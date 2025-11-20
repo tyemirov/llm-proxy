@@ -3,3 +3,8 @@ bin/
 *.iml
 .env
 release_notes.md
+# Managed by gix gitignore workflow
+.env.*
+.DS_Store
+qodana.yaml
+tools/
