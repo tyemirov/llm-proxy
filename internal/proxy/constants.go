@@ -14,6 +14,8 @@ const (
 
 	// rootPath defines the HTTP path for the root endpoint.
 	rootPath = "/"
+	// dictatePath defines the HTTP path for audio transcription requests.
+	dictatePath = "/dictate"
 
 	queryParameterPrompt       = "prompt"
 	queryParameterKey          = "key"
@@ -21,6 +23,9 @@ const (
 	queryParameterWebSearch    = "web_search"
 	queryParameterSystemPrompt = "system_prompt"
 	queryParameterFormat       = "format"
+
+	formFieldAudio = "audio"
+	formFieldFile  = "file"
 
 	redactedPlaceholder = "***REDACTED***"
 
@@ -39,6 +44,8 @@ const (
 	errorOpenAIAPINoText    = "OpenAI API error (no text)"
 	errorOpenAIFailedStatus = "OpenAI API error (failed status)"
 	errorOpenAIContinue     = "OpenAI API continue error"
+	errorInvalidAudioForm   = "invalid audio form"
+	errorMissingAudioFile   = "missing audio file"
 	// errorUpstreamIncomplete indicates that the upstream provider returned an incomplete response.
 	errorUpstreamIncomplete    = "OpenAI API error (incomplete response)"
 	errorOpenAIModelValidation = "OpenAI model validation error"

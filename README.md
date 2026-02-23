@@ -1,14 +1,17 @@
 # LLM Proxy
 
 LLM Proxy is a lightweight HTTP service that forwards user prompts to the
-OpenAI **Responses API**. It exposes a single endpoint that requires a shared
-secret and is intended to simplify integrating language model responses into
-other services without embedding API credentials in each client.
+OpenAI **Responses API** and **audio transcriptions API**. It exposes protected
+HTTP endpoints that require a shared secret and simplify integrating provider
+capabilities without embedding API credentials in each client.
 
 ## Features
 
-- Minimal HTTP server that accepts `GET /?prompt=...&key=...` requests
+- Minimal HTTP server that accepts:
+  - `GET /?prompt=...&key=...` for LLM responses
+  - `POST /dictate?key=...` for audio transcription
 - Choose the **OpenAI model** per request via `model=...` (default: `gpt-4.1`)
+- Choose the dictation model per request via `model=...` on `/dictate` (default: `gpt-4o-mini-transcribe`)
 - Optional per-request **web search** via `web_search=1|true|yes`
 - Optional logging at `debug` or `info` levels
 - Forwards requests to the OpenAI API using your existing API key
@@ -28,6 +31,8 @@ variables:
 | `--system_prompt` / `SYSTEM_PROMPT`   | Optional system prompt text                         |
 | `--workers` / `GPT_WORKERS`           | Number of worker goroutines (default `4`)           |
 | `--queue_size` / `GPT_QUEUE_SIZE`     | Request queue size (default `100`)                  |
+| `--dictation_model` / `GPT_DICTATION_MODEL` | Default model for `/dictate` when query model is not provided (default `gpt-4o-mini-transcribe`) |
+| `--max_input_audio_bytes` / `GPT_MAX_INPUT_AUDIO_BYTES` | Max accepted upload size for `/dictate` (default `26214400`) |
 
 > **Note:** Web search is **per request**, enabled by adding `web_search=1` to your query.
 
@@ -88,6 +93,22 @@ curl --get \
   "http://localhost:8080/"
 ```
 
+### Dictation request
+
+```shell
+curl -X POST \
+  -F "audio=@./recording.webm" \
+  "http://localhost:8080/dictate?key=mysecret"
+```
+
+Optional model override:
+
+```shell
+curl -X POST \
+  -F "audio=@./recording.webm" \
+  "http://localhost:8080/dictate?key=mysecret&model=gpt-4o-mini-transcribe"
+```
+
 ### Response formats
 
 You can request alternative formats using either the `format` query parameter or
@@ -102,6 +123,8 @@ If no supported value is provided, `text/plain` is returned.
 
 ## Endpoint
 
+### LLM endpoint
+
 ```
 GET /
   ?prompt=STRING            # required
@@ -109,6 +132,22 @@ GET /
   &model=MODEL_NAME         # optional; defaults to gpt-4.1
   &web_search=1|true|yes    # optional; enables OpenAI web_search tool
   &format=CONTENT_TYPE      # optional; or use Accept header
+```
+
+### Dictation endpoint
+
+```
+POST /dictate
+  ?key=SERVICE_SECRET       # required
+  &model=MODEL_NAME         # optional; defaults to gpt-4o-mini-transcribe
+Content-Type: multipart/form-data
+  audio=<file>              # required (alias: file)
+```
+
+Success response:
+
+```json
+{ "text": "..." }
 ```
 
 Supported models include any listed in `/v1/models` from the OpenAI API
@@ -128,7 +167,7 @@ Not all models support tools; for **web search**, use `gpt-4o`, `gpt-4.1`, or `g
 ### Status codes
 
 * `200 OK` – success
-* `400 Bad Request` – missing required parameters or unknown model
+* `400 Bad Request` – missing/invalid parameters or invalid multipart audio form
 * `403 Forbidden` – missing or invalid `key`
 * `504 Gateway Timeout` – upstream request timed out
 * `502 Bad Gateway` – OpenAI API returned an error
@@ -137,6 +176,10 @@ Not all models support tools; for **web search**, use `gpt-4o`, `gpt-4.1`, or `g
 
 * All requests must include the shared secret via `key=...`.
 * Do not expose this service to the public internet without appropriate network controls.
+
+## Implementation Plans
+
+Current scoped implementation plans are tracked under `docs/implementation/`.
 
 ## Releasing
 

@@ -27,6 +27,8 @@ const (
 	keyRequestTimeoutSeconds      = "request_timeout_seconds"
 	keyUpstreamPollTimeoutSeconds = "upstream_poll_timeout_seconds"
 	keyMaxOutputTokens            = "max_output_tokens"
+	keyDictationModel             = "dictation_model"
+	keyMaxInputAudioBytes         = "max_input_audio_bytes"
 
 	flagOpenAIAPIKey        = keyOpenAIAPIKey
 	flagServiceSecret       = keyServiceSecret
@@ -38,6 +40,8 @@ const (
 	flagRequestTimeout      = "request_timeout"
 	flagUpstreamPollTimeout = "upstream_poll_timeout"
 	flagMaxOutputTokens     = keyMaxOutputTokens
+	flagDictationModel      = keyDictationModel
+	flagMaxInputAudioBytes  = keyMaxInputAudioBytes
 
 	envOpenAIAPIKey               = "OPENAI_API_KEY"
 	envServiceSecret              = "SERVICE_SECRET"
@@ -49,6 +53,8 @@ const (
 	envRequestTimeoutSeconds      = "GPT_REQUEST_TIMEOUT_SECONDS"
 	envUpstreamPollTimeoutSeconds = "GPT_UPSTREAM_POLL_TIMEOUT_SECONDS"
 	envMaxOutputTokens            = "GPT_MAX_OUTPUT_TOKENS"
+	envDictationModel             = "GPT_DICTATION_MODEL"
+	envMaxInputAudioBytes         = "GPT_MAX_INPUT_AUDIO_BYTES"
 
 	quoteCharacters = "\"'"
 )
@@ -76,7 +82,7 @@ const (
 
 	// rootCmdLong provides a detailed description of the root command.
 	// Additional commands should define their long description using a constant following this pattern.
-	rootCmdLong = "Accepts GET /?prompt=…&key=SECRET and forwards to OpenAI."
+	rootCmdLong = "Accepts GET / for prompts and POST /dictate for audio transcription; forwards to OpenAI."
 
 	// rootCmdExample demonstrates how to use the root command.
 	// Additional commands should define their usage examples using a constant following this pattern.
@@ -109,6 +115,8 @@ var rootCmd = &cobra.Command{
 		populateIntConfiguration(command, flagRequestTimeout, keyRequestTimeoutSeconds, &config.RequestTimeoutSeconds, proxy.DefaultRequestTimeoutSeconds)
 		populateIntConfiguration(command, flagUpstreamPollTimeout, keyUpstreamPollTimeoutSeconds, &config.UpstreamPollTimeoutSeconds, proxy.DefaultUpstreamPollTimeoutSeconds)
 		populateIntConfiguration(command, flagMaxOutputTokens, keyMaxOutputTokens, &config.MaxOutputTokens, proxy.DefaultMaxOutputTokens)
+		populateStringConfiguration(command, flagDictationModel, keyDictationModel, &config.DictationModel, proxy.DefaultDictationModel, trimSpacesAndQuotes)
+		populateInt64Configuration(command, flagMaxInputAudioBytes, keyMaxInputAudioBytes, &config.MaxInputAudioBytes, proxy.DefaultMaxInputAudioBytes)
 
 		var logger *zap.Logger
 		var loggerError error
@@ -174,6 +182,12 @@ func bindOrDie() error {
 	}
 	if bindError := viper.BindEnv(keyMaxOutputTokens, envMaxOutputTokens); bindError != nil {
 		bindingErrors = append(bindingErrors, keyMaxOutputTokens+":"+bindError.Error())
+	}
+	if bindError := viper.BindEnv(keyDictationModel, envDictationModel); bindError != nil {
+		bindingErrors = append(bindingErrors, keyDictationModel+":"+bindError.Error())
+	}
+	if bindError := viper.BindEnv(keyMaxInputAudioBytes, envMaxInputAudioBytes); bindError != nil {
+		bindingErrors = append(bindingErrors, keyMaxInputAudioBytes+":"+bindError.Error())
 	}
 	if len(bindingErrors) > 0 {
 		return errors.New(strings.Join(bindingErrors, bindingErrorSeparator))
@@ -248,6 +262,18 @@ func init() {
 		flagMaxOutputTokens,
 		0,
 		"maximum output tokens (env: "+envMaxOutputTokens+")",
+	)
+	rootCmd.Flags().StringVar(
+		&config.DictationModel,
+		flagDictationModel,
+		"",
+		"default model for /dictate when query model is not provided (env: "+envDictationModel+")",
+	)
+	rootCmd.Flags().Int64Var(
+		&config.MaxInputAudioBytes,
+		flagMaxInputAudioBytes,
+		0,
+		"maximum accepted audio payload size for /dictate in bytes (env: "+envMaxInputAudioBytes+")",
 	)
 
 	if flagBindError := viper.BindPFlags(rootCmd.Flags()); flagBindError != nil {

@@ -80,6 +80,7 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 
 	router.Use(gin.Recovery(), secretMiddleware(configuration.ServiceSecret, structuredLogger))
 	router.GET(rootPath, chatHandler(taskQueue, configuration.SystemPrompt, validator, requestTimeout, structuredLogger))
+	router.POST(dictatePath, dictateHandler(openAIClient, configuration.OpenAIKey, configuration.DictationModel, configuration.MaxInputAudioBytes, structuredLogger))
 	return router, nil
 }
 
@@ -173,5 +174,50 @@ func chatHandler(taskQueue chan requestTask, defaultSystemPrompt string, validat
 			requestCancel()
 			ginContext.String(http.StatusGatewayTimeout, errorRequestTimedOut)
 		}
+	}
+}
+
+func dictateHandler(openAIClient *OpenAIClient, openAIKey string, defaultModel string, maxInputAudioBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxInputAudioBytes+2*1024*1024)
+		if parseError := ginContext.Request.ParseMultipartForm(maxInputAudioBytes); parseError != nil {
+			ginContext.String(http.StatusBadRequest, errorInvalidAudioForm)
+			return
+		}
+
+		audioFile, header, fileError := ginContext.Request.FormFile(formFieldAudio)
+		if fileError != nil {
+			audioFile, header, fileError = ginContext.Request.FormFile(formFieldFile)
+			if fileError != nil {
+				ginContext.String(http.StatusBadRequest, errorMissingAudioFile)
+				return
+			}
+		}
+		defer audioFile.Close()
+
+		fileName := "audio.webm"
+		if header != nil {
+			trimmedFileName := strings.TrimSpace(header.Filename)
+			if trimmedFileName != constants.EmptyString {
+				fileName = trimmedFileName
+			}
+		}
+
+		modelIdentifier := strings.TrimSpace(ginContext.Query(queryParameterModel))
+		if modelIdentifier == constants.EmptyString {
+			modelIdentifier = defaultModel
+		}
+
+		transcribedText, requestError := openAIClient.transcribeAudio(openAIKey, modelIdentifier, fileName, audioFile, structuredLogger)
+		if requestError != nil {
+			if errors.Is(requestError, context.DeadlineExceeded) {
+				ginContext.String(http.StatusGatewayTimeout, errorRequestTimedOut)
+				return
+			}
+			ginContext.String(http.StatusBadGateway, requestError.Error())
+			return
+		}
+
+		ginContext.JSON(http.StatusOK, gin.H{keyText: transcribedText})
 	}
 }
