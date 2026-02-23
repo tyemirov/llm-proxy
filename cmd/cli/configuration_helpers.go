@@ -32,6 +32,18 @@ func populateIntConfiguration(command *cobra.Command, flagName, configurationKey
 	}
 }
 
+// populateInt64Configuration resolves an int64 value from command flags, environment variables and defaults.
+// flagName specifies the CLI flag, configurationKey maps to the viper key, destination receives the result,
+// and defaultValue replaces non-positive values.
+func populateInt64Configuration(command *cobra.Command, flagName, configurationKey string, destination *int64, defaultValue int64) {
+	if !command.Flags().Changed(flagName) {
+		*destination = viper.GetInt64(configurationKey)
+	}
+	if *destination <= 0 {
+		*destination = defaultValue
+	}
+}
+
 // identityTransformer returns the supplied value unchanged.
 func identityTransformer(value string) string {
 	return value

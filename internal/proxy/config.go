@@ -21,6 +21,8 @@ const (
 	DefaultRequestTimeoutSeconds      = 180 // overall app-side request timeout
 	DefaultUpstreamPollTimeoutSeconds = 60  // poll budget after "incomplete"
 	DefaultMaxOutputTokens            = 1024
+	DefaultDictationModel             = "gpt-4o-mini-transcribe"
+	DefaultMaxInputAudioBytes         = 25 * 1024 * 1024
 )
 
 // Configuration holds runtime settings.
@@ -35,6 +37,8 @@ type Configuration struct {
 	RequestTimeoutSeconds      int
 	UpstreamPollTimeoutSeconds int
 	MaxOutputTokens            int
+	DictationModel             string
+	MaxInputAudioBytes         int64
 	Endpoints                  *Endpoints
 }
 
@@ -62,5 +66,11 @@ func (configuration *Configuration) ApplyTunables() {
 	}
 	if configuration.MaxOutputTokens <= 0 {
 		configuration.MaxOutputTokens = DefaultMaxOutputTokens
+	}
+	if strings.TrimSpace(configuration.DictationModel) == constants.EmptyString {
+		configuration.DictationModel = DefaultDictationModel
+	}
+	if configuration.MaxInputAudioBytes <= 0 {
+		configuration.MaxInputAudioBytes = DefaultMaxInputAudioBytes
 	}
 }
