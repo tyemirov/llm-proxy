@@ -15,7 +15,30 @@ jobs:
       CHANGELOG_FILE: CHANGELOG.md
       RELEASE_NOTES_FILE: release_notes.md
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
+      - name: Validate changelog and extract release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_tag="${{ github.ref_name }}"
+          release_header_regex="^## \\[${release_tag}\\]([[:space:]]+-[[:space:]].*)?$"
+
+          if ! grep -Eq "$release_header_regex" "$CHANGELOG_FILE"; then
+            echo "No changelog section found for tag $release_tag in $CHANGELOG_FILE" >&2
+            exit 1
+          fi
+
+          awk -v tag="$release_tag" '
+            index($0, "## [" tag "]") == 1 { collecting=1; next }
+            collecting && $0 ~ /^## \[v[0-9]+\.[0-9]+\.[0-9]+\]/ { collecting=0 }
+            collecting
+          ' "$CHANGELOG_FILE" > "$RELEASE_NOTES_FILE"
+
+          if [ ! -s "$RELEASE_NOTES_FILE" ]; then
+            echo "Changelog section for $release_tag exists but is empty in $CHANGELOG_FILE" >&2
+            exit 1
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -36,21 +59,6 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}:${{ github.ref_name }}
             ghcr.io/${{ github.repository }}:latest
-
-      - name: Extract release notes
-        shell: bash
-        run: |
-          set -euo pipefail
-          release_tag="${{ github.ref_name }}"
-          awk -v tag="$release_tag" '
-            index($0, "## [" tag "]") == 1 { collecting=1; next }
-            collecting && index($0, "## [") == 1 { collecting=0 }
-            collecting
-          ' "$CHANGELOG_FILE" > "$RELEASE_NOTES_FILE"
-          if [ ! -s "$RELEASE_NOTES_FILE" ]; then
-            echo "No release notes found for tag $release_tag in $CHANGELOG_FILE" >&2
-            exit 1
-          fi
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
