@@ -7,28 +7,16 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
 
 ## BugFixes
 
+- [ ] [B001] (P0) Prepare a plan for using other providers, so that a parameters specified in the query string could indicate to use Claude, gemini or other model providers.
+  Prepare a plan for using other providers, so that a parameters specified in the query string could indicate to use Claude, gemini or other model providers
+
+
 ## Improvements
 
 ## Maintenance
 
-### Recurring (runbooks; keep open)
-
-These entries are always-available procedures. Keep them `[ ]` so they remain runnable; when you run one, update a short `Last run:` line in the body (and optionally link the PR/commit).
-
-- [ ] [M400] (P2) Backlog housekeeping
-  1. Validate `ISSUES.md` matches `issues-md-format.md`.
-  2. Confirm user-facing consequences of recently closed work are documented (README/ARCHITECTURE/PRD).
-  3. Prune closed entries once documented.
-  4. Merge duplicates and delete irrelevant issues.
-
-- [ ] [M401] (P2) Polish open issues
-  1. For each open issue, add missing context (dependencies, repro steps, acceptance criteria, and test expectations).
-  2. Ensure each issue has a clear priority and concrete deliverables.
-
-- [ ] [M402] (P2) Architecture and policy review
-  1. Review the codebase against POLICY.md and stack guides.
-  2. Record findings as new Maintenance issues (or close as "no action" if already covered).
-
 ## Features
 
 ## Planning
+*do not implement yet*
+
