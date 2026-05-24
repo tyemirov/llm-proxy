@@ -30,6 +30,8 @@ func TestResolveModelPayloadSchema(testFramework *testing.T) {
 		{proxy.ModelNameGPT41, []string{"model", "input", "max_output_tokens", "temperature", "tools", "tool_choice"}},
 		{proxy.ModelNameGPT5Mini, []string{"model", "input", "max_output_tokens"}},
 		{proxy.ModelNameGPT5, []string{"model", "input", "max_output_tokens", "tools", "tool_choice", "reasoning"}},
+		{proxy.ModelNameGPT55, []string{"model", "input", "max_output_tokens", "tools", "tool_choice", "reasoning"}},
+		{proxy.ModelNameGPT55Pro, []string{"model", "input", "max_output_tokens", "tools", "tool_choice", "reasoning"}},
 	}
 	for _, testCase := range testCases {
 		payloadSchema := proxy.ResolveModelPayloadSchema(testCase.modelIdentifier)
@@ -64,6 +66,22 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 			expectTemperature: false,
 			expectTools:       false,
 			expectReasoning:   false,
+		},
+		{
+			name:              "GPT-5.5 with web search",
+			modelIdentifier:   proxy.ModelNameGPT55,
+			webSearchEnabled:  true,
+			expectTemperature: false,
+			expectTools:       true,
+			expectReasoning:   true,
+		},
+		{
+			name:              "GPT-5.5 pro with web search",
+			modelIdentifier:   proxy.ModelNameGPT55Pro,
+			webSearchEnabled:  true,
+			expectTemperature: false,
+			expectTools:       true,
+			expectReasoning:   true,
 		},
 		{
 			name:              "GPT-4o with web search",
