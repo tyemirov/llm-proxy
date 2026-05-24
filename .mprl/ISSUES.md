@@ -47,8 +47,14 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
 
 ## Maintenance
 
+- [x] [M001] (P1) Standardize repository automation targets.
+  ### Summary
+  Add the standard repo-local `make ci`, `make release`, `make publish`, and `make deploy` entrypoints used by deployed MPR services.
+  
+  ### Resolution
+  Added a Makefile, release/publish/deploy scripts, GitHub workflow alignment for `make ci`, and README documentation. `make deploy` delegates to the sibling `mprlab-gateway` checkout because `llm-proxy` is gateway-colocated.
+
 ## Features
 
 ## Planning
 *do not implement yet*
-

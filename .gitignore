@@ -4,3 +4,6 @@
 !AGENTS.md
 !.mprl/
 !.mprl/**
+!Makefile
+!scripts/
+!scripts/**
