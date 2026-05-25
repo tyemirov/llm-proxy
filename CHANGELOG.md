@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.3] - 2026-05-24
+
+### Changes
+- test: add extensive coverage tests for proxy request handling and formats
+
 ## [v0.2.2] - 2026-05-24
 
 ### Changes
