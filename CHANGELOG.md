@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.2] - 2026-05-24
+
+### Changes
+- Merge pull request #159 from tyemirov/codex/multi-provider-default-provider-and-env-renames
+- fix repository gitignore defaults
+- fix multi-provider review follow-ups
+- add multi-provider default and env var updates
+- Merge pull request #157 from tyemirov/maintenance/issues-md-init/master
+- Merge pull request #158 from tyemirov/improvement/B001-llm-proxy-model-aliases-json-body
+- Standardize Makefile automation targets
+- Improve model support and JSON chat request handling
+- Future development
+- Future development
+- chore: seed planning templates
+- chore: seed planning templates
+- ci: validate changelog before building release image
+
 ## [v0.2.1] - 2026-02-22 
 
 ### Bug Fixes 🐛                                                                                                                                      - Fill up for the missed puch of CHANGELOG fore v0.2.0
