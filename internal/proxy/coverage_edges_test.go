@@ -61,6 +61,10 @@ func coverageRouter(t *testing.T, configuration proxy.Configuration) *gin.Engine
 }
 
 func textRouterWithResponsesHandler(t *testing.T, handler http.HandlerFunc) *gin.Engine {
+	return textRouterWithResponsesHandlerAndMaxOutputTokens(t, handler, proxy.DefaultMaxOutputTokens)
+}
+
+func textRouterWithResponsesHandlerAndMaxOutputTokens(t *testing.T, handler http.HandlerFunc, maxOutputTokens int) *gin.Engine {
 	t.Helper()
 	upstreamServer := httptest.NewServer(handler)
 	t.Cleanup(upstreamServer.Close)
@@ -74,6 +78,7 @@ func textRouterWithResponsesHandler(t *testing.T, handler http.HandlerFunc) *gin
 		QueueSize:                  2,
 		RequestTimeoutSeconds:      TestTimeout,
 		UpstreamPollTimeoutSeconds: TestTimeout,
+		MaxOutputTokens:            maxOutputTokens,
 		Endpoints:                  endpoints,
 	})
 }
@@ -414,7 +419,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 	})
 
 	t.Run("initial incomplete continuation failure maps to bad gateway", func(subTest *testing.T) {
-		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		router := textRouterWithResponsesHandlerAndMaxOutputTokens(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			switch {
 			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
@@ -430,7 +435,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 			default:
 				http.NotFound(responseWriter, httpRequest)
 			}
-		})
+		}, 1024)
 		queryParameters := url.Values{}
 		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
 		if statusCode != http.StatusBadGateway {
@@ -465,7 +470,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 	})
 
 	t.Run("completed without final message starts synthesis continuation", func(subTest *testing.T) {
-		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		router := textRouterWithResponsesHandlerAndMaxOutputTokens(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			switch {
 			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
@@ -482,7 +487,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 			default:
 				http.NotFound(responseWriter, httpRequest)
 			}
-		})
+		}, 1024)
 		queryParameters := url.Values{}
 		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
 		if statusCode != http.StatusOK || body != "synthesized" {
