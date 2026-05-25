@@ -7,6 +7,15 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
 
 ## BugFixes
 
+- [x] [B405] (P0) Fix large semantic review POSTs for heavy GPT-5.5-family models.
+  Full semantic stress review requests can be around 31 KB and need a response budget large enough to return a complete reviewed transcript. The public `POST /?key=...` JSON body path must support those review jobs without forcing callers into chunked review, because chunked model responses can mutate source text or drop required stress coverage.
+  Acceptance criteria:
+  1. Add an end-to-end integration test that sends a large semantic-review JSON body through the public HTTP route with a heavier GPT-5.5-family model.
+  2. The test must fail before the implementation fix by reproducing the low-output-budget/incomplete-response path as a client-visible `502`.
+  3. The proxy must forward a sufficiently large output budget for the large full-review request and return a normal text response from the upstream stub.
+  4. The fix must not weaken downstream semantic validation expectations; chunked review remains a retry transport strategy, not an acceptance path.
+  Resolution: Added a black-box integration test for a 31 KB semantic-review JSON POST using `gpt-5.5-pro`; the pre-fix failure reproduced `502 OpenAI API error` with `max_output_tokens=1024` and an incomplete/max-output upstream path. The proxy now defaults text `max_output_tokens` to `8192`, README documents the `LLM_PROXY_MAX_OUTPUT_TOKENS` knob, low-budget continuation coverage remains explicit, and `make ci` passes with total coverage at 100.0%.
+
 - [x] [B404] (P0) Fix GPT-5.5 JSON body model requests returning 502.
   Reproduce and repair the `POST /?key=...` JSON request path where clients specify `"model": "gpt-5.5"` in the body and expect a successful OpenAI Responses API reply instead of a proxy-level `502 OpenAI API error`.
   Acceptance criteria:

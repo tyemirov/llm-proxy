@@ -25,7 +25,7 @@ const (
 
 	DefaultRequestTimeoutSeconds      = 180 // overall app-side request timeout
 	DefaultUpstreamPollTimeoutSeconds = 60  // poll budget after "incomplete"
-	DefaultMaxOutputTokens            = 1024
+	DefaultMaxOutputTokens            = 8192
 	// DefaultMaxPromptBytes limits JSON LLM request bodies accepted by POST /.
 	DefaultMaxPromptBytes     = 4 * 1024 * 1024
 	DefaultDictationModel     = "gpt-4o-mini-transcribe"
