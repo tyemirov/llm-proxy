@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.5] - 2026-05-25
+
+### Changes
+- Merge pull request #160 from tyemirov/bugfix/B405-large-semantic-review-budget
+- Fix B405 large semantic review budget
+
 ## [v0.2.4] - 2026-05-24
 
 ### Changes
