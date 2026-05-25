@@ -1,10 +1,7 @@
 package proxy
 
 import (
-	"fmt"
 	"strings"
-
-	"github.com/temirov/llm-proxy/internal/constants"
 )
 
 const (
@@ -65,12 +62,9 @@ const (
 
 type providerID string
 
-func newProviderID(rawIdentifier string) (providerID, error) {
+func newProviderID(rawIdentifier string) providerID {
 	normalizedIdentifier := strings.ToLower(strings.TrimSpace(rawIdentifier))
-	if normalizedIdentifier == constants.EmptyString {
-		return providerID(""), fmt.Errorf("%w: empty provider", ErrUnknownProvider)
-	}
-	return providerID(normalizedIdentifier), nil
+	return providerID(normalizedIdentifier)
 }
 
 func (identifier providerID) string() string {
@@ -79,12 +73,9 @@ func (identifier providerID) string() string {
 
 type modelID string
 
-func newModelID(rawIdentifier string) (modelID, error) {
+func newModelID(rawIdentifier string) modelID {
 	normalizedIdentifier := strings.TrimSpace(rawIdentifier)
-	if normalizedIdentifier == constants.EmptyString {
-		return modelID(""), fmt.Errorf("%w: empty model", ErrUnknownModel)
-	}
-	return modelID(normalizedIdentifier), nil
+	return modelID(normalizedIdentifier)
 }
 
 func (identifier modelID) string() string {
@@ -102,7 +93,6 @@ type providerDefinition struct {
 	defaultTranscriptionModel modelID
 	textModels                map[string]modelID
 	transcriptionModels       map[string]modelID
-	supportsText              bool
 	supportsDictation         bool
 	supportsWebSearch         bool
 	usesOpenAIResponses       bool
@@ -113,15 +103,4 @@ func (definition providerDefinition) credentialFor(endpoint endpointKind) string
 		return strings.TrimSpace(definition.transcriptionAPIKey)
 	}
 	return strings.TrimSpace(definition.textAPIKey)
-}
-
-func (definition providerDefinition) supports(endpoint endpointKind) bool {
-	switch endpoint {
-	case endpointKindText:
-		return definition.supportsText
-	case endpointKindDictation:
-		return definition.supportsDictation
-	default:
-		return false
-	}
 }

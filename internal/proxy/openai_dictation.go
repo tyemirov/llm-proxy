@@ -24,32 +24,19 @@ type transcriptionResponse struct {
 
 func (client *OpenAIClient) transcribeAudioWithURL(openAIKey string, transcriptionsURL string, modelIdentifier string, fileName string, audioReader io.Reader, structuredLogger *zap.SugaredLogger) (string, error) {
 	modelIdentifier = strings.TrimSpace(modelIdentifier)
-	if modelIdentifier == constants.EmptyString {
-		modelIdentifier = DefaultDictationModel
-	}
 	fileName = strings.TrimSpace(fileName)
-	if fileName == constants.EmptyString {
-		fileName = "audio.webm"
-	}
 
 	payloadBuffer := &bytes.Buffer{}
 	multipartWriter := multipart.NewWriter(payloadBuffer)
 
-	if writeError := multipartWriter.WriteField(keyModel, modelIdentifier); writeError != nil {
-		return constants.EmptyString, writeError
-	}
+	_ = multipartWriter.WriteField(keyModel, modelIdentifier)
 
-	filePart, createFileError := multipartWriter.CreateFormFile(formFieldFile, fileName)
-	if createFileError != nil {
-		return constants.EmptyString, createFileError
-	}
+	filePart, _ := multipartWriter.CreateFormFile(formFieldFile, fileName)
 	if _, copyError := io.Copy(filePart, audioReader); copyError != nil {
 		return constants.EmptyString, copyError
 	}
 
-	if closeWriterError := multipartWriter.Close(); closeWriterError != nil {
-		return constants.EmptyString, closeWriterError
-	}
+	_ = multipartWriter.Close()
 
 	requestContext, cancelRequest := context.WithTimeout(context.Background(), client.requestTimeout)
 	defer cancelRequest()
@@ -65,10 +52,7 @@ func (client *OpenAIClient) transcribeAudioWithURL(openAIKey string, transcripti
 
 	statusCode, responseBytes, _, requestError := client.performTranscriptionsRequest(httpRequest, structuredLogger)
 	if requestError != nil {
-		if errors.Is(requestError, context.DeadlineExceeded) {
-			return constants.EmptyString, requestError
-		}
-		return constants.EmptyString, errors.New(errorOpenAIRequest)
+		return constants.EmptyString, requestError
 	}
 
 	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {

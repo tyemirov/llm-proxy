@@ -11,6 +11,10 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
 
 ## Maintenance
 
+- [x] [M403] (P1) Enforce 100% Go test coverage
+  Require repository tests to prove 100% coverage without production code knowing about tests. Cover gaps through black-box HTTP/CLI entry points and use dependency injection only around hard-to-control external effects.
+  Resolution: `make test` now enforces the merged package plus CLI binary coverage gate, and `make ci` passes with total coverage at 100.0%.
+
 ### Recurring (runbooks; keep open)
 
 These entries are always-available procedures. Keep them `[ ]` so they remain runnable; when you run one, update a short `Last run:` line in the body (and optionally link the PR/commit).

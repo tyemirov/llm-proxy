@@ -8,7 +8,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/temirov/llm-proxy/internal/constants"
-	"go.uber.org/zap"
 )
 
 // preferredMime determines the response MIME type using the format query parameter or the Accept header.
@@ -20,15 +19,10 @@ func preferredMime(ginContext *gin.Context) string {
 }
 
 // formatResponse renders a textual model output into the requested MIME type and returns the body and content type.
-// Encoding failures are logged and result in a plain text error message.
-func formatResponse(modelText string, preferred string, originalPrompt string, structuredLogger *zap.SugaredLogger) (string, string) {
+func formatResponse(modelText string, preferred string, originalPrompt string) (string, string) {
 	switch {
 	case strings.Contains(preferred, mimeApplicationJSON):
-		encodedJSON, marshalError := json.Marshal(map[string]string{responseRequestAttribute: originalPrompt, jsonFieldResponse: modelText})
-		if marshalError != nil {
-			structuredLogger.Errorw(logEventMarshalResponsePayload, constants.LogFieldError, marshalError)
-			return errorResponseFormat, mimeTextPlain
-		}
+		encodedJSON, _ := json.Marshal(map[string]string{responseRequestAttribute: originalPrompt, jsonFieldResponse: modelText})
 		return string(encodedJSON), mimeApplicationJSON
 	case strings.Contains(preferred, mimeApplicationXML) || strings.Contains(preferred, mimeTextXML):
 		type xmlEnvelope struct {
@@ -36,11 +30,7 @@ func formatResponse(modelText string, preferred string, originalPrompt string, s
 			Request string   `xml:"request,attr"`
 			Text    string   `xml:",chardata"`
 		}
-		encodedXML, marshalError := xml.Marshal(xmlEnvelope{Request: originalPrompt, Text: modelText})
-		if marshalError != nil {
-			structuredLogger.Errorw(logEventMarshalResponsePayload, constants.LogFieldError, marshalError)
-			return errorResponseFormat, mimeTextPlain
-		}
+		encodedXML, _ := xml.Marshal(xmlEnvelope{Request: originalPrompt, Text: modelText})
 		return string(encodedXML), mimeApplicationXML
 	case strings.Contains(preferred, mimeTextCSV):
 		escaped := strings.ReplaceAll(modelText, `"`, `""`)

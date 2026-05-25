@@ -2,7 +2,11 @@ package utils_test
 
 import (
 	"bytes"
+	"context"
+	"io"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/temirov/llm-proxy/internal/utils"
 )
@@ -61,5 +65,25 @@ func TestBuildHTTPRequestWithHeaders_ConstructsRequests(testingInstance *testing
 				nestedTestingInstance.Fatalf("header value=%s expected=%s", headerValue, currentTestCase.expectedHeaderValue)
 			}
 		})
+	}
+}
+
+func TestPerformHTTPRequest_ReturnsBodyResetError(testingInstance *testing.T) {
+	httpRequest, buildRequestError := http.NewRequest(httpMethodGet, requestURLExample, nil)
+	if buildRequestError != nil {
+		testingInstance.Fatalf("build request: %v", buildRequestError)
+	}
+	requestContext, cancelRequest := context.WithTimeout(httpRequest.Context(), time.Millisecond)
+	defer cancelRequest()
+	httpRequest = httpRequest.WithContext(requestContext)
+	httpRequest.GetBody = func() (io.ReadCloser, error) {
+		return nil, context.Canceled
+	}
+	_, _, _, performError := utils.PerformHTTPRequest(func(*http.Request) (*http.Response, error) {
+		testingInstance.Fatalf("executeRequest should not run")
+		return nil, nil
+	}, httpRequest, nil, "transport error")
+	if performError == nil {
+		testingInstance.Fatalf("performError=nil want non-nil")
 	}
 }

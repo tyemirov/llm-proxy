@@ -65,14 +65,8 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		configuration.Endpoints = NewEndpoints()
 	}
 
-	providers, providersError := newProviderRegistry(configuration)
-	if providersError != nil {
-		return nil, providersError
-	}
-	validator, validatorError := newModelValidator(providers)
-	if validatorError != nil {
-		return nil, validatorError
-	}
+	providers := newProviderRegistry(configuration)
+	validator := newModelValidator(providers)
 
 	if strings.ToLower(configuration.LogLevel) == LogLevelDebug {
 		gin.SetMode(gin.DebugMode)
@@ -260,7 +254,7 @@ func submitChatRequest(ginContext *gin.Context, taskQueue chan requestTask, chat
 			return
 		}
 		mime := preferredMime(ginContext)
-		formattedBody, contentType := formatResponse(outcome.text, mime, chatRequest.prompt, structuredLogger)
+		formattedBody, contentType := formatResponse(outcome.text, mime, chatRequest.prompt)
 		ginContext.Data(http.StatusOK, contentType, []byte(formattedBody))
 	case <-requestContext.Done():
 		requestCancel()

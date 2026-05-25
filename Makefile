@@ -35,7 +35,7 @@ lint:
 	$(GO) run github.com/gordonklaus/ineffassign@latest ./...
 
 test:
-	$(GO) test ./...
+	@GO="$(GO)" ./scripts/check_coverage.sh
 
 build:
 	mkdir -p $(BIN_DIR)

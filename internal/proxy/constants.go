@@ -58,11 +58,9 @@ const (
 	errorInvalidAudioForm           = "invalid audio form"
 	errorMissingAudioFile           = "missing audio file"
 	// errorUpstreamIncomplete indicates that the upstream provider returned an incomplete response.
-	errorUpstreamIncomplete    = "OpenAI API error (incomplete response)"
-	errorOpenAIModelValidation = "OpenAI model validation error"
+	errorUpstreamIncomplete = "OpenAI API error (incomplete response)"
 	// errorUnknownModel indicates that a model identifier is not recognized.
-	errorUnknownModel   = "unknown model"
-	errorResponseFormat = "response formatting error"
+	errorUnknownModel = "unknown model"
 	// errorQueueFull indicates that the internal request queue cannot accept additional tasks.
 	errorQueueFull = "request queue full"
 
@@ -108,10 +106,9 @@ const (
 	textFormatType        = "text"
 	verbosityLow          = "low"
 
-	jsonFieldID         = "id"
-	jsonFieldStatus     = "status"
-	jsonFieldOutputText = "output_text"
-	jsonFieldResponse   = "response"
+	jsonFieldID       = "id"
+	jsonFieldStatus   = "status"
+	jsonFieldResponse = "response"
 
 	statusCompleted = "completed"
 	statusSucceeded = "succeeded"
@@ -136,12 +133,9 @@ const (
 	// logFieldExpectedFingerprint identifies the fingerprint of the expected client key.
 	logFieldExpectedFingerprint = "expected_fingerprint"
 
-	logEventOpenAIRequestError           = "OpenAI request error"
-	logEventOpenAIResponse               = "OpenAI API response"
-	logEventOpenAIModelsList             = "OpenAI models list"
-	logEventOpenAIModelsListError        = "OpenAI models list error"
-	logEventOpenAIModelCapabilitiesError = "OpenAI model capabilities error"
-	logEventOpenAIPollError              = "OpenAI poll error"
+	logEventOpenAIRequestError = "OpenAI request error"
+	logEventOpenAIResponse     = "OpenAI API response"
+	logEventOpenAIPollError    = "OpenAI poll error"
 	// logEventOpenAIPollResponseBody records the body returned when polling OpenAI for a response.
 	logEventOpenAIPollResponseBody = "OpenAI poll response body"
 	logEventOpenAIContinueError    = "OpenAI continue error"
@@ -149,17 +143,11 @@ const (
 	logEventOpenAIInitialResponseBody = "OpenAI initial response body"
 	logEventProviderRequestError      = "provider request error"
 	// logEventMissingFinalMessage indicates that the response completed without a final assistant message.
-	logEventMissingFinalMessage = "response is 'completed' but lacks final message; starting synthesis continuation"
-	// logEventRetryingSynthesis reports a retry of synthesis due to an empty initial attempt.
-	logEventRetryingSynthesis             = "first synthesis continuation yielded no text; retrying once with stricter settings"
-	logEventParseOpenAIResponseFailed     = "parse OpenAI response failed"
+	logEventMissingFinalMessage           = "response is 'completed' but lacks final message; starting synthesis continuation"
 	logEventForbiddenRequest              = "forbidden request"
 	logEventRequestReceived               = "request received"
 	logEventResponseSent                  = "response sent"
-	logEventMarshalRequestPayload         = "marshal request payload failed"
-	logEventMarshalResponsePayload        = "marshal response payload failed"
 	logEventBuildHTTPRequest              = "build HTTP request failed"
-	logEventRetryingWithoutParam          = "retrying without parameter"
 	logEventParseWebSearchParameterFailed = "parse web_search parameter failed"
 
 	responseRequestAttribute = "request"

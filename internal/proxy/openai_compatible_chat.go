@@ -65,11 +65,7 @@ func (client *openAICompatibleChatClient) generateText(apiKey string, baseURL st
 		Messages:  messages,
 		MaxTokens: client.maxOutputTokens,
 	}
-	payloadBytes, marshalError := json.Marshal(payload)
-	if marshalError != nil {
-		structuredLogger.Errorw(logEventMarshalRequestPayload, constants.LogFieldError, marshalError)
-		return constants.EmptyString, marshalError
-	}
+	payloadBytes, _ := json.Marshal(payload)
 
 	requestContext, cancelRequest := context.WithTimeout(context.Background(), client.requestTimeout)
 	defer cancelRequest()
@@ -81,10 +77,7 @@ func (client *openAICompatibleChatClient) generateText(apiKey string, baseURL st
 	}
 	statusCode, responseBytes, _, requestError := utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEventProviderRequestError)
 	if requestError != nil {
-		if errors.Is(requestError, context.DeadlineExceeded) {
-			return constants.EmptyString, requestError
-		}
-		return constants.EmptyString, fmt.Errorf("%w: chat completion transport", ErrProviderAPI)
+		return constants.EmptyString, requestError
 	}
 	if statusCode == http.StatusTooManyRequests {
 		return constants.EmptyString, fmt.Errorf("%w: chat completion", ErrProviderRateLimited)

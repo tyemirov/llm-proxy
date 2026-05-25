@@ -1,6 +1,17 @@
 package proxy
 
-import "testing"
+import (
+	"errors"
+	"net/http"
+	"testing"
+	"time"
+)
+
+type transcriptionFailingReader struct{}
+
+func (transcriptionFailingReader) Read([]byte) (int, error) {
+	return 0, errors.New("read failed")
+}
 
 func TestParseTranscriptionText(t *testing.T) {
 	testCases := []struct {
@@ -62,5 +73,13 @@ func TestParseTranscriptionText(t *testing.T) {
 				subTest.Fatalf("text=%q want=%q", text, testCase.wantText)
 			}
 		})
+	}
+}
+
+func TestTranscribeAudioWithURLReturnsReaderError(t *testing.T) {
+	client := NewOpenAIClient(http.DefaultClient, NewEndpoints(), time.Second, DefaultMaxOutputTokens, time.Second)
+	_, transcriptionError := client.transcribeAudioWithURL("key", "http://example.test", DefaultDictationModel, "audio.webm", transcriptionFailingReader{}, nil)
+	if transcriptionError == nil {
+		t.Fatalf("transcriptionError=nil want non-nil")
 	}
 }

@@ -50,7 +50,6 @@ func NewOpenAIClient(httpClient HTTPDoer, endpoints *Endpoints, requestTimeout t
 
 const (
 	synthesisInstructionPrimary = "Now synthesize the final answer with concise citations."
-	synthesisInstructionRetry   = "Produce the final answer now as plain text with concise citations. Do not call tools. Do not include hidden reasoning."
 )
 
 // hasFinalMessage checks if the response payload contains the terminal assistant message.
@@ -91,11 +90,7 @@ func (client *OpenAIClient) openAIRequest(openAIKey string, modelIdentifier stri
 	combinedPrompt.WriteString(userPrompt)
 
 	payload := BuildRequestPayload(modelIdentifier, combinedPrompt.String(), webSearchEnabled, client.maxOutputTokens)
-	payloadBytes, marshalError := json.Marshal(payload)
-	if marshalError != nil {
-		structuredLogger.Errorw(logEventMarshalRequestPayload, constants.LogFieldError, marshalError)
-		return constants.EmptyString, marshalError
-	}
+	payloadBytes, _ := json.Marshal(payload)
 
 	requestContext, cancelRequest := context.WithTimeout(context.Background(), client.requestTimeout)
 	defer cancelRequest()
@@ -107,10 +102,7 @@ func (client *OpenAIClient) openAIRequest(openAIKey string, modelIdentifier stri
 
 	statusCode, responseBytes, latencyMillis, requestError := client.performResponsesRequest(httpRequest, structuredLogger, logEventOpenAIRequestError)
 	if requestError != nil {
-		if errors.Is(requestError, context.DeadlineExceeded) {
-			return constants.EmptyString, requestError
-		}
-		return constants.EmptyString, errors.New(errorOpenAIRequest)
+		return constants.EmptyString, requestError
 	}
 
 	structuredLogger.Debugw(logEventOpenAIInitialResponseBody, logFieldResponseBody, string(responseBytes))
@@ -162,7 +154,7 @@ func (client *OpenAIClient) openAIRequest(openAIKey string, modelIdentifier stri
 		targetResponseID := responseIdentifier
 
 		if forcedSynthesis {
-			newID, synthErr := client.startSynthesisContinuation(openAIKey, responseIdentifier, modelIdentifier, structuredLogger /*retryOrdinal=*/, 0)
+			newID, synthErr := client.startSynthesisContinuation(openAIKey, responseIdentifier, modelIdentifier, structuredLogger)
 			if synthErr != nil {
 				structuredLogger.Errorw(
 					logEventOpenAIContinueError,
@@ -195,36 +187,6 @@ func (client *OpenAIClient) openAIRequest(openAIKey string, modelIdentifier stri
 		if !utils.IsBlank(finalText) {
 			return finalText, nil
 		}
-
-		// --- Fallback: one more synthesis continuation if still no text ---
-		if forcedSynthesis {
-			structuredLogger.Debugw(logEventRetryingSynthesis)
-			newID, synthErr := client.startSynthesisContinuation(openAIKey, targetResponseID, modelIdentifier, structuredLogger /*retryOrdinal=*/, 1)
-			if synthErr != nil {
-				structuredLogger.Errorw(
-					logEventOpenAIContinueError,
-					logFieldID, targetResponseID,
-					constants.LogFieldError, synthErr,
-				)
-				return constants.EmptyString, errors.New(errorOpenAIAPI)
-			}
-			targetResponseID = newID
-
-			finalText2, pollError2 := client.pollResponseUntilDone(openAIKey, targetResponseID, structuredLogger)
-			if pollError2 != nil {
-				structuredLogger.Errorw(
-					logEventOpenAIPollError,
-					logFieldID, targetResponseID,
-					constants.LogFieldError, pollError2,
-				)
-				return constants.EmptyString, errors.New(errorOpenAIAPI)
-			}
-			if !utils.IsBlank(finalText2) {
-				return finalText2, nil
-			}
-		}
-
-		return constants.EmptyString, errors.New(errorOpenAIAPINoText)
 	}
 
 	// If the initial response is terminal but we couldn't extract text, it's an error.
@@ -263,33 +225,19 @@ func (client *OpenAIClient) continueResponse(openAIKey string, responseIdentifie
 }
 
 // startSynthesisContinuation begins a synthesis-only pass by POSTing /v1/responses with
-// previous_response_id and tool_choice set to "none". It allocates enough output tokens,
-// limits reasoning effort to minimal, and includes a low-verbosity text format hint.
-// When retryOrdinal is 1 the instruction is strengthened and the token limit is increased.
+// previous_response_id and tool_choice set to "none". It allocates enough output tokens, limits reasoning effort to minimal, and includes a low-verbosity text format hint.
 // It returns the identifier of the new response.
-//
-// retryOrdinal==0 : first synthesis pass; retryOrdinal==1 : stricter retry
-func (client *OpenAIClient) startSynthesisContinuation(openAIKey string, previousResponseID string, modelIdentifier string, structuredLogger *zap.SugaredLogger, retryOrdinal int) (string, error) {
+func (client *OpenAIClient) startSynthesisContinuation(openAIKey string, previousResponseID string, modelIdentifier string, structuredLogger *zap.SugaredLogger) (string, error) {
 	outputTokenLimit := client.maxOutputTokens
 	if outputTokenLimit < 1536 {
 		outputTokenLimit = 1536
-	}
-	if retryOrdinal == 1 {
-		if outputTokenLimit < 2048 {
-			outputTokenLimit = 2048
-		}
-	}
-
-	instruction := synthesisInstructionPrimary
-	if retryOrdinal == 1 {
-		instruction = synthesisInstructionRetry
 	}
 
 	payload := map[string]any{
 		keyModel:              modelIdentifier,
 		keyPreviousResponseID: previousResponseID,
 		keyToolChoice:         toolChoiceNone,
-		keyInput:              instruction,
+		keyInput:              synthesisInstructionPrimary,
 		keyMaxOutputTokens:    outputTokenLimit,
 		keyReasoning: map[string]any{
 			keyEffort: reasoningEffortMinimal,
@@ -299,18 +247,11 @@ func (client *OpenAIClient) startSynthesisContinuation(openAIKey string, previou
 			keyVerbosity: verbosityLow,
 		},
 	}
-	payloadBytes, marshalError := json.Marshal(payload)
-	if marshalError != nil {
-		structuredLogger.Errorw(logEventMarshalRequestPayload, constants.LogFieldError, marshalError)
-		return constants.EmptyString, marshalError
-	}
+	payloadBytes, _ := json.Marshal(payload)
 
 	requestContext, cancelRequest := context.WithTimeout(context.Background(), client.requestTimeout)
 	defer cancelRequest()
-	request, buildError := buildAuthorizedJSONRequest(requestContext, http.MethodPost, client.endpoints.GetResponsesURL(), openAIKey, bytes.NewReader(payloadBytes))
-	if buildError != nil {
-		return constants.EmptyString, buildError
-	}
+	request, _ := buildAuthorizedJSONRequest(requestContext, http.MethodPost, client.endpoints.GetResponsesURL(), openAIKey, bytes.NewReader(payloadBytes))
 
 	statusCode, responseBytes, _, requestError := client.performResponsesRequest(request, structuredLogger, logEventOpenAIRequestError)
 	if requestError != nil {

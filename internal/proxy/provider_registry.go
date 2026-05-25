@@ -12,7 +12,7 @@ type providerRegistry struct {
 	aliases     map[string]providerID
 }
 
-func newProviderRegistry(configuration Configuration) (*providerRegistry, error) {
+func newProviderRegistry(configuration Configuration) *providerRegistry {
 	openAIProviderID := providerID(ProviderNameOpenAI)
 	deepSeekProviderID := providerID(ProviderNameDeepSeek)
 	dashScopeProviderID := providerID(ProviderNameDashScope)
@@ -29,7 +29,6 @@ func newProviderRegistry(configuration Configuration) (*providerRegistry, error)
 			defaultTranscriptionModel: modelID(configuration.DictationModel),
 			textModels:                modelSet(ModelNameGPT4oMini, ModelNameGPT4o, ModelNameGPT41, ModelNameGPT5Mini, ModelNameGPT5, ModelNameGPT55, ModelNameGPT55Pro),
 			transcriptionModels:       modelSet(configuration.DictationModel, DefaultDictationModel, "gpt-4o-transcribe"),
-			supportsText:              true,
 			supportsDictation:         true,
 			supportsWebSearch:         true,
 			usesOpenAIResponses:       true,
@@ -41,7 +40,6 @@ func newProviderRegistry(configuration Configuration) (*providerRegistry, error)
 			defaultTextModel:    modelID(ModelNameDeepSeekV4Flash),
 			textModels:          modelSet(ModelNameDeepSeekV4Flash, ModelNameDeepSeekV4Pro, ModelNameDeepSeekChat, ModelNameDeepSeekReasoner),
 			transcriptionModels: map[string]modelID{},
-			supportsText:        true,
 		},
 		dashScopeProviderID: {
 			identifier:          dashScopeProviderID,
@@ -51,7 +49,6 @@ func newProviderRegistry(configuration Configuration) (*providerRegistry, error)
 			defaultTextModel:    modelID(ModelNameDashScopeQwenPlus),
 			textModels:          modelSet(ModelNameDashScopeQwenPlus),
 			transcriptionModels: map[string]modelID{},
-			supportsText:        true,
 		},
 		moonshotProviderID: {
 			identifier:          moonshotProviderID,
@@ -61,7 +58,6 @@ func newProviderRegistry(configuration Configuration) (*providerRegistry, error)
 			defaultTextModel:    modelID(ModelNameMoonshotKimi),
 			textModels:          modelSet(ModelNameMoonshotKimi),
 			transcriptionModels: map[string]modelID{},
-			supportsText:        true,
 		},
 		siliconFlowProviderID: {
 			identifier:                siliconFlowProviderID,
@@ -73,7 +69,6 @@ func newProviderRegistry(configuration Configuration) (*providerRegistry, error)
 			defaultTranscriptionModel: modelID(defaultSiliconFlowSTTModel),
 			textModels:                modelSet(ModelNameSiliconFlowDeepSeek),
 			transcriptionModels:       modelSet(defaultSiliconFlowSTTModel),
-			supportsText:              true,
 			supportsDictation:         true,
 		},
 		zhipuProviderID: {
@@ -84,7 +79,6 @@ func newProviderRegistry(configuration Configuration) (*providerRegistry, error)
 			defaultTextModel:    modelID(ModelNameZhipuGLM),
 			textModels:          modelSet(ModelNameZhipuGLM),
 			transcriptionModels: map[string]modelID{},
-			supportsText:        true,
 		},
 	}
 
@@ -101,7 +95,7 @@ func newProviderRegistry(configuration Configuration) (*providerRegistry, error)
 			}
 		}
 	}
-	return registry, nil
+	return registry
 }
 
 func modelSet(modelIdentifiers ...string) map[string]modelID {
@@ -120,28 +114,18 @@ func (registry *providerRegistry) resolveProvider(rawProvider string, defaultPro
 	if providerCandidate == constants.EmptyString {
 		providerCandidate = defaultProvider
 	}
-	normalizedProvider, providerError := newProviderID(providerCandidate)
-	if providerError != nil {
-		return providerDefinition{}, providerError
-	}
+	normalizedProvider := newProviderID(providerCandidate)
 	canonicalIdentifier, foundAlias := registry.aliases[normalizedProvider.string()]
 	if !foundAlias {
 		return providerDefinition{}, fmt.Errorf("%w: %s", ErrUnknownProvider, normalizedProvider.string())
 	}
-	definition, foundDefinition := registry.definitions[canonicalIdentifier]
-	if !foundDefinition {
-		return providerDefinition{}, fmt.Errorf("%w: %s", ErrUnknownProvider, normalizedProvider.string())
-	}
-	return definition, nil
+	return registry.definitions[canonicalIdentifier], nil
 }
 
 func (registry *providerRegistry) resolveTextRequest(rawProvider string, rawModel string, defaultProvider string, defaultModel string, webSearchEnabled bool) (providerDefinition, modelID, error) {
 	definition, providerError := registry.resolveProvider(rawProvider, defaultProvider)
 	if providerError != nil {
 		return providerDefinition{}, modelID(""), providerError
-	}
-	if !definition.supports(endpointKindText) {
-		return providerDefinition{}, modelID(""), fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, definition.identifier.string(), endpointKindText)
 	}
 	if webSearchEnabled && !definition.supportsWebSearch {
 		return providerDefinition{}, modelID(""), fmt.Errorf("%w: provider=%s capability=web_search", ErrUnsupportedCapability, definition.identifier.string())
@@ -169,7 +153,7 @@ func (registry *providerRegistry) resolveDictationRequest(rawProvider string, ra
 	if providerError != nil {
 		return providerDefinition{}, modelID(""), providerError
 	}
-	if !definition.supports(endpointKindDictation) {
+	if !definition.supportsDictation {
 		return providerDefinition{}, modelID(""), fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, definition.identifier.string(), endpointKindDictation)
 	}
 	modelIdentifier := strings.TrimSpace(rawModel)
@@ -181,10 +165,7 @@ func (registry *providerRegistry) resolveDictationRequest(rawProvider string, ra
 		}
 	}
 	if definition.identifier == providerID(ProviderNameOpenAI) {
-		resolvedModel, constructorError := newModelID(modelIdentifier)
-		if constructorError != nil {
-			return providerDefinition{}, modelID(""), constructorError
-		}
+		resolvedModel := newModelID(modelIdentifier)
 		if definition.credentialFor(endpointKindDictation) == constants.EmptyString {
 			return providerDefinition{}, modelID(""), fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindDictation)
 		}
@@ -201,10 +182,7 @@ func (registry *providerRegistry) resolveDictationRequest(rawProvider string, ra
 }
 
 func resolveModelFromSet(modelIdentifiers map[string]modelID, rawModel string) (modelID, error) {
-	resolvedModel, constructorError := newModelID(rawModel)
-	if constructorError != nil {
-		return modelID(""), constructorError
-	}
+	resolvedModel := newModelID(rawModel)
 	if modelIdentifier, known := modelIdentifiers[strings.ToLower(resolvedModel.string())]; known {
 		return modelIdentifier, nil
 	}

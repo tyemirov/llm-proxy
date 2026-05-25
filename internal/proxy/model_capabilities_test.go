@@ -107,6 +107,22 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 			expectTools:       false,
 			expectReasoning:   false,
 		},
+		{
+			name:              "unknown model fallback without web search",
+			modelIdentifier:   "future-model",
+			webSearchEnabled:  false,
+			expectTemperature: true,
+			expectTools:       false,
+			expectReasoning:   false,
+		},
+		{
+			name:              "unknown model fallback with web search",
+			modelIdentifier:   "future-model",
+			webSearchEnabled:  true,
+			expectTemperature: true,
+			expectTools:       true,
+			expectReasoning:   false,
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -132,6 +148,13 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 				subTestFramework.Errorf(reasoningFieldPresenceMismatch, payloadJSON, testCase.expectReasoning)
 			}
 		})
+	}
+}
+
+func TestResolveModelPayloadSchemaReturnsEmptyForUnknownModel(testFramework *testing.T) {
+	payloadSchema := proxy.ResolveModelPayloadSchema(" future-model ")
+	if len(payloadSchema.AllowedRequestFields) != 0 {
+		testFramework.Fatalf("fields=%v want empty", payloadSchema.AllowedRequestFields)
 	}
 }
 

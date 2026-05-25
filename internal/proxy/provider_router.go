@@ -1,11 +1,6 @@
 package proxy
 
-import (
-	"fmt"
-
-	"github.com/temirov/llm-proxy/internal/constants"
-	"go.uber.org/zap"
-)
+import "go.uber.org/zap"
 
 type providerRouter struct {
 	openAIClient *OpenAIClient
@@ -44,9 +39,6 @@ func (router *providerRouter) transcribeAudio(request dictationRequestParameters
 	transcriptionsURL := request.provider.transcriptionsURL
 	if request.provider.identifier == providerID(ProviderNameOpenAI) {
 		transcriptionsURL = router.openAIClient.endpoints.GetTranscriptionsURL()
-	}
-	if transcriptionsURL == constants.EmptyString {
-		return constants.EmptyString, fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, request.provider.identifier.string(), endpointKindDictation)
 	}
 	return router.openAIClient.transcribeAudioWithURL(
 		request.provider.credentialFor(endpointKindDictation),

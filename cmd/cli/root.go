@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"strings"
 
@@ -113,12 +112,8 @@ const (
 	logEventStartingProxy = "starting proxy"
 )
 
-const (
-	// bindingErrorSeparator is used to join multiple binding errors.
-	bindingErrorSeparator = "; "
-)
-
 var config proxy.Configuration
+var serveProxy = proxy.Serve
 
 const (
 	// rootCmdShort provides a brief description of the root command.
@@ -181,15 +176,11 @@ var rootCmd = &cobra.Command{
 		config.ApplyTunables()
 
 		var logger *zap.Logger
-		var loggerError error
 		switch strings.ToLower(config.LogLevel) {
 		case proxy.LogLevelDebug:
-			logger, loggerError = zap.NewDevelopment()
+			logger, _ = zap.NewDevelopment()
 		default:
-			logger, loggerError = zap.NewProduction()
-		}
-		if loggerError != nil {
-			return loggerError
+			logger, _ = zap.NewProduction()
 		}
 		defer func() { _ = logger.Sync() }()
 		sugar := logger.Sugar()
@@ -209,23 +200,15 @@ var rootCmd = &cobra.Command{
 			"default_provider", config.DefaultProvider,
 			"secret_fingerprint", utils.Fingerprint(config.ServiceSecret),
 		)
-		return proxy.Serve(config, sugar)
+		return serveProxy(config, sugar)
 	},
 }
 
-// bindOrDie wraps viper bindings and returns a combined error if any bind fails.
-func bindOrDie() error {
-	var bindingErrors []string
+func bindEnvironmentVariables() {
 	for _, binding := range environmentBindings() {
 		bindArguments := append([]string{binding.key}, binding.environmentVariables...)
-		if bindError := viper.BindEnv(bindArguments...); bindError != nil {
-			bindingErrors = append(bindingErrors, binding.key+":"+bindError.Error())
-		}
+		_ = viper.BindEnv(bindArguments...)
 	}
-	if len(bindingErrors) > 0 {
-		return errors.New(strings.Join(bindingErrors, bindingErrorSeparator))
-	}
-	return nil
 }
 
 type environmentBinding struct {
@@ -269,9 +252,7 @@ func init() {
 	viper.SetEnvPrefix(envPrefix)
 	viper.AutomaticEnv()
 
-	if bindError := bindOrDie(); bindError != nil {
-		panic("viper env binding failed: " + bindError.Error())
-	}
+	bindEnvironmentVariables()
 
 	rootCmd.Flags().StringVar(&config.ServiceSecret, flagServiceSecret, "", "shared secret for requests (env: "+envServiceSecret+")")
 	rootCmd.Flags().StringVar(&config.OpenAIKey, flagOpenAIAPIKey, "", "OpenAI API key (env: "+envOpenAIAPIKey+")")
@@ -301,7 +282,5 @@ func init() {
 	rootCmd.Flags().StringVar(&config.DictationModel, flagDictationModel, "", "default model for /dictate when query model is not provided (env: "+envDictationModel+")")
 	rootCmd.Flags().Int64Var(&config.MaxInputAudioBytes, flagMaxInputAudioBytes, 0, "maximum accepted audio payload size for /dictate in bytes (env: "+envMaxInputAudioBytes+")")
 
-	if flagBindError := viper.BindPFlags(rootCmd.Flags()); flagBindError != nil {
-		panic("failed to bind flags: " + flagBindError.Error())
-	}
+	_ = viper.BindPFlags(rootCmd.Flags())
 }

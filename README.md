@@ -83,7 +83,7 @@ This repository exposes the standard local targets used by MPR app repos:
 
 | Command | Purpose |
 |---------|---------|
-| `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), and the Go test suite. |
+| `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), and the 100% coverage-gated Go test suite. |
 | `make release` | Cut a `v*` release from `master`, update `CHANGELOG.md` when needed, and push the release tag. |
 | `make publish` | Validate the release source and publish `ghcr.io/tyemirov/llm-proxy:<tag>` plus `:latest`. |
 | `make deploy` | Verify the published image and deploy through the sibling `../mprlab-gateway` checkout. |

@@ -1,0 +1,1200 @@
+package proxy_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/cenkalti/backoff/v4"
+	"github.com/gin-gonic/gin"
+	"github.com/temirov/llm-proxy/internal/proxy"
+	"go.uber.org/zap"
+)
+
+type coverageRoundTripper func(*http.Request) (*http.Response, error)
+
+func (roundTripper coverageRoundTripper) RoundTrip(httpRequest *http.Request) (*http.Response, error) {
+	return roundTripper(httpRequest)
+}
+
+type coverageHTTPDoer func(*http.Request) (*http.Response, error)
+
+func (httpDoer coverageHTTPDoer) Do(httpRequest *http.Request) (*http.Response, error) {
+	return httpDoer(httpRequest)
+}
+
+func coverageHTTPResponse(statusCode int, body string) *http.Response {
+	return &http.Response{
+		StatusCode: statusCode,
+		Body:       io.NopCloser(strings.NewReader(body)),
+		Header:     make(http.Header),
+	}
+}
+
+func coverageLogger() *zap.SugaredLogger {
+	return zap.NewNop().Sugar()
+}
+
+func requireUpstreamFailureStatus(t *testing.T, statusCode int) {
+	t.Helper()
+	if statusCode != http.StatusBadGateway && statusCode != http.StatusGatewayTimeout {
+		t.Fatalf("status=%d want one of %d,%d", statusCode, http.StatusBadGateway, http.StatusGatewayTimeout)
+	}
+}
+
+func coverageRouter(t *testing.T, configuration proxy.Configuration) *gin.Engine {
+	t.Helper()
+	router, buildError := proxy.BuildRouter(configuration, coverageLogger())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+	return router
+}
+
+func textRouterWithResponsesHandler(t *testing.T, handler http.HandlerFunc) *gin.Engine {
+	t.Helper()
+	upstreamServer := httptest.NewServer(handler)
+	t.Cleanup(upstreamServer.Close)
+	endpoints := proxy.NewEndpoints()
+	endpoints.SetResponsesURL(upstreamServer.URL)
+	return coverageRouter(t, proxy.Configuration{
+		ServiceSecret:              TestSecret,
+		OpenAIKey:                  TestAPIKey,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  2,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+		Endpoints:                  endpoints,
+	})
+}
+
+func performCoverageTextRequest(t *testing.T, router http.Handler, queryParameters url.Values, acceptHeader string) (int, string, string) {
+	t.Helper()
+	if queryParameters.Get("key") == "" {
+		queryParameters.Set("key", TestSecret)
+	}
+	if queryParameters.Get("prompt") == "" {
+		queryParameters.Set("prompt", TestPrompt)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+	if acceptHeader != "" {
+		request.Header.Set("Accept", acceptHeader)
+	}
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, request)
+	return responseRecorder.Code, responseRecorder.Body.String(), responseRecorder.Header().Get("Content-Type")
+}
+
+func TestCoverageFormatsAndRequestEdges(t *testing.T) {
+	router := textRouterWithResponsesHandler(t, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"output_text":"formatted \"answer\""}`))
+	})
+
+	t.Run("json format query overrides accept header", func(subTest *testing.T) {
+		queryParameters := url.Values{}
+		queryParameters.Set("format", " application/json ")
+		statusCode, body, contentType := performCoverageTextRequest(subTest, router, queryParameters, "text/csv")
+		if statusCode != http.StatusOK {
+			subTest.Fatalf("status=%d body=%s", statusCode, body)
+		}
+		if contentType != "application/json" {
+			subTest.Fatalf("content-type=%q", contentType)
+		}
+		var response map[string]string
+		if decodeError := json.Unmarshal([]byte(body), &response); decodeError != nil {
+			subTest.Fatalf("decode json: %v", decodeError)
+		}
+		if response["response"] != `formatted "answer"` {
+			subTest.Fatalf("response=%q", response["response"])
+		}
+	})
+
+	t.Run("xml accept header", func(subTest *testing.T) {
+		queryParameters := url.Values{}
+		statusCode, body, contentType := performCoverageTextRequest(subTest, router, queryParameters, "text/xml")
+		if statusCode != http.StatusOK {
+			subTest.Fatalf("status=%d body=%s", statusCode, body)
+		}
+		if contentType != "application/xml" {
+			subTest.Fatalf("content-type=%q", contentType)
+		}
+		if !strings.Contains(body, `request="hello"`) || !strings.Contains(body, `formatted &#34;answer&#34;`) {
+			subTest.Fatalf("body=%q", body)
+		}
+	})
+
+	t.Run("default text response", func(subTest *testing.T) {
+		queryParameters := url.Values{}
+		statusCode, body, contentType := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK {
+			subTest.Fatalf("status=%d body=%s", statusCode, body)
+		}
+		if contentType != "text/plain; charset=utf-8" {
+			subTest.Fatalf("content-type=%q", contentType)
+		}
+		if body != `formatted "answer"` {
+			subTest.Fatalf("body=%q", body)
+		}
+	})
+
+	t.Run("invalid web search value is ignored as false", func(subTest *testing.T) {
+		queryParameters := url.Values{}
+		queryParameters.Set("web_search", "maybe")
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK {
+			subTest.Fatalf("status=%d body=%s", statusCode, body)
+		}
+	})
+
+	t.Run("false web search value is accepted", func(subTest *testing.T) {
+		queryParameters := url.Values{}
+		queryParameters.Set("web_search", "0")
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK {
+			subTest.Fatalf("status=%d body=%s", statusCode, body)
+		}
+	})
+
+	t.Run("json body validates malformed and missing prompt requests", func(subTest *testing.T) {
+		for _, requestBody := range []string{`{`, `{"model":"` + proxy.ModelNameGPT41 + `"}`} {
+			request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret, strings.NewReader(requestBody))
+			request.Header.Set("Content-Type", "application/json")
+			responseRecorder := httptest.NewRecorder()
+			router.ServeHTTP(responseRecorder, request)
+			if responseRecorder.Code != http.StatusBadRequest {
+				subTest.Fatalf("body=%s status=%d", requestBody, responseRecorder.Code)
+			}
+		}
+	})
+
+	t.Run("json body accepts query model override and default system prompt", func(subTest *testing.T) {
+		request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&model="+proxy.ModelNameGPT41, strings.NewReader(`{"prompt":"hello json"}`))
+		request.Header.Set("Content-Type", "application/json")
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusOK {
+			subTest.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+		}
+	})
+
+	t.Run("json body reports provider validation errors", func(subTest *testing.T) {
+		request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&provider=unknown", strings.NewReader(`{"prompt":"hello json"}`))
+		request.Header.Set("Content-Type", "application/json")
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusBadRequest {
+			subTest.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+		}
+	})
+
+	t.Run("request context deadline adjusts enqueue timeout", func(subTest *testing.T) {
+		queryParameters := url.Values{}
+		queryParameters.Set("key", TestSecret)
+		queryParameters.Set("prompt", TestPrompt)
+		request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+		deadlineContext, cancel := context.WithDeadline(request.Context(), time.Now().Add(time.Second))
+		defer cancel()
+		request = request.WithContext(deadlineContext)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusOK {
+			subTest.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+		}
+	})
+}
+
+func TestCoverageConfigurationValidationMatrix(t *testing.T) {
+	testCases := []struct {
+		name          string
+		configuration proxy.Configuration
+		expectedError string
+	}{
+		{
+			name:          "missing service secret",
+			configuration: proxy.Configuration{OpenAIKey: TestAPIKey},
+			expectedError: "SERVICE_SECRET must be set",
+		},
+		{
+			name:          "missing openai text credential",
+			configuration: proxy.Configuration{ServiceSecret: TestSecret},
+			expectedError: "OPENAI_API_KEY must be set",
+		},
+		{
+			name: "missing deepseek text credential",
+			configuration: proxy.Configuration{
+				ServiceSecret:   TestSecret,
+				OpenAIKey:       TestAPIKey,
+				DefaultProvider: proxy.ProviderNameDeepSeek,
+			},
+			expectedError: "provider not configured: provider=deepseek",
+		},
+		{
+			name: "missing dashscope text credential from alias",
+			configuration: proxy.Configuration{
+				ServiceSecret:   TestSecret,
+				OpenAIKey:       TestAPIKey,
+				DefaultProvider: "qwen",
+			},
+			expectedError: "provider not configured: provider=dashscope",
+		},
+		{
+			name: "missing moonshot text credential from alias",
+			configuration: proxy.Configuration{
+				ServiceSecret:   TestSecret,
+				OpenAIKey:       TestAPIKey,
+				DefaultProvider: "kimi",
+			},
+			expectedError: "provider not configured: provider=moonshot",
+		},
+		{
+			name: "missing siliconflow text credential",
+			configuration: proxy.Configuration{
+				ServiceSecret:   TestSecret,
+				OpenAIKey:       TestAPIKey,
+				DefaultProvider: proxy.ProviderNameSiliconFlow,
+			},
+			expectedError: "provider not configured: provider=siliconflow",
+		},
+		{
+			name: "missing zhipu text credential from alias",
+			configuration: proxy.Configuration{
+				ServiceSecret:   TestSecret,
+				OpenAIKey:       TestAPIKey,
+				DefaultProvider: "glm",
+			},
+			expectedError: "provider not configured: provider=zhipu",
+		},
+		{
+			name: "unknown default text provider",
+			configuration: proxy.Configuration{
+				ServiceSecret:   TestSecret,
+				OpenAIKey:       TestAPIKey,
+				DefaultProvider: "unknown",
+			},
+			expectedError: "unknown provider: unknown",
+		},
+		{
+			name: "missing openai dictation credential",
+			configuration: proxy.Configuration{
+				ServiceSecret:              TestSecret,
+				DeepSeekKey:                testDeepSeekKey,
+				DefaultProvider:            proxy.ProviderNameDeepSeek,
+				DefaultDictationProvider:   proxy.ProviderNameOpenAI,
+				RequestTimeoutSeconds:      TestTimeout,
+				UpstreamPollTimeoutSeconds: TestTimeout,
+			},
+			expectedError: "OPENAI_API_KEY must be set",
+		},
+		{
+			name: "unsupported qwen default dictation",
+			configuration: proxy.Configuration{
+				ServiceSecret:              TestSecret,
+				OpenAIKey:                  TestAPIKey,
+				DefaultDictationProvider:   "qwen",
+				RequestTimeoutSeconds:      TestTimeout,
+				UpstreamPollTimeoutSeconds: TestTimeout,
+			},
+			expectedError: "unsupported provider endpoint: provider=dashscope endpoint=dictation",
+		},
+		{
+			name: "unsupported kimi default dictation",
+			configuration: proxy.Configuration{
+				ServiceSecret:              TestSecret,
+				OpenAIKey:                  TestAPIKey,
+				DefaultDictationProvider:   "kimi",
+				RequestTimeoutSeconds:      TestTimeout,
+				UpstreamPollTimeoutSeconds: TestTimeout,
+			},
+			expectedError: "unsupported provider endpoint: provider=moonshot endpoint=dictation",
+		},
+		{
+			name: "unsupported glm default dictation",
+			configuration: proxy.Configuration{
+				ServiceSecret:              TestSecret,
+				OpenAIKey:                  TestAPIKey,
+				DefaultDictationProvider:   "glm",
+				RequestTimeoutSeconds:      TestTimeout,
+				UpstreamPollTimeoutSeconds: TestTimeout,
+			},
+			expectedError: "unsupported provider endpoint: provider=zhipu endpoint=dictation",
+		},
+		{
+			name: "unknown default dictation provider",
+			configuration: proxy.Configuration{
+				ServiceSecret:              TestSecret,
+				OpenAIKey:                  TestAPIKey,
+				DefaultDictationProvider:   "unknown",
+				RequestTimeoutSeconds:      TestTimeout,
+				UpstreamPollTimeoutSeconds: TestTimeout,
+			},
+			expectedError: "unknown provider: unknown",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			_, buildError := proxy.BuildRouter(testCase.configuration, coverageLogger())
+			if buildError == nil || !strings.Contains(buildError.Error(), testCase.expectedError) {
+				subTest.Fatalf("error=%v want contains %q", buildError, testCase.expectedError)
+			}
+		})
+	}
+}
+
+func TestCoverageOpenAILifecycleBranches(t *testing.T) {
+	t.Run("terminal message returns without polling", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"id":"done","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"text","text":"direct final"}]}]}`))
+		})
+		queryParameters := url.Values{}
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK || body != "direct final" {
+			subTest.Fatalf("status=%d body=%q", statusCode, body)
+		}
+	})
+
+	t.Run("terminal message joins multiple text parts", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"id":"done","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"text","text":"first"},{"type":"output_text","text":"second"}]}]}`))
+		})
+		queryParameters := url.Values{}
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK || body != "first\nsecond" {
+			subTest.Fatalf("status=%d body=%q", statusCode, body)
+		}
+	})
+
+	t.Run("completed without final message starts synthesis continuation", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				requestBytes, _ := io.ReadAll(httpRequest.Body)
+				var requestPayload map[string]any
+				_ = json.Unmarshal(requestBytes, &requestPayload)
+				if requestPayload["previous_response_id"] == nil {
+					_, _ = responseWriter.Write([]byte(`{"id":"needs_synthesis","status":"completed","output":[{"type":"web_search_call","action":{"query":"weather"}}]}`))
+					return
+				}
+				_, _ = responseWriter.Write([]byte(`{"id":"synthesis","status":"queued"}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/synthesis":
+				_, _ = responseWriter.Write([]byte(`{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"synthesized"}]}]}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK || body != "synthesized" {
+			subTest.Fatalf("status=%d body=%q", statusCode, body)
+		}
+	})
+
+	t.Run("completed output object still starts synthesis continuation", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				requestBytes, _ := io.ReadAll(httpRequest.Body)
+				var requestPayload map[string]any
+				_ = json.Unmarshal(requestBytes, &requestPayload)
+				if requestPayload["previous_response_id"] == nil {
+					_, _ = responseWriter.Write([]byte(`{"id":"object_output","status":"completed","output":{}}`))
+					return
+				}
+				_, _ = responseWriter.Write([]byte(`{"id":"object_synthesis","status":"queued"}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/object_synthesis":
+				_, _ = responseWriter.Write([]byte(`{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"text","text":"object synthesized"}]}]}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK || body != "object synthesized" {
+			subTest.Fatalf("status=%d body=%q", statusCode, body)
+		}
+	})
+
+	t.Run("queued response continue failure maps to bad gateway", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				_, _ = responseWriter.Write([]byte(`{"id":"queued","status":"queued"}`))
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/queued/continue":
+				responseWriter.WriteHeader(http.StatusBadRequest)
+				_, _ = responseWriter.Write([]byte(`{"error":"continue rejected"}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusBadGateway {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		}
+	})
+
+	t.Run("queued response malformed identifier fails continue construction", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"id":"bad\nid","status":"queued"}`))
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusBadGateway {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		}
+	})
+
+	t.Run("queued response continue transport error reports upstream failure", func(subTest *testing.T) {
+		previousClient := proxy.HTTPClient
+		requestCount := 0
+		proxy.HTTPClient = coverageHTTPDoer(func(httpRequest *http.Request) (*http.Response, error) {
+			requestCount++
+			if requestCount == 1 {
+				return coverageHTTPResponse(http.StatusOK, `{"id":"queued","status":"queued"}`), nil
+			}
+			return nil, backoff.Permanent(errors.New("continue transport failed"))
+		})
+		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
+		router := coverageRouter(subTest, proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      1,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		requireUpstreamFailureStatus(subTest, statusCode)
+	})
+
+	t.Run("poll failed status maps to bad gateway", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				_, _ = responseWriter.Write([]byte(`{"id":"failed","status":"queued"}`))
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/failed/continue":
+				_, _ = responseWriter.Write([]byte(`{"status":"in_progress"}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/failed":
+				_, _ = responseWriter.Write([]byte(`{"status":"failed"}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusBadGateway {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		}
+	})
+
+	t.Run("synthesis transport error reports upstream failure", func(subTest *testing.T) {
+		previousClient := proxy.HTTPClient
+		requestCount := 0
+		proxy.HTTPClient = coverageHTTPDoer(func(httpRequest *http.Request) (*http.Response, error) {
+			requestCount++
+			if requestCount == 1 {
+				return coverageHTTPResponse(http.StatusOK, `{"id":"needs_synthesis","status":"completed","output":[]}`), nil
+			}
+			return nil, backoff.Permanent(errors.New("synthesis transport failed"))
+		})
+		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
+		router := coverageRouter(subTest, proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      1,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		requireUpstreamFailureStatus(subTest, statusCode)
+	})
+
+	t.Run("synthesis malformed poll identifier fails request construction", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				requestBytes, _ := io.ReadAll(httpRequest.Body)
+				var requestPayload map[string]any
+				_ = json.Unmarshal(requestBytes, &requestPayload)
+				if requestPayload["previous_response_id"] == nil {
+					_, _ = responseWriter.Write([]byte(`{"id":"needs_synthesis","status":"completed","output":[]}`))
+					return
+				}
+				_, _ = responseWriter.Write([]byte(`{"id":"bad\nid","status":"queued"}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusBadGateway {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		}
+	})
+
+	t.Run("poll timeout maps to bad gateway after upstream incomplete", func(subTest *testing.T) {
+		upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				_, _ = responseWriter.Write([]byte(`{"id":"slow","status":"queued"}`))
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/slow/continue":
+				_, _ = responseWriter.Write([]byte(`{"status":"in_progress"}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/slow":
+				_, _ = responseWriter.Write([]byte(`{"status":"in_progress"}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		}))
+		subTest.Cleanup(upstreamServer.Close)
+		endpoints := proxy.NewEndpoints()
+		endpoints.SetResponsesURL(upstreamServer.URL)
+		router := coverageRouter(subTest, proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      2,
+			UpstreamPollTimeoutSeconds: 1,
+			Endpoints:                  endpoints,
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusBadGateway {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		}
+	})
+
+	t.Run("poll completed without text maps to bad gateway", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				_, _ = responseWriter.Write([]byte(`{"id":"blank","status":"queued"}`))
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/blank/continue":
+				_, _ = responseWriter.Write([]byte(`{"status":"in_progress"}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/blank":
+				_, _ = responseWriter.Write([]byte(`{"status":"completed","output":[]}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusBadGateway {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		}
+	})
+
+	t.Run("non terminal poll transport error reports upstream failure", func(subTest *testing.T) {
+		previousClient := proxy.HTTPClient
+		requestCount := 0
+		proxy.HTTPClient = coverageHTTPDoer(func(httpRequest *http.Request) (*http.Response, error) {
+			requestCount++
+			switch requestCount {
+			case 1:
+				return coverageHTTPResponse(http.StatusOK, `{"id":"queued","status":"queued"}`), nil
+			case 2:
+				return coverageHTTPResponse(http.StatusOK, `{"status":"in_progress"}`), nil
+			default:
+				return nil, backoff.Permanent(errors.New("poll transport failed"))
+			}
+		})
+		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
+		router := coverageRouter(subTest, proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      1,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		requireUpstreamFailureStatus(subTest, statusCode)
+	})
+
+	t.Run("initial bad request status maps to bad gateway", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.WriteHeader(http.StatusBadRequest)
+			_, _ = responseWriter.Write([]byte(`{"error":"bad request"}`))
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusBadGateway {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		}
+	})
+
+	t.Run("invalid responses URL fails request construction", func(subTest *testing.T) {
+		endpoints := proxy.NewEndpoints()
+		endpoints.SetResponsesURL("http://[::1")
+		router := coverageRouter(subTest, proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      TestTimeout,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+			Endpoints:                  endpoints,
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusBadGateway {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		}
+	})
+
+	t.Run("synthesis continuation malformed responses fail", func(subTest *testing.T) {
+		testCases := []struct {
+			name          string
+			synthesisBody string
+			synthesisCode int
+		}{
+			{name: "bad status", synthesisCode: http.StatusBadRequest, synthesisBody: `{}`},
+			{name: "malformed json", synthesisCode: http.StatusOK, synthesisBody: `{`},
+			{name: "missing identifier", synthesisCode: http.StatusOK, synthesisBody: `{"status":"queued"}`},
+		}
+		for _, testCase := range testCases {
+			subTest.Run(testCase.name, func(caseTest *testing.T) {
+				router := textRouterWithResponsesHandler(caseTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+					responseWriter.Header().Set("Content-Type", "application/json")
+					switch {
+					case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+						requestBytes, _ := io.ReadAll(httpRequest.Body)
+						var requestPayload map[string]any
+						_ = json.Unmarshal(requestBytes, &requestPayload)
+						if requestPayload["previous_response_id"] == nil {
+							_, _ = responseWriter.Write([]byte(`{"id":"needs_synthesis","status":"completed","output":[]}`))
+							return
+						}
+						responseWriter.WriteHeader(testCase.synthesisCode)
+						_, _ = responseWriter.Write([]byte(testCase.synthesisBody))
+					default:
+						http.NotFound(responseWriter, httpRequest)
+					}
+				})
+				queryParameters := url.Values{}
+				statusCode, _, _ := performCoverageTextRequest(caseTest, router, queryParameters, "")
+				if statusCode != http.StatusBadGateway {
+					caseTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+				}
+			})
+		}
+	})
+}
+
+func TestCoverageProviderRoutingEdges(t *testing.T) {
+	t.Run("alias provider resolves text request", func(subTest *testing.T) {
+		var capturedPayload map[string]any
+		upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			requestBytes, _ := io.ReadAll(httpRequest.Body)
+			_ = json.Unmarshal(requestBytes, &capturedPayload)
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"reasoning_content":"reasoned answer"}}]}`))
+		}))
+		subTest.Cleanup(upstreamServer.Close)
+		router := coverageRouter(subTest, proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			DashScopeKey:               "sk-qwen",
+			DashScopeBaseURL:           upstreamServer.URL,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      TestTimeout,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+		})
+		queryParameters := url.Values{}
+		queryParameters.Set("provider", "qwen")
+		queryParameters.Set("system_prompt", "system text")
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK || body != "reasoned answer" {
+			subTest.Fatalf("status=%d body=%q", statusCode, body)
+		}
+		messages, ok := capturedPayload["messages"].([]any)
+		if !ok || len(messages) != 2 {
+			subTest.Fatalf("messages=%v", capturedPayload["messages"])
+		}
+	})
+
+	t.Run("provider status and parse errors map to responses", func(subTest *testing.T) {
+		testCases := []struct {
+			name       string
+			statusCode int
+			body       string
+			wantStatus int
+		}{
+			{name: "rate limited", statusCode: http.StatusTooManyRequests, body: `{}`, wantStatus: http.StatusTooManyRequests},
+			{name: "provider api failure", statusCode: http.StatusBadRequest, body: `{}`, wantStatus: http.StatusBadGateway},
+			{name: "malformed json", statusCode: http.StatusOK, body: `{`, wantStatus: http.StatusBadGateway},
+			{name: "missing text", statusCode: http.StatusOK, body: `{"choices":[{"message":{}}]}`, wantStatus: http.StatusBadGateway},
+		}
+		for _, testCase := range testCases {
+			subTest.Run(testCase.name, func(caseTest *testing.T) {
+				upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+					responseWriter.Header().Set("Content-Type", "application/json")
+					responseWriter.WriteHeader(testCase.statusCode)
+					_, _ = responseWriter.Write([]byte(testCase.body))
+				}))
+				caseTest.Cleanup(upstreamServer.Close)
+				router := coverageRouter(caseTest, proxy.Configuration{
+					ServiceSecret:              TestSecret,
+					OpenAIKey:                  TestAPIKey,
+					DeepSeekKey:                testDeepSeekKey,
+					DeepSeekBaseURL:            upstreamServer.URL,
+					LogLevel:                   proxy.LogLevelInfo,
+					WorkerCount:                1,
+					QueueSize:                  1,
+					RequestTimeoutSeconds:      TestTimeout,
+					UpstreamPollTimeoutSeconds: TestTimeout,
+				})
+				queryParameters := url.Values{}
+				queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
+				statusCode, _, _ := performCoverageTextRequest(caseTest, router, queryParameters, "")
+				if statusCode != testCase.wantStatus {
+					caseTest.Fatalf("status=%d want=%d", statusCode, testCase.wantStatus)
+				}
+			})
+		}
+	})
+
+	t.Run("transport deadline maps to gateway timeout", func(subTest *testing.T) {
+		previousClient := proxy.HTTPClient
+		proxy.HTTPClient = &http.Client{Transport: coverageRoundTripper(func(httpRequest *http.Request) (*http.Response, error) {
+			return nil, context.DeadlineExceeded
+		})}
+		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
+		router := coverageRouter(subTest, proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			DeepSeekKey:                testDeepSeekKey,
+			DeepSeekBaseURL:            "https://deepseek.invalid",
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      1,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+		})
+		queryParameters := url.Values{}
+		queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusGatewayTimeout {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
+		}
+	})
+
+	t.Run("provider model and URL validation failures", func(subTest *testing.T) {
+		testCases := []struct {
+			name       string
+			baseURL    string
+			model      string
+			wantStatus int
+		}{
+			{name: "unknown model", baseURL: "https://deepseek.invalid", model: "unknown-model", wantStatus: http.StatusBadRequest},
+			{name: "blank model uses provider default", baseURL: "https://deepseek.invalid", model: " ", wantStatus: http.StatusGatewayTimeout},
+			{name: "invalid provider base URL", baseURL: "http://[::1", model: proxy.ModelNameDeepSeekV4Flash, wantStatus: http.StatusBadGateway},
+		}
+		for _, testCase := range testCases {
+			subTest.Run(testCase.name, func(caseTest *testing.T) {
+				router := coverageRouter(caseTest, proxy.Configuration{
+					ServiceSecret:              TestSecret,
+					OpenAIKey:                  TestAPIKey,
+					DeepSeekKey:                testDeepSeekKey,
+					DeepSeekBaseURL:            testCase.baseURL,
+					LogLevel:                   proxy.LogLevelInfo,
+					WorkerCount:                1,
+					QueueSize:                  1,
+					RequestTimeoutSeconds:      1,
+					UpstreamPollTimeoutSeconds: TestTimeout,
+				})
+				queryParameters := url.Values{}
+				queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
+				queryParameters.Set("model", testCase.model)
+				statusCode, _, _ := performCoverageTextRequest(caseTest, router, queryParameters, "")
+				if statusCode != testCase.wantStatus {
+					caseTest.Fatalf("status=%d want=%d", statusCode, testCase.wantStatus)
+				}
+			})
+		}
+	})
+
+	t.Run("provider non deadline transport error maps to bad gateway", func(subTest *testing.T) {
+		previousClient := proxy.HTTPClient
+		proxy.HTTPClient = &http.Client{Transport: coverageRoundTripper(func(httpRequest *http.Request) (*http.Response, error) {
+			return nil, errors.New("transport failed")
+		})}
+		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
+		router := coverageRouter(subTest, proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			DeepSeekKey:                testDeepSeekKey,
+			DeepSeekBaseURL:            "https://deepseek.invalid",
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      1,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+		})
+		queryParameters := url.Values{}
+		queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusGatewayTimeout {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
+		}
+	})
+}
+
+func TestCoverageDictationEdges(t *testing.T) {
+	t.Run("invalid and missing audio forms", func(subTest *testing.T) {
+		router := coverageRouter(subTest, proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      1,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+			MaxInputAudioBytes:         1024,
+		})
+		invalidRequest := httptest.NewRequest(http.MethodPost, "/dictate?key="+TestSecret, strings.NewReader("not multipart"))
+		invalidRecorder := httptest.NewRecorder()
+		router.ServeHTTP(invalidRecorder, invalidRequest)
+		if invalidRecorder.Code != http.StatusBadRequest {
+			subTest.Fatalf("invalid form status=%d", invalidRecorder.Code)
+		}
+
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		if closeError := writer.Close(); closeError != nil {
+			subTest.Fatalf("close multipart writer: %v", closeError)
+		}
+		missingRequest := httptest.NewRequest(http.MethodPost, "/dictate?key="+TestSecret, body)
+		missingRequest.Header.Set("Content-Type", writer.FormDataContentType())
+		missingRecorder := httptest.NewRecorder()
+		router.ServeHTTP(missingRecorder, missingRequest)
+		if missingRecorder.Code != http.StatusBadRequest {
+			subTest.Fatalf("missing file status=%d", missingRecorder.Code)
+		}
+	})
+
+	t.Run("unsupported and unknown dictation requests", func(subTest *testing.T) {
+		router := coverageRouter(subTest, proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			DeepSeekKey:                testDeepSeekKey,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      TestTimeout,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+			MaxInputAudioBytes:         1024,
+		})
+		for _, requestURL := range []string{
+			"/dictate?key=" + TestSecret + "&provider=deepseek",
+			"/dictate?key=" + TestSecret + "&provider=unknown",
+		} {
+			body := &bytes.Buffer{}
+			writer := multipart.NewWriter(body)
+			filePart, createError := writer.CreateFormFile("audio", "audio.webm")
+			if createError != nil {
+				subTest.Fatalf("create form file: %v", createError)
+			}
+			_, _ = filePart.Write([]byte(testAudioPayload))
+			_ = writer.Close()
+			request := httptest.NewRequest(http.MethodPost, requestURL, body)
+			request.Header.Set("Content-Type", writer.FormDataContentType())
+			responseRecorder := httptest.NewRecorder()
+			router.ServeHTTP(responseRecorder, request)
+			if responseRecorder.Code != http.StatusBadRequest {
+				subTest.Fatalf("url=%s status=%d", requestURL, responseRecorder.Code)
+			}
+		}
+	})
+
+	t.Run("dictation provider credential and model validation failures", func(subTest *testing.T) {
+		testCases := []struct {
+			name          string
+			configuration proxy.Configuration
+			requestURL    string
+			wantStatus    int
+		}{
+			{
+				name: "siliconflow missing credential",
+				configuration: proxy.Configuration{
+					ServiceSecret:              TestSecret,
+					OpenAIKey:                  TestAPIKey,
+					LogLevel:                   proxy.LogLevelInfo,
+					WorkerCount:                1,
+					QueueSize:                  1,
+					RequestTimeoutSeconds:      TestTimeout,
+					UpstreamPollTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:         1024,
+				},
+				requestURL: "/dictate?key=" + TestSecret + "&provider=siliconflow",
+				wantStatus: http.StatusServiceUnavailable,
+			},
+			{
+				name: "siliconflow unknown model",
+				configuration: proxy.Configuration{
+					ServiceSecret:              TestSecret,
+					OpenAIKey:                  TestAPIKey,
+					SiliconFlowKey:             testSiliconFlowKey,
+					LogLevel:                   proxy.LogLevelInfo,
+					WorkerCount:                1,
+					QueueSize:                  1,
+					RequestTimeoutSeconds:      TestTimeout,
+					UpstreamPollTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:         1024,
+				},
+				requestURL: "/dictate?key=" + TestSecret + "&provider=siliconflow&model=unknown",
+				wantStatus: http.StatusBadRequest,
+			},
+			{
+				name: "openai missing credential when non openai defaults are configured",
+				configuration: proxy.Configuration{
+					ServiceSecret:              TestSecret,
+					DeepSeekKey:                testDeepSeekKey,
+					SiliconFlowKey:             testSiliconFlowKey,
+					DefaultProvider:            proxy.ProviderNameDeepSeek,
+					DefaultDictationProvider:   proxy.ProviderNameSiliconFlow,
+					LogLevel:                   proxy.LogLevelInfo,
+					WorkerCount:                1,
+					QueueSize:                  1,
+					RequestTimeoutSeconds:      TestTimeout,
+					UpstreamPollTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:         1024,
+				},
+				requestURL: "/dictate?key=" + TestSecret + "&provider=openai",
+				wantStatus: http.StatusServiceUnavailable,
+			},
+		}
+		for _, testCase := range testCases {
+			subTest.Run(testCase.name, func(caseTest *testing.T) {
+				router := coverageRouter(caseTest, testCase.configuration)
+				body := &bytes.Buffer{}
+				writer := multipart.NewWriter(body)
+				filePart, createError := writer.CreateFormFile("audio", "audio.webm")
+				if createError != nil {
+					caseTest.Fatalf("create form file: %v", createError)
+				}
+				_, _ = filePart.Write([]byte(testAudioPayload))
+				_ = writer.Close()
+				request := httptest.NewRequest(http.MethodPost, testCase.requestURL, body)
+				request.Header.Set("Content-Type", writer.FormDataContentType())
+				responseRecorder := httptest.NewRecorder()
+				router.ServeHTTP(responseRecorder, request)
+				if responseRecorder.Code != testCase.wantStatus {
+					caseTest.Fatalf("status=%d want=%d", responseRecorder.Code, testCase.wantStatus)
+				}
+			})
+		}
+	})
+
+	t.Run("upstream dictation status and transport errors", func(subTest *testing.T) {
+		testCases := []struct {
+			name       string
+			statusCode int
+			body       string
+			wantStatus int
+		}{
+			{name: "upstream status", statusCode: http.StatusBadRequest, body: `{}`, wantStatus: http.StatusBadGateway},
+			{name: "blank transcript", statusCode: http.StatusOK, body: `   `, wantStatus: http.StatusBadGateway},
+		}
+		for _, testCase := range testCases {
+			subTest.Run(testCase.name, func(caseTest *testing.T) {
+				upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+					responseWriter.WriteHeader(testCase.statusCode)
+					_, _ = responseWriter.Write([]byte(testCase.body))
+				}))
+				caseTest.Cleanup(upstreamServer.Close)
+				endpoints := proxy.NewEndpoints()
+				endpoints.SetTranscriptionsURL(upstreamServer.URL)
+				router := coverageRouter(caseTest, proxy.Configuration{
+					ServiceSecret:              TestSecret,
+					OpenAIKey:                  TestAPIKey,
+					LogLevel:                   proxy.LogLevelInfo,
+					WorkerCount:                1,
+					QueueSize:                  1,
+					RequestTimeoutSeconds:      TestTimeout,
+					UpstreamPollTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:         1024,
+					Endpoints:                  endpoints,
+				})
+				body := &bytes.Buffer{}
+				writer := multipart.NewWriter(body)
+				filePart, createError := writer.CreateFormFile("audio", "   ")
+				if createError != nil {
+					caseTest.Fatalf("create form file: %v", createError)
+				}
+				_, _ = filePart.Write([]byte(testAudioPayload))
+				_ = writer.Close()
+				request := httptest.NewRequest(http.MethodPost, "/dictate?key="+TestSecret, body)
+				request.Header.Set("Content-Type", writer.FormDataContentType())
+				responseRecorder := httptest.NewRecorder()
+				router.ServeHTTP(responseRecorder, request)
+				if responseRecorder.Code != testCase.wantStatus {
+					caseTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, testCase.wantStatus, responseRecorder.Body.String())
+				}
+			})
+		}
+	})
+
+	t.Run("invalid dictation endpoint fails request construction", func(subTest *testing.T) {
+		endpoints := proxy.NewEndpoints()
+		endpoints.SetTranscriptionsURL("http://[::1")
+		router := coverageRouter(subTest, proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      TestTimeout,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+			MaxInputAudioBytes:         1024,
+			Endpoints:                  endpoints,
+		})
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		filePart, createError := writer.CreateFormFile("audio", "audio.webm")
+		if createError != nil {
+			subTest.Fatalf("create form file: %v", createError)
+		}
+		_, _ = filePart.Write([]byte(testAudioPayload))
+		_ = writer.Close()
+		request := httptest.NewRequest(http.MethodPost, "/dictate?key="+TestSecret, body)
+		request.Header.Set("Content-Type", writer.FormDataContentType())
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusBadGateway {
+			subTest.Fatalf("status=%d want=%d", responseRecorder.Code, http.StatusBadGateway)
+		}
+	})
+
+	t.Run("dictation transport deadline maps to timeout", func(subTest *testing.T) {
+		previousClient := proxy.HTTPClient
+		proxy.HTTPClient = &http.Client{Transport: coverageRoundTripper(func(httpRequest *http.Request) (*http.Response, error) {
+			return nil, context.DeadlineExceeded
+		})}
+		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
+		router := coverageRouter(subTest, proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      TestTimeout,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+			MaxInputAudioBytes:         1024,
+		})
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		filePart, createError := writer.CreateFormFile("audio", "audio.webm")
+		if createError != nil {
+			subTest.Fatalf("create form file: %v", createError)
+		}
+		_, _ = filePart.Write([]byte(testAudioPayload))
+		_ = writer.Close()
+		request := httptest.NewRequest(http.MethodPost, "/dictate?key="+TestSecret, body)
+		request.Header.Set("Content-Type", writer.FormDataContentType())
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusGatewayTimeout {
+			subTest.Fatalf("status=%d want=%d", responseRecorder.Code, http.StatusGatewayTimeout)
+		}
+	})
+}
+
+func TestCoverageServeAndEndpointReset(t *testing.T) {
+	endpoints := proxy.NewEndpoints()
+	endpoints.SetTranscriptionsURL("http://transcriptions.example")
+	endpoints.ResetTranscriptionsURL()
+	if transcriptionsURL := endpoints.GetTranscriptionsURL(); !strings.Contains(transcriptionsURL, "/audio/transcriptions") {
+		t.Fatalf("transcriptionsURL=%q", transcriptionsURL)
+	}
+
+	buildError := proxy.Serve(proxy.Configuration{
+		OpenAIKey:                  TestAPIKey,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, coverageLogger())
+	if buildError == nil {
+		t.Fatalf("Serve buildError=nil want non-nil")
+	}
+
+	serveError := proxy.Serve(proxy.Configuration{
+		ServiceSecret:              TestSecret,
+		OpenAIKey:                  TestAPIKey,
+		Port:                       -1,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, coverageLogger())
+	if serveError == nil {
+		t.Fatalf("Serve error=nil want non-nil")
+	}
+}
+
+func TestCoverageHTTPUtilityReadFailure(t *testing.T) {
+	previousClient := proxy.HTTPClient
+	proxy.HTTPClient = &http.Client{Transport: coverageRoundTripper(func(httpRequest *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(failingReader{}),
+			Header:     make(http.Header),
+		}, nil
+	})}
+	t.Cleanup(func() { proxy.HTTPClient = previousClient })
+	router := coverageRouter(t, proxy.Configuration{
+		ServiceSecret:              TestSecret,
+		OpenAIKey:                  TestAPIKey,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      1,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	})
+	queryParameters := url.Values{}
+	statusCode, _, _ := performCoverageTextRequest(t, router, queryParameters, "")
+	if statusCode != http.StatusGatewayTimeout {
+		t.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
+	}
+}
+
+type failingReader struct{}
+
+func (failingReader) Read([]byte) (int, error) {
+	return 0, errors.New("read failed")
+}
