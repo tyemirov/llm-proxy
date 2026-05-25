@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/temirov/llm-proxy/internal/apperrors"
@@ -17,6 +18,10 @@ const (
 	DefaultQueueSize = 100
 	// DefaultModel is the model identifier used when the client does not supply one.
 	DefaultModel = ModelNameGPT41
+	// DefaultProvider is the provider identifier used when the client does not supply one.
+	DefaultProvider = ProviderNameOpenAI
+	// DefaultDictationProvider is the provider used when /dictate does not supply one.
+	DefaultDictationProvider = ProviderNameOpenAI
 
 	DefaultRequestTimeoutSeconds      = 180 // overall app-side request timeout
 	DefaultUpstreamPollTimeoutSeconds = 60  // poll budget after "incomplete"
@@ -29,20 +34,34 @@ const (
 
 // Configuration holds runtime settings.
 type Configuration struct {
-	ServiceSecret              string
-	OpenAIKey                  string
-	Port                       int
-	LogLevel                   string
-	SystemPrompt               string
-	WorkerCount                int
-	QueueSize                  int
-	RequestTimeoutSeconds      int
-	UpstreamPollTimeoutSeconds int
-	MaxOutputTokens            int
-	MaxPromptBytes             int64
-	DictationModel             string
-	MaxInputAudioBytes         int64
-	Endpoints                  *Endpoints
+	ServiceSecret                string
+	OpenAIKey                    string
+	DeepSeekKey                  string
+	DashScopeKey                 string
+	MoonshotKey                  string
+	SiliconFlowKey               string
+	ZhipuKey                     string
+	DefaultProvider              string
+	DefaultModel                 string
+	DefaultDictationProvider     string
+	DeepSeekBaseURL              string
+	DashScopeBaseURL             string
+	MoonshotBaseURL              string
+	SiliconFlowBaseURL           string
+	SiliconFlowTranscriptionsURL string
+	ZhipuBaseURL                 string
+	Port                         int
+	LogLevel                     string
+	SystemPrompt                 string
+	WorkerCount                  int
+	QueueSize                    int
+	RequestTimeoutSeconds        int
+	UpstreamPollTimeoutSeconds   int
+	MaxOutputTokens              int
+	MaxPromptBytes               int64
+	DictationModel               string
+	MaxInputAudioBytes           int64
+	Endpoints                    *Endpoints
 }
 
 // validateConfig confirms required settings are present.
@@ -50,8 +69,67 @@ func validateConfig(config Configuration) error {
 	if strings.TrimSpace(config.ServiceSecret) == constants.EmptyString {
 		return apperrors.ErrMissingServiceSecret
 	}
-	if strings.TrimSpace(config.OpenAIKey) == constants.EmptyString {
-		return apperrors.ErrMissingOpenAIKey
+	if credentialError := validateDefaultProviderCredential(config.DefaultProvider, config); credentialError != nil {
+		return credentialError
+	}
+	if credentialError := validateDefaultDictationProviderCredential(config.DefaultDictationProvider, config); credentialError != nil {
+		return credentialError
+	}
+	return nil
+}
+
+func validateDefaultProviderCredential(providerIdentifier string, config Configuration) error {
+	switch strings.ToLower(strings.TrimSpace(providerIdentifier)) {
+	case ProviderNameOpenAI:
+		if strings.TrimSpace(config.OpenAIKey) == constants.EmptyString {
+			return apperrors.ErrMissingOpenAIKey
+		}
+	case ProviderNameDeepSeek:
+		if strings.TrimSpace(config.DeepSeekKey) == constants.EmptyString {
+			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameDeepSeek)
+		}
+	case ProviderNameDashScope, providerAliasQwen:
+		if strings.TrimSpace(config.DashScopeKey) == constants.EmptyString {
+			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameDashScope)
+		}
+	case ProviderNameMoonshot, providerAliasKimi:
+		if strings.TrimSpace(config.MoonshotKey) == constants.EmptyString {
+			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameMoonshot)
+		}
+	case ProviderNameSiliconFlow:
+		if strings.TrimSpace(config.SiliconFlowKey) == constants.EmptyString {
+			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameSiliconFlow)
+		}
+	case ProviderNameZhipu, providerAliasGLM:
+		if strings.TrimSpace(config.ZhipuKey) == constants.EmptyString {
+			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameZhipu)
+		}
+	default:
+		return fmt.Errorf("%w: %s", ErrUnknownProvider, providerIdentifier)
+	}
+	return nil
+}
+
+func validateDefaultDictationProviderCredential(providerIdentifier string, config Configuration) error {
+	switch strings.ToLower(strings.TrimSpace(providerIdentifier)) {
+	case ProviderNameOpenAI:
+		if strings.TrimSpace(config.OpenAIKey) == constants.EmptyString {
+			return apperrors.ErrMissingOpenAIKey
+		}
+	case ProviderNameSiliconFlow:
+		if strings.TrimSpace(config.SiliconFlowKey) == constants.EmptyString {
+			return fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, ProviderNameSiliconFlow, endpointKindDictation)
+		}
+	case ProviderNameDeepSeek:
+		return fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, ProviderNameDeepSeek, endpointKindDictation)
+	case ProviderNameDashScope, providerAliasQwen:
+		return fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, ProviderNameDashScope, endpointKindDictation)
+	case ProviderNameMoonshot, providerAliasKimi:
+		return fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, ProviderNameMoonshot, endpointKindDictation)
+	case ProviderNameZhipu, providerAliasGLM:
+		return fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, ProviderNameZhipu, endpointKindDictation)
+	default:
+		return fmt.Errorf("%w: %s", ErrUnknownProvider, providerIdentifier)
 	}
 	return nil
 }
@@ -70,6 +148,17 @@ func (configuration *Configuration) ApplyTunables() {
 	if configuration.MaxOutputTokens <= 0 {
 		configuration.MaxOutputTokens = DefaultMaxOutputTokens
 	}
+	if strings.TrimSpace(configuration.DefaultProvider) == constants.EmptyString {
+		configuration.DefaultProvider = DefaultProvider
+	}
+	configuration.DefaultProvider = strings.ToLower(strings.TrimSpace(configuration.DefaultProvider))
+	if strings.TrimSpace(configuration.DefaultModel) == constants.EmptyString {
+		configuration.DefaultModel = DefaultModel
+	}
+	if strings.TrimSpace(configuration.DefaultDictationProvider) == constants.EmptyString {
+		configuration.DefaultDictationProvider = DefaultDictationProvider
+	}
+	configuration.DefaultDictationProvider = strings.ToLower(strings.TrimSpace(configuration.DefaultDictationProvider))
 	if configuration.MaxPromptBytes <= 0 {
 		configuration.MaxPromptBytes = DefaultMaxPromptBytes
 	}
@@ -78,5 +167,23 @@ func (configuration *Configuration) ApplyTunables() {
 	}
 	if configuration.MaxInputAudioBytes <= 0 {
 		configuration.MaxInputAudioBytes = DefaultMaxInputAudioBytes
+	}
+	if strings.TrimSpace(configuration.DeepSeekBaseURL) == constants.EmptyString {
+		configuration.DeepSeekBaseURL = defaultDeepSeekBaseURL
+	}
+	if strings.TrimSpace(configuration.DashScopeBaseURL) == constants.EmptyString {
+		configuration.DashScopeBaseURL = defaultDashScopeBaseURL
+	}
+	if strings.TrimSpace(configuration.MoonshotBaseURL) == constants.EmptyString {
+		configuration.MoonshotBaseURL = defaultMoonshotBaseURL
+	}
+	if strings.TrimSpace(configuration.SiliconFlowBaseURL) == constants.EmptyString {
+		configuration.SiliconFlowBaseURL = defaultSiliconFlowBaseURL
+	}
+	if strings.TrimSpace(configuration.SiliconFlowTranscriptionsURL) == constants.EmptyString {
+		configuration.SiliconFlowTranscriptionsURL = strings.TrimRight(configuration.SiliconFlowBaseURL, "/") + "/audio/transcriptions"
+	}
+	if strings.TrimSpace(configuration.ZhipuBaseURL) == constants.EmptyString {
+		configuration.ZhipuBaseURL = defaultZhipuBaseURL
 	}
 }

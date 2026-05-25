@@ -1,9 +1,31 @@
-# Managed by ISSUES Managing Director (planning worktree)
-*
-!.gitignore
-!AGENTS.md
-!.mprl/
-!.mprl/**
-!Makefile
-!scripts/
-!scripts/**
+# Local planning scratch
+PLAN.md
+
+# OS and editor metadata
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local environment and secrets
+.env
+.env.local
+.env.*.local
+.envrc
+*.pem
+*.key
+
+# Build output
+bin/
+dist/
+tmp/
+
+# Logs
+*.log
+
+# Go test and coverage artifacts
+*.test
+coverage.out
+*.coverprofile
+*.prof

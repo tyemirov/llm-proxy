@@ -2,8 +2,6 @@ SHELL := /bin/bash
 
 GO ?= go
 GOFMT ?= gofmt
-STATICCHECK ?= staticcheck
-INEFFASSIGN ?= ineffassign
 BIN_DIR ?= bin
 BINARY_NAME ?= llm-proxy
 PUBLISH_ARGS ?=
@@ -32,11 +30,9 @@ check-format:
 	fi
 
 lint:
-	@command -v $(STATICCHECK) >/dev/null 2>&1 || { echo "staticcheck is required (install via go install honnef.co/go/tools/cmd/staticcheck@latest)"; exit 1; }
-	@command -v $(INEFFASSIGN) >/dev/null 2>&1 || { echo "ineffassign is required (install via go install github.com/gordonklaus/ineffassign@latest)"; exit 1; }
 	$(GO) vet ./...
-	$(STATICCHECK) ./...
-	$(INEFFASSIGN) ./...
+	$(GO) run honnef.co/go/tools/cmd/staticcheck@latest ./...
+	$(GO) run github.com/gordonklaus/ineffassign@latest ./...
 
 test:
 	$(GO) test ./...

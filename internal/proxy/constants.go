@@ -19,6 +19,7 @@ const (
 
 	queryParameterPrompt       = "prompt"
 	queryParameterKey          = "key"
+	queryParameterProvider     = "provider"
 	queryParameterModel        = "model"
 	queryParameterWebSearch    = "web_search"
 	queryParameterSystemPrompt = "system_prompt"
@@ -39,15 +40,23 @@ const (
 	errorInvalidJSONRequest    = "invalid JSON request"
 	errorPromptPayloadTooLarge = "prompt payload too large"
 	// errorMissingClientKey indicates that the key query parameter is missing.
-	errorMissingClientKey   = "unknown client key"
-	errorRequestTimedOut    = "request timed out"
-	errorOpenAIRequest      = "OpenAI request error"
-	errorOpenAIAPI          = "OpenAI API error"
-	errorOpenAIAPINoText    = "OpenAI API error (no text)"
-	errorOpenAIFailedStatus = "OpenAI API error (failed status)"
-	errorOpenAIContinue     = "OpenAI API continue error"
-	errorInvalidAudioForm   = "invalid audio form"
-	errorMissingAudioFile   = "missing audio file"
+	errorMissingClientKey           = "unknown client key"
+	errorRequestTimedOut            = "request timed out"
+	errorOpenAIRequest              = "OpenAI request error"
+	errorOpenAIAPI                  = "OpenAI API error"
+	errorOpenAIAPINoText            = "OpenAI API error (no text)"
+	errorOpenAIFailedStatus         = "OpenAI API error (failed status)"
+	errorOpenAIContinue             = "OpenAI API continue error"
+	errorUnknownProvider            = "unknown provider"
+	errorProviderNotConfigured      = "provider not configured"
+	errorUnsupportedCapability      = "unsupported provider capability"
+	errorUnsupportedEndpoint        = "unsupported provider endpoint"
+	errorConflictingModelParameters = "conflicting model parameters"
+	errorProviderRateLimited        = "provider rate limited"
+	errorProviderAPI                = "provider API error"
+	errorProviderNoText             = "provider API error (no text)"
+	errorInvalidAudioForm           = "invalid audio form"
+	errorMissingAudioFile           = "missing audio file"
 	// errorUpstreamIncomplete indicates that the upstream provider returned an incomplete response.
 	errorUpstreamIncomplete    = "OpenAI API error (incomplete response)"
 	errorOpenAIModelValidation = "OpenAI model validation error"
@@ -138,6 +147,7 @@ const (
 	logEventOpenAIContinueError    = "OpenAI continue error"
 	// logEventOpenAIInitialResponseBody records the body of the initial response from OpenAI.
 	logEventOpenAIInitialResponseBody = "OpenAI initial response body"
+	logEventProviderRequestError      = "provider request error"
 	// logEventMissingFinalMessage indicates that the response completed without a final assistant message.
 	logEventMissingFinalMessage = "response is 'completed' but lacks final message; starting synthesis continuation"
 	// logEventRetryingSynthesis reports a retry of synthesis due to an empty initial attempt.

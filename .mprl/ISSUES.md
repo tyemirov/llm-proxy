@@ -7,7 +7,7 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
 
 ## BugFixes
 
-- [ ] [B001] (P0) Prepare a provider-routing plan using query-string parameters (Claude, Gemini, and others).
+- [x] [B001] (P0) Prepare a provider-routing plan using query-string parameters (Claude, Gemini, and others).
   ### Summary
   Create an implementation plan to extend `llm-proxy` so requests can select an LLM provider via query-string parameters (for example, OpenAI, Anthropic Claude, Google Gemini), rather than assuming OpenAI-only routing.
   
@@ -41,6 +41,9 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
   3. The plan identifies required code touchpoints (request parsing, routing layer, provider clients, docs, tests).
   4. The plan includes concrete test cases for success and failure paths (including unsupported combinations).
   5. The plan is detailed enough that implementation can proceed without additional requirement clarification.
+
+  ### Implementation Note
+  Implemented provider-aware routing with default OpenAI compatibility, explicit `provider` query selection, OpenAI-compatible chat-completions routing for DeepSeek/DashScope/Moonshot/SiliconFlow/Zhipu, SiliconFlow dictation routing, configuration/env wiring, docs, and black-box test coverage. `make ci` passes.
 
 
 ## Improvements
