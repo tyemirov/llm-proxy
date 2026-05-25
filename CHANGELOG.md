@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.4] - 2026-05-24
+
+### Changes
+- fix proxy constants and improve test coverage for router and openai modules
+
 ## [v0.2.3] - 2026-05-24
 
 ### Changes
