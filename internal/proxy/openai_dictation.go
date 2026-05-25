@@ -22,7 +22,7 @@ type transcriptionResponse struct {
 	OutputText string `json:"output_text"`
 }
 
-func (client *OpenAIClient) transcribeAudio(openAIKey string, modelIdentifier string, fileName string, audioReader io.Reader, structuredLogger *zap.SugaredLogger) (string, error) {
+func (client *OpenAIClient) transcribeAudioWithURL(openAIKey string, transcriptionsURL string, modelIdentifier string, fileName string, audioReader io.Reader, structuredLogger *zap.SugaredLogger) (string, error) {
 	modelIdentifier = strings.TrimSpace(modelIdentifier)
 	if modelIdentifier == constants.EmptyString {
 		modelIdentifier = DefaultDictationModel
@@ -55,7 +55,7 @@ func (client *OpenAIClient) transcribeAudio(openAIKey string, modelIdentifier st
 	defer cancelRequest()
 
 	requestBody := bytes.NewReader(payloadBuffer.Bytes())
-	httpRequest, buildError := http.NewRequestWithContext(requestContext, http.MethodPost, client.endpoints.GetTranscriptionsURL(), requestBody)
+	httpRequest, buildError := http.NewRequestWithContext(requestContext, http.MethodPost, transcriptionsURL, requestBody)
 	if buildError != nil {
 		return constants.EmptyString, buildError
 	}

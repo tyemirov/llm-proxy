@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -16,7 +16,7 @@ import (
 )
 
 // result holds the outcome returned by a worker, including the text response
-// and any error encountered during the OpenAI request.
+// and any error encountered during the upstream provider request.
 type result struct {
 	text         string
 	requestError error
@@ -25,15 +25,12 @@ type result struct {
 // requestTask carries all details needed to process a user request in the
 // worker queue.
 type requestTask struct {
-	prompt           string
-	systemPrompt     string
-	model            string
-	webSearchEnabled bool
-	reply            chan result
+	parameters chatRequestParameters
+	reply      chan result
 }
 
 // chatRequestPayload is the JSON contract for POST / LLM requests.
-// Client authentication stays outside this body on the key query parameter; OpenAI credentials are loaded from server configuration.
+// Client authentication stays outside this body on the key query parameter; provider credentials are loaded from server configuration.
 type chatRequestPayload struct {
 	Prompt       string `json:"prompt"`
 	Model        string `json:"model"`
@@ -45,22 +42,34 @@ type chatRequestPayload struct {
 type chatRequestParameters struct {
 	prompt           string
 	systemPrompt     string
-	modelIdentifier  string
+	provider         providerDefinition
+	model            modelID
 	webSearchEnabled bool
+}
+
+type dictationRequestParameters struct {
+	provider    providerDefinition
+	model       modelID
+	fileName    string
+	audioReader io.Reader
 }
 
 // BuildRouter constructs the HTTP router used by the proxy. configuration supplies queue sizes, worker counts, timeout values, API credentials and other settings. structuredLogger records structured log messages during routing.
 func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
+	configuration.ApplyTunables()
 	if validationError := validateConfig(configuration); validationError != nil {
 		return nil, validationError
 	}
 
-	configuration.ApplyTunables()
 	if configuration.Endpoints == nil {
 		configuration.Endpoints = NewEndpoints()
 	}
 
-	validator, validatorError := newModelValidator()
+	providers, providersError := newProviderRegistry(configuration)
+	if providersError != nil {
+		return nil, providersError
+	}
+	validator, validatorError := newModelValidator(providers)
 	if validatorError != nil {
 		return nil, validatorError
 	}
@@ -80,26 +89,21 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	requestTimeout := time.Duration(configuration.RequestTimeoutSeconds) * time.Second
 	pollTimeout := time.Duration(configuration.UpstreamPollTimeoutSeconds) * time.Second
 	openAIClient := NewOpenAIClient(HTTPClient, configuration.Endpoints, requestTimeout, configuration.MaxOutputTokens, pollTimeout)
+	chatClient := newOpenAICompatibleChatClient(HTTPClient, requestTimeout, configuration.MaxOutputTokens)
+	upstreamProviders := newProviderRouter(openAIClient, chatClient)
 	for workerIndex := 0; workerIndex < configuration.WorkerCount; workerIndex++ {
 		go func() {
 			for pending := range taskQueue {
-				text, requestError := openAIClient.openAIRequest(
-					configuration.OpenAIKey,
-					pending.model,
-					pending.prompt,
-					pending.systemPrompt,
-					pending.webSearchEnabled,
-					structuredLogger,
-				)
+				text, requestError := upstreamProviders.generateText(pending.parameters, structuredLogger)
 				pending.reply <- result{text: text, requestError: requestError}
 			}
 		}()
 	}
 
 	router.Use(gin.Recovery(), secretMiddleware(configuration.ServiceSecret, structuredLogger))
-	router.GET(rootPath, chatHandler(taskQueue, configuration.SystemPrompt, validator, requestTimeout, structuredLogger))
-	router.POST(rootPath, chatJSONHandler(taskQueue, configuration.SystemPrompt, validator, requestTimeout, configuration.MaxPromptBytes, structuredLogger))
-	router.POST(dictatePath, dictateHandler(openAIClient, configuration.OpenAIKey, configuration.DictationModel, configuration.MaxInputAudioBytes, structuredLogger))
+	router.GET(rootPath, chatHandler(taskQueue, configuration.SystemPrompt, configuration.DefaultProvider, configuration.DefaultModel, validator, requestTimeout, structuredLogger))
+	router.POST(rootPath, chatJSONHandler(taskQueue, configuration.SystemPrompt, configuration.DefaultProvider, configuration.DefaultModel, validator, requestTimeout, configuration.MaxPromptBytes, structuredLogger))
+	router.POST(dictatePath, dictateHandler(upstreamProviders, configuration.DefaultDictationProvider, configuration.DictationModel, validator, configuration.MaxInputAudioBytes, structuredLogger))
 	return router, nil
 }
 
@@ -113,9 +117,9 @@ func Serve(configuration Configuration, structuredLogger *zap.SugaredLogger) err
 }
 
 // chatHandler returns a handler that forwards query-string requests to the task queue.
-func chatHandler(taskQueue chan requestTask, defaultSystemPrompt string, validator *modelValidator, requestTimeout time.Duration, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+func chatHandler(taskQueue chan requestTask, defaultSystemPrompt string, defaultProvider string, defaultModel string, validator *modelValidator, requestTimeout time.Duration, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
-		chatRequest, ok := chatRequestFromQuery(ginContext, defaultSystemPrompt, validator, structuredLogger)
+		chatRequest, ok := chatRequestFromQuery(ginContext, defaultSystemPrompt, defaultProvider, defaultModel, validator, structuredLogger)
 		if !ok {
 			return
 		}
@@ -124,7 +128,7 @@ func chatHandler(taskQueue chan requestTask, defaultSystemPrompt string, validat
 }
 
 // chatJSONHandler accepts large prompt bodies while preserving the same model validation, queueing, and response formatting used by GET /.
-func chatJSONHandler(taskQueue chan requestTask, defaultSystemPrompt string, validator *modelValidator, requestTimeout time.Duration, maxPromptBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+func chatJSONHandler(taskQueue chan requestTask, defaultSystemPrompt string, defaultProvider string, defaultModel string, validator *modelValidator, requestTimeout time.Duration, maxPromptBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxPromptBytes)
 		var payload chatRequestPayload
@@ -138,16 +142,15 @@ func chatJSONHandler(taskQueue chan requestTask, defaultSystemPrompt string, val
 			return
 		}
 
-		chatRequest, validationMessage, ok := chatRequestFromPayload(payload, defaultSystemPrompt, validator)
+		chatRequest, ok := chatRequestFromPayload(ginContext, payload, defaultSystemPrompt, defaultProvider, defaultModel, validator)
 		if !ok {
-			ginContext.String(http.StatusBadRequest, validationMessage)
 			return
 		}
 		submitChatRequest(ginContext, taskQueue, chatRequest, requestTimeout, structuredLogger)
 	}
 }
 
-func chatRequestFromQuery(ginContext *gin.Context, defaultSystemPrompt string, validator *modelValidator, structuredLogger *zap.SugaredLogger) (chatRequestParameters, bool) {
+func chatRequestFromQuery(ginContext *gin.Context, defaultSystemPrompt string, defaultProvider string, defaultModel string, validator *modelValidator, structuredLogger *zap.SugaredLogger) (chatRequestParameters, bool) {
 	userPrompt := ginContext.Query(queryParameterPrompt)
 	if userPrompt == constants.EmptyString {
 		ginContext.String(http.StatusBadRequest, errorMissingPrompt)
@@ -159,41 +162,41 @@ func chatRequestFromQuery(ginContext *gin.Context, defaultSystemPrompt string, v
 		systemPrompt = defaultSystemPrompt
 	}
 
-	modelIdentifier := ginContext.Query(queryParameterModel)
-	if modelIdentifier == constants.EmptyString {
-		modelIdentifier = DefaultModel
-	}
-	if verificationError := validator.Verify(modelIdentifier); verificationError != nil {
-		ginContext.String(http.StatusBadRequest, verificationError.Error())
-		return chatRequestParameters{}, false
+	webSearchQuery := strings.TrimSpace(ginContext.Query(queryParameterWebSearch))
+	webSearchEnabled, webSearchParseError := parseWebSearchParameter(webSearchQuery)
+	if webSearchParseError != nil {
+		structuredLogger.Warnw(
+			logEventParseWebSearchParameterFailed,
+			logFieldValue, webSearchQuery,
+			constants.LogFieldError, webSearchParseError,
+		)
 	}
 
-	webSearchQuery := strings.TrimSpace(ginContext.Query(queryParameterWebSearch))
-	webSearchEnabled := false
-	if webSearchQuery != constants.EmptyString {
-		parsedWebSearch, parseError := strconv.ParseBool(webSearchQuery)
-		if parseError != nil {
-			structuredLogger.Warnw(
-				logEventParseWebSearchParameterFailed,
-				logFieldValue, webSearchQuery,
-				constants.LogFieldError, parseError,
-			)
-		} else {
-			webSearchEnabled = parsedWebSearch
-		}
+	providerDefinition, modelIdentifier, verificationError := validator.ResolveText(
+		ginContext.Query(queryParameterProvider),
+		ginContext.Query(queryParameterModel),
+		defaultProvider,
+		defaultModel,
+		webSearchEnabled,
+	)
+	if verificationError != nil {
+		ginContext.String(statusCodeForError(verificationError), responseMessageForError(verificationError))
+		return chatRequestParameters{}, false
 	}
 
 	return chatRequestParameters{
 		prompt:           userPrompt,
 		systemPrompt:     systemPrompt,
-		modelIdentifier:  modelIdentifier,
+		provider:         providerDefinition,
+		model:            modelIdentifier,
 		webSearchEnabled: webSearchEnabled,
 	}, true
 }
 
-func chatRequestFromPayload(payload chatRequestPayload, defaultSystemPrompt string, validator *modelValidator) (chatRequestParameters, string, bool) {
+func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload, defaultSystemPrompt string, defaultProvider string, defaultModel string, validator *modelValidator) (chatRequestParameters, bool) {
 	if payload.Prompt == constants.EmptyString {
-		return chatRequestParameters{}, errorMissingPrompt, false
+		ginContext.String(http.StatusBadRequest, errorMissingPrompt)
+		return chatRequestParameters{}, false
 	}
 
 	systemPrompt := payload.SystemPrompt
@@ -201,20 +204,31 @@ func chatRequestFromPayload(payload chatRequestPayload, defaultSystemPrompt stri
 		systemPrompt = defaultSystemPrompt
 	}
 
-	modelIdentifier := payload.Model
-	if modelIdentifier == constants.EmptyString {
-		modelIdentifier = DefaultModel
+	modelIdentifier, modelParameterError := resolveJSONModelParameter(ginContext.Query(queryParameterModel), payload.Model)
+	if modelParameterError != nil {
+		ginContext.String(statusCodeForError(modelParameterError), responseMessageForError(modelParameterError))
+		return chatRequestParameters{}, false
 	}
-	if verificationError := validator.Verify(modelIdentifier); verificationError != nil {
-		return chatRequestParameters{}, verificationError.Error(), false
+
+	providerDefinition, resolvedModel, verificationError := validator.ResolveText(
+		ginContext.Query(queryParameterProvider),
+		modelIdentifier,
+		defaultProvider,
+		defaultModel,
+		payload.WebSearch,
+	)
+	if verificationError != nil {
+		ginContext.String(statusCodeForError(verificationError), responseMessageForError(verificationError))
+		return chatRequestParameters{}, false
 	}
 
 	return chatRequestParameters{
 		prompt:           payload.Prompt,
 		systemPrompt:     systemPrompt,
-		modelIdentifier:  modelIdentifier,
+		provider:         providerDefinition,
+		model:            resolvedModel,
 		webSearchEnabled: payload.WebSearch,
-	}, constants.EmptyString, true
+	}, true
 }
 
 func submitChatRequest(ginContext *gin.Context, taskQueue chan requestTask, chatRequest chatRequestParameters, requestTimeout time.Duration, structuredLogger *zap.SugaredLogger) {
@@ -227,11 +241,8 @@ func submitChatRequest(ginContext *gin.Context, taskQueue chan requestTask, chat
 	enqueueContext, enqueueCancel := context.WithTimeout(ginContext.Request.Context(), enqueueDuration)
 	select {
 	case taskQueue <- requestTask{
-		prompt:           chatRequest.prompt,
-		systemPrompt:     chatRequest.systemPrompt,
-		model:            chatRequest.modelIdentifier,
-		webSearchEnabled: chatRequest.webSearchEnabled,
-		reply:            replyChannel,
+		parameters: chatRequest,
+		reply:      replyChannel,
 	}:
 		enqueueCancel()
 	case <-enqueueContext.Done():
@@ -245,13 +256,7 @@ func submitChatRequest(ginContext *gin.Context, taskQueue chan requestTask, chat
 	case outcome := <-replyChannel:
 		requestCancel()
 		if outcome.requestError != nil {
-			if errors.Is(outcome.requestError, ErrUnknownModel) {
-				ginContext.String(http.StatusBadRequest, outcome.requestError.Error())
-			} else if errors.Is(outcome.requestError, context.DeadlineExceeded) {
-				ginContext.String(http.StatusGatewayTimeout, errorRequestTimedOut)
-			} else {
-				ginContext.String(http.StatusBadGateway, outcome.requestError.Error())
-			}
+			ginContext.String(statusCodeForError(outcome.requestError), responseMessageForError(outcome.requestError))
 			return
 		}
 		mime := preferredMime(ginContext)
@@ -263,7 +268,7 @@ func submitChatRequest(ginContext *gin.Context, taskQueue chan requestTask, chat
 	}
 }
 
-func dictateHandler(openAIClient *OpenAIClient, openAIKey string, defaultModel string, maxInputAudioBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+func dictateHandler(upstreamProviders *providerRouter, defaultProvider string, defaultModel string, validator *modelValidator, maxInputAudioBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxInputAudioBytes+2*1024*1024)
 		if parseError := ginContext.Request.ParseMultipartForm(maxInputAudioBytes); parseError != nil {
@@ -289,21 +294,78 @@ func dictateHandler(openAIClient *OpenAIClient, openAIKey string, defaultModel s
 			}
 		}
 
-		modelIdentifier := strings.TrimSpace(ginContext.Query(queryParameterModel))
-		if modelIdentifier == constants.EmptyString {
-			modelIdentifier = defaultModel
+		providerDefinition, modelIdentifier, verificationError := validator.ResolveDictation(
+			ginContext.Query(queryParameterProvider),
+			ginContext.Query(queryParameterModel),
+			defaultProvider,
+			defaultModel,
+		)
+		if verificationError != nil {
+			ginContext.String(statusCodeForError(verificationError), responseMessageForError(verificationError))
+			return
 		}
 
-		transcribedText, requestError := openAIClient.transcribeAudio(openAIKey, modelIdentifier, fileName, audioFile, structuredLogger)
+		dictationRequest := dictationRequestParameters{
+			provider:    providerDefinition,
+			model:       modelIdentifier,
+			fileName:    fileName,
+			audioReader: audioFile,
+		}
+		transcribedText, requestError := upstreamProviders.transcribeAudio(dictationRequest, structuredLogger)
 		if requestError != nil {
-			if errors.Is(requestError, context.DeadlineExceeded) {
-				ginContext.String(http.StatusGatewayTimeout, errorRequestTimedOut)
-				return
-			}
-			ginContext.String(http.StatusBadGateway, requestError.Error())
+			ginContext.String(statusCodeForError(requestError), responseMessageForError(requestError))
 			return
 		}
 
 		ginContext.JSON(http.StatusOK, gin.H{keyText: transcribedText})
 	}
+}
+
+func parseWebSearchParameter(rawValue string) (bool, error) {
+	if rawValue == constants.EmptyString {
+		return false, nil
+	}
+	normalizedValue := strings.ToLower(strings.TrimSpace(rawValue))
+	switch normalizedValue {
+	case "1", "t", "true", "y", "yes":
+		return true, nil
+	case "0", "f", "false", "n", "no":
+		return false, nil
+	default:
+		return false, fmt.Errorf("invalid web_search value: %s", rawValue)
+	}
+}
+
+func resolveJSONModelParameter(queryModel string, bodyModel string) (string, error) {
+	trimmedQueryModel := strings.TrimSpace(queryModel)
+	trimmedBodyModel := strings.TrimSpace(bodyModel)
+	if trimmedQueryModel != constants.EmptyString && trimmedBodyModel != constants.EmptyString && trimmedQueryModel != trimmedBodyModel {
+		return constants.EmptyString, fmt.Errorf("%w: query=%s body=%s", ErrConflictingModelParameters, trimmedQueryModel, trimmedBodyModel)
+	}
+	if trimmedQueryModel != constants.EmptyString {
+		return trimmedQueryModel, nil
+	}
+	return trimmedBodyModel, nil
+}
+
+func statusCodeForError(requestError error) int {
+	switch {
+	case errors.Is(requestError, ErrUnknownProvider), errors.Is(requestError, ErrUnknownModel), errors.Is(requestError, ErrUnsupportedCapability), errors.Is(requestError, ErrUnsupportedEndpoint), errors.Is(requestError, ErrConflictingModelParameters):
+		return http.StatusBadRequest
+	case errors.Is(requestError, ErrProviderNotConfigured):
+		return http.StatusServiceUnavailable
+	case errors.Is(requestError, ErrProviderRateLimited):
+		return http.StatusTooManyRequests
+	case errors.Is(requestError, context.DeadlineExceeded):
+		return http.StatusGatewayTimeout
+	default:
+		return http.StatusBadGateway
+	}
+}
+
+func responseMessageForError(requestError error) string {
+	if errors.Is(requestError, context.DeadlineExceeded) {
+		return errorRequestTimedOut
+	}
+	return requestError.Error()
 }

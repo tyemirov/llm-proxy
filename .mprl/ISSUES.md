@@ -42,6 +42,9 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
   4. The plan includes concrete test cases for success and failure paths (including unsupported combinations).
   5. The plan is detailed enough that implementation can proceed without additional requirement clarification.
 
+  ### Implementation Note
+  Implemented provider-aware routing with default OpenAI compatibility, explicit `provider` query selection, OpenAI-compatible chat-completions routing for DeepSeek/DashScope/Moonshot/SiliconFlow/Zhipu, SiliconFlow dictation routing, configuration/env wiring, docs, and black-box test coverage. Status remains open until the execution chain runs the required completion checks.
+
 
 ## Improvements
 
