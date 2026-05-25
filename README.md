@@ -77,6 +77,22 @@ SERVICE_SECRET=mysecret DEEPSEEK_API_KEY=sk-xxxxx LLM_PROXY_DEFAULT_PROVIDER=dee
   ./llm-proxy --port=8080 --log_level=info
 ```
 
+## Local Automation
+
+This repository exposes the standard local targets used by MPR app repos:
+
+| Command | Purpose |
+|---------|---------|
+| `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), and the Go test suite. |
+| `make release` | Cut a `v*` release from `master`, update `CHANGELOG.md` when needed, and push the release tag. |
+| `make publish` | Validate the release source and publish `ghcr.io/tyemirov/llm-proxy:<tag>` plus `:latest`. |
+| `make deploy` | Verify the published image and deploy through the sibling `../mprlab-gateway` checkout. |
+
+`llm-proxy` is a gateway-local service in `mprlab-gateway`, so `make deploy`
+defaults to the gateway `deploy-gateway` target. Override the checkout or target
+with `GATEWAY_DIR=/path/to/mprlab-gateway` or
+`GATEWAY_DEPLOY_TARGET=<target>`.
+
 ## Usage
 
 ### Basic request (default provider and model, no web search)
@@ -301,20 +317,15 @@ the selected integration profile or deployment docs, not in this README.
 
 ## Releasing
 
-To publish a new version:
+Use `make release` from a clean, up-to-date `master` branch. It runs `make ci`,
+updates `CHANGELOG.md` if the selected version is missing, creates the release
+commit when needed, and pushes the `v*` tag. Tags that begin with `v` trigger
+the release workflow, which builds and publishes release artifacts and uses the
+matching changelog section as release notes.
 
-1. Update `CHANGELOG.md` with a new section describing the release.
-2. Commit the change.
-3. Tag the commit and push both the branch and tag:
-
-   ```bash
-   git tag vX.Y.Z
-   git push origin master
-   git push origin vX.Y.Z
-   ```
-
-Tags that begin with `v` trigger the release workflow, which builds binaries and uses the matching changelog section as
-release notes.
+Use `make publish` only when you need to publish the release image manually.
+Use `make deploy` after the release image is published and `:latest` points at
+the same digest as the release tag.
 
 ## License
 
