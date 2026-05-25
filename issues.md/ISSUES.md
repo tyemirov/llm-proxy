@@ -7,6 +7,14 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
 
 ## BugFixes
 
+- [x] [B404] (P0) Fix GPT-5.5 JSON body model requests returning 502.
+  Reproduce and repair the `POST /?key=...` JSON request path where clients specify `"model": "gpt-5.5"` in the body and expect a successful OpenAI Responses API reply instead of a proxy-level `502 OpenAI API error`.
+  Acceptance criteria:
+  1. A JSON body request with `prompt`, `model: "gpt-5.5"`, and `web_search: false` reaches the upstream Responses API with the requested model.
+  2. The proxy returns a normal text response when upstream returns a completed GPT-5.5 response.
+  3. The failure mode is documented if a live upstream credential or model access check blocks verification.
+  Resolution: The 502 came from GPT-5.5 Responses returning `status: "incomplete"` after spending the output budget on reasoning/web-search work; the proxy then called the unsupported `/v1/responses/{id}/continue` endpoint. Incomplete max-token responses now continue through a new Responses request with `previous_response_id`, preserving the body model and web-search settings. A patched live proxy run with `model: "gpt-5.5"` in the JSON body returned `200 OK`, and `make ci` passes with total coverage at 100.0%.
+
 ## Improvements
 
 ## Maintenance
