@@ -1,12 +1,17 @@
 package proxy_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/temirov/llm-proxy/internal/proxy"
+	"go.uber.org/zap"
 )
 
 // chatHandlerScenario defines a single test scenario for model validation.
@@ -31,6 +36,16 @@ func TestChatHandlerValidatesModel(testingInstance *testing.T) {
 			modelIdentifier:    proxy.ModelNameGPT4o,
 			expectedStatusCode: http.StatusOK,
 		},
+		{
+			scenarioName:       "GPT-5.5 returns ok",
+			modelIdentifier:    proxy.ModelNameGPT55,
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			scenarioName:       "GPT-5.5 pro returns ok",
+			modelIdentifier:    proxy.ModelNameGPT55Pro,
+			expectedStatusCode: http.StatusOK,
+		},
 	}
 
 	for _, testScenario := range testScenarios {
@@ -49,5 +64,90 @@ func TestChatHandlerValidatesModel(testingInstance *testing.T) {
 				subTestInstance.Fatalf("status=%d want=%d", responseRecorder.Code, testScenario.expectedStatusCode)
 			}
 		})
+	}
+}
+
+func TestChatHandlerAcceptsJSONBody(testingInstance *testing.T) {
+	const finalResponse = `{"status":"completed", "output":[{"type":"message", "role":"assistant", "content":[{"type":"text","text":"ok"}]}]}`
+	const russianPrompt = "\u0431\u043e\u043b\u044c\u0448\u043e\u0439 \u0440\u0443\u0441\u0441\u043a\u0438\u0439 \u0442\u0435\u043a\u0441\u0442"
+	const systemPrompt = "optional"
+
+	var capturedPayload map[string]any
+	mockServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		if httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/" {
+			bodyBytes, readError := io.ReadAll(httpRequest.Body)
+			if readError != nil {
+				testingInstance.Fatalf("read request body: %v", readError)
+			}
+			if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+				testingInstance.Fatalf("unmarshal request body: %v", unmarshalError)
+			}
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(fmt.Sprintf(`{"id": "%s", "status": "queued"}`, TestJobID)))
+			return
+		}
+		if httpRequest.Method == http.MethodGet && strings.HasSuffix(httpRequest.URL.Path, TestJobID) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(finalResponse))
+			return
+		}
+		if httpRequest.Method == http.MethodPost && strings.HasSuffix(httpRequest.URL.Path, "/continue") {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"status": "in_progress"}`))
+			return
+		}
+		http.NotFound(responseWriter, httpRequest)
+	}))
+	defer mockServer.Close()
+
+	router := NewTestRouter(testingInstance, mockServer.URL)
+	requestBody := bytes.NewBufferString(`{"prompt":"` + russianPrompt + `","model":"` + proxy.ModelNameGPT55 + `","web_search":false,"system_prompt":"` + systemPrompt + `"}`)
+	request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret, requestBody)
+	request.Header.Set("Content-Type", "application/json")
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		testingInstance.Fatalf("status=%d want=%d", responseRecorder.Code, http.StatusOK)
+	}
+	if capturedPayload["model"] != proxy.ModelNameGPT55 {
+		testingInstance.Fatalf("model=%v want=%s", capturedPayload["model"], proxy.ModelNameGPT55)
+	}
+	if capturedPayload["input"] != systemPrompt+"\n\n"+russianPrompt {
+		testingInstance.Fatalf("input=%q", capturedPayload["input"])
+	}
+	if _, found := capturedPayload["tools"]; found {
+		testingInstance.Fatalf("tools must be omitted when web_search=false")
+	}
+}
+
+func TestChatHandlerRejectsOversizedJSONBody(testingInstance *testing.T) {
+	endpoints := proxy.NewEndpoints()
+	logger := zap.NewNop()
+	router, buildRouterError := proxy.BuildRouter(proxy.Configuration{
+		ServiceSecret:              TestSecret,
+		OpenAIKey:                  TestAPIKey,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+		MaxPromptBytes:             32,
+		Endpoints:                  endpoints,
+	}, logger.Sugar())
+	if buildRouterError != nil {
+		testingInstance.Fatalf(messageBuildRouterError, buildRouterError)
+	}
+
+	requestBody := bytes.NewBufferString(`{"prompt":"this body is intentionally larger than the configured JSON prompt limit"}`)
+	request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret, requestBody)
+	request.Header.Set("Content-Type", "application/json")
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusRequestEntityTooLarge {
+		testingInstance.Fatalf("status=%d want=%d", responseRecorder.Code, http.StatusRequestEntityTooLarge)
 	}
 }

@@ -72,7 +72,7 @@ func BuildRequestPayload(modelIdentifier string, combinedPrompt string, webSearc
 			payload.ToolChoice = keyAuto
 		}
 		return payload
-	case ModelNameGPT5:
+	case ModelNameGPT5, ModelNameGPT55, ModelNameGPT55Pro:
 		payload := requestPayloadWithTools{requestPayloadBase: base}
 		if webSearchEnabled {
 			payload.Tools = []Tool{{Type: toolTypeWebSearch}}
@@ -120,6 +120,10 @@ const (
 	ModelNameGPT5Mini = "gpt-5-mini"
 	// ModelNameGPT5 identifies the GPT-5 model which does not accept the temperature field.
 	ModelNameGPT5 = "gpt-5"
+	// ModelNameGPT55 identifies the GPT-5.5 model which does not accept the temperature field.
+	ModelNameGPT55 = "gpt-5.5"
+	// ModelNameGPT55Pro identifies the GPT-5.5 pro model which does not accept the temperature field.
+	ModelNameGPT55Pro = "gpt-5.5-pro"
 )
 
 var (
@@ -133,6 +137,8 @@ var (
 	SchemaGPT5Mini = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens}}
 	// SchemaGPT5 defines allowed payload fields for the GPT-5 model.
 	SchemaGPT5 = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens, keyTools, keyToolChoice, keyReasoning}}
+	// SchemaGPT55 defines allowed payload fields for GPT-5.5 family models.
+	SchemaGPT55 = SchemaGPT5
 )
 
 // modelPayloadSchemas associates model identifiers with their payload schemas.
@@ -142,6 +148,8 @@ var modelPayloadSchemas = map[string]ModelPayloadSchema{
 	ModelNameGPT41:     SchemaGPT41,
 	ModelNameGPT5Mini:  SchemaGPT5Mini,
 	ModelNameGPT5:      SchemaGPT5,
+	ModelNameGPT55:     SchemaGPT55,
+	ModelNameGPT55Pro:  SchemaGPT55,
 }
 
 // ResolveModelPayloadSchema returns the schema for a model or an empty schema when unknown.

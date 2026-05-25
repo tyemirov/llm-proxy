@@ -35,7 +35,9 @@ const (
 	mimeTextCSV         = "text/csv"
 	mimeTextPlain       = "text/plain; charset=utf-8"
 
-	errorMissingPrompt = "missing prompt parameter"
+	errorMissingPrompt         = "missing prompt parameter"
+	errorInvalidJSONRequest    = "invalid JSON request"
+	errorPromptPayloadTooLarge = "prompt payload too large"
 	// errorMissingClientKey indicates that the key query parameter is missing.
 	errorMissingClientKey   = "unknown client key"
 	errorRequestTimedOut    = "request timed out"
@@ -119,8 +121,6 @@ const (
 	logFieldClientIP     = "client_ip"
 	logFieldStatus       = "status"
 	logFieldValue        = "value"
-	// logFieldParameter identifies the request parameter related to a log entry.
-	logFieldParameter = "parameter"
 	// logFieldID identifies the response identifier logged for traceability.
 	logFieldID = "id"
 

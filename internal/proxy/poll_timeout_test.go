@@ -27,3 +27,11 @@ func TestApplyTunablesSetsDefaultDictationConfiguration(testingInstance *testing
 		testingInstance.Fatalf("maxInputAudioBytes=%d want=%d", configuration.MaxInputAudioBytes, proxy.DefaultMaxInputAudioBytes)
 	}
 }
+
+func TestApplyTunablesSetsDefaultPromptPayloadLimit(testingInstance *testing.T) {
+	configuration := proxy.Configuration{}
+	configuration.ApplyTunables()
+	if configuration.MaxPromptBytes != proxy.DefaultMaxPromptBytes {
+		testingInstance.Fatalf("maxPromptBytes=%d want=%d", configuration.MaxPromptBytes, proxy.DefaultMaxPromptBytes)
+	}
+}

@@ -1,12 +1,16 @@
 # Build stage (Debian-based Go image)
-FROM golang:1.24-bullseye AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24-bullseye AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
+
 WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o llm-proxy ./cmd/cli
+RUN CGO_ENABLED=0 GOOS="${TARGETOS:-$(go env GOOS)}" GOARCH="${TARGETARCH:-$(go env GOARCH)}" go build -o llm-proxy ./cmd/cli
 
 # Runtime stage
 FROM debian:bullseye-slim
