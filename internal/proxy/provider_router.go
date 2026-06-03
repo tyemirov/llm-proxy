@@ -1,6 +1,10 @@
 package proxy
 
-import "go.uber.org/zap"
+import (
+	"context"
+
+	"go.uber.org/zap"
+)
 
 type providerRouter struct {
 	openAIClient *OpenAIClient
@@ -14,9 +18,10 @@ func newProviderRouter(openAIClient *OpenAIClient, chatClient *openAICompatibleC
 	}
 }
 
-func (router *providerRouter) generateText(request chatRequestParameters, structuredLogger *zap.SugaredLogger) (string, error) {
+func (router *providerRouter) generateText(requestContext context.Context, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (string, error) {
 	if request.provider.usesOpenAIResponses {
 		return router.openAIClient.openAIRequest(
+			requestContext,
 			request.provider.credentialFor(endpointKindText),
 			request.model.string(),
 			request.prompt,
@@ -26,6 +31,7 @@ func (router *providerRouter) generateText(request chatRequestParameters, struct
 		)
 	}
 	return router.chatClient.generateText(
+		requestContext,
 		request.provider.credentialFor(endpointKindText),
 		request.provider.textBaseURL,
 		request.model,
