@@ -25,6 +25,7 @@ type result struct {
 // requestTask carries all details needed to process a user request in the
 // worker queue.
 type requestTask struct {
+	context    context.Context
 	parameters chatRequestParameters
 	reply      chan result
 }
@@ -88,7 +89,7 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	for workerIndex := 0; workerIndex < configuration.WorkerCount; workerIndex++ {
 		go func() {
 			for pending := range taskQueue {
-				text, requestError := upstreamProviders.generateText(pending.parameters, structuredLogger)
+				text, requestError := upstreamProviders.generateText(pending.context, pending.parameters, structuredLogger)
 				pending.reply <- result{text: text, requestError: requestError}
 			}
 		}()
@@ -227,28 +228,21 @@ func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload,
 
 func submitChatRequest(ginContext *gin.Context, taskQueue chan requestTask, chatRequest chatRequestParameters, requestTimeout time.Duration, structuredLogger *zap.SugaredLogger) {
 	replyChannel := make(chan result, 1)
-	requestDeadline, deadlineFound := ginContext.Request.Context().Deadline()
-	enqueueDuration := requestTimeout
-	if deadlineFound {
-		enqueueDuration = time.Until(requestDeadline)
-	}
-	enqueueContext, enqueueCancel := context.WithTimeout(ginContext.Request.Context(), enqueueDuration)
+	requestContext, requestCancel := context.WithTimeout(ginContext.Request.Context(), requestTimeout)
+	defer requestCancel()
 	select {
 	case taskQueue <- requestTask{
+		context:    requestContext,
 		parameters: chatRequest,
 		reply:      replyChannel,
 	}:
-		enqueueCancel()
-	case <-enqueueContext.Done():
-		enqueueCancel()
+	case <-requestContext.Done():
 		ginContext.String(http.StatusServiceUnavailable, errorQueueFull)
 		return
 	}
 
-	requestContext, requestCancel := context.WithTimeout(ginContext.Request.Context(), requestTimeout)
 	select {
 	case outcome := <-replyChannel:
-		requestCancel()
 		if outcome.requestError != nil {
 			ginContext.String(statusCodeForError(outcome.requestError), responseMessageForError(outcome.requestError))
 			return
@@ -257,7 +251,6 @@ func submitChatRequest(ginContext *gin.Context, taskQueue chan requestTask, chat
 		formattedBody, contentType := formatResponse(outcome.text, mime, chatRequest.prompt)
 		ginContext.Data(http.StatusOK, contentType, []byte(formattedBody))
 	case <-requestContext.Done():
-		requestCancel()
 		ginContext.String(http.StatusGatewayTimeout, errorRequestTimedOut)
 	}
 }
@@ -350,7 +343,7 @@ func statusCodeForError(requestError error) int {
 		return http.StatusServiceUnavailable
 	case errors.Is(requestError, ErrProviderRateLimited):
 		return http.StatusTooManyRequests
-	case errors.Is(requestError, context.DeadlineExceeded):
+	case errors.Is(requestError, context.DeadlineExceeded), errors.Is(requestError, context.Canceled):
 		return http.StatusGatewayTimeout
 	default:
 		return http.StatusBadGateway
@@ -358,7 +351,7 @@ func statusCodeForError(requestError error) int {
 }
 
 func responseMessageForError(requestError error) string {
-	if errors.Is(requestError, context.DeadlineExceeded) {
+	if errors.Is(requestError, context.DeadlineExceeded) || errors.Is(requestError, context.Canceled) {
 		return errorRequestTimedOut
 	}
 	return requestError.Error()

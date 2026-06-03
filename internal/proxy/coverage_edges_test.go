@@ -716,6 +716,80 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}
 	})
 
+	t.Run("poll fetch timeout maps to bad gateway", func(subTest *testing.T) {
+		endpoints := proxy.NewEndpoints()
+		endpoints.SetResponsesURL("https://openai.invalid/v1/responses")
+		previousClient := proxy.HTTPClient
+		proxy.HTTPClient = &http.Client{Transport: coverageRoundTripper(func(httpRequest *http.Request) (*http.Response, error) {
+			switch httpRequest.URL.String() {
+			case endpoints.GetResponsesURL():
+				return coverageHTTPResponse(http.StatusOK, `{"id":"slow","status":"queued"}`), nil
+			case endpoints.GetResponsesURL() + "/slow":
+				<-httpRequest.Context().Done()
+				return nil, httpRequest.Context().Err()
+			default:
+				subTest.Fatalf("unexpected request to %s", httpRequest.URL.String())
+				return nil, nil
+			}
+		})}
+		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
+		router := coverageRouter(subTest, proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      2,
+			UpstreamPollTimeoutSeconds: 1,
+			Endpoints:                  endpoints,
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusBadGateway {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		}
+	})
+
+	t.Run("request context cancellation during poll sleep maps to gateway timeout", func(subTest *testing.T) {
+		endpoints := proxy.NewEndpoints()
+		endpoints.SetResponsesURL("https://openai.invalid/v1/responses")
+		previousClient := proxy.HTTPClient
+		proxy.HTTPClient = &http.Client{Transport: coverageRoundTripper(func(httpRequest *http.Request) (*http.Response, error) {
+			switch httpRequest.URL.String() {
+			case endpoints.GetResponsesURL():
+				return coverageHTTPResponse(http.StatusOK, `{"id":"slow","status":"queued"}`), nil
+			case endpoints.GetResponsesURL() + "/slow":
+				return coverageHTTPResponse(http.StatusOK, `{"status":"in_progress"}`), nil
+			default:
+				subTest.Fatalf("unexpected request to %s", httpRequest.URL.String())
+				return nil, nil
+			}
+		})}
+		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
+		router := coverageRouter(subTest, proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      2,
+			UpstreamPollTimeoutSeconds: 2,
+			Endpoints:                  endpoints,
+		})
+		queryParameters := url.Values{}
+		queryParameters.Set("key", TestSecret)
+		queryParameters.Set("prompt", TestPrompt)
+		request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+		requestContext, cancelRequest := context.WithTimeout(request.Context(), 100*time.Millisecond)
+		defer cancelRequest()
+		request = request.WithContext(requestContext)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusGatewayTimeout {
+			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusGatewayTimeout, responseRecorder.Body.String())
+		}
+	})
+
 	t.Run("poll completed without text maps to bad gateway", func(subTest *testing.T) {
 		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")

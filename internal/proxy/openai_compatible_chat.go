@@ -53,7 +53,7 @@ func newOpenAICompatibleChatClient(httpClient HTTPDoer, requestTimeout time.Dura
 	}
 }
 
-func (client *openAICompatibleChatClient) generateText(apiKey string, baseURL string, modelIdentifier modelID, userPrompt string, systemPrompt string, structuredLogger *zap.SugaredLogger) (string, error) {
+func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier modelID, userPrompt string, systemPrompt string, structuredLogger *zap.SugaredLogger) (string, error) {
 	messages := []chatCompletionMessage{}
 	if !utils.IsBlank(systemPrompt) {
 		messages = append(messages, chatCompletionMessage{Role: "system", Content: systemPrompt})
@@ -67,7 +67,7 @@ func (client *openAICompatibleChatClient) generateText(apiKey string, baseURL st
 	}
 	payloadBytes, _ := json.Marshal(payload)
 
-	requestContext, cancelRequest := context.WithTimeout(context.Background(), client.requestTimeout)
+	requestContext, cancelRequest := context.WithTimeout(parentContext, client.requestTimeout)
 	defer cancelRequest()
 	requestURL := strings.TrimRight(baseURL, "/") + "/chat/completions"
 	httpRequest, buildError := buildAuthorizedJSONRequest(requestContext, http.MethodPost, requestURL, apiKey, bytes.NewReader(payloadBytes))
