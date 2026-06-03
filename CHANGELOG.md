@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.6] - 2026-06-03
+
+### Changes
+- test: update coverage_edges_test.go and ISSUES.md for accuracy
+- Merge pull request #162 from tyemirov/sync/llm-proxy/internal
+- test: add integration test for gateway context timeout canceling upstream request
+- fix: cancel upstream text generation on downstream request timeout
+- fix: propagate context for OpenAI requests and improve poll timeout handling
+- Merge pull request #161 from tyemirov/sync/llm-proxy/readme
+- docs: document request timeout knobs for gateway alignment
+- docs: add request_timeout and upstream_poll_timeout to README variables table
+
 ## [v0.2.5] - 2026-05-25
 
 ### Changes
