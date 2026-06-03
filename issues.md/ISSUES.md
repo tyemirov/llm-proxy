@@ -7,6 +7,15 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
 
 ## BugFixes
 
+- [x] [B407] (P0) Cancel upstream text generation when downstream requests time out.
+  Handler timeout and client/gateway disconnect contexts must flow through queued text work, provider routing, OpenAI Responses requests, OpenAI-compatible chat requests, continuation creation, and polling. After the proxy sends a timeout response, upstream work must not keep running long enough to produce a usable late OpenAI response.
+  Acceptance criteria:
+  1. `requestTask` carries a request context derived from the HTTP request and app timeout.
+  2. OpenAI Responses, OpenAI-compatible chat, continuation, and polling HTTP requests derive from that request context instead of `context.Background()`.
+  3. An integration test proves a gateway-style timed-out request causes the upstream request context to be canceled.
+  4. The integration test proves no late usable OpenAI API response is accepted after the proxy has sent `504 Gateway Timeout`.
+  Resolution: Threaded the handler-derived request context through queued text tasks, provider routing, OpenAI Responses, OpenAI-compatible chat, continuation creation, and response polling. Added integration coverage that fails on a late usable OpenAI response after a proxy `504`, plus poll-path coverage for fetch-timeout and poll-sleep cancellation behavior. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test` (total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make lint`.
+
 - [x] [B406] (P1) Document request timeout knobs for gateway alignment.
   Public gateway routes need their upstream transport timeout to stay aligned with llm-proxy's app-side request timeout; otherwise long-running LLM calls can be cut off by the gateway before the proxy returns its own response.
   Resolution: Documented `LLM_PROXY_REQUEST_TIMEOUT_SECONDS` and `LLM_PROXY_UPSTREAM_POLL_TIMEOUT_SECONDS` in the README so operators can keep gateway transport settings aligned with the proxy's request and poll windows. Validation passed with `git diff --check`.
