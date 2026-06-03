@@ -48,6 +48,8 @@ variables:
 | `--system_prompt` / `SYSTEM_PROMPT` | Optional system prompt text |
 | `--workers` / `LLM_PROXY_WORKERS` | Number of worker goroutines (default `4`) |
 | `--queue_size` / `LLM_PROXY_QUEUE_SIZE` | Request queue size (default `100`) |
+| `--request_timeout` / `LLM_PROXY_REQUEST_TIMEOUT_SECONDS` | Overall request timeout in seconds (default `180`) |
+| `--upstream_poll_timeout` / `LLM_PROXY_UPSTREAM_POLL_TIMEOUT_SECONDS` | Poll timeout in seconds after incomplete upstream responses (default `60`) |
 | `--max_output_tokens` / `LLM_PROXY_MAX_OUTPUT_TOKENS` | Max output token budget forwarded to text models (default `8192`) |
 | `--max_prompt_bytes` / `LLM_PROXY_MAX_PROMPT_BYTES` | Max accepted JSON body size for `POST /` prompts (default `4194304`) |
 | `--dictation_model` / `LLM_PROXY_DICTATION_MODEL` | Default model for `/dictate` when query model is not provided (default `gpt-4o-mini-transcribe`) |
