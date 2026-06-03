@@ -7,6 +7,10 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
 
 ## BugFixes
 
+- [x] [B406] (P1) Document request timeout knobs for gateway alignment.
+  Public gateway routes need their upstream transport timeout to stay aligned with llm-proxy's app-side request timeout; otherwise long-running LLM calls can be cut off by the gateway before the proxy returns its own response.
+  Resolution: Documented `LLM_PROXY_REQUEST_TIMEOUT_SECONDS` and `LLM_PROXY_UPSTREAM_POLL_TIMEOUT_SECONDS` in the README so operators can keep gateway transport settings aligned with the proxy's request and poll windows. Validation passed with `git diff --check`.
+
 - [x] [B405] (P0) Fix large semantic review POSTs for heavy GPT-5.5-family models.
   Full semantic stress review requests can be around 31 KB and need a response budget large enough to return a complete reviewed transcript. The public `POST /?key=...` JSON body path must support those review jobs without forcing callers into chunked review, because chunked model responses can mutate source text or drop required stress coverage.
   Acceptance criteria:
