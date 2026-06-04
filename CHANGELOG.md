@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.9] - 2026-06-03
+
+### Changes
+- Merge pull request #164 from tyemirov/gix/remove-global-max-output-tokens-config-and-add-per
+- test: update semantic review test and remove unused token config
+- docs: update issues.md with max_tokens config removal and request-level usage
+- feat(proxy): support max_tokens query and JSON param mapping to max_output_tokens
+- docs: document optional max_tokens parameter in provider routing plan
+- remove max_output_tokens config flag and environment binding from CLI root command
+- docs: document per-request max_tokens output length cap
+
 ## [v0.2.8] - 2026-06-03
 
 ### Changes
