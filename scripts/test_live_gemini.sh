@@ -80,8 +80,10 @@ GOEXPERIMENT= CGO_ENABLED=0 "${GO_BIN}" build -o "${BINARY_PATH}" ./cmd/cli
 
 GOEXPERIMENT= \
 SERVICE_SECRET="${SERVICE_SECRET}" \
+OPENAI_API_KEY="${OPENAI_API_KEY:-unused-openai-key-for-gemini-live-smoke}" \
 GEMINI_API_KEY="${GEMINI_API_KEY}" \
 LLM_PROXY_DEFAULT_PROVIDER=gemini \
+LLM_PROXY_DEFAULT_DICTATION_PROVIDER=openai \
 "${BINARY_PATH}" --port="${PORT}" --log_level=info >"${LOG_PATH}" 2>&1 &
 PROXY_PID="$!"
 
