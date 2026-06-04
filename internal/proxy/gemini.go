@@ -15,7 +15,12 @@ import (
 	"go.uber.org/zap"
 )
 
-const geminiAPIKeyHeader = "x-goog-api-key"
+const (
+	geminiAPIKeyHeader     = "x-goog-api-key"
+	geminiFinishReasonStop = geminiFinishReason("STOP")
+)
+
+type geminiFinishReason string
 
 type geminiGenerateContentClient struct {
 	httpClient     HTTPDoer
@@ -38,7 +43,8 @@ type geminiContent struct {
 }
 
 type geminiPart struct {
-	Text string `json:"text"`
+	Text    string `json:"text"`
+	Thought bool   `json:"thought"`
 }
 
 type geminiGenerateContentResponse struct {
@@ -47,7 +53,8 @@ type geminiGenerateContentResponse struct {
 }
 
 type geminiCandidate struct {
-	Content geminiContent `json:"content"`
+	Content      geminiContent      `json:"content"`
+	FinishReason geminiFinishReason `json:"finishReason"`
 }
 
 type geminiUsageMetadata struct {
@@ -121,18 +128,36 @@ func parseGeminiGenerateContentResponse(responseBytes []byte) (textGenerationRes
 		return textGenerationResult{}, usageError
 	}
 	for _, candidate := range response.Candidates {
-		var textBuilder strings.Builder
-		for _, part := range candidate.Content.Parts {
-			if strings.TrimSpace(part.Text) != constants.EmptyString {
-				textBuilder.WriteString(part.Text)
-			}
+		if finishReasonError := validateGeminiFinishReason(candidate.FinishReason); finishReasonError != nil {
+			return textGenerationResult{}, finishReasonError
 		}
-		trimmedText := strings.TrimSpace(textBuilder.String())
+		trimmedText := visibleGeminiCandidateText(candidate)
 		if trimmedText != constants.EmptyString {
 			return textGenerationResult{text: trimmedText, usage: usage}, nil
 		}
 	}
 	return textGenerationResult{}, fmt.Errorf("%w: gemini generateContent returned no text", ErrProviderAPI)
+}
+
+func validateGeminiFinishReason(reason geminiFinishReason) error {
+	if reason == geminiFinishReasonStop {
+		return nil
+	}
+	normalizedReason := strings.TrimSpace(string(reason))
+	if normalizedReason == constants.EmptyString {
+		return fmt.Errorf("%w: gemini generateContent missing finishReason", ErrProviderAPI)
+	}
+	return fmt.Errorf("%w: gemini generateContent finishReason=%s", ErrProviderAPI, normalizedReason)
+}
+
+func visibleGeminiCandidateText(candidate geminiCandidate) string {
+	var textBuilder strings.Builder
+	for _, part := range candidate.Content.Parts {
+		if !part.Thought && strings.TrimSpace(part.Text) != constants.EmptyString {
+			textBuilder.WriteString(part.Text)
+		}
+	}
+	return strings.TrimSpace(textBuilder.String())
 }
 
 func parseGeminiTokenUsage(usage *geminiUsageMetadata) (*tokenUsage, error) {

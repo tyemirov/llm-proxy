@@ -217,7 +217,7 @@ func TestProviderRoutingSupportsGeminiGenerateContent(t *testing.T) {
 			t.Fatalf("unmarshal body: %v", unmarshalError)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"gemini ok"}]}}],"usageMetadata":{"promptTokenCount":13,"candidatesTokenCount":5}}`))
+		_, _ = responseWriter.Write([]byte(`{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"gemini ok"}]}}],"usageMetadata":{"promptTokenCount":13,"candidatesTokenCount":5}}`))
 	}))
 	defer upstreamServer.Close()
 
@@ -295,7 +295,7 @@ func TestProviderRoutingSupportsGeminiJSONPost(t *testing.T) {
 			t.Fatalf("unmarshal body: %v", unmarshalError)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"gemini json ok"}]}}]}`))
+		_, _ = responseWriter.Write([]byte(`{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"gemini internal thought","thought":true},{"text":"gemini json ok"}]}}]}`))
 	}))
 	defer upstreamServer.Close()
 
@@ -336,6 +336,84 @@ func TestProviderRoutingSupportsGeminiJSONPost(t *testing.T) {
 	}
 	if generationConfig, ok := capturedPayload["generationConfig"].(map[string]any); !ok || generationConfig["maxOutputTokens"] != float64(222) {
 		t.Fatalf("generationConfig=%v", capturedPayload["generationConfig"])
+	}
+}
+
+func TestProviderRoutingRejectsGeminiJSONPostMaxTokensAboveModelLimit(t *testing.T) {
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		t.Fatal("upstream must not be called for max_tokens above Gemini model limit")
+	}))
+	defer upstreamServer.Close()
+
+	logger := zap.NewNop()
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		ServiceSecret:              TestSecret,
+		OpenAIKey:                  TestAPIKey,
+		GeminiKey:                  testGeminiKey,
+		GeminiBaseURL:              upstreamServer.URL,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, logger.Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	requestBody := bytes.NewBufferString(`{"prompt":"hello json","model":"` + proxy.ModelNameGemini35Flash + `","max_tokens":262144}`)
+	request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&provider="+proxy.ProviderNameGemini, requestBody)
+	request.Header.Set("Content-Type", "application/json")
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
+	}
+	if !strings.Contains(responseRecorder.Body.String(), "invalid max_tokens parameter") {
+		t.Fatalf("body=%q want invalid max_tokens parameter", responseRecorder.Body.String())
+	}
+}
+
+func TestProviderRoutingRejectsGeminiQueryMaxTokensAboveModelLimit(t *testing.T) {
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		t.Fatal("upstream must not be called for query max_tokens above Gemini model limit")
+	}))
+	defer upstreamServer.Close()
+
+	logger := zap.NewNop()
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		ServiceSecret:              TestSecret,
+		OpenAIKey:                  TestAPIKey,
+		GeminiKey:                  testGeminiKey,
+		GeminiBaseURL:              upstreamServer.URL,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, logger.Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	queryParameters := url.Values{}
+	queryParameters.Set("key", TestSecret)
+	queryParameters.Set("prompt", TestPrompt)
+	queryParameters.Set("provider", proxy.ProviderNameGemini)
+	queryParameters.Set("model", proxy.ModelNameGemini35Flash)
+	queryParameters.Set("max_tokens", "262144")
+	request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
+	}
+	if !strings.Contains(responseRecorder.Body.String(), "invalid max_tokens parameter") {
+		t.Fatalf("body=%q want invalid max_tokens parameter", responseRecorder.Body.String())
 	}
 }
 
@@ -449,8 +527,10 @@ func TestProviderRoutingMapsGeminiProviderErrors(t *testing.T) {
 		{name: "rate limited", statusCode: http.StatusTooManyRequests, body: `{}`, wantStatus: http.StatusTooManyRequests},
 		{name: "provider api failure", statusCode: http.StatusInternalServerError, body: `{}`, wantStatus: http.StatusBadGateway},
 		{name: "malformed json", statusCode: http.StatusOK, body: `{`, wantStatus: http.StatusBadGateway},
-		{name: "negative usage", statusCode: http.StatusOK, body: `{"candidates":[{"content":{"parts":[{"text":"bad usage"}]}}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":-1}}`, wantStatus: http.StatusBadGateway},
-		{name: "missing text", statusCode: http.StatusOK, body: `{"candidates":[{"content":{"parts":[{}]}}]}`, wantStatus: http.StatusBadGateway},
+		{name: "negative usage", statusCode: http.StatusOK, body: `{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"bad usage"}]}}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":-1}}`, wantStatus: http.StatusBadGateway},
+		{name: "missing finish reason", statusCode: http.StatusOK, body: `{"candidates":[{"content":{"parts":[{"text":"unfinished text"}]}}]}`, wantStatus: http.StatusBadGateway},
+		{name: "max tokens finish reason", statusCode: http.StatusOK, body: `{"candidates":[{"finishReason":"MAX_TOKENS","content":{"parts":[{"text":"partial text"}]}}]}`, wantStatus: http.StatusBadGateway},
+		{name: "missing text", statusCode: http.StatusOK, body: `{"candidates":[{"finishReason":"STOP","content":{"parts":[{}]}}]}`, wantStatus: http.StatusBadGateway},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {

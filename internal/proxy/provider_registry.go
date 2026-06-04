@@ -87,11 +87,19 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			textTransport:       textTransportOpenAICompatibleChat,
 		},
 		geminiProviderID: {
-			identifier:          geminiProviderID,
-			textAPIKey:          configuration.GeminiKey,
-			textBaseURL:         configuration.GeminiBaseURL,
-			defaultTextModel:    modelID(ModelNameGemini35Flash),
-			textModels:          modelSet(ModelNameGemini35Flash, ModelNameGemini31FlashLite, ModelNameGemini25Flash, ModelNameGemini25FlashLite, ModelNameGemini25Pro),
+			identifier:       geminiProviderID,
+			textAPIKey:       configuration.GeminiKey,
+			textBaseURL:      configuration.GeminiBaseURL,
+			defaultTextModel: modelID(ModelNameGemini35Flash),
+			textModels:       modelSet(ModelNameGemini35Flash, ModelNameGemini31FlashLite, ModelNameGemini25Flash, ModelNameGemini25FlashLite, ModelNameGemini25Pro),
+			textOutputTokenLimits: tokenLimitSet(
+				geminiOutputTokenLimit,
+				ModelNameGemini35Flash,
+				ModelNameGemini31FlashLite,
+				ModelNameGemini25Flash,
+				ModelNameGemini25FlashLite,
+				ModelNameGemini25Pro,
+			),
 			transcriptionModels: map[string]modelID{},
 			textTransport:       textTransportGeminiGenerate,
 		},
@@ -122,6 +130,17 @@ func modelSet(modelIdentifiers ...string) map[string]modelID {
 		}
 	}
 	return models
+}
+
+func tokenLimitSet(limit int, modelIdentifiers ...string) map[string]int {
+	limits := map[string]int{}
+	for _, modelIdentifier := range modelIdentifiers {
+		trimmedModelIdentifier := strings.TrimSpace(modelIdentifier)
+		if trimmedModelIdentifier != constants.EmptyString {
+			limits[strings.ToLower(trimmedModelIdentifier)] = limit
+		}
+	}
+	return limits
 }
 
 func (registry *providerRegistry) resolveProvider(rawProvider string, defaultProvider string) (providerDefinition, error) {

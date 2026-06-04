@@ -62,6 +62,9 @@ support the OpenAI web search tool.
 Text output length is also per request: pass `max_tokens` when a client wants
 to cap one generation. When omitted, the proxy does not send a provider
 max-token field.
+Provider-specific output-token limits are enforced at the request edge when
+known. Gemini text models currently reject `max_tokens` above `65536` with
+`400 Bad Request` before any upstream provider call.
 
 ## Running
 
@@ -171,6 +174,8 @@ JSON body fields:
 For `POST /`, `provider` remains a query parameter. Query `model` may override
 the JSON body only when the body omits `model` or provides the same value;
 conflicting values return `400 Bad Request`.
+Gemini `max_tokens` values above `65536` return `400 Bad Request` before the
+proxy calls Gemini.
 
 ### Choose an OpenAI model
 

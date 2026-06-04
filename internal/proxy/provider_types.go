@@ -35,6 +35,7 @@ const (
 	defaultZhipuBaseURL        = "https://open.bigmodel.cn/api/paas/v4"
 	defaultGeminiBaseURL       = "https://generativelanguage.googleapis.com/v1"
 	defaultSiliconFlowSTTModel = "FunAudioLLM/SenseVoiceSmall"
+	geminiOutputTokenLimit     = 65536
 )
 
 const (
@@ -113,6 +114,7 @@ type providerDefinition struct {
 	defaultTextModel          modelID
 	defaultTranscriptionModel modelID
 	textModels                map[string]modelID
+	textOutputTokenLimits     map[string]int
 	transcriptionModels       map[string]modelID
 	supportsDictation         bool
 	supportsWebSearch         bool
@@ -124,4 +126,12 @@ func (definition providerDefinition) credentialFor(endpoint endpointKind) string
 		return strings.TrimSpace(definition.transcriptionAPIKey)
 	}
 	return strings.TrimSpace(definition.textAPIKey)
+}
+
+func (definition providerDefinition) outputTokenLimitFor(modelIdentifier modelID) (int, bool) {
+	if definition.textOutputTokenLimits == nil {
+		return 0, false
+	}
+	limit, known := definition.textOutputTokenLimits[strings.ToLower(modelIdentifier.string())]
+	return limit, known
 }
