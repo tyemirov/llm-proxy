@@ -27,6 +27,8 @@ func TestExecuteRunsConfiguredProxyWithInjectedServe(t *testing.T) {
 		"--service_secret", "sekret",
 		"--default_provider", proxy.ProviderNameDeepSeek,
 		"--deepseek_api_key", "sk-deepseek",
+		"--gemini_api_key", "sk-gemini",
+		"--gemini_base_url", "https://gemini.example",
 		"--log_level", proxy.LogLevelDebug,
 		"--port", "18080",
 	})
@@ -40,5 +42,11 @@ func TestExecuteRunsConfiguredProxyWithInjectedServe(t *testing.T) {
 	}
 	if capturedConfiguration.Port != 18080 {
 		t.Fatalf("port=%d", capturedConfiguration.Port)
+	}
+	if capturedConfiguration.GeminiKey != "sk-gemini" {
+		t.Fatalf("geminiKey=%q", capturedConfiguration.GeminiKey)
+	}
+	if capturedConfiguration.GeminiBaseURL != "https://gemini.example" {
+		t.Fatalf("geminiBaseURL=%q", capturedConfiguration.GeminiBaseURL)
 	}
 }
