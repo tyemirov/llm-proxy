@@ -85,7 +85,8 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	pollTimeout := time.Duration(configuration.UpstreamPollTimeoutSeconds) * time.Second
 	openAIClient := NewOpenAIClient(HTTPClient, configuration.Endpoints, requestTimeout, configuration.MaxOutputTokens, pollTimeout)
 	chatClient := newOpenAICompatibleChatClient(HTTPClient, requestTimeout, configuration.MaxOutputTokens)
-	upstreamProviders := newProviderRouter(openAIClient, chatClient)
+	geminiClient := newGeminiGenerateContentClient(HTTPClient, requestTimeout, configuration.MaxOutputTokens)
+	upstreamProviders := newProviderRouter(openAIClient, chatClient, geminiClient)
 	for workerIndex := 0; workerIndex < configuration.WorkerCount; workerIndex++ {
 		go func() {
 			for pending := range taskQueue {

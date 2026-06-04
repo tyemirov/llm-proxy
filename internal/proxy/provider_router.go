@@ -9,17 +9,19 @@ import (
 type providerRouter struct {
 	openAIClient *OpenAIClient
 	chatClient   *openAICompatibleChatClient
+	geminiClient *geminiGenerateContentClient
 }
 
-func newProviderRouter(openAIClient *OpenAIClient, chatClient *openAICompatibleChatClient) *providerRouter {
+func newProviderRouter(openAIClient *OpenAIClient, chatClient *openAICompatibleChatClient, geminiClient *geminiGenerateContentClient) *providerRouter {
 	return &providerRouter{
 		openAIClient: openAIClient,
 		chatClient:   chatClient,
+		geminiClient: geminiClient,
 	}
 }
 
 func (router *providerRouter) generateText(requestContext context.Context, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	if request.provider.usesOpenAIResponses {
+	if request.provider.textTransport == textTransportOpenAIResponses {
 		return router.openAIClient.openAIRequest(
 			requestContext,
 			request.provider.credentialFor(endpointKindText),
@@ -27,6 +29,17 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 			request.prompt,
 			request.systemPrompt,
 			request.webSearchEnabled,
+			structuredLogger,
+		)
+	}
+	if request.provider.textTransport == textTransportGeminiGenerate {
+		return router.geminiClient.generateText(
+			requestContext,
+			request.provider.credentialFor(endpointKindText),
+			request.provider.textBaseURL,
+			request.model,
+			request.prompt,
+			request.systemPrompt,
 			structuredLogger,
 		)
 	}

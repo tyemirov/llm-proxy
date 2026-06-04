@@ -18,6 +18,7 @@ import (
 const (
 	testDeepSeekKey    = "sk-deepseek"
 	testSiliconFlowKey = "sk-siliconflow"
+	testGeminiKey      = "sk-gemini"
 )
 
 func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
@@ -143,6 +144,354 @@ func TestProviderRoutingSurfacesChatCompletionTokenUsage(t *testing.T) {
 	}
 }
 
+func TestProviderRoutingSupportsGeminiGenerateContent(t *testing.T) {
+	var capturedPayload map[string]any
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			t.Fatalf("method=%s want=%s", request.Method, http.MethodPost)
+		}
+		if request.URL.Path != "/models/"+proxy.ModelNameGemini35Flash+":generateContent" {
+			t.Fatalf("path=%s want=%s", request.URL.Path, "/models/"+proxy.ModelNameGemini35Flash+":generateContent")
+		}
+		if apiKeyHeader := request.Header.Get("x-goog-api-key"); apiKeyHeader != testGeminiKey {
+			t.Fatalf("x-goog-api-key=%q want=%q", apiKeyHeader, testGeminiKey)
+		}
+		bodyBytes, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			t.Fatalf("read body: %v", readError)
+		}
+		if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+			t.Fatalf("unmarshal body: %v", unmarshalError)
+		}
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"gemini ok"}]}}],"usageMetadata":{"promptTokenCount":13,"candidatesTokenCount":5}}`))
+	}))
+	defer upstreamServer.Close()
+
+	logger := zap.NewNop()
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		ServiceSecret:              TestSecret,
+		OpenAIKey:                  TestAPIKey,
+		GeminiKey:                  testGeminiKey,
+		GeminiBaseURL:              upstreamServer.URL,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+		MaxOutputTokens:            123,
+	}, logger.Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	queryParameters := url.Values{}
+	queryParameters.Set("key", TestSecret)
+	queryParameters.Set("prompt", TestPrompt)
+	queryParameters.Set("provider", proxy.ProviderNameGemini)
+	queryParameters.Set("system_prompt", "system text")
+	queryParameters.Set("format", "application/json")
+	request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+	}
+	if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "13" {
+		t.Fatalf("request tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens))
+	}
+	if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "5" {
+		t.Fatalf("response tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens))
+	}
+	if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "18" {
+		t.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
+	}
+	var response struct {
+		Response string `json:"response"`
+		Usage    struct {
+			RequestTokens  int `json:"request_tokens"`
+			ResponseTokens int `json:"response_tokens"`
+			TotalTokens    int `json:"total_tokens"`
+		} `json:"usage"`
+	}
+	if decodeError := json.Unmarshal(responseRecorder.Body.Bytes(), &response); decodeError != nil {
+		t.Fatalf("decode json: %v", decodeError)
+	}
+	if response.Response != "gemini ok" || response.Usage.RequestTokens != 13 || response.Usage.ResponseTokens != 5 || response.Usage.TotalTokens != 18 {
+		t.Fatalf("response=%+v", response)
+	}
+	if generationConfig, ok := capturedPayload["generationConfig"].(map[string]any); !ok || generationConfig["maxOutputTokens"] != float64(123) {
+		t.Fatalf("generationConfig=%v", capturedPayload["generationConfig"])
+	}
+	if systemInstruction, ok := capturedPayload["systemInstruction"].(map[string]any); !ok || systemInstruction["parts"] == nil {
+		t.Fatalf("systemInstruction=%v", capturedPayload["systemInstruction"])
+	}
+}
+
+func TestProviderRoutingSupportsGeminiJSONPost(t *testing.T) {
+	var capturedPath string
+	var capturedPayload map[string]any
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		capturedPath = request.URL.Path
+		bodyBytes, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			t.Fatalf("read body: %v", readError)
+		}
+		if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+			t.Fatalf("unmarshal body: %v", unmarshalError)
+		}
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"gemini json ok"}]}}]}`))
+	}))
+	defer upstreamServer.Close()
+
+	logger := zap.NewNop()
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		ServiceSecret:              TestSecret,
+		OpenAIKey:                  TestAPIKey,
+		GeminiKey:                  testGeminiKey,
+		GeminiBaseURL:              upstreamServer.URL,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, logger.Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	requestBody := bytes.NewBufferString(`{"prompt":"hello json","model":"` + proxy.ModelNameGemini25Pro + `","system_prompt":"system json"}`)
+	request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&provider="+proxy.ProviderNameGemini, requestBody)
+	request.Header.Set("Content-Type", "application/json")
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+	}
+	if strings.TrimSpace(responseRecorder.Body.String()) != "gemini json ok" {
+		t.Fatalf("body=%q want=%q", responseRecorder.Body.String(), "gemini json ok")
+	}
+	if capturedPath != "/models/"+proxy.ModelNameGemini25Pro+":generateContent" {
+		t.Fatalf("path=%s want=%s", capturedPath, "/models/"+proxy.ModelNameGemini25Pro+":generateContent")
+	}
+	if systemInstruction, ok := capturedPayload["systemInstruction"].(map[string]any); !ok || systemInstruction["parts"] == nil {
+		t.Fatalf("systemInstruction=%v", capturedPayload["systemInstruction"])
+	}
+}
+
+func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T) {
+	logger := zap.NewNop()
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		ServiceSecret:              TestSecret,
+		OpenAIKey:                  TestAPIKey,
+		GeminiKey:                  testGeminiKey,
+		GeminiBaseURL:              "https://gemini.invalid",
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, logger.Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	testCases := []struct {
+		name         string
+		method       string
+		target       string
+		expectedCode int
+	}{
+		{name: "unknown model", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&model=unknown", expectedCode: http.StatusBadRequest},
+		{name: "unsupported web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&web_search=1", expectedCode: http.StatusBadRequest},
+		{name: "unsupported dictation", method: http.MethodPost, target: "/dictate?key=" + TestSecret + "&provider=gemini", expectedCode: http.StatusBadRequest},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			var request *http.Request
+			if testCase.target == "/dictate?key="+TestSecret+"&provider=gemini" {
+				body := &bytes.Buffer{}
+				writer := multipart.NewWriter(body)
+				filePart, createError := writer.CreateFormFile("audio", "recording.webm")
+				if createError != nil {
+					subTest.Fatalf("CreateFormFile error: %v", createError)
+				}
+				if _, writeError := filePart.Write([]byte(testAudioPayload)); writeError != nil {
+					subTest.Fatalf("write audio: %v", writeError)
+				}
+				if closeError := writer.Close(); closeError != nil {
+					subTest.Fatalf("Close writer error: %v", closeError)
+				}
+				request = httptest.NewRequest(testCase.method, testCase.target, body)
+				request.Header.Set("Content-Type", writer.FormDataContentType())
+			} else {
+				request = httptest.NewRequest(testCase.method, testCase.target, nil)
+			}
+			responseRecorder := httptest.NewRecorder()
+			router.ServeHTTP(responseRecorder, request)
+			if responseRecorder.Code != testCase.expectedCode {
+				subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, testCase.expectedCode, responseRecorder.Body.String())
+			}
+		})
+	}
+}
+
+func TestProviderRoutingRejectsGeminiMissingCredential(t *testing.T) {
+	logger := zap.NewNop()
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		ServiceSecret:              TestSecret,
+		OpenAIKey:                  TestAPIKey,
+		GeminiBaseURL:              "https://gemini.invalid",
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, logger.Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&provider=gemini", nil)
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusServiceUnavailable, responseRecorder.Body.String())
+	}
+}
+
+func TestProviderRoutingRejectsMissingGeminiDefaultCredential(t *testing.T) {
+	logger := zap.NewNop()
+	_, buildError := proxy.BuildRouter(proxy.Configuration{
+		ServiceSecret:              TestSecret,
+		OpenAIKey:                  TestAPIKey,
+		DefaultProvider:            proxy.ProviderNameGemini,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, logger.Sugar())
+	if buildError == nil || !strings.Contains(buildError.Error(), "provider not configured: provider=gemini") {
+		t.Fatalf("error=%v want Gemini provider not configured", buildError)
+	}
+}
+
+func TestProviderRoutingMapsGeminiProviderErrors(t *testing.T) {
+	testCases := []struct {
+		name       string
+		statusCode int
+		body       string
+		wantStatus int
+	}{
+		{name: "rate limited", statusCode: http.StatusTooManyRequests, body: `{}`, wantStatus: http.StatusTooManyRequests},
+		{name: "provider api failure", statusCode: http.StatusInternalServerError, body: `{}`, wantStatus: http.StatusBadGateway},
+		{name: "malformed json", statusCode: http.StatusOK, body: `{`, wantStatus: http.StatusBadGateway},
+		{name: "negative usage", statusCode: http.StatusOK, body: `{"candidates":[{"content":{"parts":[{"text":"bad usage"}]}}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":-1}}`, wantStatus: http.StatusBadGateway},
+		{name: "missing text", statusCode: http.StatusOK, body: `{"candidates":[{"content":{"parts":[{}]}}]}`, wantStatus: http.StatusBadGateway},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+				responseWriter.Header().Set("Content-Type", "application/json")
+				responseWriter.WriteHeader(testCase.statusCode)
+				_, _ = responseWriter.Write([]byte(testCase.body))
+			}))
+			defer upstreamServer.Close()
+
+			logger := zap.NewNop()
+			router, buildError := proxy.BuildRouter(proxy.Configuration{
+				ServiceSecret:              TestSecret,
+				OpenAIKey:                  TestAPIKey,
+				GeminiKey:                  testGeminiKey,
+				GeminiBaseURL:              upstreamServer.URL,
+				LogLevel:                   proxy.LogLevelInfo,
+				WorkerCount:                1,
+				QueueSize:                  1,
+				RequestTimeoutSeconds:      TestTimeout,
+				UpstreamPollTimeoutSeconds: TestTimeout,
+			}, logger.Sugar())
+			if buildError != nil {
+				subTest.Fatalf(messageBuildRouterError, buildError)
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&provider=gemini", nil)
+			responseRecorder := httptest.NewRecorder()
+
+			router.ServeHTTP(responseRecorder, request)
+
+			if responseRecorder.Code != testCase.wantStatus {
+				subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, testCase.wantStatus, responseRecorder.Body.String())
+			}
+		})
+	}
+}
+
+func TestProviderRoutingMapsGeminiTransportErrors(t *testing.T) {
+	t.Run("invalid request URL", func(subTest *testing.T) {
+		logger := zap.NewNop()
+		router, buildError := proxy.BuildRouter(proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			GeminiKey:                  testGeminiKey,
+			GeminiBaseURL:              "http://[::1",
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      TestTimeout,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+		}, logger.Sugar())
+		if buildError != nil {
+			subTest.Fatalf(messageBuildRouterError, buildError)
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&provider=gemini", nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusBadGateway {
+			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadGateway, responseRecorder.Body.String())
+		}
+	})
+
+	t.Run("transport error", func(subTest *testing.T) {
+		originalHTTPClient := proxy.HTTPClient
+		proxy.HTTPClient = coverageHTTPDoer(func(request *http.Request) (*http.Response, error) {
+			return nil, io.ErrUnexpectedEOF
+		})
+		subTest.Cleanup(func() { proxy.HTTPClient = originalHTTPClient })
+
+		logger := zap.NewNop()
+		router, buildError := proxy.BuildRouter(proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			GeminiKey:                  testGeminiKey,
+			GeminiBaseURL:              "https://gemini.invalid",
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      1,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+		}, logger.Sugar())
+		if buildError != nil {
+			subTest.Fatalf(messageBuildRouterError, buildError)
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&provider=gemini", nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusGatewayTimeout {
+			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusGatewayTimeout, responseRecorder.Body.String())
+		}
+	})
+}
+
 func TestProviderRoutingRejectsUnsupportedWebSearch(t *testing.T) {
 	logger := zap.NewNop()
 	router, buildError := proxy.BuildRouter(proxy.Configuration{
@@ -230,6 +579,21 @@ func TestProviderRoutingRejectsInvalidDefaultDictationProvider(t *testing.T) {
 				UpstreamPollTimeoutSeconds: TestTimeout,
 			},
 			expectedError: "unsupported provider endpoint: provider=deepseek endpoint=dictation",
+		},
+		{
+			name: "unsupported_gemini_dictation",
+			configuration: proxy.Configuration{
+				ServiceSecret:              TestSecret,
+				OpenAIKey:                  TestAPIKey,
+				GeminiKey:                  testGeminiKey,
+				DefaultDictationProvider:   proxy.ProviderNameGemini,
+				LogLevel:                   proxy.LogLevelInfo,
+				WorkerCount:                1,
+				QueueSize:                  1,
+				RequestTimeoutSeconds:      TestTimeout,
+				UpstreamPollTimeoutSeconds: TestTimeout,
+			},
+			expectedError: "unsupported provider endpoint: provider=gemini endpoint=dictation",
 		},
 	}
 	for _, testCase := range testCases {
