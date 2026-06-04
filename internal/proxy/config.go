@@ -41,6 +41,7 @@ type Configuration struct {
 	MoonshotKey                  string
 	SiliconFlowKey               string
 	ZhipuKey                     string
+	GeminiKey                    string
 	DefaultProvider              string
 	DefaultModel                 string
 	DefaultDictationProvider     string
@@ -50,6 +51,7 @@ type Configuration struct {
 	SiliconFlowBaseURL           string
 	SiliconFlowTranscriptionsURL string
 	ZhipuBaseURL                 string
+	GeminiBaseURL                string
 	Port                         int
 	LogLevel                     string
 	SystemPrompt                 string
@@ -104,6 +106,10 @@ func validateDefaultProviderCredential(providerIdentifier string, config Configu
 		if strings.TrimSpace(config.ZhipuKey) == constants.EmptyString {
 			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameZhipu)
 		}
+	case ProviderNameGemini:
+		if strings.TrimSpace(config.GeminiKey) == constants.EmptyString {
+			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameGemini)
+		}
 	default:
 		return fmt.Errorf("%w: %s", ErrUnknownProvider, providerIdentifier)
 	}
@@ -128,6 +134,8 @@ func validateDefaultDictationProviderCredential(providerIdentifier string, confi
 		return fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, ProviderNameMoonshot, endpointKindDictation)
 	case ProviderNameZhipu, providerAliasGLM:
 		return fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, ProviderNameZhipu, endpointKindDictation)
+	case ProviderNameGemini:
+		return fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, ProviderNameGemini, endpointKindDictation)
 	default:
 		return fmt.Errorf("%w: %s", ErrUnknownProvider, providerIdentifier)
 	}
@@ -185,5 +193,8 @@ func (configuration *Configuration) ApplyTunables() {
 	}
 	if strings.TrimSpace(configuration.ZhipuBaseURL) == constants.EmptyString {
 		configuration.ZhipuBaseURL = defaultZhipuBaseURL
+	}
+	if strings.TrimSpace(configuration.GeminiBaseURL) == constants.EmptyString {
+		configuration.GeminiBaseURL = defaultGeminiBaseURL
 	}
 }

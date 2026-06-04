@@ -19,6 +19,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 	moonshotProviderID := providerID(ProviderNameMoonshot)
 	siliconFlowProviderID := providerID(ProviderNameSiliconFlow)
 	zhipuProviderID := providerID(ProviderNameZhipu)
+	geminiProviderID := providerID(ProviderNameGemini)
 
 	definitions := map[providerID]providerDefinition{
 		openAIProviderID: {
@@ -31,7 +32,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			transcriptionModels:       modelSet(configuration.DictationModel, DefaultDictationModel, "gpt-4o-transcribe"),
 			supportsDictation:         true,
 			supportsWebSearch:         true,
-			usesOpenAIResponses:       true,
+			textTransport:             textTransportOpenAIResponses,
 		},
 		deepSeekProviderID: {
 			identifier:          deepSeekProviderID,
@@ -40,6 +41,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			defaultTextModel:    modelID(ModelNameDeepSeekV4Flash),
 			textModels:          modelSet(ModelNameDeepSeekV4Flash, ModelNameDeepSeekV4Pro, ModelNameDeepSeekChat, ModelNameDeepSeekReasoner),
 			transcriptionModels: map[string]modelID{},
+			textTransport:       textTransportOpenAICompatibleChat,
 		},
 		dashScopeProviderID: {
 			identifier:          dashScopeProviderID,
@@ -49,6 +51,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			defaultTextModel:    modelID(ModelNameDashScopeQwenPlus),
 			textModels:          modelSet(ModelNameDashScopeQwenPlus),
 			transcriptionModels: map[string]modelID{},
+			textTransport:       textTransportOpenAICompatibleChat,
 		},
 		moonshotProviderID: {
 			identifier:          moonshotProviderID,
@@ -58,6 +61,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			defaultTextModel:    modelID(ModelNameMoonshotKimi),
 			textModels:          modelSet(ModelNameMoonshotKimi),
 			transcriptionModels: map[string]modelID{},
+			textTransport:       textTransportOpenAICompatibleChat,
 		},
 		siliconFlowProviderID: {
 			identifier:                siliconFlowProviderID,
@@ -70,6 +74,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			textModels:                modelSet(ModelNameSiliconFlowDeepSeek),
 			transcriptionModels:       modelSet(defaultSiliconFlowSTTModel),
 			supportsDictation:         true,
+			textTransport:             textTransportOpenAICompatibleChat,
 		},
 		zhipuProviderID: {
 			identifier:          zhipuProviderID,
@@ -79,6 +84,16 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			defaultTextModel:    modelID(ModelNameZhipuGLM),
 			textModels:          modelSet(ModelNameZhipuGLM),
 			transcriptionModels: map[string]modelID{},
+			textTransport:       textTransportOpenAICompatibleChat,
+		},
+		geminiProviderID: {
+			identifier:          geminiProviderID,
+			textAPIKey:          configuration.GeminiKey,
+			textBaseURL:         configuration.GeminiBaseURL,
+			defaultTextModel:    modelID(ModelNameGemini35Flash),
+			textModels:          modelSet(ModelNameGemini35Flash, ModelNameGemini31FlashLite, ModelNameGemini25Flash, ModelNameGemini25FlashLite, ModelNameGemini25Pro),
+			transcriptionModels: map[string]modelID{},
+			textTransport:       textTransportGeminiGenerate,
 		},
 	}
 

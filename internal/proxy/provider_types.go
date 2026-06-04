@@ -17,6 +17,8 @@ const (
 	ProviderNameSiliconFlow = "siliconflow"
 	// ProviderNameZhipu identifies Zhipu/GLM routing.
 	ProviderNameZhipu = "zhipu"
+	// ProviderNameGemini identifies Google Gemini routing.
+	ProviderNameGemini = "gemini"
 )
 
 const (
@@ -31,6 +33,7 @@ const (
 	defaultMoonshotBaseURL     = "https://api.moonshot.ai/v1"
 	defaultSiliconFlowBaseURL  = "https://api.siliconflow.com/v1"
 	defaultZhipuBaseURL        = "https://open.bigmodel.cn/api/paas/v4"
+	defaultGeminiBaseURL       = "https://generativelanguage.googleapis.com/v1"
 	defaultSiliconFlowSTTModel = "FunAudioLLM/SenseVoiceSmall"
 )
 
@@ -51,6 +54,16 @@ const (
 	ModelNameSiliconFlowDeepSeek = "deepseek-ai/DeepSeek-R1"
 	// ModelNameZhipuGLM identifies the GLM 5.1 model.
 	ModelNameZhipuGLM = "glm-5.1"
+	// ModelNameGemini35Flash identifies Gemini 3.5 Flash.
+	ModelNameGemini35Flash = "gemini-3.5-flash"
+	// ModelNameGemini31FlashLite identifies Gemini 3.1 Flash-Lite.
+	ModelNameGemini31FlashLite = "gemini-3.1-flash-lite"
+	// ModelNameGemini25Flash identifies Gemini 2.5 Flash.
+	ModelNameGemini25Flash = "gemini-2.5-flash"
+	// ModelNameGemini25FlashLite identifies Gemini 2.5 Flash-Lite.
+	ModelNameGemini25FlashLite = "gemini-2.5-flash-lite"
+	// ModelNameGemini25Pro identifies Gemini 2.5 Pro.
+	ModelNameGemini25Pro = "gemini-2.5-pro"
 )
 
 type endpointKind string
@@ -58,6 +71,14 @@ type endpointKind string
 const (
 	endpointKindText      endpointKind = "text"
 	endpointKindDictation endpointKind = "dictation"
+)
+
+type providerTextTransport string
+
+const (
+	textTransportOpenAIResponses      providerTextTransport = "openai_responses"
+	textTransportOpenAICompatibleChat providerTextTransport = "openai_compatible_chat"
+	textTransportGeminiGenerate       providerTextTransport = "gemini_generate"
 )
 
 type providerID string
@@ -95,7 +116,7 @@ type providerDefinition struct {
 	transcriptionModels       map[string]modelID
 	supportsDictation         bool
 	supportsWebSearch         bool
-	usesOpenAIResponses       bool
+	textTransport             providerTextTransport
 }
 
 func (definition providerDefinition) credentialFor(endpoint endpointKind) string {

@@ -75,4 +75,15 @@ These entries are always-available procedures. Keep them `[ ]` so they remain ru
 
 ## Features
 
+- [x] [F409] (P1) Add Gemini as a native text provider.
+  Add Google Gemini support to the authenticated LLM endpoint using Gemini's native `generateContent` API. The provider should be selected with `provider=gemini`, should use server-side `GEMINI_API_KEY`, should default to `gemini-3.5-flash`, and should support only text generation initially. `/dictate` and `web_search` must return existing unsupported endpoint/capability errors for Gemini until those capabilities are explicitly designed.
+  Acceptance criteria:
+  1. `GET /` and JSON `POST /` route Gemini requests to the native Gemini API with the configured Gemini API key.
+  2. Known Gemini models validate through the provider registry, unknown Gemini models return `400`, and omitted Gemini model values use `gemini-3.5-flash`.
+  3. Missing Gemini credentials return `503` for selected Gemini requests and fail startup when Gemini is configured as the default provider.
+  4. Gemini dictation and Gemini `web_search` requests return the existing unsupported endpoint/capability errors.
+  5. README and implementation docs describe Gemini configuration, usage, supported models, and capability limits.
+  6. Black-box HTTP and CLI tests cover success and failure paths, and repository validation passes.
+  Resolution: Added native Gemini text routing through `provider=gemini` using Google's generateContent API, `GEMINI_API_KEY`, optional `GEMINI_BASE_URL`, and `gemini-3.5-flash` as the provider default model. Supported Gemini text models are `gemini-3.5-flash`, `gemini-3.1-flash-lite`, `gemini-2.5-flash`, `gemini-2.5-flash-lite`, and `gemini-2.5-pro`. Gemini token usage metadata is normalized into the existing usage headers and JSON response shape when upstream returns it. Gemini `/dictate`, `web_search`, unknown model, missing credential, upstream status, transport, malformed response, no-text response, and invalid usage cases are covered by black-box tests. README and provider-routing docs were updated. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test` (total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci`, and `git diff --check`.
+
 ## Planning

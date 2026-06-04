@@ -25,6 +25,7 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 | `moonshot` | `kimi` | OpenAI-compatible chat completions | Not supported | Not supported |
 | `siliconflow` | none | OpenAI-compatible chat completions | OpenAI-compatible audio transcription | Not supported |
 | `zhipu` | `glm` | OpenAI-compatible chat completions | Not supported | Not supported |
+| `gemini` | none | Native Gemini generateContent | Not supported | Not supported |
 
 ## Configuration
 
@@ -44,6 +45,7 @@ Provider credentials and base URLs:
 - `MOONSHOT_API_KEY`, `MOONSHOT_BASE_URL`
 - `SILICONFLOW_API_KEY`, `SILICONFLOW_BASE_URL`, `SILICONFLOW_TRANSCRIPTIONS_URL`
 - `ZHIPU_API_KEY`, `ZHIPU_BASE_URL`
+- `GEMINI_API_KEY`, `GEMINI_BASE_URL`
 
 Startup validates `SERVICE_SECRET`, the credential required by the configured default text provider, and the endpoint/credential required by the configured default dictation provider. Credentials for non-default providers are validated when a request selects that provider.
 
@@ -62,6 +64,7 @@ Startup validates `SERVICE_SECRET`, the credential required by the configured de
 - Provider/model validation happens at the HTTP edge through a provider registry.
 - OpenAI keeps the existing Responses API adapter.
 - Non-OpenAI text providers use a shared OpenAI-compatible Chat Completions adapter.
+- Gemini uses a native generateContent adapter against `GEMINI_BASE_URL`.
 - Dictation routing reuses the multipart transcription adapter with provider-specific URLs.
 - Response formatting remains unchanged.
 

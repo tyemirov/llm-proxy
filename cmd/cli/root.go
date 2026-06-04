@@ -22,6 +22,7 @@ const (
 	keyMoonshotAPIKey               = "moonshot_api_key"
 	keySiliconFlowAPIKey            = "siliconflow_api_key"
 	keyZhipuAPIKey                  = "zhipu_api_key"
+	keyGeminiAPIKey                 = "gemini_api_key"
 	keyServiceSecret                = "service_secret"
 	keyDefaultProvider              = "default_provider"
 	keyDefaultModel                 = "default_model"
@@ -32,6 +33,7 @@ const (
 	keySiliconFlowBaseURL           = "siliconflow_base_url"
 	keySiliconFlowTranscriptionsURL = "siliconflow_transcriptions_url"
 	keyZhipuBaseURL                 = "zhipu_base_url"
+	keyGeminiBaseURL                = "gemini_base_url"
 	keyLogLevel                     = "log_level"
 	keySystemPrompt                 = "system_prompt"
 	keyWorkers                      = "workers"
@@ -50,6 +52,7 @@ const (
 	flagMoonshotAPIKey               = keyMoonshotAPIKey
 	flagSiliconFlowAPIKey            = keySiliconFlowAPIKey
 	flagZhipuAPIKey                  = keyZhipuAPIKey
+	flagGeminiAPIKey                 = keyGeminiAPIKey
 	flagServiceSecret                = keyServiceSecret
 	flagDefaultProvider              = keyDefaultProvider
 	flagDefaultModel                 = keyDefaultModel
@@ -60,6 +63,7 @@ const (
 	flagSiliconFlowBaseURL           = keySiliconFlowBaseURL
 	flagSiliconFlowTranscriptionsURL = keySiliconFlowTranscriptionsURL
 	flagZhipuBaseURL                 = keyZhipuBaseURL
+	flagGeminiBaseURL                = keyGeminiBaseURL
 	flagLogLevel                     = keyLogLevel
 	flagSystemPrompt                 = keySystemPrompt
 	flagWorkers                      = keyWorkers
@@ -78,6 +82,7 @@ const (
 	envMoonshotAPIKey               = "MOONSHOT_API_KEY"
 	envSiliconFlowAPIKey            = "SILICONFLOW_API_KEY"
 	envZhipuAPIKey                  = "ZHIPU_API_KEY"
+	envGeminiAPIKey                 = "GEMINI_API_KEY"
 	envServiceSecret                = "SERVICE_SECRET"
 	envDefaultProvider              = "LLM_PROXY_DEFAULT_PROVIDER"
 	envDefaultModel                 = "LLM_PROXY_DEFAULT_MODEL"
@@ -88,6 +93,7 @@ const (
 	envSiliconFlowBaseURL           = "SILICONFLOW_BASE_URL"
 	envSiliconFlowTranscriptionsURL = "SILICONFLOW_TRANSCRIPTIONS_URL"
 	envZhipuBaseURL                 = "ZHIPU_BASE_URL"
+	envGeminiBaseURL                = "GEMINI_BASE_URL"
 	envLogLevel                     = "LOG_LEVEL"
 	envSystemPrompt                 = "SYSTEM_PROMPT"
 	envWorkers                      = "LLM_PROXY_WORKERS"
@@ -128,7 +134,8 @@ const (
 	// Additional commands should define their usage examples using a constant following this pattern.
 	rootCmdExample = `llm-proxy --service_secret=mysecret --openai_api_key=sk-xxxxx --log_level=debug
 SERVICE_SECRET=mysecret OPENAI_API_KEY=sk-xxxxx LOG_LEVEL=debug llm-proxy
-SERVICE_SECRET=mysecret DEEPSEEK_API_KEY=sk-xxxxx LLM_PROXY_DEFAULT_PROVIDER=deepseek llm-proxy`
+SERVICE_SECRET=mysecret DEEPSEEK_API_KEY=sk-xxxxx LLM_PROXY_DEFAULT_PROVIDER=deepseek llm-proxy
+SERVICE_SECRET=mysecret GEMINI_API_KEY=xxxxx LLM_PROXY_DEFAULT_PROVIDER=gemini llm-proxy`
 )
 
 // Execute runs the command-line interface.
@@ -153,6 +160,7 @@ var rootCmd = &cobra.Command{
 		populateStringConfiguration(command, flagMoonshotAPIKey, keyMoonshotAPIKey, &config.MoonshotKey, constants.EmptyString, trimSpacesAndQuotes)
 		populateStringConfiguration(command, flagSiliconFlowAPIKey, keySiliconFlowAPIKey, &config.SiliconFlowKey, constants.EmptyString, trimSpacesAndQuotes)
 		populateStringConfiguration(command, flagZhipuAPIKey, keyZhipuAPIKey, &config.ZhipuKey, constants.EmptyString, trimSpacesAndQuotes)
+		populateStringConfiguration(command, flagGeminiAPIKey, keyGeminiAPIKey, &config.GeminiKey, constants.EmptyString, trimSpacesAndQuotes)
 		populateStringConfiguration(command, flagDefaultProvider, keyDefaultProvider, &config.DefaultProvider, proxy.DefaultProvider, trimSpacesAndQuotes)
 		populateStringConfiguration(command, flagDefaultModel, keyDefaultModel, &config.DefaultModel, proxy.DefaultModel, trimSpacesAndQuotes)
 		populateStringConfiguration(command, flagDefaultDictationProvider, keyDefaultDictationProvider, &config.DefaultDictationProvider, proxy.DefaultDictationProvider, trimSpacesAndQuotes)
@@ -162,6 +170,7 @@ var rootCmd = &cobra.Command{
 		populateStringConfiguration(command, flagSiliconFlowBaseURL, keySiliconFlowBaseURL, &config.SiliconFlowBaseURL, constants.EmptyString, trimSpacesAndQuotes)
 		populateStringConfiguration(command, flagSiliconFlowTranscriptionsURL, keySiliconFlowTranscriptionsURL, &config.SiliconFlowTranscriptionsURL, constants.EmptyString, trimSpacesAndQuotes)
 		populateStringConfiguration(command, flagZhipuBaseURL, keyZhipuBaseURL, &config.ZhipuBaseURL, constants.EmptyString, trimSpacesAndQuotes)
+		populateStringConfiguration(command, flagGeminiBaseURL, keyGeminiBaseURL, &config.GeminiBaseURL, constants.EmptyString, trimSpacesAndQuotes)
 		populateIntConfiguration(command, flagPort, keyPort, &config.Port, proxy.DefaultPort)
 		populateStringConfiguration(command, flagLogLevel, keyLogLevel, &config.LogLevel, proxy.LogLevelInfo, identityTransformer)
 		populateStringConfiguration(command, flagSystemPrompt, keySystemPrompt, &config.SystemPrompt, constants.EmptyString, identityTransformer)
@@ -224,6 +233,7 @@ func environmentBindings() []environmentBinding {
 		{key: keyMoonshotAPIKey, environmentVariables: []string{envMoonshotAPIKey}},
 		{key: keySiliconFlowAPIKey, environmentVariables: []string{envSiliconFlowAPIKey}},
 		{key: keyZhipuAPIKey, environmentVariables: []string{envZhipuAPIKey}},
+		{key: keyGeminiAPIKey, environmentVariables: []string{envGeminiAPIKey}},
 		{key: keyServiceSecret, environmentVariables: []string{envServiceSecret}},
 		{key: keyDefaultProvider, environmentVariables: []string{envDefaultProvider}},
 		{key: keyDefaultModel, environmentVariables: []string{envDefaultModel}},
@@ -234,6 +244,7 @@ func environmentBindings() []environmentBinding {
 		{key: keySiliconFlowBaseURL, environmentVariables: []string{envSiliconFlowBaseURL}},
 		{key: keySiliconFlowTranscriptionsURL, environmentVariables: []string{envSiliconFlowTranscriptionsURL}},
 		{key: keyZhipuBaseURL, environmentVariables: []string{envZhipuBaseURL}},
+		{key: keyGeminiBaseURL, environmentVariables: []string{envGeminiBaseURL}},
 		{key: keyLogLevel, environmentVariables: []string{envLogLevel}},
 		{key: keySystemPrompt, environmentVariables: []string{envSystemPrompt}},
 		{key: keyWorkers, environmentVariables: []string{envWorkers}},
@@ -261,6 +272,7 @@ func init() {
 	rootCmd.Flags().StringVar(&config.MoonshotKey, flagMoonshotAPIKey, "", "Moonshot/Kimi API key (env: "+envMoonshotAPIKey+")")
 	rootCmd.Flags().StringVar(&config.SiliconFlowKey, flagSiliconFlowAPIKey, "", "SiliconFlow API key (env: "+envSiliconFlowAPIKey+")")
 	rootCmd.Flags().StringVar(&config.ZhipuKey, flagZhipuAPIKey, "", "Zhipu/GLM API key (env: "+envZhipuAPIKey+")")
+	rootCmd.Flags().StringVar(&config.GeminiKey, flagGeminiAPIKey, "", "Gemini API key (env: "+envGeminiAPIKey+")")
 	rootCmd.Flags().StringVar(&config.DefaultProvider, flagDefaultProvider, "", "default text provider (env: "+envDefaultProvider+")")
 	rootCmd.Flags().StringVar(&config.DefaultModel, flagDefaultModel, "", "default text model (env: "+envDefaultModel+")")
 	rootCmd.Flags().StringVar(&config.DefaultDictationProvider, flagDefaultDictationProvider, "", "default dictation provider (env: "+envDefaultDictationProvider+")")
@@ -270,6 +282,7 @@ func init() {
 	rootCmd.Flags().StringVar(&config.SiliconFlowBaseURL, flagSiliconFlowBaseURL, "", "SiliconFlow OpenAI-compatible base URL (env: "+envSiliconFlowBaseURL+")")
 	rootCmd.Flags().StringVar(&config.SiliconFlowTranscriptionsURL, flagSiliconFlowTranscriptionsURL, "", "SiliconFlow transcription URL (env: "+envSiliconFlowTranscriptionsURL+")")
 	rootCmd.Flags().StringVar(&config.ZhipuBaseURL, flagZhipuBaseURL, "", "Zhipu OpenAI-compatible base URL (env: "+envZhipuBaseURL+")")
+	rootCmd.Flags().StringVar(&config.GeminiBaseURL, flagGeminiBaseURL, "", "Gemini API base URL (env: "+envGeminiBaseURL+")")
 	rootCmd.Flags().IntVar(&config.Port, flagPort, 0, "TCP port to listen on (env: "+envPort+")")
 	rootCmd.Flags().StringVar(&config.LogLevel, flagLogLevel, "", "logging level: debug or info (env: "+envLogLevel+")")
 	rootCmd.Flags().StringVar(&config.SystemPrompt, flagSystemPrompt, "", "system prompt sent to the model (env: "+envSystemPrompt+")")

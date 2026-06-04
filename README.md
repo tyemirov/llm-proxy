@@ -1,7 +1,8 @@
 # LLM Proxy
 
 LLM Proxy is a lightweight HTTP service that forwards user prompts to OpenAI's
-Responses API, OpenAI-compatible chat providers, and audio transcription APIs.
+Responses API, OpenAI-compatible chat providers, Google Gemini's native
+generateContent API, and audio transcription APIs.
 It exposes protected HTTP endpoints that require a shared secret and simplify
 integrating provider capabilities without embedding API credentials in each
 client.
@@ -34,6 +35,7 @@ variables:
 | `--moonshot_api_key` / `MOONSHOT_API_KEY` | Moonshot/Kimi API key used when `provider=moonshot` or `provider=kimi` |
 | `--siliconflow_api_key` / `SILICONFLOW_API_KEY` | SiliconFlow API key used when `provider=siliconflow` |
 | `--zhipu_api_key` / `ZHIPU_API_KEY` | Zhipu/GLM API key used when `provider=zhipu` or `provider=glm` |
+| `--gemini_api_key` / `GEMINI_API_KEY` | Gemini API key used when `provider=gemini` |
 | `--default_provider` / `LLM_PROXY_DEFAULT_PROVIDER` | Default text provider when `provider` is omitted (default `openai`) |
 | `--default_model` / `LLM_PROXY_DEFAULT_MODEL` | Default text model when `model` is omitted for OpenAI (default `gpt-4.1`) |
 | `--default_dictation_provider` / `LLM_PROXY_DEFAULT_DICTATION_PROVIDER` | Default `/dictate` provider when `provider` is omitted (default `openai`) |
@@ -43,6 +45,7 @@ variables:
 | `--siliconflow_base_url` / `SILICONFLOW_BASE_URL` | SiliconFlow OpenAI-compatible base URL |
 | `--siliconflow_transcriptions_url` / `SILICONFLOW_TRANSCRIPTIONS_URL` | SiliconFlow audio transcription URL |
 | `--zhipu_base_url` / `ZHIPU_BASE_URL` | Zhipu OpenAI-compatible base URL |
+| `--gemini_base_url` / `GEMINI_BASE_URL` | Gemini API base URL |
 | `--port` / `HTTP_PORT` | Port for the HTTP server (default `8080`) |
 | `--log_level` / `LOG_LEVEL` | `debug` or `info` (default `info`) |
 | `--system_prompt` / `SYSTEM_PROMPT` | Optional system prompt text |
@@ -77,6 +80,13 @@ Run the service with DeepSeek as the default text provider:
 
 ```shell
 SERVICE_SECRET=mysecret DEEPSEEK_API_KEY=sk-xxxxx LLM_PROXY_DEFAULT_PROVIDER=deepseek \
+  ./llm-proxy --port=8080 --log_level=info
+```
+
+Run the service with Gemini as the default text provider:
+
+```shell
+SERVICE_SECRET=mysecret GEMINI_API_KEY=xxxxx LLM_PROXY_DEFAULT_PROVIDER=gemini \
   ./llm-proxy --port=8080 --log_level=info
 ```
 
@@ -115,6 +125,17 @@ curl --get \
   --data-urlencode "key=mysecret" \
   --data-urlencode "provider=deepseek" \
   --data-urlencode "model=deepseek-v4-flash" \
+  "http://localhost:8080/"
+```
+
+Gemini text generation:
+
+```shell
+curl --get \
+  --data-urlencode "prompt=Summarize this with Gemini" \
+  --data-urlencode "key=mysecret" \
+  --data-urlencode "provider=gemini" \
+  --data-urlencode "model=gemini-3.5-flash" \
   "http://localhost:8080/"
 ```
 
@@ -312,6 +333,11 @@ below for web search.
 | `kimi-k2-0905-preview` | Moonshot/Kimi | No |
 | `deepseek-ai/DeepSeek-R1` | SiliconFlow | No |
 | `glm-5.1` | Zhipu/GLM | No |
+| `gemini-3.5-flash` | Gemini | No |
+| `gemini-3.1-flash-lite` | Gemini | No |
+| `gemini-2.5-flash` | Gemini | No |
+| `gemini-2.5-flash-lite` | Gemini | No |
+| `gemini-2.5-pro` | Gemini | No |
 
 ### Status codes
 
