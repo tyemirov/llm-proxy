@@ -11,6 +11,9 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - `provider` is an optional query parameter on `GET /`, `POST /`, and `POST /dictate`.
 - Omitted `provider` means `openai`.
 - `model` keeps its current meaning.
+- `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies.
+- Omitted `max_tokens` means the proxy omits provider max-token fields and lets the selected provider/model default apply.
+- Provided `max_tokens` maps to OpenAI Responses `max_output_tokens`, OpenAI-compatible chat completions `max_tokens`, and Gemini `generationConfig.maxOutputTokens`.
 - For JSON `POST /`, query `model` may override the body only when the body omits `model` or provides the same value.
 - Conflicting query/body `model` values return `400 Bad Request`.
 - Upstream provider API keys are never accepted from client requests.
