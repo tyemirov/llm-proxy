@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.8] - 2026-06-03
+
+### Changes
+- Merge pull request #163 from tyemirov/gix/add-gemini-provider-support-with-native-generatecontent
+- docs: add Gemini native text provider feature to issues.md
+- feat: add Gemini provider support for text generation
+- docs: add Gemini provider to routing plan and configuration
+- feat(cli): add Gemini API key and base URL configuration flags
+- docs: add Gemini provider details and usage examples to README
+
 ## [v0.2.7] - 2026-06-03
 
 ### Changes
