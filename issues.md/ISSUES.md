@@ -39,6 +39,16 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
 
 ## Improvements
 
+- [x] [I408] (P1) Surface token usage metadata in LLM responses.
+  Upstream text providers may return token usage counts, but the proxy currently returns only generated text to response formatters. Normalize provider usage into request, response, and total token counts, surface it through non-breaking response headers, and include it in JSON-format LLM responses when upstream usage is present.
+  Acceptance criteria:
+  1. OpenAI Responses API `usage.input_tokens`, `usage.output_tokens`, and `usage.total_tokens` are normalized.
+  2. OpenAI-compatible chat `usage.prompt_tokens`, `usage.completion_tokens`, and `usage.total_tokens` are normalized.
+  3. Plain text/XML/CSV response bodies remain unchanged.
+  4. Usage metadata is visible in response headers when upstream usage is available.
+  5. JSON-format LLM responses include a `usage` object when upstream usage is available.
+  Resolution: Added normalized token usage propagation for OpenAI Responses and OpenAI-compatible chat completions, surfaced counts through `X-LLM-Proxy-Request-Tokens`, `X-LLM-Proxy-Response-Tokens`, and `X-LLM-Proxy-Total-Tokens`, and included `usage.request_tokens`, `usage.response_tokens`, and `usage.total_tokens` in JSON-format LLM responses when upstream usage is present. Empty or mismatched upstream `usage` objects are treated as absent metadata. Plain text, XML, and CSV bodies remain unchanged. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test` (total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make lint`.
+
 ## Maintenance
 
 - [x] [M403] (P1) Enforce 100% Go test coverage

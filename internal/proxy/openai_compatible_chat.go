@@ -34,6 +34,7 @@ type chatCompletionRequest struct {
 
 type chatCompletionResponse struct {
 	Choices []chatCompletionChoice `json:"choices"`
+	Usage   *upstreamTokenUsage    `json:"usage"`
 }
 
 type chatCompletionChoice struct {
@@ -53,7 +54,7 @@ func newOpenAICompatibleChatClient(httpClient HTTPDoer, requestTimeout time.Dura
 	}
 }
 
-func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier modelID, userPrompt string, systemPrompt string, structuredLogger *zap.SugaredLogger) (string, error) {
+func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier modelID, userPrompt string, systemPrompt string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	messages := []chatCompletionMessage{}
 	if !utils.IsBlank(systemPrompt) {
 		messages = append(messages, chatCompletionMessage{Role: "system", Content: systemPrompt})
@@ -73,39 +74,43 @@ func (client *openAICompatibleChatClient) generateText(parentContext context.Con
 	httpRequest, buildError := buildAuthorizedJSONRequest(requestContext, http.MethodPost, requestURL, apiKey, bytes.NewReader(payloadBytes))
 	if buildError != nil {
 		structuredLogger.Errorw(logEventBuildHTTPRequest, constants.LogFieldError, buildError)
-		return constants.EmptyString, buildError
+		return textGenerationResult{}, buildError
 	}
 	statusCode, responseBytes, _, requestError := utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEventProviderRequestError)
 	if requestError != nil {
-		return constants.EmptyString, requestError
+		return textGenerationResult{}, requestError
 	}
 	if statusCode == http.StatusTooManyRequests {
-		return constants.EmptyString, fmt.Errorf("%w: chat completion", ErrProviderRateLimited)
+		return textGenerationResult{}, fmt.Errorf("%w: chat completion", ErrProviderRateLimited)
 	}
 	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		return constants.EmptyString, fmt.Errorf("%w: status=%d", ErrProviderAPI, statusCode)
+		return textGenerationResult{}, fmt.Errorf("%w: status=%d", ErrProviderAPI, statusCode)
 	}
-	responseText, parseError := parseChatCompletionText(responseBytes)
+	generation, parseError := parseChatCompletionResponse(responseBytes)
 	if parseError != nil {
-		return constants.EmptyString, parseError
+		return textGenerationResult{}, parseError
 	}
-	return responseText, nil
+	return generation, nil
 }
 
-func parseChatCompletionText(responseBytes []byte) (string, error) {
+func parseChatCompletionResponse(responseBytes []byte) (textGenerationResult, error) {
 	var response chatCompletionResponse
 	if decodeError := json.Unmarshal(responseBytes, &response); decodeError != nil {
-		return constants.EmptyString, decodeError
+		return textGenerationResult{}, decodeError
+	}
+	usage, usageError := parseChatCompletionTokenUsage(response.Usage)
+	if usageError != nil {
+		return textGenerationResult{}, usageError
 	}
 	for _, choice := range response.Choices {
 		trimmedContent := strings.TrimSpace(choice.Message.Content)
 		if trimmedContent != constants.EmptyString {
-			return trimmedContent, nil
+			return textGenerationResult{text: trimmedContent, usage: usage}, nil
 		}
 		trimmedReasoning := strings.TrimSpace(choice.Message.ReasoningContent)
 		if trimmedReasoning != constants.EmptyString {
-			return trimmedReasoning, nil
+			return textGenerationResult{text: trimmedReasoning, usage: usage}, nil
 		}
 	}
-	return constants.EmptyString, errors.New(errorProviderNoText)
+	return textGenerationResult{}, errors.New(errorProviderNoText)
 }

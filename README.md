@@ -209,10 +209,34 @@ the `Accept` header. Supported values are:
 
 * `text/csv` - the reply as a single CSV cell with internal quotes doubled
   and a trailing newline
-* `application/json` - JSON object containing `request` and `response` fields
+* `application/json` - JSON object containing `request` and `response` fields,
+  plus `usage` when upstream token usage is available
 * `application/xml` - XML document `<response request="...">...</response>`
 
 If no supported value is provided, `text/plain` is returned.
+
+When upstream text providers return token usage, the proxy also sets these
+response headers without changing the plain text, XML, or CSV response bodies:
+
+| Header | Description |
+|--------|-------------|
+| `X-LLM-Proxy-Request-Tokens` | Normalized request/input token count |
+| `X-LLM-Proxy-Response-Tokens` | Normalized response/output token count |
+| `X-LLM-Proxy-Total-Tokens` | Normalized total token count |
+
+JSON-format LLM responses include the same normalized counts:
+
+```json
+{
+  "request": "Hello",
+  "response": "Hi",
+  "usage": {
+    "request_tokens": 1,
+    "response_tokens": 1,
+    "total_tokens": 2
+  }
+}
+```
 
 ## Endpoint
 

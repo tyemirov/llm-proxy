@@ -7,10 +7,13 @@ const (
 	// LogLevelInfo indicates that the application should log informational messages.
 	LogLevelInfo = "info"
 
-	headerAuthorization       = "Authorization"
-	headerContentType         = "Content-Type"
-	headerAccept              = "Accept"
-	headerAuthorizationPrefix = "Bearer "
+	headerAuthorization          = "Authorization"
+	headerContentType            = "Content-Type"
+	headerAccept                 = "Accept"
+	headerAuthorizationPrefix    = "Bearer "
+	headerLLMProxyRequestTokens  = "X-LLM-Proxy-Request-Tokens"
+	headerLLMProxyResponseTokens = "X-LLM-Proxy-Response-Tokens"
+	headerLLMProxyTotalTokens    = "X-LLM-Proxy-Total-Tokens"
 
 	// rootPath defines the HTTP path for the root endpoint.
 	rootPath = "/"
@@ -109,6 +112,7 @@ const (
 	jsonFieldID       = "id"
 	jsonFieldStatus   = "status"
 	jsonFieldResponse = "response"
+	jsonFieldUsage    = "usage"
 
 	statusCompleted  = "completed"
 	statusSucceeded  = "succeeded"

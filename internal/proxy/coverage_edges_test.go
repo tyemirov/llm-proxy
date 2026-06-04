@@ -28,6 +28,12 @@ func (roundTripper coverageRoundTripper) RoundTrip(httpRequest *http.Request) (*
 
 type coverageHTTPDoer func(*http.Request) (*http.Response, error)
 
+const (
+	testHeaderLLMProxyRequestTokens  = "X-LLM-Proxy-Request-Tokens"
+	testHeaderLLMProxyResponseTokens = "X-LLM-Proxy-Response-Tokens"
+	testHeaderLLMProxyTotalTokens    = "X-LLM-Proxy-Total-Tokens"
+)
+
 func (httpDoer coverageHTTPDoer) Do(httpRequest *http.Request) (*http.Response, error) {
 	return httpDoer(httpRequest)
 }
@@ -150,6 +156,79 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 		}
 		if body != `formatted "answer"` {
 			subTest.Fatalf("body=%q", body)
+		}
+	})
+
+	t.Run("json format includes OpenAI token usage and headers", func(subTest *testing.T) {
+		usageRouter := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"output_text":"token answer","usage":{"input_tokens":7,"output_tokens":5,"total_tokens":12}}`))
+		})
+		queryParameters := url.Values{}
+		queryParameters.Set("format", "application/json")
+		queryParameters.Set("key", TestSecret)
+		queryParameters.Set("prompt", TestPrompt)
+		request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+		responseRecorder := httptest.NewRecorder()
+		usageRouter.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusOK {
+			subTest.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "7" {
+			subTest.Fatalf("request tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens))
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "5" {
+			subTest.Fatalf("response tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens))
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "12" {
+			subTest.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
+		}
+		var response struct {
+			Response string `json:"response"`
+			Usage    struct {
+				RequestTokens  int `json:"request_tokens"`
+				ResponseTokens int `json:"response_tokens"`
+				TotalTokens    int `json:"total_tokens"`
+			} `json:"usage"`
+		}
+		if decodeError := json.Unmarshal(responseRecorder.Body.Bytes(), &response); decodeError != nil {
+			subTest.Fatalf("decode json: %v", decodeError)
+		}
+		if response.Response != "token answer" || response.Usage.RequestTokens != 7 || response.Usage.ResponseTokens != 5 || response.Usage.TotalTokens != 12 {
+			subTest.Fatalf("response=%+v", response)
+		}
+	})
+
+	t.Run("json format omits empty OpenAI token usage", func(subTest *testing.T) {
+		usageRouter := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"output_text":"empty usage answer","usage":{}}`))
+		})
+		queryParameters := url.Values{}
+		queryParameters.Set("format", "application/json")
+		queryParameters.Set("key", TestSecret)
+		queryParameters.Set("prompt", TestPrompt)
+		request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+		responseRecorder := httptest.NewRecorder()
+		usageRouter.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusOK {
+			subTest.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "" {
+			subTest.Fatalf("request tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens))
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "" {
+			subTest.Fatalf("response tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens))
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "" {
+			subTest.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
+		}
+		var response map[string]any
+		if decodeError := json.Unmarshal(responseRecorder.Body.Bytes(), &response); decodeError != nil {
+			subTest.Fatalf("decode json: %v", decodeError)
+		}
+		if _, found := response["usage"]; found {
+			subTest.Fatalf("usage must be omitted: %v", response)
 		}
 	})
 
@@ -370,6 +449,18 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}
 	})
 
+	t.Run("terminal response negative token usage maps to bad gateway", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"id":"done","status":"completed","output_text":"bad usage","usage":{"input_tokens":-1,"output_tokens":1,"total_tokens":0}}`))
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusBadGateway {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		}
+	})
+
 	t.Run("terminal message joins multiple text parts", func(subTest *testing.T) {
 		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
@@ -469,6 +560,84 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}
 	})
 
+	t.Run("initial incomplete continuation aggregates token usage", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				requestBytes, _ := io.ReadAll(httpRequest.Body)
+				var requestPayload map[string]any
+				_ = json.Unmarshal(requestBytes, &requestPayload)
+				if requestPayload["previous_response_id"] == nil {
+					_, _ = responseWriter.Write([]byte(`{"id":"partial","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[],"usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}`))
+					return
+				}
+				_, _ = responseWriter.Write([]byte(`{"id":"continued","status":"queued"}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/continued":
+				_, _ = responseWriter.Write([]byte(`{"status":"completed","output_text":"usage continued","usage":{"input_tokens":4,"output_tokens":5,"total_tokens":9}}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		queryParameters.Set("key", TestSecret)
+		queryParameters.Set("prompt", TestPrompt)
+		request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusOK || responseRecorder.Body.String() != "usage continued" {
+			subTest.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "5" {
+			subTest.Fatalf("request tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens))
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "7" {
+			subTest.Fatalf("response tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens))
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "12" {
+			subTest.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
+		}
+	})
+
+	t.Run("initial incomplete continuation keeps initial token usage without final usage", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				requestBytes, _ := io.ReadAll(httpRequest.Body)
+				var requestPayload map[string]any
+				_ = json.Unmarshal(requestBytes, &requestPayload)
+				if requestPayload["previous_response_id"] == nil {
+					_, _ = responseWriter.Write([]byte(`{"id":"partial","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[],"usage":{"input_tokens":6,"output_tokens":1,"total_tokens":7}}`))
+					return
+				}
+				_, _ = responseWriter.Write([]byte(`{"id":"continued","status":"queued"}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/continued":
+				_, _ = responseWriter.Write([]byte(`{"status":"completed","output_text":"usage initial"}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		queryParameters.Set("key", TestSecret)
+		queryParameters.Set("prompt", TestPrompt)
+		request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusOK || responseRecorder.Body.String() != "usage initial" {
+			subTest.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "6" {
+			subTest.Fatalf("request tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens))
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "1" {
+			subTest.Fatalf("response tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens))
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "7" {
+			subTest.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
+		}
+	})
+
 	t.Run("completed without final message starts synthesis continuation", func(subTest *testing.T) {
 		router := textRouterWithResponsesHandlerAndMaxOutputTokens(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
@@ -530,6 +699,57 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/queued":
 				responseWriter.WriteHeader(http.StatusBadRequest)
 				_, _ = responseWriter.Write([]byte(`{"error":"poll rejected"}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusBadGateway {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		}
+	})
+
+	t.Run("queued response surfaces final poll token usage", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				_, _ = responseWriter.Write([]byte(`{"id":"queued","status":"queued"}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/queued":
+				_, _ = responseWriter.Write([]byte(`{"status":"completed","output_text":"poll usage","usage":{"input_tokens":8,"output_tokens":3,"total_tokens":11}}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		queryParameters.Set("key", TestSecret)
+		queryParameters.Set("prompt", TestPrompt)
+		request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusOK || responseRecorder.Body.String() != "poll usage" {
+			subTest.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "8" {
+			subTest.Fatalf("request tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens))
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "3" {
+			subTest.Fatalf("response tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens))
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "11" {
+			subTest.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
+		}
+	})
+
+	t.Run("queued response negative poll token usage maps to bad gateway", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				_, _ = responseWriter.Write([]byte(`{"id":"queued","status":"queued"}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/queued":
+				_, _ = responseWriter.Write([]byte(`{"status":"completed","output_text":"bad usage","usage":{"input_tokens":1,"output_tokens":-1,"total_tokens":0}}`))
 			default:
 				http.NotFound(responseWriter, httpRequest)
 			}
@@ -987,6 +1207,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 			{name: "rate limited", statusCode: http.StatusTooManyRequests, body: `{}`, wantStatus: http.StatusTooManyRequests},
 			{name: "provider api failure", statusCode: http.StatusBadRequest, body: `{}`, wantStatus: http.StatusBadGateway},
 			{name: "malformed json", statusCode: http.StatusOK, body: `{`, wantStatus: http.StatusBadGateway},
+			{name: "negative usage", statusCode: http.StatusOK, body: `{"choices":[{"message":{"content":"bad usage"}}],"usage":{"prompt_tokens":1,"completion_tokens":-1}}`, wantStatus: http.StatusBadGateway},
 			{name: "missing text", statusCode: http.StatusOK, body: `{"choices":[{"message":{}}]}`, wantStatus: http.StatusBadGateway},
 		}
 		for _, testCase := range testCases {

@@ -18,7 +18,7 @@ func newProviderRouter(openAIClient *OpenAIClient, chatClient *openAICompatibleC
 	}
 }
 
-func (router *providerRouter) generateText(requestContext context.Context, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (string, error) {
+func (router *providerRouter) generateText(requestContext context.Context, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if request.provider.usesOpenAIResponses {
 		return router.openAIClient.openAIRequest(
 			requestContext,

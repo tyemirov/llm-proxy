@@ -18,7 +18,7 @@ import (
 // result holds the outcome returned by a worker, including the text response
 // and any error encountered during the upstream provider request.
 type result struct {
-	text         string
+	generation   textGenerationResult
 	requestError error
 }
 
@@ -89,8 +89,8 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	for workerIndex := 0; workerIndex < configuration.WorkerCount; workerIndex++ {
 		go func() {
 			for pending := range taskQueue {
-				text, requestError := upstreamProviders.generateText(pending.context, pending.parameters, structuredLogger)
-				pending.reply <- result{text: text, requestError: requestError}
+				generation, requestError := upstreamProviders.generateText(pending.context, pending.parameters, structuredLogger)
+				pending.reply <- result{generation: generation, requestError: requestError}
 			}
 		}()
 	}
@@ -248,7 +248,8 @@ func submitChatRequest(ginContext *gin.Context, taskQueue chan requestTask, chat
 			return
 		}
 		mime := preferredMime(ginContext)
-		formattedBody, contentType := formatResponse(outcome.text, mime, chatRequest.prompt)
+		writeTokenUsageHeaders(ginContext.Writer.Header(), outcome.generation.usage)
+		formattedBody, contentType := formatResponse(outcome.generation.text, mime, chatRequest.prompt, outcome.generation.usage)
 		ginContext.Data(http.StatusOK, contentType, []byte(formattedBody))
 	case <-requestContext.Done():
 		ginContext.String(http.StatusGatewayTimeout, errorRequestTimedOut)

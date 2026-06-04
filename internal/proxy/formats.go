@@ -19,10 +19,14 @@ func preferredMime(ginContext *gin.Context) string {
 }
 
 // formatResponse renders a textual model output into the requested MIME type and returns the body and content type.
-func formatResponse(modelText string, preferred string, originalPrompt string) (string, string) {
+func formatResponse(modelText string, preferred string, originalPrompt string, usage *tokenUsage) (string, string) {
 	switch {
 	case strings.Contains(preferred, mimeApplicationJSON):
-		encodedJSON, _ := json.Marshal(map[string]string{responseRequestAttribute: originalPrompt, jsonFieldResponse: modelText})
+		envelope := map[string]any{responseRequestAttribute: originalPrompt, jsonFieldResponse: modelText}
+		if usage != nil {
+			envelope[jsonFieldUsage] = usage
+		}
+		encodedJSON, _ := json.Marshal(envelope)
 		return string(encodedJSON), mimeApplicationJSON
 	case strings.Contains(preferred, mimeApplicationXML) || strings.Contains(preferred, mimeTextXML):
 		type xmlEnvelope struct {
