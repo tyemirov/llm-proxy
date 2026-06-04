@@ -187,6 +187,10 @@ func chatRequestFromQuery(ginContext *gin.Context, defaultSystemPrompt string, d
 		ginContext.String(statusCodeForError(verificationError), responseMessageForError(verificationError))
 		return chatRequestParameters{}, false
 	}
+	if maxTokensError := validateTextMaxTokens(providerDefinition, modelIdentifier, maxTokens); maxTokensError != nil {
+		ginContext.String(http.StatusBadRequest, errorInvalidMaxTokens)
+		return chatRequestParameters{}, false
+	}
 
 	return chatRequestParameters{
 		prompt:           userPrompt,
@@ -228,6 +232,10 @@ func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload,
 	)
 	if verificationError != nil {
 		ginContext.String(statusCodeForError(verificationError), responseMessageForError(verificationError))
+		return chatRequestParameters{}, false
+	}
+	if maxTokensError := validateTextMaxTokens(providerDefinition, resolvedModel, payload.MaxTokens); maxTokensError != nil {
+		ginContext.String(http.StatusBadRequest, errorInvalidMaxTokens)
 		return chatRequestParameters{}, false
 	}
 
@@ -361,6 +369,23 @@ func resolveJSONModelParameter(queryModel string, bodyModel string) (string, err
 		return trimmedQueryModel, nil
 	}
 	return trimmedBodyModel, nil
+}
+
+func validateTextMaxTokens(providerDefinition providerDefinition, modelIdentifier modelID, maxTokens *int) error {
+	if maxTokens == nil {
+		return nil
+	}
+	outputTokenLimit, hasOutputTokenLimit := providerDefinition.outputTokenLimitFor(modelIdentifier)
+	if !hasOutputTokenLimit || *maxTokens <= outputTokenLimit {
+		return nil
+	}
+	return fmt.Errorf(
+		"invalid max_tokens value: provider=%s model=%s max_tokens=%d output_token_limit=%d",
+		providerDefinition.identifier.string(),
+		modelIdentifier.string(),
+		*maxTokens,
+		outputTokenLimit,
+	)
 }
 
 func statusCodeForError(requestError error) int {
