@@ -7,6 +7,10 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
 
 ## BugFixes
 
+- [x] [B412] (P0) Stop sending Gemini response-only `thought` fields in generateContent requests.
+  Live Gemini calls proved that `gemini-3.5-flash` accepts the proxy's model and prompt, but rejects request parts containing `thought:false` with `400 INVALID_ARGUMENT`. The proxy introduced `parts[].thought` to filter Gemini response thoughts, then reused that struct for outbound request serialization, causing selected Gemini requests to fail as proxy `502` with `provider API error: status=400`.
+  Resolution: Split Gemini request and response part types so outbound `generateContent` payloads serialize only request-valid `text` fields, while response parsing still reads `parts[].thought` and filters thought text. Added black-box provider-routing assertions that Gemini GET and JSON POST request payloads omit `thought` from user contents and system instructions. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test` (total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci` (total coverage 100.0%), and a patched local proxy smoke test returning `OK`/`200` from live Gemini for `model=gemini-3.5-flash`.
+
 - [x] [B407] (P0) Cancel upstream text generation when downstream requests time out.
   Handler timeout and client/gateway disconnect contexts must flow through queued text work, provider routing, OpenAI Responses requests, OpenAI-compatible chat requests, continuation creation, and polling. After the proxy sends a timeout response, upstream work must not keep running long enough to produce a usable late OpenAI response.
   Acceptance criteria:
@@ -38,6 +42,10 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
   Resolution: The 502 came from GPT-5.5 Responses returning `status: "incomplete"` after spending the output budget on reasoning/web-search work; the proxy then called the unsupported `/v1/responses/{id}/continue` endpoint. Incomplete max-token responses now continue through a new Responses request with `previous_response_id`, preserving the body model and web-search settings. A patched live proxy run with `model: "gpt-5.5"` in the JSON body returned `200 OK`, and `make ci` passes with total coverage at 100.0%.
 
 ## Improvements
+
+- [x] [I413] (P0) Add a live Gemini smoke gate for the current binary.
+  The Gemini request-shape regression passed fake-upstream tests because the fake server accepted response-only fields that live Gemini rejects. The repository needs an explicit opt-in live provider test that builds the current binary, runs it locally, sends a JSON POST through the public proxy route with the model in the body, and verifies live Gemini returns `OK` with HTTP `200`.
+  Resolution: Added `scripts/test_live_gemini.sh` and `make test-live-gemini`. The target requires `GEMINI_API_KEY` and `SERVICE_SECRET`, supports `LIVE_ENV_FILE=/path/to/env`, starts a temporary local proxy with `LLM_PROXY_DEFAULT_PROVIDER=gemini`, and asserts a real `POST /?provider=gemini` call using `model=gemini-3.5-flash` succeeds against live Gemini. README documents the target. Validation passed with `LIVE_ENV_FILE=/Users/tyemirov/Development/mprlab-gateway/configs/.env.llm-proxy timeout -k 120s -s SIGKILL 120s make test-live-gemini`.
 
 - [x] [I408] (P1) Surface token usage metadata in LLM responses.
   Upstream text providers may return token usage counts, but the proxy currently returns only generated text to response formatters. Normalize provider usage into request, response, and total token counts, surface it through non-breaking response headers, and include it in JSON-format LLM responses when upstream usage is present.
