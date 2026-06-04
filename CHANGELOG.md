@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.7] - 2026-06-03
+
+### Changes
+- feat: add normalized token usage headers and JSON usage field
+
 ## [v0.2.6] - 2026-06-03
 
 ### Changes
