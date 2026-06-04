@@ -14,6 +14,7 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies.
 - Omitted `max_tokens` means the proxy omits provider max-token fields and lets the selected provider/model default apply.
 - Provided `max_tokens` maps to OpenAI Responses `max_output_tokens`, OpenAI-compatible chat completions `max_tokens`, and Gemini `generationConfig.maxOutputTokens`.
+- Known provider-specific output-token ceilings are validated before upstream calls; Gemini text models reject `max_tokens` above `65536` with `400 Bad Request`.
 - For JSON `POST /`, query `model` may override the body only when the body omits `model` or provides the same value.
 - Conflicting query/body `model` values return `400 Bad Request`.
 - Upstream provider API keys are never accepted from client requests.
