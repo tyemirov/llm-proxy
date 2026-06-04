@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.10] - 2026-06-03
+
+### Changes
+- Merge pull request #165 from tyemirov/gix/enforce-provider-specific-max-tokens-limits-for-gemini
+- docs: add detailed ISSUES.md backlog with Gemini POST response bug B001 analysis
+- feat(gemini): enforce finishReason validation and filter internal thoughts
+- docs: document max_tokens validation and Gemini token ceiling limit
+- docs: document Gemini max_tokens limit and 400 Bad Request behavior
+
 ## [v0.2.9] - 2026-06-03
 
 ### Changes
