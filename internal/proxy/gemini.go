@@ -28,8 +28,8 @@ type geminiGenerateContentClient struct {
 }
 
 type geminiGenerateContentRequest struct {
-	Contents          []geminiContent         `json:"contents"`
-	SystemInstruction *geminiContent          `json:"systemInstruction,omitempty"`
+	Contents          []geminiRequestContent  `json:"contents"`
+	SystemInstruction *geminiRequestContent   `json:"systemInstruction,omitempty"`
 	GenerationConfig  *geminiGenerationConfig `json:"generationConfig,omitempty"`
 }
 
@@ -37,12 +37,20 @@ type geminiGenerationConfig struct {
 	MaxOutputTokens int `json:"maxOutputTokens,omitempty"`
 }
 
-type geminiContent struct {
-	Role  string       `json:"role,omitempty"`
-	Parts []geminiPart `json:"parts"`
+type geminiRequestContent struct {
+	Role  string              `json:"role,omitempty"`
+	Parts []geminiRequestPart `json:"parts"`
 }
 
-type geminiPart struct {
+type geminiRequestPart struct {
+	Text string `json:"text"`
+}
+
+type geminiResponseContent struct {
+	Parts []geminiResponsePart `json:"parts"`
+}
+
+type geminiResponsePart struct {
 	Text    string `json:"text"`
 	Thought bool   `json:"thought"`
 }
@@ -53,8 +61,8 @@ type geminiGenerateContentResponse struct {
 }
 
 type geminiCandidate struct {
-	Content      geminiContent      `json:"content"`
-	FinishReason geminiFinishReason `json:"finishReason"`
+	Content      geminiResponseContent `json:"content"`
+	FinishReason geminiFinishReason    `json:"finishReason"`
 }
 
 type geminiUsageMetadata struct {
@@ -72,13 +80,13 @@ func newGeminiGenerateContentClient(httpClient HTTPDoer, requestTimeout time.Dur
 
 func (client *geminiGenerateContentClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier modelID, userPrompt string, systemPrompt string, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	payload := geminiGenerateContentRequest{
-		Contents: []geminiContent{{
+		Contents: []geminiRequestContent{{
 			Role:  "user",
-			Parts: []geminiPart{{Text: userPrompt}},
+			Parts: []geminiRequestPart{{Text: userPrompt}},
 		}},
 	}
 	if !utils.IsBlank(systemPrompt) {
-		payload.SystemInstruction = &geminiContent{Parts: []geminiPart{{Text: systemPrompt}}}
+		payload.SystemInstruction = &geminiRequestContent{Parts: []geminiRequestPart{{Text: systemPrompt}}}
 	}
 	if maxTokens != nil {
 		payload.GenerationConfig = &geminiGenerationConfig{MaxOutputTokens: *maxTokens}
