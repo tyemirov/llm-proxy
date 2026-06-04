@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +38,7 @@ type chatRequestPayload struct {
 	Model        string `json:"model"`
 	WebSearch    bool   `json:"web_search"`
 	SystemPrompt string `json:"system_prompt"`
+	MaxTokens    *int   `json:"max_tokens"`
 }
 
 // chatRequestParameters is the normalized request shape shared by GET and POST handlers after edge validation.
@@ -46,6 +48,7 @@ type chatRequestParameters struct {
 	provider         providerDefinition
 	model            modelID
 	webSearchEnabled bool
+	maxTokens        *int
 }
 
 type dictationRequestParameters struct {
@@ -83,9 +86,9 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	taskQueue := make(chan requestTask, configuration.QueueSize)
 	requestTimeout := time.Duration(configuration.RequestTimeoutSeconds) * time.Second
 	pollTimeout := time.Duration(configuration.UpstreamPollTimeoutSeconds) * time.Second
-	openAIClient := NewOpenAIClient(HTTPClient, configuration.Endpoints, requestTimeout, configuration.MaxOutputTokens, pollTimeout)
-	chatClient := newOpenAICompatibleChatClient(HTTPClient, requestTimeout, configuration.MaxOutputTokens)
-	geminiClient := newGeminiGenerateContentClient(HTTPClient, requestTimeout, configuration.MaxOutputTokens)
+	openAIClient := NewOpenAIClient(HTTPClient, configuration.Endpoints, requestTimeout, pollTimeout)
+	chatClient := newOpenAICompatibleChatClient(HTTPClient, requestTimeout)
+	geminiClient := newGeminiGenerateContentClient(HTTPClient, requestTimeout)
 	upstreamProviders := newProviderRouter(openAIClient, chatClient, geminiClient)
 	for workerIndex := 0; workerIndex < configuration.WorkerCount; workerIndex++ {
 		go func() {
@@ -167,6 +170,11 @@ func chatRequestFromQuery(ginContext *gin.Context, defaultSystemPrompt string, d
 			constants.LogFieldError, webSearchParseError,
 		)
 	}
+	maxTokens, maxTokensError := parseMaxTokensParameter(ginContext.Query(queryParameterMaxTokens))
+	if maxTokensError != nil {
+		ginContext.String(http.StatusBadRequest, errorInvalidMaxTokens)
+		return chatRequestParameters{}, false
+	}
 
 	providerDefinition, modelIdentifier, verificationError := validator.ResolveText(
 		ginContext.Query(queryParameterProvider),
@@ -186,6 +194,7 @@ func chatRequestFromQuery(ginContext *gin.Context, defaultSystemPrompt string, d
 		provider:         providerDefinition,
 		model:            modelIdentifier,
 		webSearchEnabled: webSearchEnabled,
+		maxTokens:        maxTokens,
 	}, true
 }
 
@@ -203,6 +212,10 @@ func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload,
 	modelIdentifier, modelParameterError := resolveJSONModelParameter(ginContext.Query(queryParameterModel), payload.Model)
 	if modelParameterError != nil {
 		ginContext.String(statusCodeForError(modelParameterError), responseMessageForError(modelParameterError))
+		return chatRequestParameters{}, false
+	}
+	if payload.MaxTokens != nil && *payload.MaxTokens <= 0 {
+		ginContext.String(http.StatusBadRequest, errorInvalidMaxTokens)
 		return chatRequestParameters{}, false
 	}
 
@@ -224,6 +237,7 @@ func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload,
 		provider:         providerDefinition,
 		model:            resolvedModel,
 		webSearchEnabled: payload.WebSearch,
+		maxTokens:        payload.MaxTokens,
 	}, true
 }
 
@@ -323,6 +337,18 @@ func parseWebSearchParameter(rawValue string) (bool, error) {
 	default:
 		return false, fmt.Errorf("invalid web_search value: %s", rawValue)
 	}
+}
+
+func parseMaxTokensParameter(rawValue string) (*int, error) {
+	trimmedValue := strings.TrimSpace(rawValue)
+	if trimmedValue == constants.EmptyString {
+		return nil, nil
+	}
+	maxTokens, parseError := strconv.Atoi(trimmedValue)
+	if parseError != nil || maxTokens <= 0 {
+		return nil, fmt.Errorf("invalid max_tokens value: %s", rawValue)
+	}
+	return &maxTokens, nil
 }
 
 func resolveJSONModelParameter(queryModel string, bodyModel string) (string, error) {

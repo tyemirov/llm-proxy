@@ -29,6 +29,7 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 			request.prompt,
 			request.systemPrompt,
 			request.webSearchEnabled,
+			request.maxTokens,
 			structuredLogger,
 		)
 	}
@@ -40,6 +41,7 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 			request.model,
 			request.prompt,
 			request.systemPrompt,
+			request.maxTokens,
 			structuredLogger,
 		)
 	}
@@ -50,6 +52,7 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 		request.model,
 		request.prompt,
 		request.systemPrompt,
+		request.maxTokens,
 		structuredLogger,
 	)
 }

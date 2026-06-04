@@ -23,7 +23,7 @@ type Reasoning struct {
 type requestPayloadBase struct {
 	Model           string `json:"model"`
 	Input           string `json:"input"`
-	MaxOutputTokens int    `json:"max_output_tokens"`
+	MaxOutputTokens *int   `json:"max_output_tokens,omitempty"`
 }
 
 // requestPayloadWithTools is for models supporting tools but not temperature (e.g., gpt-5).
@@ -54,7 +54,7 @@ type Tool struct {
 }
 
 // BuildRequestPayload selects the correct struct for the given model and returns it.
-func BuildRequestPayload(modelIdentifier string, combinedPrompt string, webSearchEnabled bool, maxTokens int) any {
+func BuildRequestPayload(modelIdentifier string, combinedPrompt string, webSearchEnabled bool, maxTokens *int) any {
 	base := requestPayloadBase{
 		Model:           modelIdentifier,
 		Input:           combinedPrompt,

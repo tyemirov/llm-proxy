@@ -67,10 +67,6 @@ func coverageRouter(t *testing.T, configuration proxy.Configuration) *gin.Engine
 }
 
 func textRouterWithResponsesHandler(t *testing.T, handler http.HandlerFunc) *gin.Engine {
-	return textRouterWithResponsesHandlerAndMaxOutputTokens(t, handler, proxy.DefaultMaxOutputTokens)
-}
-
-func textRouterWithResponsesHandlerAndMaxOutputTokens(t *testing.T, handler http.HandlerFunc, maxOutputTokens int) *gin.Engine {
 	t.Helper()
 	upstreamServer := httptest.NewServer(handler)
 	t.Cleanup(upstreamServer.Close)
@@ -84,7 +80,6 @@ func textRouterWithResponsesHandlerAndMaxOutputTokens(t *testing.T, handler http
 		QueueSize:                  2,
 		RequestTimeoutSeconds:      TestTimeout,
 		UpstreamPollTimeoutSeconds: TestTimeout,
-		MaxOutputTokens:            maxOutputTokens,
 		Endpoints:                  endpoints,
 	})
 }
@@ -294,6 +289,108 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 		router.ServeHTTP(responseRecorder, request)
 		if responseRecorder.Code != http.StatusOK {
 			subTest.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+		}
+	})
+}
+
+func TestCoverageOpenAIResponsesMaxTokensContract(t *testing.T) {
+	t.Run("default request omits max_output_tokens", func(subTest *testing.T) {
+		var capturedPayload map[string]any
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			requestBytes, _ := io.ReadAll(httpRequest.Body)
+			if decodeError := json.Unmarshal(requestBytes, &capturedPayload); decodeError != nil {
+				subTest.Fatalf("decode upstream request: %v", decodeError)
+			}
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"output_text":"no cap"}`))
+		})
+		queryParameters := url.Values{}
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK || body != "no cap" {
+			subTest.Fatalf("status=%d body=%q", statusCode, body)
+		}
+		if _, exists := capturedPayload["max_output_tokens"]; exists {
+			subTest.Fatalf("max_output_tokens must be omitted by default: %v", capturedPayload)
+		}
+	})
+
+	t.Run("query max_tokens maps to max_output_tokens", func(subTest *testing.T) {
+		var capturedPayload map[string]any
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			requestBytes, _ := io.ReadAll(httpRequest.Body)
+			if decodeError := json.Unmarshal(requestBytes, &capturedPayload); decodeError != nil {
+				subTest.Fatalf("decode upstream request: %v", decodeError)
+			}
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"output_text":"query cap"}`))
+		})
+		queryParameters := url.Values{}
+		queryParameters.Set("max_tokens", "777")
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK || body != "query cap" {
+			subTest.Fatalf("status=%d body=%q", statusCode, body)
+		}
+		if capturedPayload["max_output_tokens"] != float64(777) {
+			subTest.Fatalf("max_output_tokens=%v payload=%v", capturedPayload["max_output_tokens"], capturedPayload)
+		}
+	})
+
+	t.Run("json body max_tokens maps to max_output_tokens", func(subTest *testing.T) {
+		var capturedPayload map[string]any
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			requestBytes, _ := io.ReadAll(httpRequest.Body)
+			if decodeError := json.Unmarshal(requestBytes, &capturedPayload); decodeError != nil {
+				subTest.Fatalf("decode upstream request: %v", decodeError)
+			}
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"output_text":"json cap"}`))
+		})
+		request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret, strings.NewReader(`{"prompt":"hello json","max_tokens":333}`))
+		request.Header.Set("Content-Type", "application/json")
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusOK || responseRecorder.Body.String() != "json cap" {
+			subTest.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
+		}
+		if capturedPayload["max_output_tokens"] != float64(333) {
+			subTest.Fatalf("max_output_tokens=%v payload=%v", capturedPayload["max_output_tokens"], capturedPayload)
+		}
+	})
+
+	t.Run("invalid query max_tokens is rejected before upstream", func(subTest *testing.T) {
+		upstreamCalled := false
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			upstreamCalled = true
+			responseWriter.WriteHeader(http.StatusInternalServerError)
+		})
+		for _, rawValue := range []string{"0", "-1", "abc"} {
+			queryParameters := url.Values{}
+			queryParameters.Set("max_tokens", rawValue)
+			statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+			if statusCode != http.StatusBadRequest || !strings.Contains(body, "invalid max_tokens parameter") {
+				subTest.Fatalf("max_tokens=%q status=%d body=%q", rawValue, statusCode, body)
+			}
+		}
+		if upstreamCalled {
+			subTest.Fatal("upstream must not be called for invalid query max_tokens")
+		}
+	})
+
+	t.Run("invalid json max_tokens is rejected before upstream", func(subTest *testing.T) {
+		upstreamCalled := false
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			upstreamCalled = true
+			responseWriter.WriteHeader(http.StatusInternalServerError)
+		})
+		request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret, strings.NewReader(`{"prompt":"hello json","max_tokens":0}`))
+		request.Header.Set("Content-Type", "application/json")
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusBadRequest || !strings.Contains(responseRecorder.Body.String(), "invalid max_tokens parameter") {
+			subTest.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
+		}
+		if upstreamCalled {
+			subTest.Fatal("upstream must not be called for invalid json max_tokens")
 		}
 	})
 }
@@ -510,7 +607,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 	})
 
 	t.Run("initial incomplete continuation failure maps to bad gateway", func(subTest *testing.T) {
-		router := textRouterWithResponsesHandlerAndMaxOutputTokens(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			switch {
 			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
@@ -526,7 +623,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 			default:
 				http.NotFound(responseWriter, httpRequest)
 			}
-		}, 1024)
+		})
 		queryParameters := url.Values{}
 		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
 		if statusCode != http.StatusBadGateway {
@@ -639,7 +736,8 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 	})
 
 	t.Run("completed without final message starts synthesis continuation", func(subTest *testing.T) {
-		router := textRouterWithResponsesHandlerAndMaxOutputTokens(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		var synthesisPayload map[string]any
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			switch {
 			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
@@ -650,17 +748,22 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 					_, _ = responseWriter.Write([]byte(`{"id":"needs_synthesis","status":"completed","output":[{"type":"web_search_call","action":{"query":"weather"}}]}`))
 					return
 				}
+				synthesisPayload = requestPayload
 				_, _ = responseWriter.Write([]byte(`{"id":"synthesis","status":"queued"}`))
 			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/synthesis":
 				_, _ = responseWriter.Write([]byte(`{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"synthesized"}]}]}`))
 			default:
 				http.NotFound(responseWriter, httpRequest)
 			}
-		}, 1024)
+		})
 		queryParameters := url.Values{}
+		queryParameters.Set("max_tokens", "222")
 		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
 		if statusCode != http.StatusOK || body != "synthesized" {
 			subTest.Fatalf("status=%d body=%q", statusCode, body)
+		}
+		if synthesisPayload["max_output_tokens"] != float64(222) {
+			subTest.Fatalf("synthesis max_output_tokens=%v payload=%v", synthesisPayload["max_output_tokens"], synthesisPayload)
 		}
 	})
 

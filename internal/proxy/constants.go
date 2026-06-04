@@ -26,6 +26,7 @@ const (
 	queryParameterModel        = "model"
 	queryParameterWebSearch    = "web_search"
 	queryParameterSystemPrompt = "system_prompt"
+	queryParameterMaxTokens    = "max_tokens"
 	queryParameterFormat       = "format"
 
 	formFieldAudio = "audio"
@@ -41,6 +42,7 @@ const (
 
 	errorMissingPrompt         = "missing prompt parameter"
 	errorInvalidJSONRequest    = "invalid JSON request"
+	errorInvalidMaxTokens      = "invalid max_tokens parameter"
 	errorPromptPayloadTooLarge = "prompt payload too large"
 	// errorMissingClientKey indicates that the key query parameter is missing.
 	errorMissingClientKey           = "unknown client key"

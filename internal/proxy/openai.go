@@ -33,17 +33,15 @@ type OpenAIClient struct {
 	httpClient          HTTPDoer
 	endpoints           *Endpoints
 	requestTimeout      time.Duration
-	maxOutputTokens     int
 	upstreamPollTimeout time.Duration
 }
 
 // NewOpenAIClient constructs an OpenAIClient initialized with the supplied components.
-func NewOpenAIClient(httpClient HTTPDoer, endpoints *Endpoints, requestTimeout time.Duration, maxTokens int, pollTimeout time.Duration) *OpenAIClient {
+func NewOpenAIClient(httpClient HTTPDoer, endpoints *Endpoints, requestTimeout time.Duration, pollTimeout time.Duration) *OpenAIClient {
 	return &OpenAIClient{
 		httpClient:          httpClient,
 		endpoints:           endpoints,
 		requestTimeout:      requestTimeout,
-		maxOutputTokens:     maxTokens,
 		upstreamPollTimeout: pollTimeout,
 	}
 }
@@ -82,7 +80,7 @@ func hasFinalMessage(rawPayload []byte) bool {
 }
 
 // openAIRequest sends a prompt to the OpenAI responses API and returns the resulting text.
-func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier string, userPrompt string, systemPrompt string, webSearchEnabled bool, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier string, userPrompt string, systemPrompt string, webSearchEnabled bool, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	// The Responses API expects a single string input. We'll prepend the system prompt to the user prompt.
 	var combinedPrompt strings.Builder
 	if !utils.IsBlank(systemPrompt) {
@@ -91,7 +89,7 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 	}
 	combinedPrompt.WriteString(userPrompt)
 
-	payload := BuildRequestPayload(modelIdentifier, combinedPrompt.String(), webSearchEnabled, client.maxOutputTokens)
+	payload := BuildRequestPayload(modelIdentifier, combinedPrompt.String(), webSearchEnabled, maxTokens)
 	payloadBytes, _ := json.Marshal(payload)
 
 	requestContext, cancelRequest := context.WithTimeout(parentContext, client.requestTimeout)
@@ -155,7 +153,7 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 			return textGenerationResult{text: outputText, usage: initialUsage}, nil
 		}
 		if canContinueIncompleteResponse(decodedObject) && !utils.IsBlank(responseIdentifier) {
-			continuedResponseID, continuationError := client.startIncompleteContinuation(requestContext, openAIKey, responseIdentifier, modelIdentifier, webSearchEnabled, structuredLogger)
+			continuedResponseID, continuationError := client.startIncompleteContinuation(requestContext, openAIKey, responseIdentifier, modelIdentifier, webSearchEnabled, maxTokens, structuredLogger)
 			if continuationError != nil {
 				structuredLogger.Errorw(
 					logEventOpenAIContinueError,
@@ -182,7 +180,7 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 	}
 
 	if forcedSynthesis && !utils.IsBlank(responseIdentifier) {
-		continuedResponseID, synthErr := client.startSynthesisContinuation(requestContext, openAIKey, responseIdentifier, modelIdentifier, structuredLogger)
+		continuedResponseID, synthErr := client.startSynthesisContinuation(requestContext, openAIKey, responseIdentifier, modelIdentifier, maxTokens, structuredLogger)
 		if synthErr != nil {
 			structuredLogger.Errorw(
 				logEventOpenAIContinueError,
@@ -239,18 +237,12 @@ func openAIStageError(stageError error) error {
 // startSynthesisContinuation begins a synthesis-only pass by POSTing /v1/responses with
 // previous_response_id and tool_choice set to "none". It allocates enough output tokens, limits reasoning effort to minimal, and includes a low-verbosity text format hint.
 // It returns the identifier of the new response.
-func (client *OpenAIClient) startSynthesisContinuation(parentContext context.Context, openAIKey string, previousResponseID string, modelIdentifier string, structuredLogger *zap.SugaredLogger) (string, error) {
-	outputTokenLimit := client.maxOutputTokens
-	if outputTokenLimit < 1536 {
-		outputTokenLimit = 1536
-	}
-
+func (client *OpenAIClient) startSynthesisContinuation(parentContext context.Context, openAIKey string, previousResponseID string, modelIdentifier string, maxTokens *int, structuredLogger *zap.SugaredLogger) (string, error) {
 	payload := map[string]any{
 		keyModel:              modelIdentifier,
 		keyPreviousResponseID: previousResponseID,
 		keyToolChoice:         toolChoiceNone,
 		keyInput:              synthesisInstructionPrimary,
-		keyMaxOutputTokens:    outputTokenLimit,
 		keyReasoning: map[string]any{
 			keyEffort: reasoningEffortMinimal,
 		},
@@ -259,16 +251,14 @@ func (client *OpenAIClient) startSynthesisContinuation(parentContext context.Con
 			keyVerbosity: verbosityLow,
 		},
 	}
+	if maxTokens != nil {
+		payload[keyMaxOutputTokens] = *maxTokens
+	}
 	return client.startContinuationResponse(parentContext, openAIKey, payload, structuredLogger)
 }
 
-func (client *OpenAIClient) startIncompleteContinuation(parentContext context.Context, openAIKey string, previousResponseID string, modelIdentifier string, webSearchEnabled bool, structuredLogger *zap.SugaredLogger) (string, error) {
-	outputTokenLimit := client.maxOutputTokens
-	if outputTokenLimit < 1536 {
-		outputTokenLimit = 1536
-	}
-
-	payload := buildStatefulContinuationPayload(modelIdentifier, continuationInstructionPrimary, webSearchEnabled, outputTokenLimit, previousResponseID)
+func (client *OpenAIClient) startIncompleteContinuation(parentContext context.Context, openAIKey string, previousResponseID string, modelIdentifier string, webSearchEnabled bool, maxTokens *int, structuredLogger *zap.SugaredLogger) (string, error) {
+	payload := buildStatefulContinuationPayload(modelIdentifier, continuationInstructionPrimary, webSearchEnabled, maxTokens, previousResponseID)
 	return client.startContinuationResponse(parentContext, openAIKey, payload, structuredLogger)
 }
 
@@ -298,7 +288,7 @@ func (client *OpenAIClient) startContinuationResponse(parentContext context.Cont
 	return newID, nil
 }
 
-func buildStatefulContinuationPayload(modelIdentifier string, inputText string, webSearchEnabled bool, maxTokens int, previousResponseID string) map[string]any {
+func buildStatefulContinuationPayload(modelIdentifier string, inputText string, webSearchEnabled bool, maxTokens *int, previousResponseID string) map[string]any {
 	payloadBytes, _ := json.Marshal(BuildRequestPayload(modelIdentifier, inputText, webSearchEnabled, maxTokens))
 	var payload map[string]any
 	_ = json.Unmarshal(payloadBytes, &payload)
