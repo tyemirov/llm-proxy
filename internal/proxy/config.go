@@ -25,7 +25,6 @@ const (
 
 	DefaultRequestTimeoutSeconds      = 180 // overall app-side request timeout
 	DefaultUpstreamPollTimeoutSeconds = 60  // poll budget after "incomplete"
-	DefaultMaxOutputTokens            = 8192
 	// DefaultMaxPromptBytes limits JSON LLM request bodies accepted by POST /.
 	DefaultMaxPromptBytes     = 4 * 1024 * 1024
 	DefaultDictationModel     = "gpt-4o-mini-transcribe"
@@ -59,7 +58,6 @@ type Configuration struct {
 	QueueSize                    int
 	RequestTimeoutSeconds        int
 	UpstreamPollTimeoutSeconds   int
-	MaxOutputTokens              int
 	MaxPromptBytes               int64
 	DictationModel               string
 	MaxInputAudioBytes           int64
@@ -152,9 +150,6 @@ func (configuration *Configuration) ApplyTunables() {
 	}
 	if configuration.UpstreamPollTimeoutSeconds <= 0 {
 		configuration.UpstreamPollTimeoutSeconds = DefaultUpstreamPollTimeoutSeconds
-	}
-	if configuration.MaxOutputTokens <= 0 {
-		configuration.MaxOutputTokens = DefaultMaxOutputTokens
 	}
 	if strings.TrimSpace(configuration.DefaultProvider) == constants.EmptyString {
 		configuration.DefaultProvider = DefaultProvider

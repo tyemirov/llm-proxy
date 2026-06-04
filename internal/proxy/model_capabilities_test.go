@@ -15,6 +15,7 @@ const (
 	toolChoiceFieldPresenceMismatch  = "Mismatch in 'tool_choice' field presence. Got: %s, Want presence: %v"
 	reasoningFieldPresenceMismatch   = "Mismatch in 'reasoning' field presence. Got: %s, Want presence: %v"
 	reasoningFieldJSONFragment       = `"reasoning"`
+	maxOutputTokensFieldJSONFragment = `"max_output_tokens"`
 	modelFieldsMismatchFormat        = "model %s fields=%v want=%v"
 	promptValue                      = "hello"
 )
@@ -127,7 +128,7 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 
 	for _, testCase := range testCases {
 		testFramework.Run(testCase.name, func(subTestFramework *testing.T) {
-			payload := proxy.BuildRequestPayload(testCase.modelIdentifier, promptValue, testCase.webSearchEnabled, proxy.DefaultMaxOutputTokens)
+			payload := proxy.BuildRequestPayload(testCase.modelIdentifier, promptValue, testCase.webSearchEnabled, nil)
 			payloadBytes, marshalError := json.Marshal(payload)
 			if marshalError != nil {
 				subTestFramework.Fatalf(marshalPayloadErrorFormat, marshalError)
@@ -146,6 +147,19 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 			reasoningFieldPresent := strings.Contains(payloadJSON, reasoningFieldJSONFragment)
 			if reasoningFieldPresent != testCase.expectReasoning {
 				subTestFramework.Errorf(reasoningFieldPresenceMismatch, payloadJSON, testCase.expectReasoning)
+			}
+			if strings.Contains(payloadJSON, maxOutputTokensFieldJSONFragment) {
+				subTestFramework.Errorf("max_output_tokens must be omitted without request max_tokens: %s", payloadJSON)
+			}
+
+			maxTokens := 555
+			cappedPayload := proxy.BuildRequestPayload(testCase.modelIdentifier, promptValue, testCase.webSearchEnabled, &maxTokens)
+			cappedPayloadBytes, cappedMarshalError := json.Marshal(cappedPayload)
+			if cappedMarshalError != nil {
+				subTestFramework.Fatalf(marshalPayloadErrorFormat, cappedMarshalError)
+			}
+			if !strings.Contains(string(cappedPayloadBytes), `"max_output_tokens":555`) {
+				subTestFramework.Errorf("max_output_tokens missing with request max_tokens: %s", string(cappedPayloadBytes))
 			}
 		})
 	}

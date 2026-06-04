@@ -53,13 +53,15 @@ variables:
 | `--queue_size` / `LLM_PROXY_QUEUE_SIZE` | Request queue size (default `100`) |
 | `--request_timeout` / `LLM_PROXY_REQUEST_TIMEOUT_SECONDS` | Overall request timeout in seconds (default `180`) |
 | `--upstream_poll_timeout` / `LLM_PROXY_UPSTREAM_POLL_TIMEOUT_SECONDS` | Poll timeout in seconds after incomplete upstream responses (default `60`) |
-| `--max_output_tokens` / `LLM_PROXY_MAX_OUTPUT_TOKENS` | Max output token budget forwarded to text models (default `8192`) |
 | `--max_prompt_bytes` / `LLM_PROXY_MAX_PROMPT_BYTES` | Max accepted JSON body size for `POST /` prompts (default `4194304`) |
 | `--dictation_model` / `LLM_PROXY_DICTATION_MODEL` | Default model for `/dictate` when query model is not provided (default `gpt-4o-mini-transcribe`) |
 | `--max_input_audio_bytes` / `LLM_PROXY_MAX_INPUT_AUDIO_BYTES` | Max accepted upload size for `/dictate` (default `26214400`) |
 
 Web search is per request and currently supported only on OpenAI models that
 support the OpenAI web search tool.
+Text output length is also per request: pass `max_tokens` when a client wants
+to cap one generation. When omitted, the proxy does not send a provider
+max-token field.
 
 ## Running
 
@@ -136,6 +138,7 @@ curl --get \
   --data-urlencode "key=mysecret" \
   --data-urlencode "provider=gemini" \
   --data-urlencode "model=gemini-3.5-flash" \
+  --data-urlencode "max_tokens=512" \
   "http://localhost:8080/"
 ```
 
@@ -151,7 +154,7 @@ from server-side configuration. The JSON body is capped by `--max_prompt_bytes`
 ```shell
 curl -X POST \
   -H "Content-Type: application/json" \
-  --data '{"prompt":"large text...","model":"gpt-5.5","web_search":false,"system_prompt":"optional"}' \
+  --data '{"prompt":"large text...","model":"gpt-5.5","web_search":false,"system_prompt":"optional","max_tokens":4096}' \
   "http://localhost:8080/?key=mysecret"
 ```
 
@@ -163,6 +166,7 @@ JSON body fields:
 | `model` | No | provider default | Model identifier from the selected provider's supported model list. |
 | `web_search` | No | `false` | Enables OpenAI web search when the selected provider/model supports it. |
 | `system_prompt` | No | configured `SYSTEM_PROMPT` | Per-request system prompt override. |
+| `max_tokens` | No | provider default | Positive integer output-token cap for this request. The proxy maps it to OpenAI `max_output_tokens`, OpenAI-compatible `max_tokens`, or Gemini `generationConfig.maxOutputTokens`. |
 
 For `POST /`, `provider` remains a query parameter. Query `model` may override
 the JSON body only when the body omits `model` or provides the same value;
@@ -270,6 +274,7 @@ GET /
   &provider=PROVIDER        # optional; defaults to openai
   &model=MODEL_NAME         # optional; provider default
   &web_search=1|true|yes    # optional; OpenAI web_search tool
+  &max_tokens=N             # optional positive integer per-request cap
   &format=CONTENT_TYPE      # optional; or use Accept header
 ```
 
@@ -284,7 +289,8 @@ Content-Type: application/json
   "prompt": "STRING",       # required
   "model": "MODEL_NAME",    # optional; provider default
   "web_search": false,      # optional; defaults to false
-  "system_prompt": "STRING" # optional; defaults to configured system prompt
+  "system_prompt": "STRING",# optional; defaults to configured system prompt
+  "max_tokens": 512         # optional positive integer per-request cap
 }
 ```
 

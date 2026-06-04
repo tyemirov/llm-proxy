@@ -50,3 +50,19 @@ func TestExecuteRunsConfiguredProxyWithInjectedServe(t *testing.T) {
 		t.Fatalf("geminiBaseURL=%q", capturedConfiguration.GeminiBaseURL)
 	}
 }
+
+func TestRemovedGlobalMaxOutputTokensConfigSurface(t *testing.T) {
+	if rootCmd.Flags().Lookup("max_output_tokens") != nil {
+		t.Fatal("max_output_tokens flag must not be registered")
+	}
+	for _, binding := range environmentBindings() {
+		if binding.key == "max_output_tokens" {
+			t.Fatalf("max_output_tokens env binding must not be registered: %+v", binding)
+		}
+		for _, environmentVariable := range binding.environmentVariables {
+			if environmentVariable == "LLM_PROXY_MAX_OUTPUT_TOKENS" {
+				t.Fatalf("LLM_PROXY_MAX_OUTPUT_TOKENS env binding must not be registered: %+v", binding)
+			}
+		}
+	}
+}

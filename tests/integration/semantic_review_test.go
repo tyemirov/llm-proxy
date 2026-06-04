@@ -112,7 +112,7 @@ func newSemanticReviewOpenAIServer(testingInstance *testing.T, capture *semantic
 	}))
 }
 
-func TestIntegrationLargeSemanticReviewPostUsesSufficientOutputBudget(testingInstance *testing.T) {
+func TestIntegrationLargeSemanticReviewPostUsesRequestMaxTokens(testingInstance *testing.T) {
 	gin.SetMode(gin.TestMode)
 	capture := &semanticReviewCapture{}
 	openAIServer := newSemanticReviewOpenAIServer(testingInstance, capture)
@@ -147,6 +147,7 @@ func TestIntegrationLargeSemanticReviewPostUsesSufficientOutputBudget(testingIns
 		"prompt":     largeSemanticReviewPrompt(testingInstance),
 		"model":      proxy.ModelNameGPT55Pro,
 		"web_search": false,
+		"max_tokens": semanticReviewRequiredOutputLimit,
 	}
 	requestBytes, marshalError := json.Marshal(requestPayload)
 	if marshalError != nil {

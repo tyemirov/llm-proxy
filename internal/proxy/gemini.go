@@ -18,15 +18,14 @@ import (
 const geminiAPIKeyHeader = "x-goog-api-key"
 
 type geminiGenerateContentClient struct {
-	httpClient      HTTPDoer
-	requestTimeout  time.Duration
-	maxOutputTokens int
+	httpClient     HTTPDoer
+	requestTimeout time.Duration
 }
 
 type geminiGenerateContentRequest struct {
-	Contents          []geminiContent        `json:"contents"`
-	SystemInstruction *geminiContent         `json:"systemInstruction,omitempty"`
-	GenerationConfig  geminiGenerationConfig `json:"generationConfig"`
+	Contents          []geminiContent         `json:"contents"`
+	SystemInstruction *geminiContent          `json:"systemInstruction,omitempty"`
+	GenerationConfig  *geminiGenerationConfig `json:"generationConfig,omitempty"`
 }
 
 type geminiGenerationConfig struct {
@@ -57,24 +56,25 @@ type geminiUsageMetadata struct {
 	TotalTokenCount      *int `json:"totalTokenCount"`
 }
 
-func newGeminiGenerateContentClient(httpClient HTTPDoer, requestTimeout time.Duration, maxOutputTokens int) *geminiGenerateContentClient {
+func newGeminiGenerateContentClient(httpClient HTTPDoer, requestTimeout time.Duration) *geminiGenerateContentClient {
 	return &geminiGenerateContentClient{
-		httpClient:      httpClient,
-		requestTimeout:  requestTimeout,
-		maxOutputTokens: maxOutputTokens,
+		httpClient:     httpClient,
+		requestTimeout: requestTimeout,
 	}
 }
 
-func (client *geminiGenerateContentClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier modelID, userPrompt string, systemPrompt string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *geminiGenerateContentClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier modelID, userPrompt string, systemPrompt string, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	payload := geminiGenerateContentRequest{
 		Contents: []geminiContent{{
 			Role:  "user",
 			Parts: []geminiPart{{Text: userPrompt}},
 		}},
-		GenerationConfig: geminiGenerationConfig{MaxOutputTokens: client.maxOutputTokens},
 	}
 	if !utils.IsBlank(systemPrompt) {
 		payload.SystemInstruction = &geminiContent{Parts: []geminiPart{{Text: systemPrompt}}}
+	}
+	if maxTokens != nil {
+		payload.GenerationConfig = &geminiGenerationConfig{MaxOutputTokens: *maxTokens}
 	}
 	payloadBytes, _ := json.Marshal(payload)
 

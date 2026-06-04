@@ -16,9 +16,8 @@ import (
 )
 
 type openAICompatibleChatClient struct {
-	httpClient      HTTPDoer
-	requestTimeout  time.Duration
-	maxOutputTokens int
+	httpClient     HTTPDoer
+	requestTimeout time.Duration
 }
 
 type chatCompletionMessage struct {
@@ -29,7 +28,7 @@ type chatCompletionMessage struct {
 type chatCompletionRequest struct {
 	Model     string                  `json:"model"`
 	Messages  []chatCompletionMessage `json:"messages"`
-	MaxTokens int                     `json:"max_tokens,omitempty"`
+	MaxTokens *int                    `json:"max_tokens,omitempty"`
 }
 
 type chatCompletionResponse struct {
@@ -46,15 +45,14 @@ type chatCompletionResponseMessage struct {
 	ReasoningContent string `json:"reasoning_content"`
 }
 
-func newOpenAICompatibleChatClient(httpClient HTTPDoer, requestTimeout time.Duration, maxOutputTokens int) *openAICompatibleChatClient {
+func newOpenAICompatibleChatClient(httpClient HTTPDoer, requestTimeout time.Duration) *openAICompatibleChatClient {
 	return &openAICompatibleChatClient{
-		httpClient:      httpClient,
-		requestTimeout:  requestTimeout,
-		maxOutputTokens: maxOutputTokens,
+		httpClient:     httpClient,
+		requestTimeout: requestTimeout,
 	}
 }
 
-func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier modelID, userPrompt string, systemPrompt string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier modelID, userPrompt string, systemPrompt string, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	messages := []chatCompletionMessage{}
 	if !utils.IsBlank(systemPrompt) {
 		messages = append(messages, chatCompletionMessage{Role: "system", Content: systemPrompt})
@@ -64,7 +62,7 @@ func (client *openAICompatibleChatClient) generateText(parentContext context.Con
 	payload := chatCompletionRequest{
 		Model:     modelIdentifier.string(),
 		Messages:  messages,
-		MaxTokens: client.maxOutputTokens,
+		MaxTokens: maxTokens,
 	}
 	payloadBytes, _ := json.Marshal(payload)
 

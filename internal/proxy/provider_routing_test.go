@@ -80,6 +80,59 @@ func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
 	if capturedPayload["model"] != proxy.ModelNameDeepSeekV4Flash {
 		t.Fatalf("model=%v want=%s", capturedPayload["model"], proxy.ModelNameDeepSeekV4Flash)
 	}
+	if _, exists := capturedPayload["max_tokens"]; exists {
+		t.Fatalf("max_tokens must be omitted by default: %v", capturedPayload)
+	}
+}
+
+func TestProviderRoutingTranslatesMaxTokensForOpenAICompatibleChat(t *testing.T) {
+	var capturedPayload map[string]any
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		bodyBytes, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			t.Fatalf("read body: %v", readError)
+		}
+		if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+			t.Fatalf("unmarshal body: %v", unmarshalError)
+		}
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"deepseek cap ok"}}]}`))
+	}))
+	defer upstreamServer.Close()
+
+	logger := zap.NewNop()
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		ServiceSecret:              TestSecret,
+		OpenAIKey:                  TestAPIKey,
+		DeepSeekKey:                testDeepSeekKey,
+		DeepSeekBaseURL:            upstreamServer.URL,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, logger.Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	queryParameters := url.Values{}
+	queryParameters.Set("key", TestSecret)
+	queryParameters.Set("prompt", TestPrompt)
+	queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
+	queryParameters.Set("model", proxy.ModelNameDeepSeekV4Flash)
+	queryParameters.Set("max_tokens", "444")
+	request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+	}
+	if capturedPayload["max_tokens"] != float64(444) {
+		t.Fatalf("max_tokens=%v payload=%v", capturedPayload["max_tokens"], capturedPayload)
+	}
 }
 
 func TestProviderRoutingSurfacesChatCompletionTokenUsage(t *testing.T) {
@@ -179,7 +232,6 @@ func TestProviderRoutingSupportsGeminiGenerateContent(t *testing.T) {
 		QueueSize:                  1,
 		RequestTimeoutSeconds:      TestTimeout,
 		UpstreamPollTimeoutSeconds: TestTimeout,
-		MaxOutputTokens:            123,
 	}, logger.Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -222,8 +274,8 @@ func TestProviderRoutingSupportsGeminiGenerateContent(t *testing.T) {
 	if response.Response != "gemini ok" || response.Usage.RequestTokens != 13 || response.Usage.ResponseTokens != 5 || response.Usage.TotalTokens != 18 {
 		t.Fatalf("response=%+v", response)
 	}
-	if generationConfig, ok := capturedPayload["generationConfig"].(map[string]any); !ok || generationConfig["maxOutputTokens"] != float64(123) {
-		t.Fatalf("generationConfig=%v", capturedPayload["generationConfig"])
+	if _, exists := capturedPayload["generationConfig"]; exists {
+		t.Fatalf("generationConfig must be omitted by default: %v", capturedPayload["generationConfig"])
 	}
 	if systemInstruction, ok := capturedPayload["systemInstruction"].(map[string]any); !ok || systemInstruction["parts"] == nil {
 		t.Fatalf("systemInstruction=%v", capturedPayload["systemInstruction"])
@@ -263,7 +315,7 @@ func TestProviderRoutingSupportsGeminiJSONPost(t *testing.T) {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
 
-	requestBody := bytes.NewBufferString(`{"prompt":"hello json","model":"` + proxy.ModelNameGemini25Pro + `","system_prompt":"system json"}`)
+	requestBody := bytes.NewBufferString(`{"prompt":"hello json","model":"` + proxy.ModelNameGemini25Pro + `","system_prompt":"system json","max_tokens":222}`)
 	request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&provider="+proxy.ProviderNameGemini, requestBody)
 	request.Header.Set("Content-Type", "application/json")
 	responseRecorder := httptest.NewRecorder()
@@ -281,6 +333,9 @@ func TestProviderRoutingSupportsGeminiJSONPost(t *testing.T) {
 	}
 	if systemInstruction, ok := capturedPayload["systemInstruction"].(map[string]any); !ok || systemInstruction["parts"] == nil {
 		t.Fatalf("systemInstruction=%v", capturedPayload["systemInstruction"])
+	}
+	if generationConfig, ok := capturedPayload["generationConfig"].(map[string]any); !ok || generationConfig["maxOutputTokens"] != float64(222) {
+		t.Fatalf("generationConfig=%v", capturedPayload["generationConfig"])
 	}
 }
 
