@@ -16,7 +16,7 @@ GATEWAY_DEPLOY_TARGET ?= deploy-gateway
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint test build clean ci release publish deploy
+.PHONY: fmt check-format lint test test-live-gemini build clean ci release publish deploy
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -36,6 +36,9 @@ lint:
 
 test:
 	@GO="$(GO)" ./scripts/check_coverage.sh
+
+test-live-gemini:
+	@GO="$(GO)" ./scripts/test_live_gemini.sh
 
 build:
 	mkdir -p $(BIN_DIR)

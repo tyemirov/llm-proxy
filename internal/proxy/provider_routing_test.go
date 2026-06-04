@@ -280,6 +280,8 @@ func TestProviderRoutingSupportsGeminiGenerateContent(t *testing.T) {
 	if systemInstruction, ok := capturedPayload["systemInstruction"].(map[string]any); !ok || systemInstruction["parts"] == nil {
 		t.Fatalf("systemInstruction=%v", capturedPayload["systemInstruction"])
 	}
+	assertGeminiContentsOmitThought(t, capturedPayload["contents"])
+	assertGeminiContentOmitsThought(t, capturedPayload["systemInstruction"], "systemInstruction")
 }
 
 func TestProviderRoutingSupportsGeminiJSONPost(t *testing.T) {
@@ -334,8 +336,43 @@ func TestProviderRoutingSupportsGeminiJSONPost(t *testing.T) {
 	if systemInstruction, ok := capturedPayload["systemInstruction"].(map[string]any); !ok || systemInstruction["parts"] == nil {
 		t.Fatalf("systemInstruction=%v", capturedPayload["systemInstruction"])
 	}
+	assertGeminiContentsOmitThought(t, capturedPayload["contents"])
+	assertGeminiContentOmitsThought(t, capturedPayload["systemInstruction"], "systemInstruction")
 	if generationConfig, ok := capturedPayload["generationConfig"].(map[string]any); !ok || generationConfig["maxOutputTokens"] != float64(222) {
 		t.Fatalf("generationConfig=%v", capturedPayload["generationConfig"])
+	}
+}
+
+func assertGeminiContentsOmitThought(t *testing.T, rawContents any) {
+	t.Helper()
+	contents, ok := rawContents.([]any)
+	if !ok {
+		t.Fatalf("contents=%v", rawContents)
+	}
+	for contentIndex, rawContent := range contents {
+		assertGeminiContentOmitsThought(t, rawContent, "contents[%d]", contentIndex)
+	}
+}
+
+func assertGeminiContentOmitsThought(t *testing.T, rawContent any, labelFormat string, labelArguments ...any) {
+	t.Helper()
+	content, ok := rawContent.(map[string]any)
+	if !ok {
+		t.Fatalf(labelFormat+"=%v", append(labelArguments, rawContent)...)
+	}
+	rawParts := content["parts"]
+	parts, ok := rawParts.([]any)
+	if !ok {
+		t.Fatalf(labelFormat+".parts=%v", append(labelArguments, rawParts)...)
+	}
+	for partIndex, rawPart := range parts {
+		part, ok := rawPart.(map[string]any)
+		if !ok {
+			t.Fatalf(labelFormat+".parts[%d]=%v", append(labelArguments, partIndex, rawPart)...)
+		}
+		if _, exists := part["thought"]; exists {
+			t.Fatalf(labelFormat+".parts[%d] must omit thought: %v", append(labelArguments, partIndex, part)...)
+		}
 	}
 }
 
