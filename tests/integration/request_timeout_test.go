@@ -112,7 +112,6 @@ func TestIntegrationGatewayContextTimeoutCancelsUpstreamRequest(testingInstance 
 		DefaultProvider:              proxy.ProviderNameOpenAI,
 		DefaultModel:                 proxy.DefaultModel,
 		DictationModel:               proxy.DefaultDictationModel,
-		MaxOutputTokens:              proxy.DefaultMaxOutputTokens,
 		MaxPromptBytes:               proxy.DefaultMaxPromptBytes,
 		MaxInputAudioBytes:           proxy.DefaultMaxInputAudioBytes,
 		DeepSeekBaseURL:              "https://deepseek.invalid",
