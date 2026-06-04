@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.11] - 2026-06-04
+
+### Changes
+- Merge pull request #166 from tyemirov/gix/exclude-thought-parts-and-enforce-finishreason-in
+- test: add default OpenAI API key and dictation provider in Gemini live test script
+- docs: clarify live Gemini test setup with placeholder OpenAI key
+- add script to test live Gemini generateContent API with llm-proxy
+- fix: stop sending Gemini response-only `thought` fields in requests
+- fix(gemini): update request/response structs and omit 'thought' in requests
+- docs: add make target for live Gemini testing in README.md
+- build: add test-live-gemini target to Makefile
+- fix(gemini): return only final answer text and error on partial output
+
 ## [v0.2.10] - 2026-06-03
 
 ### Changes
