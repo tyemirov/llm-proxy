@@ -41,7 +41,6 @@ const (
 	keyPort                         = "port"
 	keyRequestTimeoutSeconds        = "request_timeout_seconds"
 	keyUpstreamPollTimeoutSeconds   = "upstream_poll_timeout_seconds"
-	keyMaxOutputTokens              = "max_output_tokens"
 	keyMaxPromptBytes               = "max_prompt_bytes"
 	keyDictationModel               = "dictation_model"
 	keyMaxInputAudioBytes           = "max_input_audio_bytes"
@@ -71,7 +70,6 @@ const (
 	flagPort                         = keyPort
 	flagRequestTimeout               = "request_timeout"
 	flagUpstreamPollTimeout          = "upstream_poll_timeout"
-	flagMaxOutputTokens              = keyMaxOutputTokens
 	flagMaxPromptBytes               = keyMaxPromptBytes
 	flagDictationModel               = keyDictationModel
 	flagMaxInputAudioBytes           = keyMaxInputAudioBytes
@@ -101,7 +99,6 @@ const (
 	envPort                         = "HTTP_PORT"
 	envRequestTimeoutSeconds        = "LLM_PROXY_REQUEST_TIMEOUT_SECONDS"
 	envUpstreamPollTimeoutSeconds   = "LLM_PROXY_UPSTREAM_POLL_TIMEOUT_SECONDS"
-	envMaxOutputTokens              = "LLM_PROXY_MAX_OUTPUT_TOKENS"
 	envMaxPromptBytes               = "LLM_PROXY_MAX_PROMPT_BYTES"
 	envDictationModel               = "LLM_PROXY_DICTATION_MODEL"
 	envMaxInputAudioBytes           = "LLM_PROXY_MAX_INPUT_AUDIO_BYTES"
@@ -178,7 +175,6 @@ var rootCmd = &cobra.Command{
 		populateIntConfiguration(command, flagQueueSize, keyQueueSize, &config.QueueSize, proxy.DefaultQueueSize)
 		populateIntConfiguration(command, flagRequestTimeout, keyRequestTimeoutSeconds, &config.RequestTimeoutSeconds, proxy.DefaultRequestTimeoutSeconds)
 		populateIntConfiguration(command, flagUpstreamPollTimeout, keyUpstreamPollTimeoutSeconds, &config.UpstreamPollTimeoutSeconds, proxy.DefaultUpstreamPollTimeoutSeconds)
-		populateIntConfiguration(command, flagMaxOutputTokens, keyMaxOutputTokens, &config.MaxOutputTokens, proxy.DefaultMaxOutputTokens)
 		populateInt64Configuration(command, flagMaxPromptBytes, keyMaxPromptBytes, &config.MaxPromptBytes, proxy.DefaultMaxPromptBytes)
 		populateStringConfiguration(command, flagDictationModel, keyDictationModel, &config.DictationModel, proxy.DefaultDictationModel, trimSpacesAndQuotes)
 		populateInt64Configuration(command, flagMaxInputAudioBytes, keyMaxInputAudioBytes, &config.MaxInputAudioBytes, proxy.DefaultMaxInputAudioBytes)
@@ -252,7 +248,6 @@ func environmentBindings() []environmentBinding {
 		{key: keyPort, environmentVariables: []string{envPort}},
 		{key: keyRequestTimeoutSeconds, environmentVariables: []string{envRequestTimeoutSeconds}},
 		{key: keyUpstreamPollTimeoutSeconds, environmentVariables: []string{envUpstreamPollTimeoutSeconds}},
-		{key: keyMaxOutputTokens, environmentVariables: []string{envMaxOutputTokens}},
 		{key: keyMaxPromptBytes, environmentVariables: []string{envMaxPromptBytes}},
 		{key: keyDictationModel, environmentVariables: []string{envDictationModel}},
 		{key: keyMaxInputAudioBytes, environmentVariables: []string{envMaxInputAudioBytes}},
@@ -290,7 +285,6 @@ func init() {
 	rootCmd.Flags().IntVar(&config.QueueSize, flagQueueSize, 0, "request queue size (env: "+envQueueSize+")")
 	rootCmd.Flags().IntVar(&config.RequestTimeoutSeconds, flagRequestTimeout, 0, "overall request timeout in seconds (env: "+envRequestTimeoutSeconds+")")
 	rootCmd.Flags().IntVar(&config.UpstreamPollTimeoutSeconds, flagUpstreamPollTimeout, 0, "upstream poll timeout in seconds for incomplete responses (env: "+envUpstreamPollTimeoutSeconds+")")
-	rootCmd.Flags().IntVar(&config.MaxOutputTokens, flagMaxOutputTokens, 0, "maximum output tokens (env: "+envMaxOutputTokens+")")
 	rootCmd.Flags().Int64Var(&config.MaxPromptBytes, flagMaxPromptBytes, 0, "maximum accepted JSON prompt payload size for POST / in bytes (env: "+envMaxPromptBytes+")")
 	rootCmd.Flags().StringVar(&config.DictationModel, flagDictationModel, "", "default model for /dictate when query model is not provided (env: "+envDictationModel+")")
 	rootCmd.Flags().Int64Var(&config.MaxInputAudioBytes, flagMaxInputAudioBytes, 0, "maximum accepted audio payload size for /dictate in bytes (env: "+envMaxInputAudioBytes+")")
