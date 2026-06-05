@@ -62,50 +62,67 @@ type Configuration struct {
 	DictationModel               string
 	MaxInputAudioBytes           int64
 	Endpoints                    *Endpoints
+	validated                    bool
 }
 
-// validateConfig confirms required settings are present.
-func validateConfig(config Configuration) error {
-	if strings.TrimSpace(config.ServiceSecret) == constants.EmptyString {
+// NewConfiguration returns a normalized runtime configuration after validating startup invariants.
+func NewConfiguration(configuration Configuration) (Configuration, error) {
+	configuration.ApplyTunables()
+	if validationError := validateConfig(configuration); validationError != nil {
+		return Configuration{}, validationError
+	}
+	configuration.validated = true
+	return configuration, nil
+}
+
+func ensureValidatedConfiguration(configuration Configuration) (Configuration, error) {
+	if configuration.validated {
+		return configuration, nil
+	}
+	return NewConfiguration(configuration)
+}
+
+func validateConfig(configuration Configuration) error {
+	if strings.TrimSpace(configuration.ServiceSecret) == constants.EmptyString {
 		return apperrors.ErrMissingServiceSecret
 	}
-	if credentialError := validateDefaultProviderCredential(config.DefaultProvider, config); credentialError != nil {
+	if credentialError := validateDefaultProviderCredential(configuration.DefaultProvider, configuration); credentialError != nil {
 		return credentialError
 	}
-	if credentialError := validateDefaultDictationProviderCredential(config.DefaultDictationProvider, config); credentialError != nil {
+	if credentialError := validateDefaultDictationProviderCredential(configuration.DefaultDictationProvider, configuration); credentialError != nil {
 		return credentialError
 	}
 	return nil
 }
 
-func validateDefaultProviderCredential(providerIdentifier string, config Configuration) error {
+func validateDefaultProviderCredential(providerIdentifier string, configuration Configuration) error {
 	switch strings.ToLower(strings.TrimSpace(providerIdentifier)) {
 	case ProviderNameOpenAI:
-		if strings.TrimSpace(config.OpenAIKey) == constants.EmptyString {
+		if strings.TrimSpace(configuration.OpenAIKey) == constants.EmptyString {
 			return apperrors.ErrMissingOpenAIKey
 		}
 	case ProviderNameDeepSeek:
-		if strings.TrimSpace(config.DeepSeekKey) == constants.EmptyString {
+		if strings.TrimSpace(configuration.DeepSeekKey) == constants.EmptyString {
 			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameDeepSeek)
 		}
 	case ProviderNameDashScope, providerAliasQwen:
-		if strings.TrimSpace(config.DashScopeKey) == constants.EmptyString {
+		if strings.TrimSpace(configuration.DashScopeKey) == constants.EmptyString {
 			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameDashScope)
 		}
 	case ProviderNameMoonshot, providerAliasKimi:
-		if strings.TrimSpace(config.MoonshotKey) == constants.EmptyString {
+		if strings.TrimSpace(configuration.MoonshotKey) == constants.EmptyString {
 			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameMoonshot)
 		}
 	case ProviderNameSiliconFlow:
-		if strings.TrimSpace(config.SiliconFlowKey) == constants.EmptyString {
+		if strings.TrimSpace(configuration.SiliconFlowKey) == constants.EmptyString {
 			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameSiliconFlow)
 		}
 	case ProviderNameZhipu, providerAliasGLM:
-		if strings.TrimSpace(config.ZhipuKey) == constants.EmptyString {
+		if strings.TrimSpace(configuration.ZhipuKey) == constants.EmptyString {
 			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameZhipu)
 		}
 	case ProviderNameGemini:
-		if strings.TrimSpace(config.GeminiKey) == constants.EmptyString {
+		if strings.TrimSpace(configuration.GeminiKey) == constants.EmptyString {
 			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameGemini)
 		}
 	default:
@@ -114,14 +131,14 @@ func validateDefaultProviderCredential(providerIdentifier string, config Configu
 	return nil
 }
 
-func validateDefaultDictationProviderCredential(providerIdentifier string, config Configuration) error {
+func validateDefaultDictationProviderCredential(providerIdentifier string, configuration Configuration) error {
 	switch strings.ToLower(strings.TrimSpace(providerIdentifier)) {
 	case ProviderNameOpenAI:
-		if strings.TrimSpace(config.OpenAIKey) == constants.EmptyString {
+		if strings.TrimSpace(configuration.OpenAIKey) == constants.EmptyString {
 			return apperrors.ErrMissingOpenAIKey
 		}
 	case ProviderNameSiliconFlow:
-		if strings.TrimSpace(config.SiliconFlowKey) == constants.EmptyString {
+		if strings.TrimSpace(configuration.SiliconFlowKey) == constants.EmptyString {
 			return fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, ProviderNameSiliconFlow, endpointKindDictation)
 		}
 	case ProviderNameDeepSeek:
@@ -145,6 +162,14 @@ var ErrUpstreamIncomplete = errors.New(errorUpstreamIncomplete)
 
 // ApplyTunables ensures tunable configuration values have sensible defaults.
 func (configuration *Configuration) ApplyTunables() {
+	configuration.ServiceSecret = strings.TrimSpace(configuration.ServiceSecret)
+	configuration.OpenAIKey = strings.TrimSpace(configuration.OpenAIKey)
+	configuration.DeepSeekKey = strings.TrimSpace(configuration.DeepSeekKey)
+	configuration.DashScopeKey = strings.TrimSpace(configuration.DashScopeKey)
+	configuration.MoonshotKey = strings.TrimSpace(configuration.MoonshotKey)
+	configuration.SiliconFlowKey = strings.TrimSpace(configuration.SiliconFlowKey)
+	configuration.ZhipuKey = strings.TrimSpace(configuration.ZhipuKey)
+	configuration.GeminiKey = strings.TrimSpace(configuration.GeminiKey)
 	if configuration.RequestTimeoutSeconds <= 0 {
 		configuration.RequestTimeoutSeconds = DefaultRequestTimeoutSeconds
 	}
@@ -158,6 +183,7 @@ func (configuration *Configuration) ApplyTunables() {
 	if strings.TrimSpace(configuration.DefaultModel) == constants.EmptyString {
 		configuration.DefaultModel = DefaultModel
 	}
+	configuration.DefaultModel = strings.TrimSpace(configuration.DefaultModel)
 	if strings.TrimSpace(configuration.DefaultDictationProvider) == constants.EmptyString {
 		configuration.DefaultDictationProvider = DefaultDictationProvider
 	}
@@ -168,27 +194,35 @@ func (configuration *Configuration) ApplyTunables() {
 	if strings.TrimSpace(configuration.DictationModel) == constants.EmptyString {
 		configuration.DictationModel = DefaultDictationModel
 	}
+	configuration.DictationModel = strings.TrimSpace(configuration.DictationModel)
 	if configuration.MaxInputAudioBytes <= 0 {
 		configuration.MaxInputAudioBytes = DefaultMaxInputAudioBytes
 	}
+	configuration.DeepSeekBaseURL = strings.TrimSpace(configuration.DeepSeekBaseURL)
 	if strings.TrimSpace(configuration.DeepSeekBaseURL) == constants.EmptyString {
 		configuration.DeepSeekBaseURL = defaultDeepSeekBaseURL
 	}
+	configuration.DashScopeBaseURL = strings.TrimSpace(configuration.DashScopeBaseURL)
 	if strings.TrimSpace(configuration.DashScopeBaseURL) == constants.EmptyString {
 		configuration.DashScopeBaseURL = defaultDashScopeBaseURL
 	}
+	configuration.MoonshotBaseURL = strings.TrimSpace(configuration.MoonshotBaseURL)
 	if strings.TrimSpace(configuration.MoonshotBaseURL) == constants.EmptyString {
 		configuration.MoonshotBaseURL = defaultMoonshotBaseURL
 	}
+	configuration.SiliconFlowBaseURL = strings.TrimSpace(configuration.SiliconFlowBaseURL)
 	if strings.TrimSpace(configuration.SiliconFlowBaseURL) == constants.EmptyString {
 		configuration.SiliconFlowBaseURL = defaultSiliconFlowBaseURL
 	}
+	configuration.SiliconFlowTranscriptionsURL = strings.TrimSpace(configuration.SiliconFlowTranscriptionsURL)
 	if strings.TrimSpace(configuration.SiliconFlowTranscriptionsURL) == constants.EmptyString {
 		configuration.SiliconFlowTranscriptionsURL = strings.TrimRight(configuration.SiliconFlowBaseURL, "/") + "/audio/transcriptions"
 	}
+	configuration.ZhipuBaseURL = strings.TrimSpace(configuration.ZhipuBaseURL)
 	if strings.TrimSpace(configuration.ZhipuBaseURL) == constants.EmptyString {
 		configuration.ZhipuBaseURL = defaultZhipuBaseURL
 	}
+	configuration.GeminiBaseURL = strings.TrimSpace(configuration.GeminiBaseURL)
 	if strings.TrimSpace(configuration.GeminiBaseURL) == constants.EmptyString {
 		configuration.GeminiBaseURL = defaultGeminiBaseURL
 	}

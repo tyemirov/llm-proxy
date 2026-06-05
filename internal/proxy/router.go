@@ -60,8 +60,8 @@ type dictationRequestParameters struct {
 
 // BuildRouter constructs the HTTP router used by the proxy. configuration supplies queue sizes, worker counts, timeout values, API credentials and other settings. structuredLogger records structured log messages during routing.
 func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
-	configuration.ApplyTunables()
-	if validationError := validateConfig(configuration); validationError != nil {
+	configuration, validationError := ensureValidatedConfiguration(configuration)
+	if validationError != nil {
 		return nil, validationError
 	}
 

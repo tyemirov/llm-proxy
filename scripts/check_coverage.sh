@@ -16,13 +16,20 @@ cd "$ROOT_DIR"
 "$GO_BIN" test -count=1 ./... -covermode=count -coverpkg="$COVERPKG" -coverprofile="$TMP_DIR/go-test.coverprofile"
 "$GO_BIN" build -cover -covermode=count -coverpkg="$COVERPKG" -o "$TMP_DIR/llm-proxy.cover" ./cmd/cli
 
-mkdir -p "$TMP_DIR/cov-help" "$TMP_DIR/cov-empty-env" "$TMP_DIR/cov-missing-openai"
+cat > "$TMP_DIR/missing-openai.yml" <<'CONFIG'
+server:
+  service_secret: "service-secret"
+providers:
+  openai: {}
+CONFIG
+
+mkdir -p "$TMP_DIR/cov-help" "$TMP_DIR/cov-missing-config" "$TMP_DIR/cov-missing-openai"
 env -i GOCOVERDIR="$TMP_DIR/cov-help" "$TMP_DIR/llm-proxy.cover" --help >/dev/null 2>/dev/null || true
-env -i GOCOVERDIR="$TMP_DIR/cov-empty-env" "$TMP_DIR/llm-proxy.cover" >/dev/null 2>/dev/null || true
-env -i SERVICE_SECRET=" service-secret " GOCOVERDIR="$TMP_DIR/cov-missing-openai" "$TMP_DIR/llm-proxy.cover" >/dev/null 2>/dev/null || true
+env -i GOCOVERDIR="$TMP_DIR/cov-missing-config" "$TMP_DIR/llm-proxy.cover" --config "$TMP_DIR/missing.yml" >/dev/null 2>/dev/null || true
+env -i GOCOVERDIR="$TMP_DIR/cov-missing-openai" "$TMP_DIR/llm-proxy.cover" --config "$TMP_DIR/missing-openai.yml" >/dev/null 2>/dev/null || true
 
 "$GO_BIN" tool covdata textfmt -i="$TMP_DIR/cov-help" -o="$TMP_DIR/bin-help.coverprofile"
-"$GO_BIN" tool covdata textfmt -i="$TMP_DIR/cov-empty-env" -o="$TMP_DIR/bin-empty-env.coverprofile"
+"$GO_BIN" tool covdata textfmt -i="$TMP_DIR/cov-missing-config" -o="$TMP_DIR/bin-missing-config.coverprofile"
 "$GO_BIN" tool covdata textfmt -i="$TMP_DIR/cov-missing-openai" -o="$TMP_DIR/bin-missing-openai.coverprofile"
 
 awk '
@@ -39,7 +46,7 @@ awk '
       print block, statements[block], counts[block]
     }
   }
-' "$TMP_DIR/go-test.coverprofile" "$TMP_DIR/bin-help.coverprofile" "$TMP_DIR/bin-empty-env.coverprofile" "$TMP_DIR/bin-missing-openai.coverprofile" > coverage.out
+' "$TMP_DIR/go-test.coverprofile" "$TMP_DIR/bin-help.coverprofile" "$TMP_DIR/bin-missing-config.coverprofile" "$TMP_DIR/bin-missing-openai.coverprofile" > coverage.out
 
 coverage_output="$("$GO_BIN" tool cover -func=coverage.out)"
 printf '%s\n' "$coverage_output"
