@@ -13,7 +13,7 @@ Required environment:
   SERVICE_SECRET
 
 Optional environment:
-  LIVE_ENV_FILE           Path to an env file to source before validation.
+  LIVE_ENV_FILE           Path to an env file to source before validation and config interpolation.
   LLM_PROXY_LIVE_PORT     Local port for the temporary proxy. Default: 18080.
   LLM_PROXY_LIVE_MODEL    Gemini model to test. Default: gemini-3.5-flash.
   GO                      Go binary. Default: go.
@@ -67,8 +67,11 @@ GO_BIN="$(env_or_default GO go)"
 PORT="$(env_or_default LLM_PROXY_LIVE_PORT 18080)"
 MODEL="$(env_or_default LLM_PROXY_LIVE_MODEL gemini-3.5-flash)"
 BINARY_PATH="${TMP_DIR}/llm-proxy-live"
+CONFIG_PATH="${TMP_DIR}/config.yml"
 LOG_PATH="${TMP_DIR}/llm-proxy.log"
 RESPONSE_PATH="${TMP_DIR}/response.txt"
+export LLM_PROXY_LIVE_PORT="${PORT}"
+export OPENAI_API_KEY="${OPENAI_API_KEY:-unused-openai-key-for-gemini-live-smoke}"
 
 if command -v lsof >/dev/null 2>&1 && lsof -tiTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "error: port ${PORT} is already in use; set LLM_PROXY_LIVE_PORT to a free port" >&2
@@ -78,13 +81,22 @@ fi
 cd "${ROOT_DIR}"
 GOEXPERIMENT= CGO_ENABLED=0 "${GO_BIN}" build -o "${BINARY_PATH}" ./cmd/cli
 
-GOEXPERIMENT= \
-SERVICE_SECRET="${SERVICE_SECRET}" \
-OPENAI_API_KEY="${OPENAI_API_KEY:-unused-openai-key-for-gemini-live-smoke}" \
-GEMINI_API_KEY="${GEMINI_API_KEY}" \
-LLM_PROXY_DEFAULT_PROVIDER=gemini \
-LLM_PROXY_DEFAULT_DICTATION_PROVIDER=openai \
-"${BINARY_PATH}" --port="${PORT}" --log_level=info >"${LOG_PATH}" 2>&1 &
+cat > "${CONFIG_PATH}" <<'CONFIG'
+server:
+  service_secret: "${SERVICE_SECRET}"
+  port: ${LLM_PROXY_LIVE_PORT}
+  log_level: info
+defaults:
+  provider: gemini
+  dictation_provider: openai
+providers:
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+  gemini:
+    api_key: "${GEMINI_API_KEY}"
+CONFIG
+
+GOEXPERIMENT= "${BINARY_PATH}" --config "${CONFIG_PATH}" >"${LOG_PATH}" 2>&1 &
 PROXY_PID="$!"
 
 READY="false"
