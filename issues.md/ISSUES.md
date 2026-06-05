@@ -107,7 +107,7 @@ These entries are always-available procedures. Keep them `[ ]` so they remain ru
 
 ## Planning
 
-- [ ] [P411] (P1) {F410} Make `config.yml` the sole service configuration source.
+- [x] [P411] (P1) {F410} Make `config.yml` the sole service configuration source.
   Plan and implement a configuration refactor where the running service receives all service configuration from `config.yml`. Environment variables and `.env` files may only supply interpolation values for placeholders in that YAML file; the rest of the program must never read environment variables as configuration.
   Acceptance criteria:
   1. `config.yml` has a documented strict schema for server, defaults, provider credentials/base URLs, timeouts, prompt/body/audio limits, and logging.
@@ -116,3 +116,4 @@ These entries are always-available procedures. Keep them `[ ]` so they remain ru
   4. Runtime code receives a validated `proxy.Configuration` value produced by a smart constructor; router, providers, middleware, and clients never call Viper, gotenv, or OS env APIs.
   5. Startup, README, provider-routing docs, Docker guidance, and coverage helper flows describe `config.yml` as authoritative and `.env` as interpolation input only.
   6. Black-box CLI and HTTP tests cover config-file loading, `.env` expansion, missing placeholders, unknown YAML keys, removed env/flag config surfaces, and provider credential validation.
+  Resolution: Added strict `config.yml` loading at the CLI edge with `${NAME}` expansion from process env plus same-directory `.env` values, removed service configuration flags/env bindings and direct `.env` mutation, and routed runtime setup through `proxy.NewConfiguration`. Updated README, provider-routing docs, coverage startup probes, and live Gemini smoke setup to treat config files as authoritative. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test` (total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make lint`, and `timeout -k 350s -s SIGKILL 350s make ci` (total coverage 100.0%).
