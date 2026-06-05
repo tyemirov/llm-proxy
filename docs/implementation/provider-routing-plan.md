@@ -33,25 +33,38 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 
 ## Configuration
 
-Shared:
+Runtime service configuration comes from `config.yml`; env vars and `.env`
+files are interpolation inputs only for `${NAME}` placeholders in that YAML.
+The loader rejects unknown keys and missing placeholders before the proxy starts.
 
-- `SERVICE_SECRET`
-- `LLM_PROXY_DEFAULT_PROVIDER`
-- `LLM_PROXY_DEFAULT_MODEL`
-- `LLM_PROXY_DEFAULT_DICTATION_PROVIDER`
-- `LLM_PROXY_DICTATION_MODEL`
+Shared config fields:
+
+- `server.service_secret`
+- `server.port`
+- `server.log_level`
+- `server.workers`
+- `server.queue_size`
+- `server.request_timeout_seconds`
+- `server.upstream_poll_timeout_seconds`
+- `server.max_prompt_bytes`
+- `server.max_input_audio_bytes`
+- `defaults.provider`
+- `defaults.model`
+- `defaults.dictation_provider`
+- `defaults.dictation_model`
+- `defaults.system_prompt`
 
 Provider credentials and base URLs:
 
-- `OPENAI_API_KEY`
-- `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`
-- `DASHSCOPE_API_KEY`, `DASHSCOPE_BASE_URL`
-- `MOONSHOT_API_KEY`, `MOONSHOT_BASE_URL`
-- `SILICONFLOW_API_KEY`, `SILICONFLOW_BASE_URL`, `SILICONFLOW_TRANSCRIPTIONS_URL`
-- `ZHIPU_API_KEY`, `ZHIPU_BASE_URL`
-- `GEMINI_API_KEY`, `GEMINI_BASE_URL`
+- `providers.openai.api_key`
+- `providers.deepseek.api_key`, `providers.deepseek.base_url`
+- `providers.dashscope.api_key`, `providers.dashscope.base_url`
+- `providers.moonshot.api_key`, `providers.moonshot.base_url`
+- `providers.siliconflow.api_key`, `providers.siliconflow.base_url`, `providers.siliconflow.transcriptions_url`
+- `providers.zhipu.api_key`, `providers.zhipu.base_url`
+- `providers.gemini.api_key`, `providers.gemini.base_url`
 
-Startup validates `SERVICE_SECRET`, the credential required by the configured default text provider, and the endpoint/credential required by the configured default dictation provider. Credentials for non-default providers are validated when a request selects that provider.
+Startup validates `server.service_secret`, the credential required by the configured default text provider, and the endpoint/credential required by the configured default dictation provider. Credentials for non-default providers are validated when a request selects that provider.
 
 ## Error Contract
 
