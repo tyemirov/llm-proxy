@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.12] - 2026-06-05
+
+### Changes
+- Merge pull request #167 from tyemirov/gix/switch-to-yaml-config-file-for-service-configuration
+- test: update expected error messages in integration2_test.go
+- test: improve coverage checks and live Gemini test config handling
+- chore: complete config.yml as sole service configuration source
+- refactor(config): add validated flag and unify configuration validation
+- docs: update provider routing plan with detailed config.yml schema
+- refactor: replace CLI config helpers with unified YAML config file loader
+- docs: update README to use YAML config file for service configuration
+
 ## [v0.2.11] - 2026-06-04
 
 ### Changes
