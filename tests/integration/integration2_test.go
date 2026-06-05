@@ -93,12 +93,12 @@ func TestIntegrationConfiguration(testingInstance *testing.T) {
 		{
 			name:        "missing_service_secret",
 			config:      proxy.Configuration{ServiceSecret: constants.EmptyString, OpenAIKey: openAIKeyValue},
-			expectError: "SERVICE_SECRET",
+			expectError: "server.service_secret",
 		},
 		{
 			name:        "missing_openai_key",
 			config:      proxy.Configuration{ServiceSecret: serviceSecretValue, OpenAIKey: constants.EmptyString},
-			expectError: "OPENAI_API_KEY",
+			expectError: "providers.openai.api_key",
 		},
 		{
 			name:           "wrong_key",
