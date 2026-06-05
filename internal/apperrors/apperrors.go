@@ -4,16 +4,16 @@ package apperrors
 import "errors"
 
 const (
-	environmentVariableServiceSecret = "SERVICE_SECRET"
-	environmentVariableOpenAIAPIKey  = "OPENAI_API_KEY"
-	messageSuffixMustBeSet           = " must be set"
-	messageMissingServiceSecret      = environmentVariableServiceSecret + messageSuffixMustBeSet
-	messageMissingOpenAIKey          = environmentVariableOpenAIAPIKey + messageSuffixMustBeSet
+	configurationFieldServiceSecret = "server.service_secret"
+	configurationFieldOpenAIAPIKey  = "providers.openai.api_key"
+	messageSuffixMustBeSet          = " must be set"
+	messageMissingServiceSecret     = configurationFieldServiceSecret + messageSuffixMustBeSet
+	messageMissingOpenAIKey         = configurationFieldOpenAIAPIKey + messageSuffixMustBeSet
 )
 
 var (
-	// ErrMissingServiceSecret is returned when the SERVICE_SECRET environment variable is not defined.
+	// ErrMissingServiceSecret is returned when the service secret configuration field is empty.
 	ErrMissingServiceSecret = errors.New(messageMissingServiceSecret)
-	// ErrMissingOpenAIKey is returned when the OPENAI_API_KEY environment variable is not defined.
+	// ErrMissingOpenAIKey is returned when the OpenAI API key configuration field is empty.
 	ErrMissingOpenAIKey = errors.New(messageMissingOpenAIKey)
 )

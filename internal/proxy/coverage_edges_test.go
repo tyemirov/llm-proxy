@@ -404,12 +404,12 @@ func TestCoverageConfigurationValidationMatrix(t *testing.T) {
 		{
 			name:          "missing service secret",
 			configuration: proxy.Configuration{OpenAIKey: TestAPIKey},
-			expectedError: "SERVICE_SECRET must be set",
+			expectedError: "server.service_secret must be set",
 		},
 		{
 			name:          "missing openai text credential",
 			configuration: proxy.Configuration{ServiceSecret: TestSecret},
-			expectedError: "OPENAI_API_KEY must be set",
+			expectedError: "providers.openai.api_key must be set",
 		},
 		{
 			name: "missing deepseek text credential",
@@ -475,7 +475,7 @@ func TestCoverageConfigurationValidationMatrix(t *testing.T) {
 				RequestTimeoutSeconds:      TestTimeout,
 				UpstreamPollTimeoutSeconds: TestTimeout,
 			},
-			expectedError: "OPENAI_API_KEY must be set",
+			expectedError: "providers.openai.api_key must be set",
 		},
 		{
 			name: "unsupported qwen default dictation",
