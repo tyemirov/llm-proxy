@@ -23,39 +23,64 @@ client.
 
 ## Configuration
 
-The service is configured entirely through command-line flags or environment
-variables:
+The service reads service configuration from `config.yml`. The default path is
+`config.yml` in the current working directory; use `--config /path/config.yml`
+only to select a different file. Command-line flags and environment variables
+are not service configuration sources.
 
-| Flag / Env | Description |
-|------------|-------------|
-| `--service_secret` / `SERVICE_SECRET` | Shared secret required in the `key` query parameter |
-| `--openai_api_key` / `OPENAI_API_KEY` | OpenAI API key used for requests |
-| `--deepseek_api_key` / `DEEPSEEK_API_KEY` | DeepSeek API key used when `provider=deepseek` |
-| `--dashscope_api_key` / `DASHSCOPE_API_KEY` | DashScope API key used when `provider=dashscope` or `provider=qwen` |
-| `--moonshot_api_key` / `MOONSHOT_API_KEY` | Moonshot/Kimi API key used when `provider=moonshot` or `provider=kimi` |
-| `--siliconflow_api_key` / `SILICONFLOW_API_KEY` | SiliconFlow API key used when `provider=siliconflow` |
-| `--zhipu_api_key` / `ZHIPU_API_KEY` | Zhipu/GLM API key used when `provider=zhipu` or `provider=glm` |
-| `--gemini_api_key` / `GEMINI_API_KEY` | Gemini API key used when `provider=gemini` |
-| `--default_provider` / `LLM_PROXY_DEFAULT_PROVIDER` | Default text provider when `provider` is omitted (default `openai`) |
-| `--default_model` / `LLM_PROXY_DEFAULT_MODEL` | Default text model when `model` is omitted for OpenAI (default `gpt-4.1`) |
-| `--default_dictation_provider` / `LLM_PROXY_DEFAULT_DICTATION_PROVIDER` | Default `/dictate` provider when `provider` is omitted (default `openai`) |
-| `--deepseek_base_url` / `DEEPSEEK_BASE_URL` | DeepSeek OpenAI-compatible base URL |
-| `--dashscope_base_url` / `DASHSCOPE_BASE_URL` | DashScope OpenAI-compatible base URL |
-| `--moonshot_base_url` / `MOONSHOT_BASE_URL` | Moonshot OpenAI-compatible base URL |
-| `--siliconflow_base_url` / `SILICONFLOW_BASE_URL` | SiliconFlow OpenAI-compatible base URL |
-| `--siliconflow_transcriptions_url` / `SILICONFLOW_TRANSCRIPTIONS_URL` | SiliconFlow audio transcription URL |
-| `--zhipu_base_url` / `ZHIPU_BASE_URL` | Zhipu OpenAI-compatible base URL |
-| `--gemini_base_url` / `GEMINI_BASE_URL` | Gemini API base URL |
-| `--port` / `HTTP_PORT` | Port for the HTTP server (default `8080`) |
-| `--log_level` / `LOG_LEVEL` | `debug` or `info` (default `info`) |
-| `--system_prompt` / `SYSTEM_PROMPT` | Optional system prompt text |
-| `--workers` / `LLM_PROXY_WORKERS` | Number of worker goroutines (default `4`) |
-| `--queue_size` / `LLM_PROXY_QUEUE_SIZE` | Request queue size (default `100`) |
-| `--request_timeout` / `LLM_PROXY_REQUEST_TIMEOUT_SECONDS` | Overall request timeout in seconds (default `180`) |
-| `--upstream_poll_timeout` / `LLM_PROXY_UPSTREAM_POLL_TIMEOUT_SECONDS` | Poll timeout in seconds after incomplete upstream responses (default `60`) |
-| `--max_prompt_bytes` / `LLM_PROXY_MAX_PROMPT_BYTES` | Max accepted JSON body size for `POST /` prompts (default `4194304`) |
-| `--dictation_model` / `LLM_PROXY_DICTATION_MODEL` | Default model for `/dictate` when query model is not provided (default `gpt-4o-mini-transcribe`) |
-| `--max_input_audio_bytes` / `LLM_PROXY_MAX_INPUT_AUDIO_BYTES` | Max accepted upload size for `/dictate` (default `26214400`) |
+Before parsing YAML, the loader expands `${NAME}` placeholders from process
+environment variables and from an optional `.env` file in the same directory as
+the selected config file. Process environment values override `.env` values.
+Missing placeholders fail startup. The loader does not mutate process
+environment, and all runtime code receives only the validated config value.
+
+```yaml
+server:
+  service_secret: "${SERVICE_SECRET}"
+  port: 8080
+  log_level: info
+  workers: 4
+  queue_size: 100
+  request_timeout_seconds: 180
+  upstream_poll_timeout_seconds: 60
+  max_prompt_bytes: 4194304
+  max_input_audio_bytes: 26214400
+defaults:
+  provider: openai
+  model: gpt-4.1
+  dictation_provider: openai
+  dictation_model: gpt-4o-mini-transcribe
+  system_prompt: ""
+providers:
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+  deepseek:
+    api_key: ""
+    base_url: ""
+  dashscope:
+    api_key: ""
+    base_url: ""
+  moonshot:
+    api_key: ""
+    base_url: ""
+  siliconflow:
+    api_key: ""
+    base_url: ""
+    transcriptions_url: ""
+  zhipu:
+    api_key: ""
+    base_url: ""
+  gemini:
+    api_key: ""
+    base_url: ""
+```
+
+Blank optional values use built-in provider defaults where applicable. Startup
+validates `server.service_secret`, the credential for `defaults.provider`, and
+the credential/endpoint support for `defaults.dictation_provider`. Credentials
+for non-default providers may stay blank; requests selecting those providers
+return `503 Service Unavailable` until the corresponding `api_key` is configured.
+Unknown YAML keys fail startup.
 
 Web search is per request and currently supported only on OpenAI models that
 support the OpenAI web search tool.
@@ -77,22 +102,27 @@ openssl rand -hex 32
 Run the service with OpenAI defaults:
 
 ```shell
-SERVICE_SECRET=mysecret OPENAI_API_KEY=sk-xxxxx \
-  ./llm-proxy --port=8080 --log_level=info
+./llm-proxy --config config.yml
 ```
 
 Run the service with DeepSeek as the default text provider:
 
-```shell
-SERVICE_SECRET=mysecret DEEPSEEK_API_KEY=sk-xxxxx LLM_PROXY_DEFAULT_PROVIDER=deepseek \
-  ./llm-proxy --port=8080 --log_level=info
+```yaml
+defaults:
+  provider: deepseek
+providers:
+  deepseek:
+    api_key: "${DEEPSEEK_API_KEY}"
 ```
 
 Run the service with Gemini as the default text provider:
 
-```shell
-SERVICE_SECRET=mysecret GEMINI_API_KEY=xxxxx LLM_PROXY_DEFAULT_PROVIDER=gemini \
-  ./llm-proxy --port=8080 --log_level=info
+```yaml
+defaults:
+  provider: gemini
+providers:
+  gemini:
+    api_key: "${GEMINI_API_KEY}"
 ```
 
 ## Local Automation
@@ -102,7 +132,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | Command | Purpose |
 |---------|---------|
 | `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), and the 100% coverage-gated Go test suite. |
-| `make test-live-gemini` | Run the current binary against live Gemini using `GEMINI_API_KEY` and `SERVICE_SECRET`; use `LIVE_ENV_FILE=/path/to/env` to load credentials. |
+| `make test-live-gemini` | Generate a temporary config file and run the current binary against live Gemini using `GEMINI_API_KEY` and `SERVICE_SECRET` placeholders; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
 | `make release` | Cut a `v*` release from `master`, update `CHANGELOG.md` when needed, and push the release tag. |
 | `make publish` | Validate the release source and publish `ghcr.io/tyemirov/llm-proxy:<tag>` plus `:latest`. |
 | `make deploy` | Verify the published image and deploy through the sibling `../mprlab-gateway` checkout. |
@@ -150,10 +180,10 @@ curl --get \
 
 Use `POST /` with a JSON body when the prompt is too large for a URL query
 parameter. Authentication still uses the `key` query parameter, which is the
-proxy `SERVICE_SECRET`. Provider selection also stays in the query parameter.
+configured `server.service_secret`. Provider selection also stays in the query parameter.
 Do not send upstream provider secrets in the request body; the proxy reads them
-from server-side configuration. The JSON body is capped by `--max_prompt_bytes`
-/ `LLM_PROXY_MAX_PROMPT_BYTES`.
+from server-side configuration. The JSON body is capped by
+`server.max_prompt_bytes`.
 
 ```shell
 curl -X POST \
@@ -169,7 +199,7 @@ JSON body fields:
 | `prompt` | Yes | none | Full text to send to the LLM. Use this body field for large or non-ASCII prompts. |
 | `model` | No | provider default | Model identifier from the selected provider's supported model list. |
 | `web_search` | No | `false` | Enables OpenAI web search when the selected provider/model supports it. |
-| `system_prompt` | No | configured `SYSTEM_PROMPT` | Per-request system prompt override. |
+| `system_prompt` | No | configured `defaults.system_prompt` | Per-request system prompt override. |
 | `max_tokens` | No | provider default | Positive integer output-token cap for this request. The proxy maps it to OpenAI `max_output_tokens`, OpenAI-compatible `max_tokens`, or Gemini `generationConfig.maxOutputTokens`. |
 
 For `POST /`, `provider` remains a query parameter. Query `model` may override
