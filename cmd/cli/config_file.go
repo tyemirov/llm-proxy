@@ -34,12 +34,11 @@ var (
 
 type fileConfiguration struct {
 	Server    serverConfiguration    `mapstructure:"server"`
-	Defaults  defaultsConfiguration  `mapstructure:"defaults"`
+	Tenants   []tenantConfiguration  `mapstructure:"tenants"`
 	Providers providersConfiguration `mapstructure:"providers"`
 }
 
 type serverConfiguration struct {
-	ServiceSecret              string `mapstructure:"service_secret"`
 	Port                       int    `mapstructure:"port"`
 	LogLevel                   string `mapstructure:"log_level"`
 	Workers                    int    `mapstructure:"workers"`
@@ -50,7 +49,13 @@ type serverConfiguration struct {
 	MaxInputAudioBytes         int64  `mapstructure:"max_input_audio_bytes"`
 }
 
-type defaultsConfiguration struct {
+type tenantConfiguration struct {
+	ID       string               `mapstructure:"id"`
+	Secret   string               `mapstructure:"secret"`
+	Defaults tenantDefaultsConfig `mapstructure:"defaults"`
+}
+
+type tenantDefaultsConfig struct {
 	Provider          string `mapstructure:"provider"`
 	Model             string `mapstructure:"model"`
 	DictationProvider string `mapstructure:"dictation_provider"`
@@ -161,7 +166,7 @@ func expandConfigPlaceholders(configContent string, expansionEnvironment map[str
 
 func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configuration, error) {
 	return proxy.NewConfiguration(proxy.Configuration{
-		ServiceSecret:                configuration.Server.ServiceSecret,
+		Tenants:                      tenantConfigurations(configuration.Tenants),
 		OpenAIKey:                    configuration.Providers.OpenAI.APIKey,
 		DeepSeekKey:                  configuration.Providers.DeepSeek.APIKey,
 		DashScopeKey:                 configuration.Providers.DashScope.APIKey,
@@ -169,9 +174,6 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		SiliconFlowKey:               configuration.Providers.SiliconFlow.APIKey,
 		ZhipuKey:                     configuration.Providers.Zhipu.APIKey,
 		GeminiKey:                    configuration.Providers.Gemini.APIKey,
-		DefaultProvider:              configuration.Defaults.Provider,
-		DefaultModel:                 configuration.Defaults.Model,
-		DefaultDictationProvider:     configuration.Defaults.DictationProvider,
 		DeepSeekBaseURL:              configuration.Providers.DeepSeek.BaseURL,
 		DashScopeBaseURL:             configuration.Providers.DashScope.BaseURL,
 		MoonshotBaseURL:              configuration.Providers.Moonshot.BaseURL,
@@ -181,13 +183,29 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		GeminiBaseURL:                configuration.Providers.Gemini.BaseURL,
 		Port:                         configuration.Server.Port,
 		LogLevel:                     configuration.Server.LogLevel,
-		SystemPrompt:                 configuration.Defaults.SystemPrompt,
 		WorkerCount:                  configuration.Server.Workers,
 		QueueSize:                    configuration.Server.QueueSize,
 		RequestTimeoutSeconds:        configuration.Server.RequestTimeoutSeconds,
 		UpstreamPollTimeoutSeconds:   configuration.Server.UpstreamPollTimeoutSeconds,
 		MaxPromptBytes:               configuration.Server.MaxPromptBytes,
-		DictationModel:               configuration.Defaults.DictationModel,
 		MaxInputAudioBytes:           configuration.Server.MaxInputAudioBytes,
 	})
+}
+
+func tenantConfigurations(rawTenants []tenantConfiguration) []proxy.TenantConfiguration {
+	tenants := make([]proxy.TenantConfiguration, 0, len(rawTenants))
+	for _, rawTenant := range rawTenants {
+		tenants = append(tenants, proxy.TenantConfiguration{
+			ID:     rawTenant.ID,
+			Secret: rawTenant.Secret,
+			Defaults: proxy.TenantDefaults{
+				Provider:          rawTenant.Defaults.Provider,
+				Model:             rawTenant.Defaults.Model,
+				DictationProvider: rawTenant.Defaults.DictationProvider,
+				DictationModel:    rawTenant.Defaults.DictationModel,
+				SystemPrompt:      rawTenant.Defaults.SystemPrompt,
+			},
+		})
+	}
+	return tenants
 }

@@ -20,7 +20,6 @@ func TestRootCommandRunsConfiguredProxyFromConfigFile(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir, `
 server:
-  service_secret: "${P411_SERVICE_SECRET}"
   port: 18080
   log_level: debug
   workers: 2
@@ -29,12 +28,15 @@ server:
   upstream_poll_timeout_seconds: 3
   max_prompt_bytes: 1024
   max_input_audio_bytes: 2048
-defaults:
-  provider: deepseek
-  model: gpt-5.5
-  dictation_provider: openai
-  dictation_model: gpt-4o-transcribe
-  system_prompt: "Be terse."
+tenants:
+  - id: default
+    secret: "${P411_SERVICE_SECRET}"
+    defaults:
+      provider: deepseek
+      model: deepseek-v4-flash
+      dictation_provider: openai
+      dictation_model: gpt-4o-transcribe
+      system_prompt: "Be terse."
 providers:
   openai:
     api_key: "${P411_OPENAI_KEY}"
@@ -65,14 +67,14 @@ P411_GEMINI_KEY=sk-gemini
 	if executeError != nil {
 		t.Fatalf("ExecuteC error: %v", executeError)
 	}
-	if capturedConfiguration.ServiceSecret != "process-secret" {
-		t.Fatalf("serviceSecret=%q", capturedConfiguration.ServiceSecret)
+	if capturedConfiguration.Tenants[0].Secret != "process-secret" {
+		t.Fatalf("tenantSecret=%q", capturedConfiguration.Tenants[0].Secret)
 	}
 	if capturedConfiguration.OpenAIKey != "sk-openai" {
 		t.Fatalf("openAIKey=%q", capturedConfiguration.OpenAIKey)
 	}
-	if capturedConfiguration.DefaultProvider != proxy.ProviderNameDeepSeek {
-		t.Fatalf("defaultProvider=%q", capturedConfiguration.DefaultProvider)
+	if capturedConfiguration.Tenants[0].Defaults.Provider != proxy.ProviderNameDeepSeek {
+		t.Fatalf("tenantDefaultProvider=%q", capturedConfiguration.Tenants[0].Defaults.Provider)
 	}
 	if capturedConfiguration.Port != 18080 {
 		t.Fatalf("port=%d", capturedConfiguration.Port)
@@ -89,8 +91,15 @@ func TestRootCommandRunsProductionLoggerFromConfigFile(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir, `
 server:
-  service_secret: "sekret"
   log_level: info
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: openai
+      model: gpt-4.1
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
 providers:
   openai:
     api_key: "sk-openai"
@@ -145,7 +154,15 @@ func TestRootCommandRejectsMissingConfigPlaceholder(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir, `
 server:
-  service_secret: "${P411_MISSING_SERVICE_SECRET}"
+  log_level: info
+tenants:
+  - id: default
+    secret: "${P411_MISSING_SERVICE_SECRET}"
+    defaults:
+      provider: openai
+      model: gpt-4.1
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
 providers:
   openai:
     api_key: "sk-openai"
@@ -171,7 +188,15 @@ func TestRootCommandRejectsUnreadableDotEnv(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir, `
 server:
-  service_secret: "sekret"
+  log_level: info
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: openai
+      model: gpt-4.1
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
 providers:
   openai:
     api_key: "sk-openai"
@@ -190,8 +215,8 @@ providers:
 func TestRootCommandRejectsInvalidYAML(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir, `
-server:
-  service_secret: [
+tenants:
+  - id: [
 `)
 	withServeProxy(t, failingServeProxy(t))
 
@@ -205,8 +230,15 @@ func TestRootCommandRejectsUnknownConfigKeys(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir, `
 server:
-  service_secret: "sekret"
   unsupported: true
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: openai
+      model: gpt-4.1
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
 providers:
   openai:
     api_key: "sk-openai"
@@ -222,11 +254,14 @@ providers:
 func TestRootCommandRejectsMissingDefaultProviderCredential(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir, `
-server:
-  service_secret: "sekret"
-defaults:
-  provider: gemini
-  dictation_provider: openai
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: gemini
+      model: gemini-3.5-flash
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
 providers:
   openai:
     api_key: "sk-openai"
