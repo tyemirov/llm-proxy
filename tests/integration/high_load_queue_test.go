@@ -71,7 +71,7 @@ func TestIntegrationHighLoadQueue(testingInstance *testing.T) {
 	client := makeBlockingHTTPClient(testingInstance, endpoints, upstreamRequestStarted, releaseResponses)
 	configureProxy(testingInstance, client, endpoints)
 	router, buildRouterError := proxy.BuildRouter(proxy.Configuration{
-		ServiceSecret:         serviceSecretValue,
+		Tenants:               proxy.SingleTenantConfigurations("integration", serviceSecretValue),
 		OpenAIKey:             openAIKeyValue,
 		LogLevel:              logLevelDebug,
 		WorkerCount:           singleWorkerCount,

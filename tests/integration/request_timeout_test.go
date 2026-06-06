@@ -100,7 +100,7 @@ func TestIntegrationGatewayContextTimeoutCancelsUpstreamRequest(testingInstance 
 	loggerInstance := zap.New(observedCore)
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
 	router, buildError := proxy.BuildRouter(proxy.Configuration{
-		ServiceSecret:                serviceSecretValue,
+		Tenants:                      proxy.SingleTenantConfigurations("integration", serviceSecretValue),
 		OpenAIKey:                    openAIKeyValue,
 		LogLevel:                     logLevelDebug,
 		WorkerCount:                  1,
@@ -108,10 +108,6 @@ func TestIntegrationGatewayContextTimeoutCancelsUpstreamRequest(testingInstance 
 		RequestTimeoutSeconds:        gatewayContextProxyTimeout,
 		UpstreamPollTimeoutSeconds:   gatewayContextProxyTimeout,
 		Endpoints:                    endpoints,
-		DefaultDictationProvider:     proxy.ProviderNameOpenAI,
-		DefaultProvider:              proxy.ProviderNameOpenAI,
-		DefaultModel:                 proxy.DefaultModel,
-		DictationModel:               proxy.DefaultDictationModel,
 		MaxPromptBytes:               proxy.DefaultMaxPromptBytes,
 		MaxInputAudioBytes:           proxy.DefaultMaxInputAudioBytes,
 		DeepSeekBaseURL:              "https://deepseek.invalid",
@@ -167,7 +163,7 @@ func TestIntegrationUpstreamRequestTimeoutTriggersGatewayTimeout(testingInstance
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
 			endpoints := proxy.NewEndpoints()
 			configureProxy(subTest, makeTimeoutHTTPClient(subTest, endpoints), endpoints)
-			router, buildError := proxy.BuildRouter(proxy.Configuration{ServiceSecret: serviceSecretValue, OpenAIKey: openAIKeyValue, LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 8, RequestTimeoutSeconds: timeoutRequestTimeout, Endpoints: endpoints}, newLogger(subTest))
+			router, buildError := proxy.BuildRouter(proxy.Configuration{Tenants: proxy.SingleTenantConfigurations("integration", serviceSecretValue), OpenAIKey: openAIKeyValue, LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 8, RequestTimeoutSeconds: timeoutRequestTimeout, Endpoints: endpoints}, newLogger(subTest))
 			if buildError != nil {
 				subTest.Fatalf("BuildRouter failed: %v", buildError)
 			}

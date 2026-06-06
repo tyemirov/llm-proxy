@@ -127,12 +127,12 @@ func newIntegrationServer(testingInstance *testing.T, openAIServer *httptest.Ser
 	loggerInstance, _ := zap.NewDevelopment()
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
 	router, buildRouterError := proxy.BuildRouter(proxy.Configuration{
-		ServiceSecret: integrationServiceSecret,
-		OpenAIKey:     integrationOpenAIKey,
-		LogLevel:      logLevelDebug,
-		WorkerCount:   1,
-		QueueSize:     4,
-		Endpoints:     endpoints,
+		Tenants:     proxy.SingleTenantConfigurations("integration", integrationServiceSecret),
+		OpenAIKey:   integrationOpenAIKey,
+		LogLevel:    logLevelDebug,
+		WorkerCount: 1,
+		QueueSize:   4,
+		Endpoints:   endpoints,
 	}, loggerInstance.Sugar())
 	if buildRouterError != nil {
 		testingInstance.Fatalf(buildRouterErrorFormat, buildRouterError)

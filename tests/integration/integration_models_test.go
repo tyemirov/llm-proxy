@@ -25,12 +25,12 @@ func TestIntegrationModelSpecSuppression(testingInstance *testing.T) {
 			client, captured := makeHTTPClient(subTest, true, endpoints)
 			configureProxy(subTest, client, endpoints)
 			router, buildRouterError := proxy.BuildRouter(proxy.Configuration{
-				ServiceSecret: serviceSecretValue,
-				OpenAIKey:     openAIKeyValue,
-				LogLevel:      logLevelDebug,
-				WorkerCount:   1,
-				QueueSize:     8,
-				Endpoints:     endpoints,
+				Tenants:     proxy.SingleTenantConfigurations("integration", serviceSecretValue),
+				OpenAIKey:   openAIKeyValue,
+				LogLevel:    logLevelDebug,
+				WorkerCount: 1,
+				QueueSize:   8,
+				Endpoints:   endpoints,
 			}, newLogger(subTest))
 			if buildRouterError != nil {
 				subTest.Fatalf(buildRouterFailedFormat, buildRouterError)
@@ -75,12 +75,12 @@ func TestIntegrationGPT5TemperatureSuppression(testingInstance *testing.T) {
 	client, captured := makeHTTPClient(testingInstance, true, endpoints)
 	configureProxy(testingInstance, client, endpoints)
 	router, buildRouterError := proxy.BuildRouter(proxy.Configuration{
-		ServiceSecret: serviceSecretValue,
-		OpenAIKey:     openAIKeyValue,
-		LogLevel:      logLevelDebug,
-		WorkerCount:   1,
-		QueueSize:     8,
-		Endpoints:     endpoints,
+		Tenants:     proxy.SingleTenantConfigurations("integration", serviceSecretValue),
+		OpenAIKey:   openAIKeyValue,
+		LogLevel:    logLevelDebug,
+		WorkerCount: 1,
+		QueueSize:   8,
+		Endpoints:   endpoints,
 	}, newLogger(testingInstance))
 	if buildRouterError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildRouterError)

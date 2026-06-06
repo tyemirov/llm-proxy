@@ -79,12 +79,12 @@ func TestIntegration_OmitsDisallowedParameters(testingInstance *testing.T) {
 			defer logger.Sync()
 
 			router, buildRouterError := proxy.BuildRouter(proxy.Configuration{
-				ServiceSecret: serviceSecret,
-				OpenAIKey:     openAIKey,
-				LogLevel:      logLevel,
-				WorkerCount:   1,
-				QueueSize:     4,
-				Endpoints:     endpoints,
+				Tenants:     proxy.SingleTenantConfigurations("capabilities", serviceSecret),
+				OpenAIKey:   openAIKey,
+				LogLevel:    logLevel,
+				WorkerCount: 1,
+				QueueSize:   4,
+				Endpoints:   endpoints,
 			}, logger.Sugar())
 			if buildRouterError != nil {
 				subTestInstance.Fatalf("BuildRouter error: %v", buildRouterError)

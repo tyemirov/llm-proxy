@@ -64,7 +64,7 @@ func newRouterWithStubbedOpenAI(testingInstance *testing.T, modelsBody, response
 	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
 	router, buildError := proxy.BuildRouter(proxy.Configuration{
-		ServiceSecret:         "sekret",
+		Tenants:               proxy.SingleTenantConfigurations("test", "sekret"),
 		OpenAIKey:             "sk-test",
 		LogLevel:              "debug",
 		WorkerCount:           workerCount,
