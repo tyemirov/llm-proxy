@@ -497,6 +497,9 @@ func (client *OpenAIClient) performResponsesRequest(httpRequest *http.Request, s
 		var transportError error
 		statusCode, responseBytes, latencyMillis, transportError = utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEvent)
 		if transportError != nil {
+			if errors.Is(transportError, context.Canceled) || errors.Is(transportError, context.DeadlineExceeded) {
+				return backoff.Permanent(transportError)
+			}
 			return transportError
 		}
 		// Retry on server errors (5xx) and rate limit errors (429).

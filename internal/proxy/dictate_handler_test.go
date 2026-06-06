@@ -2,6 +2,7 @@ package proxy_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -10,7 +11,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
@@ -258,14 +258,13 @@ func TestDictateHandlerUpstreamFailures(t *testing.T) {
 	})
 
 	t.Run("upstream timeout returns gateway timeout", func(subTest *testing.T) {
-		upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-			time.Sleep(1500 * time.Millisecond)
-			responseWriter.Header().Set("Content-Type", "application/json")
-			_, _ = responseWriter.Write([]byte(`{"text":"late"}`))
-		}))
-		defer upstreamServer.Close()
+		previousClient := proxy.HTTPClient
+		proxy.HTTPClient = coverageHTTPDoer(func(request *http.Request) (*http.Response, error) {
+			return nil, context.DeadlineExceeded
+		})
+		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 
-		router := newDictationRouter(subTest, upstreamServer.URL, 1)
+		router := newDictationRouter(subTest, "https://transcriptions.invalid", TestTimeout)
 		body, contentType := buildMultipartAudioRequest(subTest, "audio")
 		request := httptest.NewRequest(http.MethodPost, "/dictate?key="+TestSecret, body)
 		request.Header.Set("Content-Type", contentType)
