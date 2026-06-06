@@ -21,7 +21,7 @@ Options:
   --help                Show this help text
 
 Environment:
-  DEPLOY_CI_TIMEOUT_SECONDS  make ci timeout in seconds. Default: $LLM_PROXY_CI_TIMEOUT_SECONDS or 1200
+  DEPLOY_CI_TIMEOUT_SECONDS  make ci timeout in seconds. Default: $LLM_PROXY_CI_TIMEOUT_SECONDS or 350
 USAGE
 }
 
@@ -57,7 +57,7 @@ SKIP_IMAGE_VERIFY="false"
 SKIP_GATEWAY="false"
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-master}"
 DEPLOY_REMOTE="${DEPLOY_REMOTE:-origin}"
-CI_TIMEOUT_SECONDS="${DEPLOY_CI_TIMEOUT_SECONDS:-${LLM_PROXY_CI_TIMEOUT_SECONDS:-1200}}"
+CI_TIMEOUT_SECONDS="${DEPLOY_CI_TIMEOUT_SECONDS:-${LLM_PROXY_CI_TIMEOUT_SECONDS:-350}}"
 
 resolve_release_tag() {
   if [[ -n "${TAG}" ]]; then

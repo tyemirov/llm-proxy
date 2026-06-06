@@ -27,7 +27,7 @@ Options:
   --help                      Show this help text
 
 Environment:
-  RELEASE_CI_TIMEOUT_SECONDS  make ci timeout in seconds. Default: $LLM_PROXY_CI_TIMEOUT_SECONDS or 1200
+  RELEASE_CI_TIMEOUT_SECONDS  make ci timeout in seconds. Default: $LLM_PROXY_CI_TIMEOUT_SECONDS or 350
 USAGE
 }
 
@@ -46,7 +46,7 @@ DRY_RUN="false"
 SKIP_CI="false"
 RELEASE_REMOTE="${RELEASE_REMOTE:-origin}"
 RELEASE_BRANCH="${RELEASE_BRANCH:-master}"
-CI_TIMEOUT_SECONDS="${RELEASE_CI_TIMEOUT_SECONDS:-${LLM_PROXY_CI_TIMEOUT_SECONDS:-1200}}"
+CI_TIMEOUT_SECONDS="${RELEASE_CI_TIMEOUT_SECONDS:-${LLM_PROXY_CI_TIMEOUT_SECONDS:-350}}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
