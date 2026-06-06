@@ -25,7 +25,19 @@ Options:
   --remote <value>            Git remote. Default: $RELEASE_REMOTE or origin
   --branch <value>            Release branch. Default: $RELEASE_BRANCH or master
   --help                      Show this help text
+
+Environment:
+  RELEASE_CI_TIMEOUT_SECONDS  make ci timeout in seconds. Default: $LLM_PROXY_CI_TIMEOUT_SECONDS or 1200
 USAGE
+}
+
+require_positive_integer() {
+  local name="$1"
+  local value="$2"
+  if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "error: ${name} must be a positive integer number of seconds (got: ${value})" >&2
+    exit 1
+  fi
 }
 
 BUMP="${RELEASE_BUMP:-patch}"
@@ -34,6 +46,7 @@ DRY_RUN="false"
 SKIP_CI="false"
 RELEASE_REMOTE="${RELEASE_REMOTE:-origin}"
 RELEASE_BRANCH="${RELEASE_BRANCH:-master}"
+CI_TIMEOUT_SECONDS="${RELEASE_CI_TIMEOUT_SECONDS:-${LLM_PROXY_CI_TIMEOUT_SECONDS:-1200}}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -81,6 +94,7 @@ case "${BUMP}" in
   patch|minor|major) ;;
   *) echo "error: --bump must be patch, minor, or major" >&2; exit 1 ;;
 esac
+require_positive_integer "RELEASE_CI_TIMEOUT_SECONDS" "${CI_TIMEOUT_SECONDS}"
 
 command -v git >/dev/null 2>&1 || { echo "error: git is required" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "error: python3 is required" >&2; exit 1; }
@@ -157,8 +171,8 @@ if [[ "${DRY_RUN}" == "true" ]]; then
 fi
 
 if [[ "${SKIP_CI}" != "true" ]]; then
-  echo "==> [release] Running make ci"
-  timeout -k 350s -s SIGKILL 350s make ci
+  echo "==> [release] Running make ci (timeout ${CI_TIMEOUT_SECONDS}s)"
+  timeout -k "${CI_TIMEOUT_SECONDS}s" -s SIGKILL "${CI_TIMEOUT_SECONDS}s" make ci
 fi
 
 release_date="$(date +%Y-%m-%d)"

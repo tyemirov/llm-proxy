@@ -19,7 +19,19 @@ Options:
   --skip-image-verify   Skip release/latest image digest verification
   --skip-gateway        Skip gateway deployment
   --help                Show this help text
+
+Environment:
+  DEPLOY_CI_TIMEOUT_SECONDS  make ci timeout in seconds. Default: $LLM_PROXY_CI_TIMEOUT_SECONDS or 1200
 USAGE
+}
+
+require_positive_integer() {
+  local name="$1"
+  local value="$2"
+  if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "error: ${name} must be a positive integer number of seconds (got: ${value})" >&2
+    exit 1
+  fi
 }
 
 env_or_default() {
@@ -45,6 +57,7 @@ SKIP_IMAGE_VERIFY="false"
 SKIP_GATEWAY="false"
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-master}"
 DEPLOY_REMOTE="${DEPLOY_REMOTE:-origin}"
+CI_TIMEOUT_SECONDS="${DEPLOY_CI_TIMEOUT_SECONDS:-${LLM_PROXY_CI_TIMEOUT_SECONDS:-1200}}"
 
 resolve_release_tag() {
   if [[ -n "${TAG}" ]]; then
@@ -106,6 +119,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 command -v git >/dev/null 2>&1 || { echo "error: git is required" >&2; exit 1; }
+require_positive_integer "DEPLOY_CI_TIMEOUT_SECONDS" "${CI_TIMEOUT_SECONDS}"
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "${repo_root}"
@@ -161,8 +175,8 @@ else
 fi
 
 if [[ "${SKIP_CI}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then
-  echo "==> [deploy] Running make ci before deployment"
-  timeout -k 350s -s SIGKILL 350s make ci
+  echo "==> [deploy] Running make ci before deployment (timeout ${CI_TIMEOUT_SECONDS}s)"
+  timeout -k "${CI_TIMEOUT_SECONDS}s" -s SIGKILL "${CI_TIMEOUT_SECONDS}s" make ci
 fi
 
 if [[ "${SKIP_IMAGE_VERIFY}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then
