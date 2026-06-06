@@ -11,6 +11,7 @@ const (
 	contentTypeHeaderKey = "Content-Type"
 	mimeApplicationJSON  = "application/json"
 	minimumExpectedCalls = 2
+	retryTimeoutSeconds  = 1
 )
 
 // TestOpenAIResponsesRetries verifies that the proxy retries upstream server errors and ultimately returns HTTP 504.
@@ -30,7 +31,7 @@ func TestOpenAIResponsesRetries(testingInstance *testing.T) {
 	}))
 	testingInstance.Cleanup(openAIServer.Close)
 
-	applicationServer := newIntegrationServerWithTimeout(testingInstance, openAIServer, 4)
+	applicationServer := newIntegrationServerWithTimeout(testingInstance, openAIServer, retryTimeoutSeconds)
 	requestURL := applicationServer.URL + "?prompt=ping&key=" + integrationServiceSecret
 	httpResponse, requestError := http.Get(requestURL)
 	if requestError != nil {

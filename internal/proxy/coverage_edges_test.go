@@ -32,6 +32,7 @@ const (
 	testHeaderLLMProxyRequestTokens  = "X-LLM-Proxy-Request-Tokens"
 	testHeaderLLMProxyResponseTokens = "X-LLM-Proxy-Response-Tokens"
 	testHeaderLLMProxyTotalTokens    = "X-LLM-Proxy-Total-Tokens"
+	coverageShortRequestTimeout      = 25 * time.Millisecond
 )
 
 func (httpDoer coverageHTTPDoer) Do(httpRequest *http.Request) (*http.Response, error) {
@@ -98,6 +99,25 @@ func performCoverageTextRequest(t *testing.T, router http.Handler, queryParamete
 	}
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, request)
+	return responseRecorder.Code, responseRecorder.Body.String(), responseRecorder.Header().Get("Content-Type")
+}
+
+func performCoverageTextRequestWithTimeout(t *testing.T, router http.Handler, queryParameters url.Values, acceptHeader string, timeoutDuration time.Duration) (int, string, string) {
+	t.Helper()
+	if queryParameters.Get("key") == "" {
+		queryParameters.Set("key", TestSecret)
+	}
+	if queryParameters.Get("prompt") == "" {
+		queryParameters.Set("prompt", TestPrompt)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+	if acceptHeader != "" {
+		request.Header.Set("Accept", acceptHeader)
+	}
+	requestContext, cancelRequest := context.WithTimeout(request.Context(), timeoutDuration)
+	defer cancelRequest()
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, request.WithContext(requestContext))
 	return responseRecorder.Code, responseRecorder.Body.String(), responseRecorder.Header().Get("Content-Type")
 }
 
@@ -1375,7 +1395,6 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 			wantStatus int
 		}{
 			{name: "unknown model", baseURL: "https://deepseek.invalid", model: "unknown-model", wantStatus: http.StatusBadRequest},
-			{name: "blank model uses provider default", baseURL: "https://deepseek.invalid", model: " ", wantStatus: http.StatusGatewayTimeout},
 			{name: "invalid provider base URL", baseURL: "http://[::1", model: proxy.ModelNameDeepSeekV4Flash, wantStatus: http.StatusBadGateway},
 		}
 		for _, testCase := range testCases {
@@ -1402,6 +1421,42 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		}
 	})
 
+	t.Run("blank model uses provider default", func(subTest *testing.T) {
+		var capturedPayload map[string]any
+		upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			bodyBytes, readError := io.ReadAll(httpRequest.Body)
+			if readError != nil {
+				subTest.Fatalf("read body: %v", readError)
+			}
+			if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+				subTest.Fatalf("unmarshal body: %v", unmarshalError)
+			}
+			_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"default ok"}}]}`))
+		}))
+		subTest.Cleanup(upstreamServer.Close)
+		router := coverageRouter(subTest, proxy.Configuration{
+			ServiceSecret:              TestSecret,
+			OpenAIKey:                  TestAPIKey,
+			DeepSeekKey:                testDeepSeekKey,
+			DeepSeekBaseURL:            upstreamServer.URL,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      TestTimeout,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+		})
+		queryParameters := url.Values{}
+		queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
+		queryParameters.Set("model", " ")
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK {
+			subTest.Fatalf("status=%d want=%d body=%s", statusCode, http.StatusOK, body)
+		}
+		if capturedPayload["model"] != proxy.ModelNameDeepSeekV4Flash {
+			subTest.Fatalf("model=%v want=%s", capturedPayload["model"], proxy.ModelNameDeepSeekV4Flash)
+		}
+	})
+
 	t.Run("provider non deadline transport error maps to bad gateway", func(subTest *testing.T) {
 		previousClient := proxy.HTTPClient
 		proxy.HTTPClient = &http.Client{Transport: coverageRoundTripper(func(httpRequest *http.Request) (*http.Response, error) {
@@ -1421,7 +1476,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		})
 		queryParameters := url.Values{}
 		queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
-		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		statusCode, _, _ := performCoverageTextRequestWithTimeout(subTest, router, queryParameters, "", coverageShortRequestTimeout)
 		if statusCode != http.StatusGatewayTimeout {
 			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
 		}
@@ -1743,7 +1798,7 @@ func TestCoverageHTTPUtilityReadFailure(t *testing.T) {
 		UpstreamPollTimeoutSeconds: TestTimeout,
 	})
 	queryParameters := url.Values{}
-	statusCode, _, _ := performCoverageTextRequest(t, router, queryParameters, "")
+	statusCode, _, _ := performCoverageTextRequestWithTimeout(t, router, queryParameters, "", coverageShortRequestTimeout)
 	if statusCode != http.StatusGatewayTimeout {
 		t.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
 	}

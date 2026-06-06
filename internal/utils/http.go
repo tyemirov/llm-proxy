@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"context"
+	"errors"
 	"io"
 	"net/http"
 	"sync"
@@ -57,6 +59,9 @@ func PerformHTTPRequest(executeRequest func(*http.Request) (*http.Response, erro
 		if httpError != nil {
 			if structuredLogger != nil {
 				structuredLogger.Errorw(logEventOnTransportError, constants.LogFieldError, httpError)
+			}
+			if errors.Is(httpError, context.Canceled) || errors.Is(httpError, context.DeadlineExceeded) {
+				return backoff.Permanent(httpError)
 			}
 			return httpError
 		}

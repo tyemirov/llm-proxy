@@ -137,11 +137,11 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make publish` | Validate the release source and publish `ghcr.io/tyemirov/llm-proxy:<tag>` plus `:latest`. |
 | `make deploy` | Verify the published image and deploy through the sibling `../mprlab-gateway` checkout. |
 
-The release lifecycle commands wrap their local `make ci` gate with a
-1200-second timeout by default. Override all three with
-`LLM_PROXY_CI_TIMEOUT_SECONDS=<seconds>`, or use the command-specific
-`RELEASE_CI_TIMEOUT_SECONDS`, `PUBLISH_CI_TIMEOUT_SECONDS`, and
-`DEPLOY_CI_TIMEOUT_SECONDS` variables.
+The release lifecycle commands wrap their local `make ci` gate with the
+standard 350-second timeout by default. For exceptional local diagnostics,
+override all three with `LLM_PROXY_CI_TIMEOUT_SECONDS=<seconds>`, or use the
+command-specific `RELEASE_CI_TIMEOUT_SECONDS`, `PUBLISH_CI_TIMEOUT_SECONDS`,
+and `DEPLOY_CI_TIMEOUT_SECONDS` variables.
 
 `llm-proxy` is a gateway-local service in `mprlab-gateway`, so `make deploy`
 defaults to the gateway `deploy-gateway` target. Override the checkout or target

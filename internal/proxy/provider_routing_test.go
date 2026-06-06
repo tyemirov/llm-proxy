@@ -2,6 +2,7 @@ package proxy_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -656,8 +657,10 @@ func TestProviderRoutingMapsGeminiTransportErrors(t *testing.T) {
 		}
 
 		request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&provider=gemini", nil)
+		requestContext, cancelRequest := context.WithTimeout(request.Context(), coverageShortRequestTimeout)
+		defer cancelRequest()
 		responseRecorder := httptest.NewRecorder()
-		router.ServeHTTP(responseRecorder, request)
+		router.ServeHTTP(responseRecorder, request.WithContext(requestContext))
 		if responseRecorder.Code != http.StatusGatewayTimeout {
 			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusGatewayTimeout, responseRecorder.Body.String())
 		}

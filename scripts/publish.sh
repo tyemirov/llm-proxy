@@ -26,7 +26,7 @@ Options:
   --help                Show this help text
 
 Environment:
-  PUBLISH_CI_TIMEOUT_SECONDS  make ci timeout in seconds. Default: $LLM_PROXY_CI_TIMEOUT_SECONDS or 1200
+  PUBLISH_CI_TIMEOUT_SECONDS  make ci timeout in seconds. Default: $LLM_PROXY_CI_TIMEOUT_SECONDS or 350
 USAGE
 }
 
@@ -49,7 +49,7 @@ USERNAME="${GHCR_USERNAME:-}"
 TOKEN="${GHCR_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
 PUBLISH_BRANCH="${PUBLISH_BRANCH:-master}"
 PUBLISH_REMOTE="${PUBLISH_REMOTE:-origin}"
-CI_TIMEOUT_SECONDS="${PUBLISH_CI_TIMEOUT_SECONDS:-${LLM_PROXY_CI_TIMEOUT_SECONDS:-1200}}"
+CI_TIMEOUT_SECONDS="${PUBLISH_CI_TIMEOUT_SECONDS:-${LLM_PROXY_CI_TIMEOUT_SECONDS:-350}}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

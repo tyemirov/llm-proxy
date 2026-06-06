@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,14 +17,15 @@ import (
 const (
 	modelsListBody               = `{"data":[{"id":"` + proxy.ModelNameGPT41 + `"}]}`
 	expectedResponseBody         = "SLOW_OK"
-	responseDelay                = 31 * time.Second
-	httpClientTimeout            = responseDelay + 5*time.Second
 	requestTimeoutSecondsDefault = 40
+	responseReadyAssertion       = "response returned before upstream release"
+	responseReleaseTimeout       = 2 * time.Second
 )
 
-// makeSlowHTTPClient returns an HTTP client that simulates a delayed upstream response.
-func makeSlowHTTPClient(testingInstance *testing.T, endpoints *proxy.Endpoints) *http.Client {
+// makeControlledResponseHTTPClient returns an HTTP client whose response waits for explicit release.
+func makeControlledResponseHTTPClient(testingInstance *testing.T, endpoints *proxy.Endpoints, upstreamRequestStarted chan<- struct{}, releaseResponse <-chan struct{}) *http.Client {
 	testingInstance.Helper()
+	var closeStartedOnce sync.Once
 	return &http.Client{
 		Transport: roundTripperFunc(func(httpRequest *http.Request) (*http.Response, error) {
 			switch {
@@ -32,25 +34,33 @@ func makeSlowHTTPClient(testingInstance *testing.T, endpoints *proxy.Endpoints) 
 			case strings.HasPrefix(httpRequest.URL.String(), endpoints.GetModelsURL()+"/"):
 				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(metadataTemperatureTools)), Header: make(http.Header)}, nil
 			case httpRequest.URL.String() == endpoints.GetResponsesURL():
-				time.Sleep(responseDelay)
-				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"output_text":"` + expectedResponseBody + `"}`)), Header: make(http.Header)}, nil
+				closeStartedOnce.Do(func() { close(upstreamRequestStarted) })
+				select {
+				case <-httpRequest.Context().Done():
+					return nil, httpRequest.Context().Err()
+				case <-releaseResponse:
+					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"output_text":"` + expectedResponseBody + `"}`)), Header: make(http.Header)}, nil
+				}
 			default:
 				testingInstance.Fatalf(unexpectedRequestFormat, httpRequest.URL.String())
 				return nil, nil
 			}
 		}),
-		Timeout: httpClientTimeout,
 	}
 }
 
-// TestIntegrationResponseDeliveredAfterDelay verifies responses are sent after long upstream delays.
-func TestIntegrationResponseDeliveredAfterDelay(testingInstance *testing.T) {
+// TestIntegrationResponseDeliveredAfterUpstreamRelease verifies pending upstream responses are delivered before the configured request timeout.
+func TestIntegrationResponseDeliveredAfterUpstreamRelease(testingInstance *testing.T) {
 	gin.SetMode(gin.TestMode)
 	testCases := []struct{ name string }{{name: "delayed_response"}}
 	for _, testCase := range testCases {
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
+			upstreamRequestStarted := make(chan struct{})
+			releaseResponse := make(chan struct{})
+			responseReturned := make(chan *http.Response, 1)
+			requestErrors := make(chan error, 1)
 			endpoints := proxy.NewEndpoints()
-			configureProxy(subTest, makeSlowHTTPClient(subTest, endpoints), endpoints)
+			configureProxy(subTest, makeControlledResponseHTTPClient(subTest, endpoints, upstreamRequestStarted, releaseResponse), endpoints)
 			router, buildError := proxy.BuildRouter(proxy.Configuration{ServiceSecret: serviceSecretValue, OpenAIKey: openAIKeyValue, LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 8, RequestTimeoutSeconds: requestTimeoutSecondsDefault, Endpoints: endpoints}, newLogger(subTest))
 			if buildError != nil {
 				subTest.Fatalf(buildRouterFailedFormat, buildError)
@@ -62,9 +72,40 @@ func TestIntegrationResponseDeliveredAfterDelay(testingInstance *testing.T) {
 			queryValues.Set(promptQueryParameter, promptValue)
 			queryValues.Set(keyQueryParameter, serviceSecretValue)
 			requestURL.RawQuery = queryValues.Encode()
-			httpResponse, requestError := http.Get(requestURL.String())
-			if requestError != nil {
+
+			go func() {
+				httpResponse, requestError := server.Client().Get(requestURL.String())
+				if requestError != nil {
+					requestErrors <- requestError
+					return
+				}
+				responseReturned <- httpResponse
+			}()
+
+			select {
+			case <-upstreamRequestStarted:
+			case <-time.After(responseReleaseTimeout):
+				subTest.Fatal("upstream response request was not observed")
+			}
+			select {
+			case httpResponse := <-responseReturned:
+				if httpResponse != nil {
+					httpResponse.Body.Close()
+				}
+				subTest.Fatal(responseReadyAssertion)
+			case requestError := <-requestErrors:
 				subTest.Fatalf(getFailedFormat, requestError)
+			default:
+			}
+			close(releaseResponse)
+
+			var httpResponse *http.Response
+			select {
+			case httpResponse = <-responseReturned:
+			case requestError := <-requestErrors:
+				subTest.Fatalf(getFailedFormat, requestError)
+			case <-time.After(responseReleaseTimeout):
+				subTest.Fatal("released upstream response was not delivered")
 			}
 			defer httpResponse.Body.Close()
 			if httpResponse.StatusCode != http.StatusOK {

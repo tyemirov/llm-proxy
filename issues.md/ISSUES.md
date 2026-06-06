@@ -78,6 +78,15 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
 
 ## Maintenance
 
+- [x] [M417] (P1) Refactor slow release-gate tests instead of extending the CI timeout.
+  `make release` still timed out after the release lifecycle timeout was extended to 1200 seconds because the Go integration suite can spend long periods in fixed sleeps and retry waits before the coverage summary and Python tests run. The release gate should be made deterministic by refactoring the slow test fixtures, not by extending the default release timeout.
+  Acceptance criteria:
+  1. Release, publish, and deploy local `make ci` wrappers default back to the original 350-second gate while retaining explicit operator overrides.
+  2. Long-running integration tests stop sleeping for fixed multi-second or 30-second intervals when a channel-controlled upstream fixture can prove the same black-box route behavior.
+  3. The integration package runtime drops materially while preserving the 100% Go coverage gate.
+  4. Focused Go integration coverage and full `make ci` pass locally.
+  Resolution: Restored the release, publish, and deploy CI wrappers to the standard 350-second default while keeping shared and command-specific timeout overrides for exceptional diagnostics. Refactored slow Go fixtures to use channel-controlled upstream release/cancellation, one-slot queue saturation, short request contexts for retry-mapping checks, and injected deadline errors for dictation timeout coverage. Request cancellation and deadline errors now stop retry loops immediately. The post-test coverage binary probes also redirect stdin from `/dev/null` and fail explicitly on timeout so interactive `make ci` cannot block inside `llm-proxy-client.cover`. Validation passed with `timeout -k 120s -s SIGKILL 120s go test -count=1 ./internal/utils ./internal/proxy ./tests/integration`, `timeout -k 120s -s SIGKILL 120s make go-test` from a TTY (total coverage 100.0%, real 0m8.946s), and `timeout -k 350s -s SIGKILL 350s make ci` (real 0m13.283s).
+
 - [x] [M416] (P1) Keep release lifecycle CI wrappers aligned with the expanded Makefile gate.
   `make release` still wrapped `make ci` in a hard-coded 350-second timeout after the Makefile gate expanded to include Python mypy and pytest. Release validation can finish the Go coverage gate and then be killed by the wrapper before the remaining `make ci` steps complete. `make publish` and `make deploy` use the same local CI wrapper and should share the same operator timeout contract.
   Acceptance criteria:
