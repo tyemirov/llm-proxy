@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.14] - 2026-06-06
+
+### Changes
+- chore: remove stale Python bytecode files from repository
+
 ## [v0.2.13] - 2026-06-06
 
 ### Changes
