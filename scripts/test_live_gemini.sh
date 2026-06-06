@@ -83,12 +83,15 @@ GOEXPERIMENT= CGO_ENABLED=0 "${GO_BIN}" build -o "${BINARY_PATH}" ./cmd/cli
 
 cat > "${CONFIG_PATH}" <<'CONFIG'
 server:
-  service_secret: "${SERVICE_SECRET}"
   port: ${LLM_PROXY_LIVE_PORT}
   log_level: info
-defaults:
-  provider: gemini
-  dictation_provider: openai
+tenants:
+  - id: gemini-live
+    secret: "${SERVICE_SECRET}"
+    defaults:
+      provider: gemini
+      model: gemini-3.5-flash
+      dictation_provider: openai
 providers:
   openai:
     api_key: "${OPENAI_API_KEY}"
