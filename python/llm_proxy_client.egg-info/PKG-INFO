@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: llm-proxy-client
+Version: 0.1.0
+Summary: Python client for llm-proxy JSON POST text requests.
+Requires-Python: >=3.11
