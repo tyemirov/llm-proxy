@@ -3,7 +3,7 @@
 LLM Proxy is a lightweight HTTP service that forwards user prompts to OpenAI's
 Responses API, OpenAI-compatible chat providers, Google Gemini's native
 generateContent API, and audio transcription APIs.
-It exposes protected HTTP endpoints that require a shared secret and simplify
+It exposes protected HTTP endpoints that require a tenant secret and simplify
 integrating provider capabilities without embedding API credentials in each
 client.
 
@@ -13,9 +13,9 @@ client.
   - `GET /?prompt=...&key=...[&provider=...]` for LLM responses
   - `POST /?key=...[&provider=...]` for large JSON prompt bodies
   - `POST /dictate?key=...[&provider=...]` for audio transcription
-- Choose the provider per request via `provider=...` (default: `openai`)
-- Choose the model per request via `model=...` (default: `gpt-4.1` for OpenAI)
-- Choose the dictation model per request via `model=...` on `/dictate` (default: `gpt-4o-mini-transcribe`)
+- Choose the provider per request via `provider=...`; omitted provider uses the authenticated tenant default
+- Choose the model per request via `model=...`; omitted model uses the selected provider default
+- Choose the dictation model per request via `model=...` on `/dictate`; omitted model uses the authenticated tenant default
 - Optional per-request OpenAI web search via `web_search=1|true|yes`
 - Optional logging at `debug` or `info` levels
 - Forwards requests using server-side provider API keys
@@ -36,7 +36,6 @@ environment, and all runtime code receives only the validated config value.
 
 ```yaml
 server:
-  service_secret: "${SERVICE_SECRET}"
   port: 8080
   log_level: info
   workers: 4
@@ -45,12 +44,15 @@ server:
   upstream_poll_timeout_seconds: 60
   max_prompt_bytes: 4194304
   max_input_audio_bytes: 26214400
-defaults:
-  provider: openai
-  model: gpt-4.1
-  dictation_provider: openai
-  dictation_model: gpt-4o-mini-transcribe
-  system_prompt: ""
+tenants:
+  - id: default
+    secret: "${SERVICE_SECRET}"
+    defaults:
+      provider: openai
+      model: gpt-4.1
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
+      system_prompt: ""
 providers:
   openai:
     api_key: "${OPENAI_API_KEY}"
@@ -76,10 +78,11 @@ providers:
 ```
 
 Blank optional values use built-in provider defaults where applicable. Startup
-validates `server.service_secret`, the credential for `defaults.provider`, and
-the credential/endpoint support for `defaults.dictation_provider`. Credentials
-for non-default providers may stay blank; requests selecting those providers
-return `503 Service Unavailable` until the corresponding `api_key` is configured.
+validates that `tenants` includes at least one unique `id` and unique `secret`,
+then validates each tenant's default text provider and dictation provider.
+Credentials for providers not used by any tenant default may stay blank;
+requests selecting those providers return `503 Service Unavailable` until the
+corresponding `api_key` is configured.
 Unknown YAML keys fail startup.
 
 Web search is per request and currently supported only on OpenAI models that
@@ -108,8 +111,12 @@ Run the service with OpenAI defaults:
 Run the service with DeepSeek as the default text provider:
 
 ```yaml
-defaults:
-  provider: deepseek
+tenants:
+  - id: deepseek
+    secret: "${SERVICE_SECRET}"
+    defaults:
+      provider: deepseek
+      model: deepseek-v4-flash
 providers:
   deepseek:
     api_key: "${DEEPSEEK_API_KEY}"
@@ -118,8 +125,12 @@ providers:
 Run the service with Gemini as the default text provider:
 
 ```yaml
-defaults:
-  provider: gemini
+tenants:
+  - id: gemini
+    secret: "${SERVICE_SECRET}"
+    defaults:
+      provider: gemini
+      model: gemini-3.5-flash
 providers:
   gemini:
     api_key: "${GEMINI_API_KEY}"
@@ -251,7 +262,7 @@ curl --get \
 
 Use `POST /` with a JSON body when the prompt is too large for a URL query
 parameter. Authentication still uses the `key` query parameter, which is the
-configured `server.service_secret`. Provider selection also stays in the query parameter.
+configured tenant secret. Provider selection also stays in the query parameter.
 Do not send upstream provider secrets in the request body; the proxy reads them
 from server-side configuration. The JSON body is capped by
 `server.max_prompt_bytes`.
@@ -270,7 +281,7 @@ JSON body fields:
 | `prompt` | Yes | none | Full text to send to the LLM. Use this body field for large or non-ASCII prompts. |
 | `model` | No | provider default | Model identifier from the selected provider's supported model list. |
 | `web_search` | No | `false` | Enables OpenAI web search when the selected provider/model supports it. |
-| `system_prompt` | No | configured `defaults.system_prompt` | Per-request system prompt override. |
+| `system_prompt` | No | authenticated tenant default | Per-request system prompt override. |
 | `max_tokens` | No | provider default | Positive integer output-token cap for this request. The proxy maps it to OpenAI `max_output_tokens`, OpenAI-compatible `max_tokens`, or Gemini `generationConfig.maxOutputTokens`. |
 
 For `POST /`, `provider` remains a query parameter. Query `model` may override
@@ -465,7 +476,7 @@ below for web search.
 
 ## Security
 
-* All requests must include the shared secret via `key=...`.
+* All requests must include a configured tenant secret via `key=...`.
 * Client requests must not include upstream provider API keys; configure them on the server.
 * Do not expose this service to the public internet without appropriate network controls.
 
