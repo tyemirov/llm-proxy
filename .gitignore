@@ -20,6 +20,9 @@ PLAN.md
 bin/
 dist/
 tmp/
+python/.venv/
+python/.pytest_cache/
+python/.mypy_cache/
 
 # Logs
 *.log

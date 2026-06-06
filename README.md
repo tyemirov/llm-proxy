@@ -175,6 +175,37 @@ query parameters such as `provider`, strips body-owned query fields such as
 `prompt` and `model`, and sends `prompt`, `model`, `web_search`,
 `system_prompt`, and `max_tokens` in the body.
 
+### Python client package
+
+The same transport contract is available as an importable Python package from
+`python/llm_proxy_client`:
+
+```python
+from llm_proxy_client import Client, ClientConfig, ClientRequest
+
+client = Client(
+    ClientConfig(
+        base_url="http://localhost:8080/?provider=gemini",
+        secret="mysecret",
+    )
+)
+text = client.post(
+    ClientRequest(
+        prompt="Summarize this",
+        model="gemini-3.5-flash",
+        max_tokens=512,
+    )
+)
+```
+
+For local development:
+
+```shell
+cd python
+uv run --group dev pytest
+uv run --group dev mypy --strict llm_proxy_client
+```
+
 ### Basic request (default provider and model, no web search)
 
 ```shell

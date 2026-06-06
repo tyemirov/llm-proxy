@@ -2,8 +2,10 @@ SHELL := /bin/bash
 
 GO ?= go
 GOFMT ?= gofmt
+UV ?= uv
 BIN_DIR ?= bin
 BINARY_NAME ?= llm-proxy
+PYTHON_PROJECT_DIR ?= python
 PUBLISH_ARGS ?=
 RELEASE_ARGS ?=
 DEPLOY_ARGS ?=
@@ -16,7 +18,7 @@ GATEWAY_DEPLOY_TARGET ?= deploy-gateway
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint test test-live-gemini build clean ci release publish deploy
+.PHONY: fmt check-format lint go-lint python-lint test go-test python-test test-live-gemini build clean ci release publish deploy
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -29,13 +31,23 @@ check-format:
 		exit 1; \
 	fi
 
-lint:
+lint: go-lint python-lint
+
+go-lint:
 	$(GO) vet ./...
 	$(GO) run honnef.co/go/tools/cmd/staticcheck@latest ./...
 	$(GO) run github.com/gordonklaus/ineffassign@latest ./...
 
-test:
+python-lint:
+	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev mypy --strict llm_proxy_client
+
+test: go-test python-test
+
+go-test:
 	@GO="$(GO)" ./scripts/check_coverage.sh
+
+python-test:
+	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev pytest
 
 test-live-gemini:
 	@GO="$(GO)" ./scripts/test_live_gemini.sh

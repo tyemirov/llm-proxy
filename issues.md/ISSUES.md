@@ -43,6 +43,16 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
 
 ## Improvements
 
+- [x] [I415] (P1) Add an importable Python llm-proxy client package.
+  The American-language and Russian-language skill surfaces are Python-based callers of the llm-proxy JSON POST contract. Add a first-class Python package in this repository so those surfaces can share transport behavior without each owning a local proxy helper.
+  Acceptance criteria:
+  1. `python/llm_proxy_client` exposes validated config/request dataclasses and a client that sends JSON `POST /?key=...&format=text/plain`.
+  2. The client preserves non-body query parameters such as `provider`, strips body-owned query parameters such as `prompt`, `model`, `web_search`, `system_prompt`, and `max_tokens`, and keeps model IDs unchanged.
+  3. HTTP errors and transport errors are surfaced as typed Python exceptions without logging or printing secrets.
+  4. Pytest coverage uses a local HTTP server for the public client contract plus validation/error scenarios.
+  5. The repository Makefile runs Python mypy and pytest as part of `make lint`, `make test`, and `make ci`.
+  Resolution: Added `python/llm_proxy_client` with validated `ClientConfig` and `ClientRequest` dataclasses, typed HTTP/transport exceptions, and a transport-only `Client.post` that preserves non-body query fields, strips body-owned fields, and sends the JSON POST contract without model alias rewriting. Added `python/pyproject.toml`, `python/uv.lock`, local-server pytest coverage, README import docs, and Makefile Python lint/test integration. Post-review timeout coverage now proves stalled urllib reads raise `LLMProxyTransportError` instead of leaking raw `TimeoutError`. Validation passed with `make python-lint`, `make python-test`, editable install smoke via `uv pip install -e .`, exact local `go install github.com/tyemirov/llm-proxy/llm-proxy-client`, and final `timeout -k 350s -s SIGKILL 350s make ci` with Go total coverage 100.0% and Python pytest 12 passed.
+
 - [x] [I414] (P1) Add an installable llm-proxy client command and reusable client library.
   Port the JSON POST client contract used by the Russian-language semantic QA workflow into reusable Go client code under `llm-proxy` that compiles through `go install github.com/tyemirov/llm-proxy/llm-proxy-client`.
   Acceptance criteria:
