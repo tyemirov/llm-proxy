@@ -20,6 +20,9 @@ PLAN.md
 bin/
 dist/
 tmp/
+__pycache__/
+*.py[cod]
+*.egg-info/
 python/.venv/
 python/.pytest_cache/
 python/.mypy_cache/

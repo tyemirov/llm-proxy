@@ -24,7 +24,19 @@ Options:
   --username <value>    Registry username. Default: gh auth user login
   --token <value>       Registry token/password. Default: $GHCR_TOKEN or $GITHUB_TOKEN or $GH_TOKEN or gh auth token
   --help                Show this help text
+
+Environment:
+  PUBLISH_CI_TIMEOUT_SECONDS  make ci timeout in seconds. Default: $LLM_PROXY_CI_TIMEOUT_SECONDS or 1200
 USAGE
+}
+
+require_positive_integer() {
+  local name="$1"
+  local value="$2"
+  if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "error: ${name} must be a positive integer number of seconds (got: ${value})" >&2
+    exit 1
+  fi
 }
 
 IMAGE="${DOCKER_IMAGE:-ghcr.io/tyemirov/llm-proxy}"
@@ -37,6 +49,7 @@ USERNAME="${GHCR_USERNAME:-}"
 TOKEN="${GHCR_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
 PUBLISH_BRANCH="${PUBLISH_BRANCH:-master}"
 PUBLISH_REMOTE="${PUBLISH_REMOTE:-origin}"
+CI_TIMEOUT_SECONDS="${PUBLISH_CI_TIMEOUT_SECONDS:-${LLM_PROXY_CI_TIMEOUT_SECONDS:-1200}}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -101,6 +114,7 @@ done
 
 command -v docker >/dev/null 2>&1 || { echo "error: docker is required" >&2; exit 1; }
 command -v gh >/dev/null 2>&1 || { echo "error: gh is required" >&2; exit 1; }
+require_positive_integer "PUBLISH_CI_TIMEOUT_SECONDS" "${CI_TIMEOUT_SECONDS}"
 
 timeout -k 30s -s SIGKILL 30s git fetch "${PUBLISH_REMOTE}" "${PUBLISH_BRANCH}" --tags --prune
 
@@ -141,8 +155,8 @@ if [[ "${remote_tag_sha}" != "${head_sha}" ]]; then
 fi
 
 if [[ "${SKIP_CHECKS}" != "true" ]]; then
-  echo "==> [publish] Running make ci before publishing"
-  timeout -k 350s -s SIGKILL 350s make ci
+  echo "==> [publish] Running make ci before publishing (timeout ${CI_TIMEOUT_SECONDS}s)"
+  timeout -k "${CI_TIMEOUT_SECONDS}s" -s SIGKILL "${CI_TIMEOUT_SECONDS}s" make ci
 fi
 
 registry_host="$(printf '%s' "${IMAGE}" | cut -d'/' -f1)"

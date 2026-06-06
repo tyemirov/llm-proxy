@@ -18,7 +18,7 @@ GATEWAY_DEPLOY_TARGET ?= deploy-gateway
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint go-lint python-lint test go-test python-test test-live-gemini build clean ci release publish deploy
+.PHONY: fmt check-format lint go-lint python-lint test go-test python-test python-root-import-test test-live-gemini build clean ci release publish deploy
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -48,6 +48,10 @@ go-test:
 
 python-test:
 	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev pytest
+	$(MAKE) python-root-import-test
+
+python-root-import-test:
+	$(UV) run --no-project --with-editable . python -c 'from llm_proxy_client import Client, ClientConfig, ClientRequest; assert Client and ClientConfig and ClientRequest'
 
 test-live-gemini:
 	@GO="$(GO)" ./scripts/test_live_gemini.sh

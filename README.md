@@ -131,11 +131,17 @@ This repository exposes the standard local targets used by MPR app repos:
 
 | Command | Purpose |
 |---------|---------|
-| `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), and the 100% coverage-gated Go test suite. |
+| `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, the 100% coverage-gated Go test suite, and Python pytest. |
 | `make test-live-gemini` | Generate a temporary config file and run the current binary against live Gemini using `GEMINI_API_KEY` and `SERVICE_SECRET` placeholders; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
 | `make release` | Cut a `v*` release from `master`, update `CHANGELOG.md` when needed, and push the release tag. |
 | `make publish` | Validate the release source and publish `ghcr.io/tyemirov/llm-proxy:<tag>` plus `:latest`. |
 | `make deploy` | Verify the published image and deploy through the sibling `../mprlab-gateway` checkout. |
+
+The release lifecycle commands wrap their local `make ci` gate with a
+1200-second timeout by default. Override all three with
+`LLM_PROXY_CI_TIMEOUT_SECONDS=<seconds>`, or use the command-specific
+`RELEASE_CI_TIMEOUT_SECONDS`, `PUBLISH_CI_TIMEOUT_SECONDS`, and
+`DEPLOY_CI_TIMEOUT_SECONDS` variables.
 
 `llm-proxy` is a gateway-local service in `mprlab-gateway`, so `make deploy`
 defaults to the gateway `deploy-gateway` target. Override the checkout or target
@@ -177,8 +183,11 @@ query parameters such as `provider`, strips body-owned query fields such as
 
 ### Python client package
 
-The same transport contract is available as an importable Python package from
-`python/llm_proxy_client`:
+The same transport contract is available as an importable Python package:
+
+```shell
+uv pip install "llm-proxy-client @ git+https://github.com/tyemirov/llm-proxy.git"
+```
 
 ```python
 from llm_proxy_client import Client, ClientConfig, ClientRequest
@@ -201,9 +210,9 @@ text = client.post(
 For local development:
 
 ```shell
-cd python
-uv run --group dev pytest
-uv run --group dev mypy --strict llm_proxy_client
+uv pip install -e .
+make python-test
+make python-lint
 ```
 
 ### Basic request (default provider and model, no web search)
