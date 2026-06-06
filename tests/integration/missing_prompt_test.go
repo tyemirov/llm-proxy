@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/temirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/proxy"
 )
 
 const missingPromptErrorMessage = "missing prompt parameter"
