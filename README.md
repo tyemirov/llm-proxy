@@ -14,8 +14,8 @@ client.
   - `POST /?key=...[&provider=...]` for large JSON prompt bodies
   - `POST /dictate?key=...[&provider=...]` for audio transcription
 - Choose the provider per request via `provider=...`; omitted provider uses the authenticated tenant default
-- Choose the model per request via `model=...`; omitted model uses the selected provider default
-- Choose the dictation model per request via `model=...` on `/dictate`; omitted model uses the authenticated tenant default
+- Choose the model per request via `model=...`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider default
+- Choose the dictation model per request via `model=...` on `/dictate`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider default
 - Optional per-request OpenAI web search via `web_search=1|true|yes`
 - Optional logging at `debug` or `info` levels
 - Forwards requests using server-side provider API keys
@@ -279,7 +279,7 @@ JSON body fields:
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `prompt` | Yes | none | Full text to send to the LLM. Use this body field for large or non-ASCII prompts. |
-| `model` | No | provider default | Model identifier from the selected provider's supported model list. |
+| `model` | No | tenant or provider default | Model identifier from the selected provider's supported model list. Omitted model uses the tenant default when `provider` is omitted; otherwise it uses the selected provider default. |
 | `web_search` | No | `false` | Enables OpenAI web search when the selected provider/model supports it. |
 | `system_prompt` | No | authenticated tenant default | Per-request system prompt override. |
 | `max_tokens` | No | provider default | Positive integer output-token cap for this request. The proxy maps it to OpenAI `max_output_tokens`, OpenAI-compatible `max_tokens`, or Gemini `generationConfig.maxOutputTokens`. |
@@ -389,8 +389,8 @@ JSON-format LLM responses include the same normalized counts:
 GET /
   ?prompt=STRING            # required
   &key=SERVICE_SECRET       # required
-  &provider=PROVIDER        # optional; defaults to openai
-  &model=MODEL_NAME         # optional; provider default
+  &provider=PROVIDER        # optional; tenant default
+  &model=MODEL_NAME         # optional; tenant or provider default
   &web_search=1|true|yes    # optional; OpenAI web_search tool
   &max_tokens=N             # optional positive integer per-request cap
   &format=CONTENT_TYPE      # optional; or use Accept header
@@ -399,21 +399,21 @@ GET /
 ```text
 POST /
   ?key=SERVICE_SECRET       # required
-  &provider=PROVIDER        # optional; defaults to openai
+  &provider=PROVIDER        # optional; tenant default
   &model=MODEL_NAME         # optional; overrides JSON body if absent or equal
   &format=CONTENT_TYPE      # optional; or use Accept header
 Content-Type: application/json
 {
   "prompt": "STRING",       # required
-  "model": "MODEL_NAME",    # optional; provider default
+  "model": "MODEL_NAME",    # optional; tenant or provider default
   "web_search": false,      # optional; defaults to false
-  "system_prompt": "STRING",# optional; defaults to configured system prompt
+  "system_prompt": "STRING",# optional; tenant default
   "max_tokens": 512         # optional positive integer per-request cap
 }
 ```
 
-The POST JSON body carries only LLM request parameters. The client shared
-secret remains in the `key` query parameter, and upstream provider API keys are
+The POST JSON body carries only LLM request parameters. The tenant secret
+remains in the `key` query parameter, and upstream provider API keys are
 never accepted from client requests.
 
 ### Dictation endpoint
@@ -421,8 +421,8 @@ never accepted from client requests.
 ```text
 POST /dictate
   ?key=SERVICE_SECRET       # required
-  &provider=PROVIDER        # optional; defaults to openai
-  &model=MODEL_NAME         # optional; provider default
+  &provider=PROVIDER        # optional; tenant default
+  &model=MODEL_NAME         # optional; tenant or provider default
 Content-Type: multipart/form-data
   audio=<file>              # required (alias: file)
 ```
