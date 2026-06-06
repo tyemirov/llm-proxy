@@ -26,10 +26,10 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			identifier:                openAIProviderID,
 			textAPIKey:                configuration.OpenAIKey,
 			transcriptionAPIKey:       configuration.OpenAIKey,
-			defaultTextModel:          modelID(configuration.DefaultModel),
-			defaultTranscriptionModel: modelID(configuration.DictationModel),
+			defaultTextModel:          modelID(DefaultModel),
+			defaultTranscriptionModel: modelID(DefaultDictationModel),
 			textModels:                modelSet(ModelNameGPT4oMini, ModelNameGPT4o, ModelNameGPT41, ModelNameGPT5Mini, ModelNameGPT5, ModelNameGPT55, ModelNameGPT55Pro),
-			transcriptionModels:       modelSet(configuration.DictationModel, DefaultDictationModel, "gpt-4o-transcribe"),
+			transcriptionModels:       modelSet(DefaultDictationModel, "gpt-4o-transcribe"),
 			supportsDictation:         true,
 			supportsWebSearch:         true,
 			textTransport:             textTransportOpenAIResponses,
@@ -166,7 +166,7 @@ func (registry *providerRegistry) resolveTextRequest(rawProvider string, rawMode
 	}
 	modelIdentifier := strings.TrimSpace(rawModel)
 	if modelIdentifier == constants.EmptyString {
-		if definition.identifier == providerID(ProviderNameOpenAI) {
+		if strings.TrimSpace(rawProvider) == constants.EmptyString && strings.TrimSpace(defaultModel) != constants.EmptyString {
 			modelIdentifier = defaultModel
 		} else {
 			modelIdentifier = definition.defaultTextModel.string()
@@ -192,7 +192,7 @@ func (registry *providerRegistry) resolveDictationRequest(rawProvider string, ra
 	}
 	modelIdentifier := strings.TrimSpace(rawModel)
 	if modelIdentifier == constants.EmptyString {
-		if definition.identifier == providerID(ProviderNameOpenAI) {
+		if strings.TrimSpace(rawProvider) == constants.EmptyString && strings.TrimSpace(defaultModel) != constants.EmptyString {
 			modelIdentifier = defaultModel
 		} else {
 			modelIdentifier = definition.defaultTranscriptionModel.string()

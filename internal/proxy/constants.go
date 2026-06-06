@@ -33,6 +33,7 @@ const (
 	formFieldFile  = "file"
 
 	redactedPlaceholder = "***REDACTED***"
+	contextKeyTenant    = "tenant"
 
 	mimeApplicationJSON = "application/json"
 	mimeApplicationXML  = "application/xml"
@@ -139,11 +140,9 @@ const (
 	logFieldClientIP     = "client_ip"
 	logFieldStatus       = "status"
 	logFieldValue        = "value"
+	logFieldTenantID     = "tenant_id"
 	// logFieldID identifies the response identifier logged for traceability.
 	logFieldID = "id"
-
-	// logFieldExpectedFingerprint identifies the fingerprint of the expected client key.
-	logFieldExpectedFingerprint = "expected_fingerprint"
 
 	logEventOpenAIRequestError = "OpenAI request error"
 	logEventOpenAIResponse     = "OpenAI API response"

@@ -30,14 +30,13 @@ func newDictationRouter(t *testing.T, transcriptionsURL string, requestTimeoutSe
 	t.Cleanup(func() { _ = logger.Sync() })
 
 	router, buildError := proxy.BuildRouter(proxy.Configuration{
-		ServiceSecret:              TestSecret,
+		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
 		OpenAIKey:                  TestAPIKey,
 		LogLevel:                   proxy.LogLevelDebug,
 		WorkerCount:                1,
 		QueueSize:                  1,
 		RequestTimeoutSeconds:      requestTimeoutSeconds,
 		UpstreamPollTimeoutSeconds: requestTimeoutSeconds,
-		DictationModel:             proxy.DefaultDictationModel,
 		MaxInputAudioBytes:         1024 * 1024,
 		Endpoints:                  endpoints,
 	}, logger.Sugar())

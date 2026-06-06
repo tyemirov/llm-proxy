@@ -5,12 +5,10 @@ import (
 	"crypto/sha256"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/llm-proxy/internal/constants"
-	"github.com/tyemirov/llm-proxy/internal/utils"
 	"go.uber.org/zap"
 )
 
@@ -44,36 +42,47 @@ func requestResponseLogger(structuredLogger *zap.SugaredLogger) gin.HandlerFunc 
 
 		responseStatus := ginContext.Writer.Status()
 		responseLatencyMillis := time.Since(requestStart).Milliseconds()
-		structuredLogger.Infow(
-			logEventResponseSent,
+		responseFields := []any{
 			logFieldStatus, responseStatus,
 			constants.LogFieldLatencyMilliseconds, responseLatencyMillis,
-		)
+		}
+		if requestTenant, authenticated := tenantIfPresentFromContext(ginContext); authenticated {
+			responseFields = append(responseFields, logFieldTenantID, requestTenant.identifier.string())
+		}
+		structuredLogger.Infow(logEventResponseSent, responseFields...)
 	}
 }
 
-// secretMiddleware enforces the shared secret through a constant-time comparison of the `key` query parameter.
-func secretMiddleware(sharedSecret string, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
-	normalizedSecret := strings.TrimSpace(sharedSecret)
-	expectedSecretFingerprint := utils.Fingerprint(normalizedSecret)
+// tenantMiddleware authenticates the `key` query parameter and attaches the matched tenant to the request context.
+func tenantMiddleware(tenants tenantRegistry, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
-		presentedKey := strings.TrimSpace(ginContext.Query(queryParameterKey))
-		if !constantTimeEquals(normalizedSecret, presentedKey) {
+		requestTenant, authenticated := tenants.authenticate(ginContext.Query(queryParameterKey))
+		if !authenticated {
 			structuredLogger.Warnw(
 				logEventForbiddenRequest,
-				logFieldExpectedFingerprint, expectedSecretFingerprint,
 			)
 			ginContext.String(http.StatusForbidden, errorMissingClientKey)
 			ginContext.Abort()
 			return
 		}
+		ginContext.Set(contextKeyTenant, requestTenant)
 		ginContext.Next()
 	}
 }
 
-// constantTimeEquals compares two string values using HMAC equality on SHA-256 hashes.
-func constantTimeEquals(firstValue string, secondValue string) bool {
-	firstDigest := sha256.Sum256([]byte(firstValue))
-	secondDigest := sha256.Sum256([]byte(secondValue))
+func tenantIfPresentFromContext(ginContext *gin.Context) (tenant, bool) {
+	contextValue, exists := ginContext.Get(contextKeyTenant)
+	if !exists {
+		return tenant{}, false
+	}
+	requestTenant, ok := contextValue.(tenant)
+	return requestTenant, ok
+}
+
+func authenticatedTenantFromContext(ginContext *gin.Context) tenant {
+	return ginContext.MustGet(contextKeyTenant).(tenant)
+}
+
+func constantTimeDigestEquals(firstDigest [sha256.Size]byte, secondDigest [sha256.Size]byte) bool {
 	return hmac.Equal(firstDigest[:], secondDigest[:])
 }

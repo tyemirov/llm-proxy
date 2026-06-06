@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tyemirov/llm-proxy/internal/apperrors"
 	"github.com/tyemirov/llm-proxy/internal/constants"
 )
 
@@ -33,7 +32,7 @@ const (
 
 // Configuration holds runtime settings.
 type Configuration struct {
-	ServiceSecret                string
+	Tenants                      []TenantConfiguration
 	OpenAIKey                    string
 	DeepSeekKey                  string
 	DashScopeKey                 string
@@ -41,9 +40,6 @@ type Configuration struct {
 	SiliconFlowKey               string
 	ZhipuKey                     string
 	GeminiKey                    string
-	DefaultProvider              string
-	DefaultModel                 string
-	DefaultDictationProvider     string
 	DeepSeekBaseURL              string
 	DashScopeBaseURL             string
 	MoonshotBaseURL              string
@@ -53,24 +49,25 @@ type Configuration struct {
 	GeminiBaseURL                string
 	Port                         int
 	LogLevel                     string
-	SystemPrompt                 string
 	WorkerCount                  int
 	QueueSize                    int
 	RequestTimeoutSeconds        int
 	UpstreamPollTimeoutSeconds   int
 	MaxPromptBytes               int64
-	DictationModel               string
 	MaxInputAudioBytes           int64
 	Endpoints                    *Endpoints
+	tenants                      tenantRegistry
 	validated                    bool
 }
 
 // NewConfiguration returns a normalized runtime configuration after validating startup invariants.
 func NewConfiguration(configuration Configuration) (Configuration, error) {
 	configuration.ApplyTunables()
-	if validationError := validateConfig(configuration); validationError != nil {
+	tenants, validationError := validateConfig(configuration)
+	if validationError != nil {
 		return Configuration{}, validationError
 	}
+	configuration.tenants = tenants
 	configuration.validated = true
 	return configuration, nil
 }
@@ -82,79 +79,22 @@ func ensureValidatedConfiguration(configuration Configuration) (Configuration, e
 	return NewConfiguration(configuration)
 }
 
-func validateConfig(configuration Configuration) error {
-	if strings.TrimSpace(configuration.ServiceSecret) == constants.EmptyString {
-		return apperrors.ErrMissingServiceSecret
+func validateConfig(configuration Configuration) (tenantRegistry, error) {
+	tenants, tenantError := newTenantRegistry(configuration.Tenants)
+	if tenantError != nil {
+		return tenantRegistry{}, tenantError
 	}
-	if credentialError := validateDefaultProviderCredential(configuration.DefaultProvider, configuration); credentialError != nil {
-		return credentialError
+	providers := newProviderRegistry(configuration)
+	validator := newModelValidator(providers)
+	for _, currentTenant := range tenants.tenants {
+		if _, _, verificationError := validator.ResolveText(constants.EmptyString, constants.EmptyString, currentTenant.defaults.provider, currentTenant.defaults.model, false); verificationError != nil {
+			return tenantRegistry{}, fmt.Errorf("%w: tenant=%s", verificationError, currentTenant.identifier.string())
+		}
+		if _, _, verificationError := validator.ResolveDictation(constants.EmptyString, constants.EmptyString, currentTenant.defaults.dictationProvider, currentTenant.defaults.dictationModel); verificationError != nil {
+			return tenantRegistry{}, fmt.Errorf("%w: tenant=%s", verificationError, currentTenant.identifier.string())
+		}
 	}
-	if credentialError := validateDefaultDictationProviderCredential(configuration.DefaultDictationProvider, configuration); credentialError != nil {
-		return credentialError
-	}
-	return nil
-}
-
-func validateDefaultProviderCredential(providerIdentifier string, configuration Configuration) error {
-	switch strings.ToLower(strings.TrimSpace(providerIdentifier)) {
-	case ProviderNameOpenAI:
-		if strings.TrimSpace(configuration.OpenAIKey) == constants.EmptyString {
-			return apperrors.ErrMissingOpenAIKey
-		}
-	case ProviderNameDeepSeek:
-		if strings.TrimSpace(configuration.DeepSeekKey) == constants.EmptyString {
-			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameDeepSeek)
-		}
-	case ProviderNameDashScope, providerAliasQwen:
-		if strings.TrimSpace(configuration.DashScopeKey) == constants.EmptyString {
-			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameDashScope)
-		}
-	case ProviderNameMoonshot, providerAliasKimi:
-		if strings.TrimSpace(configuration.MoonshotKey) == constants.EmptyString {
-			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameMoonshot)
-		}
-	case ProviderNameSiliconFlow:
-		if strings.TrimSpace(configuration.SiliconFlowKey) == constants.EmptyString {
-			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameSiliconFlow)
-		}
-	case ProviderNameZhipu, providerAliasGLM:
-		if strings.TrimSpace(configuration.ZhipuKey) == constants.EmptyString {
-			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameZhipu)
-		}
-	case ProviderNameGemini:
-		if strings.TrimSpace(configuration.GeminiKey) == constants.EmptyString {
-			return fmt.Errorf("%w: provider=%s", ErrProviderNotConfigured, ProviderNameGemini)
-		}
-	default:
-		return fmt.Errorf("%w: %s", ErrUnknownProvider, providerIdentifier)
-	}
-	return nil
-}
-
-func validateDefaultDictationProviderCredential(providerIdentifier string, configuration Configuration) error {
-	switch strings.ToLower(strings.TrimSpace(providerIdentifier)) {
-	case ProviderNameOpenAI:
-		if strings.TrimSpace(configuration.OpenAIKey) == constants.EmptyString {
-			return apperrors.ErrMissingOpenAIKey
-		}
-	case ProviderNameSiliconFlow:
-		if strings.TrimSpace(configuration.SiliconFlowKey) == constants.EmptyString {
-			return fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, ProviderNameSiliconFlow, endpointKindDictation)
-		}
-	case ProviderNameDeepSeek:
-		return fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, ProviderNameDeepSeek, endpointKindDictation)
-	case ProviderNameDashScope, providerAliasQwen:
-		return fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, ProviderNameDashScope, endpointKindDictation)
-	case ProviderNameMoonshot, providerAliasKimi:
-		return fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, ProviderNameMoonshot, endpointKindDictation)
-	case ProviderNameZhipu, providerAliasGLM:
-		return fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, ProviderNameZhipu, endpointKindDictation)
-	case ProviderNameGemini:
-		return fmt.Errorf("%w: provider=%s endpoint=%s", ErrUnsupportedEndpoint, ProviderNameGemini, endpointKindDictation)
-	default:
-		return fmt.Errorf("%w: %s", ErrUnknownProvider, providerIdentifier)
-	}
-	return nil
+	return tenants, nil
 }
 
 // ErrUpstreamIncomplete indicates that the upstream provider returned an incomplete response before the poll deadline.
@@ -162,7 +102,6 @@ var ErrUpstreamIncomplete = errors.New(errorUpstreamIncomplete)
 
 // ApplyTunables ensures tunable configuration values have sensible defaults.
 func (configuration *Configuration) ApplyTunables() {
-	configuration.ServiceSecret = strings.TrimSpace(configuration.ServiceSecret)
 	configuration.OpenAIKey = strings.TrimSpace(configuration.OpenAIKey)
 	configuration.DeepSeekKey = strings.TrimSpace(configuration.DeepSeekKey)
 	configuration.DashScopeKey = strings.TrimSpace(configuration.DashScopeKey)
@@ -176,25 +115,9 @@ func (configuration *Configuration) ApplyTunables() {
 	if configuration.UpstreamPollTimeoutSeconds <= 0 {
 		configuration.UpstreamPollTimeoutSeconds = DefaultUpstreamPollTimeoutSeconds
 	}
-	if strings.TrimSpace(configuration.DefaultProvider) == constants.EmptyString {
-		configuration.DefaultProvider = DefaultProvider
-	}
-	configuration.DefaultProvider = strings.ToLower(strings.TrimSpace(configuration.DefaultProvider))
-	if strings.TrimSpace(configuration.DefaultModel) == constants.EmptyString {
-		configuration.DefaultModel = DefaultModel
-	}
-	configuration.DefaultModel = strings.TrimSpace(configuration.DefaultModel)
-	if strings.TrimSpace(configuration.DefaultDictationProvider) == constants.EmptyString {
-		configuration.DefaultDictationProvider = DefaultDictationProvider
-	}
-	configuration.DefaultDictationProvider = strings.ToLower(strings.TrimSpace(configuration.DefaultDictationProvider))
 	if configuration.MaxPromptBytes <= 0 {
 		configuration.MaxPromptBytes = DefaultMaxPromptBytes
 	}
-	if strings.TrimSpace(configuration.DictationModel) == constants.EmptyString {
-		configuration.DictationModel = DefaultDictationModel
-	}
-	configuration.DictationModel = strings.TrimSpace(configuration.DictationModel)
 	if configuration.MaxInputAudioBytes <= 0 {
 		configuration.MaxInputAudioBytes = DefaultMaxInputAudioBytes
 	}
