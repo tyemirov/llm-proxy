@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/temirov/llm-proxy/internal/constants"
+	"github.com/tyemirov/llm-proxy/internal/constants"
 )
 
 type providerRegistry struct {

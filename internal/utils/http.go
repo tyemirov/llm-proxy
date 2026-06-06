@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/temirov/llm-proxy/internal/constants"
+	"github.com/tyemirov/llm-proxy/internal/constants"
 	"go.uber.org/zap"
 )
 

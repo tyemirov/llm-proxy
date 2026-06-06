@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/temirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/proxy"
 	"go.uber.org/zap"
 )
 
