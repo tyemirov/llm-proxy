@@ -120,6 +120,19 @@ These entries are always-available procedures. Keep them `[ ]` so they remain ru
 
 ## Features
 
+- [x] [F418] (P1) Add tenant-authenticated defaults.
+  Replace the single shared `server.service_secret` plus global `defaults` contract with an explicit tenant list where each tenant has its own client secret and default text/dictation settings. Requests continue to authenticate with the `key` query parameter, but the accepted key selects tenant defaults when provider/model/system prompt values are omitted.
+  Acceptance criteria:
+  1. `config.yml` defines `tenants[]` with unique non-empty `id` and `secret` values plus tenant-local `defaults.provider`, `defaults.model`, `defaults.dictation_provider`, `defaults.dictation_model`, and `defaults.system_prompt`.
+  2. `server.service_secret` and top-level `defaults` are removed from the canonical service schema; unknown legacy keys fail startup through the strict config loader.
+  3. Runtime configuration exposes a validated tenant registry instead of raw scalar auth/default fields.
+  4. `GET /`, JSON `POST /`, and `POST /dictate` use the authenticated tenant defaults when request parameters omit provider, model, dictation provider/model, or system prompt.
+  5. Explicit request provider/model/system prompt parameters keep their existing override semantics.
+  6. Missing or invalid `key` still returns `403` without logging raw secrets.
+  7. README, provider-routing docs, and mounted gateway config examples document the tenant schema.
+  8. Black-box CLI and HTTP tests cover tenant config loading, duplicate tenant validation, token-selected defaults, request overrides, dictation defaults, and invalid keys.
+  Resolution: Replaced the canonical single-secret/global-default schema with `tenants[]`, where each tenant owns a unique `id`, unique `secret`, and text/dictation defaults. Runtime startup now validates tenant identity, secret uniqueness, and each tenant's default provider/model contract. Auth middleware resolves `key` to a tenant and routes GET, JSON POST, and `/dictate` omitted provider/model/system prompt values through that tenant; explicit request parameters keep their override behavior. README, provider-routing docs, live Gemini smoke config, coverage probe config, and the mounted gateway config were updated to the tenant schema. Added black-box coverage for config loading, duplicate/missing tenant validation, token-selected defaults, overrides, dictation defaults, and invalid keys. Validation passed with `make fmt`, `make test` (Go total coverage 100.0%, Python pytest 12 passed), `make lint`, and `make ci` (Go total coverage 100.0%, Python pytest 12 passed).
+
 - [x] [F410] (P1) Replace global output-token configuration with request `max_tokens`.
   Remove the server-wide text output token cap configuration because providers do not require it and a single global budget has different semantics across provider APIs. Clients may request an explicit cap per call with `max_tokens`, and the proxy translates that public request parameter to each provider's native field.
   Acceptance criteria:
