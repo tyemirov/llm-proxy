@@ -1,0 +1,14 @@
+[project]
+name = "llm-proxy-client"
+version = "0.1.0"
+description = "Python client for llm-proxy JSON POST text requests."
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=80.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "python"}
+packages = ["llm_proxy_client"]
