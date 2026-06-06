@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/temirov/llm-proxy/internal/proxy"
-	"github.com/temirov/llm-proxy/internal/utils"
+	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/utils"
 	"go.uber.org/zap"
 )
 

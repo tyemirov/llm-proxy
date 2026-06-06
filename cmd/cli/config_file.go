@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/subosito/gotenv"
-	"github.com/temirov/llm-proxy/internal/constants"
-	"github.com/temirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/constants"
+	"github.com/tyemirov/llm-proxy/internal/proxy"
 )
 
 const (
