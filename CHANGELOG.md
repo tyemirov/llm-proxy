@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.13] - 2026-06-06
+
+### Changes
+- Merge pull request #171 from tyemirov/gix/refactor-slow-release-gate-tests-for-deterministic
+- test: improve integration tests for queue, long requests, and retries
+- scripts: add coverage probe timeout and reduce CI default timeouts to 350s
+- docs: update ISSUES.md with refactor plan for slow release-gate tests
+- test: improve timeout handling and error mapping in proxy tests and utils
+- docs: update default timeout for release lifecycle commands to 350s
+- Merge pull request #170 from tyemirov/gix/extend-release-lifecycle-scripts-with-configurable-make
+- chore: add pyproject.toml for llm-proxy-client packaging
+- ci(scripts): add configurable CI timeout with validation for deploy, publish, release
+- ci: extend and unify local CI timeout in release, publish, deploy scripts
+- docs: update README with Python test, lint, and release timeout info
+- test: add python-root-import-test to verify root imports in python-test
+- chore: update .gitignore to exclude Python cache and egg-info files
+- Merge pull request #169 from tyemirov/gix/add-importable-python-llm-proxy-client-package
+- handle TimeoutError as LLMProxyTransportError in client requests
+- docs: update resolution note to include timeout coverage improvement
+- ci: add Python setup and uv install to GitHub Actions test workflow
+- feat: add Python client for llm-proxy JSON POST text requests
+- feat: add importable Python llm-proxy client package with dataclasses and tests
+- docs: add Python client package usage and local development instructions
+- build: add Python lint and test targets to Makefile
+- chore: ignore Python environment and cache directories in .gitignore
+- Merge pull request #168 from tyemirov/gix/add-installable-llm-proxy-client-command-and-reusable-go
+- feat: add llmproxyclient package with HTTP JSON POST client
+- feat: add llm-proxy-client command to send JSON POST prompt requests
+- fix: update import paths from temirov to tyemirov in test files
+- build: add client coverage to check_coverage.sh script
+- feat: add installable llm-proxy-client command and reusable Go client library
+- fix: update import paths from temirov to tyemirov across codebase
+- chore: update module path to github.com/tyemirov/llm-proxy
+- fix: update import paths from temirov to tyemirov in CLI package
+- docs: add usage instructions for installable llm-proxy-client prompt client
+
 ## [v0.2.12] - 2026-06-05
 
 ### Changes
