@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/temirov/llm-proxy/internal/constants"
+	"github.com/tyemirov/llm-proxy/internal/constants"
 )
 
 // preferredMime determines the response MIME type using the format query parameter or the Accept header.

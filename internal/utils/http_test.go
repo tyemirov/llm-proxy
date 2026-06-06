@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/temirov/llm-proxy/internal/utils"
+	"github.com/tyemirov/llm-proxy/internal/utils"
 )
 
 const (

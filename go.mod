@@ -1,4 +1,4 @@
-module github.com/temirov/llm-proxy
+module github.com/tyemirov/llm-proxy
 
 go 1.24
 

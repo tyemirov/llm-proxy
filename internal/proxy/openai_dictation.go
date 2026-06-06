@@ -11,8 +11,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/temirov/llm-proxy/internal/constants"
-	"github.com/temirov/llm-proxy/internal/utils"
+	"github.com/tyemirov/llm-proxy/internal/constants"
+	"github.com/tyemirov/llm-proxy/internal/utils"
 	"go.uber.org/zap"
 )
 

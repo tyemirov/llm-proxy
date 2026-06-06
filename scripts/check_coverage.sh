@@ -2,7 +2,9 @@
 set -euo pipefail
 
 GO_BIN="${GO:-go}"
-COVERPKG="./cmd/cli,./internal/apperrors,./internal/constants,./internal/proxy,./internal/utils"
+RUNTIME_COVERPKG="./cmd/cli,./internal/apperrors,./internal/constants,./internal/proxy,./internal/utils"
+CLIENT_COVERPKG="./llm-proxy-client,./pkg/llmproxyclient"
+COVERPKG="$RUNTIME_COVERPKG,$CLIENT_COVERPKG"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
 
@@ -14,7 +16,8 @@ trap cleanup EXIT
 cd "$ROOT_DIR"
 
 "$GO_BIN" test -count=1 ./... -covermode=count -coverpkg="$COVERPKG" -coverprofile="$TMP_DIR/go-test.coverprofile"
-"$GO_BIN" build -cover -covermode=count -coverpkg="$COVERPKG" -o "$TMP_DIR/llm-proxy.cover" ./cmd/cli
+"$GO_BIN" build -cover -covermode=count -coverpkg="$RUNTIME_COVERPKG" -o "$TMP_DIR/llm-proxy.cover" ./cmd/cli
+"$GO_BIN" build -cover -covermode=count -coverpkg="$CLIENT_COVERPKG" -o "$TMP_DIR/llm-proxy-client.cover" ./llm-proxy-client
 
 cat > "$TMP_DIR/missing-openai.yml" <<'CONFIG'
 server:
@@ -23,14 +26,16 @@ providers:
   openai: {}
 CONFIG
 
-mkdir -p "$TMP_DIR/cov-help" "$TMP_DIR/cov-missing-config" "$TMP_DIR/cov-missing-openai"
+mkdir -p "$TMP_DIR/cov-help" "$TMP_DIR/cov-missing-config" "$TMP_DIR/cov-missing-openai" "$TMP_DIR/cov-client-missing-config"
 env -i GOCOVERDIR="$TMP_DIR/cov-help" "$TMP_DIR/llm-proxy.cover" --help >/dev/null 2>/dev/null || true
 env -i GOCOVERDIR="$TMP_DIR/cov-missing-config" "$TMP_DIR/llm-proxy.cover" --config "$TMP_DIR/missing.yml" >/dev/null 2>/dev/null || true
 env -i GOCOVERDIR="$TMP_DIR/cov-missing-openai" "$TMP_DIR/llm-proxy.cover" --config "$TMP_DIR/missing-openai.yml" >/dev/null 2>/dev/null || true
+env -i GOCOVERDIR="$TMP_DIR/cov-client-missing-config" "$TMP_DIR/llm-proxy-client.cover" >/dev/null 2>/dev/null || true
 
 "$GO_BIN" tool covdata textfmt -i="$TMP_DIR/cov-help" -o="$TMP_DIR/bin-help.coverprofile"
 "$GO_BIN" tool covdata textfmt -i="$TMP_DIR/cov-missing-config" -o="$TMP_DIR/bin-missing-config.coverprofile"
 "$GO_BIN" tool covdata textfmt -i="$TMP_DIR/cov-missing-openai" -o="$TMP_DIR/bin-missing-openai.coverprofile"
+"$GO_BIN" tool covdata textfmt -i="$TMP_DIR/cov-client-missing-config" -o="$TMP_DIR/bin-client-missing-config.coverprofile"
 
 awk '
   FNR == 1 { next }
@@ -46,7 +51,7 @@ awk '
       print block, statements[block], counts[block]
     }
   }
-' "$TMP_DIR/go-test.coverprofile" "$TMP_DIR/bin-help.coverprofile" "$TMP_DIR/bin-missing-config.coverprofile" "$TMP_DIR/bin-missing-openai.coverprofile" > coverage.out
+' "$TMP_DIR/go-test.coverprofile" "$TMP_DIR/bin-help.coverprofile" "$TMP_DIR/bin-missing-config.coverprofile" "$TMP_DIR/bin-missing-openai.coverprofile" "$TMP_DIR/bin-client-missing-config.coverprofile" > coverage.out
 
 coverage_output="$("$GO_BIN" tool cover -func=coverage.out)"
 printf '%s\n' "$coverage_output"

@@ -144,6 +144,37 @@ with `GATEWAY_DIR=/path/to/mprlab-gateway` or
 
 ## Usage
 
+### Installable prompt client
+
+Install the reusable JSON POST client:
+
+```shell
+go install github.com/tyemirov/llm-proxy/llm-proxy-client@latest
+```
+
+Use it with explicit flags:
+
+```shell
+llm-proxy-client \
+  --base-url "http://localhost:8080/?provider=gemini" \
+  --secret "$SERVICE_SECRET" \
+  --model gemini-3.5-flash \
+  --prompt "Summarize this"
+```
+
+Or read configuration and prompt text from environment/stdin:
+
+```shell
+export LLM_PROXY_BASE_URL="http://localhost:8080/"
+export LLM_PROXY_SECRET="$SERVICE_SECRET"
+printf 'large prompt...\n' | llm-proxy-client --model gpt-5.5 --max-tokens 4096
+```
+
+The client always uses `POST /?key=...` with a JSON body. It keeps non-payload
+query parameters such as `provider`, strips body-owned query fields such as
+`prompt` and `model`, and sends `prompt`, `model`, `web_search`,
+`system_prompt`, and `max_tokens` in the body.
+
 ### Basic request (default provider and model, no web search)
 
 ```shell

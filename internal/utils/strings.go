@@ -3,7 +3,7 @@ package utils
 import (
 	"strings"
 
-	"github.com/temirov/llm-proxy/internal/constants"
+	"github.com/tyemirov/llm-proxy/internal/constants"
 )
 
 // IsBlank reports whether a string is empty or whitespace-only.
