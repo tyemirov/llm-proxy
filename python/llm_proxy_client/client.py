@@ -168,6 +168,8 @@ class Client:
             raise LLMProxyHTTPError(error.code, body, str(error.reason)) from error
         except urllib.error.URLError as error:
             raise LLMProxyTransportError(f"llm_proxy_client_transport_failure: {error.reason}") from error
+        except TimeoutError as error:
+            raise LLMProxyTransportError(f"llm_proxy_client_transport_failure: {error}") from error
 
 
 def default_response_opener(request: urllib.request.Request, timeout: float) -> str:

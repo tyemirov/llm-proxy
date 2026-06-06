@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -40,6 +41,7 @@ class CapturingHandler(BaseHTTPRequestHandler):
     captured_request = CapturedRequest()
     response_status = 200
     response_body = "reviewed"
+    response_delay_seconds = 0.0
 
     def do_POST(self) -> None:
         """Capture one POST request."""
@@ -53,10 +55,15 @@ class CapturingHandler(BaseHTTPRequestHandler):
             content_type=self.headers.get("Content-Type", ""),
             body=json.loads(raw_body),
         )
+        if type(self).response_delay_seconds > 0:
+            time.sleep(type(self).response_delay_seconds)
         self.send_response(type(self).response_status)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.end_headers()
-        self.wfile.write(type(self).response_body.encode("utf-8"))
+        try:
+            self.wfile.write(type(self).response_body.encode("utf-8"))
+        except BrokenPipeError:
+            return
 
     def log_message(self, format_string: str, *arguments: object) -> None:
         """Suppress default stderr logging in tests."""
@@ -90,6 +97,7 @@ def running_server() -> RunningServer:
     CapturingHandler.captured_request = CapturedRequest()
     CapturingHandler.response_status = 200
     CapturingHandler.response_body = "reviewed"
+    CapturingHandler.response_delay_seconds = 0.0
     server = ThreadingHTTPServer(("127.0.0.1", 0), CapturingHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -222,4 +230,20 @@ def test_transport_error_is_typed() -> None:
     client = Client(ClientConfig(base_url="http://example.test", secret="test-secret"), opener=failing_opener)
 
     with pytest.raises(LLMProxyTransportError, match="network unavailable"):
+        client.post(ClientRequest(prompt="prompt"))
+
+
+def test_read_timeout_is_typed_transport_error(running_server: RunningServer) -> None:
+    """Socket read timeouts are surfaced through the transport-error contract."""
+
+    CapturingHandler.response_delay_seconds = 0.3
+    client = Client(
+        ClientConfig(
+            base_url=running_server.url,
+            secret="test-secret",
+            timeout_seconds=0.05,
+        )
+    )
+
+    with pytest.raises(LLMProxyTransportError, match="timed out"):
         client.post(ClientRequest(prompt="prompt"))
