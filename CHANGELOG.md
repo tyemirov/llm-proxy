@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.15] - 2026-06-06
+
+### Changes
+- Merge pull request #172 from tyemirov/gix/replace-global-defaults-with-per-tenant-secrets-and
+- docs: clarify model default selection between tenant and provider in README
+- test: update tests to use Tenants config instead of ServiceSecret
+- fix: update test configs to use tenants structure for coverage and live tests
+- feat: add tenant-authenticated defaults with per-tenant secrets and settings
+- refactor: replace service secret with multi-tenant configuration support
+- docs: update provider routing plan for tenant-based defaults and validation
+- refactor(cli): replace global defaults with per-tenant configuration
+- docs: update README to use tenant secrets and tenant-based defaults
+
 ## [v0.2.14] - 2026-06-06
 
 ### Changes
