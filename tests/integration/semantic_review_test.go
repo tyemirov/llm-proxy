@@ -124,7 +124,7 @@ func TestIntegrationLargeSemanticReviewPostUsesRequestMaxTokens(testingInstance 
 	proxy.HTTPClient = openAIServer.Client()
 	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
 	router, buildError := proxy.BuildRouter(proxy.Configuration{
-		ServiceSecret:              serviceSecretValue,
+		Tenants:                    proxy.SingleTenantConfigurations("integration", serviceSecretValue),
 		OpenAIKey:                  openAIKeyValue,
 		LogLevel:                   logLevelDebug,
 		WorkerCount:                1,

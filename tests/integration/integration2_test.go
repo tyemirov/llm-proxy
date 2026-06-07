@@ -34,12 +34,12 @@ func TestClientResponseDelivery(testingInstance *testing.T) {
 			client, captured := makeHTTPClient(subTest, testCase.webSearch, endpoints)
 			configureProxy(subTest, client, endpoints)
 			router, buildRouterError := proxy.BuildRouter(proxy.Configuration{
-				ServiceSecret: serviceSecretValue,
-				OpenAIKey:     openAIKeyValue,
-				LogLevel:      logLevelDebug,
-				WorkerCount:   1,
-				QueueSize:     8,
-				Endpoints:     endpoints,
+				Tenants:     proxy.SingleTenantConfigurations("integration", serviceSecretValue),
+				OpenAIKey:   openAIKeyValue,
+				LogLevel:    logLevelDebug,
+				WorkerCount: 1,
+				QueueSize:   8,
+				Endpoints:   endpoints,
 			}, newLogger(subTest))
 			if buildRouterError != nil {
 				subTest.Fatalf(buildRouterFailedFormat, buildRouterError)
@@ -91,18 +91,18 @@ func TestIntegrationConfiguration(testingInstance *testing.T) {
 		expectError    string
 	}{
 		{
-			name:        "missing_service_secret",
-			config:      proxy.Configuration{ServiceSecret: constants.EmptyString, OpenAIKey: openAIKeyValue},
-			expectError: "server.service_secret",
+			name:        "missing_tenants",
+			config:      proxy.Configuration{OpenAIKey: openAIKeyValue},
+			expectError: "tenants",
 		},
 		{
 			name:        "missing_openai_key",
-			config:      proxy.Configuration{ServiceSecret: serviceSecretValue, OpenAIKey: constants.EmptyString},
-			expectError: "providers.openai.api_key",
+			config:      proxy.Configuration{Tenants: proxy.SingleTenantConfigurations("integration", serviceSecretValue), OpenAIKey: constants.EmptyString},
+			expectError: "provider not configured: provider=openai",
 		},
 		{
 			name:           "wrong_key",
-			config:         proxy.Configuration{ServiceSecret: serviceSecretValue, OpenAIKey: openAIKeyValue, LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 4},
+			config:         proxy.Configuration{Tenants: proxy.SingleTenantConfigurations("integration", serviceSecretValue), OpenAIKey: openAIKeyValue, LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 4},
 			requestKey:     "wrong",
 			expectedStatus: http.StatusForbidden,
 		},

@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
-	"github.com/tyemirov/llm-proxy/internal/utils"
 	"go.uber.org/zap"
 )
 
@@ -62,8 +61,7 @@ var rootCmd = &cobra.Command{
 		structuredLogger.Infow(logEventStarting,
 			"port", runtimeConfiguration.Port,
 			"log_level", strings.ToLower(runtimeConfiguration.LogLevel),
-			"default_provider", runtimeConfiguration.DefaultProvider,
-			"secret_fingerprint", utils.Fingerprint(runtimeConfiguration.ServiceSecret),
+			"tenant_count", len(runtimeConfiguration.Tenants),
 		)
 		return serveProxy(runtimeConfiguration, structuredLogger)
 	},

@@ -99,10 +99,10 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		}()
 	}
 
-	router.Use(gin.Recovery(), secretMiddleware(configuration.ServiceSecret, structuredLogger))
-	router.GET(rootPath, chatHandler(taskQueue, configuration.SystemPrompt, configuration.DefaultProvider, configuration.DefaultModel, validator, requestTimeout, structuredLogger))
-	router.POST(rootPath, chatJSONHandler(taskQueue, configuration.SystemPrompt, configuration.DefaultProvider, configuration.DefaultModel, validator, requestTimeout, configuration.MaxPromptBytes, structuredLogger))
-	router.POST(dictatePath, dictateHandler(upstreamProviders, configuration.DefaultDictationProvider, configuration.DictationModel, validator, configuration.MaxInputAudioBytes, structuredLogger))
+	router.Use(gin.Recovery(), tenantMiddleware(configuration.tenants, structuredLogger))
+	router.GET(rootPath, chatHandler(taskQueue, validator, requestTimeout, structuredLogger))
+	router.POST(rootPath, chatJSONHandler(taskQueue, validator, requestTimeout, configuration.MaxPromptBytes, structuredLogger))
+	router.POST(dictatePath, dictateHandler(upstreamProviders, validator, configuration.MaxInputAudioBytes, structuredLogger))
 	return router, nil
 }
 
@@ -116,9 +116,10 @@ func Serve(configuration Configuration, structuredLogger *zap.SugaredLogger) err
 }
 
 // chatHandler returns a handler that forwards query-string requests to the task queue.
-func chatHandler(taskQueue chan requestTask, defaultSystemPrompt string, defaultProvider string, defaultModel string, validator *modelValidator, requestTimeout time.Duration, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+func chatHandler(taskQueue chan requestTask, validator *modelValidator, requestTimeout time.Duration, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
-		chatRequest, ok := chatRequestFromQuery(ginContext, defaultSystemPrompt, defaultProvider, defaultModel, validator, structuredLogger)
+		requestTenant := authenticatedTenantFromContext(ginContext)
+		chatRequest, ok := chatRequestFromQuery(ginContext, requestTenant.defaults, validator, structuredLogger)
 		if !ok {
 			return
 		}
@@ -127,8 +128,9 @@ func chatHandler(taskQueue chan requestTask, defaultSystemPrompt string, default
 }
 
 // chatJSONHandler accepts large prompt bodies while preserving the same model validation, queueing, and response formatting used by GET /.
-func chatJSONHandler(taskQueue chan requestTask, defaultSystemPrompt string, defaultProvider string, defaultModel string, validator *modelValidator, requestTimeout time.Duration, maxPromptBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+func chatJSONHandler(taskQueue chan requestTask, validator *modelValidator, requestTimeout time.Duration, maxPromptBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		requestTenant := authenticatedTenantFromContext(ginContext)
 		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxPromptBytes)
 		var payload chatRequestPayload
 		if decodeError := json.NewDecoder(ginContext.Request.Body).Decode(&payload); decodeError != nil {
@@ -141,7 +143,7 @@ func chatJSONHandler(taskQueue chan requestTask, defaultSystemPrompt string, def
 			return
 		}
 
-		chatRequest, ok := chatRequestFromPayload(ginContext, payload, defaultSystemPrompt, defaultProvider, defaultModel, validator)
+		chatRequest, ok := chatRequestFromPayload(ginContext, payload, requestTenant.defaults, validator)
 		if !ok {
 			return
 		}
@@ -149,7 +151,7 @@ func chatJSONHandler(taskQueue chan requestTask, defaultSystemPrompt string, def
 	}
 }
 
-func chatRequestFromQuery(ginContext *gin.Context, defaultSystemPrompt string, defaultProvider string, defaultModel string, validator *modelValidator, structuredLogger *zap.SugaredLogger) (chatRequestParameters, bool) {
+func chatRequestFromQuery(ginContext *gin.Context, defaults tenantDefaults, validator *modelValidator, structuredLogger *zap.SugaredLogger) (chatRequestParameters, bool) {
 	userPrompt := ginContext.Query(queryParameterPrompt)
 	if userPrompt == constants.EmptyString {
 		ginContext.String(http.StatusBadRequest, errorMissingPrompt)
@@ -158,7 +160,7 @@ func chatRequestFromQuery(ginContext *gin.Context, defaultSystemPrompt string, d
 
 	systemPrompt := ginContext.Query(queryParameterSystemPrompt)
 	if systemPrompt == constants.EmptyString {
-		systemPrompt = defaultSystemPrompt
+		systemPrompt = defaults.systemPrompt
 	}
 
 	webSearchQuery := strings.TrimSpace(ginContext.Query(queryParameterWebSearch))
@@ -179,8 +181,8 @@ func chatRequestFromQuery(ginContext *gin.Context, defaultSystemPrompt string, d
 	providerDefinition, modelIdentifier, verificationError := validator.ResolveText(
 		ginContext.Query(queryParameterProvider),
 		ginContext.Query(queryParameterModel),
-		defaultProvider,
-		defaultModel,
+		defaults.provider,
+		defaults.model,
 		webSearchEnabled,
 	)
 	if verificationError != nil {
@@ -202,7 +204,7 @@ func chatRequestFromQuery(ginContext *gin.Context, defaultSystemPrompt string, d
 	}, true
 }
 
-func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload, defaultSystemPrompt string, defaultProvider string, defaultModel string, validator *modelValidator) (chatRequestParameters, bool) {
+func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload, defaults tenantDefaults, validator *modelValidator) (chatRequestParameters, bool) {
 	if payload.Prompt == constants.EmptyString {
 		ginContext.String(http.StatusBadRequest, errorMissingPrompt)
 		return chatRequestParameters{}, false
@@ -210,7 +212,7 @@ func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload,
 
 	systemPrompt := payload.SystemPrompt
 	if systemPrompt == constants.EmptyString {
-		systemPrompt = defaultSystemPrompt
+		systemPrompt = defaults.systemPrompt
 	}
 
 	modelIdentifier, modelParameterError := resolveJSONModelParameter(ginContext.Query(queryParameterModel), payload.Model)
@@ -226,8 +228,8 @@ func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload,
 	providerDefinition, resolvedModel, verificationError := validator.ResolveText(
 		ginContext.Query(queryParameterProvider),
 		modelIdentifier,
-		defaultProvider,
-		defaultModel,
+		defaults.provider,
+		defaults.model,
 		payload.WebSearch,
 	)
 	if verificationError != nil {
@@ -279,8 +281,9 @@ func submitChatRequest(ginContext *gin.Context, taskQueue chan requestTask, chat
 	}
 }
 
-func dictateHandler(upstreamProviders *providerRouter, defaultProvider string, defaultModel string, validator *modelValidator, maxInputAudioBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+func dictateHandler(upstreamProviders *providerRouter, validator *modelValidator, maxInputAudioBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		requestTenant := authenticatedTenantFromContext(ginContext)
 		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxInputAudioBytes+2*1024*1024)
 		if parseError := ginContext.Request.ParseMultipartForm(maxInputAudioBytes); parseError != nil {
 			ginContext.String(http.StatusBadRequest, errorInvalidAudioForm)
@@ -308,8 +311,8 @@ func dictateHandler(upstreamProviders *providerRouter, defaultProvider string, d
 		providerDefinition, modelIdentifier, verificationError := validator.ResolveDictation(
 			ginContext.Query(queryParameterProvider),
 			ginContext.Query(queryParameterModel),
-			defaultProvider,
-			defaultModel,
+			requestTenant.defaults.dictationProvider,
+			requestTenant.defaults.dictationModel,
 		)
 		if verificationError != nil {
 			ginContext.String(statusCodeForError(verificationError), responseMessageForError(verificationError))

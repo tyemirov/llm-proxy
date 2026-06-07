@@ -54,7 +54,7 @@ func NewTestRouter(t *testing.T, serverURL string) *gin.Engine {
 	t.Cleanup(func() { _ = logger.Sync() })
 
 	router, err := proxy.BuildRouter(proxy.Configuration{
-		ServiceSecret:              TestSecret,
+		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
 		OpenAIKey:                  TestAPIKey,
 		LogLevel:                   proxy.LogLevelDebug,
 		WorkerCount:                1,

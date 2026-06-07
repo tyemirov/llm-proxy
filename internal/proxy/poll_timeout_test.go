@@ -20,9 +20,6 @@ func TestApplyTunablesSetsDefaultUpstreamPollTimeout(testingInstance *testing.T)
 func TestApplyTunablesSetsDefaultDictationConfiguration(testingInstance *testing.T) {
 	configuration := proxy.Configuration{}
 	configuration.ApplyTunables()
-	if configuration.DictationModel != proxy.DefaultDictationModel {
-		testingInstance.Fatalf("dictationModel=%q want=%q", configuration.DictationModel, proxy.DefaultDictationModel)
-	}
 	if configuration.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
 		testingInstance.Fatalf("maxInputAudioBytes=%d want=%d", configuration.MaxInputAudioBytes, proxy.DefaultMaxInputAudioBytes)
 	}

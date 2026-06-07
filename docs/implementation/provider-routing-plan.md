@@ -9,8 +9,8 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 ## Request Contract
 
 - `provider` is an optional query parameter on `GET /`, `POST /`, and `POST /dictate`.
-- Omitted `provider` means `openai`.
-- `model` keeps its current meaning.
+- Omitted `provider` means the authenticated tenant's default provider.
+- `model` keeps its current meaning; omitted `model` means the authenticated tenant's default model when set, otherwise the selected provider's native default.
 - `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies.
 - Omitted `max_tokens` means the proxy omits provider max-token fields and lets the selected provider/model default apply.
 - Provided `max_tokens` maps to OpenAI Responses `max_output_tokens`, OpenAI-compatible chat completions `max_tokens`, and Gemini `generationConfig.maxOutputTokens`.
@@ -39,7 +39,6 @@ The loader rejects unknown keys and missing placeholders before the proxy starts
 
 Shared config fields:
 
-- `server.service_secret`
 - `server.port`
 - `server.log_level`
 - `server.workers`
@@ -48,11 +47,13 @@ Shared config fields:
 - `server.upstream_poll_timeout_seconds`
 - `server.max_prompt_bytes`
 - `server.max_input_audio_bytes`
-- `defaults.provider`
-- `defaults.model`
-- `defaults.dictation_provider`
-- `defaults.dictation_model`
-- `defaults.system_prompt`
+- `tenants[].id`
+- `tenants[].secret`
+- `tenants[].defaults.provider`
+- `tenants[].defaults.model`
+- `tenants[].defaults.dictation_provider`
+- `tenants[].defaults.dictation_model`
+- `tenants[].defaults.system_prompt`
 
 Provider credentials and base URLs:
 
@@ -64,7 +65,7 @@ Provider credentials and base URLs:
 - `providers.zhipu.api_key`, `providers.zhipu.base_url`
 - `providers.gemini.api_key`, `providers.gemini.base_url`
 
-Startup validates `server.service_secret`, the credential required by the configured default text provider, and the endpoint/credential required by the configured default dictation provider. Credentials for non-default providers are validated when a request selects that provider.
+Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, validates the credential required by each tenant's default text provider, and validates endpoint/credential support for each tenant's default dictation provider. Credentials for providers not used by tenant defaults are validated when a request selects that provider.
 
 ## Error Contract
 
