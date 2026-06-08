@@ -8,15 +8,22 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 
 ## Request Contract
 
-- `provider` is an optional query parameter on `GET /`, `POST /`, and `POST /dictate`.
+- `provider` is an optional query parameter on `GET /`, `POST /`, `POST /v2`, and `POST /dictate`.
 - Omitted `provider` means the authenticated tenant's default provider.
 - `model` keeps its current meaning; omitted `model` means the authenticated tenant's default model when set, otherwise the selected provider's native default.
+- Compatibility JSON `POST /` accepts exactly one text input shape: `prompt` for a single user prompt or `messages[]` for an OpenRouter/OpenAI-compatible chat transcript.
+- Canonical JSON `POST /v2` accepts only `messages[]` as the text input shape; request-body `prompt` and `system_prompt` are invalid.
+- `messages[]` items contain `role` and string `content`. Supported roles are `system`, `user`, and `assistant`; at least one `user` message is required.
+- `messages[].order` is optional. When any submitted message includes `order`, every submitted message must include a unique non-negative integer `order`; the proxy sorts submitted messages by ascending `order` before adding a request or tenant system prompt and before routing upstream.
+- With `messages[]` on `POST /`, body `system_prompt` is prepended as a system message only when the transcript does not already contain a `system` message. A body containing both `system_prompt` and a system message is invalid. With `POST /v2`, callers send system instructions as `system` role messages.
 - `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies.
 - Omitted `max_tokens` means the proxy omits provider max-token fields and lets the selected provider/model default apply.
 - Provided `max_tokens` maps to OpenAI Responses `max_output_tokens`, OpenAI-compatible chat completions `max_tokens`, and Gemini `generationConfig.maxOutputTokens`.
 - Known provider-specific output-token ceilings are validated before upstream calls; Gemini text models reject `max_tokens` above `65536` with `400 Bad Request`.
 - For JSON `POST /`, query `model` may override the body only when the body omits `model` or provides the same value.
 - Conflicting query/body `model` values return `400 Bad Request`.
+- JSON `POST /` bodies that provide both `prompt` and `messages`, neither field, empty messages, unsupported roles, empty content, a missing user message, partially specified `order`, duplicate `order`, or negative `order` return `400 Bad Request`.
+- JSON `POST /v2` bodies that provide `prompt`, body `system_prompt`, missing or empty messages, unsupported roles, empty content, a missing user message, partially specified `order`, duplicate `order`, negative `order`, or unknown JSON fields return `400 Bad Request`.
 - Upstream provider API keys are never accepted from client requests.
 
 ## Providers
@@ -83,8 +90,11 @@ Startup validates configured tenants, rejects duplicate tenant ids and duplicate
 - OpenAI keeps the existing Responses API adapter.
 - Non-OpenAI text providers use a shared OpenAI-compatible Chat Completions adapter.
 - Gemini uses a native generateContent adapter against `GEMINI_BASE_URL`.
+- OpenAI-compatible chat providers receive validated and sorted `messages[]` as provider-supported `role` and `content` items.
+- Gemini receives user messages as native `contents`, assistant messages as `model` contents, and system messages as `systemInstruction`.
+- OpenAI Responses receives single-prompt requests unchanged and multi-message requests as a deterministic role-labelled transcript.
 - Dictation routing reuses the multipart transcription adapter with provider-specific URLs.
-- Response formatting remains unchanged.
+- Response formatting keeps existing text/XML/CSV bodies and existing JSON `request`, `response`, and normalized `usage` fields. JSON responses also include OpenRouter-style `object`, `model`, and `choices[].message.content` metadata, plus request `messages` with provided `order` values.
 
 ## Test Strategy
 
