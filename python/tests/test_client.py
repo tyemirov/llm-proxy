@@ -17,6 +17,8 @@ import pytest
 from llm_proxy_client import (
     Client,
     ClientConfig,
+    ClientMessagesRequest,
+    ClientMessage,
     ClientRequest,
     LLMProxyClientError,
     LLMProxyHTTPError,
@@ -176,6 +178,66 @@ def test_client_overrides_provider_and_sends_optional_body_fields(running_server
     }
 
 
+def test_client_posts_messages_body(running_server: RunningServer) -> None:
+    """The public client can send OpenRouter-style chat messages."""
+
+    client = Client(ClientConfig(base_url=running_server.url, secret="test-secret"))
+
+    response_text = client.post(
+        ClientRequest(
+            messages=(
+                ClientMessage(role="assistant", content="Hi.", order=2),
+                ClientMessage(role="user", content="Hello", order=1),
+            ),
+            model="deepseek-v4-flash",
+            system_prompt="Outer system",
+        )
+    )
+
+    assert response_text == "reviewed"
+    assert CapturingHandler.captured_request.body == {
+        "web_search": False,
+        "messages": [
+            {"role": "user", "content": "Hello", "order": 1},
+            {"role": "assistant", "content": "Hi.", "order": 2},
+        ],
+        "model": "deepseek-v4-flash",
+        "system_prompt": "Outer system",
+    }
+
+
+def test_client_posts_v2_messages_body(running_server: RunningServer) -> None:
+    """The public client can send v2 messages-only requests."""
+
+    client = Client(ClientConfig(base_url=running_server.url, secret="test-secret"))
+
+    response_text = client.post_messages(
+        ClientMessagesRequest(
+            messages=(
+                ClientMessage(role="assistant", content="Hi.", order=2),
+                ClientMessage(role="user", content="Hello", order=1),
+            ),
+            model="deepseek-v4-flash",
+            web_search=True,
+        )
+    )
+
+    captured_request = CapturingHandler.captured_request
+    parsed_path = urllib.parse.urlparse(captured_request.path)
+    query_values = urllib.parse.parse_qs(parsed_path.query)
+    assert response_text == "reviewed"
+    assert parsed_path.path == "/v2"
+    assert query_values["key"] == ["test-secret"]
+    assert captured_request.body == {
+        "messages": [
+            {"role": "user", "content": "Hello", "order": 1},
+            {"role": "assistant", "content": "Hi.", "order": 2},
+        ],
+        "web_search": True,
+        "model": "deepseek-v4-flash",
+    }
+
+
 @pytest.mark.parametrize(
     ("config_kwargs", "expected_error"),
     [
@@ -197,6 +259,36 @@ def test_config_validation_errors(config_kwargs: dict[str, object], expected_err
     ("request_kwargs", "expected_error"),
     [
         ({"prompt": ""}, "missing prompt"),
+        ({"prompt": "prompt", "messages": (ClientMessage(role="user", content="message"),)}, "choose prompt or messages"),
+        ({"messages": (ClientMessage(role="assistant", content="prefill"),)}, "messages must include a user message"),
+        (
+            {
+                "system_prompt": "outer",
+                "messages": (
+                    ClientMessage(role="system", content="inner"),
+                    ClientMessage(role="user", content="prompt"),
+                ),
+            },
+            "system_prompt conflicts",
+        ),
+        (
+            {
+                "messages": (
+                    ClientMessage(role="user", content="prompt", order=1),
+                    ClientMessage(role="assistant", content="answer"),
+                ),
+            },
+            "all messages must include order",
+        ),
+        (
+            {
+                "messages": (
+                    ClientMessage(role="user", content="prompt", order=1),
+                    ClientMessage(role="assistant", content="answer", order=1),
+                ),
+            },
+            "duplicate message order",
+        ),
         ({"prompt": "prompt", "max_tokens": 0}, "max_tokens must be positive"),
     ],
 )
@@ -205,6 +297,56 @@ def test_request_validation_errors(request_kwargs: dict[str, object], expected_e
 
     with pytest.raises(LLMProxyClientError, match=expected_error):
         ClientRequest(**request_kwargs)
+
+
+@pytest.mark.parametrize(
+    ("request_kwargs", "expected_error"),
+    [
+        ({"messages": ()}, "missing messages"),
+        (
+            {
+                "messages": (
+                    ClientMessage(role="user", content="prompt", order=1),
+                    ClientMessage(role="assistant", content="answer"),
+                ),
+            },
+            "all messages must include order",
+        ),
+        (
+            {
+                "messages": (
+                    ClientMessage(role="user", content="prompt", order=1),
+                    ClientMessage(role="assistant", content="answer", order=1),
+                ),
+            },
+            "duplicate message order",
+        ),
+        (
+            {"messages": (ClientMessage(role="user", content="prompt"),), "max_tokens": 0},
+            "max_tokens must be positive",
+        ),
+    ],
+)
+def test_messages_request_validation_errors(request_kwargs: dict[str, object], expected_error: str) -> None:
+    """Invalid v2 request input fails at the package boundary."""
+
+    with pytest.raises(LLMProxyClientError, match=expected_error):
+        ClientMessagesRequest(**request_kwargs)
+
+
+@pytest.mark.parametrize(
+    ("message_kwargs", "expected_error"),
+    [
+        ({"role": "tool", "content": "tool result"}, "unsupported message role"),
+        ({"role": "user", "content": ""}, "empty message content"),
+        ({"role": "user", "content": "prompt", "order": -1}, "message order must be non-negative"),
+    ],
+)
+def test_message_validation_errors(message_kwargs: dict[str, object], expected_error: str) -> None:
+    """Invalid message input fails at the package boundary."""
+
+    with pytest.raises(LLMProxyClientError, match=expected_error):
+        ClientMessage(**message_kwargs)
 
 
 def test_http_error_exposes_status_and_body(running_server: RunningServer) -> None:

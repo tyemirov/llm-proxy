@@ -3,6 +3,8 @@
 from .client import (
     Client,
     ClientConfig,
+    ClientMessagesRequest,
+    ClientMessage,
     ClientRequest,
     LLMProxyClientError,
     LLMProxyHTTPError,
@@ -12,9 +14,10 @@ from .client import (
 __all__ = [
     "Client",
     "ClientConfig",
+    "ClientMessagesRequest",
+    "ClientMessage",
     "ClientRequest",
     "LLMProxyClientError",
     "LLMProxyHTTPError",
     "LLMProxyTransportError",
 ]
-
