@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.16] - 2026-06-08
+
+### Changes
+- Merge pull request #173 from tyemirov/gix/add-canonical-post-v2-messages-only-chat-endpoint-and
+- docs: update ISSUES.md with recent bugfixes, improvements, and features
+- feat: add Anthropic provider support with message-based API client
+- docs: update provider routing plan with Anthropic and Grok details
+- feat(cli): add Anthropic and Grok providers to config and tests
+- docs: add Anthropic and Grok provider support details to README
+- docs: add detailed feature spec for self-service API key and tenant UI
+- feat: add v2 messages-only API support with ClientMessage and validation
+- feat: add v2 messages API support with ordered chat messages
+- feat: add /v2 messages-only API with explicit ordering and OpenRouter support
+- feat(proxy): add structured chat message handling with validation and ordering
+- docs: update provider routing plan for multi-provider and message ordering
+- docs: update README with canonical POST /v2 chat messages endpoint
+- test: add ClientMessagesRequest to python-root-import-test check
+
 ## [v0.2.15] - 2026-06-06
 
 ### Changes
