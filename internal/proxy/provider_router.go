@@ -7,16 +7,18 @@ import (
 )
 
 type providerRouter struct {
-	openAIClient *OpenAIClient
-	chatClient   *openAICompatibleChatClient
-	geminiClient *geminiGenerateContentClient
+	openAIClient    *OpenAIClient
+	chatClient      *openAICompatibleChatClient
+	geminiClient    *geminiGenerateContentClient
+	anthropicClient *anthropicMessagesClient
 }
 
-func newProviderRouter(openAIClient *OpenAIClient, chatClient *openAICompatibleChatClient, geminiClient *geminiGenerateContentClient) *providerRouter {
+func newProviderRouter(openAIClient *OpenAIClient, chatClient *openAICompatibleChatClient, geminiClient *geminiGenerateContentClient, anthropicClient *anthropicMessagesClient) *providerRouter {
 	return &providerRouter{
-		openAIClient: openAIClient,
-		chatClient:   chatClient,
-		geminiClient: geminiClient,
+		openAIClient:    openAIClient,
+		chatClient:      chatClient,
+		geminiClient:    geminiClient,
+		anthropicClient: anthropicClient,
 	}
 }
 
@@ -34,6 +36,17 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 	}
 	if request.provider.textTransport == textTransportGeminiGenerate {
 		return router.geminiClient.generateText(
+			requestContext,
+			request.provider.credentialFor(endpointKindText),
+			request.provider.textBaseURL,
+			request.model,
+			request.messages,
+			request.maxTokens,
+			structuredLogger,
+		)
+	}
+	if request.provider.textTransport == textTransportAnthropicMessages {
+		return router.anthropicClient.generateText(
 			requestContext,
 			request.provider.credentialFor(endpointKindText),
 			request.provider.textBaseURL,

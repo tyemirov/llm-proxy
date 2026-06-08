@@ -99,7 +99,8 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	openAIClient := NewOpenAIClient(HTTPClient, configuration.Endpoints, requestTimeout, pollTimeout)
 	chatClient := newOpenAICompatibleChatClient(HTTPClient, requestTimeout)
 	geminiClient := newGeminiGenerateContentClient(HTTPClient, requestTimeout)
-	upstreamProviders := newProviderRouter(openAIClient, chatClient, geminiClient)
+	anthropicClient := newAnthropicMessagesClient(HTTPClient, requestTimeout)
+	upstreamProviders := newProviderRouter(openAIClient, chatClient, geminiClient, anthropicClient)
 	for workerIndex := 0; workerIndex < configuration.WorkerCount; workerIndex++ {
 		go func() {
 			for pending := range taskQueue {
@@ -190,10 +191,11 @@ func chatV2JSONHandler(taskQueue chan requestTask, validator *modelValidator, re
 func chatRequestFromQuery(ginContext *gin.Context, defaults tenantDefaults, validator *modelValidator, structuredLogger *zap.SugaredLogger) (chatRequestParameters, bool) {
 	userPrompt := ginContext.Query(queryParameterPrompt)
 	systemPrompt := ginContext.Query(queryParameterSystemPrompt)
+	systemPromptVisibleInResponse := systemPrompt != constants.EmptyString
 	if systemPrompt == constants.EmptyString {
 		systemPrompt = defaults.systemPrompt
 	}
-	messages, messageError := newPromptChatMessages(userPrompt, systemPrompt)
+	messages, messageError := newPromptChatMessages(userPrompt, systemPrompt, systemPromptVisibleInResponse)
 	if messageError != nil {
 		ginContext.String(http.StatusBadRequest, errorMissingPrompt)
 		return chatRequestParameters{}, false
@@ -281,10 +283,11 @@ func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload,
 	var requestDisplay string
 	if hasPrompt {
 		systemPrompt := payload.SystemPrompt
+		systemPromptVisibleInResponse := systemPrompt != constants.EmptyString
 		if systemPrompt == constants.EmptyString {
 			systemPrompt = defaults.systemPrompt
 		}
-		messages, messageError = newPromptChatMessages(payload.Prompt, systemPrompt)
+		messages, messageError = newPromptChatMessages(payload.Prompt, systemPrompt, systemPromptVisibleInResponse)
 		requestDisplay = payload.Prompt
 	} else {
 		messages, messageError = newPayloadChatMessages(*payload.Messages, defaults.systemPrompt, payload.SystemPrompt)
