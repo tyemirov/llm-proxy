@@ -34,17 +34,27 @@ type requestTask struct {
 // chatRequestPayload is the JSON contract for POST / LLM requests.
 // Client authentication stays outside this body on the key query parameter; provider credentials are loaded from server configuration.
 type chatRequestPayload struct {
-	Prompt       string `json:"prompt"`
-	Model        string `json:"model"`
-	WebSearch    bool   `json:"web_search"`
-	SystemPrompt string `json:"system_prompt"`
-	MaxTokens    *int   `json:"max_tokens"`
+	Prompt       string                `json:"prompt"`
+	Messages     *[]chatMessagePayload `json:"messages"`
+	Model        string                `json:"model"`
+	WebSearch    bool                  `json:"web_search"`
+	SystemPrompt string                `json:"system_prompt"`
+	MaxTokens    *int                  `json:"max_tokens"`
+}
+
+type chatV2RequestPayload struct {
+	Prompt       json.RawMessage       `json:"prompt"`
+	Messages     *[]chatMessagePayload `json:"messages"`
+	Model        string                `json:"model"`
+	WebSearch    bool                  `json:"web_search"`
+	SystemPrompt json.RawMessage       `json:"system_prompt"`
+	MaxTokens    *int                  `json:"max_tokens"`
 }
 
 // chatRequestParameters is the normalized request shape shared by GET and POST handlers after edge validation.
 type chatRequestParameters struct {
-	prompt           string
-	systemPrompt     string
+	messages         chatMessages
+	requestDisplay   string
 	provider         providerDefinition
 	model            modelID
 	webSearchEnabled bool
@@ -89,7 +99,8 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	openAIClient := NewOpenAIClient(HTTPClient, configuration.Endpoints, requestTimeout, pollTimeout)
 	chatClient := newOpenAICompatibleChatClient(HTTPClient, requestTimeout)
 	geminiClient := newGeminiGenerateContentClient(HTTPClient, requestTimeout)
-	upstreamProviders := newProviderRouter(openAIClient, chatClient, geminiClient)
+	anthropicClient := newAnthropicMessagesClient(HTTPClient, requestTimeout)
+	upstreamProviders := newProviderRouter(openAIClient, chatClient, geminiClient, anthropicClient)
 	for workerIndex := 0; workerIndex < configuration.WorkerCount; workerIndex++ {
 		go func() {
 			for pending := range taskQueue {
@@ -102,6 +113,7 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	router.Use(gin.Recovery(), tenantMiddleware(configuration.tenants, structuredLogger))
 	router.GET(rootPath, chatHandler(taskQueue, validator, requestTimeout, structuredLogger))
 	router.POST(rootPath, chatJSONHandler(taskQueue, validator, requestTimeout, configuration.MaxPromptBytes, structuredLogger))
+	router.POST(v2Path, chatV2JSONHandler(taskQueue, validator, requestTimeout, configuration.MaxPromptBytes, structuredLogger))
 	router.POST(dictatePath, dictateHandler(upstreamProviders, validator, configuration.MaxInputAudioBytes, structuredLogger))
 	return router, nil
 }
@@ -151,16 +163,42 @@ func chatJSONHandler(taskQueue chan requestTask, validator *modelValidator, requ
 	}
 }
 
+func chatV2JSONHandler(taskQueue chan requestTask, validator *modelValidator, requestTimeout time.Duration, maxPromptBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		requestTenant := authenticatedTenantFromContext(ginContext)
+		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxPromptBytes)
+		var payload chatV2RequestPayload
+		jsonDecoder := json.NewDecoder(ginContext.Request.Body)
+		jsonDecoder.DisallowUnknownFields()
+		if decodeError := jsonDecoder.Decode(&payload); decodeError != nil {
+			var maxBytesError *http.MaxBytesError
+			if errors.As(decodeError, &maxBytesError) {
+				ginContext.String(http.StatusRequestEntityTooLarge, errorPromptPayloadTooLarge)
+				return
+			}
+			ginContext.String(http.StatusBadRequest, errorInvalidJSONRequest)
+			return
+		}
+
+		chatRequest, ok := chatRequestFromV2Payload(ginContext, payload, requestTenant.defaults, validator)
+		if !ok {
+			return
+		}
+		submitChatRequest(ginContext, taskQueue, chatRequest, requestTimeout, structuredLogger)
+	}
+}
+
 func chatRequestFromQuery(ginContext *gin.Context, defaults tenantDefaults, validator *modelValidator, structuredLogger *zap.SugaredLogger) (chatRequestParameters, bool) {
 	userPrompt := ginContext.Query(queryParameterPrompt)
-	if userPrompt == constants.EmptyString {
-		ginContext.String(http.StatusBadRequest, errorMissingPrompt)
-		return chatRequestParameters{}, false
-	}
-
 	systemPrompt := ginContext.Query(queryParameterSystemPrompt)
+	systemPromptVisibleInResponse := systemPrompt != constants.EmptyString
 	if systemPrompt == constants.EmptyString {
 		systemPrompt = defaults.systemPrompt
+	}
+	messages, messageError := newPromptChatMessages(userPrompt, systemPrompt, systemPromptVisibleInResponse)
+	if messageError != nil {
+		ginContext.String(http.StatusBadRequest, errorMissingPrompt)
+		return chatRequestParameters{}, false
 	}
 
 	webSearchQuery := strings.TrimSpace(ginContext.Query(queryParameterWebSearch))
@@ -193,10 +231,9 @@ func chatRequestFromQuery(ginContext *gin.Context, defaults tenantDefaults, vali
 		ginContext.String(http.StatusBadRequest, errorInvalidMaxTokens)
 		return chatRequestParameters{}, false
 	}
-
 	return chatRequestParameters{
-		prompt:           userPrompt,
-		systemPrompt:     systemPrompt,
+		messages:         messages,
+		requestDisplay:   userPrompt,
 		provider:         providerDefinition,
 		model:            modelIdentifier,
 		webSearchEnabled: webSearchEnabled,
@@ -205,14 +242,15 @@ func chatRequestFromQuery(ginContext *gin.Context, defaults tenantDefaults, vali
 }
 
 func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload, defaults tenantDefaults, validator *modelValidator) (chatRequestParameters, bool) {
-	if payload.Prompt == constants.EmptyString {
-		ginContext.String(http.StatusBadRequest, errorMissingPrompt)
+	hasPrompt := payload.Prompt != constants.EmptyString
+	hasMessages := payload.Messages != nil
+	if hasPrompt && hasMessages {
+		ginContext.String(http.StatusBadRequest, errorConflictingPromptMessages)
 		return chatRequestParameters{}, false
 	}
-
-	systemPrompt := payload.SystemPrompt
-	if systemPrompt == constants.EmptyString {
-		systemPrompt = defaults.systemPrompt
+	if !hasPrompt && !hasMessages {
+		ginContext.String(http.StatusBadRequest, errorMissingPrompt)
+		return chatRequestParameters{}, false
 	}
 
 	modelIdentifier, modelParameterError := resolveJSONModelParameter(ginContext.Query(queryParameterModel), payload.Model)
@@ -240,10 +278,84 @@ func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload,
 		ginContext.String(http.StatusBadRequest, errorInvalidMaxTokens)
 		return chatRequestParameters{}, false
 	}
+	var messages chatMessages
+	var messageError error
+	var requestDisplay string
+	if hasPrompt {
+		systemPrompt := payload.SystemPrompt
+		systemPromptVisibleInResponse := systemPrompt != constants.EmptyString
+		if systemPrompt == constants.EmptyString {
+			systemPrompt = defaults.systemPrompt
+		}
+		messages, messageError = newPromptChatMessages(payload.Prompt, systemPrompt, systemPromptVisibleInResponse)
+		requestDisplay = payload.Prompt
+	} else {
+		messages, messageError = newPayloadChatMessages(*payload.Messages, defaults.systemPrompt, payload.SystemPrompt)
+		requestDisplay = messages.requestDisplayText()
+	}
+	if messageError != nil {
+		ginContext.String(statusCodeForError(messageError), responseMessageForError(messageError))
+		return chatRequestParameters{}, false
+	}
 
 	return chatRequestParameters{
-		prompt:           payload.Prompt,
-		systemPrompt:     systemPrompt,
+		messages:         messages,
+		requestDisplay:   requestDisplay,
+		provider:         providerDefinition,
+		model:            resolvedModel,
+		webSearchEnabled: payload.WebSearch,
+		maxTokens:        payload.MaxTokens,
+	}, true
+}
+
+func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayload, defaults tenantDefaults, validator *modelValidator) (chatRequestParameters, bool) {
+	if payload.Prompt != nil {
+		ginContext.String(http.StatusBadRequest, errorUnsupportedPromptParameter)
+		return chatRequestParameters{}, false
+	}
+	if payload.SystemPrompt != nil {
+		ginContext.String(http.StatusBadRequest, errorUnsupportedSystemPrompt)
+		return chatRequestParameters{}, false
+	}
+	if payload.Messages == nil {
+		ginContext.String(http.StatusBadRequest, errorMissingMessages)
+		return chatRequestParameters{}, false
+	}
+
+	modelIdentifier, modelParameterError := resolveJSONModelParameter(ginContext.Query(queryParameterModel), payload.Model)
+	if modelParameterError != nil {
+		ginContext.String(statusCodeForError(modelParameterError), responseMessageForError(modelParameterError))
+		return chatRequestParameters{}, false
+	}
+	if payload.MaxTokens != nil && *payload.MaxTokens <= 0 {
+		ginContext.String(http.StatusBadRequest, errorInvalidMaxTokens)
+		return chatRequestParameters{}, false
+	}
+
+	providerDefinition, resolvedModel, verificationError := validator.ResolveText(
+		ginContext.Query(queryParameterProvider),
+		modelIdentifier,
+		defaults.provider,
+		defaults.model,
+		payload.WebSearch,
+	)
+	if verificationError != nil {
+		ginContext.String(statusCodeForError(verificationError), responseMessageForError(verificationError))
+		return chatRequestParameters{}, false
+	}
+	if maxTokensError := validateTextMaxTokens(providerDefinition, resolvedModel, payload.MaxTokens); maxTokensError != nil {
+		ginContext.String(http.StatusBadRequest, errorInvalidMaxTokens)
+		return chatRequestParameters{}, false
+	}
+	messages, messageError := newPayloadChatMessages(*payload.Messages, defaults.systemPrompt, constants.EmptyString)
+	if messageError != nil {
+		ginContext.String(statusCodeForError(messageError), responseMessageForError(messageError))
+		return chatRequestParameters{}, false
+	}
+
+	return chatRequestParameters{
+		messages:         messages,
+		requestDisplay:   messages.requestDisplayText(),
 		provider:         providerDefinition,
 		model:            resolvedModel,
 		webSearchEnabled: payload.WebSearch,
@@ -274,7 +386,7 @@ func submitChatRequest(ginContext *gin.Context, taskQueue chan requestTask, chat
 		}
 		mime := preferredMime(ginContext)
 		writeTokenUsageHeaders(ginContext.Writer.Header(), outcome.generation.usage)
-		formattedBody, contentType := formatResponse(outcome.generation.text, mime, chatRequest.prompt, outcome.generation.usage)
+		formattedBody, contentType := formatResponse(outcome.generation.text, mime, chatRequest, outcome.generation.usage)
 		ginContext.Data(http.StatusOK, contentType, []byte(formattedBody))
 	case <-requestContext.Done():
 		ginContext.String(http.StatusGatewayTimeout, errorRequestTimedOut)
@@ -393,7 +505,7 @@ func validateTextMaxTokens(providerDefinition providerDefinition, modelIdentifie
 
 func statusCodeForError(requestError error) int {
 	switch {
-	case errors.Is(requestError, ErrUnknownProvider), errors.Is(requestError, ErrUnknownModel), errors.Is(requestError, ErrUnsupportedCapability), errors.Is(requestError, ErrUnsupportedEndpoint), errors.Is(requestError, ErrConflictingModelParameters):
+	case errors.Is(requestError, ErrUnknownProvider), errors.Is(requestError, ErrUnknownModel), errors.Is(requestError, ErrUnsupportedCapability), errors.Is(requestError, ErrUnsupportedEndpoint), errors.Is(requestError, ErrConflictingModelParameters), errors.Is(requestError, ErrInvalidChatMessages):
 		return http.StatusBadRequest
 	case errors.Is(requestError, ErrProviderNotConfigured):
 		return http.StatusServiceUnavailable

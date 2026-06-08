@@ -117,6 +117,63 @@ func TestChatHandlerAcceptsJSONBody(testingInstance *testing.T) {
 	}
 }
 
+func TestChatHandlerAcceptsMessagesJSONBodyForOpenAIResponses(testingInstance *testing.T) {
+	const finalResponse = `{"status":"completed", "output":[{"type":"message", "role":"assistant", "content":[{"type":"text","text":"ok"}]}]}`
+
+	var capturedPayload map[string]any
+	mockServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		if httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/" {
+			bodyBytes, readError := io.ReadAll(httpRequest.Body)
+			if readError != nil {
+				testingInstance.Fatalf("read request body: %v", readError)
+			}
+			if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+				testingInstance.Fatalf("unmarshal request body: %v", unmarshalError)
+			}
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(fmt.Sprintf(`{"id": "%s", "status": "queued"}`, TestJobID)))
+			return
+		}
+		if httpRequest.Method == http.MethodGet && strings.HasSuffix(httpRequest.URL.Path, TestJobID) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(finalResponse))
+			return
+		}
+		http.NotFound(responseWriter, httpRequest)
+	}))
+	defer mockServer.Close()
+
+	router := NewTestRouter(testingInstance, mockServer.URL)
+	requestBody := bytes.NewBufferString(`{"messages":[{"role":"user","content":"Continue.","order":3},{"role":"assistant","content":"Hi.","order":2},{"role":"system","content":"Follow the contract.","order":0},{"role":"user","content":"Hello.","order":1}],"model":"` + proxy.ModelNameGPT55 + `"}`)
+	request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&format=application/json", requestBody)
+	request.Header.Set("Content-Type", "application/json")
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		testingInstance.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+	}
+	expectedInput := "system:\nFollow the contract.\n\nuser:\nHello.\n\nassistant:\nHi.\n\nuser:\nContinue."
+	if capturedPayload["input"] != expectedInput {
+		testingInstance.Fatalf("input=%q want=%q", capturedPayload["input"], expectedInput)
+	}
+	var response struct {
+		Request  string `json:"request"`
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+			Order   *int   `json:"order"`
+		} `json:"messages"`
+	}
+	if decodeError := json.Unmarshal(responseRecorder.Body.Bytes(), &response); decodeError != nil {
+		testingInstance.Fatalf("decode response: %v", decodeError)
+	}
+	if response.Request != expectedInput || len(response.Messages) != 4 || response.Messages[0].Order == nil || *response.Messages[0].Order != 0 {
+		testingInstance.Fatalf("response=%+v", response)
+	}
+}
+
 func TestChatHandlerContinuesIncompleteGPT55JSONBody(testingInstance *testing.T) {
 	const finalResponse = `{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"continued ok"}]}]}`
 	const incompleteResponseID = "resp_incomplete_gpt55"

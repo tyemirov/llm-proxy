@@ -79,17 +79,9 @@ func hasFinalMessage(rawPayload []byte) bool {
 	return false
 }
 
-// openAIRequest sends a prompt to the OpenAI responses API and returns the resulting text.
-func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier string, userPrompt string, systemPrompt string, webSearchEnabled bool, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	// The Responses API expects a single string input. We'll prepend the system prompt to the user prompt.
-	var combinedPrompt strings.Builder
-	if !utils.IsBlank(systemPrompt) {
-		combinedPrompt.WriteString(systemPrompt)
-		combinedPrompt.WriteString("\n\n")
-	}
-	combinedPrompt.WriteString(userPrompt)
-
-	payload := BuildRequestPayload(modelIdentifier, combinedPrompt.String(), webSearchEnabled, maxTokens)
+// openAIRequest sends messages to the OpenAI responses API and returns the resulting text.
+func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier string, messages chatMessages, webSearchEnabled bool, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	payload := BuildRequestPayload(modelIdentifier, messages.openAIResponsesInput(), webSearchEnabled, maxTokens)
 	payloadBytes, _ := json.Marshal(payload)
 
 	requestContext, cancelRequest := context.WithTimeout(parentContext, client.requestTimeout)

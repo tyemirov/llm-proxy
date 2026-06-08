@@ -7,6 +7,15 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
 
 ## BugFixes
 
+- [x] [B413] (P1) Stop response echoes from exposing server-injected tenant system prompts.
+  JSON response metadata added for chat-message compatibility currently echoes the normalized upstream message list. When the server prepends `tenants[].defaults.system_prompt`, that default can appear in response `messages` or request display fields even though the caller did not submit it.
+  Acceptance criteria:
+  1. Provider adapters still receive tenant default system prompts when the caller omits a system message.
+  2. JSON response `messages` includes only client-visible messages and never includes server-injected tenant defaults.
+  3. Response `request` display fields do not include server-injected tenant defaults.
+  4. Black-box tests cover the upstream/response split.
+  Resolution: Added response visibility tracking to normalized chat messages so provider-facing transcripts still include tenant defaults, while JSON `messages` and response request display text include only client-visible messages. Updated DeepSeek `/v2` provider-routing coverage to prove the upstream request still receives the tenant default system prompt and the JSON response does not echo it. Clarified the response metadata contract in README and provider-routing docs. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 26 passed), `timeout -k 350s -s SIGKILL 350s make lint`, and `git diff --check`.
+
 - [x] [B412] (P0) Stop sending Gemini response-only `thought` fields in generateContent requests.
   Live Gemini calls proved that `gemini-3.5-flash` accepts the proxy's model and prompt, but rejects request parts containing `thought:false` with `400 INVALID_ARGUMENT`. The proxy introduced `parts[].thought` to filter Gemini response thoughts, then reused that struct for outbound request serialization, causing selected Gemini requests to fail as proxy `502` with `provider API error: status=400`.
   Resolution: Split Gemini request and response part types so outbound `generateContent` payloads serialize only request-valid `text` fields, while response parsing still reads `parts[].thought` and filters thought text. Added black-box provider-routing assertions that Gemini GET and JSON POST request payloads omit `thought` from user contents and system instructions. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test` (total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci` (total coverage 100.0%), and a patched local proxy smoke test returning `OK`/`200` from live Gemini for `model=gemini-3.5-flash`.
@@ -42,6 +51,48 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
   Resolution: The 502 came from GPT-5.5 Responses returning `status: "incomplete"` after spending the output budget on reasoning/web-search work; the proxy then called the unsupported `/v1/responses/{id}/continue` endpoint. Incomplete max-token responses now continue through a new Responses request with `previous_response_id`, preserving the body model and web-search settings. A patched live proxy run with `model: "gpt-5.5"` in the JSON body returned `200 OK`, and `make ci` passes with total coverage at 100.0%.
 
 ## Improvements
+
+- [x] [I423] (P1) Document provider support matrix in README.
+  Add a README support matrix that lets operators compare currently supported providers without reading the registry code. The matrix should include provider selectors, aliases, transports, default models, credential fields, base URL defaults, dictation support, web-search support, and provider-specific notes for Anthropic and Grok.
+  Acceptance criteria:
+  1. README contains a provider-level support matrix for every currently supported provider.
+  2. README documents Anthropic's native Messages behavior and Grok's xAI OpenAI-compatible chat behavior.
+  3. README keeps model-level capability details aligned with the provider matrix.
+  4. Documentation validation passes.
+  Resolution: Added a README provider support matrix covering selectors, aliases, text API transports, provider defaults, credential fields, built-in base URLs, dictation support, and web-search support for all configured providers. Added provider-specific notes for server-side credentials, OpenAI-compatible chat providers, SiliconFlow dictation, Gemini usage normalization, Anthropic Messages translation and required `max_tokens`, and Grok xAI chat completions. Expanded the model capabilities table with provider defaults and proxy-side `max_tokens` limits, and added a dictation capabilities table. Validation passed with `timeout -k 30s -s SIGKILL 30s git diff --check`.
+
+- [x] [I421] (P1) Add `/v2` messages-only text API and client support.
+  Add a versioned text endpoint for the cleaned request shape: `POST /v2` accepts only `messages[]` as the text input and keeps optional `messages[].order` support. Keep `/` compatible with existing prompt callers.
+  Acceptance criteria:
+  1. `POST /v2?key=...` accepts JSON bodies with non-empty `messages[]` using `system`, `user`, and `assistant` string-content messages.
+  2. `/v2` rejects request bodies containing `prompt`, missing or empty `messages`, unsupported roles, empty content, a missing user message, body `system_prompt`, partially specified `order`, duplicate `order`, or negative `order`.
+  3. `/v2` routes messages through OpenAI-compatible chat, Gemini, and OpenAI Responses using the existing provider translation layer.
+  4. Go and Python clients expose an explicit messages-only v2 request path.
+  5. README and provider-routing docs describe `/` as the compatibility endpoint and `/v2` as the canonical messages endpoint.
+  6. Black-box server/client tests cover successful `/v2` messages and invalid `/v2` body shapes.
+  Resolution: Added `POST /v2` as the canonical messages-only JSON endpoint. It accepts non-empty `messages[]` with `system`, `user`, and `assistant` string-content roles, preserves optional `messages[].order`, sorts by `order` only when provided by every submitted message, rejects body `prompt` and body `system_prompt`, and rejects unknown v2 body fields. The endpoint routes the validated transcript through OpenAI-compatible chat, Gemini, and OpenAI Responses with the existing provider translation layer. Added Go `NewMessagesRequest`/`Client.PostMessages` and Python `ClientMessagesRequest`/`Client.post_messages`, plus README and provider-routing documentation. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 26 passed), `timeout -k 350s -s SIGKILL 350s make lint`, and `git diff --check`.
+
+- [x] [I420] (P1) Add optional explicit ordering for chat messages.
+  Keep the OpenRouter-compatible `messages[]` list shape, but allow callers to provide an explicit numeric `order` field when they do not want to rely on array position. If any message includes `order`, every message in the body must include a unique non-negative `order`, and the proxy must sort messages by `order` before routing upstream.
+  Acceptance criteria:
+  1. `messages[].order` is optional for OpenRouter-compatible callers.
+  2. If any payload message has `order`, all payload messages must have unique non-negative `order` values.
+  3. Ordered message payloads are sorted by `order` before OpenAI-compatible chat, Gemini, and OpenAI Responses routing.
+  4. JSON responses include `order` on request `messages` when it was provided.
+  5. README, provider-routing docs, Go client, and Python client document or expose `order`.
+  6. Black-box server/client tests cover sorted ordered messages and invalid order inputs.
+  Resolution: Added optional `messages[].order` to the server, Go client, and Python client. When any submitted message has `order`, every submitted message must have a unique non-negative integer order; ordered payloads are sorted at the request edge before provider routing. OpenAI-compatible chat receives sorted provider-supported `role`/`content` items, Gemini receives sorted native contents, OpenAI Responses builds its transcript from the sorted messages, and JSON responses echo provided order values in request `messages`. Updated README and provider-routing docs. Validation passed with I421 using `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test`, `timeout -k 350s -s SIGKILL 350s make lint`, and `git diff --check`.
+
+- [x] [I419] (P1) Add OpenRouter-style chat message request and response shape.
+  OpenRouter's API documentation uses an OpenAI-compatible Chat Completions shape where JSON requests carry `messages[]` and responses expose generated assistant text at `choices[].message.content`. The proxy's public JSON POST contract still accepts only a single `prompt` field and JSON responses expose only the proxy-specific `request`/`response` envelope.
+  Acceptance criteria:
+  1. `POST /?key=...` accepts either `prompt` or `messages`, but rejects bodies that provide both or neither.
+  2. `messages[]` validates at the HTTP edge, supports ordered `system`, `user`, and `assistant` string-content messages, and rejects unsupported roles or empty content before upstream calls.
+  3. OpenAI-compatible chat providers receive the validated messages as Chat Completions messages, Gemini receives equivalent native contents/system instruction, and OpenAI Responses receives a deterministic transcript without changing the existing single-prompt behavior.
+  4. JSON-format text responses retain existing `request`, `response`, and normalized `usage` fields while adding an OpenRouter-style `object`, `model`, and `choices[].message.content` envelope.
+  5. README, provider-routing docs, Go client, and Python client document or expose the `messages` body shape.
+  6. Black-box HTTP/client tests cover message routing, validation failures, and response shape.
+  Resolution: Added validated JSON `messages[]` support for `system`, `user`, and `assistant` string-content messages, with edge rejection for prompt/messages conflicts, empty message arrays, unsupported roles, empty content, missing user messages, and system prompt conflicts. OpenAI-compatible chat providers now receive messages directly, Gemini receives native contents/system instruction, and OpenAI Responses receives a deterministic transcript while the existing single-prompt path remains unchanged. JSON responses retain `request`, `response`, and normalized `usage` and now include `object`, `model`, `choices[].message.content`, and request `messages`. Updated README, provider-routing docs, Go client, and Python client with `ClientMessage`. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make go-test` (total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make python-test` (17 passed before client conflict coverage was added), `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 18 passed), and `git diff --check`.
 
 - [x] [I415] (P1) Add an importable Python llm-proxy client package.
   The American-language and Russian-language skill surfaces are Python-based callers of the llm-proxy JSON POST contract. Add a first-class Python package in this repository so those surfaces can share transport behavior without each owning a local proxy helper.
@@ -119,6 +170,17 @@ These entries are always-available procedures. Keep them `[ ]` so they remain ru
   2. Record findings as new Maintenance issues (or close as "no action" if already covered).
 
 ## Features
+
+- [x] [F422] (P1) Add Anthropic and Grok text providers.
+  Add Anthropic Claude and xAI Grok support to the authenticated text endpoints using server-side provider credentials. Anthropic should use the native Messages API. Grok should use xAI's OpenAI-compatible chat completions API. Both providers should validate known model IDs at the request edge, support tenant defaults, reject unsupported dictation and web-search requests, and document their configuration and capability limits.
+  Acceptance criteria:
+  1. `GET /`, JSON `POST /`, and `POST /v2` route `provider=anthropic` requests to Anthropic Messages with `x-api-key`, `anthropic-version`, supported Claude models, optional request `max_tokens`, system prompt translation, and token usage normalization.
+  2. `GET /`, JSON `POST /`, and `POST /v2` route `provider=grok` requests through xAI chat completions with `XAI_API_KEY`, `https://api.x.ai/v1` defaults, supported Grok models, optional request `max_tokens`, and token usage normalization.
+  3. Missing Anthropic/Grok credentials return `503` for explicit provider requests and fail startup when used as tenant defaults.
+  4. Anthropic/Grok dictation and `web_search` requests return unsupported endpoint/capability errors until those capabilities are explicitly designed.
+  5. README and provider-routing docs describe configuration, defaults, supported models, aliases, and capability limits.
+  6. Black-box HTTP and CLI/config tests cover success and failure paths, and repository validation passes.
+  Resolution: Added `provider=anthropic`/alias `claude` using native Anthropic Messages, `provider=grok`/alias `xai` using xAI chat completions, current Claude/Grok model validation, tenant defaults, missing-credential startup/runtime errors, unsupported dictation/web-search errors, config docs, routing docs, and black-box coverage. Verified with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 26 passed), `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
 
 - [x] [F418] (P1) Add tenant-authenticated defaults.
   Replace the single shared `server.service_secret` plus global `defaults` contract with an explicit tenant list where each tenant has its own client secret and default text/dictation settings. Requests continue to authenticate with the `key` query parameter, but the accepted key selects tenant defaults when provider/model/system prompt values are omitted.

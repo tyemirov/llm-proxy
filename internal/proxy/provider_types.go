@@ -19,23 +19,34 @@ const (
 	ProviderNameZhipu = "zhipu"
 	// ProviderNameGemini identifies Google Gemini routing.
 	ProviderNameGemini = "gemini"
+	// ProviderNameAnthropic identifies Anthropic Claude routing.
+	ProviderNameAnthropic = "anthropic"
+	// ProviderNameGrok identifies xAI Grok routing.
+	ProviderNameGrok = "grok"
 )
 
 const (
-	providerAliasQwen = "qwen"
-	providerAliasKimi = "kimi"
-	providerAliasGLM  = "glm"
+	providerAliasQwen   = "qwen"
+	providerAliasKimi   = "kimi"
+	providerAliasGLM    = "glm"
+	providerAliasClaude = "claude"
+	providerAliasXAI    = "xai"
 )
 
 const (
-	defaultDeepSeekBaseURL     = "https://api.deepseek.com"
-	defaultDashScopeBaseURL    = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-	defaultMoonshotBaseURL     = "https://api.moonshot.ai/v1"
-	defaultSiliconFlowBaseURL  = "https://api.siliconflow.com/v1"
-	defaultZhipuBaseURL        = "https://open.bigmodel.cn/api/paas/v4"
-	defaultGeminiBaseURL       = "https://generativelanguage.googleapis.com/v1"
-	defaultSiliconFlowSTTModel = "FunAudioLLM/SenseVoiceSmall"
-	geminiOutputTokenLimit     = 65536
+	defaultDeepSeekBaseURL              = "https://api.deepseek.com"
+	defaultDashScopeBaseURL             = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+	defaultMoonshotBaseURL              = "https://api.moonshot.ai/v1"
+	defaultSiliconFlowBaseURL           = "https://api.siliconflow.com/v1"
+	defaultZhipuBaseURL                 = "https://open.bigmodel.cn/api/paas/v4"
+	defaultGeminiBaseURL                = "https://generativelanguage.googleapis.com/v1"
+	defaultAnthropicBaseURL             = "https://api.anthropic.com"
+	defaultGrokBaseURL                  = "https://api.x.ai/v1"
+	defaultSiliconFlowSTTModel          = "FunAudioLLM/SenseVoiceSmall"
+	geminiOutputTokenLimit              = 65536
+	anthropicOutputTokenLimit           = 64000
+	anthropicOpusOutputTokenLimit       = 128000
+	anthropicLegacyOpusOutputTokenLimit = 32000
 )
 
 const (
@@ -65,6 +76,36 @@ const (
 	ModelNameGemini25FlashLite = "gemini-2.5-flash-lite"
 	// ModelNameGemini25Pro identifies Gemini 2.5 Pro.
 	ModelNameGemini25Pro = "gemini-2.5-pro"
+	// ModelNameClaudeOpus48 identifies Claude Opus 4.8.
+	ModelNameClaudeOpus48 = "claude-opus-4-8"
+	// ModelNameClaudeSonnet46 identifies Claude Sonnet 4.6.
+	ModelNameClaudeSonnet46 = "claude-sonnet-4-6"
+	// ModelNameClaudeHaiku45 identifies Claude Haiku 4.5.
+	ModelNameClaudeHaiku45 = "claude-haiku-4-5-20251001"
+	// ModelNameClaudeHaiku45Alias identifies the Claude Haiku 4.5 convenience alias.
+	ModelNameClaudeHaiku45Alias = "claude-haiku-4-5"
+	// ModelNameClaudeSonnet45 identifies Claude Sonnet 4.5.
+	ModelNameClaudeSonnet45 = "claude-sonnet-4-5-20250929"
+	// ModelNameClaudeSonnet45Alias identifies the Claude Sonnet 4.5 convenience alias.
+	ModelNameClaudeSonnet45Alias = "claude-sonnet-4-5"
+	// ModelNameClaudeOpus41 identifies Claude Opus 4.1.
+	ModelNameClaudeOpus41 = "claude-opus-4-1-20250805"
+	// ModelNameClaudeOpus41Alias identifies the Claude Opus 4.1 convenience alias.
+	ModelNameClaudeOpus41Alias = "claude-opus-4-1"
+	// ModelNameGrok43 identifies the current Grok 4.3 model.
+	ModelNameGrok43 = "grok-4.3"
+	// ModelNameGrok43Latest identifies the Grok 4.3 latest alias.
+	ModelNameGrok43Latest = "grok-4.3-latest"
+	// ModelNameGrokLatest identifies the current Grok latest alias.
+	ModelNameGrokLatest = "grok-latest"
+	// ModelNameGrokBuild01 identifies the Grok Build coding model.
+	ModelNameGrokBuild01 = "grok-build-0.1"
+	// ModelNameGrokCodeFast identifies the Grok code fast alias.
+	ModelNameGrokCodeFast = "grok-code-fast"
+	// ModelNameGrokCodeFast1 identifies the Grok code fast 1 alias.
+	ModelNameGrokCodeFast1 = "grok-code-fast-1"
+	// ModelNameGrokCodeFast10825 identifies the dated Grok code fast 1 model.
+	ModelNameGrokCodeFast10825 = "grok-code-fast-1-0825"
 )
 
 type endpointKind string
@@ -80,6 +121,7 @@ const (
 	textTransportOpenAIResponses      providerTextTransport = "openai_responses"
 	textTransportOpenAICompatibleChat providerTextTransport = "openai_compatible_chat"
 	textTransportGeminiGenerate       providerTextTransport = "gemini_generate"
+	textTransportAnthropicMessages    providerTextTransport = "anthropic_messages"
 )
 
 type providerID string

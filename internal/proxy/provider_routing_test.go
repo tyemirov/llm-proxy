@@ -20,6 +20,8 @@ const (
 	testDeepSeekKey    = "sk-deepseek"
 	testSiliconFlowKey = "sk-siliconflow"
 	testGeminiKey      = "sk-gemini"
+	testAnthropicKey   = "sk-ant"
+	testGrokKey        = "sk-xai"
 )
 
 func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
@@ -133,6 +135,105 @@ func TestProviderRoutingTranslatesMaxTokensForOpenAICompatibleChat(t *testing.T)
 	}
 	if capturedPayload["max_tokens"] != float64(444) {
 		t.Fatalf("max_tokens=%v payload=%v", capturedPayload["max_tokens"], capturedPayload)
+	}
+}
+
+func TestProviderRoutingSupportsMessagesJSONPostForOpenAICompatibleChat(t *testing.T) {
+	var capturedPayload map[string]any
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		bodyBytes, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			t.Fatalf("read body: %v", readError)
+		}
+		if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+			t.Fatalf("unmarshal body: %v", unmarshalError)
+		}
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"chat messages ok"}}],"usage":{"prompt_tokens":8,"completion_tokens":3,"total_tokens":11}}`))
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		Tenants: proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{
+			Provider:          proxy.ProviderNameOpenAI,
+			Model:             proxy.DefaultModel,
+			DictationProvider: proxy.ProviderNameOpenAI,
+			DictationModel:    proxy.DefaultDictationModel,
+			SystemPrompt:      "Tenant system.",
+		}),
+		OpenAIKey:                  TestAPIKey,
+		DeepSeekKey:                testDeepSeekKey,
+		DeepSeekBaseURL:            upstreamServer.URL,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	requestBody := bytes.NewBufferString(`{"messages":[{"role":"user","content":"Continue.","order":3},{"role":"user","content":"Hello","order":1},{"role":"assistant","content":"Hi.","order":2}],"model":"` + proxy.ModelNameDeepSeekV4Flash + `"}`)
+	request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&provider="+proxy.ProviderNameDeepSeek+"&format=application/json", requestBody)
+	request.Header.Set("Content-Type", "application/json")
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	rawMessages, ok := capturedPayload["messages"].([]any)
+	if !ok || len(rawMessages) != 4 {
+		t.Fatalf("messages=%v", capturedPayload["messages"])
+	}
+	firstMessage, ok := rawMessages[0].(map[string]any)
+	if !ok || firstMessage["role"] != "system" || firstMessage["content"] != "Tenant system." {
+		t.Fatalf("firstMessage=%v", rawMessages[0])
+	}
+	secondMessage, ok := rawMessages[1].(map[string]any)
+	if !ok || secondMessage["role"] != "user" || secondMessage["content"] != "Hello" {
+		t.Fatalf("secondMessage=%v", rawMessages[1])
+	}
+	thirdMessage, ok := rawMessages[2].(map[string]any)
+	if !ok || thirdMessage["role"] != "assistant" || thirdMessage["content"] != "Hi." {
+		t.Fatalf("thirdMessage=%v", rawMessages[2])
+	}
+	var response struct {
+		Object   string `json:"object"`
+		Model    string `json:"model"`
+		Request  string `json:"request"`
+		Response string `json:"response"`
+		Choices  []struct {
+			Message struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+			Order   *int   `json:"order"`
+		} `json:"messages"`
+	}
+	if decodeError := json.Unmarshal(responseRecorder.Body.Bytes(), &response); decodeError != nil {
+		t.Fatalf("decode response: %v", decodeError)
+	}
+	if response.Object != "chat.completion" || response.Model != proxy.ModelNameDeepSeekV4Flash || response.Response != "chat messages ok" {
+		t.Fatalf("response=%+v", response)
+	}
+	if response.Choices[0].Message.Role != "assistant" || response.Choices[0].Message.Content != "chat messages ok" {
+		t.Fatalf("choices=%+v", response.Choices)
+	}
+	expectedRequestDisplay := "user:\nHello\n\nassistant:\nHi.\n\nuser:\nContinue."
+	if response.Request != expectedRequestDisplay || len(response.Messages) != 3 || response.Messages[0].Order == nil || *response.Messages[0].Order != 1 {
+		t.Fatalf("messages=%+v request=%q", response.Messages, response.Request)
+	}
+	for _, responseMessage := range response.Messages {
+		if responseMessage.Content == "Tenant system." {
+			t.Fatalf("response leaked tenant system prompt: %+v", response.Messages)
+		}
 	}
 }
 
@@ -430,7 +531,11 @@ func systemInstructionText(rawSystemInstruction any) string {
 	if !ok {
 		return ""
 	}
-	parts, ok := systemInstruction["parts"].([]any)
+	return geminiContentText(systemInstruction)
+}
+
+func geminiContentText(content map[string]any) string {
+	parts, ok := content["parts"].([]any)
 	if !ok || len(parts) == 0 {
 		return ""
 	}
@@ -498,6 +603,324 @@ func TestProviderRoutingSupportsGeminiJSONPost(t *testing.T) {
 	assertGeminiContentOmitsThought(t, capturedPayload["systemInstruction"], "systemInstruction")
 	if generationConfig, ok := capturedPayload["generationConfig"].(map[string]any); !ok || generationConfig["maxOutputTokens"] != float64(222) {
 		t.Fatalf("generationConfig=%v", capturedPayload["generationConfig"])
+	}
+}
+
+func TestProviderRoutingSupportsMessagesJSONPostForGemini(t *testing.T) {
+	var capturedPayload map[string]any
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		bodyBytes, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			t.Fatalf("read body: %v", readError)
+		}
+		if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+			t.Fatalf("unmarshal body: %v", unmarshalError)
+		}
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"gemini messages ok"}]}}]}`))
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:                  TestAPIKey,
+		GeminiKey:                  testGeminiKey,
+		GeminiBaseURL:              upstreamServer.URL,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	requestBody := bytes.NewBufferString(`{"messages":[{"role":"user","content":"Continue.","order":4},{"role":"assistant","content":"Hi.","order":3},{"role":"system","content":"Gemini system","order":1},{"role":"user","content":"Hello","order":2}],"model":"` + proxy.ModelNameGemini25Flash + `"}`)
+	request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&provider="+proxy.ProviderNameGemini, requestBody)
+	request.Header.Set("Content-Type", "application/json")
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	if systemInstructionText(capturedPayload["systemInstruction"]) != "Gemini system" {
+		t.Fatalf("systemInstruction=%v", capturedPayload["systemInstruction"])
+	}
+	contents, ok := capturedPayload["contents"].([]any)
+	if !ok || len(contents) != 3 {
+		t.Fatalf("contents=%v", capturedPayload["contents"])
+	}
+	firstContent, ok := contents[0].(map[string]any)
+	if !ok || firstContent["role"] != "user" || geminiContentText(firstContent) != "Hello" {
+		t.Fatalf("firstContent=%v", contents[0])
+	}
+	secondContent, ok := contents[1].(map[string]any)
+	if !ok || secondContent["role"] != "model" || geminiContentText(secondContent) != "Hi." {
+		t.Fatalf("secondContent=%v", contents[1])
+	}
+}
+
+func TestProviderRoutingSupportsAnthropicMessages(t *testing.T) {
+	var capturedPayload map[string]any
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			t.Fatalf("method=%s want=%s", request.Method, http.MethodPost)
+		}
+		if request.URL.Path != "/v1/messages" {
+			t.Fatalf("path=%s want=%s", request.URL.Path, "/v1/messages")
+		}
+		if apiKeyHeader := request.Header.Get("x-api-key"); apiKeyHeader != testAnthropicKey {
+			t.Fatalf("x-api-key=%q want=%q", apiKeyHeader, testAnthropicKey)
+		}
+		if versionHeader := request.Header.Get("anthropic-version"); versionHeader != "2023-06-01" {
+			t.Fatalf("anthropic-version=%q want=%q", versionHeader, "2023-06-01")
+		}
+		bodyBytes, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			t.Fatalf("read body: %v", readError)
+		}
+		if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+			t.Fatalf("unmarshal body: %v", unmarshalError)
+		}
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"claude ok"}],"usage":{"input_tokens":17,"output_tokens":6}}`))
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:                  TestAPIKey,
+		AnthropicKey:               testAnthropicKey,
+		AnthropicBaseURL:           upstreamServer.URL,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	requestBody := bytes.NewBufferString(`{"messages":[{"role":"user","content":"Continue.","order":4},{"role":"assistant","content":"Hi.","order":3},{"role":"system","content":"Anthropic system","order":1},{"role":"user","content":"Hello","order":2}],"model":"` + proxy.ModelNameClaudeSonnet46 + `"}`)
+	request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&provider="+proxy.ProviderNameAnthropic+"&format=application/json", requestBody)
+	request.Header.Set("Content-Type", "application/json")
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	if capturedPayload["model"] != proxy.ModelNameClaudeSonnet46 {
+		t.Fatalf("model=%v want=%s", capturedPayload["model"], proxy.ModelNameClaudeSonnet46)
+	}
+	if capturedPayload["max_tokens"] != float64(64000) {
+		t.Fatalf("max_tokens=%v payload=%v", capturedPayload["max_tokens"], capturedPayload)
+	}
+	if capturedPayload["system"] != "Anthropic system" {
+		t.Fatalf("system=%v", capturedPayload["system"])
+	}
+	rawMessages, ok := capturedPayload["messages"].([]any)
+	if !ok || len(rawMessages) != 3 {
+		t.Fatalf("messages=%v", capturedPayload["messages"])
+	}
+	firstMessage, ok := rawMessages[0].(map[string]any)
+	if !ok || firstMessage["role"] != "user" || firstMessage["content"] != "Hello" {
+		t.Fatalf("firstMessage=%v", rawMessages[0])
+	}
+	secondMessage, ok := rawMessages[1].(map[string]any)
+	if !ok || secondMessage["role"] != "assistant" || secondMessage["content"] != "Hi." {
+		t.Fatalf("secondMessage=%v", rawMessages[1])
+	}
+	if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "17" {
+		t.Fatalf("request tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens))
+	}
+	if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "6" {
+		t.Fatalf("response tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens))
+	}
+	if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "23" {
+		t.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
+	}
+	var response struct {
+		Response string `json:"response"`
+		Usage    struct {
+			RequestTokens  int `json:"request_tokens"`
+			ResponseTokens int `json:"response_tokens"`
+			TotalTokens    int `json:"total_tokens"`
+		} `json:"usage"`
+	}
+	if decodeError := json.Unmarshal(responseRecorder.Body.Bytes(), &response); decodeError != nil {
+		t.Fatalf("decode response: %v", decodeError)
+	}
+	if response.Response != "claude ok" || response.Usage.RequestTokens != 17 || response.Usage.ResponseTokens != 6 || response.Usage.TotalTokens != 23 {
+		t.Fatalf("response=%+v", response)
+	}
+}
+
+func TestProviderRoutingAnthropicDefaultMaxTokensByModel(t *testing.T) {
+	testCases := []struct {
+		name              string
+		modelIdentifier   string
+		expectedMaxTokens float64
+	}{
+		{name: "opus 4.8", modelIdentifier: proxy.ModelNameClaudeOpus48, expectedMaxTokens: 128000},
+		{name: "opus 4.1", modelIdentifier: proxy.ModelNameClaudeOpus41Alias, expectedMaxTokens: 32000},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			var capturedPayload map[string]any
+			upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+				bodyBytes, readError := io.ReadAll(request.Body)
+				if readError != nil {
+					subTest.Fatalf("read body: %v", readError)
+				}
+				if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+					subTest.Fatalf("unmarshal body: %v", unmarshalError)
+				}
+				responseWriter.Header().Set("Content-Type", "application/json")
+				_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"claude default max ok"}]}`))
+			}))
+			defer upstreamServer.Close()
+
+			router, buildError := proxy.BuildRouter(proxy.Configuration{
+				Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+				OpenAIKey:                  TestAPIKey,
+				AnthropicKey:               testAnthropicKey,
+				AnthropicBaseURL:           upstreamServer.URL,
+				LogLevel:                   proxy.LogLevelInfo,
+				WorkerCount:                1,
+				QueueSize:                  1,
+				RequestTimeoutSeconds:      TestTimeout,
+				UpstreamPollTimeoutSeconds: TestTimeout,
+			}, zap.NewNop().Sugar())
+			if buildError != nil {
+				subTest.Fatalf(messageBuildRouterError, buildError)
+			}
+
+			queryParameters := url.Values{}
+			queryParameters.Set("key", TestSecret)
+			queryParameters.Set("prompt", TestPrompt)
+			queryParameters.Set("provider", proxy.ProviderNameAnthropic)
+			queryParameters.Set("model", testCase.modelIdentifier)
+			request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+			responseRecorder := httptest.NewRecorder()
+
+			router.ServeHTTP(responseRecorder, request)
+
+			if responseRecorder.Code != http.StatusOK {
+				subTest.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+			}
+			if capturedPayload["max_tokens"] != testCase.expectedMaxTokens {
+				subTest.Fatalf("max_tokens=%v want=%v payload=%v", capturedPayload["max_tokens"], testCase.expectedMaxTokens, capturedPayload)
+			}
+		})
+	}
+}
+
+func TestProviderRoutingTranslatesMaxTokensForAnthropicMessages(t *testing.T) {
+	var capturedPayload map[string]any
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		bodyBytes, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			t.Fatalf("read body: %v", readError)
+		}
+		if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+			t.Fatalf("unmarshal body: %v", unmarshalError)
+		}
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"claude cap ok"}]}`))
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:                  TestAPIKey,
+		AnthropicKey:               testAnthropicKey,
+		AnthropicBaseURL:           upstreamServer.URL,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	requestBody := bytes.NewBufferString(`{"prompt":"hello claude","model":"` + proxy.ModelNameClaudeSonnet46 + `","max_tokens":444}`)
+	request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&provider="+proxy.ProviderNameAnthropic, requestBody)
+	request.Header.Set("Content-Type", "application/json")
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	if capturedPayload["max_tokens"] != float64(444) {
+		t.Fatalf("max_tokens=%v payload=%v", capturedPayload["max_tokens"], capturedPayload)
+	}
+}
+
+func TestProviderRoutingSupportsGrokChatCompletions(t *testing.T) {
+	var capturedPayload map[string]any
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/chat/completions" {
+			t.Fatalf("path=%s want=%s", request.URL.Path, "/chat/completions")
+		}
+		if authorizationHeader := request.Header.Get("Authorization"); authorizationHeader != "Bearer "+testGrokKey {
+			t.Fatalf("authorization=%q want=%q", authorizationHeader, "Bearer "+testGrokKey)
+		}
+		bodyBytes, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			t.Fatalf("read body: %v", readError)
+		}
+		if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+			t.Fatalf("unmarshal body: %v", unmarshalError)
+		}
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"grok ok"}}],"usage":{"prompt_tokens":9,"completion_tokens":4,"total_tokens":13}}`))
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:                  TestAPIKey,
+		GrokKey:                    testGrokKey,
+		GrokBaseURL:                upstreamServer.URL,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	queryParameters := url.Values{}
+	queryParameters.Set("key", TestSecret)
+	queryParameters.Set("prompt", TestPrompt)
+	queryParameters.Set("provider", "xai")
+	queryParameters.Set("model", proxy.ModelNameGrokCodeFast)
+	queryParameters.Set("format", "application/json")
+	request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	if capturedPayload["model"] != proxy.ModelNameGrokCodeFast {
+		t.Fatalf("model=%v want=%s", capturedPayload["model"], proxy.ModelNameGrokCodeFast)
+	}
+	if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "13" {
+		t.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
 	}
 }
 
@@ -612,6 +1035,46 @@ func TestProviderRoutingRejectsGeminiQueryMaxTokensAboveModelLimit(t *testing.T)
 	}
 }
 
+func TestProviderRoutingRejectsAnthropicMaxTokensAboveModelLimit(t *testing.T) {
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		t.Fatal("upstream must not be called for max_tokens above Anthropic model limit")
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:                  TestAPIKey,
+		AnthropicKey:               testAnthropicKey,
+		AnthropicBaseURL:           upstreamServer.URL,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	queryParameters := url.Values{}
+	queryParameters.Set("key", TestSecret)
+	queryParameters.Set("prompt", TestPrompt)
+	queryParameters.Set("provider", proxy.ProviderNameAnthropic)
+	queryParameters.Set("model", proxy.ModelNameClaudeSonnet46)
+	queryParameters.Set("max_tokens", "64001")
+	request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
+	}
+	if !strings.Contains(responseRecorder.Body.String(), "invalid max_tokens parameter") {
+		t.Fatalf("body=%q want invalid max_tokens parameter", responseRecorder.Body.String())
+	}
+}
+
 func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T) {
 	logger := zap.NewNop()
 	router, buildError := proxy.BuildRouter(proxy.Configuration{
@@ -669,6 +1132,64 @@ func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T)
 	}
 }
 
+func TestProviderRoutingRejectsAnthropicAndGrokUnsupportedRequests(t *testing.T) {
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:                  TestAPIKey,
+		AnthropicKey:               testAnthropicKey,
+		GrokKey:                    testGrokKey,
+		AnthropicBaseURL:           "https://anthropic.invalid",
+		GrokBaseURL:                "https://grok.invalid",
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	testCases := []struct {
+		name   string
+		target string
+		method string
+	}{
+		{name: "anthropic web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=anthropic&web_search=1"},
+		{name: "grok web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=grok&web_search=1"},
+		{name: "anthropic dictation", method: http.MethodPost, target: "/dictate?key=" + TestSecret + "&provider=anthropic"},
+		{name: "grok dictation", method: http.MethodPost, target: "/dictate?key=" + TestSecret + "&provider=grok"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			var request *http.Request
+			if testCase.method == http.MethodPost {
+				body := &bytes.Buffer{}
+				writer := multipart.NewWriter(body)
+				filePart, createError := writer.CreateFormFile("audio", "recording.webm")
+				if createError != nil {
+					subTest.Fatalf("CreateFormFile error: %v", createError)
+				}
+				if _, writeError := filePart.Write([]byte(testAudioPayload)); writeError != nil {
+					subTest.Fatalf("write audio: %v", writeError)
+				}
+				if closeError := writer.Close(); closeError != nil {
+					subTest.Fatalf("Close writer error: %v", closeError)
+				}
+				request = httptest.NewRequest(testCase.method, testCase.target, body)
+				request.Header.Set("Content-Type", writer.FormDataContentType())
+			} else {
+				request = httptest.NewRequest(testCase.method, testCase.target, nil)
+			}
+			responseRecorder := httptest.NewRecorder()
+			router.ServeHTTP(responseRecorder, request)
+			if responseRecorder.Code != http.StatusBadRequest {
+				subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
+			}
+		})
+	}
+}
+
 func TestProviderRoutingRejectsGeminiMissingCredential(t *testing.T) {
 	logger := zap.NewNop()
 	router, buildError := proxy.BuildRouter(proxy.Configuration{
@@ -695,6 +1216,44 @@ func TestProviderRoutingRejectsGeminiMissingCredential(t *testing.T) {
 	}
 }
 
+func TestProviderRoutingRejectsAnthropicAndGrokMissingCredentials(t *testing.T) {
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:                  TestAPIKey,
+		AnthropicBaseURL:           "https://anthropic.invalid",
+		GrokBaseURL:                "https://grok.invalid",
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	testCases := []struct {
+		name     string
+		provider string
+		model    string
+	}{
+		{name: "anthropic", provider: proxy.ProviderNameAnthropic, model: proxy.ModelNameClaudeSonnet46},
+		{name: "grok", provider: proxy.ProviderNameGrok, model: proxy.ModelNameGrok43},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&provider="+testCase.provider+"&model="+url.QueryEscape(testCase.model), nil)
+			responseRecorder := httptest.NewRecorder()
+
+			router.ServeHTTP(responseRecorder, request)
+
+			if responseRecorder.Code != http.StatusServiceUnavailable {
+				subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusServiceUnavailable, responseRecorder.Body.String())
+			}
+		})
+	}
+}
+
 func TestProviderRoutingRejectsMissingGeminiDefaultCredential(t *testing.T) {
 	logger := zap.NewNop()
 	_, buildError := proxy.BuildRouter(proxy.Configuration{
@@ -708,6 +1267,41 @@ func TestProviderRoutingRejectsMissingGeminiDefaultCredential(t *testing.T) {
 	}, logger.Sugar())
 	if buildError == nil || !strings.Contains(buildError.Error(), "provider not configured: provider=gemini") {
 		t.Fatalf("error=%v want Gemini provider not configured", buildError)
+	}
+}
+
+func TestProviderRoutingRejectsMissingAnthropicAndGrokDefaultCredentials(t *testing.T) {
+	testCases := []struct {
+		name          string
+		defaults      proxy.TenantDefaults
+		expectedError string
+	}{
+		{
+			name:          "anthropic",
+			defaults:      proxy.TenantDefaults{Provider: proxy.ProviderNameAnthropic, Model: proxy.ModelNameClaudeSonnet46, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel},
+			expectedError: "provider not configured: provider=anthropic",
+		},
+		{
+			name:          "grok",
+			defaults:      proxy.TenantDefaults{Provider: proxy.ProviderNameGrok, Model: proxy.ModelNameGrok43, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel},
+			expectedError: "provider not configured: provider=grok",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			_, buildError := proxy.BuildRouter(proxy.Configuration{
+				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, testCase.defaults),
+				OpenAIKey:                  TestAPIKey,
+				LogLevel:                   proxy.LogLevelInfo,
+				WorkerCount:                1,
+				QueueSize:                  1,
+				RequestTimeoutSeconds:      TestTimeout,
+				UpstreamPollTimeoutSeconds: TestTimeout,
+			}, zap.NewNop().Sugar())
+			if buildError == nil || !strings.Contains(buildError.Error(), testCase.expectedError) {
+				subTest.Fatalf("error=%v want %q", buildError, testCase.expectedError)
+			}
+		})
 	}
 }
 
@@ -823,6 +1417,113 @@ func TestProviderRoutingMapsGeminiTransportErrors(t *testing.T) {
 	})
 }
 
+func TestProviderRoutingMapsAnthropicProviderErrors(t *testing.T) {
+	testCases := []struct {
+		name       string
+		statusCode int
+		body       string
+		wantStatus int
+	}{
+		{name: "rate limited", statusCode: http.StatusTooManyRequests, body: `{}`, wantStatus: http.StatusTooManyRequests},
+		{name: "provider api failure", statusCode: http.StatusInternalServerError, body: `{}`, wantStatus: http.StatusBadGateway},
+		{name: "malformed json", statusCode: http.StatusOK, body: `{`, wantStatus: http.StatusBadGateway},
+		{name: "negative usage", statusCode: http.StatusOK, body: `{"content":[{"type":"text","text":"bad usage"}],"usage":{"input_tokens":1,"output_tokens":-1}}`, wantStatus: http.StatusBadGateway},
+		{name: "missing text", statusCode: http.StatusOK, body: `{"content":[{"type":"tool_use","text":"not visible"}]}`, wantStatus: http.StatusBadGateway},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+				responseWriter.Header().Set("Content-Type", "application/json")
+				responseWriter.WriteHeader(testCase.statusCode)
+				_, _ = responseWriter.Write([]byte(testCase.body))
+			}))
+			defer upstreamServer.Close()
+
+			router, buildError := proxy.BuildRouter(proxy.Configuration{
+				Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+				OpenAIKey:                  TestAPIKey,
+				AnthropicKey:               testAnthropicKey,
+				AnthropicBaseURL:           upstreamServer.URL,
+				LogLevel:                   proxy.LogLevelInfo,
+				WorkerCount:                1,
+				QueueSize:                  1,
+				RequestTimeoutSeconds:      TestTimeout,
+				UpstreamPollTimeoutSeconds: TestTimeout,
+			}, zap.NewNop().Sugar())
+			if buildError != nil {
+				subTest.Fatalf(messageBuildRouterError, buildError)
+			}
+
+			request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&provider=anthropic", nil)
+			responseRecorder := httptest.NewRecorder()
+
+			router.ServeHTTP(responseRecorder, request)
+
+			if responseRecorder.Code != testCase.wantStatus {
+				subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, testCase.wantStatus, responseRecorder.Body.String())
+			}
+		})
+	}
+}
+
+func TestProviderRoutingMapsAnthropicTransportErrors(t *testing.T) {
+	t.Run("invalid request URL", func(subTest *testing.T) {
+		router, buildError := proxy.BuildRouter(proxy.Configuration{
+			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:                  TestAPIKey,
+			AnthropicKey:               testAnthropicKey,
+			AnthropicBaseURL:           "http://[::1",
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      TestTimeout,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+		}, zap.NewNop().Sugar())
+		if buildError != nil {
+			subTest.Fatalf(messageBuildRouterError, buildError)
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&provider=anthropic", nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusBadGateway {
+			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadGateway, responseRecorder.Body.String())
+		}
+	})
+
+	t.Run("transport error", func(subTest *testing.T) {
+		originalHTTPClient := proxy.HTTPClient
+		proxy.HTTPClient = coverageHTTPDoer(func(request *http.Request) (*http.Response, error) {
+			return nil, io.ErrUnexpectedEOF
+		})
+		subTest.Cleanup(func() { proxy.HTTPClient = originalHTTPClient })
+
+		router, buildError := proxy.BuildRouter(proxy.Configuration{
+			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:                  TestAPIKey,
+			AnthropicKey:               testAnthropicKey,
+			AnthropicBaseURL:           "https://anthropic.invalid",
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      1,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+		}, zap.NewNop().Sugar())
+		if buildError != nil {
+			subTest.Fatalf(messageBuildRouterError, buildError)
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&provider=anthropic", nil)
+		requestContext, cancelRequest := context.WithTimeout(request.Context(), coverageShortRequestTimeout)
+		defer cancelRequest()
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request.WithContext(requestContext))
+		if responseRecorder.Code != http.StatusGatewayTimeout {
+			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusGatewayTimeout, responseRecorder.Body.String())
+		}
+	})
+}
+
 func TestProviderRoutingRejectsUnsupportedWebSearch(t *testing.T) {
 	logger := zap.NewNop()
 	router, buildError := proxy.BuildRouter(proxy.Configuration{
@@ -922,6 +1623,34 @@ func TestProviderRoutingRejectsInvalidDefaultDictationProvider(t *testing.T) {
 				UpstreamPollTimeoutSeconds: TestTimeout,
 			},
 			expectedError: "unsupported provider endpoint: provider=gemini endpoint=dictation",
+		},
+		{
+			name: "unsupported_anthropic_dictation",
+			configuration: proxy.Configuration{
+				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameAnthropic}),
+				OpenAIKey:                  TestAPIKey,
+				AnthropicKey:               testAnthropicKey,
+				LogLevel:                   proxy.LogLevelInfo,
+				WorkerCount:                1,
+				QueueSize:                  1,
+				RequestTimeoutSeconds:      TestTimeout,
+				UpstreamPollTimeoutSeconds: TestTimeout,
+			},
+			expectedError: "unsupported provider endpoint: provider=anthropic endpoint=dictation",
+		},
+		{
+			name: "unsupported_grok_dictation",
+			configuration: proxy.Configuration{
+				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameGrok}),
+				OpenAIKey:                  TestAPIKey,
+				GrokKey:                    testGrokKey,
+				LogLevel:                   proxy.LogLevelInfo,
+				WorkerCount:                1,
+				QueueSize:                  1,
+				RequestTimeoutSeconds:      TestTimeout,
+				UpstreamPollTimeoutSeconds: TestTimeout,
+			},
+			expectedError: "unsupported provider endpoint: provider=grok endpoint=dictation",
 		},
 	}
 	for _, testCase := range testCases {

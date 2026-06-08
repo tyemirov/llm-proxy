@@ -20,6 +20,8 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 	siliconFlowProviderID := providerID(ProviderNameSiliconFlow)
 	zhipuProviderID := providerID(ProviderNameZhipu)
 	geminiProviderID := providerID(ProviderNameGemini)
+	anthropicProviderID := providerID(ProviderNameAnthropic)
+	grokProviderID := providerID(ProviderNameGrok)
 
 	definitions := map[providerID]providerDefinition{
 		openAIProviderID: {
@@ -102,6 +104,53 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			),
 			transcriptionModels: map[string]modelID{},
 			textTransport:       textTransportGeminiGenerate,
+		},
+		anthropicProviderID: {
+			identifier:       anthropicProviderID,
+			aliases:          []string{providerAliasClaude},
+			textAPIKey:       configuration.AnthropicKey,
+			textBaseURL:      configuration.AnthropicBaseURL,
+			defaultTextModel: modelID(ModelNameClaudeSonnet46),
+			textModels: modelSet(
+				ModelNameClaudeOpus48,
+				ModelNameClaudeSonnet46,
+				ModelNameClaudeHaiku45,
+				ModelNameClaudeHaiku45Alias,
+				ModelNameClaudeSonnet45,
+				ModelNameClaudeSonnet45Alias,
+				ModelNameClaudeOpus41,
+				ModelNameClaudeOpus41Alias,
+			),
+			textOutputTokenLimits: map[string]int{
+				strings.ToLower(ModelNameClaudeOpus48):        anthropicOpusOutputTokenLimit,
+				strings.ToLower(ModelNameClaudeSonnet46):      anthropicOutputTokenLimit,
+				strings.ToLower(ModelNameClaudeHaiku45):       anthropicOutputTokenLimit,
+				strings.ToLower(ModelNameClaudeHaiku45Alias):  anthropicOutputTokenLimit,
+				strings.ToLower(ModelNameClaudeSonnet45):      anthropicOutputTokenLimit,
+				strings.ToLower(ModelNameClaudeSonnet45Alias): anthropicOutputTokenLimit,
+				strings.ToLower(ModelNameClaudeOpus41):        anthropicLegacyOpusOutputTokenLimit,
+				strings.ToLower(ModelNameClaudeOpus41Alias):   anthropicLegacyOpusOutputTokenLimit,
+			},
+			transcriptionModels: map[string]modelID{},
+			textTransport:       textTransportAnthropicMessages,
+		},
+		grokProviderID: {
+			identifier:       grokProviderID,
+			aliases:          []string{providerAliasXAI},
+			textAPIKey:       configuration.GrokKey,
+			textBaseURL:      configuration.GrokBaseURL,
+			defaultTextModel: modelID(ModelNameGrok43),
+			textModels: modelSet(
+				ModelNameGrok43,
+				ModelNameGrok43Latest,
+				ModelNameGrokLatest,
+				ModelNameGrokBuild01,
+				ModelNameGrokCodeFast,
+				ModelNameGrokCodeFast1,
+				ModelNameGrokCodeFast10825,
+			),
+			transcriptionModels: map[string]modelID{},
+			textTransport:       textTransportOpenAICompatibleChat,
 		},
 	}
 

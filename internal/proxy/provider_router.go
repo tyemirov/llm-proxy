@@ -7,16 +7,18 @@ import (
 )
 
 type providerRouter struct {
-	openAIClient *OpenAIClient
-	chatClient   *openAICompatibleChatClient
-	geminiClient *geminiGenerateContentClient
+	openAIClient    *OpenAIClient
+	chatClient      *openAICompatibleChatClient
+	geminiClient    *geminiGenerateContentClient
+	anthropicClient *anthropicMessagesClient
 }
 
-func newProviderRouter(openAIClient *OpenAIClient, chatClient *openAICompatibleChatClient, geminiClient *geminiGenerateContentClient) *providerRouter {
+func newProviderRouter(openAIClient *OpenAIClient, chatClient *openAICompatibleChatClient, geminiClient *geminiGenerateContentClient, anthropicClient *anthropicMessagesClient) *providerRouter {
 	return &providerRouter{
-		openAIClient: openAIClient,
-		chatClient:   chatClient,
-		geminiClient: geminiClient,
+		openAIClient:    openAIClient,
+		chatClient:      chatClient,
+		geminiClient:    geminiClient,
+		anthropicClient: anthropicClient,
 	}
 }
 
@@ -26,8 +28,7 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 			requestContext,
 			request.provider.credentialFor(endpointKindText),
 			request.model.string(),
-			request.prompt,
-			request.systemPrompt,
+			request.messages,
 			request.webSearchEnabled,
 			request.maxTokens,
 			structuredLogger,
@@ -39,8 +40,18 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 			request.provider.credentialFor(endpointKindText),
 			request.provider.textBaseURL,
 			request.model,
-			request.prompt,
-			request.systemPrompt,
+			request.messages,
+			request.maxTokens,
+			structuredLogger,
+		)
+	}
+	if request.provider.textTransport == textTransportAnthropicMessages {
+		return router.anthropicClient.generateText(
+			requestContext,
+			request.provider.credentialFor(endpointKindText),
+			request.provider.textBaseURL,
+			request.model,
+			request.messages,
 			request.maxTokens,
 			structuredLogger,
 		)
@@ -50,8 +61,7 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 		request.provider.credentialFor(endpointKindText),
 		request.provider.textBaseURL,
 		request.model,
-		request.prompt,
-		request.systemPrompt,
+		request.messages,
 		request.maxTokens,
 		structuredLogger,
 	)

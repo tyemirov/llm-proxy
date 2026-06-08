@@ -40,6 +40,8 @@ type Configuration struct {
 	SiliconFlowKey               string
 	ZhipuKey                     string
 	GeminiKey                    string
+	AnthropicKey                 string
+	GrokKey                      string
 	DeepSeekBaseURL              string
 	DashScopeBaseURL             string
 	MoonshotBaseURL              string
@@ -47,6 +49,8 @@ type Configuration struct {
 	SiliconFlowTranscriptionsURL string
 	ZhipuBaseURL                 string
 	GeminiBaseURL                string
+	AnthropicBaseURL             string
+	GrokBaseURL                  string
 	Port                         int
 	LogLevel                     string
 	WorkerCount                  int
@@ -109,6 +113,8 @@ func (configuration *Configuration) ApplyTunables() {
 	configuration.SiliconFlowKey = strings.TrimSpace(configuration.SiliconFlowKey)
 	configuration.ZhipuKey = strings.TrimSpace(configuration.ZhipuKey)
 	configuration.GeminiKey = strings.TrimSpace(configuration.GeminiKey)
+	configuration.AnthropicKey = strings.TrimSpace(configuration.AnthropicKey)
+	configuration.GrokKey = strings.TrimSpace(configuration.GrokKey)
 	if configuration.RequestTimeoutSeconds <= 0 {
 		configuration.RequestTimeoutSeconds = DefaultRequestTimeoutSeconds
 	}
@@ -148,5 +154,13 @@ func (configuration *Configuration) ApplyTunables() {
 	configuration.GeminiBaseURL = strings.TrimSpace(configuration.GeminiBaseURL)
 	if strings.TrimSpace(configuration.GeminiBaseURL) == constants.EmptyString {
 		configuration.GeminiBaseURL = defaultGeminiBaseURL
+	}
+	configuration.AnthropicBaseURL = strings.TrimSpace(configuration.AnthropicBaseURL)
+	if strings.TrimSpace(configuration.AnthropicBaseURL) == constants.EmptyString {
+		configuration.AnthropicBaseURL = defaultAnthropicBaseURL
+	}
+	configuration.GrokBaseURL = strings.TrimSpace(configuration.GrokBaseURL)
+	if strings.TrimSpace(configuration.GrokBaseURL) == constants.EmptyString {
+		configuration.GrokBaseURL = defaultGrokBaseURL
 	}
 }

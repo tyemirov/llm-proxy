@@ -137,7 +137,7 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 		if contentType != "application/json" {
 			subTest.Fatalf("content-type=%q", contentType)
 		}
-		var response map[string]string
+		var response map[string]any
 		if decodeError := json.Unmarshal([]byte(body), &response); decodeError != nil {
 			subTest.Fatalf("decode json: %v", decodeError)
 		}
@@ -265,8 +265,17 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 		}
 	})
 
-	t.Run("json body validates malformed and missing prompt requests", func(subTest *testing.T) {
-		for _, requestBody := range []string{`{`, `{"model":"` + proxy.ModelNameGPT41 + `"}`} {
+	t.Run("json body validates malformed and invalid prompt message requests", func(subTest *testing.T) {
+		for _, requestBody := range []string{
+			`{`,
+			`{"model":"` + proxy.ModelNameGPT41 + `"}`,
+			`{"prompt":"hello","messages":[{"role":"user","content":"hello"}]}`,
+			`{"messages":[]}`,
+			`{"messages":[{"role":"tool","content":"tool result"}]}`,
+			`{"messages":[{"role":"user","content":"   "}]}`,
+			`{"messages":[{"role":"assistant","content":"prefill"}]}`,
+			`{"system_prompt":"outer","messages":[{"role":"system","content":"inner"},{"role":"user","content":"hello"}]}`,
+		} {
 			request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret, strings.NewReader(requestBody))
 			request.Header.Set("Content-Type", "application/json")
 			responseRecorder := httptest.NewRecorder()
@@ -277,8 +286,112 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 		}
 	})
 
+	t.Run("v2 json body requires messages-only shape", func(subTest *testing.T) {
+		for _, requestBody := range []string{
+			`{"prompt":"hello"}`,
+			`{"prompt":null,"messages":[{"role":"user","content":"hello"}]}`,
+			`{"system_prompt":"outer","messages":[{"role":"user","content":"hello"}]}`,
+			`{"system_prompt":null,"messages":[{"role":"user","content":"hello"}]}`,
+			`{"model":"` + proxy.ModelNameGPT41 + `"}`,
+			`{"messages":[]}`,
+			`{"messages":[{"role":"tool","content":"tool result"}]}`,
+			`{"messages":[{"role":"user","content":"   "}]}`,
+			`{"messages":[{"role":"assistant","content":"prefill"}]}`,
+			`{"messages":[{"role":"user","content":"hello","order":1},{"role":"assistant","content":"hi"}]}`,
+			`{"messages":[{"role":"user","content":"hello","order":1},{"role":"assistant","content":"hi","order":1}]}`,
+			`{"messages":[{"role":"user","content":"hello","order":-1}]}`,
+			`{"messages":[{"role":"user","content":"hello"}],"temperature":0.2}`,
+		} {
+			request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret, strings.NewReader(requestBody))
+			request.Header.Set("Content-Type", "application/json")
+			responseRecorder := httptest.NewRecorder()
+			router.ServeHTTP(responseRecorder, request)
+			if responseRecorder.Code != http.StatusBadRequest {
+				subTest.Fatalf("body=%s status=%d", requestBody, responseRecorder.Code)
+			}
+		}
+	})
+
+	t.Run("v2 json body reports edge validation errors", func(subTest *testing.T) {
+		for _, testCase := range []struct {
+			path string
+			body string
+		}{
+			{
+				path: "/v2?key=" + TestSecret + "&model=" + proxy.ModelNameGPT41,
+				body: `{"model":"` + proxy.ModelNameGPT55 + `","messages":[{"role":"user","content":"hello"}]}`,
+			},
+			{
+				path: "/v2?key=" + TestSecret,
+				body: `{"messages":[{"role":"user","content":"hello"}],"max_tokens":0}`,
+			},
+			{
+				path: "/v2?key=" + TestSecret + "&provider=unknown",
+				body: `{"messages":[{"role":"user","content":"hello"}]}`,
+			},
+		} {
+			request := httptest.NewRequest(http.MethodPost, testCase.path, strings.NewReader(testCase.body))
+			request.Header.Set("Content-Type", "application/json")
+			responseRecorder := httptest.NewRecorder()
+			router.ServeHTTP(responseRecorder, request)
+			if responseRecorder.Code != http.StatusBadRequest {
+				subTest.Fatalf("path=%s body=%s status=%d", testCase.path, testCase.body, responseRecorder.Code)
+			}
+		}
+	})
+
+	t.Run("v2 json body rejects oversized payload", func(subTest *testing.T) {
+		smallRouter := coverageRouter(subTest, proxy.Configuration{
+			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:                  TestAPIKey,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      TestTimeout,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+			MaxPromptBytes:             4,
+		})
+		request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret, strings.NewReader(`{"messages":[{"role":"user","content":"hello"}]}`))
+		request.Header.Set("Content-Type", "application/json")
+		responseRecorder := httptest.NewRecorder()
+		smallRouter.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusRequestEntityTooLarge {
+			subTest.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+		}
+	})
+
+	t.Run("v2 json body enforces provider token limits", func(subTest *testing.T) {
+		geminiRouter := coverageRouter(subTest, proxy.Configuration{
+			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:                  TestAPIKey,
+			GeminiKey:                  "gemini-key",
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      TestTimeout,
+			UpstreamPollTimeoutSeconds: TestTimeout,
+		})
+		request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&provider="+proxy.ProviderNameGemini, strings.NewReader(`{"messages":[{"role":"user","content":"hello"}],"model":"`+proxy.ModelNameGemini25Flash+`","max_tokens":65537}`))
+		request.Header.Set("Content-Type", "application/json")
+		responseRecorder := httptest.NewRecorder()
+		geminiRouter.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusBadRequest || !strings.Contains(responseRecorder.Body.String(), "invalid max_tokens parameter") {
+			subTest.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+		}
+	})
+
 	t.Run("json body accepts query model override and default system prompt", func(subTest *testing.T) {
 		request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&model="+proxy.ModelNameGPT41, strings.NewReader(`{"prompt":"hello json"}`))
+		request.Header.Set("Content-Type", "application/json")
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusOK {
+			subTest.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+		}
+	})
+
+	t.Run("json body messages accept request system prompt", func(subTest *testing.T) {
+		request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&model="+proxy.ModelNameGPT41, strings.NewReader(`{"system_prompt":"outer","messages":[{"role":"user","content":"hello json"}]}`))
 		request.Header.Set("Content-Type", "application/json")
 		responseRecorder := httptest.NewRecorder()
 		router.ServeHTTP(responseRecorder, request)
