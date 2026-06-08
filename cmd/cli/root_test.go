@@ -45,12 +45,20 @@ providers:
   gemini:
     api_key: "${P411_GEMINI_KEY}"
     base_url: "https://gemini.example"
+  anthropic:
+    api_key: "${P411_ANTHROPIC_KEY}"
+    base_url: "https://anthropic.example"
+  grok:
+    api_key: "${P411_GROK_KEY}"
+    base_url: "https://grok.example"
 `)
 	writeTestDotEnv(t, tempDir, `
 P411_SERVICE_SECRET=dotenv-secret
 P411_OPENAI_KEY=sk-openai
 P411_DEEPSEEK_KEY=sk-deepseek
 P411_GEMINI_KEY=sk-gemini
+P411_ANTHROPIC_KEY=sk-ant
+P411_GROK_KEY=sk-xai
 `)
 	t.Setenv("P411_SERVICE_SECRET", "process-secret")
 
@@ -84,6 +92,18 @@ P411_GEMINI_KEY=sk-gemini
 	}
 	if capturedConfiguration.GeminiBaseURL != "https://gemini.example" {
 		t.Fatalf("geminiBaseURL=%q", capturedConfiguration.GeminiBaseURL)
+	}
+	if capturedConfiguration.AnthropicKey != "sk-ant" {
+		t.Fatalf("anthropicKey=%q", capturedConfiguration.AnthropicKey)
+	}
+	if capturedConfiguration.AnthropicBaseURL != "https://anthropic.example" {
+		t.Fatalf("anthropicBaseURL=%q", capturedConfiguration.AnthropicBaseURL)
+	}
+	if capturedConfiguration.GrokKey != "sk-xai" {
+		t.Fatalf("grokKey=%q", capturedConfiguration.GrokKey)
+	}
+	if capturedConfiguration.GrokBaseURL != "https://grok.example" {
+		t.Fatalf("grokBaseURL=%q", capturedConfiguration.GrokBaseURL)
 	}
 }
 

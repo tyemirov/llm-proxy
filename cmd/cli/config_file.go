@@ -71,6 +71,8 @@ type providersConfiguration struct {
 	SiliconFlow siliconFlowConfiguration `mapstructure:"siliconflow"`
 	Zhipu       providerConfiguration    `mapstructure:"zhipu"`
 	Gemini      providerConfiguration    `mapstructure:"gemini"`
+	Anthropic   providerConfiguration    `mapstructure:"anthropic"`
+	Grok        providerConfiguration    `mapstructure:"grok"`
 }
 
 type providerConfiguration struct {
@@ -174,6 +176,8 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		SiliconFlowKey:               configuration.Providers.SiliconFlow.APIKey,
 		ZhipuKey:                     configuration.Providers.Zhipu.APIKey,
 		GeminiKey:                    configuration.Providers.Gemini.APIKey,
+		AnthropicKey:                 configuration.Providers.Anthropic.APIKey,
+		GrokKey:                      configuration.Providers.Grok.APIKey,
 		DeepSeekBaseURL:              configuration.Providers.DeepSeek.BaseURL,
 		DashScopeBaseURL:             configuration.Providers.DashScope.BaseURL,
 		MoonshotBaseURL:              configuration.Providers.Moonshot.BaseURL,
@@ -181,6 +185,8 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		SiliconFlowTranscriptionsURL: configuration.Providers.SiliconFlow.TranscriptionsURL,
 		ZhipuBaseURL:                 configuration.Providers.Zhipu.BaseURL,
 		GeminiBaseURL:                configuration.Providers.Gemini.BaseURL,
+		AnthropicBaseURL:             configuration.Providers.Anthropic.BaseURL,
+		GrokBaseURL:                  configuration.Providers.Grok.BaseURL,
 		Port:                         configuration.Server.Port,
 		LogLevel:                     configuration.Server.LogLevel,
 		WorkerCount:                  configuration.Server.Workers,
