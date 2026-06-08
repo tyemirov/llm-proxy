@@ -43,6 +43,39 @@ Working backlog for this repository. Keep it current and small. Use @issues-md-f
 
 ## Improvements
 
+- [x] [I421] (P1) Add `/v2` messages-only text API and client support.
+  Add a versioned text endpoint for the cleaned request shape: `POST /v2` accepts only `messages[]` as the text input and keeps optional `messages[].order` support. Keep `/` compatible with existing prompt callers.
+  Acceptance criteria:
+  1. `POST /v2?key=...` accepts JSON bodies with non-empty `messages[]` using `system`, `user`, and `assistant` string-content messages.
+  2. `/v2` rejects request bodies containing `prompt`, missing or empty `messages`, unsupported roles, empty content, a missing user message, body `system_prompt`, partially specified `order`, duplicate `order`, or negative `order`.
+  3. `/v2` routes messages through OpenAI-compatible chat, Gemini, and OpenAI Responses using the existing provider translation layer.
+  4. Go and Python clients expose an explicit messages-only v2 request path.
+  5. README and provider-routing docs describe `/` as the compatibility endpoint and `/v2` as the canonical messages endpoint.
+  6. Black-box server/client tests cover successful `/v2` messages and invalid `/v2` body shapes.
+  Resolution: Added `POST /v2` as the canonical messages-only JSON endpoint. It accepts non-empty `messages[]` with `system`, `user`, and `assistant` string-content roles, preserves optional `messages[].order`, sorts by `order` only when provided by every submitted message, rejects body `prompt` and body `system_prompt`, and rejects unknown v2 body fields. The endpoint routes the validated transcript through OpenAI-compatible chat, Gemini, and OpenAI Responses with the existing provider translation layer. Added Go `NewMessagesRequest`/`Client.PostMessages` and Python `ClientMessagesRequest`/`Client.post_messages`, plus README and provider-routing documentation. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 26 passed), `timeout -k 350s -s SIGKILL 350s make lint`, and `git diff --check`.
+
+- [x] [I420] (P1) Add optional explicit ordering for chat messages.
+  Keep the OpenRouter-compatible `messages[]` list shape, but allow callers to provide an explicit numeric `order` field when they do not want to rely on array position. If any message includes `order`, every message in the body must include a unique non-negative `order`, and the proxy must sort messages by `order` before routing upstream.
+  Acceptance criteria:
+  1. `messages[].order` is optional for OpenRouter-compatible callers.
+  2. If any payload message has `order`, all payload messages must have unique non-negative `order` values.
+  3. Ordered message payloads are sorted by `order` before OpenAI-compatible chat, Gemini, and OpenAI Responses routing.
+  4. JSON responses include `order` on request `messages` when it was provided.
+  5. README, provider-routing docs, Go client, and Python client document or expose `order`.
+  6. Black-box server/client tests cover sorted ordered messages and invalid order inputs.
+  Resolution: Added optional `messages[].order` to the server, Go client, and Python client. When any submitted message has `order`, every submitted message must have a unique non-negative integer order; ordered payloads are sorted at the request edge before provider routing. OpenAI-compatible chat receives sorted provider-supported `role`/`content` items, Gemini receives sorted native contents, OpenAI Responses builds its transcript from the sorted messages, and JSON responses echo provided order values in request `messages`. Updated README and provider-routing docs. Validation passed with I421 using `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test`, `timeout -k 350s -s SIGKILL 350s make lint`, and `git diff --check`.
+
+- [x] [I419] (P1) Add OpenRouter-style chat message request and response shape.
+  OpenRouter's API documentation uses an OpenAI-compatible Chat Completions shape where JSON requests carry `messages[]` and responses expose generated assistant text at `choices[].message.content`. The proxy's public JSON POST contract still accepts only a single `prompt` field and JSON responses expose only the proxy-specific `request`/`response` envelope.
+  Acceptance criteria:
+  1. `POST /?key=...` accepts either `prompt` or `messages`, but rejects bodies that provide both or neither.
+  2. `messages[]` validates at the HTTP edge, supports ordered `system`, `user`, and `assistant` string-content messages, and rejects unsupported roles or empty content before upstream calls.
+  3. OpenAI-compatible chat providers receive the validated messages as Chat Completions messages, Gemini receives equivalent native contents/system instruction, and OpenAI Responses receives a deterministic transcript without changing the existing single-prompt behavior.
+  4. JSON-format text responses retain existing `request`, `response`, and normalized `usage` fields while adding an OpenRouter-style `object`, `model`, and `choices[].message.content` envelope.
+  5. README, provider-routing docs, Go client, and Python client document or expose the `messages` body shape.
+  6. Black-box HTTP/client tests cover message routing, validation failures, and response shape.
+  Resolution: Added validated JSON `messages[]` support for `system`, `user`, and `assistant` string-content messages, with edge rejection for prompt/messages conflicts, empty message arrays, unsupported roles, empty content, missing user messages, and system prompt conflicts. OpenAI-compatible chat providers now receive messages directly, Gemini receives native contents/system instruction, and OpenAI Responses receives a deterministic transcript while the existing single-prompt path remains unchanged. JSON responses retain `request`, `response`, and normalized `usage` and now include `object`, `model`, `choices[].message.content`, and request `messages`. Updated README, provider-routing docs, Go client, and Python client with `ClientMessage`. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make go-test` (total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make python-test` (17 passed before client conflict coverage was added), `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 18 passed), and `git diff --check`.
+
 - [x] [I415] (P1) Add an importable Python llm-proxy client package.
   The American-language and Russian-language skill surfaces are Python-based callers of the llm-proxy JSON POST contract. Add a first-class Python package in this repository so those surfaces can share transport behavior without each owning a local proxy helper.
   Acceptance criteria:
