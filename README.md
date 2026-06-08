@@ -192,6 +192,10 @@ query parameters such as `provider`, strips body-owned query fields such as
 `prompt` and `model`, and sends `prompt`, `model`, `web_search`,
 `system_prompt`, and `max_tokens` in the body.
 
+The reusable Go package under `pkg/llmproxyclient` also exposes
+`NewMessagesRequest` and `Client.PostMessages` for the canonical `POST /v2`
+messages-only endpoint.
+
 ### Python client package
 
 The same transport contract is available as an importable Python package:
@@ -201,7 +205,7 @@ uv pip install "llm-proxy-client @ git+https://github.com/tyemirov/llm-proxy.git
 ```
 
 ```python
-from llm_proxy_client import Client, ClientConfig, ClientRequest
+from llm_proxy_client import Client, ClientConfig, ClientMessagesRequest, ClientMessage, ClientRequest
 
 client = Client(
     ClientConfig(
@@ -217,6 +221,25 @@ text = client.post(
     )
 )
 ```
+
+For chat-transcript callers, use the v2 messages-only endpoint:
+
+```python
+chat_text = client.post_messages(
+    ClientMessagesRequest(
+        messages=(
+            ClientMessage(role="user", content="Summarize this", order=2),
+            ClientMessage(role="system", content="Be concise.", order=1),
+        ),
+        model="deepseek-v4-flash",
+    )
+)
+```
+
+The optional `order` field is for callers that do not want to rely on array
+position. When any message includes `order`, every submitted message must
+include a unique non-negative integer `order`; the proxy sorts ascending before
+provider routing and echoes provided order values in JSON responses.
 
 For local development:
 
@@ -261,11 +284,11 @@ curl --get \
 ### Large text request
 
 Use `POST /` with a JSON body when the prompt is too large for a URL query
-parameter. Authentication still uses the `key` query parameter, which is the
-configured tenant secret. Provider selection also stays in the query parameter.
-Do not send upstream provider secrets in the request body; the proxy reads them
-from server-side configuration. The JSON body is capped by
-`server.max_prompt_bytes`.
+parameter or when the caller already has a chat transcript. Authentication
+still uses the `key` query parameter, which is the configured tenant secret.
+Provider selection also stays in the query parameter. Do not send upstream
+provider secrets in the request body; the proxy reads them from server-side
+configuration. The JSON body is capped by `server.max_prompt_bytes`.
 
 ```shell
 curl -X POST \
@@ -274,21 +297,50 @@ curl -X POST \
   "http://localhost:8080/?key=mysecret"
 ```
 
+Compatibility chat transcript on `/`:
+
+```shell
+curl -X POST \
+  -H "Content-Type: application/json" \
+  --data '{"messages":[{"role":"user","content":"Summarize this","order":2},{"role":"system","content":"Be concise.","order":1}],"model":"deepseek-v4-flash","max_tokens":4096}' \
+  "http://localhost:8080/?key=mysecret&provider=deepseek"
+```
+
+Canonical v2 chat transcript:
+
+```shell
+curl -X POST \
+  -H "Content-Type: application/json" \
+  --data '{"messages":[{"role":"user","content":"Summarize this","order":2},{"role":"system","content":"Be concise.","order":1}],"model":"deepseek-v4-flash","max_tokens":4096}' \
+  "http://localhost:8080/v2?key=mysecret&provider=deepseek"
+```
+
 JSON body fields:
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `prompt` | Yes | none | Full text to send to the LLM. Use this body field for large or non-ASCII prompts. |
+| `prompt` | Yes, unless `messages` is provided | none | Full text to send to the LLM. Use this body field for large or non-ASCII prompts. |
+| `messages` | Yes, unless `prompt` is provided | none | Chat messages using `role` and string `content`. Supported roles are `system`, `user`, and `assistant`; at least one `user` message is required. Each item may include numeric `order`; if any item includes it, every submitted item must include a unique non-negative `order`, and messages are sorted ascending before routing. |
 | `model` | No | tenant or provider default | Model identifier from the selected provider's supported model list. Omitted model uses the tenant default when `provider` is omitted; otherwise it uses the selected provider default. |
 | `web_search` | No | `false` | Enables OpenAI web search when the selected provider/model supports it. |
-| `system_prompt` | No | authenticated tenant default | Per-request system prompt override. |
+| `system_prompt` | No | authenticated tenant default | Per-request system prompt override. With `messages`, it is prepended as a system message only when the body does not already contain a system message. |
 | `max_tokens` | No | provider default | Positive integer output-token cap for this request. The proxy maps it to OpenAI `max_output_tokens`, OpenAI-compatible `max_tokens`, or Gemini `generationConfig.maxOutputTokens`. |
 
 For `POST /`, `provider` remains a query parameter. Query `model` may override
 the JSON body only when the body omits `model` or provides the same value;
 conflicting values return `400 Bad Request`.
+Bodies that provide both `prompt` and `messages`, empty `messages`, unsupported
+message roles, empty message content, partially specified `order`, duplicate
+or negative `order`, or both `system_prompt` and a system message return
+`400 Bad Request` before any upstream call.
 Gemini `max_tokens` values above `65536` return `400 Bad Request` before the
 proxy calls Gemini.
+
+`POST /v2` is the canonical chat endpoint. It accepts the same `messages`,
+`model`, `web_search`, and `max_tokens` body fields, but rejects `prompt` and
+body `system_prompt`; send a `system` role message instead. The tenant default
+system prompt is still prepended when the submitted messages do not include a
+system message.
 
 ### Choose an OpenAI model
 
@@ -373,6 +425,24 @@ JSON-format LLM responses include the same normalized counts:
 {
   "request": "Hello",
   "response": "Hi",
+  "object": "chat.completion",
+  "model": "gpt-4.1",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "Hi"
+      }
+    }
+  ],
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello"
+    }
+  ],
   "usage": {
     "request_tokens": 1,
     "response_tokens": 1,
@@ -404,10 +474,30 @@ POST /
   &format=CONTENT_TYPE      # optional; or use Accept header
 Content-Type: application/json
 {
-  "prompt": "STRING",       # required
+  "prompt": "STRING",       # required unless messages is provided
+  "messages": [             # required unless prompt is provided
+    {"role": "user", "content": "STRING", "order": 1}
+  ],
   "model": "MODEL_NAME",    # optional; tenant or provider default
   "web_search": false,      # optional; defaults to false
   "system_prompt": "STRING",# optional; tenant default
+  "max_tokens": 512         # optional positive integer per-request cap
+}
+```
+
+```text
+POST /v2
+  ?key=SERVICE_SECRET       # required
+  &provider=PROVIDER        # optional; tenant default
+  &model=MODEL_NAME         # optional; overrides JSON body if absent or equal
+  &format=CONTENT_TYPE      # optional; or use Accept header
+Content-Type: application/json
+{
+  "messages": [             # required
+    {"role": "user", "content": "STRING", "order": 1}
+  ],
+  "model": "MODEL_NAME",    # optional; tenant or provider default
+  "web_search": false,      # optional; defaults to false
   "max_tokens": 512         # optional positive integer per-request cap
 }
 ```
