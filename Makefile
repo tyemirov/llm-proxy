@@ -51,7 +51,7 @@ python-test:
 	$(MAKE) python-root-import-test
 
 python-root-import-test:
-	$(UV) run --no-project --with-editable . python -c 'from llm_proxy_client import Client, ClientConfig, ClientRequest; assert Client and ClientConfig and ClientRequest'
+	$(UV) run --no-project --with-editable . python -c 'from llm_proxy_client import Client, ClientConfig, ClientMessagesRequest, ClientRequest; assert Client and ClientConfig and ClientMessagesRequest and ClientRequest'
 
 test-live-gemini:
 	@GO="$(GO)" ./scripts/test_live_gemini.sh
