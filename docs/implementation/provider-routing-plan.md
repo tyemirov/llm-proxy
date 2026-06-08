@@ -1,6 +1,6 @@
 # Provider Routing Implementation Plan
 
-Issue: `.mprl/ISSUES.md` -> `B001`
+Status: implemented provider-routing contract notes retained from the retired provider-routing backlog.
 
 ## Goal
 

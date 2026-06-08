@@ -1,6 +1,6 @@
 # ISSUES
 
-Working backlog for this repository. Keep entries in the canonical ISSUES.md format.
+Working backlog for this repository. Keep entries in the canonical ISSUES.md format described in `.mprlab/issues-md-format.md`.
 
 ## BugFixes
 
@@ -68,6 +68,31 @@ Working backlog for this repository. Keep entries in the canonical ISSUES.md for
 ## Improvements
 
 ## Maintenance
+
+- [x] [M001] (P1) Consolidate repository runbook documents under `.mprlab/`
+  ### Summary
+  The repository had duplicate runbook and issue-tracker documents under `issues.md/`, `.mprl/`, and `.mprlab/`. Keep the active tracker and relevant recurring procedures under `.mprlab/`, then remove the old duplicate locations.
+
+  ### Resolution
+  Consolidated the current policy, planning, issue-format, and stack-guide documents under `.mprlab/`; kept `.mprlab/ISSUES.md` as the active tracker; carried forward recurring housekeeping runbooks from `issues.md/ISSUES.md`; updated stale runbook path references; and removed the duplicate `issues.md/` and `.mprl/` directories.
+
+### Recurring (runbooks; keep open)
+
+These entries are always-available procedures. Keep them `[ ]` so they remain runnable; when you run one, update a short `Last run:` line in the body and optionally link the PR or commit.
+
+- [ ] [M400] (P2) Backlog housekeeping
+  1. Validate `.mprlab/ISSUES.md` matches `.mprlab/issues-md-format.md`.
+  2. Confirm user-facing consequences of recently closed work are documented in README, ARCHITECTURE, or PRD.
+  3. Prune closed entries once documented.
+  4. Merge duplicates and delete irrelevant issues.
+
+- [ ] [M401] (P2) Polish open issues
+  1. For each open issue, add missing context, dependencies, repro steps, acceptance criteria, and test expectations.
+  2. Ensure each issue has a clear priority and concrete deliverables.
+
+- [ ] [M402] (P2) Architecture and policy review
+  1. Review the codebase against `.mprlab/POLICY.md` and stack guides.
+  2. Record findings as new Maintenance issues, or close as "no action" if already covered.
 
 ## Features
 

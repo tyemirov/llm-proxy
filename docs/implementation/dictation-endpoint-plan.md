@@ -1,6 +1,6 @@
 # Dictation Endpoint Plan (`/dictate`)
 
-Issue: `ISSUES.md` -> `WB-001` (workspace-local tracker)
+Status: implemented dictation endpoint contract notes retained from the retired workspace-local tracker.
 
 ## Goal
 Provide an authenticated audio-transcription endpoint in `llm-proxy` so downstream apps can route dictation through proxy infrastructure instead of calling OpenAI directly.
