@@ -1,8 +1,8 @@
 # LLM Proxy
 
 LLM Proxy is a lightweight HTTP service that forwards user prompts to OpenAI's
-Responses API, OpenAI-compatible chat providers, Google Gemini's native
-generateContent API, and audio transcription APIs.
+Responses API, OpenAI-compatible chat providers, Anthropic's native Messages
+API, Google Gemini's native generateContent API, and audio transcription APIs.
 It exposes protected HTTP endpoints that require a tenant secret and simplify
 integrating provider capabilities without embedding API credentials in each
 client.
@@ -75,7 +75,55 @@ providers:
   gemini:
     api_key: ""
     base_url: ""
+  anthropic:
+    api_key: ""
+    base_url: ""
+  grok:
+    api_key: ""
+    base_url: ""
 ```
+
+### Provider support matrix
+
+Provider selectors and aliases are accepted anywhere the public API accepts
+`provider`. Omitted text models use the authenticated tenant default when
+`provider` is omitted; otherwise they use the selected provider's default text
+model from this table.
+
+| Provider selector | Aliases | Text API | Default text model | Credential field | Default base URL | Dictation | Web search |
+|-------------------|---------|----------|--------------------|------------------|------------------|-----------|------------|
+| `openai` | none | OpenAI Responses | `gpt-4.1` | `providers.openai.api_key` | OpenAI SDK default | Yes: `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Yes, on marked OpenAI models |
+| `deepseek` | none | OpenAI-compatible chat completions | `deepseek-v4-flash` | `providers.deepseek.api_key` | `https://api.deepseek.com` | No | No |
+| `dashscope` | `qwen` | OpenAI-compatible chat completions | `qwen-plus` | `providers.dashscope.api_key` | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` | No | No |
+| `moonshot` | `kimi` | OpenAI-compatible chat completions | `kimi-k2-0905-preview` | `providers.moonshot.api_key` | `https://api.moonshot.ai/v1` | No | No |
+| `siliconflow` | none | OpenAI-compatible chat completions | `deepseek-ai/DeepSeek-R1` | `providers.siliconflow.api_key` | `https://api.siliconflow.com/v1` | Yes: `FunAudioLLM/SenseVoiceSmall` | No |
+| `zhipu` | `glm` | OpenAI-compatible chat completions | `glm-5.1` | `providers.zhipu.api_key` | `https://open.bigmodel.cn/api/paas/v4` | No | No |
+| `gemini` | none | Gemini native `generateContent` | `gemini-3.5-flash` | `providers.gemini.api_key` | `https://generativelanguage.googleapis.com/v1` | No | No |
+| `anthropic` | `claude` | Anthropic native Messages | `claude-sonnet-4-6` | `providers.anthropic.api_key` | `https://api.anthropic.com` | No | No |
+| `grok` | `xai` | xAI OpenAI-compatible chat completions | `grok-4.3` | `providers.grok.api_key` | `https://api.x.ai/v1` | No | No |
+
+All upstream provider credentials are server-side only. Client requests must
+never send OpenAI, Anthropic, xAI, Gemini, or other upstream API keys.
+
+Provider-specific details:
+
+* OpenAI is the only provider exposed with `web_search` support. OpenAI
+  dictation uses the same `providers.openai.api_key` value.
+* OpenAI-compatible text providers send chat completion requests with
+  `Authorization: Bearer <api_key>` and the selected provider base URL.
+* SiliconFlow dictation uses `providers.siliconflow.transcriptions_url` when
+  configured; otherwise it defaults to the SiliconFlow base URL plus
+  `/audio/transcriptions`.
+* Gemini text requests use the native `generateContent` route and normalize
+  Gemini usage metadata into the same response headers and JSON `usage` object
+  used by the other text providers.
+* Anthropic text requests use `POST /v1/messages` with `x-api-key` and
+  `anthropic-version: 2023-06-01`. System messages are translated to
+  Anthropic's top-level `system` field. Anthropic requires `max_tokens`, so
+  when the client omits it the proxy sends the selected Claude model's
+  configured output limit.
+* Grok text requests use xAI's OpenAI-compatible `/chat/completions` API at
+  `https://api.x.ai/v1`.
 
 Blank optional values use built-in provider defaults where applicable. Startup
 validates that `tenants` includes at least one unique `id` and unique `secret`,
@@ -89,10 +137,12 @@ Web search is per request and currently supported only on OpenAI models that
 support the OpenAI web search tool.
 Text output length is also per request: pass `max_tokens` when a client wants
 to cap one generation. When omitted, the proxy does not send a provider
-max-token field.
+max-token field, except Anthropic Messages where `max_tokens` is required
+upstream and the proxy sends the selected model's configured output limit.
 Provider-specific output-token limits are enforced at the request edge when
-known. Gemini text models currently reject `max_tokens` above `65536` with
-`400 Bad Request` before any upstream provider call.
+known. Gemini text models currently reject `max_tokens` above `65536`; Claude
+models reject values above the configured synchronous Messages output limit.
+Those errors return `400 Bad Request` before any upstream provider call.
 
 ## Running
 
@@ -134,6 +184,34 @@ tenants:
 providers:
   gemini:
     api_key: "${GEMINI_API_KEY}"
+```
+
+Run the service with Anthropic as the default text provider:
+
+```yaml
+tenants:
+  - id: anthropic
+    secret: "${SERVICE_SECRET}"
+    defaults:
+      provider: anthropic
+      model: claude-sonnet-4-6
+providers:
+  anthropic:
+    api_key: "${ANTHROPIC_API_KEY}"
+```
+
+Run the service with Grok as the default text provider:
+
+```yaml
+tenants:
+  - id: grok
+    secret: "${SERVICE_SECRET}"
+    defaults:
+      provider: grok
+      model: grok-4.3
+providers:
+  grok:
+    api_key: "${XAI_API_KEY}"
 ```
 
 ## Local Automation
@@ -281,6 +359,30 @@ curl --get \
   "http://localhost:8080/"
 ```
 
+Anthropic Claude text generation:
+
+```shell
+curl --get \
+  --data-urlencode "prompt=Summarize this with Claude" \
+  --data-urlencode "key=mysecret" \
+  --data-urlencode "provider=anthropic" \
+  --data-urlencode "model=claude-sonnet-4-6" \
+  --data-urlencode "max_tokens=512" \
+  "http://localhost:8080/"
+```
+
+Grok text generation:
+
+```shell
+curl --get \
+  --data-urlencode "prompt=Summarize this with Grok" \
+  --data-urlencode "key=mysecret" \
+  --data-urlencode "provider=grok" \
+  --data-urlencode "model=grok-4.3" \
+  --data-urlencode "max_tokens=512" \
+  "http://localhost:8080/"
+```
+
 ### Large text request
 
 Use `POST /` with a JSON body when the prompt is too large for a URL query
@@ -324,7 +426,7 @@ JSON body fields:
 | `model` | No | tenant or provider default | Model identifier from the selected provider's supported model list. Omitted model uses the tenant default when `provider` is omitted; otherwise it uses the selected provider default. |
 | `web_search` | No | `false` | Enables OpenAI web search when the selected provider/model supports it. |
 | `system_prompt` | No | authenticated tenant default | Per-request system prompt override. With `messages`, it is prepended as a system message only when the body does not already contain a system message. |
-| `max_tokens` | No | provider default | Positive integer output-token cap for this request. The proxy maps it to OpenAI `max_output_tokens`, OpenAI-compatible `max_tokens`, or Gemini `generationConfig.maxOutputTokens`. |
+| `max_tokens` | No | provider default | Positive integer output-token cap for this request. The proxy maps it to OpenAI `max_output_tokens`, OpenAI-compatible `max_tokens`, Anthropic `max_tokens`, or Gemini `generationConfig.maxOutputTokens`. |
 
 For `POST /`, `provider` remains a query parameter. Query `model` may override
 the JSON body only when the body omits `model` or provides the same value;
@@ -334,7 +436,8 @@ message roles, empty message content, partially specified `order`, duplicate
 or negative `order`, or both `system_prompt` and a system message return
 `400 Bad Request` before any upstream call.
 Gemini `max_tokens` values above `65536` return `400 Bad Request` before the
-proxy calls Gemini.
+proxy calls Gemini. Anthropic `max_tokens` values above the configured Claude
+model output limit return `400 Bad Request` before the proxy calls Anthropic.
 
 `POST /v2` is the canonical chat endpoint. It accepts the same `messages`,
 `model`, `web_search`, and `max_tokens` body fields, but rejects `prompt` and
@@ -451,6 +554,10 @@ JSON-format LLM responses include the same normalized counts:
 }
 ```
 
+The response `messages` field echoes only caller-visible request messages.
+Server-injected tenant default system prompts are sent upstream when applicable,
+but are not returned in response metadata.
+
 ## Endpoint
 
 ### LLM endpoint
@@ -526,32 +633,56 @@ Success response:
 Supported LLM endpoint models are listed below. The `/dictate` endpoint defaults
 to OpenAI's audio transcriptions API and supports SiliconFlow when
 `provider=siliconflow`. Not all models support tools; use a model marked `Yes`
-below for web search.
+below for web search. A dash in the proxy `max_tokens` limit column means the
+proxy validates only that `max_tokens` is positive and lets the upstream
+provider enforce any provider-side model limit.
 
 ### Model capabilities
 
-| Model | Provider | Web Search |
-|-------|----------|------------|
-| `gpt-4.1` | OpenAI | Yes |
-| `gpt-4o` | OpenAI | Yes |
-| `gpt-4o-mini` | OpenAI | No |
-| `gpt-5` | OpenAI | Yes |
-| `gpt-5-mini` | OpenAI | No |
-| `gpt-5.5` | OpenAI | Yes |
-| `gpt-5.5-pro` | OpenAI | Yes |
-| `deepseek-v4-flash` | DeepSeek | No |
-| `deepseek-v4-pro` | DeepSeek | No |
-| `deepseek-chat` | DeepSeek | No |
-| `deepseek-reasoner` | DeepSeek | No |
-| `qwen-plus` | DashScope | No |
-| `kimi-k2-0905-preview` | Moonshot/Kimi | No |
-| `deepseek-ai/DeepSeek-R1` | SiliconFlow | No |
-| `glm-5.1` | Zhipu/GLM | No |
-| `gemini-3.5-flash` | Gemini | No |
-| `gemini-3.1-flash-lite` | Gemini | No |
-| `gemini-2.5-flash` | Gemini | No |
-| `gemini-2.5-flash-lite` | Gemini | No |
-| `gemini-2.5-pro` | Gemini | No |
+| Model | Provider | Provider default | Proxy `max_tokens` limit | Web search |
+|-------|----------|------------------|--------------------------|------------|
+| `gpt-4.1` | OpenAI | Yes | - | Yes |
+| `gpt-4o` | OpenAI | No | - | Yes |
+| `gpt-4o-mini` | OpenAI | No | - | No |
+| `gpt-5` | OpenAI | No | - | Yes |
+| `gpt-5-mini` | OpenAI | No | - | No |
+| `gpt-5.5` | OpenAI | No | - | Yes |
+| `gpt-5.5-pro` | OpenAI | No | - | Yes |
+| `deepseek-v4-flash` | DeepSeek | Yes | - | No |
+| `deepseek-v4-pro` | DeepSeek | No | - | No |
+| `deepseek-chat` | DeepSeek | No | - | No |
+| `deepseek-reasoner` | DeepSeek | No | - | No |
+| `qwen-plus` | DashScope/Qwen | Yes | - | No |
+| `kimi-k2-0905-preview` | Moonshot/Kimi | Yes | - | No |
+| `deepseek-ai/DeepSeek-R1` | SiliconFlow | Yes | - | No |
+| `glm-5.1` | Zhipu/GLM | Yes | - | No |
+| `gemini-3.5-flash` | Gemini | Yes | `65536` | No |
+| `gemini-3.1-flash-lite` | Gemini | No | `65536` | No |
+| `gemini-2.5-flash` | Gemini | No | `65536` | No |
+| `gemini-2.5-flash-lite` | Gemini | No | `65536` | No |
+| `gemini-2.5-pro` | Gemini | No | `65536` | No |
+| `claude-opus-4-8` | Anthropic/Claude | No | `128000` | No |
+| `claude-sonnet-4-6` | Anthropic/Claude | Yes | `64000` | No |
+| `claude-haiku-4-5-20251001` | Anthropic/Claude | No | `64000` | No |
+| `claude-haiku-4-5` | Anthropic/Claude | No | `64000` | No |
+| `claude-sonnet-4-5-20250929` | Anthropic/Claude | No | `64000` | No |
+| `claude-sonnet-4-5` | Anthropic/Claude | No | `64000` | No |
+| `claude-opus-4-1-20250805` | Anthropic/Claude | No | `32000` | No |
+| `claude-opus-4-1` | Anthropic/Claude | No | `32000` | No |
+| `grok-4.3` | Grok/xAI | Yes | - | No |
+| `grok-4.3-latest` | Grok/xAI | No | - | No |
+| `grok-latest` | Grok/xAI | No | - | No |
+| `grok-build-0.1` | Grok/xAI | No | - | No |
+| `grok-code-fast` | Grok/xAI | No | - | No |
+| `grok-code-fast-1` | Grok/xAI | No | - | No |
+| `grok-code-fast-1-0825` | Grok/xAI | No | - | No |
+
+### Dictation capabilities
+
+| Provider selector | Models | Credential field | Notes |
+|-------------------|--------|------------------|-------|
+| `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | `providers.openai.api_key` | Default dictation provider and default model `gpt-4o-mini-transcribe`. |
+| `siliconflow` | `FunAudioLLM/SenseVoiceSmall` | `providers.siliconflow.api_key` | Uses `providers.siliconflow.transcriptions_url` when configured, otherwise `<base_url>/audio/transcriptions`. |
 
 ### Status codes
 
