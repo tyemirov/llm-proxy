@@ -17,9 +17,9 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - `messages[].order` is optional. When any submitted message includes `order`, every submitted message must include a unique non-negative integer `order`; the proxy sorts submitted messages by ascending `order` before adding a request or tenant system prompt and before routing upstream.
 - With `messages[]` on `POST /`, body `system_prompt` is prepended as a system message only when the transcript does not already contain a `system` message. A body containing both `system_prompt` and a system message is invalid. With `POST /v2`, callers send system instructions as `system` role messages.
 - `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies.
-- Omitted `max_tokens` means the proxy omits provider max-token fields and lets the selected provider/model default apply.
-- Provided `max_tokens` maps to OpenAI Responses `max_output_tokens`, OpenAI-compatible chat completions `max_tokens`, and Gemini `generationConfig.maxOutputTokens`.
-- Known provider-specific output-token ceilings are validated before upstream calls; Gemini text models reject `max_tokens` above `65536` with `400 Bad Request`.
+- Provided `max_tokens` maps to OpenAI Responses `max_output_tokens`, OpenAI-compatible chat completions `max_tokens`, Anthropic Messages `max_tokens`, and Gemini `generationConfig.maxOutputTokens`.
+- Omitted `max_tokens` means the proxy omits provider max-token fields and lets the selected provider/model default apply, except Anthropic Messages where the upstream API requires `max_tokens` and the proxy sends the selected model's configured synchronous output limit.
+- Known provider-specific output-token ceilings are validated before upstream calls; Gemini text models reject `max_tokens` above `65536` with `400 Bad Request`, and Claude models reject values above their configured synchronous Messages output limit.
 - For JSON `POST /`, query `model` may override the body only when the body omits `model` or provides the same value.
 - Conflicting query/body `model` values return `400 Bad Request`.
 - JSON `POST /` bodies that provide both `prompt` and `messages`, neither field, empty messages, unsupported roles, empty content, a missing user message, partially specified `order`, duplicate `order`, or negative `order` return `400 Bad Request`.
@@ -37,6 +37,8 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 | `siliconflow` | none | OpenAI-compatible chat completions | OpenAI-compatible audio transcription | Not supported |
 | `zhipu` | `glm` | OpenAI-compatible chat completions | Not supported | Not supported |
 | `gemini` | none | Native Gemini generateContent | Not supported | Not supported |
+| `anthropic` | `claude` | Native Anthropic Messages | Not supported | Not supported |
+| `grok` | `xai` | xAI OpenAI-compatible chat completions | Not supported | Not supported |
 
 ## Configuration
 
@@ -71,6 +73,8 @@ Provider credentials and base URLs:
 - `providers.siliconflow.api_key`, `providers.siliconflow.base_url`, `providers.siliconflow.transcriptions_url`
 - `providers.zhipu.api_key`, `providers.zhipu.base_url`
 - `providers.gemini.api_key`, `providers.gemini.base_url`
+- `providers.anthropic.api_key`, `providers.anthropic.base_url`
+- `providers.grok.api_key`, `providers.grok.base_url`
 
 Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, validates the credential required by each tenant's default text provider, and validates endpoint/credential support for each tenant's default dictation provider. Credentials for providers not used by tenant defaults are validated when a request selects that provider.
 
@@ -89,12 +93,14 @@ Startup validates configured tenants, rejects duplicate tenant ids and duplicate
 - Provider/model validation happens at the HTTP edge through a provider registry.
 - OpenAI keeps the existing Responses API adapter.
 - Non-OpenAI text providers use a shared OpenAI-compatible Chat Completions adapter.
+- Anthropic uses a native Messages adapter, translating proxy `system` messages to the top-level Anthropic `system` parameter and `user`/`assistant` messages to Anthropic `messages[]`.
 - Gemini uses a native generateContent adapter against `GEMINI_BASE_URL`.
+- Grok uses the shared OpenAI-compatible Chat Completions adapter against `GROK_BASE_URL`, defaulting to `https://api.x.ai/v1`.
 - OpenAI-compatible chat providers receive validated and sorted `messages[]` as provider-supported `role` and `content` items.
 - Gemini receives user messages as native `contents`, assistant messages as `model` contents, and system messages as `systemInstruction`.
 - OpenAI Responses receives single-prompt requests unchanged and multi-message requests as a deterministic role-labelled transcript.
 - Dictation routing reuses the multipart transcription adapter with provider-specific URLs.
-- Response formatting keeps existing text/XML/CSV bodies and existing JSON `request`, `response`, and normalized `usage` fields. JSON responses also include OpenRouter-style `object`, `model`, and `choices[].message.content` metadata, plus request `messages` with provided `order` values.
+- Response formatting keeps existing text/XML/CSV bodies and existing JSON `request`, `response`, and normalized `usage` fields. JSON responses also include OpenRouter-style `object`, `model`, and `choices[].message.content` metadata, plus caller-visible request `messages` with provided `order` values. Server-injected tenant default system prompts are sent upstream but not echoed in response metadata.
 
 ## Test Strategy
 
