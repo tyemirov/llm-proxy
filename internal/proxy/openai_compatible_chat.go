@@ -52,16 +52,10 @@ func newOpenAICompatibleChatClient(httpClient HTTPDoer, requestTimeout time.Dura
 	}
 }
 
-func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier modelID, userPrompt string, systemPrompt string, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	messages := []chatCompletionMessage{}
-	if !utils.IsBlank(systemPrompt) {
-		messages = append(messages, chatCompletionMessage{Role: "system", Content: systemPrompt})
-	}
-	messages = append(messages, chatCompletionMessage{Role: "user", Content: userPrompt})
-
+func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier modelID, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	payload := chatCompletionRequest{
 		Model:     modelIdentifier.string(),
-		Messages:  messages,
+		Messages:  messages.chatCompletionMessages(),
 		MaxTokens: maxTokens,
 	}
 	payloadBytes, _ := json.Marshal(payload)
@@ -89,6 +83,14 @@ func (client *openAICompatibleChatClient) generateText(parentContext context.Con
 		return textGenerationResult{}, parseError
 	}
 	return generation, nil
+}
+
+func (messages chatMessages) chatCompletionMessages() []chatCompletionMessage {
+	chatMessagesPayload := make([]chatCompletionMessage, 0, len(messages))
+	for _, message := range messages {
+		chatMessagesPayload = append(chatMessagesPayload, chatCompletionMessage{Role: string(message.role), Content: message.content})
+	}
+	return chatMessagesPayload
 }
 
 func parseChatCompletionResponse(responseBytes []byte) (textGenerationResult, error) {

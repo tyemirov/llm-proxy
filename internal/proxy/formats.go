@@ -19,10 +19,24 @@ func preferredMime(ginContext *gin.Context) string {
 }
 
 // formatResponse renders a textual model output into the requested MIME type and returns the body and content type.
-func formatResponse(modelText string, preferred string, originalPrompt string, usage *tokenUsage) (string, string) {
+func formatResponse(modelText string, preferred string, request chatRequestParameters, usage *tokenUsage) (string, string) {
 	switch {
 	case strings.Contains(preferred, mimeApplicationJSON):
-		envelope := map[string]any{responseRequestAttribute: originalPrompt, jsonFieldResponse: modelText}
+		envelope := map[string]any{
+			responseRequestAttribute: request.requestDisplay,
+			jsonFieldResponse:        modelText,
+			jsonFieldObject:          chatCompletionObject,
+			keyModel:                 request.model.string(),
+			jsonFieldChoices: []map[string]any{{
+				jsonFieldIndex:        0,
+				jsonFieldFinishReason: finishReasonStop,
+				jsonFieldMessage: map[string]string{
+					jsonFieldRole:    string(chatRoleAssistant),
+					jsonFieldContent: modelText,
+				},
+			}},
+			jsonFieldMessages: request.messages.responseRequestMessages(),
+		}
 		if usage != nil {
 			envelope[jsonFieldUsage] = usage
 		}
@@ -34,7 +48,7 @@ func formatResponse(modelText string, preferred string, originalPrompt string, u
 			Request string   `xml:"request,attr"`
 			Text    string   `xml:",chardata"`
 		}
-		encodedXML, _ := xml.Marshal(xmlEnvelope{Request: originalPrompt, Text: modelText})
+		encodedXML, _ := xml.Marshal(xmlEnvelope{Request: request.requestDisplay, Text: modelText})
 		return string(encodedXML), mimeApplicationXML
 	case strings.Contains(preferred, mimeTextCSV):
 		escaped := strings.ReplaceAll(modelText, `"`, `""`)

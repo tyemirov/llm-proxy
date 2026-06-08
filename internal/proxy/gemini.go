@@ -78,15 +78,11 @@ func newGeminiGenerateContentClient(httpClient HTTPDoer, requestTimeout time.Dur
 	}
 }
 
-func (client *geminiGenerateContentClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier modelID, userPrompt string, systemPrompt string, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *geminiGenerateContentClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier modelID, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	contents, systemInstruction := messages.geminiContents()
 	payload := geminiGenerateContentRequest{
-		Contents: []geminiRequestContent{{
-			Role:  "user",
-			Parts: []geminiRequestPart{{Text: userPrompt}},
-		}},
-	}
-	if !utils.IsBlank(systemPrompt) {
-		payload.SystemInstruction = &geminiRequestContent{Parts: []geminiRequestPart{{Text: systemPrompt}}}
+		Contents:          contents,
+		SystemInstruction: systemInstruction,
 	}
 	if maxTokens != nil {
 		payload.GenerationConfig = &geminiGenerationConfig{MaxOutputTokens: *maxTokens}
@@ -119,6 +115,29 @@ func (client *geminiGenerateContentClient) generateText(parentContext context.Co
 		return textGenerationResult{}, parseError
 	}
 	return generation, nil
+}
+
+func (messages chatMessages) geminiContents() ([]geminiRequestContent, *geminiRequestContent) {
+	contents := []geminiRequestContent{}
+	var systemInstructionParts []geminiRequestPart
+	for _, message := range messages {
+		if message.role == chatRoleSystem {
+			systemInstructionParts = append(systemInstructionParts, geminiRequestPart{Text: message.content})
+			continue
+		}
+		role := "user"
+		if message.role == chatRoleAssistant {
+			role = "model"
+		}
+		contents = append(contents, geminiRequestContent{
+			Role:  role,
+			Parts: []geminiRequestPart{{Text: message.content}},
+		})
+	}
+	if len(systemInstructionParts) == 0 {
+		return contents, nil
+	}
+	return contents, &geminiRequestContent{Parts: systemInstructionParts}
 }
 
 func geminiGenerateContentURL(baseURL string, modelIdentifier modelID) string {

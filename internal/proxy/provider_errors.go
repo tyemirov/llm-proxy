@@ -17,4 +17,6 @@ var (
 	ErrProviderRateLimited = errors.New(errorProviderRateLimited)
 	// ErrProviderAPI is returned when an upstream provider returns an unsuccessful response.
 	ErrProviderAPI = errors.New(errorProviderAPI)
+	// ErrInvalidChatMessages is returned when a JSON request body contains invalid chat messages.
+	ErrInvalidChatMessages = errors.New(errorInvalidChatMessages)
 )

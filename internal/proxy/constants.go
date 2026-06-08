@@ -17,6 +17,7 @@ const (
 
 	// rootPath defines the HTTP path for the root endpoint.
 	rootPath = "/"
+	v2Path   = "/v2"
 	// dictatePath defines the HTTP path for audio transcription requests.
 	dictatePath = "/dictate"
 
@@ -61,6 +62,11 @@ const (
 	errorProviderRateLimited        = "provider rate limited"
 	errorProviderAPI                = "provider API error"
 	errorProviderNoText             = "provider API error (no text)"
+	errorInvalidChatMessages        = "invalid messages parameter"
+	errorConflictingPromptMessages  = "conflicting prompt and messages parameters"
+	errorMissingMessages            = "missing messages parameter"
+	errorUnsupportedPromptParameter = "unsupported prompt parameter"
+	errorUnsupportedSystemPrompt    = "unsupported system_prompt parameter"
 	errorInvalidAudioForm           = "invalid audio form"
 	errorMissingAudioFile           = "missing audio file"
 	// errorUpstreamIncomplete indicates that the upstream provider returned an incomplete response.
@@ -112,10 +118,20 @@ const (
 	textFormatType        = "text"
 	verbosityLow          = "low"
 
-	jsonFieldID       = "id"
-	jsonFieldStatus   = "status"
-	jsonFieldResponse = "response"
-	jsonFieldUsage    = "usage"
+	jsonFieldID           = "id"
+	jsonFieldChoices      = "choices"
+	jsonFieldContent      = "content"
+	jsonFieldFinishReason = "finish_reason"
+	jsonFieldIndex        = "index"
+	jsonFieldMessage      = "message"
+	jsonFieldMessages     = "messages"
+	jsonFieldObject       = "object"
+	jsonFieldRole         = "role"
+	jsonFieldStatus       = "status"
+	jsonFieldResponse     = "response"
+	jsonFieldUsage        = "usage"
+	chatCompletionObject  = "chat.completion"
+	finishReasonStop      = "stop"
 
 	statusCompleted  = "completed"
 	statusSucceeded  = "succeeded"

@@ -136,6 +136,99 @@ func TestProviderRoutingTranslatesMaxTokensForOpenAICompatibleChat(t *testing.T)
 	}
 }
 
+func TestProviderRoutingSupportsMessagesJSONPostForOpenAICompatibleChat(t *testing.T) {
+	var capturedPayload map[string]any
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		bodyBytes, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			t.Fatalf("read body: %v", readError)
+		}
+		if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+			t.Fatalf("unmarshal body: %v", unmarshalError)
+		}
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"chat messages ok"}}],"usage":{"prompt_tokens":8,"completion_tokens":3,"total_tokens":11}}`))
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		Tenants: proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{
+			Provider:          proxy.ProviderNameOpenAI,
+			Model:             proxy.DefaultModel,
+			DictationProvider: proxy.ProviderNameOpenAI,
+			DictationModel:    proxy.DefaultDictationModel,
+			SystemPrompt:      "Tenant system.",
+		}),
+		OpenAIKey:                  TestAPIKey,
+		DeepSeekKey:                testDeepSeekKey,
+		DeepSeekBaseURL:            upstreamServer.URL,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	requestBody := bytes.NewBufferString(`{"messages":[{"role":"user","content":"Continue.","order":3},{"role":"user","content":"Hello","order":1},{"role":"assistant","content":"Hi.","order":2}],"model":"` + proxy.ModelNameDeepSeekV4Flash + `"}`)
+	request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&provider="+proxy.ProviderNameDeepSeek+"&format=application/json", requestBody)
+	request.Header.Set("Content-Type", "application/json")
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	rawMessages, ok := capturedPayload["messages"].([]any)
+	if !ok || len(rawMessages) != 4 {
+		t.Fatalf("messages=%v", capturedPayload["messages"])
+	}
+	firstMessage, ok := rawMessages[0].(map[string]any)
+	if !ok || firstMessage["role"] != "system" || firstMessage["content"] != "Tenant system." {
+		t.Fatalf("firstMessage=%v", rawMessages[0])
+	}
+	secondMessage, ok := rawMessages[1].(map[string]any)
+	if !ok || secondMessage["role"] != "user" || secondMessage["content"] != "Hello" {
+		t.Fatalf("secondMessage=%v", rawMessages[1])
+	}
+	thirdMessage, ok := rawMessages[2].(map[string]any)
+	if !ok || thirdMessage["role"] != "assistant" || thirdMessage["content"] != "Hi." {
+		t.Fatalf("thirdMessage=%v", rawMessages[2])
+	}
+	var response struct {
+		Object   string `json:"object"`
+		Model    string `json:"model"`
+		Request  string `json:"request"`
+		Response string `json:"response"`
+		Choices  []struct {
+			Message struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+			Order   *int   `json:"order"`
+		} `json:"messages"`
+	}
+	if decodeError := json.Unmarshal(responseRecorder.Body.Bytes(), &response); decodeError != nil {
+		t.Fatalf("decode response: %v", decodeError)
+	}
+	if response.Object != "chat.completion" || response.Model != proxy.ModelNameDeepSeekV4Flash || response.Response != "chat messages ok" {
+		t.Fatalf("response=%+v", response)
+	}
+	if response.Choices[0].Message.Role != "assistant" || response.Choices[0].Message.Content != "chat messages ok" {
+		t.Fatalf("choices=%+v", response.Choices)
+	}
+	if len(response.Messages) != 4 || response.Messages[1].Order == nil || *response.Messages[1].Order != 1 || response.Request == "" {
+		t.Fatalf("messages=%+v request=%q", response.Messages, response.Request)
+	}
+}
+
 func TestProviderRoutingSurfacesChatCompletionTokenUsage(t *testing.T) {
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.Header().Set("Content-Type", "application/json")
@@ -430,7 +523,11 @@ func systemInstructionText(rawSystemInstruction any) string {
 	if !ok {
 		return ""
 	}
-	parts, ok := systemInstruction["parts"].([]any)
+	return geminiContentText(systemInstruction)
+}
+
+func geminiContentText(content map[string]any) string {
+	parts, ok := content["parts"].([]any)
 	if !ok || len(parts) == 0 {
 		return ""
 	}
@@ -498,6 +595,63 @@ func TestProviderRoutingSupportsGeminiJSONPost(t *testing.T) {
 	assertGeminiContentOmitsThought(t, capturedPayload["systemInstruction"], "systemInstruction")
 	if generationConfig, ok := capturedPayload["generationConfig"].(map[string]any); !ok || generationConfig["maxOutputTokens"] != float64(222) {
 		t.Fatalf("generationConfig=%v", capturedPayload["generationConfig"])
+	}
+}
+
+func TestProviderRoutingSupportsMessagesJSONPostForGemini(t *testing.T) {
+	var capturedPayload map[string]any
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		bodyBytes, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			t.Fatalf("read body: %v", readError)
+		}
+		if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+			t.Fatalf("unmarshal body: %v", unmarshalError)
+		}
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"gemini messages ok"}]}}]}`))
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:                  TestAPIKey,
+		GeminiKey:                  testGeminiKey,
+		GeminiBaseURL:              upstreamServer.URL,
+		LogLevel:                   proxy.LogLevelInfo,
+		WorkerCount:                1,
+		QueueSize:                  1,
+		RequestTimeoutSeconds:      TestTimeout,
+		UpstreamPollTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	requestBody := bytes.NewBufferString(`{"messages":[{"role":"user","content":"Continue.","order":4},{"role":"assistant","content":"Hi.","order":3},{"role":"system","content":"Gemini system","order":1},{"role":"user","content":"Hello","order":2}],"model":"` + proxy.ModelNameGemini25Flash + `"}`)
+	request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&provider="+proxy.ProviderNameGemini, requestBody)
+	request.Header.Set("Content-Type", "application/json")
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	if systemInstructionText(capturedPayload["systemInstruction"]) != "Gemini system" {
+		t.Fatalf("systemInstruction=%v", capturedPayload["systemInstruction"])
+	}
+	contents, ok := capturedPayload["contents"].([]any)
+	if !ok || len(contents) != 3 {
+		t.Fatalf("contents=%v", capturedPayload["contents"])
+	}
+	firstContent, ok := contents[0].(map[string]any)
+	if !ok || firstContent["role"] != "user" || geminiContentText(firstContent) != "Hello" {
+		t.Fatalf("firstContent=%v", contents[0])
+	}
+	secondContent, ok := contents[1].(map[string]any)
+	if !ok || secondContent["role"] != "model" || geminiContentText(secondContent) != "Hi." {
+		t.Fatalf("secondContent=%v", contents[1])
 	}
 }
 
