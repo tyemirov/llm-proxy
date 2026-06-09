@@ -49,9 +49,11 @@ cover that path.
 
 Runtime service configuration comes from `config.yml`; env vars and `.env`
 files are interpolation inputs only for `${NAME}` placeholders in that YAML.
-The loader rejects unknown keys before the proxy starts. Missing placeholders
-expand to empty strings, then normal config validation decides whether that
-empty value is allowed.
+The loader rejects unknown keys and missing placeholders before the proxy
+starts, except when a provider `api_key` value is exactly one missing
+placeholder. That exact missing provider credential expands to an empty string
+so non-default providers can stay disabled; missing placeholders in other
+fields or embedded inside longer values fail startup.
 
 Shared config fields:
 
