@@ -30,19 +30,17 @@ var (
 // OpenAIClient provides access to the OpenAI responses API with configurable
 // endpoints and tunable parameters.
 type OpenAIClient struct {
-	httpClient          HTTPDoer
-	endpoints           *Endpoints
-	requestTimeout      time.Duration
-	upstreamPollTimeout time.Duration
+	httpClient     HTTPDoer
+	endpoints      *Endpoints
+	requestTimeout time.Duration
 }
 
 // NewOpenAIClient constructs an OpenAIClient initialized with the supplied components.
-func NewOpenAIClient(httpClient HTTPDoer, endpoints *Endpoints, requestTimeout time.Duration, pollTimeout time.Duration) *OpenAIClient {
+func NewOpenAIClient(httpClient HTTPDoer, endpoints *Endpoints, requestTimeout time.Duration) *OpenAIClient {
 	return &OpenAIClient{
-		httpClient:          httpClient,
-		endpoints:           endpoints,
-		requestTimeout:      requestTimeout,
-		upstreamPollTimeout: pollTimeout,
+		httpClient:     httpClient,
+		endpoints:      endpoints,
+		requestTimeout: requestTimeout,
 	}
 }
 
@@ -223,9 +221,6 @@ func openAIStageError(stageError error) error {
 	if errors.Is(stageError, context.Canceled) || errors.Is(stageError, context.DeadlineExceeded) {
 		return stageError
 	}
-	if errors.Is(stageError, ErrUpstreamPollTimeout) {
-		return stageError
-	}
 	return errors.New(errorOpenAIAPI)
 }
 
@@ -307,18 +302,13 @@ func canContinueIncompleteResponse(decodedObject map[string]any) bool {
 	}
 }
 
-// pollResponseUntilDone repeatedly fetches a response until it is complete or the poll timeout elapses.
+// pollResponseUntilDone repeatedly fetches a response until it is complete or the request context expires.
 func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context, openAIKey string, responseIdentifier string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	pollContext, cancelPoll := context.WithTimeout(parentContext, client.upstreamPollTimeout)
-	defer cancelPoll()
 	for {
-		generationCandidate, responseComplete, fetchError := client.fetchResponseByID(pollContext, openAIKey, responseIdentifier, structuredLogger)
+		generationCandidate, responseComplete, fetchError := client.fetchResponseByID(parentContext, openAIKey, responseIdentifier, structuredLogger)
 		if fetchError != nil {
 			if parentContext.Err() != nil {
 				return textGenerationResult{}, parentContext.Err()
-			}
-			if pollContext.Err() != nil {
-				return textGenerationResult{}, newUpstreamPollTimeoutError(responseIdentifier)
 			}
 			return textGenerationResult{}, fetchError
 		}
@@ -330,17 +320,10 @@ func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context,
 		}
 		select {
 		case <-time.After(responsePollInterval):
-		case <-pollContext.Done():
-			if parentContext.Err() != nil {
-				return textGenerationResult{}, parentContext.Err()
-			}
-			return textGenerationResult{}, newUpstreamPollTimeoutError(responseIdentifier)
+		case <-parentContext.Done():
+			return textGenerationResult{}, parentContext.Err()
 		}
 	}
-}
-
-func (client *OpenAIClient) pollStoredResponse(parentContext context.Context, openAIKey string, responseIdentifier string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	return client.pollResponseUntilDone(parentContext, openAIKey, responseIdentifier, structuredLogger)
 }
 
 // fetchResponseByID retrieves a response by identifier and reports whether the response is complete.

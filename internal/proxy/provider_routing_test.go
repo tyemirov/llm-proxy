@@ -45,15 +45,14 @@ func TestProviderRoutingUsesConfiguredOpenAIURLsForTextAndDictation(t *testing.T
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		OpenAIBaseURL:              upstreamServer.URL + "/text-api",
-		OpenAITranscriptionsURL:    upstreamServer.URL + "/dictation-api/transcriptions",
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:                 proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:               TestAPIKey,
+		OpenAIBaseURL:           upstreamServer.URL + "/text-api",
+		OpenAITranscriptionsURL: upstreamServer.URL + "/dictation-api/transcriptions",
+		LogLevel:                proxy.LogLevelInfo,
+		WorkerCount:             1,
+		QueueSize:               1,
+		RequestTimeoutSeconds:   TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -117,15 +116,14 @@ func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		DeepSeekKey:                testDeepSeekKey,
-		DeepSeekBaseURL:            upstreamServer.URL,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		DeepSeekKey:           testDeepSeekKey,
+		DeepSeekBaseURL:       upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -185,16 +183,15 @@ func TestProviderRoutingUsesConfiguredTextModelCatalog(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		DeepSeekKey:                testDeepSeekKey,
-		DeepSeekBaseURL:            upstreamServer.URL,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
-		ProviderModels:             configuredCatalogs,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		DeepSeekKey:           testDeepSeekKey,
+		DeepSeekBaseURL:       upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+		ProviderModels:        configuredCatalogs,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -256,15 +253,14 @@ func TestProviderRoutingTranslatesMaxTokensForOpenAICompatibleChat(t *testing.T)
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		DeepSeekKey:                testDeepSeekKey,
-		DeepSeekBaseURL:            upstreamServer.URL,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		DeepSeekKey:           testDeepSeekKey,
+		DeepSeekBaseURL:       upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -312,14 +308,13 @@ func TestProviderRoutingSupportsMessagesJSONPostForOpenAICompatibleChat(t *testi
 			DictationModel:    proxy.DefaultDictationModel,
 			SystemPrompt:      "Tenant system.",
 		}),
-		OpenAIKey:                  TestAPIKey,
-		DeepSeekKey:                testDeepSeekKey,
-		DeepSeekBaseURL:            upstreamServer.URL,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		OpenAIKey:             TestAPIKey,
+		DeepSeekKey:           testDeepSeekKey,
+		DeepSeekBaseURL:       upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -397,15 +392,14 @@ func TestProviderRoutingSurfacesChatCompletionTokenUsage(t *testing.T) {
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		DeepSeekKey:                testDeepSeekKey,
-		DeepSeekBaseURL:            upstreamServer.URL,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		DeepSeekKey:           testDeepSeekKey,
+		DeepSeekBaseURL:       upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -476,15 +470,14 @@ func TestProviderRoutingSupportsGeminiGenerateContent(t *testing.T) {
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		GeminiKey:                  testGeminiKey,
-		GeminiBaseURL:              upstreamServer.URL,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		GeminiKey:             testGeminiKey,
+		GeminiBaseURL:         upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -611,15 +604,14 @@ func TestProviderRoutingSelectsDefaultsByTenantSecret(t *testing.T) {
 				},
 			},
 		},
-		OpenAIKey:                  TestAPIKey,
-		GeminiKey:                  testGeminiKey,
-		GeminiBaseURL:              geminiServer.URL,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  3,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
-		Endpoints:                  endpoints,
+		OpenAIKey:             TestAPIKey,
+		GeminiKey:             testGeminiKey,
+		GeminiBaseURL:         geminiServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             3,
+		RequestTimeoutSeconds: TestTimeout,
+		Endpoints:             endpoints,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -717,15 +709,14 @@ func TestProviderRoutingSupportsGeminiJSONPost(t *testing.T) {
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		GeminiKey:                  testGeminiKey,
-		GeminiBaseURL:              upstreamServer.URL,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		GeminiKey:             testGeminiKey,
+		GeminiBaseURL:         upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -773,15 +764,14 @@ func TestProviderRoutingSupportsMessagesJSONPostForGemini(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		GeminiKey:                  testGeminiKey,
-		GeminiBaseURL:              upstreamServer.URL,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		GeminiKey:             testGeminiKey,
+		GeminiBaseURL:         upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -842,15 +832,14 @@ func TestProviderRoutingSupportsAnthropicMessages(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		AnthropicKey:               testAnthropicKey,
-		AnthropicBaseURL:           upstreamServer.URL,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		AnthropicKey:          testAnthropicKey,
+		AnthropicBaseURL:      upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -938,15 +927,14 @@ func TestProviderRoutingAnthropicDefaultMaxTokensByModel(t *testing.T) {
 			defer upstreamServer.Close()
 
 			router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-				Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-				OpenAIKey:                  TestAPIKey,
-				AnthropicKey:               testAnthropicKey,
-				AnthropicBaseURL:           upstreamServer.URL,
-				LogLevel:                   proxy.LogLevelInfo,
-				WorkerCount:                1,
-				QueueSize:                  1,
-				RequestTimeoutSeconds:      TestTimeout,
-				UpstreamPollTimeoutSeconds: TestTimeout,
+				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+				OpenAIKey:             TestAPIKey,
+				AnthropicKey:          testAnthropicKey,
+				AnthropicBaseURL:      upstreamServer.URL,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
 			}, zap.NewNop().Sugar())
 			if buildError != nil {
 				subTest.Fatalf(messageBuildRouterError, buildError)
@@ -988,15 +976,14 @@ func TestProviderRoutingTranslatesMaxTokensForAnthropicMessages(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		AnthropicKey:               testAnthropicKey,
-		AnthropicBaseURL:           upstreamServer.URL,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		AnthropicKey:          testAnthropicKey,
+		AnthropicBaseURL:      upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -1039,15 +1026,14 @@ func TestProviderRoutingSupportsGrokChatCompletions(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		GrokKey:                    testGrokKey,
-		GrokBaseURL:                upstreamServer.URL,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		GrokKey:               testGrokKey,
+		GrokBaseURL:           upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -1116,15 +1102,14 @@ func TestProviderRoutingRejectsGeminiJSONPostMaxTokensAboveModelLimit(t *testing
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		GeminiKey:                  testGeminiKey,
-		GeminiBaseURL:              upstreamServer.URL,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		GeminiKey:             testGeminiKey,
+		GeminiBaseURL:         upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -1153,15 +1138,14 @@ func TestProviderRoutingRejectsGeminiQueryMaxTokensAboveModelLimit(t *testing.T)
 
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		GeminiKey:                  testGeminiKey,
-		GeminiBaseURL:              upstreamServer.URL,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		GeminiKey:             testGeminiKey,
+		GeminiBaseURL:         upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -1193,15 +1177,14 @@ func TestProviderRoutingRejectsAnthropicMaxTokensAboveModelLimit(t *testing.T) {
 	defer upstreamServer.Close()
 
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		AnthropicKey:               testAnthropicKey,
-		AnthropicBaseURL:           upstreamServer.URL,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		AnthropicKey:          testAnthropicKey,
+		AnthropicBaseURL:      upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -1229,15 +1212,14 @@ func TestProviderRoutingRejectsAnthropicMaxTokensAboveModelLimit(t *testing.T) {
 func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T) {
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		GeminiKey:                  testGeminiKey,
-		GeminiBaseURL:              "https://gemini.invalid",
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		GeminiKey:             testGeminiKey,
+		GeminiBaseURL:         "https://gemini.invalid",
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -1285,17 +1267,16 @@ func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T)
 
 func TestProviderRoutingRejectsAnthropicAndGrokUnsupportedCapabilities(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		AnthropicKey:               testAnthropicKey,
-		GrokKey:                    testGrokKey,
-		AnthropicBaseURL:           "https://anthropic.invalid",
-		GrokBaseURL:                "https://grok.invalid",
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		AnthropicKey:          testAnthropicKey,
+		GrokKey:               testGrokKey,
+		AnthropicBaseURL:      "https://anthropic.invalid",
+		GrokBaseURL:           "https://grok.invalid",
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -1343,14 +1324,13 @@ func TestProviderRoutingRejectsAnthropicAndGrokUnsupportedCapabilities(t *testin
 func TestProviderRoutingRejectsGeminiMissingCredential(t *testing.T) {
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		GeminiBaseURL:              "https://gemini.invalid",
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		GeminiBaseURL:         "https://gemini.invalid",
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -1371,15 +1351,14 @@ func TestProviderRoutingRejectsGeminiMissingCredential(t *testing.T) {
 
 func TestProviderRoutingRejectsAnthropicAndGrokMissingCredentials(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		AnthropicBaseURL:           "https://anthropic.invalid",
-		GrokBaseURL:                "https://grok.invalid",
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		AnthropicBaseURL:      "https://anthropic.invalid",
+		GrokBaseURL:           "https://grok.invalid",
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -1410,13 +1389,12 @@ func TestProviderRoutingRejectsAnthropicAndGrokMissingCredentials(t *testing.T) 
 func TestProviderRoutingRejectsMissingGeminiDefaultCredential(t *testing.T) {
 	logger := zap.NewNop()
 	_, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini35Flash, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}),
-		OpenAIKey:                  TestAPIKey,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini35Flash, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}),
+		OpenAIKey:             TestAPIKey,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError == nil || !strings.Contains(buildError.Error(), "provider not configured: provider=gemini") {
 		t.Fatalf("error=%v want Gemini provider not configured", buildError)
@@ -1443,13 +1421,12 @@ func TestProviderRoutingRejectsMissingAnthropicAndGrokDefaultCredentials(t *test
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
 			_, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, testCase.defaults),
-				OpenAIKey:                  TestAPIKey,
-				LogLevel:                   proxy.LogLevelInfo,
-				WorkerCount:                1,
-				QueueSize:                  1,
-				RequestTimeoutSeconds:      TestTimeout,
-				UpstreamPollTimeoutSeconds: TestTimeout,
+				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, testCase.defaults),
+				OpenAIKey:             TestAPIKey,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
 			}, zap.NewNop().Sugar())
 			if buildError == nil || !strings.Contains(buildError.Error(), testCase.expectedError) {
 				subTest.Fatalf("error=%v want %q", buildError, testCase.expectedError)
@@ -1484,15 +1461,14 @@ func TestProviderRoutingMapsGeminiProviderErrors(t *testing.T) {
 
 			logger := zap.NewNop()
 			router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-				Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-				OpenAIKey:                  TestAPIKey,
-				GeminiKey:                  testGeminiKey,
-				GeminiBaseURL:              upstreamServer.URL,
-				LogLevel:                   proxy.LogLevelInfo,
-				WorkerCount:                1,
-				QueueSize:                  1,
-				RequestTimeoutSeconds:      TestTimeout,
-				UpstreamPollTimeoutSeconds: TestTimeout,
+				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+				OpenAIKey:             TestAPIKey,
+				GeminiKey:             testGeminiKey,
+				GeminiBaseURL:         upstreamServer.URL,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
 			}, logger.Sugar())
 			if buildError != nil {
 				subTest.Fatalf(messageBuildRouterError, buildError)
@@ -1514,15 +1490,14 @@ func TestProviderRoutingMapsGeminiTransportErrors(t *testing.T) {
 	t.Run("invalid request URL", func(subTest *testing.T) {
 		logger := zap.NewNop()
 		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			GeminiKey:                  testGeminiKey,
-			GeminiBaseURL:              "http://[::1",
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      TestTimeout,
-			UpstreamPollTimeoutSeconds: TestTimeout,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			GeminiKey:             testGeminiKey,
+			GeminiBaseURL:         "http://[::1",
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: TestTimeout,
 		}, logger.Sugar())
 		if buildError != nil {
 			subTest.Fatalf(messageBuildRouterError, buildError)
@@ -1545,15 +1520,14 @@ func TestProviderRoutingMapsGeminiTransportErrors(t *testing.T) {
 
 		logger := zap.NewNop()
 		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			GeminiKey:                  testGeminiKey,
-			GeminiBaseURL:              "https://gemini.invalid",
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      1,
-			UpstreamPollTimeoutSeconds: TestTimeout,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			GeminiKey:             testGeminiKey,
+			GeminiBaseURL:         "https://gemini.invalid",
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: 1,
 		}, logger.Sugar())
 		if buildError != nil {
 			subTest.Fatalf(messageBuildRouterError, buildError)
@@ -1593,15 +1567,14 @@ func TestProviderRoutingMapsAnthropicProviderErrors(t *testing.T) {
 			defer upstreamServer.Close()
 
 			router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-				Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-				OpenAIKey:                  TestAPIKey,
-				AnthropicKey:               testAnthropicKey,
-				AnthropicBaseURL:           upstreamServer.URL,
-				LogLevel:                   proxy.LogLevelInfo,
-				WorkerCount:                1,
-				QueueSize:                  1,
-				RequestTimeoutSeconds:      TestTimeout,
-				UpstreamPollTimeoutSeconds: TestTimeout,
+				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+				OpenAIKey:             TestAPIKey,
+				AnthropicKey:          testAnthropicKey,
+				AnthropicBaseURL:      upstreamServer.URL,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
 			}, zap.NewNop().Sugar())
 			if buildError != nil {
 				subTest.Fatalf(messageBuildRouterError, buildError)
@@ -1622,15 +1595,14 @@ func TestProviderRoutingMapsAnthropicProviderErrors(t *testing.T) {
 func TestProviderRoutingMapsAnthropicTransportErrors(t *testing.T) {
 	t.Run("invalid request URL", func(subTest *testing.T) {
 		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			AnthropicKey:               testAnthropicKey,
-			AnthropicBaseURL:           "http://[::1",
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      TestTimeout,
-			UpstreamPollTimeoutSeconds: TestTimeout,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			AnthropicKey:          testAnthropicKey,
+			AnthropicBaseURL:      "http://[::1",
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: TestTimeout,
 		}, zap.NewNop().Sugar())
 		if buildError != nil {
 			subTest.Fatalf(messageBuildRouterError, buildError)
@@ -1652,15 +1624,14 @@ func TestProviderRoutingMapsAnthropicTransportErrors(t *testing.T) {
 		subTest.Cleanup(func() { proxy.HTTPClient = originalHTTPClient })
 
 		router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			AnthropicKey:               testAnthropicKey,
-			AnthropicBaseURL:           "https://anthropic.invalid",
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      1,
-			UpstreamPollTimeoutSeconds: TestTimeout,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			AnthropicKey:          testAnthropicKey,
+			AnthropicBaseURL:      "https://anthropic.invalid",
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: 1,
 		}, zap.NewNop().Sugar())
 		if buildError != nil {
 			subTest.Fatalf(messageBuildRouterError, buildError)
@@ -1680,15 +1651,14 @@ func TestProviderRoutingMapsAnthropicTransportErrors(t *testing.T) {
 func TestProviderRoutingRejectsUnsupportedWebSearch(t *testing.T) {
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		DeepSeekKey:                testDeepSeekKey,
-		DeepSeekBaseURL:            "https://deepseek.invalid",
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		DeepSeekKey:           testDeepSeekKey,
+		DeepSeekBaseURL:       "https://deepseek.invalid",
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -1707,14 +1677,13 @@ func TestProviderRoutingRejectsUnsupportedWebSearch(t *testing.T) {
 func TestProviderRoutingRejectsMissingProviderCredential(t *testing.T) {
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		DeepSeekBaseURL:            "https://deepseek.invalid",
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		DeepSeekBaseURL:       "https://deepseek.invalid",
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -1742,81 +1711,75 @@ func TestProviderRoutingRejectsInvalidDefaultDictationProvider(t *testing.T) {
 		{
 			name: "missing_siliconflow_credential",
 			configuration: proxy.Configuration{
-				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameSiliconFlow}),
-				OpenAIKey:                  TestAPIKey,
-				LogLevel:                   proxy.LogLevelInfo,
-				WorkerCount:                1,
-				QueueSize:                  1,
-				RequestTimeoutSeconds:      TestTimeout,
-				UpstreamPollTimeoutSeconds: TestTimeout,
+				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameSiliconFlow}),
+				OpenAIKey:             TestAPIKey,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
 			},
 			expectedError: "provider not configured: provider=siliconflow endpoint=dictation",
 		},
 		{
 			name: "unsupported_deepseek_dictation",
 			configuration: proxy.Configuration{
-				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameDeepSeek}),
-				OpenAIKey:                  TestAPIKey,
-				DeepSeekKey:                testDeepSeekKey,
-				LogLevel:                   proxy.LogLevelInfo,
-				WorkerCount:                1,
-				QueueSize:                  1,
-				RequestTimeoutSeconds:      TestTimeout,
-				UpstreamPollTimeoutSeconds: TestTimeout,
+				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameDeepSeek}),
+				OpenAIKey:             TestAPIKey,
+				DeepSeekKey:           testDeepSeekKey,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
 			},
 			expectedError: "unsupported provider endpoint: provider=deepseek endpoint=dictation",
 		},
 		{
 			name: "unsupported_gemini_dictation",
 			configuration: proxy.Configuration{
-				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameGemini}),
-				OpenAIKey:                  TestAPIKey,
-				GeminiKey:                  testGeminiKey,
-				LogLevel:                   proxy.LogLevelInfo,
-				WorkerCount:                1,
-				QueueSize:                  1,
-				RequestTimeoutSeconds:      TestTimeout,
-				UpstreamPollTimeoutSeconds: TestTimeout,
+				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameGemini}),
+				OpenAIKey:             TestAPIKey,
+				GeminiKey:             testGeminiKey,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
 			},
 			expectedError: "unsupported provider endpoint: provider=gemini endpoint=dictation",
 		},
 		{
 			name: "unsupported_anthropic_dictation",
 			configuration: proxy.Configuration{
-				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameAnthropic}),
-				OpenAIKey:                  TestAPIKey,
-				AnthropicKey:               testAnthropicKey,
-				LogLevel:                   proxy.LogLevelInfo,
-				WorkerCount:                1,
-				QueueSize:                  1,
-				RequestTimeoutSeconds:      TestTimeout,
-				UpstreamPollTimeoutSeconds: TestTimeout,
+				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameAnthropic}),
+				OpenAIKey:             TestAPIKey,
+				AnthropicKey:          testAnthropicKey,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
 			},
 			expectedError: "unsupported provider endpoint: provider=anthropic endpoint=dictation",
 		},
 		{
 			name: "missing_zhipu_credential",
 			configuration: proxy.Configuration{
-				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameZhipu}),
-				OpenAIKey:                  TestAPIKey,
-				LogLevel:                   proxy.LogLevelInfo,
-				WorkerCount:                1,
-				QueueSize:                  1,
-				RequestTimeoutSeconds:      TestTimeout,
-				UpstreamPollTimeoutSeconds: TestTimeout,
+				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameZhipu}),
+				OpenAIKey:             TestAPIKey,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
 			},
 			expectedError: "provider not configured: provider=zhipu endpoint=dictation",
 		},
 		{
 			name: "missing_grok_credential",
 			configuration: proxy.Configuration{
-				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameGrok}),
-				OpenAIKey:                  TestAPIKey,
-				LogLevel:                   proxy.LogLevelInfo,
-				WorkerCount:                1,
-				QueueSize:                  1,
-				RequestTimeoutSeconds:      TestTimeout,
-				UpstreamPollTimeoutSeconds: TestTimeout,
+				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameGrok}),
+				OpenAIKey:             TestAPIKey,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
 			},
 			expectedError: "provider not configured: provider=grok endpoint=dictation",
 		},
@@ -1835,13 +1798,12 @@ func TestProviderRoutingRejectsInvalidDefaultDictationProvider(t *testing.T) {
 func TestProviderRoutingRejectsConflictingJSONModelParameters(t *testing.T) {
 	logger := zap.NewNop()
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, logger.Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -1891,7 +1853,6 @@ func TestProviderRoutingSupportsSiliconFlowDictation(t *testing.T) {
 		WorkerCount:                  1,
 		QueueSize:                    1,
 		RequestTimeoutSeconds:        TestTimeout,
-		UpstreamPollTimeoutSeconds:   TestTimeout,
 		MaxInputAudioBytes:           1024 * 1024,
 	}, logger.Sugar())
 	if buildError != nil {
@@ -1943,16 +1904,15 @@ func TestProviderRoutingSupportsZhipuAndGrokDictation(t *testing.T) {
 			expectedResponse: "zhipu dictation ok",
 			configuration: func(transcriptionsURL string) proxy.Configuration {
 				return proxy.Configuration{
-					Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-					OpenAIKey:                  TestAPIKey,
-					ZhipuKey:                   testZhipuKey,
-					ZhipuTranscriptionsURL:     transcriptionsURL,
-					LogLevel:                   proxy.LogLevelInfo,
-					WorkerCount:                1,
-					QueueSize:                  1,
-					RequestTimeoutSeconds:      TestTimeout,
-					UpstreamPollTimeoutSeconds: TestTimeout,
-					MaxInputAudioBytes:         1024 * 1024,
+					Tenants:                proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:              TestAPIKey,
+					ZhipuKey:               testZhipuKey,
+					ZhipuTranscriptionsURL: transcriptionsURL,
+					LogLevel:               proxy.LogLevelInfo,
+					WorkerCount:            1,
+					QueueSize:              1,
+					RequestTimeoutSeconds:  TestTimeout,
+					MaxInputAudioBytes:     1024 * 1024,
 				}
 			},
 		},
@@ -1965,16 +1925,15 @@ func TestProviderRoutingSupportsZhipuAndGrokDictation(t *testing.T) {
 			expectedResponse: "grok dictation ok",
 			configuration: func(transcriptionsURL string) proxy.Configuration {
 				return proxy.Configuration{
-					Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-					OpenAIKey:                  TestAPIKey,
-					GrokKey:                    testGrokKey,
-					GrokTranscriptionsURL:      transcriptionsURL,
-					LogLevel:                   proxy.LogLevelInfo,
-					WorkerCount:                1,
-					QueueSize:                  1,
-					RequestTimeoutSeconds:      TestTimeout,
-					UpstreamPollTimeoutSeconds: TestTimeout,
-					MaxInputAudioBytes:         1024 * 1024,
+					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:             TestAPIKey,
+					GrokKey:               testGrokKey,
+					GrokTranscriptionsURL: transcriptionsURL,
+					LogLevel:              proxy.LogLevelInfo,
+					WorkerCount:           1,
+					QueueSize:             1,
+					RequestTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:    1024 * 1024,
 				}
 			},
 		},

@@ -22,8 +22,7 @@ const (
 	// DefaultDictationProvider is the provider used when /dictate does not supply one.
 	DefaultDictationProvider = ProviderNameOpenAI
 
-	DefaultRequestTimeoutSeconds      = 180 // overall app-side request timeout
-	DefaultUpstreamPollTimeoutSeconds = 60  // bounded OpenAI background response poll window
+	DefaultRequestTimeoutSeconds = 240 // overall app-side request timeout
 	// DefaultMaxPromptBytes limits JSON LLM request bodies accepted by POST /.
 	DefaultMaxPromptBytes     = 4 * 1024 * 1024
 	DefaultDictationModel     = "gpt-4o-mini-transcribe"
@@ -60,7 +59,6 @@ type Configuration struct {
 	WorkerCount                  int
 	QueueSize                    int
 	RequestTimeoutSeconds        int
-	UpstreamPollTimeoutSeconds   int
 	MaxPromptBytes               int64
 	MaxInputAudioBytes           int64
 	Endpoints                    *Endpoints
@@ -112,33 +110,6 @@ func validateConfig(configuration Configuration) (tenantRegistry, error) {
 // ErrUpstreamIncomplete indicates that the upstream provider returned an incomplete response before the poll deadline.
 var ErrUpstreamIncomplete = errors.New(errorUpstreamIncomplete)
 
-// ErrUpstreamPollTimeout indicates that a background upstream response did not finish before the poll deadline.
-var ErrUpstreamPollTimeout = errors.New(errorUpstreamPollTimedOut)
-
-type upstreamPollTimeoutError struct {
-	responseIdentifier string
-}
-
-func (pollError upstreamPollTimeoutError) Error() string {
-	return errorUpstreamPollTimedOut
-}
-
-func (pollError upstreamPollTimeoutError) Is(target error) bool {
-	return target == ErrUpstreamPollTimeout
-}
-
-func newUpstreamPollTimeoutError(responseIdentifier string) error {
-	return upstreamPollTimeoutError{responseIdentifier: responseIdentifier}
-}
-
-func responseIdentifierFromPollTimeout(requestError error) string {
-	var pollError upstreamPollTimeoutError
-	if errors.As(requestError, &pollError) {
-		return strings.TrimSpace(pollError.responseIdentifier)
-	}
-	return constants.EmptyString
-}
-
 // ApplyTunables ensures tunable configuration values have sensible defaults.
 func (configuration *Configuration) ApplyTunables() {
 	configuration.OpenAIKey = strings.TrimSpace(configuration.OpenAIKey)
@@ -152,9 +123,6 @@ func (configuration *Configuration) ApplyTunables() {
 	configuration.GrokKey = strings.TrimSpace(configuration.GrokKey)
 	if configuration.RequestTimeoutSeconds <= 0 {
 		configuration.RequestTimeoutSeconds = DefaultRequestTimeoutSeconds
-	}
-	if configuration.UpstreamPollTimeoutSeconds <= 0 {
-		configuration.UpstreamPollTimeoutSeconds = DefaultUpstreamPollTimeoutSeconds
 	}
 	if configuration.MaxPromptBytes <= 0 {
 		configuration.MaxPromptBytes = DefaultMaxPromptBytes

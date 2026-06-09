@@ -14,13 +14,10 @@ const (
 	headerLLMProxyRequestTokens  = "X-LLM-Proxy-Request-Tokens"
 	headerLLMProxyResponseTokens = "X-LLM-Proxy-Response-Tokens"
 	headerLLMProxyTotalTokens    = "X-LLM-Proxy-Total-Tokens"
-	headerLLMProxyResumeProvider = "X-LLM-Proxy-Resume-Provider"
-	headerLLMProxyResponseID     = "X-LLM-Proxy-Upstream-Response-ID"
 
 	// rootPath defines the HTTP path for the root endpoint.
-	rootPath      = "/"
-	v2Path        = "/v2"
-	responsesPath = "/responses/:id"
+	rootPath = "/"
+	v2Path   = "/v2"
 	// dictatePath defines the HTTP path for audio transcription requests.
 	dictatePath = "/dictate"
 
@@ -38,7 +35,6 @@ const (
 
 	redactedPlaceholder = "***REDACTED***"
 	contextKeyTenant    = "tenant"
-	pathParameterID     = "id"
 
 	mimeApplicationJSON = "application/json"
 	mimeApplicationXML  = "application/xml"
@@ -53,13 +49,11 @@ const (
 	// errorMissingClientKey indicates that the key query parameter is missing.
 	errorMissingClientKey           = "unknown client key"
 	errorRequestTimedOut            = "request timed out"
-	errorUpstreamPollTimedOut       = "upstream response still running after poll timeout; resume polling with X-LLM-Proxy-Upstream-Response-ID"
 	errorOpenAIRequest              = "OpenAI request error"
 	errorOpenAIAPI                  = "OpenAI API error"
 	errorOpenAIAPINoText            = "OpenAI API error (no text)"
 	errorOpenAIFailedStatus         = "OpenAI API error (failed status)"
 	errorOpenAIContinue             = "OpenAI API continue error"
-	errorInvalidOpenAIResponseID    = "invalid OpenAI response id"
 	errorUnknownProvider            = "unknown provider"
 	errorProviderNotConfigured      = "provider not configured"
 	errorUnsupportedCapability      = "unsupported provider capability"

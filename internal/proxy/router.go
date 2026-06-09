@@ -95,8 +95,7 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 
 	taskQueue := make(chan requestTask, configuration.QueueSize)
 	requestTimeout := time.Duration(configuration.RequestTimeoutSeconds) * time.Second
-	pollTimeout := time.Duration(configuration.UpstreamPollTimeoutSeconds) * time.Second
-	openAIClient := NewOpenAIClient(HTTPClient, configuration.Endpoints, requestTimeout, pollTimeout)
+	openAIClient := NewOpenAIClient(HTTPClient, configuration.Endpoints, requestTimeout)
 	chatClient := newOpenAICompatibleChatClient(HTTPClient, requestTimeout)
 	geminiClient := newGeminiGenerateContentClient(HTTPClient, requestTimeout)
 	anthropicClient := newAnthropicMessagesClient(HTTPClient, requestTimeout)
@@ -114,7 +113,6 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	router.GET(rootPath, chatHandler(taskQueue, validator, requestTimeout, structuredLogger))
 	router.POST(rootPath, chatJSONHandler(taskQueue, validator, requestTimeout, configuration.MaxPromptBytes, structuredLogger))
 	router.POST(v2Path, chatV2JSONHandler(taskQueue, validator, requestTimeout, configuration.MaxPromptBytes, structuredLogger))
-	router.GET(responsesPath, resumeOpenAIResponseHandler(providers, openAIClient, requestTimeout, structuredLogger))
 	router.POST(dictatePath, dictateHandler(upstreamProviders, validator, configuration.MaxInputAudioBytes, structuredLogger))
 	return router, nil
 }
@@ -382,7 +380,6 @@ func submitChatRequest(ginContext *gin.Context, taskQueue chan requestTask, chat
 	select {
 	case outcome := <-replyChannel:
 		if outcome.requestError != nil {
-			writeResumeHeaders(ginContext.Writer.Header(), outcome.requestError)
 			ginContext.String(statusCodeForError(outcome.requestError), responseMessageForError(outcome.requestError))
 			return
 		}
@@ -393,58 +390,6 @@ func submitChatRequest(ginContext *gin.Context, taskQueue chan requestTask, chat
 	case <-requestContext.Done():
 		ginContext.String(http.StatusGatewayTimeout, errorRequestTimedOut)
 	}
-}
-
-func resumeOpenAIResponseHandler(providers *providerRegistry, openAIClient *OpenAIClient, requestTimeout time.Duration, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
-	return func(ginContext *gin.Context) {
-		requestTenant := authenticatedTenantFromContext(ginContext)
-		responseIdentifier := strings.TrimSpace(ginContext.Param(pathParameterID))
-		if responseIdentifier == constants.EmptyString {
-			ginContext.String(http.StatusBadRequest, errorInvalidOpenAIResponseID)
-			return
-		}
-		providerDefinition, providerError := providers.resolveProvider(ginContext.Query(queryParameterProvider), requestTenant.defaults.provider)
-		if providerError != nil {
-			ginContext.String(statusCodeForError(providerError), responseMessageForError(providerError))
-			return
-		}
-		if providerDefinition.textTransport != textTransportOpenAIResponses {
-			responseError := fmt.Errorf("%w: provider=%s endpoint=responses", ErrUnsupportedEndpoint, providerDefinition.identifier.string())
-			ginContext.String(http.StatusBadRequest, responseError.Error())
-			return
-		}
-		if strings.TrimSpace(providerDefinition.credentialFor(endpointKindText)) == constants.EmptyString {
-			responseError := fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, providerDefinition.identifier.string(), endpointKindText)
-			ginContext.String(http.StatusServiceUnavailable, responseError.Error())
-			return
-		}
-		requestContext, requestCancel := context.WithTimeout(ginContext.Request.Context(), requestTimeout)
-		defer requestCancel()
-		generation, requestError := openAIClient.pollStoredResponse(
-			requestContext,
-			providerDefinition.credentialFor(endpointKindText),
-			responseIdentifier,
-			structuredLogger,
-		)
-		if requestError != nil {
-			writeResumeHeaders(ginContext.Writer.Header(), requestError)
-			ginContext.String(statusCodeForError(requestError), responseMessageForError(requestError))
-			return
-		}
-		mime := preferredMime(ginContext)
-		writeTokenUsageHeaders(ginContext.Writer.Header(), generation.usage)
-		formattedBody, contentType := formatResponse(generation.text, mime, chatRequestParameters{}, generation.usage)
-		ginContext.Data(http.StatusOK, contentType, []byte(formattedBody))
-	}
-}
-
-func writeResumeHeaders(responseHeader http.Header, requestError error) {
-	responseIdentifier := responseIdentifierFromPollTimeout(requestError)
-	if responseIdentifier == constants.EmptyString {
-		return
-	}
-	responseHeader.Set(headerLLMProxyResumeProvider, ProviderNameOpenAI)
-	responseHeader.Set(headerLLMProxyResponseID, responseIdentifier)
 }
 
 func dictateHandler(upstreamProviders *providerRouter, validator *modelValidator, maxInputAudioBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
@@ -564,8 +509,6 @@ func statusCodeForError(requestError error) int {
 		return http.StatusServiceUnavailable
 	case errors.Is(requestError, ErrProviderRateLimited):
 		return http.StatusTooManyRequests
-	case errors.Is(requestError, ErrUpstreamPollTimeout):
-		return http.StatusGatewayTimeout
 	case errors.Is(requestError, context.DeadlineExceeded), errors.Is(requestError, context.Canceled):
 		return http.StatusGatewayTimeout
 	default:
