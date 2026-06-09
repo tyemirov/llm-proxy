@@ -65,7 +65,7 @@ Working backlog for this repository. Keep entries in the canonical ISSUES.md for
   ### Resolution
   Added black-box Gemini POST coverage for thought-marked parts returning only final answer text, non-final `finishReason` values mapping to `502`, and missing `finishReason` mapping to `502`. `internal/proxy/gemini.go` now models `parts[].thought` and candidate `finishReason`, returns only non-thought text for completed `STOP` candidates, and treats missing or non-`STOP` finish reasons as provider API errors instead of successful partial output. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test` (total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make lint`, and `timeout -k 350s -s SIGKILL 350s make ci` (total coverage 100.0%).
 
-- [ ] [B002] (P1) Long semantic-review POSTs fail transport while small requests pass
+- [x] [B002] (P1) Long semantic-review POSTs fail transport while small requests pass
   ### Summary
   Camu Russian semantic-stress QA can still fail before materialization on long full-story prompts even though a small `llm-proxy` smoke request succeeds. On 2026-06-09, `po-schuchemu-velenyu` text prep failed three times at the `llm-proxy` stage: one read timeout, then two SSL record-layer failures. A tiny Russian pipeline smoke test using the same Russian-language `pipeline_runner.py` reached `semantic-stress-qa` and `materialize` successfully, so the service is not fully down; the failure appears tied to long-running or larger semantic-review POSTs and/or chunk retry transport handling.
 
@@ -131,6 +131,42 @@ Working backlog for this repository. Keep entries in the canonical ISSUES.md for
   2. Add coverage for chunked semantic-review retry behavior so chunk transport failures are reported with chunk index, provider, model, timeout, and upstream status when available.
   3. Verify the Russian-language `po-schuchemu-velenyu` materialization path reaches `materialize` or returns a structured proxy error instead of `read operation timed out` or SSL record-layer failure.
   4. Preserve the existing successful behavior for small POST requests.
+
+  ### Resolution
+  OpenAI Responses text requests now run in background mode by sending `background: true` and `store: true` on initial, continuation, and synthesis payloads, then polling the returned response id instead of holding long semantic-review generations on one synchronous upstream HTTP read. Poll-budget exhaustion is now a distinct `ErrUpstreamPollTimeout` that maps to `504 Gateway Timeout` with retry guidance to increase `server.upstream_poll_timeout_seconds`; terminal incomplete/provider failures remain provider failures. Added black-box integration coverage for a long semantic-review JSON POST that returns a queued background response, polls by response id, and returns the completed body. Python client HTTP and transport failures now include non-secret provider, model, and timeout context, and raw OS/SSL-style failures are typed as `LLMProxyTransportError`.
+
+  Validation passed with `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make python-test` (27 passed), `timeout -k 350s -s SIGKILL 350s make python-lint`, `timeout -k 350s -s SIGKILL 350s make go-lint`, and `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 27 passed). A Camu scratch verification of `po-schuchemu-velenyu` against the local proxy with forced chunking and `gpt-5-mini` no longer surfaced `read operation timed out` or SSL record-layer transport failures; under the current 60-second `server.upstream_poll_timeout_seconds` budget, the pipeline returned the classified error `llm-proxy chunk 1 failed after retries with HTTP 504: Gateway Timeout`. The exact reported forced-chunked semantic-review payload was then reconstructed from the failed Camu pipeline state (`chunkIndex=1`, `chunkChars=1800`, request SHA-256 `ba8737a7dd4b81dc0d52e68d9260756fdb0f32e6e12f3be2527d8be55df1a0cd`) and replayed through `POST /?provider=openai&format=text/plain`: the default 60-second poll budget returned the classified 504 after 60.55s, while a temporary config with `request_timeout_seconds: 360` and `upstream_poll_timeout_seconds: 300` returned HTTP 200 after 171.16s. The returned body passed `semantic_stress_qa.py` validation as a full-transcript review with 23/23 high-risk target reviews covered and 2 human-review items.
+
+- [x] [B003] (P1) OpenAI background semantic-review calls require manual timeout tuning
+  ### Summary
+  B002 moved long OpenAI Responses calls into background mode, but the successful manual replay still required hand-editing `request_timeout_seconds` and `upstream_poll_timeout_seconds`. A normal llm-proxy client call should not require operators or downstream workflows to guess timeout knobs for a semantic-review payload.
+
+  ### Impact
+  Downstream callers can still fail a viable OpenAI background response with a proxy-side poll-budget 504, then retry from scratch or require caller-specific timeout overrides. This keeps long semantic review fragile even though the provider can complete the response.
+
+  ### Reproduction
+  Reuse the reported `po-schuchemu-velenyu` forced-chunked semantic-review request reconstructed from the failed Camu pipeline state:
+
+  ```text
+  /tmp/llm-proxy-b002-direct/po-schuchemu-velenyu.chunk-0001.llm-proxy-request.json
+  ```
+
+  With `server.upstream_poll_timeout_seconds: 60`, the proxy returns a classified 504 after about 60 seconds. With a temporary 300-second poll budget, the same request returns HTTP 200 after about 171 seconds and validates as a full semantic-review response.
+
+  ### Expected
+  The proxy should own long OpenAI background response completion. If the synchronous poll budget expires, the error must include a resumable response token, and the bundled first-party clients should use that token to resume polling through llm-proxy instead of requiring manual timeout tuning or restarting the generation.
+
+  ### Acceptance Criteria
+  1. OpenAI poll-budget exhaustion returns enough non-secret metadata for a client to resume the already-running upstream response through llm-proxy.
+  2. llm-proxy exposes a protected resume endpoint that polls an existing OpenAI Responses id and returns the final body with the same response formatting contract.
+  3. The bundled Go and Python clients transparently resume OpenAI background responses from the proxy-provided token while preserving typed HTTP/transport failures for non-resumable errors.
+  4. Default local config and documented defaults use a short bounded server poll budget, while first-party clients transparently resume long OpenAI semantic-review calls without per-call tuning.
+  5. Black-box integration tests cover the initial 504-with-resume-token path and the resume-to-200 path.
+
+  ### Resolution
+  OpenAI background poll-budget exhaustion now carries resumable metadata through `X-LLM-Proxy-Resume-Provider: openai` and `X-LLM-Proxy-Upstream-Response-ID`. Added authenticated `GET /responses/:id` to poll an existing OpenAI Responses id through llm-proxy and return the final text with the existing response formatting path. The bundled Python client, Go package, and installable Go CLI now treat a resumable 504 as an internal continuation signal and follow the resume endpoint up to completion, so callers still use one client call instead of tuning timeouts or restarting generation. Default/local server budgets remain bounded at `request_timeout_seconds: 180` and `upstream_poll_timeout_seconds: 60`; long OpenAI completions continue through client-side resume instead of a multi-minute server-held poll. README/provider-routing docs were updated.
+
+  Validation passed with targeted proxy, Go client, and Python client resume tests, `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make python-test` (28 passed), `timeout -k 350s -s SIGKILL 350s make python-lint`, `timeout -k 350s -s SIGKILL 350s make go-lint`, and `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 28 passed). Live exact-payload replay with the bounded default `upstream_poll_timeout_seconds: 60` returned a resumable POST 504 after 60.64s, a resumable GET 504 after 60.00s, and a final GET 200 after 20.27s; total wall time was 141s. The returned body parsed as a full-transcript semantic review and covered 23/23 high-risk targets, with 2 uncertain target reviews requiring human review.
 
 ## Improvements
 
