@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"go.uber.org/zap"
 )
 
@@ -126,20 +127,28 @@ func newIntegrationServer(testingInstance *testing.T, openAIServer *httptest.Ser
 	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
 	loggerInstance, _ := zap.NewDevelopment()
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
-	router, buildRouterError := proxy.BuildRouter(proxy.Configuration{
+	router, buildRouterError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
 		Tenants:     proxy.SingleTenantConfigurations("integration", integrationServiceSecret),
 		OpenAIKey:   integrationOpenAIKey,
 		LogLevel:    logLevelDebug,
 		WorkerCount: 1,
 		QueueSize:   4,
 		Endpoints:   endpoints,
-	}, loggerInstance.Sugar())
+	}), loggerInstance.Sugar())
 	if buildRouterError != nil {
 		testingInstance.Fatalf(buildRouterErrorFormat, buildRouterError)
 	}
 	server := httptest.NewServer(router)
 	testingInstance.Cleanup(server.Close)
 	return server
+}
+
+func integrationConfiguration(testingInstance testing.TB, configuration proxy.Configuration) proxy.Configuration {
+	testingInstance.Helper()
+	if len(configuration.ProviderModels) == 0 {
+		configuration.ProviderModels = testfixtures.ProviderModelCatalogs(testingInstance)
+	}
+	return configuration
 }
 
 // makeHTTPClient returns a stub HTTP client capturing payloads and returning canned responses.

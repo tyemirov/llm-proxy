@@ -19,7 +19,7 @@ func TestRequestWithoutPromptReturnsMissingPromptError(testingInstance *testing.
 	endpoints := proxy.NewEndpoints()
 	client, _ := makeHTTPClient(testingInstance, false, endpoints)
 	configureProxy(testingInstance, client, endpoints)
-	router, buildError := proxy.BuildRouter(proxy.Configuration{Tenants: proxy.SingleTenantConfigurations("integration", serviceSecretValue), OpenAIKey: openAIKeyValue, LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 8, Endpoints: endpoints}, newLogger(testingInstance))
+	router, buildError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{Tenants: proxy.SingleTenantConfigurations("integration", serviceSecretValue), OpenAIKey: openAIKeyValue, LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 8, Endpoints: endpoints}), newLogger(testingInstance))
 	if buildError != nil {
 		testingInstance.Fatalf("BuildRouter failed: %v", buildError)
 	}

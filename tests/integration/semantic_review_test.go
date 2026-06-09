@@ -123,7 +123,7 @@ func TestIntegrationLargeSemanticReviewPostUsesRequestMaxTokens(testingInstance 
 	originalClient := proxy.HTTPClient
 	proxy.HTTPClient = openAIServer.Client()
 	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
-	router, buildError := proxy.BuildRouter(proxy.Configuration{
+	router, buildError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
 		Tenants:                    proxy.SingleTenantConfigurations("integration", serviceSecretValue),
 		OpenAIKey:                  openAIKeyValue,
 		LogLevel:                   logLevelDebug,
@@ -132,7 +132,7 @@ func TestIntegrationLargeSemanticReviewPostUsesRequestMaxTokens(testingInstance 
 		RequestTimeoutSeconds:      requestTimeoutSecondsDefault,
 		UpstreamPollTimeoutSeconds: requestTimeoutSecondsDefault,
 		Endpoints:                  endpoints,
-	}, newLogger(testingInstance))
+	}), newLogger(testingInstance))
 	if buildError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildError)
 	}

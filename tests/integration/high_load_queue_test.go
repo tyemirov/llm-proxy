@@ -70,7 +70,7 @@ func TestIntegrationHighLoadQueue(testingInstance *testing.T) {
 	releaseResponses := make(chan struct{})
 	client := makeBlockingHTTPClient(testingInstance, endpoints, upstreamRequestStarted, releaseResponses)
 	configureProxy(testingInstance, client, endpoints)
-	router, buildRouterError := proxy.BuildRouter(proxy.Configuration{
+	router, buildRouterError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
 		Tenants:               proxy.SingleTenantConfigurations("integration", serviceSecretValue),
 		OpenAIKey:             openAIKeyValue,
 		LogLevel:              logLevelDebug,
@@ -78,7 +78,7 @@ func TestIntegrationHighLoadQueue(testingInstance *testing.T) {
 		QueueSize:             singleQueueSlot,
 		RequestTimeoutSeconds: requestTimeoutSeconds,
 		Endpoints:             endpoints,
-	}, newLogger(testingInstance))
+	}), newLogger(testingInstance))
 	if buildRouterError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildRouterError)
 	}

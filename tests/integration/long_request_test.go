@@ -61,7 +61,7 @@ func TestIntegrationResponseDeliveredAfterUpstreamRelease(testingInstance *testi
 			requestErrors := make(chan error, 1)
 			endpoints := proxy.NewEndpoints()
 			configureProxy(subTest, makeControlledResponseHTTPClient(subTest, endpoints, upstreamRequestStarted, releaseResponse), endpoints)
-			router, buildError := proxy.BuildRouter(proxy.Configuration{Tenants: proxy.SingleTenantConfigurations("integration", serviceSecretValue), OpenAIKey: openAIKeyValue, LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 8, RequestTimeoutSeconds: requestTimeoutSecondsDefault, Endpoints: endpoints}, newLogger(subTest))
+			router, buildError := proxy.BuildRouter(integrationConfiguration(subTest, proxy.Configuration{Tenants: proxy.SingleTenantConfigurations("integration", serviceSecretValue), OpenAIKey: openAIKeyValue, LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 8, RequestTimeoutSeconds: requestTimeoutSecondsDefault, Endpoints: endpoints}), newLogger(subTest))
 			if buildError != nil {
 				subTest.Fatalf(buildRouterFailedFormat, buildError)
 			}

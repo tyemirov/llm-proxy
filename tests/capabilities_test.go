@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"go.uber.org/zap"
 )
 
@@ -78,14 +79,14 @@ func TestIntegration_OmitsDisallowedParameters(testingInstance *testing.T) {
 			logger, _ := zap.NewDevelopment()
 			defer logger.Sync()
 
-			router, buildRouterError := proxy.BuildRouter(proxy.Configuration{
+			router, buildRouterError := proxy.BuildRouter(testfixtures.WithProviderModelCatalogs(subTestInstance, proxy.Configuration{
 				Tenants:     proxy.SingleTenantConfigurations("capabilities", serviceSecret),
 				OpenAIKey:   openAIKey,
 				LogLevel:    logLevel,
 				WorkerCount: 1,
 				QueueSize:   4,
 				Endpoints:   endpoints,
-			}, logger.Sugar())
+			}), logger.Sugar())
 			if buildRouterError != nil {
 				subTestInstance.Fatalf("BuildRouter error: %v", buildRouterError)
 			}

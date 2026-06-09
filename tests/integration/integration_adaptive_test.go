@@ -75,14 +75,14 @@ func newAdaptiveRouter(testingInstance *testing.T, mode string) *gin.Engine {
 	testingInstance.Cleanup(func() { endpoints.ResetResponsesURL() })
 	logger, _ := zap.NewDevelopment()
 	testingInstance.Cleanup(func() { _ = logger.Sync() })
-	router, buildRouterError := proxy.BuildRouter(proxy.Configuration{
+	router, buildRouterError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
 		Tenants:     proxy.SingleTenantConfigurations("integration", serviceSecretValue),
 		OpenAIKey:   openAIKeyValue,
 		LogLevel:    logLevelDebug,
 		WorkerCount: 1,
 		QueueSize:   8,
 		Endpoints:   endpoints,
-	}, logger.Sugar())
+	}), logger.Sugar())
 	if buildRouterError != nil {
 		testingInstance.Fatalf("BuildRouter failed: %v", buildRouterError)
 	}
