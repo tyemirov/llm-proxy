@@ -240,8 +240,8 @@ tenants:
 	withServeProxy(t, failingServeProxy(t))
 
 	executeError := executeRootCommand(t, "--config", configPath)
-	if executeError == nil || !strings.Contains(executeError.Error(), "secret must be set") {
-		t.Fatalf("error=%v want missing tenant secret", executeError)
+	if executeError == nil || !strings.Contains(executeError.Error(), "config_placeholder_missing: names=P411_MISSING_SERVICE_SECRET") {
+		t.Fatalf("error=%v want missing tenant secret placeholder", executeError)
 	}
 }
 
@@ -275,6 +275,28 @@ tenants:
 	}
 	if capturedConfiguration.GeminiKey != "" {
 		t.Fatalf("geminiKey=%q want empty disabled non-default provider", capturedConfiguration.GeminiKey)
+	}
+}
+
+func TestRootCommandRejectsPartialMissingProviderKeyPlaceholder(t *testing.T) {
+	tempDir := t.TempDir()
+	providerValues := defaultProviderYAMLValues()
+	providerValues.GeminiAPIKey = "sk-${P411_MISSING_GEMINI_SUFFIX}"
+	configPath := writeTestConfig(t, tempDir, `
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: openai
+      model: gpt-4.1
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
+`+completeProvidersYAML(providerValues))
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError == nil || !strings.Contains(executeError.Error(), "config_placeholder_missing: names=P411_MISSING_GEMINI_SUFFIX") {
+		t.Fatalf("error=%v want missing partial provider key placeholder", executeError)
 	}
 }
 

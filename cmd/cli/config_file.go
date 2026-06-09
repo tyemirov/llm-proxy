@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -31,11 +32,13 @@ var (
 	errConfigFileRead            = errors.New("config_file_read_failed")
 	errConfigFileParse           = errors.New("config_file_parse_failed")
 	errConfigEnvironmentRead     = errors.New("config_environment_read_failed")
+	errConfigPlaceholderMissing  = errors.New("config_placeholder_missing")
 	errConfigInvalid             = errors.New("config_invalid")
 	errProviderAPIKeyRequired    = errors.New("provider_api_key_required")
 	errProviderBaseURLRequired   = errors.New("provider_base_url_required")
 	errTranscriptionsURLRequired = errors.New("provider_transcriptions_url_required")
 	placeholderPattern           = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+	optionalAPIKeyLinePattern    = regexp.MustCompile(`^\s*api_key:\s*(?:"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"|'\$\{([A-Za-z_][A-Za-z0-9_]*)\}'|\$\{([A-Za-z_][A-Za-z0-9_]*)\})\s*(?:#.*)?$`)
 	readConfigBytes              = os.ReadFile
 	readDotEnvFile               = gotenv.Read
 	processEnvironment           = os.Environ
@@ -126,7 +129,10 @@ func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error)
 	if environmentError != nil {
 		return proxy.Configuration{}, environmentError
 	}
-	expandedConfig := expandConfigPlaceholders(string(configBytes), expansionEnvironment)
+	expandedConfig, expansionError := expandConfigPlaceholders(string(configBytes), expansionEnvironment)
+	if expansionError != nil {
+		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigFileParse, configPath, expansionError)
+	}
 
 	configReader := viper.New()
 	configReader.SetConfigType(configFileType)
@@ -170,17 +176,45 @@ func configurationExpansionEnvironment(configPath string) (map[string]string, er
 	return expansionEnvironment, nil
 }
 
-func expandConfigPlaceholders(configContent string, expansionEnvironment map[string]string) string {
-	expandedConfig := placeholderPattern.ReplaceAllStringFunc(configContent, func(placeholder string) string {
-		placeholderMatches := placeholderPattern.FindStringSubmatch(placeholder)
-		placeholderName := placeholderMatches[1]
-		placeholderValue, foundValue := expansionEnvironment[placeholderName]
-		if !foundValue {
-			return constants.EmptyString
+func expandConfigPlaceholders(configContent string, expansionEnvironment map[string]string) (string, error) {
+	missingPlaceholders := map[string]struct{}{}
+	var expandedConfig strings.Builder
+	for _, configLine := range strings.SplitAfter(configContent, "\n") {
+		expandedLine := placeholderPattern.ReplaceAllStringFunc(configLine, func(placeholder string) string {
+			placeholderMatches := placeholderPattern.FindStringSubmatch(placeholder)
+			placeholderName := placeholderMatches[1]
+			placeholderValue, foundValue := expansionEnvironment[placeholderName]
+			if foundValue {
+				return placeholderValue
+			}
+			if optionalMissingAPIKeyPlaceholder(configLine, placeholderName) {
+				return constants.EmptyString
+			}
+			missingPlaceholders[placeholderName] = struct{}{}
+			return placeholder
+		})
+		expandedConfig.WriteString(expandedLine)
+	}
+	if len(missingPlaceholders) > 0 {
+		missingNames := make([]string, 0, len(missingPlaceholders))
+		for placeholderName := range missingPlaceholders {
+			missingNames = append(missingNames, placeholderName)
 		}
-		return placeholderValue
-	})
-	return expandedConfig
+		sort.Strings(missingNames)
+		return constants.EmptyString, fmt.Errorf("%w: names=%s", errConfigPlaceholderMissing, strings.Join(missingNames, ","))
+	}
+	return expandedConfig.String(), nil
+}
+
+func optionalMissingAPIKeyPlaceholder(configLine string, placeholderName string) bool {
+	trimmedLine := strings.TrimRight(configLine, "\r\n")
+	placeholderLineMatches := optionalAPIKeyLinePattern.FindStringSubmatch(trimmedLine)
+	if len(placeholderLineMatches) == 0 {
+		return false
+	}
+	return placeholderLineMatches[1] == placeholderName ||
+		placeholderLineMatches[2] == placeholderName ||
+		placeholderLineMatches[3] == placeholderName
 }
 
 func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configuration, error) {
