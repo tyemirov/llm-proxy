@@ -24,6 +24,8 @@ type requestPayloadBase struct {
 	Model           string `json:"model"`
 	Input           string `json:"input"`
 	MaxOutputTokens *int   `json:"max_output_tokens,omitempty"`
+	Background      bool   `json:"background"`
+	Store           bool   `json:"store"`
 }
 
 // requestPayloadWithTools is for models supporting tools but not temperature (e.g., gpt-5).
@@ -59,6 +61,8 @@ func BuildRequestPayload(modelIdentifier string, rawRequestProfile string, combi
 		Model:           modelIdentifier,
 		Input:           combinedPrompt,
 		MaxOutputTokens: maxTokens,
+		Background:      true,
+		Store:           true,
 	}
 	requestProfile := modelRequestProfile(strings.ToLower(strings.TrimSpace(rawRequestProfile)))
 
@@ -119,15 +123,15 @@ const (
 
 var (
 	// SchemaGPT4oMini defines allowed payload fields for the GPT-4o-mini model.
-	SchemaGPT4oMini = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens, keyTemperature}}
+	SchemaGPT4oMini = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens, keyBackground, keyStore, keyTemperature}}
 	// SchemaGPT4o defines allowed payload fields for the GPT-4o model.
-	SchemaGPT4o = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens, keyTemperature, keyTools, keyToolChoice}}
+	SchemaGPT4o = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens, keyBackground, keyStore, keyTemperature, keyTools, keyToolChoice}}
 	// SchemaGPT41 defines allowed payload fields for the GPT-4.1 model.
-	SchemaGPT41 = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens, keyTemperature, keyTools, keyToolChoice}}
+	SchemaGPT41 = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens, keyBackground, keyStore, keyTemperature, keyTools, keyToolChoice}}
 	// SchemaGPT5Mini defines allowed payload fields for the GPT-5-mini model.
-	SchemaGPT5Mini = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens}}
+	SchemaGPT5Mini = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens, keyBackground, keyStore}}
 	// SchemaGPT5 defines allowed payload fields for the GPT-5 model.
-	SchemaGPT5 = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens, keyTools, keyToolChoice, keyReasoning}}
+	SchemaGPT5 = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens, keyBackground, keyStore, keyTools, keyToolChoice, keyReasoning}}
 	// SchemaGPT55 defines allowed payload fields for GPT-5.5 family models.
 	SchemaGPT55 = SchemaGPT5
 )

@@ -23,7 +23,7 @@ const (
 	DefaultDictationProvider = ProviderNameOpenAI
 
 	DefaultRequestTimeoutSeconds      = 180 // overall app-side request timeout
-	DefaultUpstreamPollTimeoutSeconds = 60  // poll budget after "incomplete"
+	DefaultUpstreamPollTimeoutSeconds = 60  // bounded OpenAI background response poll window
 	// DefaultMaxPromptBytes limits JSON LLM request bodies accepted by POST /.
 	DefaultMaxPromptBytes     = 4 * 1024 * 1024
 	DefaultDictationModel     = "gpt-4o-mini-transcribe"
@@ -111,6 +111,33 @@ func validateConfig(configuration Configuration) (tenantRegistry, error) {
 
 // ErrUpstreamIncomplete indicates that the upstream provider returned an incomplete response before the poll deadline.
 var ErrUpstreamIncomplete = errors.New(errorUpstreamIncomplete)
+
+// ErrUpstreamPollTimeout indicates that a background upstream response did not finish before the poll deadline.
+var ErrUpstreamPollTimeout = errors.New(errorUpstreamPollTimedOut)
+
+type upstreamPollTimeoutError struct {
+	responseIdentifier string
+}
+
+func (pollError upstreamPollTimeoutError) Error() string {
+	return errorUpstreamPollTimedOut
+}
+
+func (pollError upstreamPollTimeoutError) Is(target error) bool {
+	return target == ErrUpstreamPollTimeout
+}
+
+func newUpstreamPollTimeoutError(responseIdentifier string) error {
+	return upstreamPollTimeoutError{responseIdentifier: responseIdentifier}
+}
+
+func responseIdentifierFromPollTimeout(requestError error) string {
+	var pollError upstreamPollTimeoutError
+	if errors.As(requestError, &pollError) {
+		return strings.TrimSpace(pollError.responseIdentifier)
+	}
+	return constants.EmptyString
+}
 
 // ApplyTunables ensures tunable configuration values have sensible defaults.
 func (configuration *Configuration) ApplyTunables() {

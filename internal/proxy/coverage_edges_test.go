@@ -1170,7 +1170,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("poll timeout maps to bad gateway after upstream incomplete", func(subTest *testing.T) {
+	t.Run("poll timeout maps to gateway timeout after upstream incomplete", func(subTest *testing.T) {
 		upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			switch {
@@ -1196,13 +1196,185 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 			Endpoints:                  endpoints,
 		})
 		queryParameters := url.Values{}
-		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusBadGateway {
-			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		queryParameters.Set("key", TestSecret)
+		queryParameters.Set("prompt", TestPrompt)
+		request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		statusCode := responseRecorder.Code
+		responseBody := responseRecorder.Body.String()
+		if statusCode != http.StatusGatewayTimeout {
+			subTest.Fatalf("status=%d want=%d body=%s", statusCode, http.StatusGatewayTimeout, responseBody)
+		}
+		if !strings.Contains(responseBody, "resume polling with X-LLM-Proxy-Upstream-Response-ID") {
+			subTest.Fatalf("body=%q missing resume guidance", responseBody)
+		}
+		if responseIdentifier := responseRecorder.Header().Get("X-LLM-Proxy-Upstream-Response-ID"); responseIdentifier != "slow" {
+			subTest.Fatalf("resume response id=%q want slow", responseIdentifier)
+		}
+		if resumeProvider := responseRecorder.Header().Get("X-LLM-Proxy-Resume-Provider"); resumeProvider != proxy.ProviderNameOpenAI {
+			subTest.Fatalf("resume provider=%q want %s", resumeProvider, proxy.ProviderNameOpenAI)
 		}
 	})
 
-	t.Run("poll fetch timeout maps to bad gateway", func(subTest *testing.T) {
+	t.Run("resume endpoint polls stored OpenAI response", func(subTest *testing.T) {
+		pollCount := 0
+		upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			if httpRequest.Method != http.MethodGet || httpRequest.URL.Path != "/slow" {
+				http.NotFound(responseWriter, httpRequest)
+				return
+			}
+			pollCount++
+			if pollCount == 1 {
+				_, _ = responseWriter.Write([]byte(`{"id":"slow","status":"in_progress"}`))
+				return
+			}
+			_, _ = responseWriter.Write([]byte(`{"id":"slow","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"resumed"}]}]}`))
+		}))
+		subTest.Cleanup(upstreamServer.Close)
+		endpoints := proxy.NewEndpoints()
+		endpoints.SetResponsesURL(upstreamServer.URL)
+		router := coverageRouter(subTest, proxy.Configuration{
+			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:                  TestAPIKey,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      2,
+			UpstreamPollTimeoutSeconds: 2,
+			Endpoints:                  endpoints,
+		})
+		request := httptest.NewRequest(http.MethodGet, "/responses/slow?key="+url.QueryEscape(TestSecret)+"&format=text/plain", nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusOK {
+			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+		}
+		if responseRecorder.Body.String() != "resumed" {
+			subTest.Fatalf("body=%q want resumed", responseRecorder.Body.String())
+		}
+		if pollCount < 2 {
+			subTest.Fatalf("poll_count=%d want>=2", pollCount)
+		}
+	})
+
+	t.Run("resume endpoint rejects blank response id", func(subTest *testing.T) {
+		router := coverageRouter(subTest, proxy.Configuration{
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: 1,
+		})
+		request := httptest.NewRequest(http.MethodGet, "/responses/%20?key="+url.QueryEscape(TestSecret), nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusBadRequest {
+			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
+		}
+	})
+
+	t.Run("resume endpoint rejects unknown provider", func(subTest *testing.T) {
+		router := coverageRouter(subTest, proxy.Configuration{
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: 1,
+		})
+		request := httptest.NewRequest(http.MethodGet, "/responses/slow?key="+url.QueryEscape(TestSecret)+"&provider=missing", nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusBadRequest {
+			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
+		}
+	})
+
+	t.Run("resume endpoint rejects non OpenAI provider", func(subTest *testing.T) {
+		router := coverageRouter(subTest, proxy.Configuration{
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			GeminiKey:             "gemini-key",
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: 1,
+		})
+		request := httptest.NewRequest(http.MethodGet, "/responses/slow?key="+url.QueryEscape(TestSecret)+"&provider=gemini", nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusBadRequest {
+			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
+		}
+		if !strings.Contains(responseRecorder.Body.String(), "unsupported provider endpoint") {
+			subTest.Fatalf("body=%q missing unsupported endpoint", responseRecorder.Body.String())
+		}
+	})
+
+	t.Run("resume endpoint rejects unconfigured OpenAI provider", func(subTest *testing.T) {
+		router := coverageRouter(subTest, proxy.Configuration{
+			Tenants: proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{
+				Provider:          proxy.ProviderNameGemini,
+				Model:             "gemini-2.5-flash",
+				DictationProvider: proxy.ProviderNameSiliconFlow,
+				DictationModel:    "FunAudioLLM/SenseVoiceSmall",
+			}),
+			GeminiKey:                    "gemini-key",
+			SiliconFlowKey:               "siliconflow-key",
+			SiliconFlowTranscriptionsURL: "https://siliconflow.invalid/audio/transcriptions",
+			LogLevel:                     proxy.LogLevelInfo,
+			WorkerCount:                  1,
+			QueueSize:                    1,
+			RequestTimeoutSeconds:        1,
+		})
+		request := httptest.NewRequest(http.MethodGet, "/responses/slow?key="+url.QueryEscape(TestSecret)+"&provider=openai", nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusServiceUnavailable {
+			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusServiceUnavailable, responseRecorder.Body.String())
+		}
+		if !strings.Contains(responseRecorder.Body.String(), "provider not configured") {
+			subTest.Fatalf("body=%q missing provider not configured", responseRecorder.Body.String())
+		}
+	})
+
+	t.Run("resume endpoint returns resume headers on stored response poll timeout", func(subTest *testing.T) {
+		upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			if httpRequest.Method != http.MethodGet || httpRequest.URL.Path != "/slow" {
+				http.NotFound(responseWriter, httpRequest)
+				return
+			}
+			_, _ = responseWriter.Write([]byte(`{"id":"slow","status":"in_progress"}`))
+		}))
+		subTest.Cleanup(upstreamServer.Close)
+		endpoints := proxy.NewEndpoints()
+		endpoints.SetResponsesURL(upstreamServer.URL)
+		router := coverageRouter(subTest, proxy.Configuration{
+			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:                  TestAPIKey,
+			LogLevel:                   proxy.LogLevelInfo,
+			WorkerCount:                1,
+			QueueSize:                  1,
+			RequestTimeoutSeconds:      2,
+			UpstreamPollTimeoutSeconds: 1,
+			Endpoints:                  endpoints,
+		})
+		request := httptest.NewRequest(http.MethodGet, "/responses/slow?key="+url.QueryEscape(TestSecret), nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusGatewayTimeout {
+			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusGatewayTimeout, responseRecorder.Body.String())
+		}
+		if responseIdentifier := responseRecorder.Header().Get("X-LLM-Proxy-Upstream-Response-ID"); responseIdentifier != "slow" {
+			subTest.Fatalf("resume response id=%q want slow", responseIdentifier)
+		}
+	})
+
+	t.Run("poll fetch timeout maps to gateway timeout", func(subTest *testing.T) {
 		endpoints := proxy.NewEndpoints()
 		endpoints.SetResponsesURL("https://openai.invalid/v1/responses")
 		previousClient := proxy.HTTPClient
@@ -1231,12 +1403,12 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		})
 		queryParameters := url.Values{}
 		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusBadGateway {
-			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		if statusCode != http.StatusGatewayTimeout {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
 		}
 	})
 
-	t.Run("poll sleep timeout maps to bad gateway", func(subTest *testing.T) {
+	t.Run("poll sleep timeout maps to gateway timeout", func(subTest *testing.T) {
 		endpoints := proxy.NewEndpoints()
 		endpoints.SetResponsesURL("https://openai.invalid/v1/responses")
 		previousClient := proxy.HTTPClient
@@ -1265,8 +1437,8 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		})
 		queryParameters := url.Values{}
 		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusBadGateway {
-			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		if statusCode != http.StatusGatewayTimeout {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
 		}
 	})
 

@@ -223,6 +223,9 @@ func openAIStageError(stageError error) error {
 	if errors.Is(stageError, context.Canceled) || errors.Is(stageError, context.DeadlineExceeded) {
 		return stageError
 	}
+	if errors.Is(stageError, ErrUpstreamPollTimeout) {
+		return stageError
+	}
 	return errors.New(errorOpenAIAPI)
 }
 
@@ -233,6 +236,8 @@ func (client *OpenAIClient) startSynthesisContinuation(parentContext context.Con
 	payload := map[string]any{
 		keyModel:              modelIdentifier,
 		keyPreviousResponseID: previousResponseID,
+		keyBackground:         true,
+		keyStore:              true,
 		keyToolChoice:         toolChoiceNone,
 		keyInput:              synthesisInstructionPrimary,
 		keyReasoning: map[string]any{
@@ -313,7 +318,7 @@ func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context,
 				return textGenerationResult{}, parentContext.Err()
 			}
 			if pollContext.Err() != nil {
-				return textGenerationResult{}, ErrUpstreamIncomplete
+				return textGenerationResult{}, newUpstreamPollTimeoutError(responseIdentifier)
 			}
 			return textGenerationResult{}, fetchError
 		}
@@ -329,9 +334,13 @@ func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context,
 			if parentContext.Err() != nil {
 				return textGenerationResult{}, parentContext.Err()
 			}
-			return textGenerationResult{}, ErrUpstreamIncomplete
+			return textGenerationResult{}, newUpstreamPollTimeoutError(responseIdentifier)
 		}
 	}
+}
+
+func (client *OpenAIClient) pollStoredResponse(parentContext context.Context, openAIKey string, responseIdentifier string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	return client.pollResponseUntilDone(parentContext, openAIKey, responseIdentifier, structuredLogger)
 }
 
 // fetchResponseByID retrieves a response by identifier and reports whether the response is complete.

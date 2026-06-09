@@ -26,10 +26,10 @@ func TestResolveModelPayloadSchema(testFramework *testing.T) {
 		requestProfile string
 		expectFields   []string
 	}{
-		{"openai_responses_temperature", []string{"model", "input", "max_output_tokens", "temperature"}},
-		{"openai_responses_temperature_tools", []string{"model", "input", "max_output_tokens", "temperature", "tools", "tool_choice"}},
-		{"openai_responses_base", []string{"model", "input", "max_output_tokens"}},
-		{"openai_responses_reasoning_tools", []string{"model", "input", "max_output_tokens", "tools", "tool_choice", "reasoning"}},
+		{"openai_responses_temperature", []string{"model", "input", "max_output_tokens", "background", "store", "temperature"}},
+		{"openai_responses_temperature_tools", []string{"model", "input", "max_output_tokens", "background", "store", "temperature", "tools", "tool_choice"}},
+		{"openai_responses_base", []string{"model", "input", "max_output_tokens", "background", "store"}},
+		{"openai_responses_reasoning_tools", []string{"model", "input", "max_output_tokens", "background", "store", "tools", "tool_choice", "reasoning"}},
 	}
 	for _, testCase := range testCases {
 		payloadSchema := proxy.ResolveModelPayloadSchema(testCase.requestProfile)
@@ -157,6 +157,12 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 			}
 			if strings.Contains(payloadJSON, maxOutputTokensFieldJSONFragment) {
 				subTestFramework.Errorf("max_output_tokens must be omitted without request max_tokens: %s", payloadJSON)
+			}
+			if !strings.Contains(payloadJSON, `"background":true`) {
+				subTestFramework.Errorf("background must be enabled for OpenAI Responses polling: %s", payloadJSON)
+			}
+			if !strings.Contains(payloadJSON, `"store":true`) {
+				subTestFramework.Errorf("store must be enabled for OpenAI Responses polling: %s", payloadJSON)
 			}
 
 			maxTokens := 555
