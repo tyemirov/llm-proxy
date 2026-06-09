@@ -21,15 +21,18 @@ const (
 )
 
 var (
-	errConfigFileRead           = errors.New("config_file_read_failed")
-	errConfigFileParse          = errors.New("config_file_parse_failed")
-	errConfigEnvironmentRead    = errors.New("config_environment_read_failed")
-	errConfigPlaceholderMissing = errors.New("config_placeholder_missing")
-	errConfigInvalid            = errors.New("config_invalid")
-	placeholderPattern          = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
-	readConfigBytes             = os.ReadFile
-	readDotEnvFile              = gotenv.Read
-	processEnvironment          = os.Environ
+	errConfigFileRead            = errors.New("config_file_read_failed")
+	errConfigFileParse           = errors.New("config_file_parse_failed")
+	errConfigEnvironmentRead     = errors.New("config_environment_read_failed")
+	errConfigPlaceholderMissing  = errors.New("config_placeholder_missing")
+	errConfigInvalid             = errors.New("config_invalid")
+	errProviderAPIKeyRequired    = errors.New("provider_api_key_required")
+	errProviderBaseURLRequired   = errors.New("provider_base_url_required")
+	errTranscriptionsURLRequired = errors.New("provider_transcriptions_url_required")
+	placeholderPattern           = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+	readConfigBytes              = os.ReadFile
+	readDotEnvFile               = gotenv.Read
+	processEnvironment           = os.Environ
 )
 
 type fileConfiguration struct {
@@ -64,26 +67,41 @@ type tenantDefaultsConfig struct {
 }
 
 type providersConfiguration struct {
-	OpenAI      providerConfiguration    `mapstructure:"openai"`
-	DeepSeek    providerConfiguration    `mapstructure:"deepseek"`
-	DashScope   providerConfiguration    `mapstructure:"dashscope"`
-	Moonshot    providerConfiguration    `mapstructure:"moonshot"`
-	SiliconFlow siliconFlowConfiguration `mapstructure:"siliconflow"`
-	Zhipu       providerConfiguration    `mapstructure:"zhipu"`
-	Gemini      providerConfiguration    `mapstructure:"gemini"`
-	Anthropic   providerConfiguration    `mapstructure:"anthropic"`
-	Grok        providerConfiguration    `mapstructure:"grok"`
+	OpenAI      transcribingProviderConfiguration `mapstructure:"openai"`
+	DeepSeek    providerConfiguration             `mapstructure:"deepseek"`
+	DashScope   providerConfiguration             `mapstructure:"dashscope"`
+	Moonshot    providerConfiguration             `mapstructure:"moonshot"`
+	SiliconFlow transcribingProviderConfiguration `mapstructure:"siliconflow"`
+	Zhipu       transcribingProviderConfiguration `mapstructure:"zhipu"`
+	Gemini      providerConfiguration             `mapstructure:"gemini"`
+	Anthropic   providerConfiguration             `mapstructure:"anthropic"`
+	Grok        transcribingProviderConfiguration `mapstructure:"grok"`
 }
 
 type providerConfiguration struct {
-	APIKey  string `mapstructure:"api_key"`
-	BaseURL string `mapstructure:"base_url"`
+	APIKey  string                     `mapstructure:"api_key"`
+	BaseURL string                     `mapstructure:"base_url"`
+	Text    modelEndpointConfiguration `mapstructure:"text"`
 }
 
-type siliconFlowConfiguration struct {
-	APIKey            string `mapstructure:"api_key"`
-	BaseURL           string `mapstructure:"base_url"`
-	TranscriptionsURL string `mapstructure:"transcriptions_url"`
+type transcribingProviderConfiguration struct {
+	APIKey            string                     `mapstructure:"api_key"`
+	BaseURL           string                     `mapstructure:"base_url"`
+	TranscriptionsURL string                     `mapstructure:"transcriptions_url"`
+	Text              modelEndpointConfiguration `mapstructure:"text"`
+	Dictation         modelEndpointConfiguration `mapstructure:"dictation"`
+}
+
+type modelEndpointConfiguration struct {
+	DefaultModel string               `mapstructure:"default_model"`
+	Models       []modelConfiguration `mapstructure:"models"`
+}
+
+type modelConfiguration struct {
+	ID               string `mapstructure:"id"`
+	RequestProfile   string `mapstructure:"request_profile"`
+	WebSearch        bool   `mapstructure:"web_search"`
+	OutputTokenLimit int    `mapstructure:"output_token_limit"`
 }
 
 func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error) {
@@ -167,6 +185,9 @@ func expandConfigPlaceholders(configContent string, expansionEnvironment map[str
 }
 
 func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configuration, error) {
+	if providerValidationError := configuration.Providers.validateCompleteProviderConfiguration(); providerValidationError != nil {
+		return proxy.Configuration{}, providerValidationError
+	}
 	return proxy.NewConfiguration(proxy.Configuration{
 		Tenants:                      tenantConfigurations(configuration.Tenants),
 		OpenAIKey:                    configuration.Providers.OpenAI.APIKey,
@@ -178,15 +199,19 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		GeminiKey:                    configuration.Providers.Gemini.APIKey,
 		AnthropicKey:                 configuration.Providers.Anthropic.APIKey,
 		GrokKey:                      configuration.Providers.Grok.APIKey,
+		OpenAIBaseURL:                configuration.Providers.OpenAI.BaseURL,
+		OpenAITranscriptionsURL:      configuration.Providers.OpenAI.TranscriptionsURL,
 		DeepSeekBaseURL:              configuration.Providers.DeepSeek.BaseURL,
 		DashScopeBaseURL:             configuration.Providers.DashScope.BaseURL,
 		MoonshotBaseURL:              configuration.Providers.Moonshot.BaseURL,
 		SiliconFlowBaseURL:           configuration.Providers.SiliconFlow.BaseURL,
 		SiliconFlowTranscriptionsURL: configuration.Providers.SiliconFlow.TranscriptionsURL,
 		ZhipuBaseURL:                 configuration.Providers.Zhipu.BaseURL,
+		ZhipuTranscriptionsURL:       configuration.Providers.Zhipu.TranscriptionsURL,
 		GeminiBaseURL:                configuration.Providers.Gemini.BaseURL,
 		AnthropicBaseURL:             configuration.Providers.Anthropic.BaseURL,
 		GrokBaseURL:                  configuration.Providers.Grok.BaseURL,
+		GrokTranscriptionsURL:        configuration.Providers.Grok.TranscriptionsURL,
 		Port:                         configuration.Server.Port,
 		LogLevel:                     configuration.Server.LogLevel,
 		WorkerCount:                  configuration.Server.Workers,
@@ -195,7 +220,121 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		UpstreamPollTimeoutSeconds:   configuration.Server.UpstreamPollTimeoutSeconds,
 		MaxPromptBytes:               configuration.Server.MaxPromptBytes,
 		MaxInputAudioBytes:           configuration.Server.MaxInputAudioBytes,
+		ProviderModels:               configuration.Providers.providerModelCatalogs(),
 	})
+}
+
+func (configuration providersConfiguration) providerModelCatalogs() proxy.ProviderModelCatalogs {
+	return proxy.ProviderModelCatalogs{
+		proxy.ProviderNameOpenAI: {
+			Text:      configuration.OpenAI.Text.proxyCatalog(),
+			Dictation: configuration.OpenAI.Dictation.proxyCatalog(),
+		},
+		proxy.ProviderNameDeepSeek: {
+			Text: configuration.DeepSeek.Text.proxyCatalog(),
+		},
+		proxy.ProviderNameDashScope: {
+			Text: configuration.DashScope.Text.proxyCatalog(),
+		},
+		proxy.ProviderNameMoonshot: {
+			Text: configuration.Moonshot.Text.proxyCatalog(),
+		},
+		proxy.ProviderNameSiliconFlow: {
+			Text:      configuration.SiliconFlow.Text.proxyCatalog(),
+			Dictation: configuration.SiliconFlow.Dictation.proxyCatalog(),
+		},
+		proxy.ProviderNameZhipu: {
+			Text:      configuration.Zhipu.Text.proxyCatalog(),
+			Dictation: configuration.Zhipu.Dictation.proxyCatalog(),
+		},
+		proxy.ProviderNameGemini: {
+			Text: configuration.Gemini.Text.proxyCatalog(),
+		},
+		proxy.ProviderNameAnthropic: {
+			Text: configuration.Anthropic.Text.proxyCatalog(),
+		},
+		proxy.ProviderNameGrok: {
+			Text:      configuration.Grok.Text.proxyCatalog(),
+			Dictation: configuration.Grok.Dictation.proxyCatalog(),
+		},
+	}
+}
+
+func (configuration modelEndpointConfiguration) proxyCatalog() proxy.ModelEndpointCatalog {
+	models := make([]proxy.ModelConfiguration, 0, len(configuration.Models))
+	for _, currentModel := range configuration.Models {
+		models = append(models, proxy.ModelConfiguration{
+			ID:               currentModel.ID,
+			RequestProfile:   currentModel.RequestProfile,
+			WebSearch:        currentModel.WebSearch,
+			OutputTokenLimit: currentModel.OutputTokenLimit,
+		})
+	}
+	return proxy.ModelEndpointCatalog{
+		DefaultModel: configuration.DefaultModel,
+		Models:       models,
+	}
+}
+
+func (configuration providersConfiguration) validateCompleteProviderConfiguration() error {
+	requiredAPIKeys := []struct {
+		providerName string
+		fieldName    string
+		apiKey       string
+	}{
+		{providerName: proxy.ProviderNameOpenAI, fieldName: "providers.openai.api_key", apiKey: configuration.OpenAI.APIKey},
+		{providerName: proxy.ProviderNameDeepSeek, fieldName: "providers.deepseek.api_key", apiKey: configuration.DeepSeek.APIKey},
+		{providerName: proxy.ProviderNameDashScope, fieldName: "providers.dashscope.api_key", apiKey: configuration.DashScope.APIKey},
+		{providerName: proxy.ProviderNameMoonshot, fieldName: "providers.moonshot.api_key", apiKey: configuration.Moonshot.APIKey},
+		{providerName: proxy.ProviderNameSiliconFlow, fieldName: "providers.siliconflow.api_key", apiKey: configuration.SiliconFlow.APIKey},
+		{providerName: proxy.ProviderNameZhipu, fieldName: "providers.zhipu.api_key", apiKey: configuration.Zhipu.APIKey},
+		{providerName: proxy.ProviderNameGemini, fieldName: "providers.gemini.api_key", apiKey: configuration.Gemini.APIKey},
+		{providerName: proxy.ProviderNameAnthropic, fieldName: "providers.anthropic.api_key", apiKey: configuration.Anthropic.APIKey},
+		{providerName: proxy.ProviderNameGrok, fieldName: "providers.grok.api_key", apiKey: configuration.Grok.APIKey},
+	}
+	for _, requiredAPIKey := range requiredAPIKeys {
+		if strings.TrimSpace(requiredAPIKey.apiKey) == constants.EmptyString {
+			return fmt.Errorf("%w: provider=%s field=%s", errProviderAPIKeyRequired, requiredAPIKey.providerName, requiredAPIKey.fieldName)
+		}
+	}
+
+	requiredBaseURLs := []struct {
+		providerName string
+		fieldName    string
+		baseURL      string
+	}{
+		{providerName: proxy.ProviderNameOpenAI, fieldName: "providers.openai.base_url", baseURL: configuration.OpenAI.BaseURL},
+		{providerName: proxy.ProviderNameDeepSeek, fieldName: "providers.deepseek.base_url", baseURL: configuration.DeepSeek.BaseURL},
+		{providerName: proxy.ProviderNameDashScope, fieldName: "providers.dashscope.base_url", baseURL: configuration.DashScope.BaseURL},
+		{providerName: proxy.ProviderNameMoonshot, fieldName: "providers.moonshot.base_url", baseURL: configuration.Moonshot.BaseURL},
+		{providerName: proxy.ProviderNameSiliconFlow, fieldName: "providers.siliconflow.base_url", baseURL: configuration.SiliconFlow.BaseURL},
+		{providerName: proxy.ProviderNameZhipu, fieldName: "providers.zhipu.base_url", baseURL: configuration.Zhipu.BaseURL},
+		{providerName: proxy.ProviderNameGemini, fieldName: "providers.gemini.base_url", baseURL: configuration.Gemini.BaseURL},
+		{providerName: proxy.ProviderNameAnthropic, fieldName: "providers.anthropic.base_url", baseURL: configuration.Anthropic.BaseURL},
+		{providerName: proxy.ProviderNameGrok, fieldName: "providers.grok.base_url", baseURL: configuration.Grok.BaseURL},
+	}
+	for _, requiredBaseURL := range requiredBaseURLs {
+		if strings.TrimSpace(requiredBaseURL.baseURL) == constants.EmptyString {
+			return fmt.Errorf("%w: provider=%s field=%s", errProviderBaseURLRequired, requiredBaseURL.providerName, requiredBaseURL.fieldName)
+		}
+	}
+
+	requiredTranscriptionsURLs := []struct {
+		providerName      string
+		fieldName         string
+		transcriptionsURL string
+	}{
+		{providerName: proxy.ProviderNameOpenAI, fieldName: "providers.openai.transcriptions_url", transcriptionsURL: configuration.OpenAI.TranscriptionsURL},
+		{providerName: proxy.ProviderNameSiliconFlow, fieldName: "providers.siliconflow.transcriptions_url", transcriptionsURL: configuration.SiliconFlow.TranscriptionsURL},
+		{providerName: proxy.ProviderNameZhipu, fieldName: "providers.zhipu.transcriptions_url", transcriptionsURL: configuration.Zhipu.TranscriptionsURL},
+		{providerName: proxy.ProviderNameGrok, fieldName: "providers.grok.transcriptions_url", transcriptionsURL: configuration.Grok.TranscriptionsURL},
+	}
+	for _, requiredTranscriptionsURL := range requiredTranscriptionsURLs {
+		if strings.TrimSpace(requiredTranscriptionsURL.transcriptionsURL) == constants.EmptyString {
+			return fmt.Errorf("%w: provider=%s field=%s", errTranscriptionsURLRequired, requiredTranscriptionsURL.providerName, requiredTranscriptionsURL.fieldName)
+		}
+	}
+	return nil
 }
 
 func tenantConfigurations(rawTenants []tenantConfiguration) []proxy.TenantConfiguration {

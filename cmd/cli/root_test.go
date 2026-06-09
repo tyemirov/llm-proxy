@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,6 +19,29 @@ const (
 
 func TestRootCommandRunsConfiguredProxyFromConfigFile(t *testing.T) {
 	tempDir := t.TempDir()
+	providerValues := defaultProviderYAMLValues()
+	providerValues.OpenAIAPIKey = "${P411_OPENAI_KEY}"
+	providerValues.OpenAIBaseURL = "https://openai.example/v1"
+	providerValues.OpenAITranscriptionsURL = "https://openai.example/v1/audio/transcriptions"
+	providerValues.DeepSeekAPIKey = "${P411_DEEPSEEK_KEY}"
+	providerValues.DeepSeekBaseURL = "https://deepseek.example"
+	providerValues.DashScopeAPIKey = "${P411_DASHSCOPE_KEY}"
+	providerValues.DashScopeBaseURL = "https://dashscope.example"
+	providerValues.MoonshotAPIKey = "${P411_MOONSHOT_KEY}"
+	providerValues.MoonshotBaseURL = "https://moonshot.example"
+	providerValues.SiliconFlowAPIKey = "${P411_SILICONFLOW_KEY}"
+	providerValues.SiliconFlowBaseURL = "https://siliconflow.example"
+	providerValues.SiliconFlowTranscriptionsURL = "https://siliconflow.example/audio/transcriptions"
+	providerValues.ZhipuAPIKey = "${P411_ZHIPU_KEY}"
+	providerValues.ZhipuBaseURL = "https://zhipu.example"
+	providerValues.ZhipuTranscriptionsURL = "https://zhipu.example/audio/transcriptions"
+	providerValues.GeminiAPIKey = "${P411_GEMINI_KEY}"
+	providerValues.GeminiBaseURL = "https://gemini.example"
+	providerValues.AnthropicAPIKey = "${P411_ANTHROPIC_KEY}"
+	providerValues.AnthropicBaseURL = "https://anthropic.example"
+	providerValues.GrokAPIKey = "${P411_GROK_KEY}"
+	providerValues.GrokBaseURL = "https://grok.example"
+	providerValues.GrokTranscriptionsURL = "https://grok.example/stt"
 	configPath := writeTestConfig(t, tempDir, `
 server:
   port: 18080
@@ -37,25 +61,15 @@ tenants:
       dictation_provider: openai
       dictation_model: gpt-4o-transcribe
       system_prompt: "Be terse."
-providers:
-  openai:
-    api_key: "${P411_OPENAI_KEY}"
-  deepseek:
-    api_key: "${P411_DEEPSEEK_KEY}"
-  gemini:
-    api_key: "${P411_GEMINI_KEY}"
-    base_url: "https://gemini.example"
-  anthropic:
-    api_key: "${P411_ANTHROPIC_KEY}"
-    base_url: "https://anthropic.example"
-  grok:
-    api_key: "${P411_GROK_KEY}"
-    base_url: "https://grok.example"
-`)
+`+completeProvidersYAML(providerValues))
 	writeTestDotEnv(t, tempDir, `
 P411_SERVICE_SECRET=dotenv-secret
 P411_OPENAI_KEY=sk-openai
 P411_DEEPSEEK_KEY=sk-deepseek
+P411_DASHSCOPE_KEY=sk-dashscope
+P411_MOONSHOT_KEY=sk-moonshot
+P411_SILICONFLOW_KEY=sk-siliconflow
+P411_ZHIPU_KEY=sk-zhipu
 P411_GEMINI_KEY=sk-gemini
 P411_ANTHROPIC_KEY=sk-ant
 P411_GROK_KEY=sk-xai
@@ -81,8 +95,17 @@ P411_GROK_KEY=sk-xai
 	if capturedConfiguration.OpenAIKey != "sk-openai" {
 		t.Fatalf("openAIKey=%q", capturedConfiguration.OpenAIKey)
 	}
+	if capturedConfiguration.OpenAIBaseURL != "https://openai.example/v1" {
+		t.Fatalf("openAIBaseURL=%q", capturedConfiguration.OpenAIBaseURL)
+	}
+	if capturedConfiguration.OpenAITranscriptionsURL != "https://openai.example/v1/audio/transcriptions" {
+		t.Fatalf("openAITranscriptionsURL=%q", capturedConfiguration.OpenAITranscriptionsURL)
+	}
 	if capturedConfiguration.Tenants[0].Defaults.Provider != proxy.ProviderNameDeepSeek {
 		t.Fatalf("tenantDefaultProvider=%q", capturedConfiguration.Tenants[0].Defaults.Provider)
+	}
+	if capturedConfiguration.DeepSeekBaseURL != "https://deepseek.example" {
+		t.Fatalf("deepSeekBaseURL=%q", capturedConfiguration.DeepSeekBaseURL)
 	}
 	if capturedConfiguration.Port != 18080 {
 		t.Fatalf("port=%d", capturedConfiguration.Port)
@@ -99,11 +122,24 @@ P411_GROK_KEY=sk-xai
 	if capturedConfiguration.AnthropicBaseURL != "https://anthropic.example" {
 		t.Fatalf("anthropicBaseURL=%q", capturedConfiguration.AnthropicBaseURL)
 	}
+	if capturedConfiguration.ZhipuTranscriptionsURL != "https://zhipu.example/audio/transcriptions" {
+		t.Fatalf("zhipuTranscriptionsURL=%q", capturedConfiguration.ZhipuTranscriptionsURL)
+	}
 	if capturedConfiguration.GrokKey != "sk-xai" {
 		t.Fatalf("grokKey=%q", capturedConfiguration.GrokKey)
 	}
 	if capturedConfiguration.GrokBaseURL != "https://grok.example" {
 		t.Fatalf("grokBaseURL=%q", capturedConfiguration.GrokBaseURL)
+	}
+	if capturedConfiguration.GrokTranscriptionsURL != "https://grok.example/stt" {
+		t.Fatalf("grokTranscriptionsURL=%q", capturedConfiguration.GrokTranscriptionsURL)
+	}
+	if capturedConfiguration.ProviderModels[proxy.ProviderNameDeepSeek].Text.DefaultModel != "deepseek-v4-flash" {
+		t.Fatalf("deepseek default model=%q", capturedConfiguration.ProviderModels[proxy.ProviderNameDeepSeek].Text.DefaultModel)
+	}
+	openAIModels := capturedConfiguration.ProviderModels[proxy.ProviderNameOpenAI].Text.Models
+	if len(openAIModels) < 3 || openAIModels[2].ID != "gpt-4.1" || openAIModels[2].RequestProfile != "openai_responses_temperature_tools" || !openAIModels[2].WebSearch {
+		t.Fatalf("openai model catalog=%+v", openAIModels)
 	}
 }
 
@@ -120,13 +156,30 @@ tenants:
       model: gpt-4.1
       dictation_provider: openai
       dictation_model: gpt-4o-mini-transcribe
-providers:
-  openai:
-    api_key: "sk-openai"
-`)
+`+completeLiteralProvidersYAML())
 	withServeProxy(t, func(configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) error {
 		if configuration.LogLevel != proxy.LogLevelInfo {
 			t.Fatalf("logLevel=%q", configuration.LogLevel)
+		}
+		return nil
+	})
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError != nil {
+		t.Fatalf("ExecuteC error: %v", executeError)
+	}
+}
+
+func TestRootCommandUsesDefaultTenantProvidersFromConfigFile(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir, `
+tenants:
+  - id: default
+    secret: "sekret"
+`+completeLiteralProvidersYAML())
+	withServeProxy(t, func(configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) error {
+		if _, buildError := proxy.BuildRouter(configuration, structuredLogger); buildError != nil {
+			t.Fatalf("BuildRouter error: %v", buildError)
 		}
 		return nil
 	})
@@ -271,9 +324,300 @@ providers:
 	}
 }
 
-func TestRootCommandRejectsMissingDefaultProviderCredential(t *testing.T) {
-	tempDir := t.TempDir()
-	configPath := writeTestConfig(t, tempDir, `
+func TestRootCommandRejectsIncompleteStaticProviderConfig(t *testing.T) {
+	testCases := []struct {
+		name          string
+		providersYAML string
+		expectedError string
+	}{
+		{
+			name: "missing provider api key",
+			providersYAML: `
+providers:
+  openai:
+    api_key: "sk-openai"
+    base_url: "https://api.openai.com/v1"
+    transcriptions_url: "https://api.openai.com/v1/audio/transcriptions"
+  deepseek:
+    api_key: "sk-deepseek"
+    base_url: "https://api.deepseek.com"
+  dashscope:
+    api_key: "sk-dashscope"
+    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+  moonshot:
+    api_key: "sk-moonshot"
+    base_url: "https://api.moonshot.ai/v1"
+  siliconflow:
+    api_key: "sk-siliconflow"
+    base_url: "https://api.siliconflow.com/v1"
+    transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
+  zhipu:
+    api_key: "sk-zhipu"
+    base_url: "https://open.bigmodel.cn/api/paas/v4"
+    transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
+  gemini:
+    api_key: ""
+    base_url: "https://generativelanguage.googleapis.com/v1"
+  anthropic:
+    api_key: "sk-anthropic"
+    base_url: "https://api.anthropic.com"
+  grok:
+    api_key: "sk-grok"
+    base_url: "https://api.x.ai/v1"
+    transcriptions_url: "https://api.x.ai/v1/stt"
+`,
+			expectedError: "provider_api_key_required: provider=gemini field=providers.gemini.api_key",
+		},
+		{
+			name: "missing provider base url",
+			providersYAML: `
+providers:
+  openai:
+    api_key: "sk-openai"
+    base_url: "https://api.openai.com/v1"
+    transcriptions_url: "https://api.openai.com/v1/audio/transcriptions"
+  deepseek:
+    api_key: "sk-deepseek"
+    base_url: "https://api.deepseek.com"
+  dashscope:
+    api_key: "sk-dashscope"
+    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+  moonshot:
+    api_key: "sk-moonshot"
+    base_url: "https://api.moonshot.ai/v1"
+  siliconflow:
+    api_key: "sk-siliconflow"
+    base_url: "https://api.siliconflow.com/v1"
+    transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
+  zhipu:
+    api_key: "sk-zhipu"
+    base_url: "https://open.bigmodel.cn/api/paas/v4"
+  gemini:
+    api_key: "sk-gemini"
+    base_url: "https://generativelanguage.googleapis.com/v1"
+  anthropic:
+    api_key: "sk-anthropic"
+    base_url: "https://api.anthropic.com"
+  grok:
+    api_key: "sk-grok"
+    base_url: ""
+    transcriptions_url: "https://api.x.ai/v1/stt"
+`,
+			expectedError: "provider_base_url_required: provider=grok field=providers.grok.base_url",
+		},
+		{
+			name: "missing openai transcriptions url",
+			providersYAML: `
+providers:
+  openai:
+    api_key: "sk-openai"
+    base_url: "https://api.openai.com/v1"
+    transcriptions_url: ""
+  deepseek:
+    api_key: "sk-deepseek"
+    base_url: "https://api.deepseek.com"
+  dashscope:
+    api_key: "sk-dashscope"
+    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+  moonshot:
+    api_key: "sk-moonshot"
+    base_url: "https://api.moonshot.ai/v1"
+  siliconflow:
+    api_key: "sk-siliconflow"
+    base_url: "https://api.siliconflow.com/v1"
+    transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
+  zhipu:
+    api_key: "sk-zhipu"
+    base_url: "https://open.bigmodel.cn/api/paas/v4"
+    transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
+  gemini:
+    api_key: "sk-gemini"
+    base_url: "https://generativelanguage.googleapis.com/v1"
+  anthropic:
+    api_key: "sk-anthropic"
+    base_url: "https://api.anthropic.com"
+  grok:
+    api_key: "sk-grok"
+    base_url: "https://api.x.ai/v1"
+    transcriptions_url: "https://api.x.ai/v1/stt"
+`,
+			expectedError: "provider_transcriptions_url_required: provider=openai field=providers.openai.transcriptions_url",
+		},
+		{
+			name: "missing siliconflow transcriptions url",
+			providersYAML: `
+providers:
+  openai:
+    api_key: "sk-openai"
+    base_url: "https://api.openai.com/v1"
+    transcriptions_url: "https://api.openai.com/v1/audio/transcriptions"
+  deepseek:
+    api_key: "sk-deepseek"
+    base_url: "https://api.deepseek.com"
+  dashscope:
+    api_key: "sk-dashscope"
+    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+  moonshot:
+    api_key: "sk-moonshot"
+    base_url: "https://api.moonshot.ai/v1"
+  siliconflow:
+    api_key: "sk-siliconflow"
+    base_url: "https://api.siliconflow.com/v1"
+    transcriptions_url: ""
+  zhipu:
+    api_key: "sk-zhipu"
+    base_url: "https://open.bigmodel.cn/api/paas/v4"
+    transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
+  gemini:
+    api_key: "sk-gemini"
+    base_url: "https://generativelanguage.googleapis.com/v1"
+  anthropic:
+    api_key: "sk-anthropic"
+    base_url: "https://api.anthropic.com"
+  grok:
+    api_key: "sk-grok"
+    base_url: "https://api.x.ai/v1"
+    transcriptions_url: "https://api.x.ai/v1/stt"
+`,
+			expectedError: "provider_transcriptions_url_required: provider=siliconflow field=providers.siliconflow.transcriptions_url",
+		},
+		{
+			name: "missing zhipu transcriptions url",
+			providersYAML: `
+providers:
+  openai:
+    api_key: "sk-openai"
+    base_url: "https://api.openai.com/v1"
+    transcriptions_url: "https://api.openai.com/v1/audio/transcriptions"
+  deepseek:
+    api_key: "sk-deepseek"
+    base_url: "https://api.deepseek.com"
+  dashscope:
+    api_key: "sk-dashscope"
+    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+  moonshot:
+    api_key: "sk-moonshot"
+    base_url: "https://api.moonshot.ai/v1"
+  siliconflow:
+    api_key: "sk-siliconflow"
+    base_url: "https://api.siliconflow.com/v1"
+    transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
+  zhipu:
+    api_key: "sk-zhipu"
+    base_url: "https://open.bigmodel.cn/api/paas/v4"
+    transcriptions_url: ""
+  gemini:
+    api_key: "sk-gemini"
+    base_url: "https://generativelanguage.googleapis.com/v1"
+  anthropic:
+    api_key: "sk-anthropic"
+    base_url: "https://api.anthropic.com"
+  grok:
+    api_key: "sk-grok"
+    base_url: "https://api.x.ai/v1"
+    transcriptions_url: "https://api.x.ai/v1/stt"
+`,
+			expectedError: "provider_transcriptions_url_required: provider=zhipu field=providers.zhipu.transcriptions_url",
+		},
+		{
+			name: "missing grok transcriptions url",
+			providersYAML: `
+providers:
+  openai:
+    api_key: "sk-openai"
+    base_url: "https://api.openai.com/v1"
+    transcriptions_url: "https://api.openai.com/v1/audio/transcriptions"
+  deepseek:
+    api_key: "sk-deepseek"
+    base_url: "https://api.deepseek.com"
+  dashscope:
+    api_key: "sk-dashscope"
+    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+  moonshot:
+    api_key: "sk-moonshot"
+    base_url: "https://api.moonshot.ai/v1"
+  siliconflow:
+    api_key: "sk-siliconflow"
+    base_url: "https://api.siliconflow.com/v1"
+    transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
+  zhipu:
+    api_key: "sk-zhipu"
+    base_url: "https://open.bigmodel.cn/api/paas/v4"
+    transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
+  gemini:
+    api_key: "sk-gemini"
+    base_url: "https://generativelanguage.googleapis.com/v1"
+  anthropic:
+    api_key: "sk-anthropic"
+    base_url: "https://api.anthropic.com"
+  grok:
+    api_key: "sk-grok"
+    base_url: "https://api.x.ai/v1"
+    transcriptions_url: ""
+`,
+			expectedError: "provider_transcriptions_url_required: provider=grok field=providers.grok.transcriptions_url",
+		},
+		{
+			name:          "missing provider text models",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "models:\n        - id: \"qwen-plus\"", "models: []", 1),
+			expectedError: "invalid_model_catalog: provider=dashscope endpoint=text field=providers.dashscope.text.models",
+		},
+		{
+			name:          "blank provider text default model",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "default_model: \"gpt-4.1\"", "default_model: \"\"", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=text field=providers.openai.text.default_model",
+		},
+		{
+			name:          "blank provider dictation default model",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "dictation:\n      default_model: \"gpt-4o-mini-transcribe\"", "dictation:\n      default_model: \"\"", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=dictation field=providers.openai.dictation.default_model",
+		},
+		{
+			name:          "blank provider model id",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "- id: \"gpt-4o-mini\"", "- id: \"\"", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=text field=providers.openai.text.models[0].id",
+		},
+		{
+			name:          "duplicate provider model id",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "- id: \"gpt-4o\"", "- id: \"gpt-4o-mini\"", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=text duplicate_model=gpt-4o-mini",
+		},
+		{
+			name:          "default provider model missing from catalog",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "default_model: \"gpt-4.1\"", "default_model: \"gpt-not-configured\"", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=text default_model=gpt-not-configured",
+		},
+		{
+			name:          "negative provider output token limit",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "output_token_limit: 65536", "output_token_limit: -1", 1),
+			expectedError: "invalid_model_catalog: provider=gemini endpoint=text field=providers.gemini.text.models[0].output_token_limit",
+		},
+		{
+			name:          "anthropic output token limit required",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "id: \"claude-sonnet-4-6\"\n          output_token_limit: 64000", "id: \"claude-sonnet-4-6\"\n          output_token_limit: 0", 1),
+			expectedError: "invalid_model_catalog: provider=anthropic endpoint=text field=providers.anthropic.text.models[1].output_token_limit",
+		},
+		{
+			name:          "blank openai request profile",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "request_profile: \"openai_responses_temperature\"", "request_profile: \"\"", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=text",
+		},
+		{
+			name:          "invalid openai request profile",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "request_profile: \"openai_responses_temperature\"", "request_profile: \"future_profile\"", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=text profile=future_profile",
+		},
+		{
+			name:          "non openai request profile",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "id: \"deepseek-v4-flash\"", "id: \"deepseek-v4-flash\"\n          request_profile: \"openai_responses_base\"", 1),
+			expectedError: "invalid_model_catalog: provider=deepseek endpoint=text profile=openai_responses_base",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			tempDir := subTest.TempDir()
+			configPath := writeTestConfig(subTest, tempDir, `
 tenants:
   - id: default
     secret: "sekret"
@@ -282,15 +626,14 @@ tenants:
       model: gemini-3.5-flash
       dictation_provider: openai
       dictation_model: gpt-4o-mini-transcribe
-providers:
-  openai:
-    api_key: "sk-openai"
-`)
-	withServeProxy(t, failingServeProxy(t))
+`+testCase.providersYAML)
+			withServeProxy(subTest, failingServeProxy(subTest))
 
-	executeError := executeRootCommand(t, "--config", configPath)
-	if executeError == nil || !strings.Contains(executeError.Error(), "provider not configured: provider=gemini") {
-		t.Fatalf("error=%v want missing gemini credential", executeError)
+			executeError := executeRootCommand(subTest, "--config", configPath)
+			if executeError == nil || !strings.Contains(executeError.Error(), testCase.expectedError) {
+				subTest.Fatalf("error=%v want contains %q", executeError, testCase.expectedError)
+			}
+		})
 	}
 }
 
@@ -346,4 +689,224 @@ func writeTestDotEnv(t *testing.T, tempDir string, dotEnvContent string) {
 	if writeError := os.WriteFile(dotEnvPath, []byte(strings.TrimSpace(dotEnvContent)+"\n"), 0600); writeError != nil {
 		t.Fatalf("write dotenv: %v", writeError)
 	}
+}
+
+func completeLiteralProvidersYAML() string {
+	return completeProvidersYAML(defaultProviderYAMLValues())
+}
+
+type providerYAMLValues struct {
+	OpenAIAPIKey                 string
+	OpenAIBaseURL                string
+	OpenAITranscriptionsURL      string
+	DeepSeekAPIKey               string
+	DeepSeekBaseURL              string
+	DashScopeAPIKey              string
+	DashScopeBaseURL             string
+	MoonshotAPIKey               string
+	MoonshotBaseURL              string
+	SiliconFlowAPIKey            string
+	SiliconFlowBaseURL           string
+	SiliconFlowTranscriptionsURL string
+	ZhipuAPIKey                  string
+	ZhipuBaseURL                 string
+	ZhipuTranscriptionsURL       string
+	GeminiAPIKey                 string
+	GeminiBaseURL                string
+	AnthropicAPIKey              string
+	AnthropicBaseURL             string
+	GrokAPIKey                   string
+	GrokBaseURL                  string
+	GrokTranscriptionsURL        string
+}
+
+func defaultProviderYAMLValues() providerYAMLValues {
+	return providerYAMLValues{
+		OpenAIAPIKey:                 "sk-openai",
+		OpenAIBaseURL:                "https://api.openai.com/v1",
+		OpenAITranscriptionsURL:      "https://api.openai.com/v1/audio/transcriptions",
+		DeepSeekAPIKey:               "sk-deepseek",
+		DeepSeekBaseURL:              "https://api.deepseek.com",
+		DashScopeAPIKey:              "sk-dashscope",
+		DashScopeBaseURL:             "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+		MoonshotAPIKey:               "sk-moonshot",
+		MoonshotBaseURL:              "https://api.moonshot.ai/v1",
+		SiliconFlowAPIKey:            "sk-siliconflow",
+		SiliconFlowBaseURL:           "https://api.siliconflow.com/v1",
+		SiliconFlowTranscriptionsURL: "https://api.siliconflow.com/v1/audio/transcriptions",
+		ZhipuAPIKey:                  "sk-zhipu",
+		ZhipuBaseURL:                 "https://open.bigmodel.cn/api/paas/v4",
+		ZhipuTranscriptionsURL:       "https://api.z.ai/api/paas/v4/audio/transcriptions",
+		GeminiAPIKey:                 "sk-gemini",
+		GeminiBaseURL:                "https://generativelanguage.googleapis.com/v1",
+		AnthropicAPIKey:              "sk-anthropic",
+		AnthropicBaseURL:             "https://api.anthropic.com",
+		GrokAPIKey:                   "sk-grok",
+		GrokBaseURL:                  "https://api.x.ai/v1",
+		GrokTranscriptionsURL:        "https://api.x.ai/v1/stt",
+	}
+}
+
+func completeProvidersYAML(values providerYAMLValues) string {
+	return fmt.Sprintf(`
+providers:
+  openai:
+    api_key: "%s"
+    base_url: "%s"
+    transcriptions_url: "%s"
+    text:
+      default_model: "gpt-4.1"
+      models:
+        - id: "gpt-4o-mini"
+          request_profile: "openai_responses_temperature"
+        - id: "gpt-4o"
+          request_profile: "openai_responses_temperature_tools"
+          web_search: true
+        - id: "gpt-4.1"
+          request_profile: "openai_responses_temperature_tools"
+          web_search: true
+        - id: "gpt-5-mini"
+          request_profile: "openai_responses_base"
+        - id: "gpt-5"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
+        - id: "gpt-5.5"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
+        - id: "gpt-5.5-pro"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
+    dictation:
+      default_model: "gpt-4o-mini-transcribe"
+      models:
+        - id: "gpt-4o-mini-transcribe"
+        - id: "gpt-4o-transcribe"
+  deepseek:
+    api_key: "%s"
+    base_url: "%s"
+    text:
+      default_model: "deepseek-v4-flash"
+      models:
+        - id: "deepseek-v4-flash"
+        - id: "deepseek-v4-pro"
+        - id: "deepseek-chat"
+        - id: "deepseek-reasoner"
+  dashscope:
+    api_key: "%s"
+    base_url: "%s"
+    text:
+      default_model: "qwen-plus"
+      models:
+        - id: "qwen-plus"
+  moonshot:
+    api_key: "%s"
+    base_url: "%s"
+    text:
+      default_model: "kimi-k2-0905-preview"
+      models:
+        - id: "kimi-k2-0905-preview"
+  siliconflow:
+    api_key: "%s"
+    base_url: "%s"
+    transcriptions_url: "%s"
+    text:
+      default_model: "deepseek-ai/DeepSeek-R1"
+      models:
+        - id: "deepseek-ai/DeepSeek-R1"
+    dictation:
+      default_model: "FunAudioLLM/SenseVoiceSmall"
+      models:
+        - id: "FunAudioLLM/SenseVoiceSmall"
+  zhipu:
+    api_key: "%s"
+    base_url: "%s"
+    transcriptions_url: "%s"
+    text:
+      default_model: "glm-5.1"
+      models:
+        - id: "glm-5.1"
+    dictation:
+      default_model: "glm-asr-2512"
+      models:
+        - id: "glm-asr-2512"
+  gemini:
+    api_key: "%s"
+    base_url: "%s"
+    text:
+      default_model: "gemini-3.5-flash"
+      models:
+        - id: "gemini-3.5-flash"
+          output_token_limit: 65536
+        - id: "gemini-3.1-flash-lite"
+          output_token_limit: 65536
+        - id: "gemini-2.5-flash"
+          output_token_limit: 65536
+        - id: "gemini-2.5-flash-lite"
+          output_token_limit: 65536
+        - id: "gemini-2.5-pro"
+          output_token_limit: 65536
+  anthropic:
+    api_key: "%s"
+    base_url: "%s"
+    text:
+      default_model: "claude-sonnet-4-6"
+      models:
+        - id: "claude-opus-4-8"
+          output_token_limit: 128000
+        - id: "claude-sonnet-4-6"
+          output_token_limit: 64000
+        - id: "claude-haiku-4-5-20251001"
+          output_token_limit: 64000
+        - id: "claude-haiku-4-5"
+          output_token_limit: 64000
+        - id: "claude-sonnet-4-5-20250929"
+          output_token_limit: 64000
+        - id: "claude-sonnet-4-5"
+          output_token_limit: 64000
+        - id: "claude-opus-4-1-20250805"
+          output_token_limit: 32000
+        - id: "claude-opus-4-1"
+          output_token_limit: 32000
+  grok:
+    api_key: "%s"
+    base_url: "%s"
+    transcriptions_url: "%s"
+    text:
+      default_model: "grok-4.3"
+      models:
+        - id: "grok-4.3"
+        - id: "grok-4.3-latest"
+        - id: "grok-latest"
+        - id: "grok-build-0.1"
+        - id: "grok-code-fast"
+        - id: "grok-code-fast-1"
+        - id: "grok-code-fast-1-0825"
+    dictation:
+      default_model: "xai-stt"
+      models:
+        - id: "xai-stt"
+`,
+		values.OpenAIAPIKey,
+		values.OpenAIBaseURL,
+		values.OpenAITranscriptionsURL,
+		values.DeepSeekAPIKey,
+		values.DeepSeekBaseURL,
+		values.DashScopeAPIKey,
+		values.DashScopeBaseURL,
+		values.MoonshotAPIKey,
+		values.MoonshotBaseURL,
+		values.SiliconFlowAPIKey,
+		values.SiliconFlowBaseURL,
+		values.SiliconFlowTranscriptionsURL,
+		values.ZhipuAPIKey,
+		values.ZhipuBaseURL,
+		values.ZhipuTranscriptionsURL,
+		values.GeminiAPIKey,
+		values.GeminiBaseURL,
+		values.AnthropicAPIKey,
+		values.AnthropicBaseURL,
+		values.GrokAPIKey,
+		values.GrokBaseURL,
+		values.GrokTranscriptionsURL,
+	)
 }
