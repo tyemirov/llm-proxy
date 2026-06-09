@@ -3,6 +3,8 @@ package llmproxyclient_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +15,43 @@ import (
 
 	"github.com/tyemirov/llm-proxy/pkg/llmproxyclient"
 )
+
+type clientDoer func(*http.Request) (*http.Response, error)
+
+func (doer clientDoer) Do(request *http.Request) (*http.Response, error) {
+	return doer(request)
+}
+
+type errorReader struct{}
+
+func (reader errorReader) Read(_ []byte) (int, error) {
+	return 0, errors.New("read failed")
+}
+
+func (reader errorReader) Close() error {
+	return nil
+}
+
+func testTextResponse(statusCode int, body string, headers http.Header) *http.Response {
+	responseHeaders := http.Header{}
+	for headerName, headerValues := range headers {
+		for _, headerValue := range headerValues {
+			responseHeaders.Add(headerName, headerValue)
+		}
+	}
+	return &http.Response{
+		StatusCode: statusCode,
+		Header:     responseHeaders,
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
+
+func resumableGatewayTimeout(responseID string) *http.Response {
+	headers := http.Header{}
+	headers.Set("X-LLM-Proxy-Resume-Provider", "openai")
+	headers.Set("X-LLM-Proxy-Upstream-Response-ID", responseID)
+	return testTextResponse(http.StatusGatewayTimeout, "still running", headers)
+}
 
 func TestConfigPostURLShapesAuthenticatedJSONPostURL(testingInstance *testing.T) {
 	config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
@@ -204,6 +243,253 @@ func TestClientPostSendsMessagesBody(testingInstance *testing.T) {
 	firstMessage, ok := rawMessages[0].(map[string]any)
 	if !ok || firstMessage["role"] != "user" || firstMessage["content"] != "Hello" || firstMessage["order"] != float64(1) {
 		testingInstance.Fatalf("firstMessage=%v", rawMessages[0])
+	}
+}
+
+func TestClientPostResumesOpenAIBackgroundResponse(testingInstance *testing.T) {
+	var capturedPaths []string
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		capturedPaths = append(capturedPaths, httpRequest.URL.String())
+		switch len(capturedPaths) {
+		case 1:
+			if httpRequest.Method != http.MethodPost {
+				testingInstance.Fatalf("method=%s want POST", httpRequest.Method)
+			}
+			responseWriter.Header().Set("X-LLM-Proxy-Resume-Provider", "openai")
+			responseWriter.Header().Set("X-LLM-Proxy-Upstream-Response-ID", "resp_test")
+			responseWriter.WriteHeader(http.StatusGatewayTimeout)
+			_, _ = responseWriter.Write([]byte("still running"))
+		case 2:
+			if httpRequest.Method != http.MethodGet {
+				testingInstance.Fatalf("method=%s want GET", httpRequest.Method)
+			}
+			_, _ = responseWriter.Write([]byte("resumed"))
+		default:
+			testingInstance.Fatalf("unexpected request count=%d", len(capturedPaths))
+		}
+	}))
+	defer server.Close()
+
+	config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
+		BaseURL:  server.URL + "/review?provider=openai&keep=1",
+		Secret:   "sekret",
+		Provider: "openai",
+		Timeout:  time.Second,
+	})
+	if configError != nil {
+		testingInstance.Fatalf("config error: %v", configError)
+	}
+	client, clientError := llmproxyclient.NewClient(config, server.Client())
+	if clientError != nil {
+		testingInstance.Fatalf("client error: %v", clientError)
+	}
+	request, requestError := llmproxyclient.NewRequest(llmproxyclient.RequestInput{Prompt: "prompt", Model: "gpt-5-mini"})
+	if requestError != nil {
+		testingInstance.Fatalf("request error: %v", requestError)
+	}
+
+	responseText, postError := client.Post(context.Background(), request)
+
+	if postError != nil {
+		testingInstance.Fatalf("post error: %v", postError)
+	}
+	if responseText != "resumed" {
+		testingInstance.Fatalf("response=%q want resumed", responseText)
+	}
+	if len(capturedPaths) != 2 {
+		testingInstance.Fatalf("request count=%d want 2", len(capturedPaths))
+	}
+	resumeURL, parseError := url.Parse(capturedPaths[1])
+	if parseError != nil {
+		testingInstance.Fatalf("parse resume url: %v", parseError)
+	}
+	if resumeURL.Path != "/review/responses/resp_test" {
+		testingInstance.Fatalf("resume path=%q", resumeURL.Path)
+	}
+	if resumeURL.Query().Get("key") != "sekret" || resumeURL.Query().Get("provider") != "openai" || resumeURL.Query().Get("format") != "text/plain" || resumeURL.Query().Get("keep") != "1" {
+		testingInstance.Fatalf("resume query=%s", resumeURL.RawQuery)
+	}
+}
+
+func TestClientPostMessagesResumesFromV2BasePath(testingInstance *testing.T) {
+	var capturedPaths []string
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		capturedPaths = append(capturedPaths, httpRequest.URL.Path)
+		switch len(capturedPaths) {
+		case 1:
+			responseWriter.Header().Set("X-LLM-Proxy-Resume-Provider", "openai")
+			responseWriter.Header().Set("X-LLM-Proxy-Upstream-Response-ID", "resp_v2")
+			responseWriter.WriteHeader(http.StatusGatewayTimeout)
+			_, _ = responseWriter.Write([]byte("still running"))
+		case 2:
+			_, _ = responseWriter.Write([]byte("resumed messages"))
+		default:
+			testingInstance.Fatalf("unexpected request count=%d", len(capturedPaths))
+		}
+	}))
+	defer server.Close()
+
+	config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
+		BaseURL: server.URL + "/v2",
+		Secret:  "sekret",
+		Timeout: time.Second,
+	})
+	if configError != nil {
+		testingInstance.Fatalf("config error: %v", configError)
+	}
+	client, clientError := llmproxyclient.NewClient(config, server.Client())
+	if clientError != nil {
+		testingInstance.Fatalf("client error: %v", clientError)
+	}
+	request, requestError := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{
+		Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "prompt"}},
+		Model:    "gpt-5-mini",
+	})
+	if requestError != nil {
+		testingInstance.Fatalf("request error: %v", requestError)
+	}
+
+	responseText, postError := client.PostMessages(context.Background(), request)
+
+	if postError != nil {
+		testingInstance.Fatalf("post error: %v", postError)
+	}
+	if responseText != "resumed messages" {
+		testingInstance.Fatalf("response=%q", responseText)
+	}
+	if strings.Join(capturedPaths, ",") != "/v2,/responses/resp_v2" {
+		testingInstance.Fatalf("paths=%v", capturedPaths)
+	}
+}
+
+func TestClientPostRepeatsResumeUntilStoredResponseCompletes(testingInstance *testing.T) {
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		requestCount++
+		if requestCount <= 2 {
+			responseWriter.Header().Set("X-LLM-Proxy-Resume-Provider", "openai")
+			responseWriter.Header().Set("X-LLM-Proxy-Upstream-Response-ID", fmt.Sprintf("resp_%d", requestCount))
+			responseWriter.WriteHeader(http.StatusGatewayTimeout)
+			_, _ = responseWriter.Write([]byte("still running"))
+			return
+		}
+		_, _ = responseWriter.Write([]byte("complete"))
+	}))
+	defer server.Close()
+
+	config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
+		BaseURL: server.URL,
+		Secret:  "sekret",
+		Timeout: time.Second,
+	})
+	if configError != nil {
+		testingInstance.Fatalf("config error: %v", configError)
+	}
+	client, clientError := llmproxyclient.NewClient(config, server.Client())
+	if clientError != nil {
+		testingInstance.Fatalf("client error: %v", clientError)
+	}
+	request, requestError := llmproxyclient.NewRequest(llmproxyclient.RequestInput{Prompt: "prompt"})
+	if requestError != nil {
+		testingInstance.Fatalf("request error: %v", requestError)
+	}
+
+	responseText, postError := client.Post(context.Background(), request)
+
+	if postError != nil {
+		testingInstance.Fatalf("post error: %v", postError)
+	}
+	if responseText != "complete" || requestCount != 3 {
+		testingInstance.Fatalf("response=%q request_count=%d", responseText, requestCount)
+	}
+}
+
+func TestClientPostResumeFailuresRemainHTTPFailures(testingInstance *testing.T) {
+	testCases := []struct {
+		name             string
+		doer             clientDoer
+		expectedFragment string
+	}{
+		{
+			name: "resume request transport error",
+			doer: func() clientDoer {
+				requestCount := 0
+				return func(_ *http.Request) (*http.Response, error) {
+					requestCount++
+					if requestCount == 1 {
+						return resumableGatewayTimeout("resp_test"), nil
+					}
+					return nil, errors.New("network unavailable")
+				}
+			}(),
+			expectedFragment: "resume request: network unavailable",
+		},
+		{
+			name: "resume response read error",
+			doer: func() clientDoer {
+				requestCount := 0
+				return func(_ *http.Request) (*http.Response, error) {
+					requestCount++
+					if requestCount == 1 {
+						return resumableGatewayTimeout("resp_test"), nil
+					}
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Header:     http.Header{},
+						Body:       errorReader{},
+					}, nil
+				}
+			}(),
+			expectedFragment: "read response body: read failed",
+		},
+		{
+			name: "resume response lacks next token",
+			doer: func() clientDoer {
+				requestCount := 0
+				return func(_ *http.Request) (*http.Response, error) {
+					requestCount++
+					if requestCount == 1 {
+						return resumableGatewayTimeout("resp_test"), nil
+					}
+					return testTextResponse(http.StatusGatewayTimeout, "missing token", http.Header{}), nil
+				}
+			}(),
+			expectedFragment: `status=504 body="missing token"`,
+		},
+		{
+			name: "resume attempts exhausted",
+			doer: func(_ *http.Request) (*http.Response, error) {
+				return resumableGatewayTimeout("resp_test"), nil
+			},
+			expectedFragment: "OpenAI background response did not complete after resume attempts",
+		},
+	}
+
+	for _, testCase := range testCases {
+		testingInstance.Run(testCase.name, func(subTest *testing.T) {
+			config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
+				BaseURL: "https://proxy.example",
+				Secret:  "sekret",
+				Timeout: time.Second,
+			})
+			if configError != nil {
+				subTest.Fatalf("config error: %v", configError)
+			}
+			client, clientError := llmproxyclient.NewClient(config, testCase.doer)
+			if clientError != nil {
+				subTest.Fatalf("client error: %v", clientError)
+			}
+			request, requestError := llmproxyclient.NewRequest(llmproxyclient.RequestInput{Prompt: "prompt"})
+			if requestError != nil {
+				subTest.Fatalf("request error: %v", requestError)
+			}
+
+			_, postError := client.Post(context.Background(), request)
+
+			if postError == nil || !strings.Contains(postError.Error(), testCase.expectedFragment) {
+				subTest.Fatalf("error=%v want contains %q", postError, testCase.expectedFragment)
+			}
+		})
 	}
 }
 
