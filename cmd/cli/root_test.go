@@ -49,7 +49,6 @@ server:
   workers: 2
   queue_size: 9
   request_timeout_seconds: 7
-  upstream_poll_timeout_seconds: 3
   max_prompt_bytes: 1024
   max_input_audio_bytes: 2048
 tenants:
