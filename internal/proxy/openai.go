@@ -80,8 +80,8 @@ func hasFinalMessage(rawPayload []byte) bool {
 }
 
 // openAIRequest sends messages to the OpenAI responses API and returns the resulting text.
-func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier string, messages chatMessages, webSearchEnabled bool, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	payload := BuildRequestPayload(modelIdentifier, messages.openAIResponsesInput(), webSearchEnabled, maxTokens)
+func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, messages chatMessages, webSearchEnabled bool, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	payload := BuildRequestPayload(modelIdentifier.string(), modelIdentifier.requestProfile.string(), messages.openAIResponsesInput(), webSearchEnabled, maxTokens)
 	payloadBytes, _ := json.Marshal(payload)
 
 	requestContext, cancelRequest := context.WithTimeout(parentContext, client.requestTimeout)
@@ -172,7 +172,7 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 	}
 
 	if forcedSynthesis && !utils.IsBlank(responseIdentifier) {
-		continuedResponseID, synthErr := client.startSynthesisContinuation(requestContext, openAIKey, responseIdentifier, modelIdentifier, maxTokens, structuredLogger)
+		continuedResponseID, synthErr := client.startSynthesisContinuation(requestContext, openAIKey, responseIdentifier, modelIdentifier.string(), maxTokens, structuredLogger)
 		if synthErr != nil {
 			structuredLogger.Errorw(
 				logEventOpenAIContinueError,
@@ -249,7 +249,7 @@ func (client *OpenAIClient) startSynthesisContinuation(parentContext context.Con
 	return client.startContinuationResponse(parentContext, openAIKey, payload, structuredLogger)
 }
 
-func (client *OpenAIClient) startIncompleteContinuation(parentContext context.Context, openAIKey string, previousResponseID string, modelIdentifier string, webSearchEnabled bool, maxTokens *int, structuredLogger *zap.SugaredLogger) (string, error) {
+func (client *OpenAIClient) startIncompleteContinuation(parentContext context.Context, openAIKey string, previousResponseID string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, structuredLogger *zap.SugaredLogger) (string, error) {
 	payload := buildStatefulContinuationPayload(modelIdentifier, continuationInstructionPrimary, webSearchEnabled, maxTokens, previousResponseID)
 	return client.startContinuationResponse(parentContext, openAIKey, payload, structuredLogger)
 }
@@ -280,8 +280,8 @@ func (client *OpenAIClient) startContinuationResponse(parentContext context.Cont
 	return newID, nil
 }
 
-func buildStatefulContinuationPayload(modelIdentifier string, inputText string, webSearchEnabled bool, maxTokens *int, previousResponseID string) map[string]any {
-	payloadBytes, _ := json.Marshal(BuildRequestPayload(modelIdentifier, inputText, webSearchEnabled, maxTokens))
+func buildStatefulContinuationPayload(modelIdentifier textModelDefinition, inputText string, webSearchEnabled bool, maxTokens *int, previousResponseID string) map[string]any {
+	payloadBytes, _ := json.Marshal(BuildRequestPayload(modelIdentifier.string(), modelIdentifier.requestProfile.string(), inputText, webSearchEnabled, maxTokens))
 	var payload map[string]any
 	_ = json.Unmarshal(payloadBytes, &payload)
 	payload[keyPreviousResponseID] = previousResponseID

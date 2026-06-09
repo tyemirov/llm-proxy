@@ -20,33 +20,31 @@ const (
 	promptValue                      = "hello"
 )
 
-// TestResolveModelPayloadSchema verifies that payload schemas are returned for every model.
+// TestResolveModelPayloadSchema verifies that payload schemas are returned for every request profile.
 func TestResolveModelPayloadSchema(testFramework *testing.T) {
 	testCases := []struct {
-		modelIdentifier string
-		expectFields    []string
+		requestProfile string
+		expectFields   []string
 	}{
-		{proxy.ModelNameGPT4oMini, []string{"model", "input", "max_output_tokens", "temperature"}},
-		{proxy.ModelNameGPT4o, []string{"model", "input", "max_output_tokens", "temperature", "tools", "tool_choice"}},
-		{proxy.ModelNameGPT41, []string{"model", "input", "max_output_tokens", "temperature", "tools", "tool_choice"}},
-		{proxy.ModelNameGPT5Mini, []string{"model", "input", "max_output_tokens"}},
-		{proxy.ModelNameGPT5, []string{"model", "input", "max_output_tokens", "tools", "tool_choice", "reasoning"}},
-		{proxy.ModelNameGPT55, []string{"model", "input", "max_output_tokens", "tools", "tool_choice", "reasoning"}},
-		{proxy.ModelNameGPT55Pro, []string{"model", "input", "max_output_tokens", "tools", "tool_choice", "reasoning"}},
+		{"openai_responses_temperature", []string{"model", "input", "max_output_tokens", "temperature"}},
+		{"openai_responses_temperature_tools", []string{"model", "input", "max_output_tokens", "temperature", "tools", "tool_choice"}},
+		{"openai_responses_base", []string{"model", "input", "max_output_tokens"}},
+		{"openai_responses_reasoning_tools", []string{"model", "input", "max_output_tokens", "tools", "tool_choice", "reasoning"}},
 	}
 	for _, testCase := range testCases {
-		payloadSchema := proxy.ResolveModelPayloadSchema(testCase.modelIdentifier)
+		payloadSchema := proxy.ResolveModelPayloadSchema(testCase.requestProfile)
 		if !equalSlices(payloadSchema.AllowedRequestFields, testCase.expectFields) {
-			testFramework.Fatalf(modelFieldsMismatchFormat, testCase.modelIdentifier, payloadSchema.AllowedRequestFields, testCase.expectFields)
+			testFramework.Fatalf(modelFieldsMismatchFormat, testCase.requestProfile, payloadSchema.AllowedRequestFields, testCase.expectFields)
 		}
 	}
 }
 
-// TestBuildRequestPayload verifies the correct payload structure is built for each model.
+// TestBuildRequestPayload verifies the correct payload structure is built for each request profile.
 func TestBuildRequestPayload(testFramework *testing.T) {
 	testCases := []struct {
 		name              string
 		modelIdentifier   string
+		requestProfile    string
 		webSearchEnabled  bool
 		expectTemperature bool
 		expectTools       bool
@@ -55,6 +53,7 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 		{
 			name:              "GPT-5 with web search",
 			modelIdentifier:   proxy.ModelNameGPT5,
+			requestProfile:    "openai_responses_reasoning_tools",
 			webSearchEnabled:  true,
 			expectTemperature: false,
 			expectTools:       true,
@@ -63,6 +62,7 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 		{
 			name:              "GPT-5 without web search",
 			modelIdentifier:   proxy.ModelNameGPT5,
+			requestProfile:    "openai_responses_reasoning_tools",
 			webSearchEnabled:  false,
 			expectTemperature: false,
 			expectTools:       false,
@@ -71,6 +71,7 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 		{
 			name:              "GPT-5.5 with web search",
 			modelIdentifier:   proxy.ModelNameGPT55,
+			requestProfile:    "openai_responses_reasoning_tools",
 			webSearchEnabled:  true,
 			expectTemperature: false,
 			expectTools:       true,
@@ -79,6 +80,7 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 		{
 			name:              "GPT-5.5 pro with web search",
 			modelIdentifier:   proxy.ModelNameGPT55Pro,
+			requestProfile:    "openai_responses_reasoning_tools",
 			webSearchEnabled:  true,
 			expectTemperature: false,
 			expectTools:       true,
@@ -87,6 +89,7 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 		{
 			name:              "GPT-4o with web search",
 			modelIdentifier:   proxy.ModelNameGPT4o,
+			requestProfile:    "openai_responses_temperature_tools",
 			webSearchEnabled:  true,
 			expectTemperature: true,
 			expectTools:       true,
@@ -95,7 +98,8 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 		{
 			name:              "GPT-4o-mini (no tools)",
 			modelIdentifier:   proxy.ModelNameGPT4oMini,
-			webSearchEnabled:  true, // Ignored
+			requestProfile:    "openai_responses_temperature",
+			webSearchEnabled:  true,
 			expectTemperature: true,
 			expectTools:       false,
 			expectReasoning:   false,
@@ -103,32 +107,35 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 		{
 			name:              "GPT-5-mini (base only)",
 			modelIdentifier:   proxy.ModelNameGPT5Mini,
-			webSearchEnabled:  true, // Ignored
+			requestProfile:    "openai_responses_base",
+			webSearchEnabled:  true,
 			expectTemperature: false,
 			expectTools:       false,
 			expectReasoning:   false,
 		},
 		{
-			name:              "unknown model fallback without web search",
+			name:              "unknown profile without web search",
 			modelIdentifier:   "future-model",
+			requestProfile:    "future_profile",
 			webSearchEnabled:  false,
-			expectTemperature: true,
+			expectTemperature: false,
 			expectTools:       false,
 			expectReasoning:   false,
 		},
 		{
-			name:              "unknown model fallback with web search",
+			name:              "unknown profile with web search",
 			modelIdentifier:   "future-model",
+			requestProfile:    "future_profile",
 			webSearchEnabled:  true,
-			expectTemperature: true,
-			expectTools:       true,
+			expectTemperature: false,
+			expectTools:       false,
 			expectReasoning:   false,
 		},
 	}
 
 	for _, testCase := range testCases {
 		testFramework.Run(testCase.name, func(subTestFramework *testing.T) {
-			payload := proxy.BuildRequestPayload(testCase.modelIdentifier, promptValue, testCase.webSearchEnabled, nil)
+			payload := proxy.BuildRequestPayload(testCase.modelIdentifier, testCase.requestProfile, promptValue, testCase.webSearchEnabled, nil)
 			payloadBytes, marshalError := json.Marshal(payload)
 			if marshalError != nil {
 				subTestFramework.Fatalf(marshalPayloadErrorFormat, marshalError)
@@ -153,7 +160,7 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 			}
 
 			maxTokens := 555
-			cappedPayload := proxy.BuildRequestPayload(testCase.modelIdentifier, promptValue, testCase.webSearchEnabled, &maxTokens)
+			cappedPayload := proxy.BuildRequestPayload(testCase.modelIdentifier, testCase.requestProfile, promptValue, testCase.webSearchEnabled, &maxTokens)
 			cappedPayloadBytes, cappedMarshalError := json.Marshal(cappedPayload)
 			if cappedMarshalError != nil {
 				subTestFramework.Fatalf(marshalPayloadErrorFormat, cappedMarshalError)

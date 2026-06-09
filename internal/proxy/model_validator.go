@@ -18,7 +18,7 @@ func newModelValidator(registry *providerRegistry) *modelValidator {
 }
 
 // ResolveText validates and resolves a provider/model pair for text generation.
-func (validator *modelValidator) ResolveText(providerIdentifier string, modelIdentifier string, defaultProvider string, defaultModel string, webSearchEnabled bool) (providerDefinition, modelID, error) {
+func (validator *modelValidator) ResolveText(providerIdentifier string, modelIdentifier string, defaultProvider string, defaultModel string, webSearchEnabled bool) (providerDefinition, textModelDefinition, error) {
 	return validator.registry.resolveTextRequest(providerIdentifier, modelIdentifier, defaultProvider, defaultModel, webSearchEnabled)
 }
 

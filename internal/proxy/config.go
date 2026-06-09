@@ -42,15 +42,19 @@ type Configuration struct {
 	GeminiKey                    string
 	AnthropicKey                 string
 	GrokKey                      string
+	OpenAIBaseURL                string
+	OpenAITranscriptionsURL      string
 	DeepSeekBaseURL              string
 	DashScopeBaseURL             string
 	MoonshotBaseURL              string
 	SiliconFlowBaseURL           string
 	SiliconFlowTranscriptionsURL string
 	ZhipuBaseURL                 string
+	ZhipuTranscriptionsURL       string
 	GeminiBaseURL                string
 	AnthropicBaseURL             string
 	GrokBaseURL                  string
+	GrokTranscriptionsURL        string
 	Port                         int
 	LogLevel                     string
 	WorkerCount                  int
@@ -60,6 +64,7 @@ type Configuration struct {
 	MaxPromptBytes               int64
 	MaxInputAudioBytes           int64
 	Endpoints                    *Endpoints
+	ProviderModels               ProviderModelCatalogs
 	tenants                      tenantRegistry
 	validated                    bool
 }
@@ -87,6 +92,9 @@ func validateConfig(configuration Configuration) (tenantRegistry, error) {
 	tenants, tenantError := newTenantRegistry(configuration.Tenants)
 	if tenantError != nil {
 		return tenantRegistry{}, tenantError
+	}
+	if modelCatalogError := validateProviderModelCatalogs(configuration.ProviderModels); modelCatalogError != nil {
+		return tenantRegistry{}, modelCatalogError
 	}
 	providers := newProviderRegistry(configuration)
 	validator := newModelValidator(providers)
@@ -127,6 +135,14 @@ func (configuration *Configuration) ApplyTunables() {
 	if configuration.MaxInputAudioBytes <= 0 {
 		configuration.MaxInputAudioBytes = DefaultMaxInputAudioBytes
 	}
+	configuration.OpenAIBaseURL = strings.TrimSpace(configuration.OpenAIBaseURL)
+	if strings.TrimSpace(configuration.OpenAIBaseURL) == constants.EmptyString {
+		configuration.OpenAIBaseURL = defaultOpenAIBaseURL
+	}
+	configuration.OpenAITranscriptionsURL = strings.TrimSpace(configuration.OpenAITranscriptionsURL)
+	if strings.TrimSpace(configuration.OpenAITranscriptionsURL) == constants.EmptyString {
+		configuration.OpenAITranscriptionsURL = defaultTranscriptionsURL
+	}
 	configuration.DeepSeekBaseURL = strings.TrimSpace(configuration.DeepSeekBaseURL)
 	if strings.TrimSpace(configuration.DeepSeekBaseURL) == constants.EmptyString {
 		configuration.DeepSeekBaseURL = defaultDeepSeekBaseURL
@@ -151,6 +167,10 @@ func (configuration *Configuration) ApplyTunables() {
 	if strings.TrimSpace(configuration.ZhipuBaseURL) == constants.EmptyString {
 		configuration.ZhipuBaseURL = defaultZhipuBaseURL
 	}
+	configuration.ZhipuTranscriptionsURL = strings.TrimSpace(configuration.ZhipuTranscriptionsURL)
+	if strings.TrimSpace(configuration.ZhipuTranscriptionsURL) == constants.EmptyString {
+		configuration.ZhipuTranscriptionsURL = defaultZhipuTranscriptionsURL
+	}
 	configuration.GeminiBaseURL = strings.TrimSpace(configuration.GeminiBaseURL)
 	if strings.TrimSpace(configuration.GeminiBaseURL) == constants.EmptyString {
 		configuration.GeminiBaseURL = defaultGeminiBaseURL
@@ -162,5 +182,12 @@ func (configuration *Configuration) ApplyTunables() {
 	configuration.GrokBaseURL = strings.TrimSpace(configuration.GrokBaseURL)
 	if strings.TrimSpace(configuration.GrokBaseURL) == constants.EmptyString {
 		configuration.GrokBaseURL = defaultGrokBaseURL
+	}
+	configuration.GrokTranscriptionsURL = strings.TrimSpace(configuration.GrokTranscriptionsURL)
+	if strings.TrimSpace(configuration.GrokTranscriptionsURL) == constants.EmptyString {
+		configuration.GrokTranscriptionsURL = defaultGrokTranscriptionsURL
+	}
+	if len(configuration.ProviderModels) == 0 {
+		configuration.ProviderModels = defaultProviderModelCatalogs()
 	}
 }

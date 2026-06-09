@@ -39,10 +39,14 @@ const (
 	defaultMoonshotBaseURL              = "https://api.moonshot.ai/v1"
 	defaultSiliconFlowBaseURL           = "https://api.siliconflow.com/v1"
 	defaultZhipuBaseURL                 = "https://open.bigmodel.cn/api/paas/v4"
+	defaultZhipuTranscriptionsURL       = "https://api.z.ai/api/paas/v4/audio/transcriptions"
 	defaultGeminiBaseURL                = "https://generativelanguage.googleapis.com/v1"
 	defaultAnthropicBaseURL             = "https://api.anthropic.com"
 	defaultGrokBaseURL                  = "https://api.x.ai/v1"
+	defaultGrokTranscriptionsURL        = "https://api.x.ai/v1/stt"
 	defaultSiliconFlowSTTModel          = "FunAudioLLM/SenseVoiceSmall"
+	defaultZhipuSTTModel                = "glm-asr-2512"
+	defaultGrokSTTModel                 = "xai-stt"
 	geminiOutputTokenLimit              = 65536
 	anthropicOutputTokenLimit           = 64000
 	anthropicOpusOutputTokenLimit       = 128000
@@ -146,6 +150,27 @@ func (identifier modelID) string() string {
 	return string(identifier)
 }
 
+type modelRequestProfile string
+
+const (
+	requestProfileOpenAIResponsesBase             modelRequestProfile = "openai_responses_base"
+	requestProfileOpenAIResponsesTemperature      modelRequestProfile = "openai_responses_temperature"
+	requestProfileOpenAIResponsesTemperatureTools modelRequestProfile = "openai_responses_temperature_tools"
+	requestProfileOpenAIResponsesReasoningTools   modelRequestProfile = "openai_responses_reasoning_tools"
+)
+
+type textModelDefinition struct {
+	identifier          modelID
+	requestProfile      modelRequestProfile
+	supportsWebSearch   bool
+	outputTokenLimit    int
+	hasOutputTokenLimit bool
+}
+
+func (definition textModelDefinition) string() string {
+	return definition.identifier.string()
+}
+
 type providerDefinition struct {
 	identifier                providerID
 	aliases                   []string
@@ -155,11 +180,10 @@ type providerDefinition struct {
 	transcriptionsURL         string
 	defaultTextModel          modelID
 	defaultTranscriptionModel modelID
-	textModels                map[string]modelID
-	textOutputTokenLimits     map[string]int
+	transcriptionModelField   string
+	textModels                map[string]textModelDefinition
 	transcriptionModels       map[string]modelID
 	supportsDictation         bool
-	supportsWebSearch         bool
 	textTransport             providerTextTransport
 }
 
@@ -168,12 +192,4 @@ func (definition providerDefinition) credentialFor(endpoint endpointKind) string
 		return strings.TrimSpace(definition.transcriptionAPIKey)
 	}
 	return strings.TrimSpace(definition.textAPIKey)
-}
-
-func (definition providerDefinition) outputTokenLimitFor(modelIdentifier modelID) (int, bool) {
-	if definition.textOutputTokenLimits == nil {
-		return 0, false
-	}
-	limit, known := definition.textOutputTokenLimits[strings.ToLower(modelIdentifier.string())]
-	return limit, known
 }

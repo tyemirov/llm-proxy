@@ -52,7 +52,7 @@ func newOpenAICompatibleChatClient(httpClient HTTPDoer, requestTimeout time.Dura
 	}
 }
 
-func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier modelID, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	payload := chatCompletionRequest{
 		Model:     modelIdentifier.string(),
 		Messages:  messages.chatCompletionMessages(),

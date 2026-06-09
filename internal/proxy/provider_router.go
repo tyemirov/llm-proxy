@@ -27,7 +27,7 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 		return router.openAIClient.openAIRequest(
 			requestContext,
 			request.provider.credentialFor(endpointKindText),
-			request.model.string(),
+			request.model,
 			request.messages,
 			request.webSearchEnabled,
 			request.maxTokens,
@@ -75,6 +75,7 @@ func (router *providerRouter) transcribeAudio(request dictationRequestParameters
 	return router.openAIClient.transcribeAudioWithURL(
 		request.provider.credentialFor(endpointKindDictation),
 		transcriptionsURL,
+		request.provider.transcriptionModelField,
 		request.model.string(),
 		request.fileName,
 		request.audioReader,
