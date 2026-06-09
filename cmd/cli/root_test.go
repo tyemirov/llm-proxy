@@ -223,7 +223,7 @@ func TestRootCommandRejectsRemovedServiceConfigurationFlags(t *testing.T) {
 	}
 }
 
-func TestRootCommandRejectsMissingConfigPlaceholder(t *testing.T) {
+func TestRootCommandRejectsMissingTenantSecretPlaceholder(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir, `
 server:
@@ -236,15 +236,186 @@ tenants:
       model: gpt-4.1
       dictation_provider: openai
       dictation_model: gpt-4o-mini-transcribe
-providers:
-  openai:
-    api_key: "sk-openai"
-`)
+`+completeLiteralProvidersYAML())
 	withServeProxy(t, failingServeProxy(t))
 
 	executeError := executeRootCommand(t, "--config", configPath)
-	if executeError == nil || !strings.Contains(executeError.Error(), "config_placeholder_missing") {
-		t.Fatalf("error=%v want missing placeholder", executeError)
+	if executeError == nil || !strings.Contains(executeError.Error(), "secret must be set") {
+		t.Fatalf("error=%v want missing tenant secret", executeError)
+	}
+}
+
+func TestRootCommandAllowsMissingNonDefaultProviderKey(t *testing.T) {
+	tempDir := t.TempDir()
+	providerValues := defaultProviderYAMLValues()
+	providerValues.GeminiAPIKey = "${P411_MISSING_GEMINI_KEY}"
+	configPath := writeTestConfig(t, tempDir, `
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: openai
+      model: gpt-4.1
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
+`+completeProvidersYAML(providerValues))
+
+	var capturedConfiguration proxy.Configuration
+	withServeProxy(t, func(configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) error {
+		if _, buildError := proxy.BuildRouter(configuration, structuredLogger); buildError != nil {
+			t.Fatalf("BuildRouter error: %v", buildError)
+		}
+		capturedConfiguration = configuration
+		return nil
+	})
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError != nil {
+		t.Fatalf("ExecuteC error: %v", executeError)
+	}
+	if capturedConfiguration.GeminiKey != "" {
+		t.Fatalf("geminiKey=%q want empty disabled non-default provider", capturedConfiguration.GeminiKey)
+	}
+}
+
+func TestRootCommandRejectsMissingDefaultDictationProviderKey(t *testing.T) {
+	tempDir := t.TempDir()
+	providerValues := defaultProviderYAMLValues()
+	providerValues.SiliconFlowAPIKey = "${P411_MISSING_SILICONFLOW_KEY}"
+	configPath := writeTestConfig(t, tempDir, `
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: openai
+      model: gpt-4.1
+      dictation_provider: siliconflow
+      dictation_model: FunAudioLLM/SenseVoiceSmall
+`+completeProvidersYAML(providerValues))
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError == nil || !strings.Contains(executeError.Error(), "provider_api_key_required: provider=siliconflow field=providers.siliconflow.api_key") {
+		t.Fatalf("error=%v want missing default dictation provider key", executeError)
+	}
+}
+
+func TestRootCommandRejectsMissingDefaultTextProviderKeys(t *testing.T) {
+	testCases := []struct {
+		name          string
+		provider      string
+		model         string
+		missingKey    func(*providerYAMLValues)
+		expectedError string
+	}{
+		{
+			name:     "dashscope alias",
+			provider: providerAliasQwen,
+			model:    proxy.ModelNameDashScopeQwenPlus,
+			missingKey: func(values *providerYAMLValues) {
+				values.DashScopeAPIKey = "${P411_MISSING_DASHSCOPE_KEY}"
+			},
+			expectedError: "provider_api_key_required: provider=dashscope field=providers.dashscope.api_key",
+		},
+		{
+			name:     "moonshot alias",
+			provider: providerAliasKimi,
+			model:    proxy.ModelNameMoonshotKimi,
+			missingKey: func(values *providerYAMLValues) {
+				values.MoonshotAPIKey = "${P411_MISSING_MOONSHOT_KEY}"
+			},
+			expectedError: "provider_api_key_required: provider=moonshot field=providers.moonshot.api_key",
+		},
+		{
+			name:     "zhipu alias",
+			provider: providerAliasGLM,
+			model:    proxy.ModelNameZhipuGLM,
+			missingKey: func(values *providerYAMLValues) {
+				values.ZhipuAPIKey = "${P411_MISSING_ZHIPU_KEY}"
+			},
+			expectedError: "provider_api_key_required: provider=zhipu field=providers.zhipu.api_key",
+		},
+		{
+			name:     "anthropic alias",
+			provider: providerAliasClaude,
+			model:    proxy.ModelNameClaudeSonnet46,
+			missingKey: func(values *providerYAMLValues) {
+				values.AnthropicAPIKey = "${P411_MISSING_ANTHROPIC_KEY}"
+			},
+			expectedError: "provider_api_key_required: provider=anthropic field=providers.anthropic.api_key",
+		},
+		{
+			name:     "grok alias",
+			provider: providerAliasXAI,
+			model:    proxy.ModelNameGrok43,
+			missingKey: func(values *providerYAMLValues) {
+				values.GrokAPIKey = "${P411_MISSING_XAI_KEY}"
+			},
+			expectedError: "provider_api_key_required: provider=grok field=providers.grok.api_key",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			tempDir := subTest.TempDir()
+			providerValues := defaultProviderYAMLValues()
+			testCase.missingKey(&providerValues)
+			configPath := writeTestConfig(subTest, tempDir, `
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: `+testCase.provider+`
+      model: `+testCase.model+`
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
+`+completeProvidersYAML(providerValues))
+			withServeProxy(subTest, failingServeProxy(subTest))
+
+			executeError := executeRootCommand(subTest, "--config", configPath)
+			if executeError == nil || !strings.Contains(executeError.Error(), testCase.expectedError) {
+				subTest.Fatalf("error=%v want %q", executeError, testCase.expectedError)
+			}
+		})
+	}
+}
+
+func TestRootCommandRejectsUnsupportedDefaultDictationProviderAfterCredentialValidation(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir, `
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: openai
+      model: gpt-4.1
+      dictation_provider: deepseek
+      dictation_model: deepseek-v4-flash
+`+completeLiteralProvidersYAML())
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError == nil || !strings.Contains(executeError.Error(), "unsupported provider endpoint: provider=deepseek endpoint=dictation") {
+		t.Fatalf("error=%v want unsupported default dictation provider", executeError)
+	}
+}
+
+func TestRootCommandRejectsUnknownDefaultTextProviderAfterCredentialValidation(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir, `
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: unknown
+      model: gpt-4.1
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
+`+completeLiteralProvidersYAML())
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError == nil || !strings.Contains(executeError.Error(), "unknown provider: unknown") {
+		t.Fatalf("error=%v want unknown default text provider", executeError)
 	}
 }
 
@@ -331,7 +502,7 @@ func TestRootCommandRejectsIncompleteStaticProviderConfig(t *testing.T) {
 		expectedError string
 	}{
 		{
-			name: "missing provider api key",
+			name: "missing default provider api key",
 			providersYAML: `
 providers:
   openai:
@@ -612,6 +783,16 @@ providers:
 			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "id: \"deepseek-v4-flash\"", "id: \"deepseek-v4-flash\"\n          request_profile: \"openai_responses_base\"", 1),
 			expectedError: "invalid_model_catalog: provider=deepseek endpoint=text profile=openai_responses_base",
 		},
+		{
+			name:          "non openai web search",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "id: \"deepseek-v4-flash\"", "id: \"deepseek-v4-flash\"\n          web_search: true", 1),
+			expectedError: "invalid_model_catalog: provider=deepseek endpoint=text field=providers.deepseek.text.models[0].web_search",
+		},
+		{
+			name:          "dictation web search",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "id: \"gpt-4o-mini-transcribe\"", "id: \"gpt-4o-mini-transcribe\"\n          web_search: true", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=dictation field=providers.openai.dictation.models[0].web_search",
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -833,7 +1014,7 @@ providers:
     api_key: "%s"
     base_url: "%s"
     text:
-      default_model: "gemini-3.5-flash"
+      default_model: "gemini-2.5-flash"
       models:
         - id: "gemini-3.5-flash"
           output_token_limit: 65536
