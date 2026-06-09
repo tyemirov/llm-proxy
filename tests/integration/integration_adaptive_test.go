@@ -18,9 +18,7 @@ import (
 const (
 	adaptiveModelQueryParameter = "model"
 	adaptiveModeTemperature     = "temperature"
-	adaptiveModeTools           = "tools"
 	adaptiveOKNoTemp            = "ADAPT_OK_NO_TEMP"
-	adaptiveOKNoTools           = "ADAPT_OK_NO_TOOLS"
 )
 
 type adaptiveRoundTripper func(httpRequest *http.Request) (*http.Response, error)
@@ -51,13 +49,6 @@ func newAdaptiveClient(testingInstance *testing.T, mode string, endpoints *proxy
 						return &http.Response{StatusCode: http.StatusBadRequest, Body: io.NopCloser(strings.NewReader(errBody)), Header: make(http.Header)}, nil
 					}
 					ok := `{"output_text":"` + adaptiveOKNoTemp + `"}`
-					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(ok)), Header: make(http.Header)}, nil
-				case adaptiveModeTools:
-					if strings.Contains(payload, `"tools"`) {
-						errBody := `{"error":{"message":"Unsupported parameter: 'tools' is not supported with this model.","type":"invalid_request_error","param":"tools","code":null}}`
-						return &http.Response{StatusCode: http.StatusBadRequest, Body: io.NopCloser(strings.NewReader(errBody)), Header: make(http.Header)}, nil
-					}
-					ok := `{"output_text":"` + adaptiveOKNoTools + `"}`
 					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(ok)), Header: make(http.Header)}, nil
 				default:
 					return &http.Response{StatusCode: http.StatusTeapot, Body: io.NopCloser(strings.NewReader(`{}`)), Header: make(http.Header)}, nil
@@ -112,15 +103,6 @@ func TestAdaptiveRemovesUnsupportedParameters(testingInstance *testing.T) {
 			expected: adaptiveOKNoTemp,
 			query: map[string]string{
 				adaptiveModelQueryParameter: proxy.ModelNameGPT5Mini,
-			},
-		},
-		{
-			name:     "tools",
-			mode:     adaptiveModeTools,
-			expected: adaptiveOKNoTools,
-			query: map[string]string{
-				adaptiveModelQueryParameter: proxy.ModelNameGPT5Mini,
-				webSearchQueryParameter:     "1",
 			},
 		},
 	}

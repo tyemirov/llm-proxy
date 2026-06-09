@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,7 +42,6 @@ func TestIntegrationModelSpecSuppression(testingInstance *testing.T) {
 			queryValues := requestURL.Query()
 			queryValues.Set(promptQueryParameter, promptValue)
 			queryValues.Set(keyQueryParameter, serviceSecretValue)
-			queryValues.Set(webSearchQueryParameter, "1")
 			queryValues.Set(adaptiveModelQueryParameter, testCase.model)
 			requestURL.RawQuery = queryValues.Encode()
 			httpResponse, requestError := http.Get(requestURL.String())
@@ -50,6 +50,9 @@ func TestIntegrationModelSpecSuppression(testingInstance *testing.T) {
 			}
 			defer httpResponse.Body.Close()
 			_, _ = io.ReadAll(httpResponse.Body)
+			if httpResponse.StatusCode != http.StatusOK {
+				subTest.Fatalf("status=%d want=%d", httpResponse.StatusCode, http.StatusOK)
+			}
 			payload := *captured
 			if _, ok := payload["temperature"]; ok {
 				subTest.Fatalf(temperatureOmittedFormat, testCase.model, payload["temperature"])
@@ -65,6 +68,42 @@ func TestIntegrationModelSpecSuppression(testingInstance *testing.T) {
 			}
 			time.Sleep(10 * time.Millisecond)
 		})
+	}
+}
+
+// TestIntegrationModelCatalogRejectsUnsupportedWebSearch verifies configured model capability validation.
+func TestIntegrationModelCatalogRejectsUnsupportedWebSearch(testingInstance *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router, buildRouterError := proxy.BuildRouter(proxy.Configuration{
+		Tenants:     proxy.SingleTenantConfigurations("integration", serviceSecretValue),
+		OpenAIKey:   openAIKeyValue,
+		LogLevel:    logLevelDebug,
+		WorkerCount: 1,
+		QueueSize:   8,
+	}, newLogger(testingInstance))
+	if buildRouterError != nil {
+		testingInstance.Fatalf(buildRouterFailedFormat, buildRouterError)
+	}
+	server := httptest.NewServer(router)
+	testingInstance.Cleanup(server.Close)
+	requestURL, _ := url.Parse(server.URL)
+	queryValues := requestURL.Query()
+	queryValues.Set(promptQueryParameter, promptValue)
+	queryValues.Set(keyQueryParameter, serviceSecretValue)
+	queryValues.Set(webSearchQueryParameter, "1")
+	queryValues.Set(adaptiveModelQueryParameter, proxy.ModelNameGPT5Mini)
+	requestURL.RawQuery = queryValues.Encode()
+	httpResponse, requestError := http.Get(requestURL.String())
+	if requestError != nil {
+		testingInstance.Fatalf(getFailedFormat, requestError)
+	}
+	defer httpResponse.Body.Close()
+	responseBody, _ := io.ReadAll(httpResponse.Body)
+	if httpResponse.StatusCode != http.StatusBadRequest {
+		testingInstance.Fatalf("status=%d body=%q", httpResponse.StatusCode, string(responseBody))
+	}
+	if !strings.Contains(string(responseBody), "unsupported provider capability") {
+		testingInstance.Fatalf("body=%q want unsupported provider capability", string(responseBody))
 	}
 }
 

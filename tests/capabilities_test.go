@@ -46,7 +46,7 @@ func TestIntegration_OmitsDisallowedParameters(testingInstance *testing.T) {
 		{
 			testName:         "tools omitted",
 			modelIdentifier:  modelIDGPT4oMini,
-			additionalQuery:  "&web_search=1",
+			additionalQuery:  "",
 			expectedResponse: responseTextWithoutTools,
 			disallowedFields: []string{"tools", "tool_choice"},
 		},
