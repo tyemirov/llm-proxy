@@ -1,0 +1,154 @@
+server:
+  port: 8080
+  log_level: info
+  workers: 4
+  queue_size: 32
+  request_timeout_seconds: 180
+  upstream_poll_timeout_seconds: 60
+  max_prompt_bytes: 4194304
+  max_input_audio_bytes: 26214400
+tenants:
+  - id: default
+    secret: "${SERVICE_SECRET}"
+    defaults:
+      provider: openai
+      model: gpt-4.1
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
+      system_prompt: ""
+providers:
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+    base_url: "https://api.openai.com/v1"
+    transcriptions_url: "https://api.openai.com/v1/audio/transcriptions"
+    text:
+      default_model: "gpt-4.1"
+      models:
+        - id: "gpt-4o-mini"
+          request_profile: "openai_responses_temperature"
+        - id: "gpt-4o"
+          request_profile: "openai_responses_temperature_tools"
+          web_search: true
+        - id: "gpt-4.1"
+          request_profile: "openai_responses_temperature_tools"
+          web_search: true
+        - id: "gpt-5-mini"
+          request_profile: "openai_responses_base"
+        - id: "gpt-5"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
+        - id: "gpt-5.5"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
+        - id: "gpt-5.5-pro"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
+    dictation:
+      default_model: "gpt-4o-mini-transcribe"
+      models:
+        - id: "gpt-4o-mini-transcribe"
+        - id: "gpt-4o-transcribe"
+  deepseek:
+    api_key: "${DEEPSEEK_API_KEY}"
+    base_url: "https://api.deepseek.com"
+    text:
+      default_model: "deepseek-v4-flash"
+      models:
+        - id: "deepseek-v4-flash"
+        - id: "deepseek-v4-pro"
+        - id: "deepseek-chat"
+        - id: "deepseek-reasoner"
+  dashscope:
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    text:
+      default_model: "qwen-plus"
+      models:
+        - id: "qwen-plus"
+  moonshot:
+    api_key: "${MOONSHOT_API_KEY}"
+    base_url: "https://api.moonshot.ai/v1"
+    text:
+      default_model: "kimi-k2-0905-preview"
+      models:
+        - id: "kimi-k2-0905-preview"
+  siliconflow:
+    api_key: "${SILICONFLOW_API_KEY}"
+    base_url: "https://api.siliconflow.com/v1"
+    transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
+    text:
+      default_model: "deepseek-ai/DeepSeek-R1"
+      models:
+        - id: "deepseek-ai/DeepSeek-R1"
+    dictation:
+      default_model: "FunAudioLLM/SenseVoiceSmall"
+      models:
+        - id: "FunAudioLLM/SenseVoiceSmall"
+  zhipu:
+    api_key: "${ZHIPU_API_KEY}"
+    base_url: "https://open.bigmodel.cn/api/paas/v4"
+    transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
+    text:
+      default_model: "glm-5.1"
+      models:
+        - id: "glm-5.1"
+    dictation:
+      default_model: "glm-asr-2512"
+      models:
+        - id: "glm-asr-2512"
+  gemini:
+    api_key: "${GEMINI_API_KEY}"
+    base_url: "https://generativelanguage.googleapis.com/v1"
+    text:
+      default_model: "gemini-2.5-flash"
+      models:
+        - id: "gemini-3.5-flash"
+          output_token_limit: 65536
+        - id: "gemini-3.1-flash-lite"
+          output_token_limit: 65536
+        - id: "gemini-2.5-flash"
+          output_token_limit: 65536
+        - id: "gemini-2.5-flash-lite"
+          output_token_limit: 65536
+        - id: "gemini-2.5-pro"
+          output_token_limit: 65536
+  anthropic:
+    api_key: "${ANTHROPIC_API_KEY}"
+    base_url: "https://api.anthropic.com"
+    text:
+      default_model: "claude-sonnet-4-6"
+      models:
+        - id: "claude-opus-4-8"
+          output_token_limit: 128000
+        - id: "claude-sonnet-4-6"
+          output_token_limit: 64000
+        - id: "claude-haiku-4-5-20251001"
+          output_token_limit: 64000
+        - id: "claude-haiku-4-5"
+          output_token_limit: 64000
+        - id: "claude-sonnet-4-5-20250929"
+          output_token_limit: 64000
+        - id: "claude-sonnet-4-5"
+          output_token_limit: 64000
+        - id: "claude-opus-4-1-20250805"
+          output_token_limit: 32000
+        - id: "claude-opus-4-1"
+          output_token_limit: 32000
+  grok:
+    api_key: "${XAI_API_KEY}"
+    base_url: "https://api.x.ai/v1"
+    transcriptions_url: "https://api.x.ai/v1/stt"
+    text:
+      default_model: "grok-4.3"
+      models:
+        - id: "grok-4.3"
+        - id: "grok-4.3-latest"
+        - id: "grok-latest"
+        - id: "grok-build-0.1"
+        - id: "grok-code-fast"
+        - id: "grok-code-fast-1"
+        - id: "grok-code-fast-1-0825"
+    dictation:
+      default_model: "xai-stt"
+      models:
+        - id: "xai-stt"

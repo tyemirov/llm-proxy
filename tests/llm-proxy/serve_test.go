@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"go.uber.org/zap"
 )
 
@@ -63,7 +64,7 @@ func newRouterWithStubbedOpenAI(testingInstance *testing.T, modelsBody, response
 
 	logger, _ := zap.NewDevelopment()
 	defer logger.Sync()
-	router, buildError := proxy.BuildRouter(proxy.Configuration{
+	router, buildError := proxy.BuildRouter(testfixtures.WithProviderModelCatalogs(testingInstance, proxy.Configuration{
 		Tenants:               proxy.SingleTenantConfigurations("test", "sekret"),
 		OpenAIKey:             "sk-test",
 		LogLevel:              "debug",
@@ -71,7 +72,7 @@ func newRouterWithStubbedOpenAI(testingInstance *testing.T, modelsBody, response
 		QueueSize:             queueSize,
 		RequestTimeoutSeconds: requestTimeoutSeconds,
 		Endpoints:             endpoints,
-	}, logger.Sugar())
+	}), logger.Sugar())
 	if buildError != nil {
 		testingInstance.Fatalf("BuildRouter error: %v", buildError)
 	}

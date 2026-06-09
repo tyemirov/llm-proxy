@@ -99,7 +99,7 @@ func TestIntegrationGatewayContextTimeoutCancelsUpstreamRequest(testingInstance 
 	observedCore, observedLogs := observer.New(zapcore.DebugLevel)
 	loggerInstance := zap.New(observedCore)
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
-	router, buildError := proxy.BuildRouter(proxy.Configuration{
+	router, buildError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
 		Tenants:                      proxy.SingleTenantConfigurations("integration", serviceSecretValue),
 		OpenAIKey:                    openAIKeyValue,
 		LogLevel:                     logLevelDebug,
@@ -116,7 +116,7 @@ func TestIntegrationGatewayContextTimeoutCancelsUpstreamRequest(testingInstance 
 		SiliconFlowBaseURL:           "https://siliconflow.invalid",
 		SiliconFlowTranscriptionsURL: "https://siliconflow.invalid/audio/transcriptions",
 		ZhipuBaseURL:                 "https://zhipu.invalid",
-	}, loggerInstance.Sugar())
+	}), loggerInstance.Sugar())
 	if buildError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildError)
 	}
@@ -163,7 +163,7 @@ func TestIntegrationUpstreamRequestTimeoutTriggersGatewayTimeout(testingInstance
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
 			endpoints := proxy.NewEndpoints()
 			configureProxy(subTest, makeTimeoutHTTPClient(subTest, endpoints), endpoints)
-			router, buildError := proxy.BuildRouter(proxy.Configuration{Tenants: proxy.SingleTenantConfigurations("integration", serviceSecretValue), OpenAIKey: openAIKeyValue, LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 8, RequestTimeoutSeconds: timeoutRequestTimeout, Endpoints: endpoints}, newLogger(subTest))
+			router, buildError := proxy.BuildRouter(integrationConfiguration(subTest, proxy.Configuration{Tenants: proxy.SingleTenantConfigurations("integration", serviceSecretValue), OpenAIKey: openAIKeyValue, LogLevel: logLevelDebug, WorkerCount: 1, QueueSize: 8, RequestTimeoutSeconds: timeoutRequestTimeout, Endpoints: endpoints}), newLogger(subTest))
 			if buildError != nil {
 				subTest.Fatalf("BuildRouter failed: %v", buildError)
 			}

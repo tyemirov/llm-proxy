@@ -1,11 +1,15 @@
 package proxy
 
-import "sync"
+import (
+	"strings"
+	"sync"
+)
 
 const (
-	defaultResponsesURL      = "https://api.openai.com/v1/responses"
-	defaultModelsURL         = "https://api.openai.com/v1/models"
-	defaultTranscriptionsURL = "https://api.openai.com/v1/audio/transcriptions"
+	defaultOpenAIBaseURL     = "https://api.openai.com/v1"
+	defaultResponsesURL      = defaultOpenAIBaseURL + "/responses"
+	defaultModelsURL         = defaultOpenAIBaseURL + "/models"
+	defaultTranscriptionsURL = defaultOpenAIBaseURL + "/audio/transcriptions"
 )
 
 // Endpoints provides concurrency-safe access to OpenAI endpoint URLs.
@@ -18,10 +22,17 @@ type Endpoints struct {
 
 // NewEndpoints creates an Endpoints instance initialized with default URLs.
 func NewEndpoints() *Endpoints {
+	return NewEndpointsForURLs(defaultOpenAIBaseURL, defaultTranscriptionsURL)
+}
+
+// NewEndpointsForURLs creates an Endpoints instance from configured OpenAI URLs.
+func NewEndpointsForURLs(rawBaseURL string, rawTranscriptionsURL string) *Endpoints {
+	baseURL := strings.TrimRight(strings.TrimSpace(rawBaseURL), "/")
+	transcriptionsURL := strings.TrimSpace(rawTranscriptionsURL)
 	return &Endpoints{
-		responsesURL:      defaultResponsesURL,
-		modelsURL:         defaultModelsURL,
-		transcriptionsURL: defaultTranscriptionsURL,
+		responsesURL:      baseURL + "/responses",
+		modelsURL:         baseURL + "/models",
+		transcriptionsURL: transcriptionsURL,
 	}
 }
 

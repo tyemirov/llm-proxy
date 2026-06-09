@@ -53,17 +53,17 @@ type Tool struct {
 	Type string `json:"type"`
 }
 
-// BuildRequestPayload selects the correct struct for the given model and returns it.
-func BuildRequestPayload(modelIdentifier string, combinedPrompt string, webSearchEnabled bool, maxTokens *int) any {
+// BuildRequestPayload selects the correct OpenAI Responses payload shape for the configured request profile.
+func BuildRequestPayload(modelIdentifier string, rawRequestProfile string, combinedPrompt string, webSearchEnabled bool, maxTokens *int) any {
 	base := requestPayloadBase{
 		Model:           modelIdentifier,
 		Input:           combinedPrompt,
 		MaxOutputTokens: maxTokens,
 	}
+	requestProfile := modelRequestProfile(strings.ToLower(strings.TrimSpace(rawRequestProfile)))
 
-	// Declaratively choose the payload structure based on the model.
-	switch modelIdentifier {
-	case ModelNameGPT4o, ModelNameGPT41:
+	switch requestProfile {
+	case requestProfileOpenAIResponsesTemperatureTools:
 		payload := requestPayloadFull{requestPayloadBase: base}
 		temperature := defaultTemperature
 		payload.Temperature = &temperature
@@ -72,7 +72,7 @@ func BuildRequestPayload(modelIdentifier string, combinedPrompt string, webSearc
 			payload.ToolChoice = keyAuto
 		}
 		return payload
-	case ModelNameGPT5, ModelNameGPT55, ModelNameGPT55Pro:
+	case requestProfileOpenAIResponsesReasoningTools:
 		payload := requestPayloadWithTools{requestPayloadBase: base}
 		if webSearchEnabled {
 			payload.Tools = []Tool{{Type: toolTypeWebSearch}}
@@ -80,24 +80,15 @@ func BuildRequestPayload(modelIdentifier string, combinedPrompt string, webSearc
 			payload.Reasoning = &Reasoning{Effort: reasoningEffortMedium}
 		}
 		return payload
-	case ModelNameGPT4oMini:
+	case requestProfileOpenAIResponsesTemperature:
 		payload := requestPayloadWithTemperature{requestPayloadBase: base}
 		temperature := defaultTemperature
 		payload.Temperature = &temperature
 		return payload
-	case ModelNameGPT5Mini:
-		// This model has no optional parameters, so we use the base struct directly.
+	case requestProfileOpenAIResponsesBase:
 		return base
 	default:
-		// Fallback for any unknown models, assuming full capabilities as a sensible default.
-		payload := requestPayloadFull{requestPayloadBase: base}
-		temperature := defaultTemperature
-		payload.Temperature = &temperature
-		if webSearchEnabled {
-			payload.Tools = []Tool{{Type: toolTypeWebSearch}}
-			payload.ToolChoice = keyAuto
-		}
-		return payload
+		return base
 	}
 }
 
@@ -141,20 +132,17 @@ var (
 	SchemaGPT55 = SchemaGPT5
 )
 
-// modelPayloadSchemas associates model identifiers with their payload schemas.
-var modelPayloadSchemas = map[string]ModelPayloadSchema{
-	ModelNameGPT4oMini: SchemaGPT4oMini,
-	ModelNameGPT4o:     SchemaGPT4o,
-	ModelNameGPT41:     SchemaGPT41,
-	ModelNameGPT5Mini:  SchemaGPT5Mini,
-	ModelNameGPT5:      SchemaGPT5,
-	ModelNameGPT55:     SchemaGPT55,
-	ModelNameGPT55Pro:  SchemaGPT55,
+// modelPayloadSchemas associates request profiles with their payload schemas.
+var modelPayloadSchemas = map[modelRequestProfile]ModelPayloadSchema{
+	requestProfileOpenAIResponsesTemperature:      SchemaGPT4oMini,
+	requestProfileOpenAIResponsesTemperatureTools: SchemaGPT41,
+	requestProfileOpenAIResponsesBase:             SchemaGPT5Mini,
+	requestProfileOpenAIResponsesReasoningTools:   SchemaGPT5,
 }
 
-// ResolveModelPayloadSchema returns the schema for a model or an empty schema when unknown.
-func ResolveModelPayloadSchema(modelIdentifier string) ModelPayloadSchema {
-	normalized := strings.ToLower(strings.TrimSpace(modelIdentifier))
+// ResolveModelPayloadSchema returns the schema for a request profile or an empty schema when unknown.
+func ResolveModelPayloadSchema(requestProfile string) ModelPayloadSchema {
+	normalized := modelRequestProfile(strings.ToLower(strings.TrimSpace(requestProfile)))
 	if schema, found := modelPayloadSchemas[normalized]; found {
 		return schema
 	}

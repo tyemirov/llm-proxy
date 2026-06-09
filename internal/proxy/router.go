@@ -56,7 +56,7 @@ type chatRequestParameters struct {
 	messages         chatMessages
 	requestDisplay   string
 	provider         providerDefinition
-	model            modelID
+	model            textModelDefinition
 	webSearchEnabled bool
 	maxTokens        *int
 }
@@ -76,7 +76,7 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}
 
 	if configuration.Endpoints == nil {
-		configuration.Endpoints = NewEndpoints()
+		configuration.Endpoints = NewEndpointsForURLs(configuration.OpenAIBaseURL, configuration.OpenAITranscriptionsURL)
 	}
 
 	providers := newProviderRegistry(configuration)
@@ -486,12 +486,11 @@ func resolveJSONModelParameter(queryModel string, bodyModel string) (string, err
 	return trimmedBodyModel, nil
 }
 
-func validateTextMaxTokens(providerDefinition providerDefinition, modelIdentifier modelID, maxTokens *int) error {
+func validateTextMaxTokens(providerDefinition providerDefinition, modelIdentifier textModelDefinition, maxTokens *int) error {
 	if maxTokens == nil {
 		return nil
 	}
-	outputTokenLimit, hasOutputTokenLimit := providerDefinition.outputTokenLimitFor(modelIdentifier)
-	if !hasOutputTokenLimit || *maxTokens <= outputTokenLimit {
+	if !modelIdentifier.hasOutputTokenLimit || *maxTokens <= modelIdentifier.outputTokenLimit {
 		return nil
 	}
 	return fmt.Errorf(
@@ -499,7 +498,7 @@ func validateTextMaxTokens(providerDefinition providerDefinition, modelIdentifie
 		providerDefinition.identifier.string(),
 		modelIdentifier.string(),
 		*maxTokens,
-		outputTokenLimit,
+		modelIdentifier.outputTokenLimit,
 	)
 }
 

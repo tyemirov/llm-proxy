@@ -14,9 +14,9 @@ client.
   - `POST /?key=...[&provider=...]` for large JSON prompt bodies
   - `POST /dictate?key=...[&provider=...]` for audio transcription
 - Choose the provider per request via `provider=...`; omitted provider uses the authenticated tenant default
-- Choose the model per request via `model=...`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider default
-- Choose the dictation model per request via `model=...` on `/dictate`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider default
-- Optional per-request OpenAI web search via `web_search=1|true|yes`
+- Choose the model per request via `model=...`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
+- Choose the dictation model per request via `model=...` on `/dictate`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
+- Optional per-request web search via `web_search=1|true|yes` when the selected provider/model is configured to support it
 - Optional logging at `debug` or `info` levels
 - Forwards requests using server-side provider API keys
 - Supports plain text, JSON, XML, or CSV responses
@@ -31,8 +31,11 @@ are not service configuration sources.
 Before parsing YAML, the loader expands `${NAME}` placeholders from process
 environment variables and from an optional `.env` file in the same directory as
 the selected config file. Process environment values override `.env` values.
-Missing placeholders fail startup. The loader does not mutate process
-environment, and all runtime code receives only the validated config value.
+Missing placeholders fail startup except when an `api_key` value is exactly one
+missing placeholder; that exact missing provider credential expands to an empty
+string so non-default providers can stay disabled. The loader does not mutate
+process environment, and all runtime code receives only the validated config
+value.
 
 ```yaml
 server:
@@ -56,64 +59,230 @@ tenants:
 providers:
   openai:
     api_key: "${OPENAI_API_KEY}"
+    base_url: "https://api.openai.com/v1"
+    transcriptions_url: "https://api.openai.com/v1/audio/transcriptions"
+    text:
+      default_model: "gpt-4.1"
+      models:
+        - id: "gpt-4o-mini"
+          request_profile: "openai_responses_temperature"
+        - id: "gpt-4o"
+          request_profile: "openai_responses_temperature_tools"
+          web_search: true
+        - id: "gpt-4.1"
+          request_profile: "openai_responses_temperature_tools"
+          web_search: true
+        - id: "gpt-5-mini"
+          request_profile: "openai_responses_base"
+        - id: "gpt-5"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
+        - id: "gpt-5.5"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
+        - id: "gpt-5.5-pro"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
+    dictation:
+      default_model: "gpt-4o-mini-transcribe"
+      models:
+        - id: "gpt-4o-mini-transcribe"
+        - id: "gpt-4o-transcribe"
   deepseek:
-    api_key: ""
-    base_url: ""
+    api_key: "${DEEPSEEK_API_KEY}"
+    base_url: "https://api.deepseek.com"
+    text:
+      default_model: "deepseek-v4-flash"
+      models:
+        - id: "deepseek-v4-flash"
+        - id: "deepseek-v4-pro"
+        - id: "deepseek-chat"
+        - id: "deepseek-reasoner"
   dashscope:
-    api_key: ""
-    base_url: ""
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    text:
+      default_model: "qwen-plus"
+      models:
+        - id: "qwen-plus"
   moonshot:
-    api_key: ""
-    base_url: ""
+    api_key: "${MOONSHOT_API_KEY}"
+    base_url: "https://api.moonshot.ai/v1"
+    text:
+      default_model: "kimi-k2-0905-preview"
+      models:
+        - id: "kimi-k2-0905-preview"
   siliconflow:
-    api_key: ""
-    base_url: ""
-    transcriptions_url: ""
+    api_key: "${SILICONFLOW_API_KEY}"
+    base_url: "https://api.siliconflow.com/v1"
+    transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
+    text:
+      default_model: "deepseek-ai/DeepSeek-R1"
+      models:
+        - id: "deepseek-ai/DeepSeek-R1"
+    dictation:
+      default_model: "FunAudioLLM/SenseVoiceSmall"
+      models:
+        - id: "FunAudioLLM/SenseVoiceSmall"
   zhipu:
-    api_key: ""
-    base_url: ""
+    api_key: "${ZHIPU_API_KEY}"
+    base_url: "https://open.bigmodel.cn/api/paas/v4"
+    transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
+    text:
+      default_model: "glm-5.1"
+      models:
+        - id: "glm-5.1"
+    dictation:
+      default_model: "glm-asr-2512"
+      models:
+        - id: "glm-asr-2512"
   gemini:
-    api_key: ""
-    base_url: ""
+    api_key: "${GEMINI_API_KEY}"
+    base_url: "https://generativelanguage.googleapis.com/v1"
+    text:
+      default_model: "gemini-2.5-flash"
+      models:
+        - id: "gemini-3.5-flash"
+          output_token_limit: 65536
+        - id: "gemini-3.1-flash-lite"
+          output_token_limit: 65536
+        - id: "gemini-2.5-flash"
+          output_token_limit: 65536
+        - id: "gemini-2.5-flash-lite"
+          output_token_limit: 65536
+        - id: "gemini-2.5-pro"
+          output_token_limit: 65536
   anthropic:
-    api_key: ""
-    base_url: ""
+    api_key: "${ANTHROPIC_API_KEY}"
+    base_url: "https://api.anthropic.com"
+    text:
+      default_model: "claude-sonnet-4-6"
+      models:
+        - id: "claude-opus-4-8"
+          output_token_limit: 128000
+        - id: "claude-sonnet-4-6"
+          output_token_limit: 64000
+        - id: "claude-haiku-4-5-20251001"
+          output_token_limit: 64000
+        - id: "claude-haiku-4-5"
+          output_token_limit: 64000
+        - id: "claude-sonnet-4-5-20250929"
+          output_token_limit: 64000
+        - id: "claude-sonnet-4-5"
+          output_token_limit: 64000
+        - id: "claude-opus-4-1-20250805"
+          output_token_limit: 32000
+        - id: "claude-opus-4-1"
+          output_token_limit: 32000
   grok:
-    api_key: ""
-    base_url: ""
+    api_key: "${XAI_API_KEY}"
+    base_url: "https://api.x.ai/v1"
+    transcriptions_url: "https://api.x.ai/v1/stt"
+    text:
+      default_model: "grok-4.3"
+      models:
+        - id: "grok-4.3"
+        - id: "grok-4.3-latest"
+        - id: "grok-latest"
+        - id: "grok-build-0.1"
+        - id: "grok-code-fast"
+        - id: "grok-code-fast-1"
+        - id: "grok-code-fast-1-0825"
+    dictation:
+      default_model: "xai-stt"
+      models:
+        - id: "xai-stt"
 ```
 
 ### Provider support matrix
 
 Provider selectors and aliases are accepted anywhere the public API accepts
 `provider`. Omitted text models use the authenticated tenant default when
-`provider` is omitted; otherwise they use the selected provider's default text
-model from this table.
+`provider` is omitted; otherwise they use the selected provider's configured
+default text model. This table describes capabilities currently wired through
+`llm-proxy` and the defaults shipped in [configs/config.yml](configs/config.yml).
+Upstream providers may expose additional speech APIs that need separate proxy
+adapters before they are available through `/dictate`.
 
-| Provider selector | Aliases | Text API | Default text model | Credential field | Default base URL | Dictation | Web search |
-|-------------------|---------|----------|--------------------|------------------|------------------|-----------|------------|
-| `openai` | none | OpenAI Responses | `gpt-4.1` | `providers.openai.api_key` | OpenAI SDK default | Yes: `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Yes, on marked OpenAI models |
+| Provider selector | Aliases | Text API | Configured default text model | Credential field | Default base URL | Dictation | Web search |
+|-------------------|---------|----------|-------------------------------|------------------|------------------|-----------|------------|
+| `openai` | none | OpenAI Responses | `gpt-4.1` | `providers.openai.api_key` | `https://api.openai.com/v1` | Yes: `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Yes, on marked OpenAI models |
 | `deepseek` | none | OpenAI-compatible chat completions | `deepseek-v4-flash` | `providers.deepseek.api_key` | `https://api.deepseek.com` | No | No |
 | `dashscope` | `qwen` | OpenAI-compatible chat completions | `qwen-plus` | `providers.dashscope.api_key` | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` | No | No |
 | `moonshot` | `kimi` | OpenAI-compatible chat completions | `kimi-k2-0905-preview` | `providers.moonshot.api_key` | `https://api.moonshot.ai/v1` | No | No |
 | `siliconflow` | none | OpenAI-compatible chat completions | `deepseek-ai/DeepSeek-R1` | `providers.siliconflow.api_key` | `https://api.siliconflow.com/v1` | Yes: `FunAudioLLM/SenseVoiceSmall` | No |
-| `zhipu` | `glm` | OpenAI-compatible chat completions | `glm-5.1` | `providers.zhipu.api_key` | `https://open.bigmodel.cn/api/paas/v4` | No | No |
-| `gemini` | none | Gemini native `generateContent` | `gemini-3.5-flash` | `providers.gemini.api_key` | `https://generativelanguage.googleapis.com/v1` | No | No |
+| `zhipu` | `glm` | OpenAI-compatible chat completions | `glm-5.1` | `providers.zhipu.api_key` | `https://open.bigmodel.cn/api/paas/v4` | Yes: `glm-asr-2512` | No |
+| `gemini` | none | Gemini native `generateContent` | `gemini-2.5-flash` | `providers.gemini.api_key` | `https://generativelanguage.googleapis.com/v1` | No | No |
 | `anthropic` | `claude` | Anthropic native Messages | `claude-sonnet-4-6` | `providers.anthropic.api_key` | `https://api.anthropic.com` | No | No |
-| `grok` | `xai` | xAI OpenAI-compatible chat completions | `grok-4.3` | `providers.grok.api_key` | `https://api.x.ai/v1` | No | No |
+| `grok` | `xai` | xAI OpenAI-compatible chat completions | `grok-4.3` | `providers.grok.api_key` | `https://api.x.ai/v1` | Yes: `xai-stt` | No |
 
 All upstream provider credentials are server-side only. Client requests must
 never send OpenAI, Anthropic, xAI, Gemini, or other upstream API keys.
 
+### Model catalog schema
+
+Model ids and per-model metadata are runtime config data. To add, remove, or
+replace provider models, update the selected `config.yml` and restart the
+service; provider transports stay code-owned.
+
+Each provider must declare a text catalog:
+
+```yaml
+providers:
+  provider_name:
+    text:
+      default_model: "provider-default-model"
+      models:
+        - id: "provider-model-id"
+          request_profile: "openai_responses_temperature_tools"
+          web_search: true
+          output_token_limit: 65536
+```
+
+Dictation-capable providers must also declare a dictation catalog:
+
+```yaml
+providers:
+  provider_name:
+    dictation:
+      default_model: "provider-default-dictation-model"
+      models:
+        - id: "provider-dictation-model-id"
+```
+
+Catalog validation fails startup when a provider text catalog is missing, a
+dictation-capable provider dictation catalog is missing, a model id is blank or
+duplicated, `default_model` is not present in the corresponding `models` list,
+or `web_search: true` appears outside an OpenAI text model entry.
+`output_token_limit` is optional for most providers; when set, it is used as a
+proxy-side maximum for `max_tokens`. Anthropic text models require
+`output_token_limit` because Anthropic Messages requires `max_tokens` even when
+the client omits it.
+
+`request_profile` is currently required only for OpenAI text models. It selects
+the stable proxy payload shape for that OpenAI model and must be one of:
+
+| Request profile | Payload behavior |
+|-----------------|------------------|
+| `openai_responses_base` | Sends `model` and `input`; omits temperature, tools, and reasoning controls. |
+| `openai_responses_temperature` | Adds `temperature`. |
+| `openai_responses_temperature_tools` | Adds `temperature`; includes web-search tools only when both the request and model catalog enable web search. |
+| `openai_responses_reasoning_tools` | Adds reasoning/text controls; includes web-search tools only when both the request and model catalog enable web search. |
+
 Provider-specific details:
 
-* OpenAI is the only provider exposed with `web_search` support. OpenAI
-  dictation uses the same `providers.openai.api_key` value.
+* OpenAI is the only provider currently exposed with `web_search` support, and
+  only for OpenAI model catalog entries with `web_search: true`. OpenAI
+  dictation uses the same `providers.openai.api_key` value. OpenAI Responses
+  and Models endpoint URLs are derived from `providers.openai.base_url`;
+  dictation uses `providers.openai.transcriptions_url`.
 * OpenAI-compatible text providers send chat completion requests with
   `Authorization: Bearer <api_key>` and the selected provider base URL.
-* SiliconFlow dictation uses `providers.siliconflow.transcriptions_url` when
-  configured; otherwise it defaults to the SiliconFlow base URL plus
-  `/audio/transcriptions`.
+* Only dictation-capable providers expose `transcriptions_url` fields:
+  OpenAI uses `providers.openai.transcriptions_url`, SiliconFlow uses
+  `providers.siliconflow.transcriptions_url`, Zhipu uses
+  `providers.zhipu.transcriptions_url`, and Grok/xAI uses
+  `providers.grok.transcriptions_url`.
 * Gemini text requests use the native `generateContent` route and normalize
   Gemini usage metadata into the same response headers and JSON `usage` object
   used by the other text providers.
@@ -122,15 +291,30 @@ Provider-specific details:
   Anthropic's top-level `system` field. Anthropic requires `max_tokens`, so
   when the client omits it the proxy sends the selected Claude model's
   configured output limit.
+* Zhipu dictation uses Z.AI GLM-ASR through
+  `providers.zhipu.transcriptions_url` with the selected configured dictation
+  model.
 * Grok text requests use xAI's OpenAI-compatible `/chat/completions` API at
-  `https://api.x.ai/v1`.
+  `https://api.x.ai/v1`. Grok/xAI dictation uses xAI STT through
+  `providers.grok.transcriptions_url`; the upstream STT endpoint does not
+  receive a `model` multipart field.
 
-Blank optional values use built-in provider defaults where applicable. Startup
-validates that `tenants` includes at least one unique `id` and unique `secret`,
-then validates each tenant's default text provider and dictation provider.
-Credentials for providers not used by any tenant default may stay blank;
-requests selecting those providers return `503 Service Unavailable` until the
-corresponding `api_key` is configured.
+Provider API keys are optional until a tenant uses that provider as a default.
+If a non-default provider key is blank or its whole `api_key` value is a missing
+`${...}` placeholder, startup continues and explicit requests for that provider
+return `503 provider not configured`. Missing placeholders in other fields, or
+embedded inside a longer `api_key` value, fail startup. If a tenant's default
+text or dictation provider lacks its API key, startup fails before the server
+listens. Provider `base_url` values are explicit config values; leave them at
+the documented URLs unless routing through a test server, proxy, or compatible
+gateway. Dictation-capable provider
+`transcriptions_url` values are also explicit config values and are required for
+OpenAI, SiliconFlow, Zhipu, and Grok/xAI. Text model catalogs are required for
+every supported provider, and dictation model catalogs are required for OpenAI,
+SiliconFlow, Zhipu, and Grok/xAI. Startup validates that `tenants` includes at
+least one unique `id` and unique `secret`, then validates each tenant's default
+text provider/model and dictation provider/model against those configured
+catalogs and credentials.
 Unknown YAML keys fail startup.
 
 Web search is per request and currently supported only on OpenAI models that
@@ -158,7 +342,8 @@ Run the service with OpenAI defaults:
 ./llm-proxy --config config.yml
 ```
 
-Run the service with DeepSeek as the default text provider:
+In the full `config.yml`, set a tenant's default text provider/model to route
+omitted-provider requests to DeepSeek:
 
 ```yaml
 tenants:
@@ -167,12 +352,9 @@ tenants:
     defaults:
       provider: deepseek
       model: deepseek-v4-flash
-providers:
-  deepseek:
-    api_key: "${DEEPSEEK_API_KEY}"
 ```
 
-Run the service with Gemini as the default text provider:
+Set Gemini as the default text provider:
 
 ```yaml
 tenants:
@@ -180,13 +362,10 @@ tenants:
     secret: "${SERVICE_SECRET}"
     defaults:
       provider: gemini
-      model: gemini-3.5-flash
-providers:
-  gemini:
-    api_key: "${GEMINI_API_KEY}"
+      model: gemini-2.5-flash
 ```
 
-Run the service with Anthropic as the default text provider:
+Set Anthropic as the default text provider:
 
 ```yaml
 tenants:
@@ -195,12 +374,9 @@ tenants:
     defaults:
       provider: anthropic
       model: claude-sonnet-4-6
-providers:
-  anthropic:
-    api_key: "${ANTHROPIC_API_KEY}"
 ```
 
-Run the service with Grok as the default text provider:
+Set Grok as the default text provider:
 
 ```yaml
 tenants:
@@ -209,9 +385,6 @@ tenants:
     defaults:
       provider: grok
       model: grok-4.3
-providers:
-  grok:
-    api_key: "${XAI_API_KEY}"
 ```
 
 ## Local Automation
@@ -221,10 +394,44 @@ This repository exposes the standard local targets used by MPR app repos:
 | Command | Purpose |
 |---------|---------|
 | `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, the 100% coverage-gated Go test suite, and Python pytest. |
-| `make test-live-gemini` | Generate a temporary config file and run the current binary against live Gemini using `GEMINI_API_KEY` and `SERVICE_SECRET` placeholders; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
+| `make test-live-providers` | Generate a complete temporary config and run live text smoke tests for every provider whose API key is present; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
+| `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
 | `make release` | Cut a `v*` release from `master`, update `CHANGELOG.md` when needed, and push the release tag. |
 | `make publish` | Validate the release source and publish `ghcr.io/tyemirov/llm-proxy:<tag>` plus `:latest`. |
 | `make deploy` | Verify the published image and deploy through the sibling `../mprlab-gateway` checkout. |
+
+Live provider smoke tests are intentionally not part of `make ci`; they call
+paid upstream APIs and depend on local or CI secret availability. The dynamic
+target discovers these provider keys after loading `LIVE_ENV_FILE`. By default,
+smoke requests omit `model`, so each provider uses the default configured in
+the selected `configs/config.yml`; set a model override only when debugging a
+specific provider/model pair.
+
+| Provider | Key variable | Model override |
+|----------|--------------|----------------|
+| OpenAI | `OPENAI_API_KEY` | `LLM_PROXY_LIVE_OPENAI_MODEL` |
+| DeepSeek | `DEEPSEEK_API_KEY` | `LLM_PROXY_LIVE_DEEPSEEK_MODEL` |
+| DashScope/Qwen | `DASHSCOPE_API_KEY` | `LLM_PROXY_LIVE_DASHSCOPE_MODEL` |
+| Moonshot/Kimi | `MOONSHOT_API_KEY` | `LLM_PROXY_LIVE_MOONSHOT_MODEL` |
+| SiliconFlow | `SILICONFLOW_API_KEY` | `LLM_PROXY_LIVE_SILICONFLOW_MODEL` |
+| Zhipu/GLM | `ZHIPU_API_KEY` | `LLM_PROXY_LIVE_ZHIPU_MODEL` |
+| Gemini | `GEMINI_API_KEY` | `LLM_PROXY_LIVE_GEMINI_MODEL` |
+| Anthropic/Claude | `ANTHROPIC_API_KEY` | `LLM_PROXY_LIVE_ANTHROPIC_MODEL` |
+| Grok/xAI | `XAI_API_KEY` | `LLM_PROXY_LIVE_GROK_MODEL` |
+
+Run every provider with an available key:
+
+```shell
+make test-live-providers LIVE_ENV_FILE=configs/.env
+```
+
+Run only selected providers. When `LLM_PROXY_LIVE_PROVIDERS` is set, every
+listed provider must have its key:
+
+```shell
+LLM_PROXY_LIVE_PROVIDERS=openai,gemini \
+  make test-live-providers LIVE_ENV_FILE=configs/.env
+```
 
 The release lifecycle commands wrap their local `make ci` gate with the
 standard 350-second timeout by default. For exceptional local diagnostics,
@@ -253,7 +460,7 @@ Use it with explicit flags:
 llm-proxy-client \
   --base-url "http://localhost:8080/?provider=gemini" \
   --secret "$SERVICE_SECRET" \
-  --model gemini-3.5-flash \
+  --model gemini-2.5-flash \
   --prompt "Summarize this"
 ```
 
@@ -294,7 +501,7 @@ client = Client(
 text = client.post(
     ClientRequest(
         prompt="Summarize this",
-        model="gemini-3.5-flash",
+        model="gemini-2.5-flash",
         max_tokens=512,
     )
 )
@@ -354,7 +561,7 @@ curl --get \
   --data-urlencode "prompt=Summarize this with Gemini" \
   --data-urlencode "key=mysecret" \
   --data-urlencode "provider=gemini" \
-  --data-urlencode "model=gemini-3.5-flash" \
+  --data-urlencode "model=gemini-2.5-flash" \
   --data-urlencode "max_tokens=512" \
   "http://localhost:8080/"
 ```
@@ -423,7 +630,7 @@ JSON body fields:
 |-------|----------|---------|-------------|
 | `prompt` | Yes, unless `messages` is provided | none | Full text to send to the LLM. Use this body field for large or non-ASCII prompts. |
 | `messages` | Yes, unless `prompt` is provided | none | Chat messages using `role` and string `content`. Supported roles are `system`, `user`, and `assistant`; at least one `user` message is required. Each item may include numeric `order`; if any item includes it, every submitted item must include a unique non-negative `order`, and messages are sorted ascending before routing. |
-| `model` | No | tenant or provider default | Model identifier from the selected provider's supported model list. Omitted model uses the tenant default when `provider` is omitted; otherwise it uses the selected provider default. |
+| `model` | No | tenant or configured provider default | Model identifier from the selected provider's configured model list. Omitted model uses the tenant default when `provider` is omitted; otherwise it uses the selected provider's configured default. |
 | `web_search` | No | `false` | Enables OpenAI web search when the selected provider/model supports it. |
 | `system_prompt` | No | authenticated tenant default | Per-request system prompt override. With `messages`, it is prepended as a system message only when the body does not already contain a system message. |
 | `max_tokens` | No | provider default | Positive integer output-token cap for this request. The proxy maps it to OpenAI `max_output_tokens`, OpenAI-compatible `max_tokens`, Anthropic `max_tokens`, or Gemini `generationConfig.maxOutputTokens`. |
@@ -567,8 +774,8 @@ GET /
   ?prompt=STRING            # required
   &key=SERVICE_SECRET       # required
   &provider=PROVIDER        # optional; tenant default
-  &model=MODEL_NAME         # optional; tenant or provider default
-  &web_search=1|true|yes    # optional; OpenAI web_search tool
+  &model=MODEL_NAME         # optional; tenant or configured provider default
+  &web_search=1|true|yes    # optional; requires configured model support
   &max_tokens=N             # optional positive integer per-request cap
   &format=CONTENT_TYPE      # optional; or use Accept header
 ```
@@ -585,7 +792,7 @@ Content-Type: application/json
   "messages": [             # required unless prompt is provided
     {"role": "user", "content": "STRING", "order": 1}
   ],
-  "model": "MODEL_NAME",    # optional; tenant or provider default
+  "model": "MODEL_NAME",    # optional; tenant or configured provider default
   "web_search": false,      # optional; defaults to false
   "system_prompt": "STRING",# optional; tenant default
   "max_tokens": 512         # optional positive integer per-request cap
@@ -603,7 +810,7 @@ Content-Type: application/json
   "messages": [             # required
     {"role": "user", "content": "STRING", "order": 1}
   ],
-  "model": "MODEL_NAME",    # optional; tenant or provider default
+  "model": "MODEL_NAME",    # optional; tenant or configured provider default
   "web_search": false,      # optional; defaults to false
   "max_tokens": 512         # optional positive integer per-request cap
 }
@@ -619,7 +826,7 @@ never accepted from client requests.
 POST /dictate
   ?key=SERVICE_SECRET       # required
   &provider=PROVIDER        # optional; tenant default
-  &model=MODEL_NAME         # optional; tenant or provider default
+  &model=MODEL_NAME         # optional; tenant or configured provider default
 Content-Type: multipart/form-data
   audio=<file>              # required (alias: file)
 ```
@@ -630,12 +837,13 @@ Success response:
 { "text": "..." }
 ```
 
-Supported LLM endpoint models are listed below. The `/dictate` endpoint defaults
-to OpenAI's audio transcriptions API and supports SiliconFlow when
-`provider=siliconflow`. Not all models support tools; use a model marked `Yes`
-below for web search. A dash in the proxy `max_tokens` limit column means the
-proxy validates only that `max_tokens` is positive and lets the upstream
-provider enforce any provider-side model limit.
+The default model catalog in [configs/config.yml](configs/config.yml)
+declares the LLM endpoint models below. The `/dictate` endpoint defaults to
+OpenAI's audio transcriptions API and also supports SiliconFlow, Zhipu, and
+Grok/xAI through their provider selectors. Not all configured models support
+tools; use a model marked `Yes` below for web search. A dash in the proxy
+`max_tokens` limit column means the proxy validates only that `max_tokens` is
+positive and lets the upstream provider enforce any provider-side model limit.
 
 ### Model capabilities
 
@@ -656,9 +864,9 @@ provider enforce any provider-side model limit.
 | `kimi-k2-0905-preview` | Moonshot/Kimi | Yes | - | No |
 | `deepseek-ai/DeepSeek-R1` | SiliconFlow | Yes | - | No |
 | `glm-5.1` | Zhipu/GLM | Yes | - | No |
-| `gemini-3.5-flash` | Gemini | Yes | `65536` | No |
+| `gemini-3.5-flash` | Gemini | No | `65536` | No |
 | `gemini-3.1-flash-lite` | Gemini | No | `65536` | No |
-| `gemini-2.5-flash` | Gemini | No | `65536` | No |
+| `gemini-2.5-flash` | Gemini | Yes | `65536` | No |
 | `gemini-2.5-flash-lite` | Gemini | No | `65536` | No |
 | `gemini-2.5-pro` | Gemini | No | `65536` | No |
 | `claude-opus-4-8` | Anthropic/Claude | No | `128000` | No |
@@ -679,10 +887,12 @@ provider enforce any provider-side model limit.
 
 ### Dictation capabilities
 
-| Provider selector | Models | Credential field | Notes |
-|-------------------|--------|------------------|-------|
-| `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | `providers.openai.api_key` | Default dictation provider and default model `gpt-4o-mini-transcribe`. |
-| `siliconflow` | `FunAudioLLM/SenseVoiceSmall` | `providers.siliconflow.api_key` | Uses `providers.siliconflow.transcriptions_url` when configured, otherwise `<base_url>/audio/transcriptions`. |
+| Provider selector | Models | Credential field | Transcription URL field | Notes |
+|-------------------|--------|------------------|-------------------------|-------|
+| `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | `providers.openai.api_key` | `providers.openai.transcriptions_url` | Default dictation provider and default model `gpt-4o-mini-transcribe`. |
+| `siliconflow` | `FunAudioLLM/SenseVoiceSmall` | `providers.siliconflow.api_key` | `providers.siliconflow.transcriptions_url` | OpenAI-compatible audio transcription. |
+| `zhipu` / `glm` | `glm-asr-2512` | `providers.zhipu.api_key` | `providers.zhipu.transcriptions_url` | Z.AI GLM-ASR; sends `model=glm-asr-2512`. |
+| `grok` / `xai` | `xai-stt` | `providers.grok.api_key` | `providers.grok.transcriptions_url` | xAI STT; the proxy model name selects the provider but is not sent as a multipart `model` field. |
 
 ### Status codes
 
@@ -691,7 +901,7 @@ provider enforce any provider-side model limit.
 * `403 Forbidden` - missing or invalid `key`
 * `413 Payload Too Large` - JSON prompt body exceeds `max_prompt_bytes`
 * `429 Too Many Requests` - upstream provider rate limit
-* `503 Service Unavailable` - selected provider is not configured server-side
+* `503 Service Unavailable` - selected provider credential is unavailable because that non-default provider is disabled or missing its API key
 * `504 Gateway Timeout` - upstream request timed out
 * `502 Bad Gateway` - upstream provider API returned an error
 

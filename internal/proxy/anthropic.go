@@ -54,7 +54,7 @@ func newAnthropicMessagesClient(httpClient HTTPDoer, requestTimeout time.Duratio
 	}
 }
 
-func (client *anthropicMessagesClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier modelID, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *anthropicMessagesClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	providerMessages, systemPrompt := messages.anthropicMessages()
 	payload := anthropicMessagesRequest{
 		Model:     modelIdentifier.string(),
@@ -106,18 +106,11 @@ func (messages chatMessages) anthropicMessages() ([]anthropicMessage, string) {
 	return providerMessages, strings.Join(systemPrompts, "\n\n")
 }
 
-func anthropicMaxTokens(modelIdentifier modelID, maxTokens *int) int {
+func anthropicMaxTokens(modelIdentifier textModelDefinition, maxTokens *int) int {
 	if maxTokens != nil {
 		return *maxTokens
 	}
-	switch strings.ToLower(modelIdentifier.string()) {
-	case strings.ToLower(ModelNameClaudeOpus48):
-		return anthropicOpusOutputTokenLimit
-	case strings.ToLower(ModelNameClaudeOpus41), strings.ToLower(ModelNameClaudeOpus41Alias):
-		return anthropicLegacyOpusOutputTokenLimit
-	default:
-		return anthropicOutputTokenLimit
-	}
+	return modelIdentifier.outputTokenLimit
 }
 
 func parseAnthropicMessagesResponse(responseBytes []byte) (textGenerationResult, error) {

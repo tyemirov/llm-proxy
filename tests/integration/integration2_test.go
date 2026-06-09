@@ -33,14 +33,14 @@ func TestClientResponseDelivery(testingInstance *testing.T) {
 			endpoints := proxy.NewEndpoints()
 			client, captured := makeHTTPClient(subTest, testCase.webSearch, endpoints)
 			configureProxy(subTest, client, endpoints)
-			router, buildRouterError := proxy.BuildRouter(proxy.Configuration{
+			router, buildRouterError := proxy.BuildRouter(integrationConfiguration(subTest, proxy.Configuration{
 				Tenants:     proxy.SingleTenantConfigurations("integration", serviceSecretValue),
 				OpenAIKey:   openAIKeyValue,
 				LogLevel:    logLevelDebug,
 				WorkerCount: 1,
 				QueueSize:   8,
 				Endpoints:   endpoints,
-			}, newLogger(subTest))
+			}), newLogger(subTest))
 			if buildRouterError != nil {
 				subTest.Fatalf(buildRouterFailedFormat, buildRouterError)
 			}
@@ -110,7 +110,7 @@ func TestIntegrationConfiguration(testingInstance *testing.T) {
 	for _, testCase := range testCases {
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
 			if testCase.expectError != constants.EmptyString {
-				_, buildRouterError := proxy.BuildRouter(testCase.config, newLogger(subTest))
+				_, buildRouterError := proxy.BuildRouter(integrationConfiguration(subTest, testCase.config), newLogger(subTest))
 				if buildRouterError == nil || !strings.Contains(buildRouterError.Error(), testCase.expectError) {
 					subTest.Fatalf(expectedErrorFormat, testCase.expectError, buildRouterError)
 				}
@@ -121,7 +121,7 @@ func TestIntegrationConfiguration(testingInstance *testing.T) {
 			configureProxy(subTest, client, endpoints)
 			config := testCase.config
 			config.Endpoints = endpoints
-			router, buildRouterError := proxy.BuildRouter(config, newLogger(subTest))
+			router, buildRouterError := proxy.BuildRouter(integrationConfiguration(subTest, config), newLogger(subTest))
 			if buildRouterError != nil {
 				subTest.Fatalf(buildRouterFailedFormat, buildRouterError)
 			}

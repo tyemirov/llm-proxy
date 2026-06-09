@@ -78,7 +78,7 @@ func newGeminiGenerateContentClient(httpClient HTTPDoer, requestTimeout time.Dur
 	}
 }
 
-func (client *geminiGenerateContentClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier modelID, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *geminiGenerateContentClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	contents, systemInstruction := messages.geminiContents()
 	payload := geminiGenerateContentRequest{
 		Contents:          contents,
@@ -140,7 +140,7 @@ func (messages chatMessages) geminiContents() ([]geminiRequestContent, *geminiRe
 	return contents, &geminiRequestContent{Parts: systemInstructionParts}
 }
 
-func geminiGenerateContentURL(baseURL string, modelIdentifier modelID) string {
+func geminiGenerateContentURL(baseURL string, modelIdentifier textModelDefinition) string {
 	trimmedBaseURL := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	return trimmedBaseURL + "/models/" + url.PathEscape(modelIdentifier.string()) + ":generateContent"
 }

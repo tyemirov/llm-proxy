@@ -10,7 +10,7 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 
 - `provider` is an optional query parameter on `GET /`, `POST /`, `POST /v2`, and `POST /dictate`.
 - Omitted `provider` means the authenticated tenant's default provider.
-- `model` keeps its current meaning; omitted `model` means the authenticated tenant's default model when set, otherwise the selected provider's native default.
+- `model` keeps its current meaning; omitted `model` means the authenticated tenant's default model when set, otherwise the selected provider's configured default model.
 - Compatibility JSON `POST /` accepts exactly one text input shape: `prompt` for a single user prompt or `messages[]` for an OpenRouter/OpenAI-compatible chat transcript.
 - Canonical JSON `POST /v2` accepts only `messages[]` as the text input shape; request-body `prompt` and `system_prompt` are invalid.
 - `messages[]` items contain `role` and string `content`. Supported roles are `system`, `user`, and `assistant`; at least one `user` message is required.
@@ -30,21 +30,30 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 
 | Provider | Aliases | Text | Dictation | Web Search |
 |----------|---------|------|-----------|------------|
-| `openai` | none | OpenAI Responses API | OpenAI audio transcription | Supported by existing OpenAI model table |
+| `openai` | none | OpenAI Responses API | OpenAI audio transcription | Supported by configured OpenAI model entries with `web_search: true` |
 | `deepseek` | none | OpenAI-compatible chat completions | Not supported | Not supported |
 | `dashscope` | `qwen` | OpenAI-compatible chat completions | Not supported | Not supported |
 | `moonshot` | `kimi` | OpenAI-compatible chat completions | Not supported | Not supported |
 | `siliconflow` | none | OpenAI-compatible chat completions | OpenAI-compatible audio transcription | Not supported |
-| `zhipu` | `glm` | OpenAI-compatible chat completions | Not supported | Not supported |
+| `zhipu` | `glm` | OpenAI-compatible chat completions | Z.AI GLM-ASR transcription | Not supported |
 | `gemini` | none | Native Gemini generateContent | Not supported | Not supported |
 | `anthropic` | `claude` | Native Anthropic Messages | Not supported | Not supported |
-| `grok` | `xai` | xAI OpenAI-compatible chat completions | Not supported | Not supported |
+| `grok` | `xai` | xAI OpenAI-compatible chat completions | xAI STT | Not supported |
+
+This matrix describes capabilities wired through `llm-proxy`. Upstream products
+can expose speech APIs that are not yet proxy adapters; do not mark them
+supported for `/dictate` until the provider registry and black-box routing tests
+cover that path.
 
 ## Configuration
 
 Runtime service configuration comes from `config.yml`; env vars and `.env`
 files are interpolation inputs only for `${NAME}` placeholders in that YAML.
-The loader rejects unknown keys and missing placeholders before the proxy starts.
+The loader rejects unknown keys and missing placeholders before the proxy
+starts, except when a provider `api_key` value is exactly one missing
+placeholder. That exact missing provider credential expands to an empty string
+so non-default providers can stay disabled; missing placeholders in other
+fields or embedded inside longer values fail startup.
 
 Shared config fields:
 
@@ -66,17 +75,46 @@ Shared config fields:
 
 Provider credentials and base URLs:
 
-- `providers.openai.api_key`
+- `providers.openai.api_key`, `providers.openai.base_url`, `providers.openai.transcriptions_url`
 - `providers.deepseek.api_key`, `providers.deepseek.base_url`
 - `providers.dashscope.api_key`, `providers.dashscope.base_url`
 - `providers.moonshot.api_key`, `providers.moonshot.base_url`
 - `providers.siliconflow.api_key`, `providers.siliconflow.base_url`, `providers.siliconflow.transcriptions_url`
-- `providers.zhipu.api_key`, `providers.zhipu.base_url`
+- `providers.zhipu.api_key`, `providers.zhipu.base_url`, `providers.zhipu.transcriptions_url`
 - `providers.gemini.api_key`, `providers.gemini.base_url`
 - `providers.anthropic.api_key`, `providers.anthropic.base_url`
-- `providers.grok.api_key`, `providers.grok.base_url`
+- `providers.grok.api_key`, `providers.grok.base_url`, `providers.grok.transcriptions_url`
 
-Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, validates the credential required by each tenant's default text provider, and validates endpoint/credential support for each tenant's default dictation provider. Credentials for providers not used by tenant defaults are validated when a request selects that provider.
+Provider model catalogs:
+
+- `providers.<provider>.text.default_model`
+- `providers.<provider>.text.models[].id`
+- `providers.<provider>.text.models[].output_token_limit`
+- `providers.openai.text.models[].request_profile`
+- `providers.openai.text.models[].web_search`
+- `providers.openai.dictation.default_model`
+- `providers.openai.dictation.models[].id`
+- `providers.siliconflow.dictation.default_model`
+- `providers.siliconflow.dictation.models[].id`
+- `providers.zhipu.dictation.default_model`
+- `providers.zhipu.dictation.models[].id`
+- `providers.grok.dictation.default_model`
+- `providers.grok.dictation.models[].id`
+
+The model catalog is runtime config data. Code owns provider selectors,
+aliases, transports, endpoint shapes, and stable OpenAI request-profile
+implementations. `config.yml` owns provider model ids, provider default models,
+dictation model ids, model-specific web-search enablement, and known
+provider-side output-token limits.
+
+OpenAI `request_profile` values select stable payload shapes:
+
+- `openai_responses_base`
+- `openai_responses_temperature`
+- `openai_responses_temperature_tools`
+- `openai_responses_reasoning_tools`
+
+Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, requires API keys for each tenant's default text and dictation providers, allows non-default provider API keys to be blank so those providers are disabled until configured, requires every configured provider base URL, requires transcription URLs for dictation-capable providers, requires text model catalogs for every provider, requires dictation model catalogs for dictation-capable providers, rejects blank or duplicate model ids, rejects defaults not listed in their model catalog, rejects `web_search` outside OpenAI text model entries, validates OpenAI request profiles, validates each tenant's default text provider/model, and validates endpoint/credential support for each tenant's default dictation provider/model.
 
 ## Error Contract
 
@@ -84,22 +122,23 @@ Startup validates configured tenants, rejects duplicate tenant ids and duplicate
 - `403`: missing or invalid client `key`.
 - `413`: prompt or audio payload too large.
 - `429`: upstream provider rate limiting.
-- `503`: registered provider is missing its server-side credential.
+- `503`: registered non-default provider credential is unavailable, so the selected provider is disabled until its API key is configured.
 - `504`: upstream timeout.
 - `502`: other upstream provider failure.
 
 ## Implementation Notes
 
-- Provider/model validation happens at the HTTP edge through a provider registry.
-- OpenAI keeps the existing Responses API adapter.
+- Provider/model validation happens at the HTTP edge through a provider registry built from the configured model catalogs.
+- OpenAI keeps the existing Responses API adapter and derives Responses and Models URLs from `providers.openai.base_url`; audio transcription uses `providers.openai.transcriptions_url`.
 - Non-OpenAI text providers use a shared OpenAI-compatible Chat Completions adapter.
 - Anthropic uses a native Messages adapter, translating proxy `system` messages to the top-level Anthropic `system` parameter and `user`/`assistant` messages to Anthropic `messages[]`.
-- Gemini uses a native generateContent adapter against `GEMINI_BASE_URL`.
-- Grok uses the shared OpenAI-compatible Chat Completions adapter against `GROK_BASE_URL`, defaulting to `https://api.x.ai/v1`.
+- Gemini uses a native generateContent adapter against `providers.gemini.base_url`.
+- Grok uses the shared OpenAI-compatible Chat Completions adapter against `providers.grok.base_url`.
 - OpenAI-compatible chat providers receive validated and sorted `messages[]` as provider-supported `role` and `content` items.
+- OpenAI Responses payload shape comes from the selected configured model's stable `request_profile`; model-specific web-search support comes from the selected model catalog entry.
 - Gemini receives user messages as native `contents`, assistant messages as `model` contents, and system messages as `systemInstruction`.
 - OpenAI Responses receives single-prompt requests unchanged and multi-message requests as a deterministic role-labelled transcript.
-- Dictation routing reuses the multipart transcription adapter with provider-specific URLs.
+- Dictation routing reuses the multipart transcription adapter with provider-specific URLs. OpenAI, SiliconFlow, and Zhipu send a multipart `model` field; Grok/xAI uses xAI STT and omits the multipart `model` field. Only providers that support `/dictate` expose transcription URL config fields.
 - Response formatting keeps existing text/XML/CSV bodies and existing JSON `request`, `response`, and normalized `usage` fields. JSON responses also include OpenRouter-style `object`, `model`, and `choices[].message.content` metadata, plus caller-visible request `messages` with provided `order` values. Server-injected tenant default system prompts are sent upstream but not echoed in response metadata.
 
 ## Test Strategy
@@ -113,4 +152,6 @@ Black-box router tests cover:
 - Invalid default dictation provider configuration.
 - Conflicting JSON body/query models.
 - SiliconFlow dictation routing.
+- Configured text model routing without code changes.
+- Invalid configured model catalog startup failures.
 - Existing OpenAI dictation and response-format tests.

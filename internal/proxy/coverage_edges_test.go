@@ -60,7 +60,7 @@ func requireUpstreamFailureStatus(t *testing.T, statusCode int) {
 
 func coverageRouter(t *testing.T, configuration proxy.Configuration) *gin.Engine {
 	t.Helper()
-	router, buildError := proxy.BuildRouter(configuration, coverageLogger())
+	router, buildError := proxy.BuildRouter(withProviderModelCatalogs(t, configuration), coverageLogger())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
@@ -665,14 +665,14 @@ func TestCoverageConfigurationValidationMatrix(t *testing.T) {
 			expectedError: "unsupported provider endpoint: provider=moonshot endpoint=dictation",
 		},
 		{
-			name: "unsupported glm default dictation",
+			name: "missing glm default dictation credential",
 			configuration: proxy.Configuration{
 				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: "glm"}),
 				OpenAIKey:                  TestAPIKey,
 				RequestTimeoutSeconds:      TestTimeout,
 				UpstreamPollTimeoutSeconds: TestTimeout,
 			},
-			expectedError: "unsupported provider endpoint: provider=zhipu endpoint=dictation",
+			expectedError: "provider not configured: provider=zhipu endpoint=dictation",
 		},
 		{
 			name: "unknown default dictation provider",
@@ -688,7 +688,7 @@ func TestCoverageConfigurationValidationMatrix(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
-			_, buildError := proxy.BuildRouter(testCase.configuration, coverageLogger())
+			_, buildError := proxy.BuildRouter(withProviderModelCatalogs(subTest, testCase.configuration), coverageLogger())
 			if buildError == nil || !strings.Contains(buildError.Error(), testCase.expectedError) {
 				subTest.Fatalf("error=%v want contains %q", buildError, testCase.expectedError)
 			}
@@ -1747,6 +1747,68 @@ func TestCoverageDictationEdges(t *testing.T) {
 				requestURL: "/dictate?key=" + TestSecret + "&provider=openai",
 				wantStatus: http.StatusServiceUnavailable,
 			},
+			{
+				name: "zhipu missing credential",
+				configuration: proxy.Configuration{
+					Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:                  TestAPIKey,
+					LogLevel:                   proxy.LogLevelInfo,
+					WorkerCount:                1,
+					QueueSize:                  1,
+					RequestTimeoutSeconds:      TestTimeout,
+					UpstreamPollTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:         1024,
+				},
+				requestURL: "/dictate?key=" + TestSecret + "&provider=zhipu",
+				wantStatus: http.StatusServiceUnavailable,
+			},
+			{
+				name: "zhipu unknown model",
+				configuration: proxy.Configuration{
+					Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:                  TestAPIKey,
+					ZhipuKey:                   testZhipuKey,
+					LogLevel:                   proxy.LogLevelInfo,
+					WorkerCount:                1,
+					QueueSize:                  1,
+					RequestTimeoutSeconds:      TestTimeout,
+					UpstreamPollTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:         1024,
+				},
+				requestURL: "/dictate?key=" + TestSecret + "&provider=zhipu&model=unknown",
+				wantStatus: http.StatusBadRequest,
+			},
+			{
+				name: "grok missing credential",
+				configuration: proxy.Configuration{
+					Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:                  TestAPIKey,
+					LogLevel:                   proxy.LogLevelInfo,
+					WorkerCount:                1,
+					QueueSize:                  1,
+					RequestTimeoutSeconds:      TestTimeout,
+					UpstreamPollTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:         1024,
+				},
+				requestURL: "/dictate?key=" + TestSecret + "&provider=grok",
+				wantStatus: http.StatusServiceUnavailable,
+			},
+			{
+				name: "grok unknown model",
+				configuration: proxy.Configuration{
+					Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:                  TestAPIKey,
+					GrokKey:                    testGrokKey,
+					LogLevel:                   proxy.LogLevelInfo,
+					WorkerCount:                1,
+					QueueSize:                  1,
+					RequestTimeoutSeconds:      TestTimeout,
+					UpstreamPollTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:         1024,
+				},
+				requestURL: "/dictate?key=" + TestSecret + "&provider=grok&model=unknown",
+				wantStatus: http.StatusBadRequest,
+			},
 		}
 		for _, testCase := range testCases {
 			subTest.Run(testCase.name, func(caseTest *testing.T) {
@@ -1904,7 +1966,7 @@ func TestCoverageServeAndEndpointReset(t *testing.T) {
 		t.Fatalf("Serve buildError=nil want non-nil")
 	}
 
-	serveError := proxy.Serve(proxy.Configuration{
+	serveError := proxy.Serve(withProviderModelCatalogs(t, proxy.Configuration{
 		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
 		OpenAIKey:                  TestAPIKey,
 		Port:                       -1,
@@ -1913,7 +1975,7 @@ func TestCoverageServeAndEndpointReset(t *testing.T) {
 		QueueSize:                  1,
 		RequestTimeoutSeconds:      TestTimeout,
 		UpstreamPollTimeoutSeconds: TestTimeout,
-	}, coverageLogger())
+	}), coverageLogger())
 	if serveError == nil {
 		t.Fatalf("Serve error=nil want non-nil")
 	}

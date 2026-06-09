@@ -22,14 +22,17 @@ type transcriptionResponse struct {
 	OutputText string `json:"output_text"`
 }
 
-func (client *OpenAIClient) transcribeAudioWithURL(openAIKey string, transcriptionsURL string, modelIdentifier string, fileName string, audioReader io.Reader, structuredLogger *zap.SugaredLogger) (string, error) {
+func (client *OpenAIClient) transcribeAudioWithURL(openAIKey string, transcriptionsURL string, modelFieldName string, modelIdentifier string, fileName string, audioReader io.Reader, structuredLogger *zap.SugaredLogger) (string, error) {
+	modelFieldName = strings.TrimSpace(modelFieldName)
 	modelIdentifier = strings.TrimSpace(modelIdentifier)
 	fileName = strings.TrimSpace(fileName)
 
 	payloadBuffer := &bytes.Buffer{}
 	multipartWriter := multipart.NewWriter(payloadBuffer)
 
-	_ = multipartWriter.WriteField(keyModel, modelIdentifier)
+	if modelFieldName != constants.EmptyString {
+		_ = multipartWriter.WriteField(modelFieldName, modelIdentifier)
+	}
 
 	filePart, _ := multipartWriter.CreateFormFile(formFieldFile, fileName)
 	if _, copyError := io.Copy(filePart, audioReader); copyError != nil {
