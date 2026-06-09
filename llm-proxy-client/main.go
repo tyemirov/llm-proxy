@@ -31,7 +31,7 @@ const (
 	envNameBaseURL = "LLM_PROXY_BASE_URL"
 	envNameSecret  = "LLM_PROXY_SECRET"
 
-	defaultTimeout = 120 * time.Second
+	defaultTimeout = 600 * time.Second
 )
 
 type commandOptions struct {
