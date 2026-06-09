@@ -19,15 +19,10 @@ const (
 	formatQueryValueTextPlain = "text/plain"
 	headerAccept              = "Accept"
 	headerContentType         = "Content-Type"
-	headerResumeProvider      = "X-LLM-Proxy-Resume-Provider"
-	headerUpstreamResponseID  = "X-LLM-Proxy-Upstream-Response-ID"
 	jsonContentType           = "application/json; charset=utf-8"
-	maxBackgroundResumeChecks = 20
 	queryFormat               = "format"
 	queryKey                  = "key"
 	queryProvider             = "provider"
-	responsesPathSegment      = "responses"
-	resumeProviderOpenAI      = "openai"
 )
 
 const (
@@ -424,17 +419,12 @@ func (client Client) postPayload(contextValue context.Context, requestURL url.UR
 	if httpError != nil {
 		return "", fmt.Errorf("%w: post request: %v", ErrClientHTTPFailure, httpError)
 	}
-	defer httpResponse.Body.Close()
 	responseBody, readError := io.ReadAll(httpResponse.Body)
+	_ = httpResponse.Body.Close()
 	if readError != nil {
 		return "", fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
 	}
 	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
-		if httpResponse.StatusCode == http.StatusGatewayTimeout {
-			if responseID := resumableResponseID(httpResponse.Header); responseID != "" {
-				return client.resumeBackgroundResponse(contextValue, requestURL, responseID)
-			}
-		}
 		return "", fmt.Errorf(
 			"%w: status=%d body=%q",
 			ErrClientHTTPFailure,
@@ -443,63 +433,4 @@ func (client Client) postPayload(contextValue context.Context, requestURL url.UR
 		)
 	}
 	return string(responseBody), nil
-}
-
-func (client Client) resumeBackgroundResponse(contextValue context.Context, requestURL url.URL, responseID string) (string, error) {
-	currentResponseID := responseID
-	for range maxBackgroundResumeChecks {
-		resumeURL := responseResumeURL(requestURL, currentResponseID)
-		httpRequest := (&http.Request{
-			Method: http.MethodGet,
-			URL:    &resumeURL,
-			Header: http.Header{},
-		}).WithContext(contextValue)
-		httpRequest.Header.Set(headerAccept, formatQueryValueTextPlain)
-		httpResponse, httpError := client.httpClient.Do(httpRequest)
-		if httpError != nil {
-			return "", fmt.Errorf("%w: resume request: %v", ErrClientHTTPFailure, httpError)
-		}
-		responseBody, readError := io.ReadAll(httpResponse.Body)
-		_ = httpResponse.Body.Close()
-		if readError != nil {
-			return "", fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
-		}
-		if httpResponse.StatusCode >= http.StatusOK && httpResponse.StatusCode < http.StatusMultipleChoices {
-			return string(responseBody), nil
-		}
-		if httpResponse.StatusCode == http.StatusGatewayTimeout {
-			if nextResponseID := resumableResponseID(httpResponse.Header); nextResponseID != "" {
-				currentResponseID = nextResponseID
-				continue
-			}
-		}
-		return "", fmt.Errorf(
-			"%w: status=%d body=%q",
-			ErrClientHTTPFailure,
-			httpResponse.StatusCode,
-			strings.TrimSpace(string(responseBody)),
-		)
-	}
-	return "", fmt.Errorf("%w: status=%d body=%q", ErrClientHTTPFailure, http.StatusGatewayTimeout, "OpenAI background response did not complete after resume attempts")
-}
-
-func resumableResponseID(responseHeader http.Header) string {
-	responseID := strings.TrimSpace(responseHeader.Get(headerUpstreamResponseID))
-	resumeProvider := strings.TrimSpace(responseHeader.Get(headerResumeProvider))
-	if responseID != "" && resumeProvider == resumeProviderOpenAI {
-		return responseID
-	}
-	return ""
-}
-
-func responseResumeURL(requestURL url.URL, responseID string) url.URL {
-	resumeURL := requestURL
-	trimmedPath := strings.TrimRight(strings.TrimSpace(requestURL.Path), "/")
-	if trimmedPath == "/v2" || strings.HasSuffix(trimmedPath, "/v2") {
-		trimmedPath = strings.TrimSuffix(trimmedPath, "/v2")
-	}
-	resumePath := strings.TrimRight(trimmedPath, "/") + "/" + responsesPathSegment + "/" + url.PathEscape(responseID)
-	resumeURL.Path = resumePath
-	resumeURL.RawPath = ""
-	return resumeURL
 }
