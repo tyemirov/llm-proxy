@@ -60,7 +60,7 @@ func requireUpstreamFailureStatus(t *testing.T, statusCode int) {
 
 func coverageRouter(t *testing.T, configuration proxy.Configuration) *gin.Engine {
 	t.Helper()
-	router, buildError := proxy.BuildRouter(configuration, coverageLogger())
+	router, buildError := proxy.BuildRouter(withProviderModelCatalogs(t, configuration), coverageLogger())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
@@ -688,7 +688,7 @@ func TestCoverageConfigurationValidationMatrix(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
-			_, buildError := proxy.BuildRouter(testCase.configuration, coverageLogger())
+			_, buildError := proxy.BuildRouter(withProviderModelCatalogs(subTest, testCase.configuration), coverageLogger())
 			if buildError == nil || !strings.Contains(buildError.Error(), testCase.expectedError) {
 				subTest.Fatalf("error=%v want contains %q", buildError, testCase.expectedError)
 			}
@@ -1966,7 +1966,7 @@ func TestCoverageServeAndEndpointReset(t *testing.T) {
 		t.Fatalf("Serve buildError=nil want non-nil")
 	}
 
-	serveError := proxy.Serve(proxy.Configuration{
+	serveError := proxy.Serve(withProviderModelCatalogs(t, proxy.Configuration{
 		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
 		OpenAIKey:                  TestAPIKey,
 		Port:                       -1,
@@ -1975,7 +1975,7 @@ func TestCoverageServeAndEndpointReset(t *testing.T) {
 		QueueSize:                  1,
 		RequestTimeoutSeconds:      TestTimeout,
 		UpstreamPollTimeoutSeconds: TestTimeout,
-	}, coverageLogger())
+	}), coverageLogger())
 	if serveError == nil {
 		t.Fatalf("Serve error=nil want non-nil")
 	}

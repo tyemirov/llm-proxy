@@ -241,7 +241,7 @@ func TestChatHandlerContinuesIncompleteGPT55JSONBody(testingInstance *testing.T)
 func TestChatHandlerRejectsOversizedJSONBody(testingInstance *testing.T) {
 	endpoints := proxy.NewEndpoints()
 	logger := zap.NewNop()
-	router, buildRouterError := proxy.BuildRouter(proxy.Configuration{
+	router, buildRouterError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
 		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
 		OpenAIKey:                  TestAPIKey,
 		LogLevel:                   proxy.LogLevelInfo,

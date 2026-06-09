@@ -30,134 +30,6 @@ type ModelConfiguration struct {
 	OutputTokenLimit int
 }
 
-func defaultProviderModelCatalogs() ProviderModelCatalogs {
-	return ProviderModelCatalogs{
-		ProviderNameOpenAI: {
-			Text: ModelEndpointCatalog{
-				DefaultModel: ModelNameGPT41,
-				Models: []ModelConfiguration{
-					{ID: ModelNameGPT4oMini, RequestProfile: requestProfileOpenAIResponsesTemperature.string()},
-					{ID: ModelNameGPT4o, RequestProfile: requestProfileOpenAIResponsesTemperatureTools.string(), WebSearch: true},
-					{ID: ModelNameGPT41, RequestProfile: requestProfileOpenAIResponsesTemperatureTools.string(), WebSearch: true},
-					{ID: ModelNameGPT5Mini, RequestProfile: requestProfileOpenAIResponsesBase.string()},
-					{ID: ModelNameGPT5, RequestProfile: requestProfileOpenAIResponsesReasoningTools.string(), WebSearch: true},
-					{ID: ModelNameGPT55, RequestProfile: requestProfileOpenAIResponsesReasoningTools.string(), WebSearch: true},
-					{ID: ModelNameGPT55Pro, RequestProfile: requestProfileOpenAIResponsesReasoningTools.string(), WebSearch: true},
-				},
-			},
-			Dictation: ModelEndpointCatalog{
-				DefaultModel: DefaultDictationModel,
-				Models: []ModelConfiguration{
-					{ID: DefaultDictationModel},
-					{ID: "gpt-4o-transcribe"},
-				},
-			},
-		},
-		ProviderNameDeepSeek: {
-			Text: ModelEndpointCatalog{
-				DefaultModel: ModelNameDeepSeekV4Flash,
-				Models: []ModelConfiguration{
-					{ID: ModelNameDeepSeekV4Flash},
-					{ID: ModelNameDeepSeekV4Pro},
-					{ID: ModelNameDeepSeekChat},
-					{ID: ModelNameDeepSeekReasoner},
-				},
-			},
-		},
-		ProviderNameDashScope: {
-			Text: ModelEndpointCatalog{
-				DefaultModel: ModelNameDashScopeQwenPlus,
-				Models: []ModelConfiguration{
-					{ID: ModelNameDashScopeQwenPlus},
-				},
-			},
-		},
-		ProviderNameMoonshot: {
-			Text: ModelEndpointCatalog{
-				DefaultModel: ModelNameMoonshotKimi,
-				Models: []ModelConfiguration{
-					{ID: ModelNameMoonshotKimi},
-				},
-			},
-		},
-		ProviderNameSiliconFlow: {
-			Text: ModelEndpointCatalog{
-				DefaultModel: ModelNameSiliconFlowDeepSeek,
-				Models: []ModelConfiguration{
-					{ID: ModelNameSiliconFlowDeepSeek},
-				},
-			},
-			Dictation: ModelEndpointCatalog{
-				DefaultModel: defaultSiliconFlowSTTModel,
-				Models: []ModelConfiguration{
-					{ID: defaultSiliconFlowSTTModel},
-				},
-			},
-		},
-		ProviderNameZhipu: {
-			Text: ModelEndpointCatalog{
-				DefaultModel: ModelNameZhipuGLM,
-				Models: []ModelConfiguration{
-					{ID: ModelNameZhipuGLM},
-				},
-			},
-			Dictation: ModelEndpointCatalog{
-				DefaultModel: defaultZhipuSTTModel,
-				Models: []ModelConfiguration{
-					{ID: defaultZhipuSTTModel},
-				},
-			},
-		},
-		ProviderNameGemini: {
-			Text: ModelEndpointCatalog{
-				DefaultModel: ModelNameGemini35Flash,
-				Models: []ModelConfiguration{
-					{ID: ModelNameGemini35Flash, OutputTokenLimit: geminiOutputTokenLimit},
-					{ID: ModelNameGemini31FlashLite, OutputTokenLimit: geminiOutputTokenLimit},
-					{ID: ModelNameGemini25Flash, OutputTokenLimit: geminiOutputTokenLimit},
-					{ID: ModelNameGemini25FlashLite, OutputTokenLimit: geminiOutputTokenLimit},
-					{ID: ModelNameGemini25Pro, OutputTokenLimit: geminiOutputTokenLimit},
-				},
-			},
-		},
-		ProviderNameAnthropic: {
-			Text: ModelEndpointCatalog{
-				DefaultModel: ModelNameClaudeSonnet46,
-				Models: []ModelConfiguration{
-					{ID: ModelNameClaudeOpus48, OutputTokenLimit: anthropicOpusOutputTokenLimit},
-					{ID: ModelNameClaudeSonnet46, OutputTokenLimit: anthropicOutputTokenLimit},
-					{ID: ModelNameClaudeHaiku45, OutputTokenLimit: anthropicOutputTokenLimit},
-					{ID: ModelNameClaudeHaiku45Alias, OutputTokenLimit: anthropicOutputTokenLimit},
-					{ID: ModelNameClaudeSonnet45, OutputTokenLimit: anthropicOutputTokenLimit},
-					{ID: ModelNameClaudeSonnet45Alias, OutputTokenLimit: anthropicOutputTokenLimit},
-					{ID: ModelNameClaudeOpus41, OutputTokenLimit: anthropicLegacyOpusOutputTokenLimit},
-					{ID: ModelNameClaudeOpus41Alias, OutputTokenLimit: anthropicLegacyOpusOutputTokenLimit},
-				},
-			},
-		},
-		ProviderNameGrok: {
-			Text: ModelEndpointCatalog{
-				DefaultModel: ModelNameGrok43,
-				Models: []ModelConfiguration{
-					{ID: ModelNameGrok43},
-					{ID: ModelNameGrok43Latest},
-					{ID: ModelNameGrokLatest},
-					{ID: ModelNameGrokBuild01},
-					{ID: ModelNameGrokCodeFast},
-					{ID: ModelNameGrokCodeFast1},
-					{ID: ModelNameGrokCodeFast10825},
-				},
-			},
-			Dictation: ModelEndpointCatalog{
-				DefaultModel: defaultGrokSTTModel,
-				Models: []ModelConfiguration{
-					{ID: defaultGrokSTTModel},
-				},
-			},
-		},
-	}
-}
-
 func validateProviderModelCatalogs(catalogs ProviderModelCatalogs) error {
 	for _, providerName := range []string{
 		ProviderNameOpenAI,
@@ -213,6 +85,9 @@ func validateModelEndpointCatalog(providerName string, endpoint endpointKind, ca
 		}
 		if modelConfiguration.OutputTokenLimit < 0 {
 			return fmt.Errorf("%w: provider=%s endpoint=%s field=%s.models[%d].output_token_limit", ErrInvalidModelCatalog, providerName, endpointName, fieldPrefix, modelIndex)
+		}
+		if modelConfiguration.WebSearch && (providerName != ProviderNameOpenAI || endpoint != endpointKindText) {
+			return fmt.Errorf("%w: provider=%s endpoint=%s field=%s.models[%d].web_search", ErrInvalidModelCatalog, providerName, endpointName, fieldPrefix, modelIndex)
 		}
 		if providerName == ProviderNameAnthropic && endpoint == endpointKindText && modelConfiguration.OutputTokenLimit <= 0 {
 			return fmt.Errorf("%w: provider=%s endpoint=%s field=%s.models[%d].output_token_limit", ErrInvalidModelCatalog, providerName, endpointName, fieldPrefix, modelIndex)

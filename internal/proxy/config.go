@@ -187,7 +187,4 @@ func (configuration *Configuration) ApplyTunables() {
 	if strings.TrimSpace(configuration.GrokTranscriptionsURL) == constants.EmptyString {
 		configuration.GrokTranscriptionsURL = defaultGrokTranscriptionsURL
 	}
-	if len(configuration.ProviderModels) == 0 {
-		configuration.ProviderModels = defaultProviderModelCatalogs()
-	}
 }

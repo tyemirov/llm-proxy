@@ -29,7 +29,7 @@ func newDictationRouter(t *testing.T, transcriptionsURL string, requestTimeoutSe
 	logger, _ := zap.NewDevelopment()
 	t.Cleanup(func() { _ = logger.Sync() })
 
-	router, buildError := proxy.BuildRouter(proxy.Configuration{
+	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
 		OpenAIKey:                  TestAPIKey,
 		LogLevel:                   proxy.LogLevelDebug,

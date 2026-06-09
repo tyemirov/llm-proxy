@@ -34,23 +34,16 @@ const (
 )
 
 const (
-	defaultDeepSeekBaseURL              = "https://api.deepseek.com"
-	defaultDashScopeBaseURL             = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-	defaultMoonshotBaseURL              = "https://api.moonshot.ai/v1"
-	defaultSiliconFlowBaseURL           = "https://api.siliconflow.com/v1"
-	defaultZhipuBaseURL                 = "https://open.bigmodel.cn/api/paas/v4"
-	defaultZhipuTranscriptionsURL       = "https://api.z.ai/api/paas/v4/audio/transcriptions"
-	defaultGeminiBaseURL                = "https://generativelanguage.googleapis.com/v1"
-	defaultAnthropicBaseURL             = "https://api.anthropic.com"
-	defaultGrokBaseURL                  = "https://api.x.ai/v1"
-	defaultGrokTranscriptionsURL        = "https://api.x.ai/v1/stt"
-	defaultSiliconFlowSTTModel          = "FunAudioLLM/SenseVoiceSmall"
-	defaultZhipuSTTModel                = "glm-asr-2512"
-	defaultGrokSTTModel                 = "xai-stt"
-	geminiOutputTokenLimit              = 65536
-	anthropicOutputTokenLimit           = 64000
-	anthropicOpusOutputTokenLimit       = 128000
-	anthropicLegacyOpusOutputTokenLimit = 32000
+	defaultDeepSeekBaseURL        = "https://api.deepseek.com"
+	defaultDashScopeBaseURL       = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+	defaultMoonshotBaseURL        = "https://api.moonshot.ai/v1"
+	defaultSiliconFlowBaseURL     = "https://api.siliconflow.com/v1"
+	defaultZhipuBaseURL           = "https://open.bigmodel.cn/api/paas/v4"
+	defaultZhipuTranscriptionsURL = "https://api.z.ai/api/paas/v4/audio/transcriptions"
+	defaultGeminiBaseURL          = "https://generativelanguage.googleapis.com/v1"
+	defaultAnthropicBaseURL       = "https://api.anthropic.com"
+	defaultGrokBaseURL            = "https://api.x.ai/v1"
+	defaultGrokTranscriptionsURL  = "https://api.x.ai/v1/stt"
 )
 
 const (

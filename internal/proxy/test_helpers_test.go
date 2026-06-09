@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"go.uber.org/zap"
 )
 
@@ -53,7 +54,7 @@ func NewTestRouter(t *testing.T, serverURL string) *gin.Engine {
 	logger, _ := zap.NewDevelopment()
 	t.Cleanup(func() { _ = logger.Sync() })
 
-	router, err := proxy.BuildRouter(proxy.Configuration{
+	router, err := buildRouterWithCatalogs(t, proxy.Configuration{
 		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
 		OpenAIKey:                  TestAPIKey,
 		LogLevel:                   proxy.LogLevelDebug,
@@ -67,4 +68,22 @@ func NewTestRouter(t *testing.T, serverURL string) *gin.Engine {
 		t.Fatalf("BuildRouter error: %v", err)
 	}
 	return router
+}
+
+func buildRouterWithCatalogs(testingInstance testing.TB, configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
+	testingInstance.Helper()
+	return proxy.BuildRouter(withProviderModelCatalogs(testingInstance, configuration), structuredLogger)
+}
+
+func newConfigurationWithCatalogs(testingInstance testing.TB, configuration proxy.Configuration) (proxy.Configuration, error) {
+	testingInstance.Helper()
+	return proxy.NewConfiguration(withProviderModelCatalogs(testingInstance, configuration))
+}
+
+func withProviderModelCatalogs(testingInstance testing.TB, configuration proxy.Configuration) proxy.Configuration {
+	testingInstance.Helper()
+	if len(configuration.ProviderModels) == 0 {
+		configuration.ProviderModels = testfixtures.ProviderModelCatalogs(testingInstance)
+	}
+	return configuration
 }
