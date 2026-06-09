@@ -67,6 +67,34 @@ Working backlog for this repository. Keep entries in the canonical ISSUES.md for
 
 ## Improvements
 
+- [x] [I008] (P1) Require API keys only for tenant default providers
+  ### Summary
+  Provider configuration should treat supported providers symmetrically: every provider keeps explicit URLs and model catalogs, but API credentials are only startup-required when a tenant uses that provider as a default text or dictation provider. Non-default providers with missing credentials should remain selectable by name but return a clear `provider not configured` response to that tenant instead of preventing service startup.
+
+  ### Acceptance Criteria
+  1. Static config loading no longer fails solely because a non-default provider API-key placeholder is missing or expands to blank.
+  2. Static config loading fails startup when any tenant default text provider lacks its provider API key.
+  3. Static config loading fails startup when any tenant default dictation provider lacks its provider API key.
+  4. Requests that explicitly select a configured non-default provider without an API key return `503 provider not configured`.
+  5. README and provider-routing docs describe provider keys as optional for non-default providers and required for tenant defaults.
+
+  ### Resolution
+  Static config placeholder expansion now turns missing `${...}` values into empty strings, allowing non-default provider API keys to be omitted without blocking startup. Config validation now requires API keys only for tenant default text providers and tenant default dictation providers that support dictation; unknown or unsupported defaults continue through the runtime provider/model validation path. Explicit requests for configured non-default providers without API keys return `503 provider not configured` with provider and endpoint detail. README and provider-routing docs now document optional non-default provider keys, disabled-provider request behavior, and startup-fatal default provider credentials. Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./cmd/cli`, `timeout -k 240s -s SIGKILL 240s go test -count=1 ./internal/proxy`, `timeout -k 240s -s SIGKILL 240s go test -count=1 ./tests/...`, `timeout -k 30s -s SIGKILL 30s git diff --check`, and `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 26 passed).
+
+- [x] [I007] (P1) Address provider config review followups
+  ### Summary
+  Review found three gaps in the explicit provider config branch: non-OpenAI model catalogs can advertise `web_search` even though only OpenAI consumes it, programmatic runtime configuration still silently falls back to a hardcoded model catalog, and live provider smoke tests duplicate default model ids instead of exercising the configured provider defaults.
+
+  ### Acceptance Criteria
+  1. Static config validation rejects `web_search: true` for any non-OpenAI text model catalog entry and for dictation catalogs.
+  2. Runtime `proxy.Configuration` no longer injects a hardcoded provider model catalog when `ProviderModels` is omitted.
+  3. Tests that build routers/configuration programmatically pass explicit provider model catalogs through test fixtures rather than relying on runtime fallback.
+  4. `make test-live-providers` omits the `model` field by default and sends a model only when a per-provider override is set.
+  5. README documents that live smoke defaults come from `configs/config.yml` and override variables are optional.
+
+  ### Resolution
+  Static provider model catalog validation now rejects `web_search: true` outside OpenAI text model entries, and the CLI config test matrix covers non-OpenAI text and dictation catalog failures. Runtime configuration no longer injects a hardcoded model catalog fallback; programmatic tests load explicit provider model catalogs from `configs/config.yml` through test fixtures, preserving custom catalog tests. The live provider smoke runner now omits `model` by default so configured provider defaults are exercised, and only sends `model` when a per-provider override variable is set. Because the new configured-default live run exposed Gemini `gemini-3.5-flash` returning provider 503 while `gemini-2.5-flash` passed, the Gemini default in `configs/config.yml`, README, and representative CLI test fixtures was changed to `gemini-2.5-flash`. Validation passed with `timeout -k 120s -s SIGKILL 120s go test -count=1 ./cmd/cli -run TestRootCommandRejectsIncompleteStaticProviderConfig`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy`, `timeout -k 240s -s SIGKILL 240s go test -count=1 ./tests/...`, `bash -n scripts/test_live_providers.sh scripts/test_live_gemini.sh`, `scripts/test_live_providers.sh --help`, no-key skip via `env -i PATH="$PATH" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" GOENV=off scripts/test_live_providers.sh`, explicit missing-key failure via `env -i PATH="$PATH" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" LLM_PROXY_LIVE_PROVIDERS=openai GOENV=off scripts/test_live_providers.sh`, targeted Gemini override proof via `timeout -k 180s -s SIGKILL 180s env LLM_PROXY_LIVE_PROVIDERS=gemini LLM_PROXY_LIVE_GEMINI_MODEL=gemini-2.5-flash make test-live-providers LIVE_ENV_FILE=configs/.env`, dynamic live smoke via `timeout -k 180s -s SIGKILL 180s make test-live-providers LIVE_ENV_FILE=configs/.env` (OpenAI and Gemini passed with configured defaults), `timeout -k 350s -s SIGKILL 350s make ci`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
+
 - [x] [I006] (P1) Add dynamic live provider smoke tests
   ### Summary
   The repository has a stale Gemini-only live smoke target that now fails against the complete static config contract, and it does not exercise OpenAI even when `OPENAI_API_KEY` is present. Add a provider-aware live smoke target that builds a complete temporary config, runs text smoke tests for providers with available API keys, and keeps targeted runs explicit for debugging.
