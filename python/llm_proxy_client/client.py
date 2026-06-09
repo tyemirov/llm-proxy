@@ -15,7 +15,11 @@ FORMAT_QUERY_KEY = "format"
 FORMAT_QUERY_VALUE_TEXT_PLAIN = "text/plain"
 JSON_CONTENT_TYPE = "application/json; charset=utf-8"
 KEY_QUERY_KEY = "key"
+LLM_PROXY_RESUME_PROVIDER_HEADER = "X-LLM-Proxy-Resume-Provider"
+LLM_PROXY_RESPONSE_ID_HEADER = "X-LLM-Proxy-Upstream-Response-ID"
+MAX_BACKGROUND_RESUME_ATTEMPTS = 20
 PROVIDER_QUERY_KEY = "provider"
+RESPONSES_PATH_SEGMENT = "responses"
 POST_BODY_QUERY_KEYS = frozenset(
     {
         "messages",
@@ -37,11 +41,15 @@ class LLMProxyClientError(ValueError):
 class LLMProxyHTTPError(RuntimeError):
     """Raised when llm-proxy returns a non-success HTTP status."""
 
-    def __init__(self, status_code: int, body: str, reason: str) -> None:
-        super().__init__(f"llm_proxy_client_http_failure: status={status_code} reason={reason} body={body!r}")
+    def __init__(self, status_code: int, body: str, reason: str, request_context: str) -> None:
+        super().__init__(
+            f"llm_proxy_client_http_failure: status={status_code} reason={reason} "
+            f"{request_context} body={body!r}"
+        )
         self.status_code = status_code
         self.body = body
         self.reason = reason
+        self.request_context = request_context
 
 
 class LLMProxyTransportError(RuntimeError):
@@ -62,7 +70,7 @@ class ClientConfig:
     base_url: str
     secret: str
     provider: str = ""
-    timeout_seconds: float = 120.0
+    timeout_seconds: float = 600.0
 
     def __post_init__(self) -> None:
         if not self.base_url.strip():
@@ -287,15 +295,134 @@ class Client:
             method="POST",
         )
         opener = self.opener or default_response_opener
+        failure_context = request_failure_context(request_payload, request_url, self.config.timeout_seconds)
         try:
             return opener(prepared_request, self.config.timeout_seconds)
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", errors="replace")
-            raise LLMProxyHTTPError(error.code, body, str(error.reason)) from error
+            resume_response_id = resumable_response_id(error)
+            if error.code == 504 and resume_response_id:
+                return self._resume_background_response(
+                    request_url,
+                    resume_response_id,
+                    opener,
+                    failure_context,
+                )
+            raise LLMProxyHTTPError(error.code, body, str(error.reason), failure_context) from error
         except urllib.error.URLError as error:
-            raise LLMProxyTransportError(f"llm_proxy_client_transport_failure: {error.reason}") from error
+            raise LLMProxyTransportError(
+                f"llm_proxy_client_transport_failure: {failure_context} reason={error.reason}"
+            ) from error
         except TimeoutError as error:
-            raise LLMProxyTransportError(f"llm_proxy_client_transport_failure: {error}") from error
+            raise LLMProxyTransportError(
+                f"llm_proxy_client_transport_failure: {failure_context} reason={error}"
+            ) from error
+        except OSError as error:
+            raise LLMProxyTransportError(
+                f"llm_proxy_client_transport_failure: {failure_context} reason={error}"
+            ) from error
+
+    def _resume_background_response(
+        self,
+        request_url: str,
+        response_id: str,
+        opener: ResponseOpener,
+        failure_context: str,
+    ) -> str:
+        """Poll a stored OpenAI background response through llm-proxy."""
+
+        current_response_id = response_id
+        for _ in range(MAX_BACKGROUND_RESUME_ATTEMPTS):
+            resume_url = response_resume_url(request_url, current_response_id)
+            prepared_request = urllib.request.Request(
+                resume_url,
+                headers={ACCEPT_HEADER: FORMAT_QUERY_VALUE_TEXT_PLAIN},
+                method="GET",
+            )
+            try:
+                return opener(prepared_request, self.config.timeout_seconds)
+            except urllib.error.HTTPError as error:
+                body = error.read().decode("utf-8", errors="replace")
+                next_response_id = resumable_response_id(error)
+                if error.code == 504 and next_response_id:
+                    current_response_id = next_response_id
+                    continue
+                raise LLMProxyHTTPError(error.code, body, str(error.reason), failure_context) from error
+            except urllib.error.URLError as error:
+                raise LLMProxyTransportError(
+                    f"llm_proxy_client_transport_failure: {failure_context} reason={error.reason}"
+                ) from error
+            except TimeoutError as error:
+                raise LLMProxyTransportError(
+                    f"llm_proxy_client_transport_failure: {failure_context} reason={error}"
+                ) from error
+            except OSError as error:
+                raise LLMProxyTransportError(
+                    f"llm_proxy_client_transport_failure: {failure_context} reason={error}"
+                ) from error
+        raise LLMProxyHTTPError(
+            504,
+            "OpenAI background response did not complete after resume attempts",
+            "Gateway Timeout",
+            failure_context,
+        )
+
+
+def request_failure_context(request_payload: dict[str, Any], request_url: str, timeout_seconds: float) -> str:
+    """Return non-secret request context for HTTP and transport failures."""
+
+    parsed_url = urllib.parse.urlparse(request_url)
+    query_values = urllib.parse.parse_qs(parsed_url.query)
+    provider = first_query_value(query_values, PROVIDER_QUERY_KEY, "default")
+    model_value = request_payload.get("model")
+    model = model_value if isinstance(model_value, str) and model_value.strip() else "default"
+    return f"provider={provider} model={model} timeout_seconds={timeout_seconds:g}"
+
+
+def resumable_response_id(error: urllib.error.HTTPError) -> str:
+    """Return a proxy-provided OpenAI response id for resumable 504 errors."""
+
+    response_id = error.headers.get(LLM_PROXY_RESPONSE_ID_HEADER, "").strip() if error.headers else ""
+    resume_provider = error.headers.get(LLM_PROXY_RESUME_PROVIDER_HEADER, "").strip() if error.headers else ""
+    if response_id and resume_provider == "openai":
+        return response_id
+    return ""
+
+
+def response_resume_url(request_url: str, response_id: str) -> str:
+    """Return the llm-proxy resume endpoint URL for a stored response id."""
+
+    parsed_url = urllib.parse.urlparse(request_url)
+    request_path = parsed_url.path or "/"
+    trimmed_path = request_path.rstrip("/")
+    if trimmed_path == "/v2" or trimmed_path.endswith("/v2"):
+        trimmed_path = trimmed_path[: -len("/v2")]
+    prefix = trimmed_path.rstrip("/")
+    resume_path = f"{prefix}/{RESPONSES_PATH_SEGMENT}/{urllib.parse.quote(response_id, safe='')}"
+    if not resume_path.startswith("/"):
+        resume_path = "/" + resume_path
+    return urllib.parse.urlunparse(
+        (
+            parsed_url.scheme,
+            parsed_url.netloc,
+            resume_path,
+            parsed_url.params,
+            parsed_url.query,
+            "",
+        )
+    )
+
+
+def first_query_value(query_values: dict[str, list[str]], key: str, default: str) -> str:
+    """Return the first non-empty query value for a key."""
+
+    values = query_values.get(key, [])
+    if not values:
+        return default
+    value = values[0].strip()
+    if not value:
+        return default
+    return value
 
 
 def default_response_opener(request: urllib.request.Request, timeout: float) -> str:
