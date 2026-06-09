@@ -74,17 +74,17 @@ provider_key_variable() {
   esac
 }
 
-provider_model() {
+provider_model_override() {
   case "$1" in
-    openai) env_or_default LLM_PROXY_LIVE_OPENAI_MODEL "gpt-4o-mini" ;;
-    deepseek) env_or_default LLM_PROXY_LIVE_DEEPSEEK_MODEL "deepseek-v4-flash" ;;
-    dashscope) env_or_default LLM_PROXY_LIVE_DASHSCOPE_MODEL "qwen-plus" ;;
-    moonshot) env_or_default LLM_PROXY_LIVE_MOONSHOT_MODEL "kimi-k2-0905-preview" ;;
-    siliconflow) env_or_default LLM_PROXY_LIVE_SILICONFLOW_MODEL "deepseek-ai/DeepSeek-R1" ;;
-    zhipu) env_or_default LLM_PROXY_LIVE_ZHIPU_MODEL "glm-5.1" ;;
-    gemini) env_or_default LLM_PROXY_LIVE_GEMINI_MODEL "gemini-3.5-flash" ;;
-    anthropic) env_or_default LLM_PROXY_LIVE_ANTHROPIC_MODEL "claude-sonnet-4-6" ;;
-    grok) env_or_default LLM_PROXY_LIVE_GROK_MODEL "grok-4.3" ;;
+    openai) env_or_default LLM_PROXY_LIVE_OPENAI_MODEL "" ;;
+    deepseek) env_or_default LLM_PROXY_LIVE_DEEPSEEK_MODEL "" ;;
+    dashscope) env_or_default LLM_PROXY_LIVE_DASHSCOPE_MODEL "" ;;
+    moonshot) env_or_default LLM_PROXY_LIVE_MOONSHOT_MODEL "" ;;
+    siliconflow) env_or_default LLM_PROXY_LIVE_SILICONFLOW_MODEL "" ;;
+    zhipu) env_or_default LLM_PROXY_LIVE_ZHIPU_MODEL "" ;;
+    gemini) env_or_default LLM_PROXY_LIVE_GEMINI_MODEL "" ;;
+    anthropic) env_or_default LLM_PROXY_LIVE_ANTHROPIC_MODEL "" ;;
+    grok) env_or_default LLM_PROXY_LIVE_GROK_MODEL "" ;;
     *) return 1 ;;
   esac
 }
@@ -184,9 +184,13 @@ run_text_smoke() {
   local request_body
   local http_status
   local response_text
-  model="$(provider_model "${provider}")"
+  model="$(provider_model_override "${provider}")"
   response_path="${TMP_DIR}/${provider}-response.txt"
-  request_body="$(printf '{"prompt":"Reply with exactly OK and no punctuation.","model":"%s","web_search":false}' "${model}")"
+  if [[ -n "${model}" ]]; then
+    request_body="$(printf '{"prompt":"Reply with exactly OK and no punctuation.","model":"%s","web_search":false}' "${model}")"
+  else
+    request_body='{"prompt":"Reply with exactly OK and no punctuation.","web_search":false}'
+  fi
 
   http_status="$(
     curl -sS --max-time "${LIVE_TIMEOUT}" \
@@ -200,11 +204,11 @@ run_text_smoke() {
 
   response_text="$(tr -d '\r\n' < "${response_path}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
   if [[ "${http_status}" != "200" || "${response_text}" != "OK" ]]; then
-    echo "error: live ${provider} smoke failed: model=${model} status=${http_status} response=${response_text}" >&2
+    echo "error: live ${provider} smoke failed: model=${model:-configured-default} status=${http_status} response=${response_text}" >&2
     redact_log
     exit 1
   fi
-  echo "live provider smoke passed: provider=${provider} model=${model} status=${http_status}"
+  echo "live provider smoke passed: provider=${provider} model=${model:-configured-default} status=${http_status}"
 }
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
