@@ -12,6 +12,7 @@ client.
 - Minimal HTTP server that accepts:
   - `GET /?prompt=...&key=...[&provider=...]` for LLM responses
   - `POST /?key=...[&provider=...]` for large JSON prompt bodies
+  - `POST /v2?key=...[&provider=...]` for ordered chat-message JSON bodies
   - `POST /dictate?key=...[&provider=...]` for audio transcription
 - Choose the provider per request via `provider=...`; omitted provider uses the authenticated tenant default
 - Choose the model per request via `model=...`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
@@ -20,6 +21,23 @@ client.
 - Optional logging at `debug` or `info` levels
 - Forwards requests using server-side provider API keys
 - Supports plain text, JSON, XML, or CSV responses
+
+## REST Contract
+
+llm-proxy exposes a blocking REST contract for text generation. A caller sends
+one authenticated `GET /`, `POST /`, or `POST /v2` request and receives the final
+formatted answer in that same HTTP response.
+
+The caller does not stream tokens, poll a job endpoint, follow a resume token, or
+know whether the selected upstream provider uses synchronous responses,
+background responses, or provider-specific polling internally. For OpenAI
+Responses, llm-proxy always owns the background-response lifecycle: it sends
+stored background requests upstream and polls OpenAI server-side until the answer
+is terminal or `server.request_timeout_seconds` expires.
+
+A `504 Gateway Timeout` means the overall proxy request deadline expired before
+the selected upstream provider produced a final answer. It is not a prompt for
+the client to poll llm-proxy.
 
 ## Configuration
 
@@ -43,8 +61,7 @@ server:
   log_level: info
   workers: 4
   queue_size: 100
-  request_timeout_seconds: 180
-  upstream_poll_timeout_seconds: 60
+  request_timeout_seconds: 240
   max_prompt_bytes: 4194304
   max_input_audio_bytes: 26214400
 tenants:
@@ -270,17 +287,11 @@ the stable proxy payload shape for that OpenAI model and must be one of:
 | `openai_responses_reasoning_tools` | Adds reasoning/text controls; includes web-search tools only when both the request and model catalog enable web search. |
 
 All OpenAI Responses text requests also send `background: true` and
-`store: true`, then poll the response id until the upstream response reaches a
-terminal state or `server.upstream_poll_timeout_seconds` expires. If the poll
-budget is exhausted while OpenAI is still working, the 504 response includes
-`X-LLM-Proxy-Resume-Provider: openai` and
-`X-LLM-Proxy-Upstream-Response-ID: <response-id>`. The bundled Go and Python
-clients use those headers to continue polling `GET /responses/<response-id>`
-through llm-proxy, so first-party callers still issue one normal client call
-instead of restarting the generation or tuning timeout values by hand. Keep
-`server.upstream_poll_timeout_seconds` short enough to bound one server-held
-HTTP request; long OpenAI completions should continue through the resume
-contract.
+`store: true`. llm-proxy polls the stored OpenAI response server-side until it
+reaches a terminal state or the normal `server.request_timeout_seconds` deadline
+expires. Plain REST callers use one `GET /`, `POST /`, or `POST /v2` request and
+receive the final formatted answer; they do not stream, poll, or follow a
+separate resume endpoint.
 
 Provider-specific details:
 
@@ -492,9 +503,7 @@ query parameters such as `provider`, strips body-owned query fields such as
 
 The reusable Go package under `pkg/llmproxyclient` also exposes
 `NewMessagesRequest` and `Client.PostMessages` for the canonical `POST /v2`
-messages-only endpoint. The installable CLI and reusable Go package also
-follow resumable OpenAI background-response 504s transparently through
-llm-proxy.
+messages-only endpoint.
 
 ### Python client package
 
@@ -917,7 +926,7 @@ positive and lets the upstream provider enforce any provider-side model limit.
 * `413 Payload Too Large` - JSON prompt body exceeds `max_prompt_bytes`
 * `429 Too Many Requests` - upstream provider rate limit
 * `503 Service Unavailable` - selected provider credential is unavailable because that non-default provider is disabled or missing its API key
-* `504 Gateway Timeout` - upstream request timed out, or an OpenAI background response was still running after `server.upstream_poll_timeout_seconds`. Resumable OpenAI poll timeouts include `X-LLM-Proxy-Resume-Provider` and `X-LLM-Proxy-Upstream-Response-ID`.
+* `504 Gateway Timeout` - the overall proxy request timed out before the selected upstream provider returned a final result
 * `502 Bad Gateway` - upstream provider API returned an error
 
 ## Security
