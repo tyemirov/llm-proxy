@@ -3,8 +3,7 @@ server:
   log_level: info
   workers: 4
   queue_size: 32
-  request_timeout_seconds: 180
-  upstream_poll_timeout_seconds: 60
+  request_timeout_seconds: 240
   max_prompt_bytes: 4194304
   max_input_audio_bytes: 26214400
 tenants:
