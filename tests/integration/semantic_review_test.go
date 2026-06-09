@@ -138,14 +138,13 @@ func TestIntegrationLargeSemanticReviewPostUsesRequestMaxTokens(testingInstance 
 	proxy.HTTPClient = openAIServer.Client()
 	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
 	router, buildError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("integration", serviceSecretValue),
-		OpenAIKey:                  openAIKeyValue,
-		LogLevel:                   logLevelDebug,
-		WorkerCount:                1,
-		QueueSize:                  8,
-		RequestTimeoutSeconds:      requestTimeoutSecondsDefault,
-		UpstreamPollTimeoutSeconds: requestTimeoutSecondsDefault,
-		Endpoints:                  endpoints,
+		Tenants:               proxy.SingleTenantConfigurations("integration", serviceSecretValue),
+		OpenAIKey:             openAIKeyValue,
+		LogLevel:              logLevelDebug,
+		WorkerCount:           1,
+		QueueSize:             8,
+		RequestTimeoutSeconds: requestTimeoutSecondsDefault,
+		Endpoints:             endpoints,
 	}), newLogger(testingInstance))
 	if buildError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildError)
@@ -239,14 +238,13 @@ func TestIntegrationLargeSemanticReviewPostPollsBackgroundOpenAIResponse(testing
 	proxy.HTTPClient = openAIServer.Client()
 	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
 	router, buildError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("integration", serviceSecretValue),
-		OpenAIKey:                  openAIKeyValue,
-		LogLevel:                   logLevelDebug,
-		WorkerCount:                1,
-		QueueSize:                  8,
-		RequestTimeoutSeconds:      3,
-		UpstreamPollTimeoutSeconds: 3,
-		Endpoints:                  endpoints,
+		Tenants:               proxy.SingleTenantConfigurations("integration", serviceSecretValue),
+		OpenAIKey:             openAIKeyValue,
+		LogLevel:              logLevelDebug,
+		WorkerCount:           1,
+		QueueSize:             8,
+		RequestTimeoutSeconds: 3,
+		Endpoints:             endpoints,
 	}), newLogger(testingInstance))
 	if buildError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildError)
@@ -290,11 +288,9 @@ func TestIntegrationLargeSemanticReviewPostPollsBackgroundOpenAIResponse(testing
 	}
 }
 
-func TestIntegrationLargeSemanticReviewPostReturnsResumeTokenAndStoredResponseCompletes(testingInstance *testing.T) {
+func TestIntegrationLargeSemanticReviewPostCompletesThroughServerSidePolling(testingInstance *testing.T) {
 	gin.SetMode(gin.TestMode)
 	capture := &semanticReviewCapture{}
-	var completionMutex sync.Mutex
-	completeStoredResponse := false
 	openAIServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 		responseWriter.Header().Set("Content-Type", contentTypeJSON)
 		switch {
@@ -311,10 +307,7 @@ func TestIntegrationLargeSemanticReviewPostReturnsResumeTokenAndStoredResponseCo
 			_, _ = responseWriter.Write([]byte(`{"id":"semantic_review_background","status":"queued","background":true}`))
 		case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == integrationResponsesPath+"/semantic_review_background":
 			capture.recordPoll()
-			completionMutex.Lock()
-			shouldComplete := completeStoredResponse
-			completionMutex.Unlock()
-			if !shouldComplete {
+			if capture.snapshot().pollCount < 4 {
 				_, _ = responseWriter.Write([]byte(`{"id":"semantic_review_background","status":"in_progress"}`))
 				return
 			}
@@ -335,14 +328,13 @@ func TestIntegrationLargeSemanticReviewPostReturnsResumeTokenAndStoredResponseCo
 	proxy.HTTPClient = openAIServer.Client()
 	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
 	router, buildError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("integration", serviceSecretValue),
-		OpenAIKey:                  openAIKeyValue,
-		LogLevel:                   logLevelDebug,
-		WorkerCount:                1,
-		QueueSize:                  8,
-		RequestTimeoutSeconds:      3,
-		UpstreamPollTimeoutSeconds: 1,
-		Endpoints:                  endpoints,
+		Tenants:               proxy.SingleTenantConfigurations("integration", serviceSecretValue),
+		OpenAIKey:             openAIKeyValue,
+		LogLevel:              logLevelDebug,
+		WorkerCount:           1,
+		QueueSize:             8,
+		RequestTimeoutSeconds: 3,
+		Endpoints:             endpoints,
 	}), newLogger(testingInstance))
 	if buildError != nil {
 		testingInstance.Fatalf(buildRouterFailedFormat, buildError)
@@ -370,36 +362,17 @@ func TestIntegrationLargeSemanticReviewPostReturnsResumeTokenAndStoredResponseCo
 	}
 	defer httpResponse.Body.Close()
 	responseBytes, _ := io.ReadAll(httpResponse.Body)
-	if httpResponse.StatusCode != http.StatusGatewayTimeout {
-		testingInstance.Fatalf("status=%d want=%d body=%s", httpResponse.StatusCode, http.StatusGatewayTimeout, string(responseBytes))
+	captured := capture.snapshot()
+	if httpResponse.StatusCode != http.StatusOK {
+		testingInstance.Fatalf("status=%d want=%d body=%s poll_count=%d", httpResponse.StatusCode, http.StatusOK, string(responseBytes), captured.pollCount)
 	}
-	responseIdentifier := httpResponse.Header.Get("X-LLM-Proxy-Upstream-Response-ID")
-	if responseIdentifier != "semantic_review_background" {
-		testingInstance.Fatalf("resume response id=%q want semantic_review_background", responseIdentifier)
+	if string(responseBytes) != semanticReviewAcceptedResponse {
+		testingInstance.Fatalf(bodyMismatchFormat, string(responseBytes), semanticReviewAcceptedResponse)
 	}
-	if resumeProvider := httpResponse.Header.Get("X-LLM-Proxy-Resume-Provider"); resumeProvider != proxy.ProviderNameOpenAI {
-		testingInstance.Fatalf("resume provider=%q want %s", resumeProvider, proxy.ProviderNameOpenAI)
+	if captured.pollCount < 4 {
+		testingInstance.Fatalf("poll_count=%d want>=4", captured.pollCount)
 	}
-
-	completionMutex.Lock()
-	completeStoredResponse = true
-	completionMutex.Unlock()
-	resumeURL, _ := url.Parse(applicationServer.URL + "/responses/" + responseIdentifier)
-	resumeQueryValues := resumeURL.Query()
-	resumeQueryValues.Set(keyQueryParameter, serviceSecretValue)
-	resumeQueryValues.Set("provider", proxy.ProviderNameOpenAI)
-	resumeQueryValues.Set("format", "text/plain")
-	resumeURL.RawQuery = resumeQueryValues.Encode()
-	resumeResponse, resumeError := http.Get(resumeURL.String())
-	if resumeError != nil {
-		testingInstance.Fatalf(requestErrorFormat, resumeError)
-	}
-	defer resumeResponse.Body.Close()
-	resumeBytes, _ := io.ReadAll(resumeResponse.Body)
-	if resumeResponse.StatusCode != http.StatusOK {
-		testingInstance.Fatalf("resume status=%d body=%s", resumeResponse.StatusCode, string(resumeBytes))
-	}
-	if string(resumeBytes) != semanticReviewAcceptedResponse {
-		testingInstance.Fatalf(bodyMismatchFormat, string(resumeBytes), semanticReviewAcceptedResponse)
+	if resumeToken := httpResponse.Header.Get("X-LLM-Proxy-Resume-Token"); resumeToken != "" {
+		testingInstance.Fatalf("resume token header must be absent, got %q", resumeToken)
 	}
 }

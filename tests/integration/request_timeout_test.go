@@ -106,7 +106,6 @@ func TestIntegrationGatewayContextTimeoutCancelsUpstreamRequest(testingInstance 
 		WorkerCount:                  1,
 		QueueSize:                    4,
 		RequestTimeoutSeconds:        gatewayContextProxyTimeout,
-		UpstreamPollTimeoutSeconds:   gatewayContextProxyTimeout,
 		Endpoints:                    endpoints,
 		MaxPromptBytes:               proxy.DefaultMaxPromptBytes,
 		MaxInputAudioBytes:           proxy.DefaultMaxInputAudioBytes,
