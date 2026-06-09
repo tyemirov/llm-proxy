@@ -31,9 +31,11 @@ are not service configuration sources.
 Before parsing YAML, the loader expands `${NAME}` placeholders from process
 environment variables and from an optional `.env` file in the same directory as
 the selected config file. Process environment values override `.env` values.
-Missing placeholders expand to empty strings so provider credentials can be
-omitted for disabled providers. The loader does not mutate process environment,
-and all runtime code receives only the validated config value.
+Missing placeholders fail startup except when an `api_key` value is exactly one
+missing placeholder; that exact missing provider credential expands to an empty
+string so non-default providers can stay disabled. The loader does not mutate
+process environment, and all runtime code receives only the validated config
+value.
 
 ```yaml
 server:
@@ -298,12 +300,14 @@ Provider-specific details:
   receive a `model` multipart field.
 
 Provider API keys are optional until a tenant uses that provider as a default.
-If a non-default provider key is blank or its `${...}` placeholder is missing,
-startup continues and explicit requests for that provider return `503 provider
-not configured`. If a tenant's default text or dictation provider lacks its API
-key, startup fails before the server listens. Provider `base_url` values are
-explicit config values; leave them at the documented URLs unless routing
-through a test server, proxy, or compatible gateway. Dictation-capable provider
+If a non-default provider key is blank or its whole `api_key` value is a missing
+`${...}` placeholder, startup continues and explicit requests for that provider
+return `503 provider not configured`. Missing placeholders in other fields, or
+embedded inside a longer `api_key` value, fail startup. If a tenant's default
+text or dictation provider lacks its API key, startup fails before the server
+listens. Provider `base_url` values are explicit config values; leave them at
+the documented URLs unless routing through a test server, proxy, or compatible
+gateway. Dictation-capable provider
 `transcriptions_url` values are also explicit config values and are required for
 OpenAI, SiliconFlow, Zhipu, and Grok/xAI. Text model catalogs are required for
 every supported provider, and dictation model catalogs are required for OpenAI,
