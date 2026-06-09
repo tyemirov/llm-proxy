@@ -49,7 +49,9 @@ cover that path.
 
 Runtime service configuration comes from `config.yml`; env vars and `.env`
 files are interpolation inputs only for `${NAME}` placeholders in that YAML.
-The loader rejects unknown keys and missing placeholders before the proxy starts.
+The loader rejects unknown keys before the proxy starts. Missing placeholders
+expand to empty strings, then normal config validation decides whether that
+empty value is allowed.
 
 Shared config fields:
 
@@ -110,7 +112,7 @@ OpenAI `request_profile` values select stable payload shapes:
 - `openai_responses_temperature_tools`
 - `openai_responses_reasoning_tools`
 
-Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, requires every supported provider API key in static `config.yml`, requires every configured provider base URL, requires transcription URLs for dictation-capable providers, requires text model catalogs for every provider, requires dictation model catalogs for dictation-capable providers, rejects blank or duplicate model ids, rejects defaults not listed in their model catalog, validates OpenAI request profiles, validates each tenant's default text provider/model, and validates endpoint/credential support for each tenant's default dictation provider/model.
+Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, requires API keys for each tenant's default text and dictation providers, allows non-default provider API keys to be blank so those providers are disabled until configured, requires every configured provider base URL, requires transcription URLs for dictation-capable providers, requires text model catalogs for every provider, requires dictation model catalogs for dictation-capable providers, rejects blank or duplicate model ids, rejects defaults not listed in their model catalog, rejects `web_search` outside OpenAI text model entries, validates OpenAI request profiles, validates each tenant's default text provider/model, and validates endpoint/credential support for each tenant's default dictation provider/model.
 
 ## Error Contract
 
@@ -118,7 +120,7 @@ Startup validates configured tenants, rejects duplicate tenant ids and duplicate
 - `403`: missing or invalid client `key`.
 - `413`: prompt or audio payload too large.
 - `429`: upstream provider rate limiting.
-- `503`: registered provider credential is unavailable; static `config.yml` startup validation should prevent this in normal deployments.
+- `503`: registered non-default provider credential is unavailable, so the selected provider is disabled until its API key is configured.
 - `504`: upstream timeout.
 - `502`: other upstream provider failure.
 
