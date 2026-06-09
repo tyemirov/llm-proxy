@@ -100,7 +100,7 @@ providers:
     api_key: "${GEMINI_API_KEY}"
     base_url: "https://generativelanguage.googleapis.com/v1"
     text:
-      default_model: "gemini-3.5-flash"
+      default_model: "gemini-2.5-flash"
       models:
         - id: "gemini-3.5-flash"
           output_token_limit: 65536
