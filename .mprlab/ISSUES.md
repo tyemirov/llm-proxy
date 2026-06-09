@@ -65,7 +65,87 @@ Working backlog for this repository. Keep entries in the canonical ISSUES.md for
   ### Resolution
   Added black-box Gemini POST coverage for thought-marked parts returning only final answer text, non-final `finishReason` values mapping to `502`, and missing `finishReason` mapping to `502`. `internal/proxy/gemini.go` now models `parts[].thought` and candidate `finishReason`, returns only non-thought text for completed `STOP` candidates, and treats missing or non-`STOP` finish reasons as provider API errors instead of successful partial output. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test` (total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make lint`, and `timeout -k 350s -s SIGKILL 350s make ci` (total coverage 100.0%).
 
+- [ ] [B002] (P1) Long semantic-review POSTs fail transport while small requests pass
+  ### Summary
+  Camu Russian semantic-stress QA can still fail before materialization on long full-story prompts even though a small `llm-proxy` smoke request succeeds. On 2026-06-09, `po-schuchemu-velenyu` text prep failed three times at the `llm-proxy` stage: one read timeout, then two SSL record-layer failures. A tiny Russian pipeline smoke test using the same Russian-language `pipeline_runner.py` reached `semantic-stress-qa` and `materialize` successfully, so the service is not fully down; the failure appears tied to long-running or larger semantic-review POSTs and/or chunk retry transport handling.
+
+  ### Impact
+  Downstream production workflows cannot safely materialize corrected TTS for long stories. In the observed Camu run, this blocked applying an occurrence-scoped pronunciation correction for `Слез` versus `Слёз`; regenerating audio from the existing stale `tts.txt` would reproduce the old pronunciation.
+
+  ### Reproduction
+  From the Camu checkout, run the long story materialization:
+
+  ```bash
+  tools/camu_audio.py prepare-text \
+    fairy-tales/po-schuchemu-velenyu/source/narration.txt \
+    --output fairy-tales/po-schuchemu-velenyu/pronunciation \
+    --skip-speech-performance
+  ```
+
+  Retried variants also failed:
+
+  ```bash
+  tools/camu_audio.py prepare-text \
+    fairy-tales/po-schuchemu-velenyu/source/narration.txt \
+    --output fairy-tales/po-schuchemu-velenyu/pronunciation \
+    --skip-speech-performance \
+    --llm-proxy-timeout-seconds 240 \
+    --llm-proxy-chunk-chars 3000
+
+  LLM_PROXY_FORCE_CHUNKED=1 tools/camu_audio.py prepare-text \
+    fairy-tales/po-schuchemu-velenyu/source/narration.txt \
+    --output fairy-tales/po-schuchemu-velenyu/pronunciation \
+    --skip-speech-performance \
+    --llm-proxy-model gpt-5-mini \
+    --llm-proxy-timeout-seconds 240 \
+    --llm-proxy-chunk-chars 1800
+  ```
+
+  As a control, this tiny pipeline passed through `semantic-stress-qa` and `materialize`:
+
+  ```bash
+  mkdir -p /tmp/camu-llm-proxy-smoke
+  printf 'Жил-был кот. Он любил тёплое молоко.\n' | \
+    /Users/tyemirov/Development/Smith/russian-language/russian_language/pipeline_runner.py \
+      --output-dir /tmp/camu-llm-proxy-smoke \
+      --basename smoke \
+      --to materialize \
+      --quiet
+  ```
+
+  ### Observed
+  The long story runs completed deterministic Russian-language stages and then failed at `llm-proxy` with:
+
+  ```text
+  llm_proxy_client_transport_failure: The read operation timed out
+  [SSL] record layer failure (_ssl.c:2658)
+  ```
+
+  The forced-chunked `gpt-5-mini` retry also failed with the same SSL record-layer error before materialization. The small control request reported `semantic-stress-qa` passed with `transport: post`, `invocationMode: single`, and `materialize` passed.
+
+  ### Expected
+  Long semantic-review POSTs should either complete successfully or return a structured proxy/provider error that the client can classify and retry. The proxy should not leave clients with opaque transport failures after the upstream request may still be in progress or recoverable.
+
+  ### Acceptance Criteria
+  1. Add production-comparable black-box coverage for a long POST body where the upstream completes after the normal client wait; the proxy either streams/polls/waits correctly or returns a structured timeout error with retry guidance.
+  2. Add coverage for chunked semantic-review retry behavior so chunk transport failures are reported with chunk index, provider, model, timeout, and upstream status when available.
+  3. Verify the Russian-language `po-schuchemu-velenyu` materialization path reaches `materialize` or returns a structured proxy error instead of `read operation timed out` or SSL record-layer failure.
+  4. Preserve the existing successful behavior for small POST requests.
+
 ## Improvements
+
+- [x] [I009] (P1) Make missing placeholder handling field-aware
+  ### Summary
+  Review found that allowing missing `${...}` placeholders globally can silently mutate non-key configuration values. Keep the new disabled-provider behavior for missing provider API-key placeholders, but fail startup for missing placeholders everywhere else and for partial API-key placeholders.
+
+  ### Acceptance Criteria
+  1. Missing placeholders outside provider `api_key` fields fail startup with `config_placeholder_missing`.
+  2. A provider `api_key` value that is exactly a missing `${...}` placeholder expands to an empty key so a non-default provider can be disabled.
+  3. Missing placeholders embedded inside longer provider `api_key` values fail startup rather than creating malformed credentials.
+  4. README and provider-routing docs describe the field-aware placeholder behavior.
+
+  ### Resolution
+  Config placeholder expansion now allows a missing placeholder only when it is the whole provider `api_key` value; missing placeholders in tenant secrets, URLs, and partial API-key strings fail with `config_placeholder_missing`. Added black-box CLI coverage for missing non-key placeholders, exact optional provider API-key placeholders, partial API-key placeholders, and missing default-provider credentials. README and provider-routing docs now describe the field-aware placeholder rule. Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./cmd/cli -run 'TestRootCommand(RejectsMissingTenantSecretPlaceholder|AllowsMissingNonDefaultProviderKey|RejectsPartialMissingProviderKeyPlaceholder|RejectsMissingDefaultDictationProviderKey|RejectsMissingDefaultTextProviderKeys)'` and `timeout -k 350s -s SIGKILL 350s make ci`.
 
 - [x] [I008] (P1) Require API keys only for tenant default providers
   ### Summary
