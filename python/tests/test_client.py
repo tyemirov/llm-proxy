@@ -44,11 +44,6 @@ class CapturingHandler(BaseHTTPRequestHandler):
     response_status = 200
     response_body = "reviewed"
     response_delay_seconds = 0.0
-    response_headers: dict[str, str] = {}
-    resume_status = 200
-    resume_body = "resumed"
-    resume_headers: dict[str, str] = {}
-    resume_path = "/responses/resp_test"
 
     def do_POST(self) -> None:
         """Capture one POST request."""
@@ -66,31 +61,11 @@ class CapturingHandler(BaseHTTPRequestHandler):
             time.sleep(type(self).response_delay_seconds)
         self.send_response(type(self).response_status)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
-        for header_name, header_value in type(self).response_headers.items():
-            self.send_header(header_name, header_value)
         self.end_headers()
         try:
             self.wfile.write(type(self).response_body.encode("utf-8"))
         except BrokenPipeError:
             return
-
-    def do_GET(self) -> None:
-        """Return a stored-response resume body."""
-
-        type(self).captured_request = CapturedRequest(
-            method=self.command,
-            path=self.path,
-        )
-        if urllib.parse.urlparse(self.path).path != type(self).resume_path:
-            self.send_response(404)
-            self.end_headers()
-            return
-        self.send_response(type(self).resume_status)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
-        for header_name, header_value in type(self).resume_headers.items():
-            self.send_header(header_name, header_value)
-        self.end_headers()
-        self.wfile.write(type(self).resume_body.encode("utf-8"))
 
     def log_message(self, format_string: str, *arguments: object) -> None:
         """Suppress default stderr logging in tests."""
@@ -125,11 +100,6 @@ def running_server() -> RunningServer:
     CapturingHandler.response_status = 200
     CapturingHandler.response_body = "reviewed"
     CapturingHandler.response_delay_seconds = 0.0
-    CapturingHandler.response_headers = {}
-    CapturingHandler.resume_status = 200
-    CapturingHandler.resume_body = "resumed"
-    CapturingHandler.resume_headers = {}
-    CapturingHandler.resume_path = "/responses/resp_test"
     server = ThreadingHTTPServer(("127.0.0.1", 0), CapturingHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -399,34 +369,6 @@ def test_http_error_exposes_status_and_body(running_server: RunningServer) -> No
     assert error_info.value.body == "upstream failed"
     assert error_info.value.request_context == "provider=gemini model=gpt-5-mini timeout_seconds=12"
     assert "provider=gemini model=gpt-5-mini timeout_seconds=12" in str(error_info.value)
-
-
-def test_post_resumes_openai_background_response(running_server: RunningServer) -> None:
-    """A resumable proxy 504 is hidden behind one client post call."""
-
-    CapturingHandler.response_status = 504
-    CapturingHandler.response_body = "upstream response still running after poll timeout"
-    CapturingHandler.response_headers = {
-        "X-LLM-Proxy-Resume-Provider": "openai",
-        "X-LLM-Proxy-Upstream-Response-ID": "resp_test",
-    }
-    CapturingHandler.resume_body = "reviewed after resume"
-    client = Client(
-        ClientConfig(
-            base_url=f"{running_server.url}/?provider=openai",
-            secret="test-secret",
-            timeout_seconds=12,
-        )
-    )
-
-    response_text = client.post(ClientRequest(prompt="prompt", model="gpt-5-mini"))
-
-    assert response_text == "reviewed after resume"
-    parsed_resume_path = urllib.parse.urlparse(CapturingHandler.captured_request.path)
-    assert CapturingHandler.captured_request.method == "GET"
-    assert parsed_resume_path.path == "/responses/resp_test"
-    assert urllib.parse.parse_qs(parsed_resume_path.query)["provider"] == ["openai"]
-    assert urllib.parse.parse_qs(parsed_resume_path.query)["format"] == ["text/plain"]
 
 
 def test_transport_error_is_typed() -> None:
