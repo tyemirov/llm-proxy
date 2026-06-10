@@ -128,6 +128,7 @@ const (
 	jsonFieldMessage      = "message"
 	jsonFieldMessages     = "messages"
 	jsonFieldObject       = "object"
+	jsonFieldOutputText   = "output_text"
 	jsonFieldRole         = "role"
 	jsonFieldStatus       = "status"
 	jsonFieldResponse     = "response"

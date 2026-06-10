@@ -530,6 +530,74 @@ func TestProviderRoutingSupportsGeminiGenerateContent(t *testing.T) {
 	assertGeminiContentOmitsThought(t, capturedPayload["systemInstruction"], "systemInstruction")
 }
 
+func TestProviderRoutingUsesGeminiDefaultModelForJSONPosts(t *testing.T) {
+	var capturedPaths []string
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			t.Fatalf("method=%s want=%s", request.Method, http.MethodPost)
+		}
+		if apiKeyHeader := request.Header.Get("x-goog-api-key"); apiKeyHeader != testGeminiKey {
+			t.Fatalf("x-goog-api-key=%q want=%q", apiKeyHeader, testGeminiKey)
+		}
+		if request.URL.Path != "/models/"+proxy.ModelNameGemini25Flash+":generateContent" {
+			t.Fatalf("path=%s want=%s", request.URL.Path, "/models/"+proxy.ModelNameGemini25Flash+":generateContent")
+		}
+		capturedPaths = append(capturedPaths, request.URL.Path)
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"gemini default ok"}]}}]}`))
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		GeminiKey:             testGeminiKey,
+		GeminiBaseURL:         upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	for _, testCase := range []struct {
+		name string
+		path string
+		body string
+	}{
+		{
+			name: "post prompt",
+			path: "/?key=" + TestSecret + "&provider=" + proxy.ProviderNameGemini,
+			body: `{"prompt":"hello gemini default","web_search":false}`,
+		},
+		{
+			name: "post v2 messages",
+			path: "/v2?key=" + TestSecret + "&provider=" + proxy.ProviderNameGemini,
+			body: `{"messages":[{"role":"user","content":"hello gemini default"}]}`,
+		},
+	} {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, testCase.path, strings.NewReader(testCase.body))
+			request.Header.Set("Content-Type", "application/json")
+			responseRecorder := httptest.NewRecorder()
+
+			router.ServeHTTP(responseRecorder, request)
+
+			if responseRecorder.Code != http.StatusOK {
+				subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+			}
+			if strings.TrimSpace(responseRecorder.Body.String()) != "gemini default ok" {
+				subTest.Fatalf("body=%q", responseRecorder.Body.String())
+			}
+		})
+	}
+	if len(capturedPaths) != 2 {
+		t.Fatalf("capturedPaths=%v want two Gemini calls", capturedPaths)
+	}
+}
+
 func TestProviderRoutingSelectsDefaultsByTenantSecret(t *testing.T) {
 	const openAITenantSecret = "openai-tenant-secret"
 	const geminiTenantSecret = "gemini-tenant-secret"

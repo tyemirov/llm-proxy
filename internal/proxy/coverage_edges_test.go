@@ -1112,6 +1112,76 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}
 	})
 
+	t.Run("polled incomplete response starts continuation", func(subTest *testing.T) {
+		var continuationPayload map[string]any
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				requestBytes, _ := io.ReadAll(httpRequest.Body)
+				var requestPayload map[string]any
+				_ = json.Unmarshal(requestBytes, &requestPayload)
+				if requestPayload["previous_response_id"] == nil {
+					_, _ = responseWriter.Write([]byte(`{"id":"polled_partial","status":"queued"}`))
+					return
+				}
+				continuationPayload = requestPayload
+				_, _ = responseWriter.Write([]byte(`{"id":"polled_continued","status":"queued"}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/polled_partial":
+				_, _ = responseWriter.Write([]byte(`{"id":"polled_partial","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[],"usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5}}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/polled_continued":
+				_, _ = responseWriter.Write([]byte(`{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"polled continued"}]}],"usage":{"input_tokens":4,"output_tokens":5,"total_tokens":9}}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK || body != "polled continued" {
+			subTest.Fatalf("status=%d body=%q", statusCode, body)
+		}
+		if continuationPayload["previous_response_id"] != "polled_partial" {
+			subTest.Fatalf("previous_response_id=%v payload=%v", continuationPayload["previous_response_id"], continuationPayload)
+		}
+	})
+
+	t.Run("polled completed response without final message starts synthesis continuation", func(subTest *testing.T) {
+		var synthesisPayload map[string]any
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				requestBytes, _ := io.ReadAll(httpRequest.Body)
+				var requestPayload map[string]any
+				_ = json.Unmarshal(requestBytes, &requestPayload)
+				if requestPayload["previous_response_id"] == nil {
+					_, _ = responseWriter.Write([]byte(`{"id":"polled_tool_only","status":"queued"}`))
+					return
+				}
+				synthesisPayload = requestPayload
+				_, _ = responseWriter.Write([]byte(`{"id":"polled_synthesis","status":"queued"}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/polled_tool_only":
+				_, _ = responseWriter.Write([]byte(`{"id":"polled_tool_only","status":"completed","output":[{"type":"web_search_call","action":{"query":"weather"}}],"usage":{"input_tokens":6,"output_tokens":1,"total_tokens":7}}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/polled_synthesis":
+				_, _ = responseWriter.Write([]byte(`{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"polled synthesized"}]}],"usage":{"input_tokens":8,"output_tokens":3,"total_tokens":11}}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		queryParameters.Set("max_tokens", "333")
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK || body != "polled synthesized" {
+			subTest.Fatalf("status=%d body=%q", statusCode, body)
+		}
+		if synthesisPayload["previous_response_id"] != "polled_tool_only" {
+			subTest.Fatalf("previous_response_id=%v payload=%v", synthesisPayload["previous_response_id"], synthesisPayload)
+		}
+		if synthesisPayload["max_output_tokens"] != float64(333) {
+			subTest.Fatalf("max_output_tokens=%v payload=%v", synthesisPayload["max_output_tokens"], synthesisPayload)
+		}
+	})
+
 	t.Run("synthesis transport error reports upstream failure", func(subTest *testing.T) {
 		previousClient := proxy.HTTPClient
 		requestCount := 0
