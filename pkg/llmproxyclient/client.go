@@ -1,4 +1,4 @@
-// Package llmproxyclient provides an HTTP client for llm-proxy JSON POST requests.
+// Package llmproxyclient provides an HTTP client for llm-proxy v2 JSON POST requests.
 package llmproxyclient
 
 import (
@@ -107,24 +107,10 @@ func (config Config) Timeout() time.Duration {
 	return config.timeout
 }
 
-// PostURL builds the authenticated JSON POST URL for this config.
-func (config Config) PostURL() string {
-	requestURL := config.postURL()
-	return requestURL.String()
-}
-
 // MessagesPostURL builds the authenticated v2 JSON POST URL for this config.
 func (config Config) MessagesPostURL() string {
 	requestURL := config.messagesPostURL()
 	return requestURL.String()
-}
-
-func (config Config) postURL() url.URL {
-	requestURL := *config.baseURL
-	if requestURL.Path == "" {
-		requestURL.Path = "/"
-	}
-	return config.authenticatedPostURL(requestURL)
 }
 
 func (config Config) messagesPostURL() url.URL {
@@ -158,32 +144,12 @@ func v2EndpointPath(basePath string) string {
 	return trimmedPath + "/v2"
 }
 
-// RequestInput is the unvalidated external input for a JSON POST request.
-type RequestInput struct {
-	Prompt       string
-	Messages     []MessageInput
-	Model        string
-	WebSearch    bool
-	SystemPrompt string
-	MaxTokens    *int
-}
-
-// MessageInput is an unvalidated chat message for a JSON POST request.
+// MessageInput is an unvalidated chat message for a v2 JSON POST request.
 type MessageInput struct {
 	Role    string
 	Content string
 	// Order is optional; when any message sets it, every message in the request must set a unique non-negative value.
 	Order *int
-}
-
-// Request is a validated llm-proxy JSON POST request.
-type Request struct {
-	prompt       string
-	messages     []message
-	model        string
-	webSearch    bool
-	systemPrompt string
-	maxTokens    *int
 }
 
 type message struct {
@@ -208,36 +174,6 @@ type MessagesRequest struct {
 	maxTokens *int
 }
 
-// NewRequest validates external request input.
-func NewRequest(input RequestInput) (Request, error) {
-	hasPrompt := input.Prompt != ""
-	hasMessages := len(input.Messages) > 0
-	if hasPrompt && hasMessages {
-		return Request{}, fmt.Errorf("%w: choose prompt or messages", ErrInvalidClientRequest)
-	}
-	if !hasPrompt && !hasMessages {
-		return Request{}, fmt.Errorf("%w: missing prompt", ErrInvalidClientRequest)
-	}
-	if input.MaxTokens != nil && *input.MaxTokens <= 0 {
-		return Request{}, fmt.Errorf("%w: max_tokens must be positive", ErrInvalidClientRequest)
-	}
-	messages, messageError := newMessages(input.Messages)
-	if messageError != nil {
-		return Request{}, messageError
-	}
-	if strings.TrimSpace(input.SystemPrompt) != "" && hasSystemMessage(messages) {
-		return Request{}, fmt.Errorf("%w: system_prompt conflicts with messages role=system", ErrInvalidClientRequest)
-	}
-	return Request{
-		prompt:       input.Prompt,
-		messages:     messages,
-		model:        strings.TrimSpace(input.Model),
-		webSearch:    input.WebSearch,
-		systemPrompt: strings.TrimSpace(input.SystemPrompt),
-		maxTokens:    input.MaxTokens,
-	}, nil
-}
-
 // NewMessagesRequest validates v2 messages-only request input.
 func NewMessagesRequest(input MessagesRequestInput) (MessagesRequest, error) {
 	if len(input.Messages) == 0 {
@@ -256,26 +192,6 @@ func NewMessagesRequest(input MessagesRequestInput) (MessagesRequest, error) {
 		webSearch: input.WebSearch,
 		maxTokens: input.MaxTokens,
 	}, nil
-}
-
-func (request Request) payloadBody() []byte {
-	payload := map[string]any{"web_search": request.webSearch}
-	if len(request.messages) > 0 {
-		payload["messages"] = request.messagePayload()
-	} else {
-		payload["prompt"] = request.prompt
-	}
-	if request.model != "" {
-		payload["model"] = request.model
-	}
-	if request.systemPrompt != "" {
-		payload["system_prompt"] = request.systemPrompt
-	}
-	if request.maxTokens != nil {
-		payload["max_tokens"] = *request.maxTokens
-	}
-	payloadBytes, _ := json.Marshal(payload)
-	return payloadBytes
 }
 
 func (request MessagesRequest) payloadBody() []byte {
@@ -352,19 +268,6 @@ func sortInputMessagesByOrder(inputMessages []MessageInput) ([]MessageInput, err
 	return orderedInputMessages, nil
 }
 
-func hasSystemMessage(messages []message) bool {
-	for _, requestMessage := range messages {
-		if requestMessage.role == messageRoleSystem {
-			return true
-		}
-	}
-	return false
-}
-
-func (request Request) messagePayload() []map[string]any {
-	return messagePayload(request.messages)
-}
-
 func messagePayload(messages []message) []map[string]any {
 	payload := make([]map[string]any, 0, len(messages))
 	for _, requestMessage := range messages {
@@ -394,11 +297,6 @@ func NewClient(config Config, httpClient HTTPDoer) (Client, error) {
 	return Client{config: config, httpClient: httpClient}, nil
 }
 
-// Post sends a JSON POST prompt request and returns the response text.
-func (client Client) Post(contextValue context.Context, request Request) (string, error) {
-	return client.postPayload(contextValue, client.config.postURL(), request.payloadBody())
-}
-
 // PostMessages sends a v2 JSON POST messages request and returns the response text.
 func (client Client) PostMessages(contextValue context.Context, request MessagesRequest) (string, error) {
 	return client.postPayload(contextValue, client.config.messagesPostURL(), request.payloadBody())
@@ -419,8 +317,8 @@ func (client Client) postPayload(contextValue context.Context, requestURL url.UR
 	if httpError != nil {
 		return "", fmt.Errorf("%w: post request: %v", ErrClientHTTPFailure, httpError)
 	}
-	defer httpResponse.Body.Close()
 	responseBody, readError := io.ReadAll(httpResponse.Body)
+	_ = httpResponse.Body.Close()
 	if readError != nil {
 		return "", fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
 	}

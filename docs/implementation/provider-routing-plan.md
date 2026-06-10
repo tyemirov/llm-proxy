@@ -11,6 +11,7 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - `provider` is an optional query parameter on `GET /`, `POST /`, `POST /v2`, and `POST /dictate`.
 - Omitted `provider` means the authenticated tenant's default provider.
 - `model` keeps its current meaning; omitted `model` means the authenticated tenant's default model when set, otherwise the selected provider's configured default model.
+- A provider with an API key configured must have a configured default text model so provider-selected requests can omit `model` consistently.
 - Compatibility JSON `POST /` accepts exactly one text input shape: `prompt` for a single user prompt or `messages[]` for an OpenRouter/OpenAI-compatible chat transcript.
 - Canonical JSON `POST /v2` accepts only `messages[]` as the text input shape; request-body `prompt` and `system_prompt` are invalid.
 - `messages[]` items contain `role` and string `content`. Supported roles are `system`, `user`, and `assistant`; at least one `user` message is required.
@@ -62,7 +63,6 @@ Shared config fields:
 - `server.workers`
 - `server.queue_size`
 - `server.request_timeout_seconds`
-- `server.upstream_poll_timeout_seconds`
 - `server.max_prompt_bytes`
 - `server.max_input_audio_bytes`
 - `tenants[].id`
@@ -114,6 +114,26 @@ OpenAI `request_profile` values select stable payload shapes:
 - `openai_responses_temperature_tools`
 - `openai_responses_reasoning_tools`
 
+Every OpenAI Responses text request includes `background: true` and
+`store: true`; the proxy polls the returned response id server-side until a
+terminal status or `server.request_timeout_seconds`. Callers use one normal
+`GET /`, `POST /`, or `POST /v2` request and receive the final formatted answer;
+there is no streaming or client-side polling contract.
+
+Bundled clients intentionally expose only the canonical `POST /v2` text
+contract. The installable Go CLI maps prompt flags or stdin into v2 `system` and
+`user` messages, while the reusable Go and Python packages expose only
+messages-request constructors and `PostMessages`/`post_messages` send methods.
+The server keeps `GET /` and compatibility JSON `POST /` available for direct
+REST callers.
+
+`server.workers` limits concurrent upstream provider HTTP operations, not whole
+client request lifecycles. `server.queue_size` limits the number of additional
+upstream HTTP operations waiting for that shared worker limit. OpenAI
+background-response sleeps between polls do not occupy worker capacity; only the
+actual upstream create, poll, continuation, synthesis, chat, native-provider, or
+dictation HTTP operation does.
+
 Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, requires API keys for each tenant's default text and dictation providers, allows non-default provider API keys to be blank so those providers are disabled until configured, requires every configured provider base URL, requires transcription URLs for dictation-capable providers, requires text model catalogs for every provider, requires dictation model catalogs for dictation-capable providers, rejects blank or duplicate model ids, rejects defaults not listed in their model catalog, rejects `web_search` outside OpenAI text model entries, validates OpenAI request profiles, validates each tenant's default text provider/model, and validates endpoint/credential support for each tenant's default dictation provider/model.
 
 ## Error Contract
@@ -123,7 +143,7 @@ Startup validates configured tenants, rejects duplicate tenant ids and duplicate
 - `413`: prompt or audio payload too large.
 - `429`: upstream provider rate limiting.
 - `503`: registered non-default provider credential is unavailable, so the selected provider is disabled until its API key is configured.
-- `504`: upstream timeout.
+- `504`: the overall proxy request timed out before the selected upstream provider returned a final result.
 - `502`: other upstream provider failure.
 
 ## Implementation Notes
@@ -135,7 +155,7 @@ Startup validates configured tenants, rejects duplicate tenant ids and duplicate
 - Gemini uses a native generateContent adapter against `providers.gemini.base_url`.
 - Grok uses the shared OpenAI-compatible Chat Completions adapter against `providers.grok.base_url`.
 - OpenAI-compatible chat providers receive validated and sorted `messages[]` as provider-supported `role` and `content` items.
-- OpenAI Responses payload shape comes from the selected configured model's stable `request_profile`; model-specific web-search support comes from the selected model catalog entry.
+- OpenAI Responses payload shape comes from the selected configured model's stable `request_profile`; model-specific web-search support comes from the selected model catalog entry. OpenAI Responses text calls run in background mode with stored responses so long provider work can be polled by llm-proxy while the caller waits on one REST request.
 - Gemini receives user messages as native `contents`, assistant messages as `model` contents, and system messages as `systemInstruction`.
 - OpenAI Responses receives single-prompt requests unchanged and multi-message requests as a deterministic role-labelled transcript.
 - Dictation routing reuses the multipart transcription adapter with provider-specific URLs. OpenAI, SiliconFlow, and Zhipu send a multipart `model` field; Grok/xAI uses xAI STT and omits the multipart `model` field. Only providers that support `/dictate` expose transcription URL config fields.

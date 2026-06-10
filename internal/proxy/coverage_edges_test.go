@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -74,14 +75,13 @@ func textRouterWithResponsesHandler(t *testing.T, handler http.HandlerFunc) *gin
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetResponsesURL(upstreamServer.URL)
 	return coverageRouter(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  2,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
-		Endpoints:                  endpoints,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             2,
+		RequestTimeoutSeconds: TestTimeout,
+		Endpoints:             endpoints,
 	})
 }
 
@@ -342,14 +342,13 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 
 	t.Run("v2 json body rejects oversized payload", func(subTest *testing.T) {
 		smallRouter := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      TestTimeout,
-			UpstreamPollTimeoutSeconds: TestTimeout,
-			MaxPromptBytes:             4,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: TestTimeout,
+			MaxPromptBytes:        4,
 		})
 		request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret, strings.NewReader(`{"messages":[{"role":"user","content":"hello"}]}`))
 		request.Header.Set("Content-Type", "application/json")
@@ -362,14 +361,13 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 
 	t.Run("v2 json body enforces provider token limits", func(subTest *testing.T) {
 		geminiRouter := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			GeminiKey:                  "gemini-key",
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      TestTimeout,
-			UpstreamPollTimeoutSeconds: TestTimeout,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			GeminiKey:             "gemini-key",
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: TestTimeout,
 		})
 		request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&provider="+proxy.ProviderNameGemini, strings.NewReader(`{"messages":[{"role":"user","content":"hello"}],"model":"`+proxy.ModelNameGemini25Flash+`","max_tokens":65537}`))
 		request.Header.Set("Content-Type", "application/json")
@@ -637,50 +635,45 @@ func TestCoverageConfigurationValidationMatrix(t *testing.T) {
 		{
 			name: "missing openai dictation credential",
 			configuration: proxy.Configuration{
-				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameDeepSeek, Model: proxy.ModelNameDeepSeekV4Flash, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}),
-				DeepSeekKey:                testDeepSeekKey,
-				RequestTimeoutSeconds:      TestTimeout,
-				UpstreamPollTimeoutSeconds: TestTimeout,
+				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameDeepSeek, Model: proxy.ModelNameDeepSeekV4Flash, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}),
+				DeepSeekKey:           testDeepSeekKey,
+				RequestTimeoutSeconds: TestTimeout,
 			},
 			expectedError: "provider not configured: provider=openai endpoint=dictation",
 		},
 		{
 			name: "unsupported qwen default dictation",
 			configuration: proxy.Configuration{
-				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: "qwen"}),
-				OpenAIKey:                  TestAPIKey,
-				RequestTimeoutSeconds:      TestTimeout,
-				UpstreamPollTimeoutSeconds: TestTimeout,
+				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: "qwen"}),
+				OpenAIKey:             TestAPIKey,
+				RequestTimeoutSeconds: TestTimeout,
 			},
 			expectedError: "unsupported provider endpoint: provider=dashscope endpoint=dictation",
 		},
 		{
 			name: "unsupported kimi default dictation",
 			configuration: proxy.Configuration{
-				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: "kimi"}),
-				OpenAIKey:                  TestAPIKey,
-				RequestTimeoutSeconds:      TestTimeout,
-				UpstreamPollTimeoutSeconds: TestTimeout,
+				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: "kimi"}),
+				OpenAIKey:             TestAPIKey,
+				RequestTimeoutSeconds: TestTimeout,
 			},
 			expectedError: "unsupported provider endpoint: provider=moonshot endpoint=dictation",
 		},
 		{
 			name: "missing glm default dictation credential",
 			configuration: proxy.Configuration{
-				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: "glm"}),
-				OpenAIKey:                  TestAPIKey,
-				RequestTimeoutSeconds:      TestTimeout,
-				UpstreamPollTimeoutSeconds: TestTimeout,
+				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: "glm"}),
+				OpenAIKey:             TestAPIKey,
+				RequestTimeoutSeconds: TestTimeout,
 			},
 			expectedError: "provider not configured: provider=zhipu endpoint=dictation",
 		},
 		{
 			name: "unknown default dictation provider",
 			configuration: proxy.Configuration{
-				Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: "unknown"}),
-				OpenAIKey:                  TestAPIKey,
-				RequestTimeoutSeconds:      TestTimeout,
-				UpstreamPollTimeoutSeconds: TestTimeout,
+				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: "unknown"}),
+				OpenAIKey:             TestAPIKey,
+				RequestTimeoutSeconds: TestTimeout,
 			},
 			expectedError: "unknown provider: unknown",
 		},
@@ -1051,13 +1044,12 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		})
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      1,
-			UpstreamPollTimeoutSeconds: TestTimeout,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: 1,
 		})
 		queryParameters := url.Values{}
 		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
@@ -1121,6 +1113,76 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}
 	})
 
+	t.Run("polled incomplete response starts continuation", func(subTest *testing.T) {
+		var continuationPayload map[string]any
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				requestBytes, _ := io.ReadAll(httpRequest.Body)
+				var requestPayload map[string]any
+				_ = json.Unmarshal(requestBytes, &requestPayload)
+				if requestPayload["previous_response_id"] == nil {
+					_, _ = responseWriter.Write([]byte(`{"id":"polled_partial","status":"queued"}`))
+					return
+				}
+				continuationPayload = requestPayload
+				_, _ = responseWriter.Write([]byte(`{"id":"polled_continued","status":"queued"}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/polled_partial":
+				_, _ = responseWriter.Write([]byte(`{"id":"polled_partial","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[],"usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5}}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/polled_continued":
+				_, _ = responseWriter.Write([]byte(`{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"polled continued"}]}],"usage":{"input_tokens":4,"output_tokens":5,"total_tokens":9}}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK || body != "polled continued" {
+			subTest.Fatalf("status=%d body=%q", statusCode, body)
+		}
+		if continuationPayload["previous_response_id"] != "polled_partial" {
+			subTest.Fatalf("previous_response_id=%v payload=%v", continuationPayload["previous_response_id"], continuationPayload)
+		}
+	})
+
+	t.Run("polled completed response without final message starts synthesis continuation", func(subTest *testing.T) {
+		var synthesisPayload map[string]any
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				requestBytes, _ := io.ReadAll(httpRequest.Body)
+				var requestPayload map[string]any
+				_ = json.Unmarshal(requestBytes, &requestPayload)
+				if requestPayload["previous_response_id"] == nil {
+					_, _ = responseWriter.Write([]byte(`{"id":"polled_tool_only","status":"queued"}`))
+					return
+				}
+				synthesisPayload = requestPayload
+				_, _ = responseWriter.Write([]byte(`{"id":"polled_synthesis","status":"queued"}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/polled_tool_only":
+				_, _ = responseWriter.Write([]byte(`{"id":"polled_tool_only","status":"completed","output":[{"type":"web_search_call","action":{"query":"weather"}}],"usage":{"input_tokens":6,"output_tokens":1,"total_tokens":7}}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/polled_synthesis":
+				_, _ = responseWriter.Write([]byte(`{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"polled synthesized"}]}],"usage":{"input_tokens":8,"output_tokens":3,"total_tokens":11}}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		queryParameters.Set("max_tokens", "333")
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK || body != "polled synthesized" {
+			subTest.Fatalf("status=%d body=%q", statusCode, body)
+		}
+		if synthesisPayload["previous_response_id"] != "polled_tool_only" {
+			subTest.Fatalf("previous_response_id=%v payload=%v", synthesisPayload["previous_response_id"], synthesisPayload)
+		}
+		if synthesisPayload["max_output_tokens"] != float64(333) {
+			subTest.Fatalf("max_output_tokens=%v payload=%v", synthesisPayload["max_output_tokens"], synthesisPayload)
+		}
+	})
+
 	t.Run("synthesis transport error reports upstream failure", func(subTest *testing.T) {
 		previousClient := proxy.HTTPClient
 		requestCount := 0
@@ -1133,13 +1195,12 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		})
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      1,
-			UpstreamPollTimeoutSeconds: TestTimeout,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: 1,
 		})
 		queryParameters := url.Values{}
 		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
@@ -1170,14 +1231,20 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("poll timeout maps to bad gateway after upstream incomplete", func(subTest *testing.T) {
+	t.Run("background response polls server side past legacy poll budget", func(subTest *testing.T) {
+		pollCount := 0
 		upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			switch {
 			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
 				_, _ = responseWriter.Write([]byte(`{"id":"slow","status":"queued"}`))
 			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/slow":
-				_, _ = responseWriter.Write([]byte(`{"status":"in_progress"}`))
+				pollCount++
+				if pollCount < 4 {
+					_, _ = responseWriter.Write([]byte(`{"id":"slow","status":"in_progress"}`))
+					return
+				}
+				_, _ = responseWriter.Write([]byte(`{"id":"slow","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"server-side final"}]}]}`))
 			default:
 				http.NotFound(responseWriter, httpRequest)
 			}
@@ -1186,23 +1253,33 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		endpoints := proxy.NewEndpoints()
 		endpoints.SetResponsesURL(upstreamServer.URL)
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      2,
-			UpstreamPollTimeoutSeconds: 1,
-			Endpoints:                  endpoints,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: 2,
+			Endpoints:             endpoints,
 		})
 		queryParameters := url.Values{}
-		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusBadGateway {
-			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		queryParameters.Set("key", TestSecret)
+		queryParameters.Set("prompt", TestPrompt)
+		request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+		responseRecorder := httptest.NewRecorder()
+		startedAt := time.Now()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusOK {
+			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+		}
+		if responseRecorder.Body.String() != "server-side final" {
+			subTest.Fatalf("body=%q want server-side final", responseRecorder.Body.String())
+		}
+		if pollCount < 4 || time.Since(startedAt) < time.Second {
+			subTest.Fatalf("poll_count=%d elapsed=%s", pollCount, time.Since(startedAt))
 		}
 	})
 
-	t.Run("poll fetch timeout maps to bad gateway", func(subTest *testing.T) {
+	t.Run("poll fetch timeout maps to gateway timeout", func(subTest *testing.T) {
 		endpoints := proxy.NewEndpoints()
 		endpoints.SetResponsesURL("https://openai.invalid/v1/responses")
 		previousClient := proxy.HTTPClient
@@ -1220,23 +1297,22 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		})}
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      2,
-			UpstreamPollTimeoutSeconds: 1,
-			Endpoints:                  endpoints,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: 2,
+			Endpoints:             endpoints,
 		})
 		queryParameters := url.Values{}
 		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusBadGateway {
-			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		if statusCode != http.StatusGatewayTimeout {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
 		}
 	})
 
-	t.Run("poll sleep timeout maps to bad gateway", func(subTest *testing.T) {
+	t.Run("poll sleep timeout maps to gateway timeout", func(subTest *testing.T) {
 		endpoints := proxy.NewEndpoints()
 		endpoints.SetResponsesURL("https://openai.invalid/v1/responses")
 		previousClient := proxy.HTTPClient
@@ -1254,19 +1330,18 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		})}
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      2,
-			UpstreamPollTimeoutSeconds: 1,
-			Endpoints:                  endpoints,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: 2,
+			Endpoints:             endpoints,
 		})
 		queryParameters := url.Values{}
 		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusBadGateway {
-			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		if statusCode != http.StatusGatewayTimeout {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
 		}
 	})
 
@@ -1287,14 +1362,13 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		})}
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      2,
-			UpstreamPollTimeoutSeconds: 2,
-			Endpoints:                  endpoints,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: 2,
+			Endpoints:             endpoints,
 		})
 		queryParameters := url.Values{}
 		queryParameters.Set("key", TestSecret)
@@ -1345,13 +1419,12 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		})
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      1,
-			UpstreamPollTimeoutSeconds: TestTimeout,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: 1,
 		})
 		queryParameters := url.Values{}
 		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
@@ -1374,14 +1447,13 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		endpoints := proxy.NewEndpoints()
 		endpoints.SetResponsesURL("http://[::1")
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      TestTimeout,
-			UpstreamPollTimeoutSeconds: TestTimeout,
-			Endpoints:                  endpoints,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: TestTimeout,
+			Endpoints:             endpoints,
 		})
 		queryParameters := url.Values{}
 		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
@@ -1440,15 +1512,14 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		}))
 		subTest.Cleanup(upstreamServer.Close)
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			DashScopeKey:               "sk-qwen",
-			DashScopeBaseURL:           upstreamServer.URL,
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      TestTimeout,
-			UpstreamPollTimeoutSeconds: TestTimeout,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			DashScopeKey:          "sk-qwen",
+			DashScopeBaseURL:      upstreamServer.URL,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: TestTimeout,
 		})
 		queryParameters := url.Values{}
 		queryParameters.Set("provider", "qwen")
@@ -1485,15 +1556,14 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 				}))
 				caseTest.Cleanup(upstreamServer.Close)
 				router := coverageRouter(caseTest, proxy.Configuration{
-					Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-					OpenAIKey:                  TestAPIKey,
-					DeepSeekKey:                testDeepSeekKey,
-					DeepSeekBaseURL:            upstreamServer.URL,
-					LogLevel:                   proxy.LogLevelInfo,
-					WorkerCount:                1,
-					QueueSize:                  1,
-					RequestTimeoutSeconds:      TestTimeout,
-					UpstreamPollTimeoutSeconds: TestTimeout,
+					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:             TestAPIKey,
+					DeepSeekKey:           testDeepSeekKey,
+					DeepSeekBaseURL:       upstreamServer.URL,
+					LogLevel:              proxy.LogLevelInfo,
+					WorkerCount:           1,
+					QueueSize:             1,
+					RequestTimeoutSeconds: TestTimeout,
 				})
 				queryParameters := url.Values{}
 				queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
@@ -1512,15 +1582,14 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		})}
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			DeepSeekKey:                testDeepSeekKey,
-			DeepSeekBaseURL:            "https://deepseek.invalid",
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      1,
-			UpstreamPollTimeoutSeconds: TestTimeout,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			DeepSeekKey:           testDeepSeekKey,
+			DeepSeekBaseURL:       "https://deepseek.invalid",
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: 1,
 		})
 		queryParameters := url.Values{}
 		queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
@@ -1543,15 +1612,14 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		for _, testCase := range testCases {
 			subTest.Run(testCase.name, func(caseTest *testing.T) {
 				router := coverageRouter(caseTest, proxy.Configuration{
-					Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-					OpenAIKey:                  TestAPIKey,
-					DeepSeekKey:                testDeepSeekKey,
-					DeepSeekBaseURL:            testCase.baseURL,
-					LogLevel:                   proxy.LogLevelInfo,
-					WorkerCount:                1,
-					QueueSize:                  1,
-					RequestTimeoutSeconds:      1,
-					UpstreamPollTimeoutSeconds: TestTimeout,
+					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:             TestAPIKey,
+					DeepSeekKey:           testDeepSeekKey,
+					DeepSeekBaseURL:       testCase.baseURL,
+					LogLevel:              proxy.LogLevelInfo,
+					WorkerCount:           1,
+					QueueSize:             1,
+					RequestTimeoutSeconds: 1,
 				})
 				queryParameters := url.Values{}
 				queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
@@ -1578,15 +1646,14 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		}))
 		subTest.Cleanup(upstreamServer.Close)
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			DeepSeekKey:                testDeepSeekKey,
-			DeepSeekBaseURL:            upstreamServer.URL,
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      TestTimeout,
-			UpstreamPollTimeoutSeconds: TestTimeout,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			DeepSeekKey:           testDeepSeekKey,
+			DeepSeekBaseURL:       upstreamServer.URL,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: TestTimeout,
 		})
 		queryParameters := url.Values{}
 		queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
@@ -1607,15 +1674,14 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		})}
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			DeepSeekKey:                testDeepSeekKey,
-			DeepSeekBaseURL:            "https://deepseek.invalid",
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      1,
-			UpstreamPollTimeoutSeconds: TestTimeout,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			DeepSeekKey:           testDeepSeekKey,
+			DeepSeekBaseURL:       "https://deepseek.invalid",
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: 1,
 		})
 		queryParameters := url.Values{}
 		queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
@@ -1624,19 +1690,74 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
 		}
 	})
+
+	t.Run("admitted provider request timeout releases queue slot before acquiring worker", func(subTest *testing.T) {
+		upstreamStarted := make(chan struct{})
+		releaseUpstream := make(chan struct{})
+		var closeStartedOnce sync.Once
+		previousClient := proxy.HTTPClient
+		proxy.HTTPClient = &http.Client{Transport: coverageRoundTripper(func(httpRequest *http.Request) (*http.Response, error) {
+			closeStartedOnce.Do(func() { close(upstreamStarted) })
+			select {
+			case <-httpRequest.Context().Done():
+				return nil, httpRequest.Context().Err()
+			case <-releaseUpstream:
+				return coverageHTTPResponse(http.StatusOK, `{"choices":[{"message":{"content":"released"}}]}`), nil
+			}
+		})}
+		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
+		router := coverageRouter(subTest, proxy.Configuration{
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			DeepSeekKey:           testDeepSeekKey,
+			DeepSeekBaseURL:       "https://deepseek.invalid",
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: TestTimeout,
+		})
+
+		firstResult := make(chan int, 1)
+		go func() {
+			queryParameters := url.Values{}
+			queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
+			statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+			firstResult <- statusCode
+		}()
+		select {
+		case <-upstreamStarted:
+		case <-time.After(time.Second):
+			subTest.Fatal("upstream request did not start")
+		}
+
+		queryParameters := url.Values{}
+		queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
+		statusCode, _, _ := performCoverageTextRequestWithTimeout(subTest, router, queryParameters, "", coverageShortRequestTimeout)
+		if statusCode != http.StatusGatewayTimeout {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
+		}
+		close(releaseUpstream)
+		select {
+		case firstStatusCode := <-firstResult:
+			if firstStatusCode != http.StatusOK {
+				subTest.Fatalf("first status=%d want=%d", firstStatusCode, http.StatusOK)
+			}
+		case <-time.After(time.Second):
+			subTest.Fatal("first request did not complete")
+		}
+	})
 }
 
 func TestCoverageDictationEdges(t *testing.T) {
 	t.Run("invalid and missing audio forms", func(subTest *testing.T) {
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      1,
-			UpstreamPollTimeoutSeconds: TestTimeout,
-			MaxInputAudioBytes:         1024,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: 1,
+			MaxInputAudioBytes:    1024,
 		})
 		invalidRequest := httptest.NewRequest(http.MethodPost, "/dictate?key="+TestSecret, strings.NewReader("not multipart"))
 		invalidRecorder := httptest.NewRecorder()
@@ -1661,15 +1782,14 @@ func TestCoverageDictationEdges(t *testing.T) {
 
 	t.Run("unsupported and unknown dictation requests", func(subTest *testing.T) {
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			DeepSeekKey:                testDeepSeekKey,
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      TestTimeout,
-			UpstreamPollTimeoutSeconds: TestTimeout,
-			MaxInputAudioBytes:         1024,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			DeepSeekKey:           testDeepSeekKey,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: TestTimeout,
+			MaxInputAudioBytes:    1024,
 		})
 		for _, requestURL := range []string{
 			"/dictate?key=" + TestSecret + "&provider=deepseek",
@@ -1703,14 +1823,13 @@ func TestCoverageDictationEdges(t *testing.T) {
 			{
 				name: "siliconflow missing credential",
 				configuration: proxy.Configuration{
-					Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-					OpenAIKey:                  TestAPIKey,
-					LogLevel:                   proxy.LogLevelInfo,
-					WorkerCount:                1,
-					QueueSize:                  1,
-					RequestTimeoutSeconds:      TestTimeout,
-					UpstreamPollTimeoutSeconds: TestTimeout,
-					MaxInputAudioBytes:         1024,
+					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:             TestAPIKey,
+					LogLevel:              proxy.LogLevelInfo,
+					WorkerCount:           1,
+					QueueSize:             1,
+					RequestTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:    1024,
 				},
 				requestURL: "/dictate?key=" + TestSecret + "&provider=siliconflow",
 				wantStatus: http.StatusServiceUnavailable,
@@ -1718,15 +1837,14 @@ func TestCoverageDictationEdges(t *testing.T) {
 			{
 				name: "siliconflow unknown model",
 				configuration: proxy.Configuration{
-					Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-					OpenAIKey:                  TestAPIKey,
-					SiliconFlowKey:             testSiliconFlowKey,
-					LogLevel:                   proxy.LogLevelInfo,
-					WorkerCount:                1,
-					QueueSize:                  1,
-					RequestTimeoutSeconds:      TestTimeout,
-					UpstreamPollTimeoutSeconds: TestTimeout,
-					MaxInputAudioBytes:         1024,
+					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:             TestAPIKey,
+					SiliconFlowKey:        testSiliconFlowKey,
+					LogLevel:              proxy.LogLevelInfo,
+					WorkerCount:           1,
+					QueueSize:             1,
+					RequestTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:    1024,
 				},
 				requestURL: "/dictate?key=" + TestSecret + "&provider=siliconflow&model=unknown",
 				wantStatus: http.StatusBadRequest,
@@ -1734,15 +1852,14 @@ func TestCoverageDictationEdges(t *testing.T) {
 			{
 				name: "openai missing credential when non openai defaults are configured",
 				configuration: proxy.Configuration{
-					Tenants:                    proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameDeepSeek, Model: proxy.ModelNameDeepSeekV4Flash, DictationProvider: proxy.ProviderNameSiliconFlow}),
-					DeepSeekKey:                testDeepSeekKey,
-					SiliconFlowKey:             testSiliconFlowKey,
-					LogLevel:                   proxy.LogLevelInfo,
-					WorkerCount:                1,
-					QueueSize:                  1,
-					RequestTimeoutSeconds:      TestTimeout,
-					UpstreamPollTimeoutSeconds: TestTimeout,
-					MaxInputAudioBytes:         1024,
+					Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameDeepSeek, Model: proxy.ModelNameDeepSeekV4Flash, DictationProvider: proxy.ProviderNameSiliconFlow}),
+					DeepSeekKey:           testDeepSeekKey,
+					SiliconFlowKey:        testSiliconFlowKey,
+					LogLevel:              proxy.LogLevelInfo,
+					WorkerCount:           1,
+					QueueSize:             1,
+					RequestTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:    1024,
 				},
 				requestURL: "/dictate?key=" + TestSecret + "&provider=openai",
 				wantStatus: http.StatusServiceUnavailable,
@@ -1750,14 +1867,13 @@ func TestCoverageDictationEdges(t *testing.T) {
 			{
 				name: "zhipu missing credential",
 				configuration: proxy.Configuration{
-					Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-					OpenAIKey:                  TestAPIKey,
-					LogLevel:                   proxy.LogLevelInfo,
-					WorkerCount:                1,
-					QueueSize:                  1,
-					RequestTimeoutSeconds:      TestTimeout,
-					UpstreamPollTimeoutSeconds: TestTimeout,
-					MaxInputAudioBytes:         1024,
+					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:             TestAPIKey,
+					LogLevel:              proxy.LogLevelInfo,
+					WorkerCount:           1,
+					QueueSize:             1,
+					RequestTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:    1024,
 				},
 				requestURL: "/dictate?key=" + TestSecret + "&provider=zhipu",
 				wantStatus: http.StatusServiceUnavailable,
@@ -1765,15 +1881,14 @@ func TestCoverageDictationEdges(t *testing.T) {
 			{
 				name: "zhipu unknown model",
 				configuration: proxy.Configuration{
-					Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-					OpenAIKey:                  TestAPIKey,
-					ZhipuKey:                   testZhipuKey,
-					LogLevel:                   proxy.LogLevelInfo,
-					WorkerCount:                1,
-					QueueSize:                  1,
-					RequestTimeoutSeconds:      TestTimeout,
-					UpstreamPollTimeoutSeconds: TestTimeout,
-					MaxInputAudioBytes:         1024,
+					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:             TestAPIKey,
+					ZhipuKey:              testZhipuKey,
+					LogLevel:              proxy.LogLevelInfo,
+					WorkerCount:           1,
+					QueueSize:             1,
+					RequestTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:    1024,
 				},
 				requestURL: "/dictate?key=" + TestSecret + "&provider=zhipu&model=unknown",
 				wantStatus: http.StatusBadRequest,
@@ -1781,14 +1896,13 @@ func TestCoverageDictationEdges(t *testing.T) {
 			{
 				name: "grok missing credential",
 				configuration: proxy.Configuration{
-					Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-					OpenAIKey:                  TestAPIKey,
-					LogLevel:                   proxy.LogLevelInfo,
-					WorkerCount:                1,
-					QueueSize:                  1,
-					RequestTimeoutSeconds:      TestTimeout,
-					UpstreamPollTimeoutSeconds: TestTimeout,
-					MaxInputAudioBytes:         1024,
+					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:             TestAPIKey,
+					LogLevel:              proxy.LogLevelInfo,
+					WorkerCount:           1,
+					QueueSize:             1,
+					RequestTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:    1024,
 				},
 				requestURL: "/dictate?key=" + TestSecret + "&provider=grok",
 				wantStatus: http.StatusServiceUnavailable,
@@ -1796,15 +1910,14 @@ func TestCoverageDictationEdges(t *testing.T) {
 			{
 				name: "grok unknown model",
 				configuration: proxy.Configuration{
-					Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-					OpenAIKey:                  TestAPIKey,
-					GrokKey:                    testGrokKey,
-					LogLevel:                   proxy.LogLevelInfo,
-					WorkerCount:                1,
-					QueueSize:                  1,
-					RequestTimeoutSeconds:      TestTimeout,
-					UpstreamPollTimeoutSeconds: TestTimeout,
-					MaxInputAudioBytes:         1024,
+					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:             TestAPIKey,
+					GrokKey:               testGrokKey,
+					LogLevel:              proxy.LogLevelInfo,
+					WorkerCount:           1,
+					QueueSize:             1,
+					RequestTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:    1024,
 				},
 				requestURL: "/dictate?key=" + TestSecret + "&provider=grok&model=unknown",
 				wantStatus: http.StatusBadRequest,
@@ -1852,15 +1965,14 @@ func TestCoverageDictationEdges(t *testing.T) {
 				endpoints := proxy.NewEndpoints()
 				endpoints.SetTranscriptionsURL(upstreamServer.URL)
 				router := coverageRouter(caseTest, proxy.Configuration{
-					Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-					OpenAIKey:                  TestAPIKey,
-					LogLevel:                   proxy.LogLevelInfo,
-					WorkerCount:                1,
-					QueueSize:                  1,
-					RequestTimeoutSeconds:      TestTimeout,
-					UpstreamPollTimeoutSeconds: TestTimeout,
-					MaxInputAudioBytes:         1024,
-					Endpoints:                  endpoints,
+					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+					OpenAIKey:             TestAPIKey,
+					LogLevel:              proxy.LogLevelInfo,
+					WorkerCount:           1,
+					QueueSize:             1,
+					RequestTimeoutSeconds: TestTimeout,
+					MaxInputAudioBytes:    1024,
+					Endpoints:             endpoints,
 				})
 				body := &bytes.Buffer{}
 				writer := multipart.NewWriter(body)
@@ -1885,15 +1997,14 @@ func TestCoverageDictationEdges(t *testing.T) {
 		endpoints := proxy.NewEndpoints()
 		endpoints.SetTranscriptionsURL("http://[::1")
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      TestTimeout,
-			UpstreamPollTimeoutSeconds: TestTimeout,
-			MaxInputAudioBytes:         1024,
-			Endpoints:                  endpoints,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: TestTimeout,
+			MaxInputAudioBytes:    1024,
+			Endpoints:             endpoints,
 		})
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
@@ -1919,14 +2030,13 @@ func TestCoverageDictationEdges(t *testing.T) {
 		})}
 		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
 		router := coverageRouter(subTest, proxy.Configuration{
-			Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-			OpenAIKey:                  TestAPIKey,
-			LogLevel:                   proxy.LogLevelInfo,
-			WorkerCount:                1,
-			QueueSize:                  1,
-			RequestTimeoutSeconds:      TestTimeout,
-			UpstreamPollTimeoutSeconds: TestTimeout,
-			MaxInputAudioBytes:         1024,
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: TestTimeout,
+			MaxInputAudioBytes:    1024,
 		})
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
@@ -1955,26 +2065,24 @@ func TestCoverageServeAndEndpointReset(t *testing.T) {
 	}
 
 	buildError := proxy.Serve(proxy.Configuration{
-		OpenAIKey:                  TestAPIKey,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		OpenAIKey:             TestAPIKey,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}, coverageLogger())
 	if buildError == nil {
 		t.Fatalf("Serve buildError=nil want non-nil")
 	}
 
 	serveError := proxy.Serve(withProviderModelCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		Port:                       -1,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		Port:                  -1,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
 	}), coverageLogger())
 	if serveError == nil {
 		t.Fatalf("Serve error=nil want non-nil")
@@ -1992,13 +2100,12 @@ func TestCoverageHTTPUtilityReadFailure(t *testing.T) {
 	})}
 	t.Cleanup(func() { proxy.HTTPClient = previousClient })
 	router := coverageRouter(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      1,
-		UpstreamPollTimeoutSeconds: TestTimeout,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: 1,
 	})
 	queryParameters := url.Values{}
 	statusCode, _, _ := performCoverageTextRequestWithTimeout(t, router, queryParameters, "", coverageShortRequestTimeout)

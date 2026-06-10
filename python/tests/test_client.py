@@ -19,7 +19,6 @@ from llm_proxy_client import (
     ClientConfig,
     ClientMessagesRequest,
     ClientMessage,
-    ClientRequest,
     LLMProxyClientError,
     LLMProxyHTTPError,
     LLMProxyTransportError,
@@ -110,8 +109,8 @@ def running_server() -> RunningServer:
         running.close()
 
 
-def test_client_posts_json_body_and_preserves_non_body_query(running_server: RunningServer) -> None:
-    """The public client sends prompt fields in the body and auth in query."""
+def test_client_posts_v2_body_and_preserves_non_body_query(running_server: RunningServer) -> None:
+    """The public client sends v2 messages in the body and auth in query."""
 
     client = Client(
         ClientConfig(
@@ -123,7 +122,12 @@ def test_client_posts_json_body_and_preserves_non_body_query(running_server: Run
         )
     )
 
-    response_text = client.post(ClientRequest(prompt="Проверить текст", model="gpt-5.5"))
+    response_text = client.post_messages(
+        ClientMessagesRequest(
+            messages=(ClientMessage(role="user", content="Проверить текст"),),
+            model="gpt-5.5",
+        )
+    )
 
     captured_request = CapturingHandler.captured_request
     parsed_path = urllib.parse.urlparse(captured_request.path)
@@ -132,7 +136,7 @@ def test_client_posts_json_body_and_preserves_non_body_query(running_server: Run
     assert captured_request.method == "POST"
     assert captured_request.accept == "text/plain"
     assert captured_request.content_type == "application/json; charset=utf-8"
-    assert parsed_path.path == "/review"
+    assert parsed_path.path == "/review/v2"
     assert query_values["key"] == ["test-secret"]
     assert query_values["format"] == ["text/plain"]
     assert query_values["provider"] == ["gemini"]
@@ -140,13 +144,40 @@ def test_client_posts_json_body_and_preserves_non_body_query(running_server: Run
     for stripped_query_key in ("prompt", "model", "max_tokens", "web_search"):
         assert stripped_query_key not in query_values
     assert captured_request.body == {
-        "prompt": "Проверить текст",
+        "messages": [{"role": "user", "content": "Проверить текст"}],
         "web_search": False,
         "model": "gpt-5.5",
     }
 
 
-def test_client_overrides_provider_and_sends_optional_body_fields(running_server: RunningServer) -> None:
+def test_client_omits_model_when_request_uses_provider_default(running_server: RunningServer) -> None:
+    """Blank request model is omitted while the selected provider stays in the URL."""
+
+    client = Client(
+        ClientConfig(
+            base_url=f"{running_server.url}/review?provider=gemini&model=stale&keep=1",
+            secret="test-secret",
+        )
+    )
+
+    response_text = client.post_messages(
+        ClientMessagesRequest(messages=(ClientMessage(role="user", content="Use provider default"),))
+    )
+
+    captured_request = CapturingHandler.captured_request
+    parsed_path = urllib.parse.urlparse(captured_request.path)
+    query_values = urllib.parse.parse_qs(parsed_path.query)
+    assert response_text == "reviewed"
+    assert parsed_path.path == "/review/v2"
+    assert query_values["provider"] == ["gemini"]
+    assert "model" not in query_values
+    assert captured_request.body == {
+        "messages": [{"role": "user", "content": "Use provider default"}],
+        "web_search": False,
+    }
+
+
+def test_client_overrides_provider_and_sends_optional_v2_body_fields(running_server: RunningServer) -> None:
     """Explicit provider config overrides a provider already present in the URL."""
 
     client = Client(
@@ -157,52 +188,31 @@ def test_client_overrides_provider_and_sends_optional_body_fields(running_server
         )
     )
 
-    response_text = client.post(
-        ClientRequest(
-            prompt="Summarize",
+    response_text = client.post_messages(
+        ClientMessagesRequest(
+            messages=(
+                ClientMessage(role="system", content="Be terse."),
+                ClientMessage(role="user", content="Summarize"),
+            ),
             web_search=True,
-            system_prompt="Be terse.",
             max_tokens=42,
         )
     )
 
-    query_values = urllib.parse.parse_qs(urllib.parse.urlparse(CapturingHandler.captured_request.path).query)
+    captured_request = CapturingHandler.captured_request
+    parsed_path = urllib.parse.urlparse(captured_request.path)
+    query_values = urllib.parse.parse_qs(parsed_path.query)
     assert response_text == "reviewed"
+    assert parsed_path.path == "/v2"
     assert query_values["provider"] == ["deepseek"]
     assert query_values["keep"] == ["1"]
-    assert CapturingHandler.captured_request.body == {
-        "prompt": "Summarize",
-        "web_search": True,
-        "system_prompt": "Be terse.",
-        "max_tokens": 42,
-    }
-
-
-def test_client_posts_messages_body(running_server: RunningServer) -> None:
-    """The public client can send OpenRouter-style chat messages."""
-
-    client = Client(ClientConfig(base_url=running_server.url, secret="test-secret"))
-
-    response_text = client.post(
-        ClientRequest(
-            messages=(
-                ClientMessage(role="assistant", content="Hi.", order=2),
-                ClientMessage(role="user", content="Hello", order=1),
-            ),
-            model="deepseek-v4-flash",
-            system_prompt="Outer system",
-        )
-    )
-
-    assert response_text == "reviewed"
-    assert CapturingHandler.captured_request.body == {
-        "web_search": False,
+    assert captured_request.body == {
         "messages": [
-            {"role": "user", "content": "Hello", "order": 1},
-            {"role": "assistant", "content": "Hi.", "order": 2},
+            {"role": "system", "content": "Be terse."},
+            {"role": "user", "content": "Summarize"},
         ],
-        "model": "deepseek-v4-flash",
-        "system_prompt": "Outer system",
+        "web_search": True,
+        "max_tokens": 42,
     }
 
 
@@ -253,50 +263,6 @@ def test_config_validation_errors(config_kwargs: dict[str, object], expected_err
 
     with pytest.raises(LLMProxyClientError, match=expected_error):
         ClientConfig(**config_kwargs)
-
-
-@pytest.mark.parametrize(
-    ("request_kwargs", "expected_error"),
-    [
-        ({"prompt": ""}, "missing prompt"),
-        ({"prompt": "prompt", "messages": (ClientMessage(role="user", content="message"),)}, "choose prompt or messages"),
-        ({"messages": (ClientMessage(role="assistant", content="prefill"),)}, "messages must include a user message"),
-        (
-            {
-                "system_prompt": "outer",
-                "messages": (
-                    ClientMessage(role="system", content="inner"),
-                    ClientMessage(role="user", content="prompt"),
-                ),
-            },
-            "system_prompt conflicts",
-        ),
-        (
-            {
-                "messages": (
-                    ClientMessage(role="user", content="prompt", order=1),
-                    ClientMessage(role="assistant", content="answer"),
-                ),
-            },
-            "all messages must include order",
-        ),
-        (
-            {
-                "messages": (
-                    ClientMessage(role="user", content="prompt", order=1),
-                    ClientMessage(role="assistant", content="answer", order=1),
-                ),
-            },
-            "duplicate message order",
-        ),
-        ({"prompt": "prompt", "max_tokens": 0}, "max_tokens must be positive"),
-    ],
-)
-def test_request_validation_errors(request_kwargs: dict[str, object], expected_error: str) -> None:
-    """Invalid request input fails at the package boundary."""
-
-    with pytest.raises(LLMProxyClientError, match=expected_error):
-        ClientRequest(**request_kwargs)
 
 
 @pytest.mark.parametrize(
@@ -354,13 +320,26 @@ def test_http_error_exposes_status_and_body(running_server: RunningServer) -> No
 
     CapturingHandler.response_status = 502
     CapturingHandler.response_body = "upstream failed"
-    client = Client(ClientConfig(base_url=running_server.url, secret="test-secret"))
+    client = Client(
+        ClientConfig(
+            base_url=f"{running_server.url}/?provider=gemini",
+            secret="test-secret",
+            timeout_seconds=12,
+        )
+    )
 
     with pytest.raises(LLMProxyHTTPError) as error_info:
-        client.post(ClientRequest(prompt="prompt"))
+        client.post_messages(
+            ClientMessagesRequest(
+                messages=(ClientMessage(role="user", content="prompt"),),
+                model="gpt-5-mini",
+            )
+        )
 
     assert error_info.value.status_code == 502
     assert error_info.value.body == "upstream failed"
+    assert error_info.value.request_context == "provider=gemini model=gpt-5-mini timeout_seconds=12"
+    assert "provider=gemini model=gpt-5-mini timeout_seconds=12" in str(error_info.value)
 
 
 def test_transport_error_is_typed() -> None:
@@ -369,10 +348,25 @@ def test_transport_error_is_typed() -> None:
     def failing_opener(request: urllib.request.Request, timeout: float) -> str:
         raise urllib.error.URLError("network unavailable")
 
-    client = Client(ClientConfig(base_url="http://example.test", secret="test-secret"), opener=failing_opener)
+    client = Client(
+        ClientConfig(
+            base_url="http://example.test/?provider=gemini",
+            secret="test-secret",
+            timeout_seconds=9,
+        ),
+        opener=failing_opener,
+    )
 
-    with pytest.raises(LLMProxyTransportError, match="network unavailable"):
-        client.post(ClientRequest(prompt="prompt"))
+    with pytest.raises(
+        LLMProxyTransportError,
+        match="provider=gemini model=gpt-5-mini timeout_seconds=9.*network unavailable",
+    ):
+        client.post_messages(
+            ClientMessagesRequest(
+                messages=(ClientMessage(role="user", content="prompt"),),
+                model="gpt-5-mini",
+            )
+        )
 
 
 def test_read_timeout_is_typed_transport_error(running_server: RunningServer) -> None:
@@ -387,5 +381,32 @@ def test_read_timeout_is_typed_transport_error(running_server: RunningServer) ->
         )
     )
 
-    with pytest.raises(LLMProxyTransportError, match="timed out"):
-        client.post(ClientRequest(prompt="prompt"))
+    with pytest.raises(LLMProxyTransportError, match="provider=omitted model=omitted timeout_seconds=0.05.*timed out"):
+        client.post_messages(ClientMessagesRequest(messages=(ClientMessage(role="user", content="prompt"),)))
+
+
+def test_ssl_failure_is_typed_transport_error() -> None:
+    """Raw socket and SSL style failures are surfaced through the transport-error contract."""
+
+    def failing_opener(request: urllib.request.Request, timeout: float) -> str:
+        raise OSError("record layer failure")
+
+    client = Client(
+        ClientConfig(
+            base_url="http://example.test/?provider=openai",
+            secret="test-secret",
+            timeout_seconds=240,
+        ),
+        opener=failing_opener,
+    )
+
+    with pytest.raises(
+        LLMProxyTransportError,
+        match="provider=openai model=gpt-5.5 timeout_seconds=240.*record layer failure",
+    ):
+        client.post_messages(
+            ClientMessagesRequest(
+                messages=(ClientMessage(role="user", content="prompt"),),
+                model="gpt-5.5",
+            )
+        )

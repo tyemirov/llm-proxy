@@ -11,9 +11,9 @@ import (
 const (
 	// DefaultPort is the TCP port used by the HTTP server when no explicit port is provided.
 	DefaultPort = 8080
-	// DefaultWorkers is the number of worker goroutines that process upstream requests.
+	// DefaultWorkers is the maximum number of concurrent upstream HTTP operations.
 	DefaultWorkers = 4
-	// DefaultQueueSize is the capacity of the internal request queue.
+	// DefaultQueueSize is the number of upstream HTTP operations that may wait for a worker.
 	DefaultQueueSize = 100
 	// DefaultModel is the model identifier used when the client does not supply one.
 	DefaultModel = ModelNameGPT41
@@ -22,8 +22,8 @@ const (
 	// DefaultDictationProvider is the provider used when /dictate does not supply one.
 	DefaultDictationProvider = ProviderNameOpenAI
 
-	DefaultRequestTimeoutSeconds      = 180 // overall app-side request timeout
-	DefaultUpstreamPollTimeoutSeconds = 60  // poll budget after "incomplete"
+	// DefaultRequestTimeoutSeconds is the overall app-side request timeout.
+	DefaultRequestTimeoutSeconds = 240
 	// DefaultMaxPromptBytes limits JSON LLM request bodies accepted by POST /.
 	DefaultMaxPromptBytes     = 4 * 1024 * 1024
 	DefaultDictationModel     = "gpt-4o-mini-transcribe"
@@ -60,7 +60,6 @@ type Configuration struct {
 	WorkerCount                  int
 	QueueSize                    int
 	RequestTimeoutSeconds        int
-	UpstreamPollTimeoutSeconds   int
 	MaxPromptBytes               int64
 	MaxInputAudioBytes           int64
 	Endpoints                    *Endpoints
@@ -109,8 +108,10 @@ func validateConfig(configuration Configuration) (tenantRegistry, error) {
 	return tenants, nil
 }
 
-// ErrUpstreamIncomplete indicates that the upstream provider returned an incomplete response before the poll deadline.
+// ErrUpstreamIncomplete indicates that the upstream provider returned an incomplete response before the request deadline.
 var ErrUpstreamIncomplete = errors.New(errorUpstreamIncomplete)
+
+var errQueueFull = errors.New(errorQueueFull)
 
 // ApplyTunables ensures tunable configuration values have sensible defaults.
 func (configuration *Configuration) ApplyTunables() {
@@ -123,11 +124,14 @@ func (configuration *Configuration) ApplyTunables() {
 	configuration.GeminiKey = strings.TrimSpace(configuration.GeminiKey)
 	configuration.AnthropicKey = strings.TrimSpace(configuration.AnthropicKey)
 	configuration.GrokKey = strings.TrimSpace(configuration.GrokKey)
+	if configuration.WorkerCount <= 0 {
+		configuration.WorkerCount = DefaultWorkers
+	}
+	if configuration.QueueSize <= 0 {
+		configuration.QueueSize = DefaultQueueSize
+	}
 	if configuration.RequestTimeoutSeconds <= 0 {
 		configuration.RequestTimeoutSeconds = DefaultRequestTimeoutSeconds
-	}
-	if configuration.UpstreamPollTimeoutSeconds <= 0 {
-		configuration.UpstreamPollTimeoutSeconds = DefaultUpstreamPollTimeoutSeconds
 	}
 	if configuration.MaxPromptBytes <= 0 {
 		configuration.MaxPromptBytes = DefaultMaxPromptBytes

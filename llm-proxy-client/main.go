@@ -15,7 +15,7 @@ import (
 
 const (
 	commandUse   = "llm-proxy-client"
-	commandShort = "Send a JSON POST prompt request through llm-proxy"
+	commandShort = "Send a v2 JSON POST request through llm-proxy"
 
 	flagBaseURL      = "base-url"
 	flagSecret       = "secret"
@@ -31,7 +31,7 @@ const (
 	envNameBaseURL = "LLM_PROXY_BASE_URL"
 	envNameSecret  = "LLM_PROXY_SECRET"
 
-	defaultTimeout = 120 * time.Second
+	defaultTimeout = 260 * time.Second
 )
 
 type commandOptions struct {
@@ -95,6 +95,9 @@ func newRootCommand(
 			if promptError != nil {
 				return promptError
 			}
+			if prompt == "" {
+				return fmt.Errorf("llm_proxy_client_request_failed: %w: missing prompt", llmproxyclient.ErrInvalidClientRequest)
+			}
 			config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
 				BaseURL:  configuredString(command, flagBaseURL, envNameBaseURL, options.baseURL),
 				Secret:   configuredString(command, flagSecret, envNameSecret, options.secret),
@@ -104,16 +107,20 @@ func newRootCommand(
 			if configError != nil {
 				return fmt.Errorf("llm_proxy_client_config_failed: %w", configError)
 			}
-			requestInput := llmproxyclient.RequestInput{
-				Prompt:       prompt,
-				Model:        options.model,
-				WebSearch:    options.webSearch,
-				SystemPrompt: options.systemPrompt,
+			messages := []llmproxyclient.MessageInput{}
+			if options.systemPrompt != "" {
+				messages = append(messages, llmproxyclient.MessageInput{Role: "system", Content: options.systemPrompt})
+			}
+			messages = append(messages, llmproxyclient.MessageInput{Role: "user", Content: prompt})
+			requestInput := llmproxyclient.MessagesRequestInput{
+				Messages:  messages,
+				Model:     options.model,
+				WebSearch: options.webSearch,
 			}
 			if command.Flags().Changed(flagMaxTokens) {
 				requestInput.MaxTokens = &options.maxTokens
 			}
-			request, requestError := llmproxyclient.NewRequest(requestInput)
+			request, requestError := llmproxyclient.NewMessagesRequest(requestInput)
 			if requestError != nil {
 				return fmt.Errorf("llm_proxy_client_request_failed: %w", requestError)
 			}
@@ -121,7 +128,7 @@ func newRootCommand(
 			if clientError != nil {
 				return fmt.Errorf("llm_proxy_client_create_failed: %w", clientError)
 			}
-			responseText, postError := client.Post(context.Background(), request)
+			responseText, postError := client.PostMessages(context.Background(), request)
 			if postError != nil {
 				return fmt.Errorf("llm_proxy_client_post_failed: %w", postError)
 			}
@@ -137,11 +144,11 @@ func newRootCommand(
 	flagSet.StringVar(&options.baseURL, flagBaseURL, "", "llm-proxy base URL")
 	flagSet.StringVar(&options.secret, flagSecret, "", "llm-proxy shared secret")
 	flagSet.StringVar(&options.provider, flagProvider, "", "provider query override")
-	flagSet.StringVar(&options.model, flagModel, "", "model body field")
-	flagSet.StringVar(&options.prompt, flagPrompt, "", "prompt text")
-	flagSet.StringVar(&options.promptFile, flagPromptFile, "", "path to prompt text file")
+	flagSet.StringVar(&options.model, flagModel, "", "v2 model body field")
+	flagSet.StringVar(&options.prompt, flagPrompt, "", "user message text")
+	flagSet.StringVar(&options.promptFile, flagPromptFile, "", "path to user message text file")
 	flagSet.BoolVar(&options.webSearch, flagWebSearch, false, "enable OpenAI web search")
-	flagSet.StringVar(&options.systemPrompt, flagSystemPrompt, "", "system prompt body field")
+	flagSet.StringVar(&options.systemPrompt, flagSystemPrompt, "", "v2 system message content")
 	flagSet.IntVar(&options.maxTokens, flagMaxTokens, 0, "positive output token cap")
 	flagSet.DurationVar(&options.timeout, flagTimeout, defaultTimeout, "request timeout")
 

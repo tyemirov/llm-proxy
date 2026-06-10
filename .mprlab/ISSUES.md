@@ -111,6 +111,73 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   3. Verify the Russian-language `po-schuchemu-velenyu` materialization path reaches `materialize` or returns a structured proxy error instead of `read operation timed out` or SSL record-layer failure.
   4. Preserve the existing successful behavior for small POST requests.
 
+  ### Resolution
+  OpenAI Responses text requests now run in background mode by sending `background: true` and `store: true` on initial, continuation, and synthesis payloads, then polling the returned response id instead of holding long semantic-review generations on one synchronous upstream HTTP read. Added black-box integration coverage for a long semantic-review JSON POST that returns a queued background response, polls by response id, and returns the completed body. Python client HTTP and transport failures now include non-secret provider, model, and timeout context, and raw OS/SSL-style failures are typed as `LLMProxyTransportError`. B003 supersedes the remaining manual tuning gap with the final one-shot REST contract.
+
+  Validation for the initial background-mode fix passed with `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make python-test` (27 passed), `timeout -k 350s -s SIGKILL 350s make python-lint`, `timeout -k 350s -s SIGKILL 350s make go-lint`, and `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 27 passed). The exact reported forced-chunked semantic-review payload was reconstructed from the failed Camu pipeline state (`chunkIndex=1`, `chunkChars=1800`, request SHA-256 `ba8737a7dd4b81dc0d52e68d9260756fdb0f32e6e12f3be2527d8be55df1a0cd`) and proved that OpenAI could complete the response in about 171 seconds, motivating B003.
+
+- [x] [B003] (P1) OpenAI background semantic-review calls require manual timeout tuning
+  ### Summary
+  B002 moved long OpenAI Responses calls into background mode, but the successful manual replay still required hand-editing timeout knobs. A normal llm-proxy REST call should not require operators, downstream workflows, or client libraries to guess provider polling behavior for a semantic-review payload.
+
+  ### Impact
+  Downstream callers can still fail a viable OpenAI background response, then retry from scratch or require caller-specific timeout overrides. This keeps long semantic review fragile even though the provider can complete the response.
+
+  ### Reproduction
+  Reuse the reported `po-schuchemu-velenyu` forced-chunked semantic-review request reconstructed from the failed Camu pipeline state:
+
+  ```text
+  /tmp/llm-proxy-b002-direct/po-schuchemu-velenyu.chunk-0001.llm-proxy-request.json
+  ```
+
+  Before this fix, the default proxy returned a classified 504 after about 60 seconds. With a temporary larger timeout, the same request returned HTTP 200 after about 171 seconds and validated as a full semantic-review response.
+
+  ### Expected
+  The proxy should own long OpenAI background response completion. A simple REST caller should issue one `GET /`, `POST /`, or `POST /v2` request through llm-proxy and receive the final answer without streaming, client-side polling, or a resume-token protocol.
+
+  ### Acceptance Criteria
+  1. OpenAI background response polling is server-side and bounded only by `server.request_timeout_seconds`.
+  2. The public `GET /`, `POST /`, and `POST /v2` contract does not require streaming, client-side polling, or `/responses` resume calls.
+  3. The obsolete poll-timeout configuration is removed from the public static config surface.
+  4. Bundled Go and Python clients remain simple one-request REST transports; they do not implement OpenAI background polling.
+  5. Black-box integration tests cover a long background semantic-review POST returning HTTP 200 in the original request after multiple server-side polls.
+
+  ### Resolution
+  OpenAI background response polling is now owned by llm-proxy for the normal REST request lifecycle. Initial, continuation, and synthesis OpenAI Responses payloads use `background: true` and `store: true`; when OpenAI returns a non-terminal response id, llm-proxy polls that stored response server-side until completion or the normal `server.request_timeout_seconds` deadline. The public `/responses` resume endpoint and the Go/Python client resume loops were removed, and `upstream_poll_timeout_seconds` was removed from the static config surface. Default `request_timeout_seconds` is now 240 seconds, while the packaged Go CLI and Python client default to a 260-second transport timeout so one normal REST request has room to complete.
+
+  Validation passed with `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make python-test` (Python 27 passed), `timeout -k 350s -s SIGKILL 350s make ci` (Go/Python lint clean, Go total coverage 100.0%, Python 27 passed), and `timeout -k 30s -s SIGKILL 30s git diff --check`. Live OpenAI smoke passed with `model` omitted, using the provider default, and HTTP 200. Live exact-payload replay of `/tmp/llm-proxy-b002-direct/po-schuchemu-velenyu.chunk-0001.llm-proxy-request.json` through the local current-branch proxy returned HTTP 200 from one `POST /?provider=openai&format=text/plain` in 150.394s with no `X-LLM-Proxy-Resume-*` or raw upstream response-id headers. The final body was valid JSON with 23 `targetReviews`, `needsHumanReview=true`, and 2 human-review items for `проруби`/`прорубь` stress confirmation.
+
+- [x] [B004] (P1) Polled OpenAI terminal responses skip continuation and synthesis handling
+  ### Summary
+  B003 made OpenAI Responses run in background mode, so terminal OpenAI response payloads commonly arrive from the server-side GET poll path. The initial POST path still handled `status: "incomplete"` max-token continuations and completed responses without a final assistant message, but the poll path collapsed terminal responses to text too early and could return `502` or fallback text instead of continuing or synthesizing the final answer.
+
+  ### Impact
+  A simple REST caller could still fail a viable long OpenAI response when the stored response reached `incomplete_details.reason=max_output_tokens` during polling, or receive an unhelpful tool-call fallback when a polled completed response lacked a final assistant message.
+
+  ### Acceptance Criteria
+  1. Initial POST and GET poll OpenAI Responses terminal payloads share the same continuation and synthesis rules.
+  2. A polled `status: "incomplete"` response with `max_tokens`/`max_output_tokens` incomplete reason starts a stored continuation and returns the final answer in the original REST response.
+  3. A polled completed response without a final assistant message starts synthesis before returning to the caller.
+  4. Existing background polling, timeout, and malformed-upstream error behavior remains covered by black-box HTTP tests.
+
+  ### Resolution
+  OpenAI response handling now parses initial and polled Responses payloads into a shared response snapshot and resolves terminal states through one lifecycle handler. The shared handler preserves max-token continuation, completed-without-final-message synthesis, usage merging, malformed JSON classification, and the blocking one-shot REST contract for both initial POST responses and polled GET responses. Added black-box router coverage for polled incomplete continuation and polled completed tool-only synthesis.
+
+  Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run TestCoverageOpenAILifecycleBranches`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./tests/integration -run 'TestIntegration(LargeSemanticReviewPost|BackgroundPollSleepDoesNotOccupyUpstreamWorker)'`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy`, `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make ci` (Go lint/staticcheck/ineffassign clean, Python mypy clean, Go total coverage 100.0%, Python 27 passed, root import smoke passed).
+
+- [x] [B005] (P1) PR merge CI drops limiter coverage below 100%
+  ### Summary
+  GitHub Actions ran PR #175 on the generated pull-request merge ref with Go 1.24.13 and failed `make go-test` at total coverage 99.8%. The function table showed partial coverage for `internal/proxy/limited_http.go` `Do` and `acquire`, even though branch-head local runs reached 100.0%.
+  ### Impact
+  The PR cannot merge while the coverage gate is red, and the gap is specifically in the concurrency limiter path that should stay covered because it controls upstream worker admission and queue release.
+  ### Acceptance Criteria
+  1. The limiter path where an admitted request times out before acquiring an upstream worker is covered deterministically.
+  2. The test goes through the router/provider path rather than weakening the coverage gate.
+  3. The Go 1.24 merged coverage gate reports total 100.0%.
+  ### Resolution
+  Added router-level coverage for a blocked DeepSeek-compatible upstream request holding the only active worker while a second admitted request times out before acquiring that worker. The scenario covers the limiter `acquire` context-cancel path and `Do` admission-release path deterministically.
+
+  Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 180s -s SIGKILL 180s env GOTOOLCHAIN=go1.24.13 go test -count=1 ./internal/proxy -run 'TestCoverageProviderRoutingEdges/admitted_provider_request_timeout_releases_queue_slot_before_acquiring_worker'`, `timeout -k 350s -s SIGKILL 350s env GOTOOLCHAIN=go1.24.13 make go-test` (Go total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make ci` (Go lint/staticcheck/ineffassign clean, Python mypy clean, Go total coverage 100.0%, Python 20 passed, root import smoke passed).
 
 ## Improvements
 
@@ -145,7 +212,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   4. `make test-live-providers` omits the `model` field by default and sends a model only when a per-provider override is set.
   5. README documents that live smoke defaults come from `configs/config.yml` and override variables are optional.
   ### Resolution
-  Static provider model catalog validation now rejects `web_search: true` outside OpenAI text model entries, and the CLI config test matrix covers non-OpenAI text and dictation catalog failures. Runtime configuration no longer injects a hardcoded model catalog fallback; programmatic tests load explicit provider model catalogs from `configs/config.yml` through test fixtures, preserving custom catalog tests. The live provider smoke runner now omits `model` by default so configured provider defaults are exercised, and only sends `model` when a per-provider override variable is set. Because the new configured-default live run exposed Gemini `gemini-3.5-flash` returning provider 503 while `gemini-2.5-flash` passed, the Gemini default in `configs/config.yml`, README, and representative CLI test fixtures was changed to `gemini-2.5-flash`. Validation passed with `timeout -k 120s -s SIGKILL 120s go test -count=1 ./cmd/cli -run TestRootCommandRejectsIncompleteStaticProviderConfig`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy`, `timeout -k 240s -s SIGKILL 240s go test -count=1 ./tests/...`, `bash -n scripts/test_live_providers.sh scripts/test_live_gemini.sh`, `scripts/test_live_providers.sh --help`, no-key skip via `env -i PATH="$PATH" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" GOENV=off scripts/test_live_providers.sh`, explicit missing-key failure via `env -i PATH="$PATH" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" LLM_PROXY_LIVE_PROVIDERS=openai GOENV=off scripts/test_live_providers.sh`, targeted Gemini override proof via `timeout -k 180s -s SIGKILL 180s env LLM_PROXY_LIVE_PROVIDERS=gemini LLM_PROXY_LIVE_GEMINI_MODEL=gemini-2.5-flash make test-live-providers LIVE_ENV_FILE=configs/.env`, dynamic live smoke via `timeout -k 180s -s SIGKILL 180s make test-live-providers LIVE_ENV_FILE=configs/.env` (OpenAI and Gemini passed with configured defaults), `timeout -k 350s -s SIGKILL 350s make ci`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
+  Static provider model catalog validation now rejects `web_search: true` outside OpenAI text model entries, and the CLI config test matrix covers non-OpenAI text and dictation catalog failures. Runtime configuration no longer injects a hardcoded model catalog fallback; programmatic tests load explicit provider model catalogs from `configs/config.yml` through test fixtures, preserving custom catalog tests. The live provider smoke runner now omits `model` by default so configured provider defaults are exercised, and only sends `model` when a per-provider override variable is set. Because the live run that omitted `model` exposed Gemini `gemini-3.5-flash` returning provider 503 while `gemini-2.5-flash` passed, the Gemini default in `configs/config.yml`, README, and representative CLI test fixtures was changed to `gemini-2.5-flash`. Validation passed with `timeout -k 120s -s SIGKILL 120s go test -count=1 ./cmd/cli -run TestRootCommandRejectsIncompleteStaticProviderConfig`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy`, `timeout -k 240s -s SIGKILL 240s go test -count=1 ./tests/...`, `bash -n scripts/test_live_providers.sh scripts/test_live_gemini.sh`, `scripts/test_live_providers.sh --help`, no-key skip via `env -i PATH="$PATH" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" GOENV=off scripts/test_live_providers.sh`, explicit missing-key failure via `env -i PATH="$PATH" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" LLM_PROXY_LIVE_PROVIDERS=openai GOENV=off scripts/test_live_providers.sh`, targeted Gemini override proof via `timeout -k 180s -s SIGKILL 180s env LLM_PROXY_LIVE_PROVIDERS=gemini LLM_PROXY_LIVE_GEMINI_MODEL=gemini-2.5-flash make test-live-providers LIVE_ENV_FILE=configs/.env`, dynamic live smoke via `timeout -k 180s -s SIGKILL 180s make test-live-providers LIVE_ENV_FILE=configs/.env` (OpenAI and Gemini passed with provider defaults), `timeout -k 350s -s SIGKILL 350s make ci`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
 - [x] [I004] (P1) Add dynamic live provider smoke tests.
   ### Summary
   The repository has a stale Gemini-only live smoke target that now fails against the complete static config contract, and it does not exercise OpenAI even when `OPENAI_API_KEY` is present. Add a provider-aware live smoke target that builds a complete temporary config, runs text smoke tests for providers with available API keys, and keeps targeted runs explicit for debugging.
@@ -216,6 +283,51 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   5. Black-box CLI/config tests cover missing required provider credentials.
   ### Resolution
   `configs/config.yml` now uses `${...}` placeholders for every supported provider API key and explicit URLs for every provider `base_url` plus SiliconFlow `transcriptions_url`. The config-file loader now rejects blank provider API keys, blank provider base URLs, and blank SiliconFlow transcription URLs before building runtime configuration. README and provider-routing docs now describe provider keys as required and provider URLs as explicit config values. Black-box CLI config tests cover complete startup config, missing provider key, missing provider base URL, missing SiliconFlow transcription URL, and omitted tenant defaults. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./cmd/cli -run 'TestRootCommand(RunsConfiguredProxyFromConfigFile|RunsProductionLoggerFromConfigFile|RejectsIncompleteStaticProviderConfig)'`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 26 passed), `timeout -k 350s -s SIGKILL 350s make lint`, and `timeout -k 350s -s SIGKILL 350s make ci`.
+- [x] [I011] (P1) Decouple OpenAI background polling from text worker occupancy
+  ### Summary
+  B003 made long OpenAI background Responses calls succeed through one blocking REST request, but the internal text worker queue still treats the whole request lifecycle as occupying a scarce worker. A long semantic-review call can spend most of its time sleeping between server-side polls while preventing other text requests from starting.
+  ### Impact
+  The public REST contract is correct, but internal capacity is still coupled to long provider lifecycles. With low `server.workers` values, a viable long OpenAI request can reduce unrelated request throughput even when no upstream HTTP operation is active.
+  ### Expected
+  Keep the external one-shot REST contract unchanged. Internally, `server.workers` should limit concurrent upstream HTTP operations, `server.queue_size` should limit pending upstream HTTP operations, and OpenAI poll sleeps should not occupy an upstream worker.
+  ### Acceptance Criteria
+  1. `GET /`, `POST /`, and `POST /v2` still return the final answer in the original HTTP response with no streaming, client polling, or resume endpoint.
+  2. OpenAI background polling remains server-side and bounded by `server.request_timeout_seconds`.
+  3. Long OpenAI poll sleeps do not occupy a `server.workers` slot.
+  4. `server.workers` and `server.queue_size` apply consistently across text providers and dictation upstream HTTP calls.
+  5. Black-box integration coverage proves a simple REST request can complete while another OpenAI background request is between server-side polls, even with one worker.
+  ### Resolution
+  Text requests now run provider work in per-request goroutines while the shared `limitedHTTPDoer` enforces `server.workers` as active upstream HTTP operation concurrency and `server.queue_size` as the pending upstream HTTP operation queue. OpenAI background-response sleeps release worker capacity between polls, and the same limiter is shared by OpenAI Responses, OpenAI-compatible chat providers, Gemini, Anthropic, and dictation. `/dictate` now propagates the inbound request context to upstream transcription calls. README and provider-routing docs describe the internal concurrency contract without changing the blocking REST caller contract.
+  Validation passed with `timeout -k 120s -s SIGKILL 120s go test -count=1 ./tests/integration -run 'TestIntegration(BackgroundPollSleepDoesNotOccupyUpstreamWorker|HighLoadQueue|GatewayContextTimeoutCancelsUpstreamRequest|UpstreamRequestTimeoutTriggersGatewayTimeout)'`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./tests/llm-proxy -run 'TestEndpoint_Returns(ServiceUnavailableWhenQueueFull|GatewayTimeoutWhenWaitingForUpstreamWorker)'`, `timeout -k 350s -s SIGKILL 350s make go-test` (total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make ci` (Go lint/staticcheck/ineffassign, Python mypy, Go total coverage 100.0%, Python 27 passed, root import smoke), `timeout -k 30s -s SIGKILL 30s git diff --check`, and `timeout -k 180s -s SIGKILL 180s make test-live-providers LIVE_ENV_FILE=configs/.env LLM_PROXY_LIVE_PROVIDERS=openai` (`model` omitted for OpenAI, HTTP 200). Live exact-payload replay of `/tmp/llm-proxy-b002-direct/po-schuchemu-velenyu.chunk-0001.llm-proxy-request.json` through a temporary current-branch local proxy returned HTTP 200 in 159.191s from one `POST /?provider=openai&format=text/plain` and parsed as valid JSON with 23 `targetReviews`, `needsHumanReview=false`, and 0 `reviewItems`.
+- [x] [I012] (P1) Codify provider default model selection for omitted JSON model fields
+  ### Summary
+  Request model identifiers are provider-scoped, so `provider=gemini` with `model=gpt-5-mini` correctly returns `400`. When the client omits `model`, the selected provider's configured default model must be used universally for `GET /`, `POST /`, and `POST /v2`, and a provider with an API key must have a configured default model.
+
+  ### Acceptance Criteria
+  1. `POST /?provider=gemini` without a JSON body `model` routes to Gemini's configured text `default_model`.
+  2. `POST /v2?provider=gemini` without a JSON body `model` routes to Gemini's configured text `default_model`.
+  3. Static config validation rejects a keyed non-OpenAI provider whose text catalog has a blank `default_model`.
+  4. README and provider-routing docs state that omitted `model` uses the selected provider default and that keyed providers require valid defaults.
+  5. Live Gemini provider smoke proves the configured default works without a model override.
+  6. Bundled Go, CLI, and Python clients omit `model` when callers do not specify a model while still preserving the selected provider.
+
+  ### Resolution
+  The existing provider registry already used the selected provider's configured default model when `model` was omitted. Added black-box JSON POST coverage for `POST /?provider=gemini` and `POST /v2?provider=gemini` without `model`, both asserting the upstream Gemini default path `/models/gemini-2.5-flash:generateContent`. Added CLI config validation coverage for a keyed Gemini provider with a blank text `default_model`. README and provider-routing docs now explicitly connect configured provider keys, required default models, and omitted-model request behavior. Added bundled Go, CLI, and Python client coverage proving provider-selected requests omit stale query/body `model` values when the caller does not specify a model. Python client failure context now reports omitted provider/model values as `provider=omitted model=omitted` instead of inventing a default model label.
+
+  Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./internal/proxy -run TestProviderRoutingUsesGeminiDefaultModelForJSONPosts`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./cmd/cli -run TestRootCommandRejectsIncompleteStaticProviderConfig/blank_keyed_gemini_text_default_model`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./pkg/llmproxyclient -run TestClientOmitsModelWhenRequestUsesProviderDefault`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./llm-proxy-client -run TestCommandReadsPromptFileAndOptionalBodyFields`, `timeout -k 120s -s SIGKILL 120s bash -lc 'cd python && uv run --group dev pytest tests/test_client.py -k "omits_model or read_timeout"'`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./cmd/cli`, `bash -n scripts/test_live_providers.sh scripts/test_live_gemini.sh`, `timeout -k 180s -s SIGKILL 180s make test-live-providers LIVE_ENV_FILE=configs/.env LLM_PROXY_LIVE_PROVIDERS=gemini` (`model=omitted`, HTTP 200), `timeout -k 30s -s SIGKILL 30s git diff --check`, and `timeout -k 350s -s SIGKILL 350s make ci` (Go/Python lint clean, Go total coverage 100.0%, Python 28 passed).
+- [x] [I013] (P1) Make bundled clients canonical v2-only transports
+  ### Summary
+  The public server remains a blocking REST proxy with `GET /`, compatibility JSON `POST /`, and canonical `POST /v2`, but bundled client libraries should not keep two text request shapes. They should expose only the canonical v2 messages contract so downstream callers do not have to choose between prompt JSON and messages JSON.
+  ### Acceptance Criteria
+  1. The reusable Go client exposes only `NewMessagesRequest` and `Client.PostMessages` for text requests.
+  2. The installable Go CLI sends `--prompt`, stdin, or `--prompt-file` content as a v2 `user` message through `POST /v2`.
+  3. The Python package exports only `ClientMessagesRequest` and `Client.post_messages` for text requests.
+  4. README and provider-routing docs state that bundled clients are v2-only while the server still supports the direct REST endpoints.
+  5. Black-box Go CLI, Go client, and Python client tests cover the v2-only path and omitted-model provider-default behavior.
+  ### Resolution
+  Removed the legacy Go `Request`/`NewRequest`/`Client.Post` API and the Python `ClientRequest`/`Client.post` API. The Go CLI now maps prompt inputs into v2 `messages[]`, sends through `Client.PostMessages`, preserves the clearer `missing prompt` boundary error, and still omits `model` when `--model` is not provided. README and provider-routing docs now state that bundled clients are v2-only while direct server callers may still use `GET /`, compatibility `POST /`, or canonical `POST /v2`.
+
+  Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./pkg/llmproxyclient`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./llm-proxy-client`, `timeout -k 120s -s SIGKILL 120s bash -lc 'cd python && uv run --group dev pytest tests/test_client.py'` (Python 20 passed), `timeout -k 350s -s SIGKILL 350s make ci` (Go/Python lint clean, Go total coverage 100.0%, Python 20 passed, root import smoke passed), and `timeout -k 30s -s SIGKILL 30s git diff --check`.
 - [ ] [I010] (P0) Limit upstream HTTP call rate in shared HTTP client for text and dictation, without provider‑specific logic.
   Goal:
   Ensure the shared HTTP client layer enforces a consistent, configurable limit on upstream HTTP calls across both text and dictation flows, so that provider rate limits and system resource usage are controlled without duplicating provider-specific throttling logic in multiple places.
@@ -302,4 +414,3 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
 ## Planning
 *do not implement yet*
-

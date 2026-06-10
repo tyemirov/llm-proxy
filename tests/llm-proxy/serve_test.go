@@ -1,10 +1,12 @@
 package llm_proxy_test
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -140,39 +142,194 @@ func TestEndpoint_RespectsAcceptHeaderCSV(testingInstance *testing.T) {
 	}
 }
 
-// TestEndpoint_ReturnsServiceUnavailableWhenQueueFull confirms that a full queue results in an HTTP 503 status code.
+// TestEndpoint_ReturnsServiceUnavailableWhenQueueFull confirms that a full upstream HTTP queue results in an HTTP 503 status code.
 func TestEndpoint_ReturnsServiceUnavailableWhenQueueFull(testingInstance *testing.T) {
 	gin.SetMode(gin.TestMode)
+	endpoints := proxy.NewEndpoints()
+	endpoints.SetModelsURL(modelsURL)
+	endpoints.SetResponsesURL(responsesURL)
+	upstreamStarted := make(chan struct{})
+	releaseUpstream := make(chan struct{})
+	var closeStartedOnce sync.Once
+	originalClient := proxy.HTTPClient
+	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
+	proxy.HTTPClient = &http.Client{
+		Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+			switch request.URL.String() {
+			case endpoints.GetModelsURL():
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(`{"data":[{"id":"` + proxy.ModelNameGPT41 + `"}]}`)),
+					Header:     make(http.Header),
+				}, nil
+			case endpoints.GetResponsesURL():
+				closeStartedOnce.Do(func() { close(upstreamStarted) })
+				select {
+				case <-request.Context().Done():
+					return nil, request.Context().Err()
+				case <-releaseUpstream:
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(strings.NewReader(`{"output_text":"queued"}`)),
+						Header:     make(http.Header),
+					}, nil
+				}
+			default:
+				return &http.Response{
+					StatusCode: http.StatusNotFound,
+					Body:       io.NopCloser(strings.NewReader(`{}`)),
+					Header:     make(http.Header),
+				}, nil
+			}
+		}),
+		Timeout: 5 * time.Second,
+	}
 
-	router := newRouterWithStubbedOpenAI(
-		testingInstance,
-		`{"data":[{"id":"`+proxy.ModelNameGPT41+`"}]}`,
-		`{"output_text":"queued"}`,
-		0,
-		1,
-		1,
-	)
+	logger, _ := zap.NewDevelopment()
+	defer logger.Sync()
+	router, buildError := proxy.BuildRouter(testfixtures.WithProviderModelCatalogs(testingInstance, proxy.Configuration{
+		Tenants:               proxy.SingleTenantConfigurations("test", "sekret"),
+		OpenAIKey:             "sk-test",
+		LogLevel:              "debug",
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: 1,
+		Endpoints:             endpoints,
+	}), logger.Sugar())
+	if buildError != nil {
+		testingInstance.Fatalf("BuildRouter error: %v", buildError)
+	}
 
 	server := httptest.NewServer(router)
 	testingInstance.Cleanup(server.Close)
 
 	firstRequest, _ := http.NewRequest("GET", server.URL+"/?prompt=first&key=sekret", nil)
-	go http.DefaultClient.Do(firstRequest)
+	go func() {
+		firstResponse, requestError := http.DefaultClient.Do(firstRequest)
+		if requestError == nil {
+			_ = firstResponse.Body.Close()
+		}
+	}()
+	select {
+	case <-upstreamStarted:
+	case <-time.After(time.Second):
+		testingInstance.Fatal("upstream request did not start")
+	}
+
+	statuses := make(chan int, 2)
+	for requestIndex := 0; requestIndex < 2; requestIndex++ {
+		go func() {
+			requestContext, cancelRequest := context.WithTimeout(context.Background(), 250*time.Millisecond)
+			defer cancelRequest()
+			request, _ := http.NewRequestWithContext(requestContext, "GET", server.URL+"/?prompt=queued&key=sekret", nil)
+			response, requestError := http.DefaultClient.Do(request)
+			if requestError != nil {
+				statuses <- 0
+				return
+			}
+			defer response.Body.Close()
+			statuses <- response.StatusCode
+		}()
+	}
+
+	queueFullObserved := false
+	for receivedStatusCount := 0; receivedStatusCount < 2 && !queueFullObserved; receivedStatusCount++ {
+		select {
+		case status := <-statuses:
+			queueFullObserved = status == http.StatusServiceUnavailable
+		case <-time.After(time.Second):
+			testingInstance.Fatal("queue full response was not observed")
+		}
+	}
+	if !queueFullObserved {
+		testingInstance.Fatal("queue full response was not observed")
+	}
+	close(releaseUpstream)
+}
+
+// TestEndpoint_ReturnsGatewayTimeoutWhenWaitingForUpstreamWorker confirms that admitted upstream HTTP waits respect the request timeout.
+func TestEndpoint_ReturnsGatewayTimeoutWhenWaitingForUpstreamWorker(testingInstance *testing.T) {
+	gin.SetMode(gin.TestMode)
+	endpoints := proxy.NewEndpoints()
+	endpoints.SetModelsURL(modelsURL)
+	endpoints.SetResponsesURL(responsesURL)
+	upstreamStarted := make(chan struct{})
+	releaseUpstream := make(chan struct{})
+	var closeStartedOnce sync.Once
+	originalClient := proxy.HTTPClient
+	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
+	proxy.HTTPClient = &http.Client{
+		Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+			switch request.URL.String() {
+			case endpoints.GetModelsURL():
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(`{"data":[{"id":"` + proxy.ModelNameGPT41 + `"}]}`)),
+					Header:     make(http.Header),
+				}, nil
+			case endpoints.GetResponsesURL():
+				closeStartedOnce.Do(func() { close(upstreamStarted) })
+				select {
+				case <-request.Context().Done():
+					return nil, request.Context().Err()
+				case <-releaseUpstream:
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(strings.NewReader(`{"output_text":"queued"}`)),
+						Header:     make(http.Header),
+					}, nil
+				}
+			default:
+				return &http.Response{
+					StatusCode: http.StatusNotFound,
+					Body:       io.NopCloser(strings.NewReader(`{}`)),
+					Header:     make(http.Header),
+				}, nil
+			}
+		}),
+		Timeout: 5 * time.Second,
+	}
+
+	logger, _ := zap.NewDevelopment()
+	defer logger.Sync()
+	router, buildError := proxy.BuildRouter(testfixtures.WithProviderModelCatalogs(testingInstance, proxy.Configuration{
+		Tenants:               proxy.SingleTenantConfigurations("test", "sekret"),
+		OpenAIKey:             "sk-test",
+		LogLevel:              "debug",
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: 1,
+		Endpoints:             endpoints,
+	}), logger.Sugar())
+	if buildError != nil {
+		testingInstance.Fatalf("BuildRouter error: %v", buildError)
+	}
+
+	server := httptest.NewServer(router)
+	testingInstance.Cleanup(server.Close)
+
+	firstRequest, _ := http.NewRequest("GET", server.URL+"/?prompt=first&key=sekret", nil)
+	go func() {
+		firstResponse, requestError := http.DefaultClient.Do(firstRequest)
+		if requestError == nil {
+			_ = firstResponse.Body.Close()
+		}
+	}()
+	select {
+	case <-upstreamStarted:
+	case <-time.After(time.Second):
+		testingInstance.Fatal("upstream request did not start")
+	}
+
+	waitingRequest, _ := http.NewRequest("GET", server.URL+"/?prompt=waiting&key=sekret", nil)
+	waitingResponse, waitingRequestError := http.DefaultClient.Do(waitingRequest)
+	if waitingRequestError != nil {
+		testingInstance.Fatalf("request failed: %v", waitingRequestError)
+	}
+	defer waitingResponse.Body.Close()
+	if waitingResponse.StatusCode != http.StatusGatewayTimeout {
+		testingInstance.Fatalf("status=%d want=%d", waitingResponse.StatusCode, http.StatusGatewayTimeout)
+	}
 	time.Sleep(50 * time.Millisecond)
-
-	secondRequest, _ := http.NewRequest("GET", server.URL+"/?prompt=second&key=sekret", nil)
-	secondResponse, secondRequestError := http.DefaultClient.Do(secondRequest)
-	if secondRequestError != nil {
-		testingInstance.Fatalf("request failed: %v", secondRequestError)
-	}
-	defer secondResponse.Body.Close()
-
-	if secondResponse.StatusCode != http.StatusServiceUnavailable {
-		testingInstance.Fatalf("status=%d want=%d", secondResponse.StatusCode, http.StatusServiceUnavailable)
-	}
-	responseBody, _ := io.ReadAll(secondResponse.Body)
-	const expectedBody = "request queue full"
-	if strings.TrimSpace(string(responseBody)) != expectedBody {
-		testingInstance.Fatalf("body=%q want=%q", string(responseBody), expectedBody)
-	}
+	close(releaseUpstream)
 }

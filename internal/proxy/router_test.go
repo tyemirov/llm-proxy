@@ -242,15 +242,14 @@ func TestChatHandlerRejectsOversizedJSONBody(testingInstance *testing.T) {
 	endpoints := proxy.NewEndpoints()
 	logger := zap.NewNop()
 	router, buildRouterError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		LogLevel:                   proxy.LogLevelInfo,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
-		MaxPromptBytes:             32,
-		Endpoints:                  endpoints,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+		MaxPromptBytes:        32,
+		Endpoints:             endpoints,
 	}, logger.Sugar())
 	if buildRouterError != nil {
 		testingInstance.Fatalf(messageBuildRouterError, buildRouterError)

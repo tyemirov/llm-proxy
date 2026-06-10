@@ -22,7 +22,7 @@ type transcriptionResponse struct {
 	OutputText string `json:"output_text"`
 }
 
-func (client *OpenAIClient) transcribeAudioWithURL(openAIKey string, transcriptionsURL string, modelFieldName string, modelIdentifier string, fileName string, audioReader io.Reader, structuredLogger *zap.SugaredLogger) (string, error) {
+func (client *OpenAIClient) transcribeAudioWithURL(parentContext context.Context, openAIKey string, transcriptionsURL string, modelFieldName string, modelIdentifier string, fileName string, audioReader io.Reader, structuredLogger *zap.SugaredLogger) (string, error) {
 	modelFieldName = strings.TrimSpace(modelFieldName)
 	modelIdentifier = strings.TrimSpace(modelIdentifier)
 	fileName = strings.TrimSpace(fileName)
@@ -41,7 +41,7 @@ func (client *OpenAIClient) transcribeAudioWithURL(openAIKey string, transcripti
 
 	_ = multipartWriter.Close()
 
-	requestContext, cancelRequest := context.WithTimeout(context.Background(), client.requestTimeout)
+	requestContext, cancelRequest := context.WithTimeout(parentContext, client.requestTimeout)
 	defer cancelRequest()
 
 	requestBody := bytes.NewReader(payloadBuffer.Bytes())

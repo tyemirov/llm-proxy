@@ -30,19 +30,17 @@ var (
 // OpenAIClient provides access to the OpenAI responses API with configurable
 // endpoints and tunable parameters.
 type OpenAIClient struct {
-	httpClient          HTTPDoer
-	endpoints           *Endpoints
-	requestTimeout      time.Duration
-	upstreamPollTimeout time.Duration
+	httpClient     HTTPDoer
+	endpoints      *Endpoints
+	requestTimeout time.Duration
 }
 
 // NewOpenAIClient constructs an OpenAIClient initialized with the supplied components.
-func NewOpenAIClient(httpClient HTTPDoer, endpoints *Endpoints, requestTimeout time.Duration, pollTimeout time.Duration) *OpenAIClient {
+func NewOpenAIClient(httpClient HTTPDoer, endpoints *Endpoints, requestTimeout time.Duration) *OpenAIClient {
 	return &OpenAIClient{
-		httpClient:          httpClient,
-		endpoints:           endpoints,
-		requestTimeout:      requestTimeout,
-		upstreamPollTimeout: pollTimeout,
+		httpClient:     httpClient,
+		endpoints:      endpoints,
+		requestTimeout: requestTimeout,
 	}
 }
 
@@ -99,19 +97,14 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 
 	structuredLogger.Debugw(logEventOpenAIInitialResponseBody, logFieldResponseBody, string(responseBytes))
 
-	var decodedObject map[string]any
-	_ = json.Unmarshal(responseBytes, &decodedObject)
-
-	outputText := extractTextFromAny(responseBytes)
-	responseIdentifier := utils.GetString(decodedObject, jsonFieldID)
-	apiStatus := utils.GetString(decodedObject, jsonFieldStatus)
+	responseSnapshot, snapshotError := newOpenAIResponseSnapshot(responseBytes)
 
 	structuredLogger.Infow(
 		logEventOpenAIResponse,
 		logFieldHTTPStatus, statusCode,
-		logFieldAPIStatus, apiStatus,
+		logFieldAPIStatus, responseSnapshot.status,
 		constants.LogFieldLatencyMilliseconds, latencyMillis,
-		logFieldResponseText, outputText,
+		logFieldResponseText, responseSnapshot.text,
 	)
 
 	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
@@ -122,66 +115,140 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 		)
 		return textGenerationResult{}, errors.New(errorOpenAIAPI)
 	}
-
-	initialUsage, usageError := parseResponsesTokenUsage(responseBytes)
-	if usageError != nil {
+	if snapshotError != nil {
 		return textGenerationResult{}, errors.New(errorOpenAIAPI)
 	}
 
-	isTerminalStatus := false
-	switch apiStatus {
+	return client.resolveOpenAIResponse(requestContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, responseSnapshot, structuredLogger)
+}
+
+type openAIResponseSnapshot struct {
+	decodedObject         map[string]any
+	identifier            string
+	status                string
+	text                  string
+	usage                 *tokenUsage
+	hasFinalMessage       bool
+	hasTopLevelOutputText bool
+}
+
+func newOpenAIResponseSnapshot(responseBytes []byte) (openAIResponseSnapshot, error) {
+	var decodedObject map[string]any
+	decodeError := json.Unmarshal(responseBytes, &decodedObject)
+	usage, usageError := parseResponsesTokenUsage(responseBytes)
+	responseSnapshot := openAIResponseSnapshot{
+		decodedObject:         decodedObject,
+		identifier:            utils.GetString(decodedObject, jsonFieldID),
+		status:                strings.ToLower(utils.GetString(decodedObject, jsonFieldStatus)),
+		text:                  extractTextFromAny(responseBytes),
+		usage:                 usage,
+		hasFinalMessage:       hasFinalMessage(responseBytes),
+		hasTopLevelOutputText: !utils.IsBlank(utils.GetString(decodedObject, jsonFieldOutputText)),
+	}
+	if decodeError != nil {
+		return responseSnapshot, decodeError
+	}
+	if usageError != nil {
+		return responseSnapshot, usageError
+	}
+	return responseSnapshot, nil
+}
+
+func (responseSnapshot openAIResponseSnapshot) isTerminal() bool {
+	switch responseSnapshot.status {
 	case statusCompleted, statusSucceeded, statusDone, statusCancelled, statusFailed, statusErrored, statusIncomplete:
-		isTerminalStatus = true
+		return true
+	default:
+		return false
 	}
+}
 
-	forcedSynthesis := false
-	if isTerminalStatus && apiStatus == statusCompleted && !hasFinalMessage(responseBytes) {
-		forcedSynthesis = true
-		structuredLogger.Debugw(logEventMissingFinalMessage)
+func (responseSnapshot openAIResponseSnapshot) needsSynthesis() bool {
+	return responseSnapshot.status == statusCompleted && !responseSnapshot.hasFinalMessage && !responseSnapshot.hasTopLevelOutputText
+}
+
+func (responseSnapshot openAIResponseSnapshot) generation() textGenerationResult {
+	return textGenerationResult{text: responseSnapshot.text, usage: responseSnapshot.usage}
+}
+
+func (client *OpenAIClient) resolveOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	if !responseSnapshot.isTerminal() && !utils.IsBlank(responseSnapshot.identifier) {
+		finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, responseSnapshot.identifier, modelIdentifier, webSearchEnabled, maxTokens, structuredLogger)
+		if pollError != nil {
+			structuredLogger.Errorw(
+				logEventOpenAIPollError,
+				logFieldID, responseSnapshot.identifier,
+				constants.LogFieldError, pollError,
+			)
+			return textGenerationResult{}, openAIStageError(pollError)
+		}
+		if !utils.IsBlank(finalGeneration.text) {
+			finalGeneration.usage = mergeTokenUsage(responseSnapshot.usage, finalGeneration.usage)
+			return finalGeneration, nil
+		}
 	}
+	if !responseSnapshot.isTerminal() {
+		if utils.IsBlank(responseSnapshot.text) {
+			return textGenerationResult{}, errors.New(errorOpenAIAPI)
+		}
+		return responseSnapshot.generation(), nil
+	}
+	return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, responseSnapshot, structuredLogger)
+}
 
-	if apiStatus == statusIncomplete {
-		if !utils.IsBlank(outputText) {
-			return textGenerationResult{text: outputText, usage: initialUsage}, nil
-		}
-		if canContinueIncompleteResponse(decodedObject) && !utils.IsBlank(responseIdentifier) {
-			continuedResponseID, continuationError := client.startIncompleteContinuation(requestContext, openAIKey, responseIdentifier, modelIdentifier, webSearchEnabled, maxTokens, structuredLogger)
-			if continuationError != nil {
-				structuredLogger.Errorw(
-					logEventOpenAIContinueError,
-					logFieldID, responseIdentifier,
-					constants.LogFieldError, continuationError,
-				)
-				return textGenerationResult{}, openAIStageError(continuationError)
-			}
-			finalGeneration, pollError := client.pollResponseUntilDone(requestContext, openAIKey, continuedResponseID, structuredLogger)
-			if pollError != nil {
-				structuredLogger.Errorw(
-					logEventOpenAIPollError,
-					logFieldID, continuedResponseID,
-					constants.LogFieldError, pollError,
-				)
-				return textGenerationResult{}, openAIStageError(pollError)
-			}
-			if !utils.IsBlank(finalGeneration.text) {
-				finalGeneration.usage = mergeTokenUsage(initialUsage, finalGeneration.usage)
-				return finalGeneration, nil
-			}
-		}
+func (client *OpenAIClient) resolveTerminalOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	switch responseSnapshot.status {
+	case statusCancelled, statusFailed, statusErrored:
+		return textGenerationResult{}, errors.New(errorOpenAIFailedStatus)
+	case statusIncomplete:
+		return client.resolveIncompleteOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, responseSnapshot, structuredLogger)
+	default:
+		return client.resolveCompleteOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, responseSnapshot, structuredLogger)
+	}
+}
+
+func (client *OpenAIClient) resolveIncompleteOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	if !utils.IsBlank(responseSnapshot.text) {
+		return responseSnapshot.generation(), nil
+	}
+	if !canContinueIncompleteResponse(responseSnapshot.decodedObject) || utils.IsBlank(responseSnapshot.identifier) {
 		return textGenerationResult{}, ErrUpstreamIncomplete
 	}
+	continuedResponseID, continuationError := client.startIncompleteContinuation(parentContext, openAIKey, responseSnapshot.identifier, modelIdentifier, webSearchEnabled, maxTokens, structuredLogger)
+	if continuationError != nil {
+		structuredLogger.Errorw(
+			logEventOpenAIContinueError,
+			logFieldID, responseSnapshot.identifier,
+			constants.LogFieldError, continuationError,
+		)
+		return textGenerationResult{}, openAIStageError(continuationError)
+	}
+	finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, continuedResponseID, modelIdentifier, webSearchEnabled, maxTokens, structuredLogger)
+	if pollError != nil {
+		structuredLogger.Errorw(
+			logEventOpenAIPollError,
+			logFieldID, continuedResponseID,
+			constants.LogFieldError, pollError,
+		)
+		return textGenerationResult{}, openAIStageError(pollError)
+	}
+	finalGeneration.usage = mergeTokenUsage(responseSnapshot.usage, finalGeneration.usage)
+	return finalGeneration, nil
+}
 
-	if forcedSynthesis && !utils.IsBlank(responseIdentifier) {
-		continuedResponseID, synthErr := client.startSynthesisContinuation(requestContext, openAIKey, responseIdentifier, modelIdentifier.string(), maxTokens, structuredLogger)
+func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	if responseSnapshot.needsSynthesis() && !utils.IsBlank(responseSnapshot.identifier) {
+		structuredLogger.Debugw(logEventMissingFinalMessage)
+		continuedResponseID, synthErr := client.startSynthesisContinuation(parentContext, openAIKey, responseSnapshot.identifier, modelIdentifier.string(), maxTokens, structuredLogger)
 		if synthErr != nil {
 			structuredLogger.Errorw(
 				logEventOpenAIContinueError,
-				logFieldID, responseIdentifier,
+				logFieldID, responseSnapshot.identifier,
 				constants.LogFieldError, synthErr,
 			)
 			return textGenerationResult{}, openAIStageError(synthErr)
 		}
-		finalGeneration, pollError := client.pollResponseUntilDone(requestContext, openAIKey, continuedResponseID, structuredLogger)
+		finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, continuedResponseID, modelIdentifier, webSearchEnabled, maxTokens, structuredLogger)
 		if pollError != nil {
 			structuredLogger.Errorw(
 				logEventOpenAIPollError,
@@ -190,33 +257,13 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 			)
 			return textGenerationResult{}, openAIStageError(pollError)
 		}
-		if !utils.IsBlank(finalGeneration.text) {
-			finalGeneration.usage = mergeTokenUsage(initialUsage, finalGeneration.usage)
-			return finalGeneration, nil
-		}
+		finalGeneration.usage = mergeTokenUsage(responseSnapshot.usage, finalGeneration.usage)
+		return finalGeneration, nil
 	}
-
-	if !isTerminalStatus && !utils.IsBlank(responseIdentifier) {
-		finalGeneration, pollError := client.pollResponseUntilDone(requestContext, openAIKey, responseIdentifier, structuredLogger)
-		if pollError != nil {
-			structuredLogger.Errorw(
-				logEventOpenAIPollError,
-				logFieldID, responseIdentifier,
-				constants.LogFieldError, pollError,
-			)
-			return textGenerationResult{}, openAIStageError(pollError)
-		}
-		if !utils.IsBlank(finalGeneration.text) {
-			finalGeneration.usage = mergeTokenUsage(initialUsage, finalGeneration.usage)
-			return finalGeneration, nil
-		}
-	}
-
-	// If the initial response is terminal but we couldn't extract text, it's an error.
-	if utils.IsBlank(outputText) {
+	if utils.IsBlank(responseSnapshot.text) {
 		return textGenerationResult{}, errors.New(errorOpenAIAPI)
 	}
-	return textGenerationResult{text: outputText, usage: initialUsage}, nil
+	return responseSnapshot.generation(), nil
 }
 
 func openAIStageError(stageError error) error {
@@ -233,6 +280,8 @@ func (client *OpenAIClient) startSynthesisContinuation(parentContext context.Con
 	payload := map[string]any{
 		keyModel:              modelIdentifier,
 		keyPreviousResponseID: previousResponseID,
+		keyBackground:         true,
+		keyStore:              true,
 		keyToolChoice:         toolChoiceNone,
 		keyInput:              synthesisInstructionPrimary,
 		keyReasoning: map[string]any{
@@ -302,52 +351,41 @@ func canContinueIncompleteResponse(decodedObject map[string]any) bool {
 	}
 }
 
-// pollResponseUntilDone repeatedly fetches a response until it is complete or the poll timeout elapses.
-func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context, openAIKey string, responseIdentifier string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	pollContext, cancelPoll := context.WithTimeout(parentContext, client.upstreamPollTimeout)
-	defer cancelPoll()
+// pollResponseUntilDone repeatedly fetches a response until it is complete or the request context expires.
+func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context, openAIKey string, responseIdentifier string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	for {
-		generationCandidate, responseComplete, fetchError := client.fetchResponseByID(pollContext, openAIKey, responseIdentifier, structuredLogger)
+		responseSnapshot, responseComplete, fetchError := client.fetchResponseByID(parentContext, openAIKey, responseIdentifier, structuredLogger)
 		if fetchError != nil {
 			if parentContext.Err() != nil {
 				return textGenerationResult{}, parentContext.Err()
 			}
-			if pollContext.Err() != nil {
-				return textGenerationResult{}, ErrUpstreamIncomplete
-			}
 			return textGenerationResult{}, fetchError
 		}
-		if responseComplete && !utils.IsBlank(generationCandidate.text) {
-			return generationCandidate, nil
-		}
 		if responseComplete {
-			return textGenerationResult{}, errors.New(errorOpenAIAPINoText)
+			return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, responseSnapshot, structuredLogger)
 		}
 		select {
 		case <-time.After(responsePollInterval):
-		case <-pollContext.Done():
-			if parentContext.Err() != nil {
-				return textGenerationResult{}, parentContext.Err()
-			}
-			return textGenerationResult{}, ErrUpstreamIncomplete
+		case <-parentContext.Done():
+			return textGenerationResult{}, parentContext.Err()
 		}
 	}
 }
 
 // fetchResponseByID retrieves a response by identifier and reports whether the response is complete.
-func (client *OpenAIClient) fetchResponseByID(parentContext context.Context, openAIKey string, responseIdentifier string, structuredLogger *zap.SugaredLogger) (textGenerationResult, bool, error) {
+func (client *OpenAIClient) fetchResponseByID(parentContext context.Context, openAIKey string, responseIdentifier string, structuredLogger *zap.SugaredLogger) (openAIResponseSnapshot, bool, error) {
 	resourceURL := client.endpoints.GetResponsesURL() + "/" + responseIdentifier
 	requestContext, cancel := context.WithTimeout(parentContext, client.requestTimeout)
 	defer cancel()
 
 	httpRequest, buildError := buildAuthorizedJSONRequest(requestContext, http.MethodGet, resourceURL, openAIKey, nil)
 	if buildError != nil {
-		return textGenerationResult{}, false, buildError
+		return openAIResponseSnapshot{}, false, buildError
 	}
 
 	statusCode, responseBytes, _, requestError := client.performResponsesRequest(httpRequest, structuredLogger, logEventOpenAIPollError)
 	if requestError != nil {
-		return textGenerationResult{}, false, requestError
+		return openAIResponseSnapshot{}, false, requestError
 	}
 	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
 		structuredLogger.Desugar().Error(
@@ -356,7 +394,7 @@ func (client *OpenAIClient) fetchResponseByID(parentContext context.Context, ope
 			zap.ByteString(logFieldResponseBody, responseBytes),
 			zap.String(logFieldID, responseIdentifier),
 		)
-		return textGenerationResult{}, false, errors.New(errorOpenAIAPI)
+		return openAIResponseSnapshot{}, false, errors.New(errorOpenAIAPI)
 	}
 
 	structuredLogger.Debugw(
@@ -365,28 +403,11 @@ func (client *OpenAIClient) fetchResponseByID(parentContext context.Context, ope
 		logFieldResponseBody, string(responseBytes),
 	)
 
-	var decodedObject map[string]any
-	_ = json.Unmarshal(responseBytes, &decodedObject)
-	responseStatus := strings.ToLower(utils.GetString(decodedObject, jsonFieldStatus))
-	outputText := extractTextFromAny(responseBytes)
-	usage, usageError := parseResponsesTokenUsage(responseBytes)
-	if usageError != nil {
-		return textGenerationResult{}, false, errors.New(errorOpenAIAPI)
+	responseSnapshot, snapshotError := newOpenAIResponseSnapshot(responseBytes)
+	if snapshotError != nil {
+		return openAIResponseSnapshot{}, false, errors.New(errorOpenAIAPI)
 	}
-
-	switch responseStatus {
-	case statusCompleted, statusSucceeded, statusDone:
-		return textGenerationResult{text: outputText, usage: usage}, true, nil
-	case statusCancelled, statusFailed, statusErrored:
-		return textGenerationResult{}, true, errors.New(errorOpenAIFailedStatus)
-	case statusIncomplete:
-		if !utils.IsBlank(outputText) {
-			return textGenerationResult{text: outputText, usage: usage}, true, nil
-		}
-		return textGenerationResult{}, true, ErrUpstreamIncomplete
-	default:
-		return textGenerationResult{}, false, nil
-	}
+	return responseSnapshot, responseSnapshot.isTerminal(), nil
 }
 
 // --- Final, Corrected Response Parser ---
@@ -489,7 +510,7 @@ func (client *OpenAIClient) performResponsesRequest(httpRequest *http.Request, s
 		var transportError error
 		statusCode, responseBytes, latencyMillis, transportError = utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEvent)
 		if transportError != nil {
-			if errors.Is(transportError, context.Canceled) || errors.Is(transportError, context.DeadlineExceeded) {
+			if errors.Is(transportError, context.Canceled) || errors.Is(transportError, context.DeadlineExceeded) || errors.Is(transportError, errQueueFull) {
 				return backoff.Permanent(transportError)
 			}
 			return transportError

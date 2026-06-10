@@ -51,14 +51,13 @@ type fileConfiguration struct {
 }
 
 type serverConfiguration struct {
-	Port                       int    `mapstructure:"port"`
-	LogLevel                   string `mapstructure:"log_level"`
-	Workers                    int    `mapstructure:"workers"`
-	QueueSize                  int    `mapstructure:"queue_size"`
-	RequestTimeoutSeconds      int    `mapstructure:"request_timeout_seconds"`
-	UpstreamPollTimeoutSeconds int    `mapstructure:"upstream_poll_timeout_seconds"`
-	MaxPromptBytes             int64  `mapstructure:"max_prompt_bytes"`
-	MaxInputAudioBytes         int64  `mapstructure:"max_input_audio_bytes"`
+	Port                  int    `mapstructure:"port"`
+	LogLevel              string `mapstructure:"log_level"`
+	Workers               int    `mapstructure:"workers"`
+	QueueSize             int    `mapstructure:"queue_size"`
+	RequestTimeoutSeconds int    `mapstructure:"request_timeout_seconds"`
+	MaxPromptBytes        int64  `mapstructure:"max_prompt_bytes"`
+	MaxInputAudioBytes    int64  `mapstructure:"max_input_audio_bytes"`
 }
 
 type tenantConfiguration struct {
@@ -250,7 +249,6 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		WorkerCount:                  configuration.Server.Workers,
 		QueueSize:                    configuration.Server.QueueSize,
 		RequestTimeoutSeconds:        configuration.Server.RequestTimeoutSeconds,
-		UpstreamPollTimeoutSeconds:   configuration.Server.UpstreamPollTimeoutSeconds,
 		MaxPromptBytes:               configuration.Server.MaxPromptBytes,
 		MaxInputAudioBytes:           configuration.Server.MaxInputAudioBytes,
 		ProviderModels:               configuration.Providers.providerModelCatalogs(),

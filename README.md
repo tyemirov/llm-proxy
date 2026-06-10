@@ -12,6 +12,7 @@ client.
 - Minimal HTTP server that accepts:
   - `GET /?prompt=...&key=...[&provider=...]` for LLM responses
   - `POST /?key=...[&provider=...]` for large JSON prompt bodies
+  - `POST /v2?key=...[&provider=...]` for ordered chat-message JSON bodies
   - `POST /dictate?key=...[&provider=...]` for audio transcription
 - Choose the provider per request via `provider=...`; omitted provider uses the authenticated tenant default
 - Choose the model per request via `model=...`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
@@ -20,6 +21,28 @@ client.
 - Optional logging at `debug` or `info` levels
 - Forwards requests using server-side provider API keys
 - Supports plain text, JSON, XML, or CSV responses
+
+## REST Contract
+
+llm-proxy exposes a blocking REST contract for text generation. A caller sends
+one authenticated `GET /`, `POST /`, or `POST /v2` request and receives the final
+formatted answer in that same HTTP response.
+
+The caller does not stream tokens, poll a job endpoint, follow a resume token, or
+know whether the selected upstream provider uses synchronous responses,
+background responses, or provider-specific polling internally. For OpenAI
+Responses, llm-proxy always owns the background-response lifecycle: it sends
+stored background requests upstream and polls OpenAI server-side until the answer
+is terminal or `server.request_timeout_seconds` expires.
+
+A `504 Gateway Timeout` means the overall proxy request deadline expired before
+the selected upstream provider produced a final answer. It is not a prompt for
+the client to poll llm-proxy.
+
+Internally, `server.workers` limits concurrent upstream provider HTTP
+operations and `server.queue_size` limits upstream HTTP operations waiting for a
+worker. Long OpenAI background-response poll sleeps do not occupy a worker slot;
+only the actual upstream HTTP request or poll does.
 
 ## Configuration
 
@@ -43,8 +66,7 @@ server:
   log_level: info
   workers: 4
   queue_size: 100
-  request_timeout_seconds: 180
-  upstream_poll_timeout_seconds: 60
+  request_timeout_seconds: 240
   max_prompt_bytes: 4194304
   max_input_audio_bytes: 26214400
 tenants:
@@ -194,6 +216,12 @@ providers:
         - id: "xai-stt"
 ```
 
+`server.workers` is not the number of client requests that may be connected at
+once. It is the upstream provider HTTP concurrency limit shared by text
+generation and dictation. `server.queue_size` is the number of additional
+upstream HTTP operations that may wait for that shared limit before the proxy
+returns `503 request queue full`.
+
 ### Provider support matrix
 
 Provider selectors and aliases are accepted anywhere the public API accepts
@@ -225,7 +253,9 @@ Model ids and per-model metadata are runtime config data. To add, remove, or
 replace provider models, update the selected `config.yml` and restart the
 service; provider transports stay code-owned.
 
-Each provider must declare a text catalog:
+Each provider must declare a text catalog. A provider with an `api_key`
+configured must have a valid text `default_model`; that default is used when a
+request selects the provider and omits `model`.
 
 ```yaml
 providers:
@@ -268,6 +298,13 @@ the stable proxy payload shape for that OpenAI model and must be one of:
 | `openai_responses_temperature` | Adds `temperature`. |
 | `openai_responses_temperature_tools` | Adds `temperature`; includes web-search tools only when both the request and model catalog enable web search. |
 | `openai_responses_reasoning_tools` | Adds reasoning/text controls; includes web-search tools only when both the request and model catalog enable web search. |
+
+All OpenAI Responses text requests also send `background: true` and
+`store: true`. llm-proxy polls the stored OpenAI response server-side until it
+reaches a terminal state or the normal `server.request_timeout_seconds` deadline
+expires. Plain REST callers use one `GET /`, `POST /`, or `POST /v2` request and
+receive the final formatted answer; they do not stream, poll, or follow a
+separate resume endpoint.
 
 Provider-specific details:
 
@@ -472,14 +509,17 @@ export LLM_PROXY_SECRET="$SERVICE_SECRET"
 printf 'large prompt...\n' | llm-proxy-client --model gpt-5.5 --max-tokens 4096
 ```
 
-The client always uses `POST /?key=...` with a JSON body. It keeps non-payload
-query parameters such as `provider`, strips body-owned query fields such as
-`prompt` and `model`, and sends `prompt`, `model`, `web_search`,
-`system_prompt`, and `max_tokens` in the body.
+The client always uses canonical `POST /v2?key=...` with a JSON body. It keeps
+non-payload query parameters such as `provider`, strips body-owned query fields
+such as `prompt` and `model`, and sends the prompt as a v2 `user` message.
+`--system-prompt` becomes a v2 `system` message. Optional `model`,
+`web_search`, and `max_tokens` values remain body fields. When `--model` is
+omitted, the body omits `model` so llm-proxy uses the selected provider's
+configured default model.
 
-The reusable Go package under `pkg/llmproxyclient` also exposes
-`NewMessagesRequest` and `Client.PostMessages` for the canonical `POST /v2`
-messages-only endpoint.
+The reusable Go package under `pkg/llmproxyclient` is v2-only: construct a
+`MessagesRequest` with `NewMessagesRequest` and send it with
+`Client.PostMessages`.
 
 ### Python client package
 
@@ -490,7 +530,7 @@ uv pip install "llm-proxy-client @ git+https://github.com/tyemirov/llm-proxy.git
 ```
 
 ```python
-from llm_proxy_client import Client, ClientConfig, ClientMessagesRequest, ClientMessage, ClientRequest
+from llm_proxy_client import Client, ClientConfig, ClientMessagesRequest, ClientMessage
 
 client = Client(
     ClientConfig(
@@ -498,16 +538,18 @@ client = Client(
         secret="mysecret",
     )
 )
-text = client.post(
-    ClientRequest(
-        prompt="Summarize this",
+
+text = client.post_messages(
+    ClientMessagesRequest(
+        messages=(ClientMessage(role="user", content="Summarize this"),),
         model="gemini-2.5-flash",
         max_tokens=512,
     )
 )
 ```
 
-For chat-transcript callers, use the v2 messages-only endpoint:
+The Python package is v2-only. For chat-transcript callers, send the same
+`post_messages` request with multiple messages:
 
 ```python
 chat_text = client.post_messages(
@@ -902,7 +944,7 @@ positive and lets the upstream provider enforce any provider-side model limit.
 * `413 Payload Too Large` - JSON prompt body exceeds `max_prompt_bytes`
 * `429 Too Many Requests` - upstream provider rate limit
 * `503 Service Unavailable` - selected provider credential is unavailable because that non-default provider is disabled or missing its API key
-* `504 Gateway Timeout` - upstream request timed out
+* `504 Gateway Timeout` - the overall proxy request timed out before the selected upstream provider returned a final result
 * `502 Bad Gateway` - upstream provider API returned an error
 
 ## Security

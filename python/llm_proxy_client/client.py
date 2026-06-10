@@ -1,4 +1,4 @@
-"""Transport-only client for llm-proxy JSON POST text requests."""
+"""Transport-only client for llm-proxy v2 JSON POST text requests."""
 
 from __future__ import annotations
 
@@ -37,11 +37,15 @@ class LLMProxyClientError(ValueError):
 class LLMProxyHTTPError(RuntimeError):
     """Raised when llm-proxy returns a non-success HTTP status."""
 
-    def __init__(self, status_code: int, body: str, reason: str) -> None:
-        super().__init__(f"llm_proxy_client_http_failure: status={status_code} reason={reason} body={body!r}")
+    def __init__(self, status_code: int, body: str, reason: str, request_context: str) -> None:
+        super().__init__(
+            f"llm_proxy_client_http_failure: status={status_code} reason={reason} "
+            f"{request_context} body={body!r}"
+        )
         self.status_code = status_code
         self.body = body
         self.reason = reason
+        self.request_context = request_context
 
 
 class LLMProxyTransportError(RuntimeError):
@@ -62,7 +66,7 @@ class ClientConfig:
     base_url: str
     secret: str
     provider: str = ""
-    timeout_seconds: float = 120.0
+    timeout_seconds: float = 260.0
 
     def __post_init__(self) -> None:
         if not self.base_url.strip():
@@ -77,21 +81,12 @@ class ClientConfig:
         if self.timeout_seconds <= 0:
             raise LLMProxyClientError("llm_proxy_client_invalid_config: timeout_seconds must be positive")
 
-    def post_url(self) -> str:
-        """Return the authenticated JSON POST URL for this config."""
-
-        return self._post_url("")
-
     def messages_post_url(self) -> str:
         """Return the authenticated v2 JSON POST URL for this config."""
 
-        return self._post_url("v2")
-
-    def _post_url(self, api_version: str) -> str:
         parsed_url = urllib.parse.urlparse(self.base_url.strip())
         request_path = parsed_url.path or "/"
-        if api_version == "v2":
-            request_path = v2_endpoint_path(request_path)
+        request_path = v2_endpoint_path(request_path)
         query_items = urllib.parse.parse_qsl(parsed_url.query, keep_blank_values=True)
         stripped_query_keys = set(POST_BODY_QUERY_KEYS)
         stripped_query_keys.update({KEY_QUERY_KEY, FORMAT_QUERY_KEY})
@@ -157,55 +152,6 @@ class ClientMessage:
 
 
 @dataclass(frozen=True)
-class ClientRequest:
-    """Validated llm-proxy JSON POST request."""
-
-    prompt: str = ""
-    model: str = ""
-    web_search: bool = False
-    system_prompt: str = ""
-    max_tokens: int | None = None
-    messages: Sequence[ClientMessage] = ()
-
-    def __post_init__(self) -> None:
-        has_prompt = self.prompt != ""
-        has_messages = len(self.messages) > 0
-        if has_prompt and has_messages:
-            raise LLMProxyClientError("llm_proxy_client_invalid_request: choose prompt or messages")
-        if not has_prompt and not has_messages:
-            raise LLMProxyClientError("llm_proxy_client_invalid_request: missing prompt")
-        if has_messages:
-            validate_messages(self.messages)
-        if self.system_prompt.strip() and any(message.role.strip().lower() == "system" for message in self.messages):
-            raise LLMProxyClientError("llm_proxy_client_invalid_request: system_prompt conflicts with system message")
-        if self.max_tokens is not None and self.max_tokens <= 0:
-            raise LLMProxyClientError("llm_proxy_client_invalid_request: max_tokens must be positive")
-
-    def body(self) -> dict[str, Any]:
-        """Return the JSON body payload for this request."""
-
-        payload: dict[str, Any] = {
-            "web_search": self.web_search,
-        }
-        if self.messages:
-            payload["messages"] = [message.body() for message in self.ordered_messages()]
-        else:
-            payload["prompt"] = self.prompt
-        if self.model.strip():
-            payload["model"] = self.model.strip()
-        if self.system_prompt.strip():
-            payload["system_prompt"] = self.system_prompt.strip()
-        if self.max_tokens is not None:
-            payload["max_tokens"] = self.max_tokens
-        return payload
-
-    def ordered_messages(self) -> Sequence[ClientMessage]:
-        """Return messages sorted by explicit order when provided."""
-
-        return ordered_messages(self.messages)
-
-
-@dataclass(frozen=True)
 class ClientMessagesRequest:
     """Validated v2 messages-only JSON POST request."""
 
@@ -258,15 +204,10 @@ def ordered_messages(messages: Sequence[ClientMessage]) -> Sequence[ClientMessag
 
 @dataclass(frozen=True)
 class Client:
-    """HTTP client for llm-proxy JSON POST text requests."""
+    """HTTP client for llm-proxy v2 JSON POST text requests."""
 
     config: ClientConfig
     opener: ResponseOpener | None = None
-
-    def post(self, request: ClientRequest) -> str:
-        """Send a JSON POST request and return the response text."""
-
-        return self._post_json(request.body(), self.config.post_url())
 
     def post_messages(self, request: ClientMessagesRequest) -> str:
         """Send a v2 messages-only JSON POST request and return the response text."""
@@ -287,15 +228,47 @@ class Client:
             method="POST",
         )
         opener = self.opener or default_response_opener
+        failure_context = request_failure_context(request_payload, request_url, self.config.timeout_seconds)
         try:
             return opener(prepared_request, self.config.timeout_seconds)
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", errors="replace")
-            raise LLMProxyHTTPError(error.code, body, str(error.reason)) from error
+            raise LLMProxyHTTPError(error.code, body, str(error.reason), failure_context) from error
         except urllib.error.URLError as error:
-            raise LLMProxyTransportError(f"llm_proxy_client_transport_failure: {error.reason}") from error
+            raise LLMProxyTransportError(
+                f"llm_proxy_client_transport_failure: {failure_context} reason={error.reason}"
+            ) from error
         except TimeoutError as error:
-            raise LLMProxyTransportError(f"llm_proxy_client_transport_failure: {error}") from error
+            raise LLMProxyTransportError(
+                f"llm_proxy_client_transport_failure: {failure_context} reason={error}"
+            ) from error
+        except OSError as error:
+            raise LLMProxyTransportError(
+                f"llm_proxy_client_transport_failure: {failure_context} reason={error}"
+            ) from error
+
+
+def request_failure_context(request_payload: dict[str, Any], request_url: str, timeout_seconds: float) -> str:
+    """Return non-secret request context for HTTP and transport failures."""
+
+    parsed_url = urllib.parse.urlparse(request_url)
+    query_values = urllib.parse.parse_qs(parsed_url.query)
+    provider = first_query_value(query_values, PROVIDER_QUERY_KEY, "omitted")
+    model_value = request_payload.get("model")
+    model = model_value if isinstance(model_value, str) and model_value.strip() else "omitted"
+    return f"provider={provider} model={model} timeout_seconds={timeout_seconds:g}"
+
+
+def first_query_value(query_values: dict[str, list[str]], key: str, default: str) -> str:
+    """Return the first non-empty query value for a key."""
+
+    values = query_values.get(key, [])
+    if not values:
+        return default
+    value = values[0].strip()
+    if not value:
+        return default
+    return value
 
 
 def default_response_opener(request: urllib.request.Request, timeout: float) -> str:

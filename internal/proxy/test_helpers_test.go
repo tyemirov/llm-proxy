@@ -55,14 +55,13 @@ func NewTestRouter(t *testing.T, serverURL string) *gin.Engine {
 	t.Cleanup(func() { _ = logger.Sync() })
 
 	router, err := buildRouterWithCatalogs(t, proxy.Configuration{
-		Tenants:                    proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:                  TestAPIKey,
-		LogLevel:                   proxy.LogLevelDebug,
-		WorkerCount:                1,
-		QueueSize:                  1,
-		RequestTimeoutSeconds:      TestTimeout,
-		UpstreamPollTimeoutSeconds: TestTimeout,
-		Endpoints:                  endpoints,
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		LogLevel:              proxy.LogLevelDebug,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+		Endpoints:             endpoints,
 	}, logger.Sugar())
 	if err != nil {
 		t.Fatalf("BuildRouter error: %v", err)
