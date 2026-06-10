@@ -2,6 +2,73 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.17] - 2026-06-09
+
+### Changes
+- Merge pull request #175 from tyemirov/gix/support-resumable-openai-background-responses-with
+- test: verify timeout releases queue slot before worker acquisition in coverage provider
+- docs: add issue B005 describing PR merge CI limiter coverage gap and fix
+- fix: clarify model label in live provider smoke test logs
+- refactor: migrate client to llm-proxy v2 messages-only JSON POST API
+- refactor: remove legacy JSON POST support and enforce v2 messages-only API
+- refactor(llm-proxy-client): switch to v2 JSON POST request format
+- refactor(openai): unify response handling with snapshot abstraction
+- docs: clarify provider default model and bundled client POST /v2 usage
+- test(cli): add case for blank gemini text default model validation error
+- docs: update README to reflect v2-only client API changes
+- fix: correct import names in python-root-import-test Makefile target
+- docs: update issue tracker with OpenAI polling fix and default model handling
+- test: add integration test for concurrency and queue behavior
+- feat(proxy): add concurrency-limited HTTP client for upstream requests
+- docs: clarify server.workers and server.queue_size limits in routing plan
+- docs: clarify server.workers and server.queue_size concurrency limits
+- docs: add detailed issue I010 on decoupling OpenAI polling from worker occupancy
+- Merge branch 'master' into gix/support-resumable-openai-background-responses-with
+- Merge pull request #176 from tyemirov/issues-md-1781049635220
+- Update ISSUES.md
+- Update ISSUES.md
+- test: remove UpstreamPollTimeoutSeconds and simplify semantic review tests
+- refactor: remove background response resume logic and lower default timeout
+- refactor: remove background response resume logic and related tests
+- chore: reduce default timeout from 600s to 260s in llm-proxy-client
+- refactor: remove deprecated upstream poll timeout feature and related code
+- docs: clarify OpenAI Responses polling and timeout behavior in provider routing plan
+- chore: increase server request timeout from 180s to 240s
+- refactor: remove UpstreamPollTimeoutSeconds from server config
+- docs: clarify REST contract and update request timeout in README
+- fix: remove manual timeout tuning for OpenAI background semantic-review calls
+- test: add integration tests for background semantic review responses
+- feat(client): add support for resumable OpenAI background responses
+- feat: add support for resuming OpenAI background responses on 504 Gateway Timeout
+- chore: increase default timeout from 120s to 600s in llm-proxy-client
+- feat(proxy): add resume endpoint for polling incomplete OpenAI responses
+- docs: document OpenAI Responses background polling and resumable 504 errors
+- docs: document resumable OpenAI background response 504 handling
+- fix: enable resumable OpenAI background responses to avoid manual timeout tuning
+- Merge pull request #174 from tyemirov/gix/make-static-provider-config-explicit-and-add-dynamic
+- docs: clarify config loader behavior for missing provider api_key placeholders
+- fix(config): error on missing config placeholders except optional API keys
+- docs: clarify handling of missing provider API key placeholders
+- docs: add detailed issue B002 on long semantic-review POST transport failures
+- test: unify integration test router setup with integrationConfiguration helper
+- test_live_providers.sh: allow empty model override and improve logging
+- test: unify tests to use explicit provider model catalogs
+- docs: clarify config validation and provider API key requirements
+- fix: revert default Gemini model to gemini-2.5-flash in config.yml
+- fix: enforce API key validation for tenant default providers with aliases
+- docs: update README to reflect Gemini default model change and API key handling
+- docs: update ISSUES.md with provider config improvements and API key rules
+- chore: add comprehensive default configuration file with providers and models
+- test: remove deprecated adaptive tools tests and add web_search capability rejection test
+- test: unify live provider smoke tests into a single script
+- feat: add provider model catalog and enhance config with OpenAI URLs
+- docs: update provider routing plan with multi-provider model catalog config
+- feat(config): add comprehensive provider config validation and model catalogs
+- docs: update README with detailed provider model catalog schema and defaults
+- build: add test-live-providers target to Makefile
+- chore: update ISSUES.md with completed provider config and live test improvements
+- Runbook consolidated
+
 ## [v0.2.16] - 2026-06-08
 
 ### Changes
