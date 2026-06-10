@@ -11,6 +11,7 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - `provider` is an optional query parameter on `GET /`, `POST /`, `POST /v2`, and `POST /dictate`.
 - Omitted `provider` means the authenticated tenant's default provider.
 - `model` keeps its current meaning; omitted `model` means the authenticated tenant's default model when set, otherwise the selected provider's configured default model.
+- A provider with an API key configured must have a configured default text model so provider-selected requests can omit `model` consistently.
 - Compatibility JSON `POST /` accepts exactly one text input shape: `prompt` for a single user prompt or `messages[]` for an OpenRouter/OpenAI-compatible chat transcript.
 - Canonical JSON `POST /v2` accepts only `messages[]` as the text input shape; request-body `prompt` and `system_prompt` are invalid.
 - `messages[]` items contain `role` and string `content`. Supported roles are `system`, `user`, and `assistant`; at least one `user` message is required.
@@ -118,6 +119,13 @@ Every OpenAI Responses text request includes `background: true` and
 terminal status or `server.request_timeout_seconds`. Callers use one normal
 `GET /`, `POST /`, or `POST /v2` request and receive the final formatted answer;
 there is no streaming or client-side polling contract.
+
+Bundled clients intentionally expose only the canonical `POST /v2` text
+contract. The installable Go CLI maps prompt flags or stdin into v2 `system` and
+`user` messages, while the reusable Go and Python packages expose only
+messages-request constructors and `PostMessages`/`post_messages` send methods.
+The server keeps `GET /` and compatibility JSON `POST /` available for direct
+REST callers.
 
 `server.workers` limits concurrent upstream provider HTTP operations, not whole
 client request lifecycles. `server.queue_size` limits the number of additional
