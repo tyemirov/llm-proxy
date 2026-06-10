@@ -216,7 +216,32 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   5. Black-box CLI/config tests cover missing required provider credentials.
   ### Resolution
   `configs/config.yml` now uses `${...}` placeholders for every supported provider API key and explicit URLs for every provider `base_url` plus SiliconFlow `transcriptions_url`. The config-file loader now rejects blank provider API keys, blank provider base URLs, and blank SiliconFlow transcription URLs before building runtime configuration. README and provider-routing docs now describe provider keys as required and provider URLs as explicit config values. Black-box CLI config tests cover complete startup config, missing provider key, missing provider base URL, missing SiliconFlow transcription URL, and omitted tenant defaults. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./cmd/cli -run 'TestRootCommand(RunsConfiguredProxyFromConfigFile|RunsProductionLoggerFromConfigFile|RejectsIncompleteStaticProviderConfig)'`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 26 passed), `timeout -k 350s -s SIGKILL 350s make lint`, and `timeout -k 350s -s SIGKILL 350s make ci`.
-- [ ] [I010] (P0) limit upstream HTTP calls at the shared HTTP client layer, which covers text and dictation without duplicating provider-specific logic.
+- [ ] [I010] (P0) Limit upstream HTTP call rate in shared HTTP client for text and dictation, without provider‑specific logic.
+  Goal:
+  Ensure the shared HTTP client layer enforces a consistent, configurable limit on upstream HTTP calls across both text and dictation flows, so that provider rate limits and system resource usage are controlled without duplicating provider-specific throttling logic in multiple places.
+  
+  Requirements:
+  - Apply limiting at the shared HTTP client abstraction used by text and dictation, not in provider-specific integrations.
+  - Support configuration of call limits (e.g., max requests per unit time) via existing config mechanisms or a new, clearly documented one.
+  - Avoid changing existing provider-specific semantics beyond the addition of call limiting; existing error handling, retries, and timeouts should remain compatible.
+  - Ensure limits can be tuned independently per upstream host or service if needed, without hard-coding provider identities.
+  - Preserve observability: logging and/or metrics should make it possible to understand when and how often calls are limited.
+  - Do not introduce breaking API changes for current callers of the shared HTTP client without a migration path.
+  - Handle concurrent requests safely to avoid race conditions or inconsistent enforcement of limits.
+  
+  Deliverables:
+  - Updated shared HTTP client implementation that enforces upstream HTTP call limits for all consumers, including text and dictation paths.
+  - Configuration options (and defaults) for call limiting behavior, with inline code docs describing their usage.
+  - Logging/metrics hooks that surface when requests are delayed, denied, or otherwise affected by the limiting behavior.
+  - Brief developer documentation or comments explaining where the limiting occurs, how to configure it, and how it interacts with existing retry/timeout behavior.
+  - Tests covering at least: respecting configured limits, behavior under concurrent load, interaction with retries, and no regression for existing non-limited behavior when limits are effectively disabled.
+  
+  Validation:
+  - Run automated tests demonstrating that the shared HTTP client enforces configured call limits under concurrent traffic for both text and dictation code paths.
+  - Confirm that no provider-specific modules contain duplicated or custom call-limiting logic for this purpose after the change, or that any remaining logic is clearly outside this shared concern.
+  - Verify through logs/metrics that limiting events are emitted as expected when thresholds are reached.
+  - Validate that typical workloads for text and dictation still succeed without unexpected errors when limits are set to realistic production values.
+  - Perform a targeted regression check to ensure existing integrations using the shared HTTP client behave as before when limits are configured to be non-restrictive (e.g., effectively off).
 
 
 ## Maintenance
