@@ -119,6 +119,13 @@ terminal status or `server.request_timeout_seconds`. Callers use one normal
 `GET /`, `POST /`, or `POST /v2` request and receive the final formatted answer;
 there is no streaming or client-side polling contract.
 
+`server.workers` limits concurrent upstream provider HTTP operations, not whole
+client request lifecycles. `server.queue_size` limits the number of additional
+upstream HTTP operations waiting for that shared worker limit. OpenAI
+background-response sleeps between polls do not occupy worker capacity; only the
+actual upstream create, poll, continuation, synthesis, chat, native-provider, or
+dictation HTTP operation does.
+
 Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, requires API keys for each tenant's default text and dictation providers, allows non-default provider API keys to be blank so those providers are disabled until configured, requires every configured provider base URL, requires transcription URLs for dictation-capable providers, requires text model catalogs for every provider, requires dictation model catalogs for dictation-capable providers, rejects blank or duplicate model ids, rejects defaults not listed in their model catalog, rejects `web_search` outside OpenAI text model entries, validates OpenAI request profiles, validates each tenant's default text provider/model, and validates endpoint/credential support for each tenant's default dictation provider/model.
 
 ## Error Contract
