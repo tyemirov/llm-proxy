@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.18] - 2026-06-10
+
+### Changes
+- Merge pull request #177 from tyemirov/gix/update-default-gateway-deploy-target-to-deploy-llm-proxy
+- fix(deploy): update default gateway target to deploy-llm-proxy
+- docs: correct default deploy target to deploy-llm-proxy in README
+- fix Makefile default deploy target to deploy-llm-proxy
+- docs: update ISSUE.md with live retry and gateway timeout analysis
+
 ## [v0.2.17] - 2026-06-09
 
 ### Changes
