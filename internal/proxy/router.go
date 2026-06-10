@@ -16,19 +16,11 @@ import (
 	"go.uber.org/zap"
 )
 
-// result holds the outcome returned by a worker, including the text response
+// result holds the outcome returned by a provider goroutine, including the text response
 // and any error encountered during the upstream provider request.
 type result struct {
 	generation   textGenerationResult
 	requestError error
-}
-
-// requestTask carries all details needed to process a user request in the
-// worker queue.
-type requestTask struct {
-	context    context.Context
-	parameters chatRequestParameters
-	reply      chan result
 }
 
 // chatRequestPayload is the JSON contract for POST / LLM requests.
@@ -93,26 +85,18 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		router.Use(requestResponseLogger(structuredLogger))
 	}
 
-	taskQueue := make(chan requestTask, configuration.QueueSize)
 	requestTimeout := time.Duration(configuration.RequestTimeoutSeconds) * time.Second
-	openAIClient := NewOpenAIClient(HTTPClient, configuration.Endpoints, requestTimeout)
-	chatClient := newOpenAICompatibleChatClient(HTTPClient, requestTimeout)
-	geminiClient := newGeminiGenerateContentClient(HTTPClient, requestTimeout)
-	anthropicClient := newAnthropicMessagesClient(HTTPClient, requestTimeout)
+	upstreamHTTPClient := newLimitedHTTPDoer(HTTPClient, configuration.WorkerCount, configuration.QueueSize)
+	openAIClient := NewOpenAIClient(upstreamHTTPClient, configuration.Endpoints, requestTimeout)
+	chatClient := newOpenAICompatibleChatClient(upstreamHTTPClient, requestTimeout)
+	geminiClient := newGeminiGenerateContentClient(upstreamHTTPClient, requestTimeout)
+	anthropicClient := newAnthropicMessagesClient(upstreamHTTPClient, requestTimeout)
 	upstreamProviders := newProviderRouter(openAIClient, chatClient, geminiClient, anthropicClient)
-	for workerIndex := 0; workerIndex < configuration.WorkerCount; workerIndex++ {
-		go func() {
-			for pending := range taskQueue {
-				generation, requestError := upstreamProviders.generateText(pending.context, pending.parameters, structuredLogger)
-				pending.reply <- result{generation: generation, requestError: requestError}
-			}
-		}()
-	}
 
 	router.Use(gin.Recovery(), tenantMiddleware(configuration.tenants, structuredLogger))
-	router.GET(rootPath, chatHandler(taskQueue, validator, requestTimeout, structuredLogger))
-	router.POST(rootPath, chatJSONHandler(taskQueue, validator, requestTimeout, configuration.MaxPromptBytes, structuredLogger))
-	router.POST(v2Path, chatV2JSONHandler(taskQueue, validator, requestTimeout, configuration.MaxPromptBytes, structuredLogger))
+	router.GET(rootPath, chatHandler(upstreamProviders, validator, requestTimeout, structuredLogger))
+	router.POST(rootPath, chatJSONHandler(upstreamProviders, validator, requestTimeout, configuration.MaxPromptBytes, structuredLogger))
+	router.POST(v2Path, chatV2JSONHandler(upstreamProviders, validator, requestTimeout, configuration.MaxPromptBytes, structuredLogger))
 	router.POST(dictatePath, dictateHandler(upstreamProviders, validator, configuration.MaxInputAudioBytes, structuredLogger))
 	return router, nil
 }
@@ -126,20 +110,20 @@ func Serve(configuration Configuration, structuredLogger *zap.SugaredLogger) err
 	return router.Run(fmt.Sprintf(":%d", configuration.Port))
 }
 
-// chatHandler returns a handler that forwards query-string requests to the task queue.
-func chatHandler(taskQueue chan requestTask, validator *modelValidator, requestTimeout time.Duration, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+// chatHandler returns a handler that forwards query-string requests to upstream providers.
+func chatHandler(upstreamProviders *providerRouter, validator *modelValidator, requestTimeout time.Duration, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		requestTenant := authenticatedTenantFromContext(ginContext)
 		chatRequest, ok := chatRequestFromQuery(ginContext, requestTenant.defaults, validator, structuredLogger)
 		if !ok {
 			return
 		}
-		submitChatRequest(ginContext, taskQueue, chatRequest, requestTimeout, structuredLogger)
+		submitChatRequest(ginContext, upstreamProviders, chatRequest, requestTimeout, structuredLogger)
 	}
 }
 
-// chatJSONHandler accepts large prompt bodies while preserving the same model validation, queueing, and response formatting used by GET /.
-func chatJSONHandler(taskQueue chan requestTask, validator *modelValidator, requestTimeout time.Duration, maxPromptBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+// chatJSONHandler accepts large prompt bodies while preserving the same model validation and response formatting used by GET /.
+func chatJSONHandler(upstreamProviders *providerRouter, validator *modelValidator, requestTimeout time.Duration, maxPromptBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		requestTenant := authenticatedTenantFromContext(ginContext)
 		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxPromptBytes)
@@ -158,11 +142,11 @@ func chatJSONHandler(taskQueue chan requestTask, validator *modelValidator, requ
 		if !ok {
 			return
 		}
-		submitChatRequest(ginContext, taskQueue, chatRequest, requestTimeout, structuredLogger)
+		submitChatRequest(ginContext, upstreamProviders, chatRequest, requestTimeout, structuredLogger)
 	}
 }
 
-func chatV2JSONHandler(taskQueue chan requestTask, validator *modelValidator, requestTimeout time.Duration, maxPromptBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+func chatV2JSONHandler(upstreamProviders *providerRouter, validator *modelValidator, requestTimeout time.Duration, maxPromptBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		requestTenant := authenticatedTenantFromContext(ginContext)
 		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxPromptBytes)
@@ -183,7 +167,7 @@ func chatV2JSONHandler(taskQueue chan requestTask, validator *modelValidator, re
 		if !ok {
 			return
 		}
-		submitChatRequest(ginContext, taskQueue, chatRequest, requestTimeout, structuredLogger)
+		submitChatRequest(ginContext, upstreamProviders, chatRequest, requestTimeout, structuredLogger)
 	}
 }
 
@@ -362,20 +346,14 @@ func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayl
 	}, true
 }
 
-func submitChatRequest(ginContext *gin.Context, taskQueue chan requestTask, chatRequest chatRequestParameters, requestTimeout time.Duration, structuredLogger *zap.SugaredLogger) {
+func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRouter, chatRequest chatRequestParameters, requestTimeout time.Duration, structuredLogger *zap.SugaredLogger) {
 	replyChannel := make(chan result, 1)
 	requestContext, requestCancel := context.WithTimeout(ginContext.Request.Context(), requestTimeout)
 	defer requestCancel()
-	select {
-	case taskQueue <- requestTask{
-		context:    requestContext,
-		parameters: chatRequest,
-		reply:      replyChannel,
-	}:
-	case <-requestContext.Done():
-		ginContext.String(http.StatusServiceUnavailable, errorQueueFull)
-		return
-	}
+	go func() {
+		generation, requestError := upstreamProviders.generateText(requestContext, chatRequest, structuredLogger)
+		replyChannel <- result{generation: generation, requestError: requestError}
+	}()
 
 	select {
 	case outcome := <-replyChannel:
@@ -436,7 +414,7 @@ func dictateHandler(upstreamProviders *providerRouter, validator *modelValidator
 			fileName:    fileName,
 			audioReader: audioFile,
 		}
-		transcribedText, requestError := upstreamProviders.transcribeAudio(dictationRequest, structuredLogger)
+		transcribedText, requestError := upstreamProviders.transcribeAudio(ginContext.Request.Context(), dictationRequest, structuredLogger)
 		if requestError != nil {
 			ginContext.String(statusCodeForError(requestError), responseMessageForError(requestError))
 			return
@@ -505,7 +483,7 @@ func statusCodeForError(requestError error) int {
 	switch {
 	case errors.Is(requestError, ErrUnknownProvider), errors.Is(requestError, ErrUnknownModel), errors.Is(requestError, ErrUnsupportedCapability), errors.Is(requestError, ErrUnsupportedEndpoint), errors.Is(requestError, ErrConflictingModelParameters), errors.Is(requestError, ErrInvalidChatMessages):
 		return http.StatusBadRequest
-	case errors.Is(requestError, ErrProviderNotConfigured):
+	case errors.Is(requestError, ErrProviderNotConfigured), errors.Is(requestError, errQueueFull):
 		return http.StatusServiceUnavailable
 	case errors.Is(requestError, ErrProviderRateLimited):
 		return http.StatusTooManyRequests

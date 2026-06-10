@@ -67,12 +67,13 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 	)
 }
 
-func (router *providerRouter) transcribeAudio(request dictationRequestParameters, structuredLogger *zap.SugaredLogger) (string, error) {
+func (router *providerRouter) transcribeAudio(requestContext context.Context, request dictationRequestParameters, structuredLogger *zap.SugaredLogger) (string, error) {
 	transcriptionsURL := request.provider.transcriptionsURL
 	if request.provider.identifier == providerID(ProviderNameOpenAI) {
 		transcriptionsURL = router.openAIClient.endpoints.GetTranscriptionsURL()
 	}
 	return router.openAIClient.transcribeAudioWithURL(
+		requestContext,
 		request.provider.credentialFor(endpointKindDictation),
 		transcriptionsURL,
 		request.provider.transcriptionModelField,

@@ -481,7 +481,7 @@ func (client *OpenAIClient) performResponsesRequest(httpRequest *http.Request, s
 		var transportError error
 		statusCode, responseBytes, latencyMillis, transportError = utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEvent)
 		if transportError != nil {
-			if errors.Is(transportError, context.Canceled) || errors.Is(transportError, context.DeadlineExceeded) {
+			if errors.Is(transportError, context.Canceled) || errors.Is(transportError, context.DeadlineExceeded) || errors.Is(transportError, errQueueFull) {
 				return backoff.Permanent(transportError)
 			}
 			return transportError
