@@ -760,6 +760,11 @@ providers:
 			expectedError: "invalid_model_catalog: provider=openai endpoint=text field=providers.openai.text.default_model",
 		},
 		{
+			name:          "blank keyed gemini text default model",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "default_model: \"gemini-2.5-flash\"", "default_model: \"\"", 1),
+			expectedError: "invalid_model_catalog: provider=gemini endpoint=text field=providers.gemini.text.default_model",
+		},
+		{
 			name:          "blank provider dictation default model",
 			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "dictation:\n      default_model: \"gpt-4o-mini-transcribe\"", "dictation:\n      default_model: \"\"", 1),
 			expectedError: "invalid_model_catalog: provider=openai endpoint=dictation field=providers.openai.dictation.default_model",
