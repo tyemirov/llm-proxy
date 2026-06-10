@@ -14,7 +14,7 @@ import (
 	"github.com/tyemirov/llm-proxy/pkg/llmproxyclient"
 )
 
-func TestConfigPostURLShapesAuthenticatedJSONPostURL(testingInstance *testing.T) {
+func TestConfigMessagesPostURLShapesAuthenticatedV2JSONPostURL(testingInstance *testing.T) {
 	config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
 		BaseURL:  "https://proxy.example/review?prompt=old&model=old&max_tokens=9&web_search=true&provider=gemini&keep=1",
 		Secret:   "sekret",
@@ -25,19 +25,12 @@ func TestConfigPostURLShapesAuthenticatedJSONPostURL(testingInstance *testing.T)
 		testingInstance.Fatalf("config error: %v", configError)
 	}
 
-	parsedURL, parseError := url.Parse(config.PostURL())
+	parsedURL, parseError := url.Parse(config.MessagesPostURL())
 	if parseError != nil {
-		testingInstance.Fatalf("parse post url: %v", parseError)
+		testingInstance.Fatalf("parse messages post url: %v", parseError)
 	}
-	if parsedURL.Path != "/review" {
-		testingInstance.Fatalf("path=%q", parsedURL.Path)
-	}
-	parsedMessagesURL, messagesParseError := url.Parse(config.MessagesPostURL())
-	if messagesParseError != nil {
-		testingInstance.Fatalf("parse messages post url: %v", messagesParseError)
-	}
-	if parsedMessagesURL.Path != "/review/v2" {
-		testingInstance.Fatalf("messages path=%q", parsedMessagesURL.Path)
+	if parsedURL.Path != "/review/v2" {
+		testingInstance.Fatalf("messages path=%q", parsedURL.Path)
 	}
 	v2Config, v2ConfigError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
 		BaseURL: "https://proxy.example/v2?prompt=old",
@@ -142,9 +135,8 @@ func TestClientPostMessagesSendsV2MessagesBody(testingInstance *testing.T) {
 	}
 }
 
-func TestClientPostSendsMessagesBody(testingInstance *testing.T) {
-	firstOrder := messageOrder(1)
-	secondOrder := messageOrder(2)
+func TestClientOmitsModelWhenRequestUsesProviderDefault(testingInstance *testing.T) {
+	var capturedPath string
 	var capturedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 		bodyBytes, readError := io.ReadAll(httpRequest.Body)
@@ -154,12 +146,13 @@ func TestClientPostSendsMessagesBody(testingInstance *testing.T) {
 		if decodeError := json.Unmarshal(bodyBytes, &capturedBody); decodeError != nil {
 			testingInstance.Fatalf("decode body: %v", decodeError)
 		}
+		capturedPath = httpRequest.URL.RequestURI()
 		_, _ = responseWriter.Write([]byte("ok"))
 	}))
 	defer server.Close()
 
 	config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
-		BaseURL: server.URL,
+		BaseURL: server.URL + "/review?provider=gemini&model=stale&keep=1",
 		Secret:  "sekret",
 		Timeout: time.Second,
 	})
@@ -170,40 +163,30 @@ func TestClientPostSendsMessagesBody(testingInstance *testing.T) {
 	if clientError != nil {
 		testingInstance.Fatalf("client error: %v", clientError)
 	}
-	request, requestError := llmproxyclient.NewRequest(llmproxyclient.RequestInput{
-		Messages: []llmproxyclient.MessageInput{
-			{Role: "assistant", Content: "Hi", Order: secondOrder},
-			{Role: "user", Content: "Hello", Order: firstOrder},
-		},
-		Model:        "deepseek-v4-flash",
-		SystemPrompt: "outer system",
-		WebSearch:    true,
+	messagesRequest, messagesRequestError := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{
+		Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "Use provider default"}},
 	})
-	if requestError != nil {
-		testingInstance.Fatalf("request error: %v", requestError)
+	if messagesRequestError != nil {
+		testingInstance.Fatalf("messages request error: %v", messagesRequestError)
 	}
 
-	responseText, postError := client.Post(context.Background(), request)
+	if _, postError := client.PostMessages(context.Background(), messagesRequest); postError != nil {
+		testingInstance.Fatalf("post messages error: %v", postError)
+	}
 
-	if postError != nil {
-		testingInstance.Fatalf("post error: %v", postError)
+	parsedURL, parseError := url.Parse(capturedPath)
+	if parseError != nil {
+		testingInstance.Fatalf("parse request URL: %v", parseError)
 	}
-	if responseText != "ok" {
-		testingInstance.Fatalf("response=%q", responseText)
+	queryValues := parsedURL.Query()
+	if parsedURL.Path != "/review/v2" || queryValues.Get("provider") != "gemini" {
+		testingInstance.Fatalf("path=%s provider=%q", capturedPath, queryValues.Get("provider"))
 	}
-	if capturedBody["prompt"] != nil {
-		testingInstance.Fatalf("prompt must be omitted for messages body: %v", capturedBody)
+	if queryValues.Has("model") {
+		testingInstance.Fatalf("path=%s must not include model query", capturedPath)
 	}
-	if capturedBody["model"] != "deepseek-v4-flash" || capturedBody["system_prompt"] != "outer system" || capturedBody["web_search"] != true {
-		testingInstance.Fatalf("body=%v", capturedBody)
-	}
-	rawMessages, ok := capturedBody["messages"].([]any)
-	if !ok || len(rawMessages) != 2 {
-		testingInstance.Fatalf("messages=%v", capturedBody["messages"])
-	}
-	firstMessage, ok := rawMessages[0].(map[string]any)
-	if !ok || firstMessage["role"] != "user" || firstMessage["content"] != "Hello" || firstMessage["order"] != float64(1) {
-		testingInstance.Fatalf("firstMessage=%v", rawMessages[0])
+	if _, hasModel := capturedBody["model"]; hasModel {
+		testingInstance.Fatalf("body must omit model when using provider default: %v", capturedBody)
 	}
 }
 
@@ -228,72 +211,36 @@ func TestMessagesRequestRejectsInvalidInputs(testingInstance *testing.T) {
 			input:       llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "tool", Content: "tool result"}}},
 			errorString: "role unsupported",
 		},
-	}
-
-	for _, testCase := range testCases {
-		testingInstance.Run(testCase.name, func(subTest *testing.T) {
-			_, requestError := llmproxyclient.NewMessagesRequest(testCase.input)
-			if requestError == nil || !strings.Contains(requestError.Error(), testCase.errorString) {
-				subTest.Fatalf("error=%v want contains %q", requestError, testCase.errorString)
-			}
-		})
-	}
-}
-
-func TestRequestRejectsInvalidMessageInputs(testingInstance *testing.T) {
-	testCases := []struct {
-		name        string
-		input       llmproxyclient.RequestInput
-		errorString string
-	}{
-		{
-			name: "conflicting prompt and messages",
-			input: llmproxyclient.RequestInput{
-				Prompt:   "prompt",
-				Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "message"}},
-			},
-			errorString: "choose prompt or messages",
-		},
-		{
-			name:        "unsupported role",
-			input:       llmproxyclient.RequestInput{Messages: []llmproxyclient.MessageInput{{Role: "tool", Content: "tool result"}}},
-			errorString: "role unsupported",
-		},
 		{
 			name:        "empty content",
-			input:       llmproxyclient.RequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user"}}},
+			input:       llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user"}}},
 			errorString: "content is empty",
 		},
 		{
 			name:        "missing user message",
-			input:       llmproxyclient.RequestInput{Messages: []llmproxyclient.MessageInput{{Role: "assistant", Content: "prefill"}}},
+			input:       llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "assistant", Content: "prefill"}}},
 			errorString: "messages must include a user message",
 		},
 		{
-			name:        "system prompt conflicts with system message",
-			input:       llmproxyclient.RequestInput{SystemPrompt: "outer", Messages: []llmproxyclient.MessageInput{{Role: "system", Content: "inner"}, {Role: "user", Content: "prompt"}}},
-			errorString: "system_prompt conflicts",
-		},
-		{
 			name:        "mixed order fields",
-			input:       llmproxyclient.RequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "prompt", Order: messageOrder(1)}, {Role: "assistant", Content: "answer"}}},
+			input:       llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "prompt", Order: messageOrder(1)}, {Role: "assistant", Content: "answer"}}},
 			errorString: "order missing",
 		},
 		{
 			name:        "duplicate order",
-			input:       llmproxyclient.RequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "prompt", Order: messageOrder(1)}, {Role: "assistant", Content: "answer", Order: messageOrder(1)}}},
+			input:       llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "prompt", Order: messageOrder(1)}, {Role: "assistant", Content: "answer", Order: messageOrder(1)}}},
 			errorString: "duplicate messages order",
 		},
 		{
 			name:        "negative order",
-			input:       llmproxyclient.RequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "prompt", Order: messageOrder(-1)}}},
+			input:       llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "prompt", Order: messageOrder(-1)}}},
 			errorString: "order is negative",
 		},
 	}
 
 	for _, testCase := range testCases {
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
-			_, requestError := llmproxyclient.NewRequest(testCase.input)
+			_, requestError := llmproxyclient.NewMessagesRequest(testCase.input)
 			if requestError == nil || !strings.Contains(requestError.Error(), testCase.errorString) {
 				subTest.Fatalf("error=%v want contains %q", requestError, testCase.errorString)
 			}
