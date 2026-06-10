@@ -60,7 +60,7 @@ func (failingWriter) Write(buffer []byte) (int, error) {
 	return 0, errors.New("stdout failed")
 }
 
-func TestCommandPostsPromptAsJSONBody(t *testing.T) {
+func TestCommandPostsPromptAsV2UserMessage(t *testing.T) {
 	capturedRequest := capturedProxyRequest{}
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 		bodyBytes, readError := io.ReadAll(httpRequest.Body)
@@ -113,6 +113,9 @@ func TestCommandPostsPromptAsJSONBody(t *testing.T) {
 	if parseError != nil {
 		t.Fatalf("parse request path: %v", parseError)
 	}
+	if parsedRequestURL.Path != "/review/v2" {
+		t.Fatalf("path=%q", parsedRequestURL.Path)
+	}
 	queryValues := parsedRequestURL.Query()
 	if queryValues.Get("key") != "test-secret" {
 		t.Fatalf("key=%q", queryValues.Get("key"))
@@ -132,7 +135,7 @@ func TestCommandPostsPromptAsJSONBody(t *testing.T) {
 		}
 	}
 	for _, expectedBodyFragment := range []string{
-		`"prompt":"Проверить текст"`,
+		`"messages":[{"content":"Проверить текст","role":"user"}]`,
 		`"model":"5.5"`,
 		`"web_search":false`,
 	} {
@@ -170,7 +173,14 @@ func TestCommandReadsEnvironmentAndStdin(t *testing.T) {
 	if !strings.Contains(capturedRequest.path, "key=env-secret") {
 		t.Fatalf("path=%q", capturedRequest.path)
 	}
-	if !strings.Contains(capturedRequest.body, `"prompt":"stdin prompt"`) {
+	parsedRequestURL, parseError := url.Parse(capturedRequest.path)
+	if parseError != nil {
+		t.Fatalf("parse request path: %v", parseError)
+	}
+	if parsedRequestURL.Path != "/v2" {
+		t.Fatalf("path=%q", parsedRequestURL.Path)
+	}
+	if !strings.Contains(capturedRequest.body, `"messages":[{"content":"stdin prompt","role":"user"}]`) {
 		t.Fatalf("body=%s", capturedRequest.body)
 	}
 }
@@ -221,15 +231,27 @@ func TestCommandReadsPromptFileAndOptionalBodyFields(t *testing.T) {
 	if !strings.Contains(capturedRequest.path, "provider=deepseek") {
 		t.Fatalf("path=%q", capturedRequest.path)
 	}
+	if strings.Contains(capturedRequest.path, "model=") {
+		t.Fatalf("path must omit model query: %q", capturedRequest.path)
+	}
+	parsedRequestURL, parseError := url.Parse(capturedRequest.path)
+	if parseError != nil {
+		t.Fatalf("parse request path: %v", parseError)
+	}
+	if parsedRequestURL.Path != "/v2" {
+		t.Fatalf("path=%q", parsedRequestURL.Path)
+	}
 	for _, expectedBodyFragment := range []string{
-		`"prompt":"file prompt"`,
+		`"messages":[{"content":"Be terse.","role":"system"},{"content":"file prompt","role":"user"}]`,
 		`"web_search":true`,
-		`"system_prompt":"Be terse."`,
 		`"max_tokens":42`,
 	} {
 		if !strings.Contains(capturedRequest.body, expectedBodyFragment) {
 			t.Fatalf("body=%s missing %s", capturedRequest.body, expectedBodyFragment)
 		}
+	}
+	if strings.Contains(capturedRequest.body, `"model"`) {
+		t.Fatalf("body must omit model when --model is omitted: %s", capturedRequest.body)
 	}
 }
 
