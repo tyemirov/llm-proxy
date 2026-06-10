@@ -39,6 +39,11 @@ A `504 Gateway Timeout` means the overall proxy request deadline expired before
 the selected upstream provider produced a final answer. It is not a prompt for
 the client to poll llm-proxy.
 
+Internally, `server.workers` limits concurrent upstream provider HTTP
+operations and `server.queue_size` limits upstream HTTP operations waiting for a
+worker. Long OpenAI background-response poll sleeps do not occupy a worker slot;
+only the actual upstream HTTP request or poll does.
+
 ## Configuration
 
 The service reads service configuration from `config.yml`. The default path is
@@ -210,6 +215,12 @@ providers:
       models:
         - id: "xai-stt"
 ```
+
+`server.workers` is not the number of client requests that may be connected at
+once. It is the upstream provider HTTP concurrency limit shared by text
+generation and dictation. `server.queue_size` is the number of additional
+upstream HTTP operations that may wait for that shared limit before the proxy
+returns `503 request queue full`.
 
 ### Provider support matrix
 
