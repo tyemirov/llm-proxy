@@ -51,7 +51,7 @@ python-test:
 	$(MAKE) python-root-import-test
 
 python-root-import-test:
-	$(UV) run --no-project --with-editable . python -c 'from llm_proxy_client import Client, ClientConfig, ClientMessagesRequest, ClientRequest; assert Client and ClientConfig and ClientMessagesRequest and ClientRequest'
+	$(UV) run --no-project --with-editable . python -c 'from llm_proxy_client import Client, ClientConfig, ClientMessage, ClientMessagesRequest; assert Client and ClientConfig and ClientMessage and ClientMessagesRequest'
 
 test-live-providers:
 	@GO="$(GO)" ./scripts/test_live_providers.sh
