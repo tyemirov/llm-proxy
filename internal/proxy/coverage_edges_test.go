@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1687,6 +1688,62 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		statusCode, _, _ := performCoverageTextRequestWithTimeout(subTest, router, queryParameters, "", coverageShortRequestTimeout)
 		if statusCode != http.StatusGatewayTimeout {
 			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
+		}
+	})
+
+	t.Run("admitted provider request timeout releases queue slot before acquiring worker", func(subTest *testing.T) {
+		upstreamStarted := make(chan struct{})
+		releaseUpstream := make(chan struct{})
+		var closeStartedOnce sync.Once
+		previousClient := proxy.HTTPClient
+		proxy.HTTPClient = &http.Client{Transport: coverageRoundTripper(func(httpRequest *http.Request) (*http.Response, error) {
+			closeStartedOnce.Do(func() { close(upstreamStarted) })
+			select {
+			case <-httpRequest.Context().Done():
+				return nil, httpRequest.Context().Err()
+			case <-releaseUpstream:
+				return coverageHTTPResponse(http.StatusOK, `{"choices":[{"message":{"content":"released"}}]}`), nil
+			}
+		})}
+		subTest.Cleanup(func() { proxy.HTTPClient = previousClient })
+		router := coverageRouter(subTest, proxy.Configuration{
+			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+			OpenAIKey:             TestAPIKey,
+			DeepSeekKey:           testDeepSeekKey,
+			DeepSeekBaseURL:       "https://deepseek.invalid",
+			LogLevel:              proxy.LogLevelInfo,
+			WorkerCount:           1,
+			QueueSize:             1,
+			RequestTimeoutSeconds: TestTimeout,
+		})
+
+		firstResult := make(chan int, 1)
+		go func() {
+			queryParameters := url.Values{}
+			queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
+			statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+			firstResult <- statusCode
+		}()
+		select {
+		case <-upstreamStarted:
+		case <-time.After(time.Second):
+			subTest.Fatal("upstream request did not start")
+		}
+
+		queryParameters := url.Values{}
+		queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
+		statusCode, _, _ := performCoverageTextRequestWithTimeout(subTest, router, queryParameters, "", coverageShortRequestTimeout)
+		if statusCode != http.StatusGatewayTimeout {
+			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
+		}
+		close(releaseUpstream)
+		select {
+		case firstStatusCode := <-firstResult:
+			if firstStatusCode != http.StatusOK {
+				subTest.Fatalf("first status=%d want=%d", firstStatusCode, http.StatusOK)
+			}
+		case <-time.After(time.Second):
+			subTest.Fatal("first request did not complete")
 		}
 	})
 }
