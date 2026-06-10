@@ -8,11 +8,11 @@ Usage:
 
 Deploys llm-proxy through mprlab-gateway after verifying the release image has
 been published. llm-proxy is gateway-colocated, so the default gateway target is
-deploy-gateway.
+deploy-llm-proxy.
 
 Options:
   --gateway-dir <path>  Gateway checkout. Default: $GATEWAY_DIR or sibling ../mprlab-gateway
-  --gateway-target <target> Gateway make target. Default: $GATEWAY_DEPLOY_TARGET or deploy-gateway
+  --gateway-target <target> Gateway make target. Default: $GATEWAY_DEPLOY_TARGET or deploy-llm-proxy
   --image <value>       Image repository. Default: $DOCKER_IMAGE or ghcr.io/tyemirov/llm-proxy
   --tag <value>         Release tag. Default: v* tag pointing at HEAD
   --skip-ci             Skip the local make ci deployment gate
@@ -49,7 +49,7 @@ env_or_default() {
 }
 
 GATEWAY_DIR="$(env_or_default GATEWAY_DIR "")"
-GATEWAY_TARGET="$(env_or_default GATEWAY_DEPLOY_TARGET deploy-gateway)"
+GATEWAY_TARGET="$(env_or_default GATEWAY_DEPLOY_TARGET deploy-llm-proxy)"
 IMAGE_REPOSITORY="$(env_or_default DOCKER_IMAGE ghcr.io/tyemirov/llm-proxy)"
 TAG="$(env_or_default DEPLOY_TAG "")"
 SKIP_CI="false"

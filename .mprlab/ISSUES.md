@@ -103,6 +103,15 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   [SSL] record layer failure (_ssl.c:2658)
   ```
   The forced-chunked `gpt-5-mini` retry also failed with the same SSL record-layer error before materialization. The small control request reported `semantic-stress-qa` passed with `transport: post`, `invocationMode: single`, and `materialize` passed.
+
+  2026-06-10 live retry after updating the Russian-language caller to the current v2 Python client contract (`ClientMessagesRequest` + `POST /v2`) still failed against `https://llm-proxy.mprlab.com` for the 8,528-character Camu story. Focused Russian-language transport tests passed, and a tiny live v2 pipeline smoke reached `semantic-stress-qa` and `materialize`. The long story failed before materialization with:
+  ```text
+  llm_proxy_client_transport_failure: provider=omitted model=gpt-5.5 timeout_seconds=240 reason=[SSL] record layer failure (_ssl.c:2658)
+  llm_proxy_client_transport_failure: provider=omitted model=gpt-5-mini timeout_seconds=600 reason=[SSL] record layer failure (_ssl.c:2658)
+  ```
+  Failed variants included normal v2 POST with `--llm-proxy-timeout-seconds 240 --llm-proxy-chunk-chars 1800`, forced chunking with `--llm-proxy-chunk-chars 900`, and forced chunking with `--llm-proxy-model gpt-5-mini --llm-proxy-timeout-seconds 600 --llm-proxy-chunk-chars 450`. This suggests the current branch/local replay fix has not reached, or is not sufficient for, the deployed default live endpoint used by Camu.
+
+  2026-06-10 deployed gateway inspection found the public `llm-proxy` Caddy transport using `response_header_timeout 240s` and `read_timeout 240s`, exactly equal to the canonical `server.request_timeout_seconds: 240` staged from `configs/config.yml`. That can race the proxy-owned final response or structured `504` and surface as an SSL record-layer failure from the public TLS endpoint. The sibling `mprlab-gateway` MG-336 patch now keeps the canonical proxy config unchanged, raises the dedicated Caddy transport to 300 seconds so llm-proxy owns the final success/error response, and adds a narrow `deploy-llm-proxy` gateway target. The llm-proxy deploy wrapper now defaults to that target. B002 remains open until `make deploy-llm-proxy` is completed and the long Camu story is retried against `https://llm-proxy.mprlab.com`; a first deploy attempt paused at `Gateway sudo password:` and was aborted before remote staging because no password was entered.
   ### Expected
   Long semantic-review POSTs should either complete successfully or return a structured proxy/provider error that the client can classify and retry. The proxy should not leave clients with opaque transport failures after the upstream request may still be in progress or recoverable.
   ### Acceptance Criteria

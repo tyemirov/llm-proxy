@@ -14,7 +14,7 @@ DOCKER_IMAGE ?= ghcr.io/tyemirov/llm-proxy
 PUBLISH_REMOTE ?= origin
 PUBLISH_BRANCH ?= master
 GATEWAY_DIR ?=
-GATEWAY_DEPLOY_TARGET ?= deploy-gateway
+GATEWAY_DEPLOY_TARGET ?= deploy-llm-proxy
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 

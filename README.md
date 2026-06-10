@@ -477,7 +477,7 @@ command-specific `RELEASE_CI_TIMEOUT_SECONDS`, `PUBLISH_CI_TIMEOUT_SECONDS`,
 and `DEPLOY_CI_TIMEOUT_SECONDS` variables.
 
 `llm-proxy` is a gateway-local service in `mprlab-gateway`, so `make deploy`
-defaults to the gateway `deploy-gateway` target. Override the checkout or target
+defaults to the gateway `deploy-llm-proxy` target. Override the checkout or target
 with `GATEWAY_DIR=/path/to/mprlab-gateway` or
 `GATEWAY_DEPLOY_TARGET=<target>`.
 
