@@ -253,7 +253,9 @@ Model ids and per-model metadata are runtime config data. To add, remove, or
 replace provider models, update the selected `config.yml` and restart the
 service; provider transports stay code-owned.
 
-Each provider must declare a text catalog:
+Each provider must declare a text catalog. A provider with an `api_key`
+configured must have a valid text `default_model`; that default is used when a
+request selects the provider and omits `model`.
 
 ```yaml
 providers:
@@ -507,14 +509,17 @@ export LLM_PROXY_SECRET="$SERVICE_SECRET"
 printf 'large prompt...\n' | llm-proxy-client --model gpt-5.5 --max-tokens 4096
 ```
 
-The client always uses `POST /?key=...` with a JSON body. It keeps non-payload
-query parameters such as `provider`, strips body-owned query fields such as
-`prompt` and `model`, and sends `prompt`, `model`, `web_search`,
-`system_prompt`, and `max_tokens` in the body.
+The client always uses canonical `POST /v2?key=...` with a JSON body. It keeps
+non-payload query parameters such as `provider`, strips body-owned query fields
+such as `prompt` and `model`, and sends the prompt as a v2 `user` message.
+`--system-prompt` becomes a v2 `system` message. Optional `model`,
+`web_search`, and `max_tokens` values remain body fields. When `--model` is
+omitted, the body omits `model` so llm-proxy uses the selected provider's
+configured default model.
 
-The reusable Go package under `pkg/llmproxyclient` also exposes
-`NewMessagesRequest` and `Client.PostMessages` for the canonical `POST /v2`
-messages-only endpoint.
+The reusable Go package under `pkg/llmproxyclient` is v2-only: construct a
+`MessagesRequest` with `NewMessagesRequest` and send it with
+`Client.PostMessages`.
 
 ### Python client package
 
@@ -525,7 +530,7 @@ uv pip install "llm-proxy-client @ git+https://github.com/tyemirov/llm-proxy.git
 ```
 
 ```python
-from llm_proxy_client import Client, ClientConfig, ClientMessagesRequest, ClientMessage, ClientRequest
+from llm_proxy_client import Client, ClientConfig, ClientMessagesRequest, ClientMessage
 
 client = Client(
     ClientConfig(
@@ -533,16 +538,18 @@ client = Client(
         secret="mysecret",
     )
 )
-text = client.post(
-    ClientRequest(
-        prompt="Summarize this",
+
+text = client.post_messages(
+    ClientMessagesRequest(
+        messages=(ClientMessage(role="user", content="Summarize this"),),
         model="gemini-2.5-flash",
         max_tokens=512,
     )
 )
 ```
 
-For chat-transcript callers, use the v2 messages-only endpoint:
+The Python package is v2-only. For chat-transcript callers, send the same
+`post_messages` request with multiple messages:
 
 ```python
 chat_text = client.post_messages(
