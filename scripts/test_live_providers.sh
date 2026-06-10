@@ -184,12 +184,15 @@ run_text_smoke() {
   local request_body
   local http_status
   local response_text
+  local request_model_label
   model="$(provider_model_override "${provider}")"
   response_path="${TMP_DIR}/${provider}-response.txt"
   if [[ -n "${model}" ]]; then
     request_body="$(printf '{"prompt":"Reply with exactly OK and no punctuation.","model":"%s","web_search":false}' "${model}")"
+    request_model_label="${model}"
   else
     request_body='{"prompt":"Reply with exactly OK and no punctuation.","web_search":false}'
+    request_model_label="omitted"
   fi
 
   http_status="$(
@@ -204,11 +207,11 @@ run_text_smoke() {
 
   response_text="$(tr -d '\r\n' < "${response_path}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
   if [[ "${http_status}" != "200" || "${response_text}" != "OK" ]]; then
-    echo "error: live ${provider} smoke failed: model=${model:-configured-default} status=${http_status} response=${response_text}" >&2
+    echo "error: live ${provider} smoke failed: model=${request_model_label} status=${http_status} response=${response_text}" >&2
     redact_log
     exit 1
   fi
-  echo "live provider smoke passed: provider=${provider} model=${model:-configured-default} status=${http_status}"
+  echo "live provider smoke passed: provider=${provider} model=${request_model_label} status=${http_status}"
 }
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
