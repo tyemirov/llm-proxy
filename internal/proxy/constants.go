@@ -56,6 +56,7 @@ const (
 	errorOpenAIContinue             = "OpenAI API continue error"
 	errorUnknownProvider            = "unknown provider"
 	errorProviderNotConfigured      = "provider not configured"
+	errorClientProviderAPIKey       = "client provider API keys are not accepted"
 	errorUnsupportedCapability      = "unsupported provider capability"
 	errorUnsupportedEndpoint        = "unsupported provider endpoint"
 	errorConflictingModelParameters = "conflicting model parameters"

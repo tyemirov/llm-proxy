@@ -53,21 +53,53 @@ func requestResponseLogger(structuredLogger *zap.SugaredLogger) gin.HandlerFunc 
 	}
 }
 
-// tenantMiddleware authenticates the `key` query parameter and attaches the matched tenant to the request context.
-func tenantMiddleware(tenants tenantRegistry, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+func tenantAuthenticatedHandler(authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger, handler gin.HandlerFunc) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
-		requestTenant, authenticated := tenants.authenticate(ginContext.Query(queryParameterKey))
-		if !authenticated {
-			structuredLogger.Warnw(
-				logEventForbiddenRequest,
-			)
-			ginContext.String(http.StatusForbidden, errorMissingClientKey)
-			ginContext.Abort()
+		if !authenticateTenantRequest(ginContext, authenticator, structuredLogger) {
 			return
 		}
-		ginContext.Set(contextKeyTenant, requestTenant)
-		ginContext.Next()
+		handler(ginContext)
 	}
+}
+
+func authenticateTenantRequest(ginContext *gin.Context, authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger) bool {
+	requestTenant, authenticated := authenticator.authenticate(ginContext.Query(queryParameterKey))
+	if !authenticated {
+		structuredLogger.Warnw(
+			logEventForbiddenRequest,
+		)
+		ginContext.String(http.StatusForbidden, errorMissingClientKey)
+		ginContext.Abort()
+		return false
+	}
+	ginContext.Set(contextKeyTenant, requestTenant)
+	return true
+}
+
+type tenantAuthenticator struct {
+	staticTenants  tenantRegistry
+	managedTenants *managedTenantStore
+}
+
+func newTenantAuthenticator(staticTenants tenantRegistry, managedTenants *managedTenantStore) tenantAuthenticator {
+	return tenantAuthenticator{
+		staticTenants:  staticTenants,
+		managedTenants: managedTenants,
+	}
+}
+
+func (authenticator tenantAuthenticator) authenticate(rawSecret string) (tenant, bool) {
+	if requestTenant, authenticated := authenticator.staticTenants.authenticate(rawSecret); authenticated {
+		return requestTenant, true
+	}
+	if authenticator.managedTenants == nil {
+		return tenant{}, false
+	}
+	return authenticator.managedTenants.authenticate(rawSecret)
+}
+
+func (authenticator tenantAuthenticator) containsStaticSecretDigest(secretDigest [sha256.Size]byte) bool {
+	return authenticator.staticTenants.containsSecretDigest(secretDigest)
 }
 
 func tenantIfPresentFromContext(ginContext *gin.Context) (tenant, bool) {

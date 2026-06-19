@@ -62,6 +62,12 @@ type dictationRequestParameters struct {
 
 // BuildRouter constructs the HTTP router used by the proxy. configuration supplies queue sizes, worker counts, timeout values, API credentials and other settings. structuredLogger records structured log messages during routing.
 func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger) (*gin.Engine, error) {
+	return buildRouter(configuration, structuredLogger, newManagedTenantStore)
+}
+
+type managedTenantStoreOpener func(ManagementConfiguration) (*managedTenantStore, error)
+
+func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger, openManagedTenantStore managedTenantStoreOpener) (*gin.Engine, error) {
 	configuration, validationError := ensureValidatedConfiguration(configuration)
 	if validationError != nil {
 		return nil, validationError
@@ -72,7 +78,6 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}
 
 	providers := newProviderRegistry(configuration)
-	validator := newModelValidator(providers)
 
 	if strings.ToLower(configuration.LogLevel) == LogLevelDebug {
 		gin.SetMode(gin.DebugMode)
@@ -92,12 +97,31 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	geminiClient := newGeminiGenerateContentClient(upstreamHTTPClient, requestTimeout)
 	anthropicClient := newAnthropicMessagesClient(upstreamHTTPClient, requestTimeout)
 	upstreamProviders := newProviderRouter(openAIClient, chatClient, geminiClient, anthropicClient)
+	var managedTenants *managedTenantStore
+	runtimeStaticTenants := configuration.tenants
+	if configuration.Management.Enabled {
+		var storeError error
+		managedTenants, storeError = openManagedTenantStore(configuration.Management)
+		if storeError != nil {
+			return nil, storeError
+		}
+		if migrationError := managedTenants.migrateStaticConfiguration(configuration); migrationError != nil {
+			return nil, migrationError
+		}
+		runtimeStaticTenants = tenantRegistry{}
+	}
+	tenantAuthenticator := newTenantAuthenticator(runtimeStaticTenants, managedTenants)
 
-	router.Use(gin.Recovery(), tenantMiddleware(configuration.tenants, structuredLogger))
-	router.GET(rootPath, chatHandler(upstreamProviders, validator, requestTimeout, structuredLogger))
-	router.POST(rootPath, chatJSONHandler(upstreamProviders, validator, requestTimeout, configuration.MaxPromptBytes, structuredLogger))
-	router.POST(v2Path, chatV2JSONHandler(upstreamProviders, validator, requestTimeout, configuration.MaxPromptBytes, structuredLogger))
-	router.POST(dictatePath, dictateHandler(upstreamProviders, validator, configuration.MaxInputAudioBytes, structuredLogger))
+	router.Use(gin.Recovery())
+	rootProxyHandler := tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, chatHandler(upstreamProviders, providers, requestTimeout, structuredLogger))
+	if configuration.Management.Enabled {
+		managementService := newManagementService(configuration.Management, managedTenants, providers, tenantAuthenticator, structuredLogger)
+		managementService.registerRoutes(router)
+	}
+	router.GET(rootPath, rootProxyHandler)
+	router.POST(rootPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, chatJSONHandler(upstreamProviders, providers, requestTimeout, configuration.MaxPromptBytes, structuredLogger)))
+	router.POST(v2Path, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, chatV2JSONHandler(upstreamProviders, providers, requestTimeout, configuration.MaxPromptBytes, structuredLogger)))
+	router.POST(dictatePath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, dictateHandler(upstreamProviders, providers, configuration.MaxInputAudioBytes, structuredLogger)))
 	return router, nil
 }
 
@@ -111,9 +135,13 @@ func Serve(configuration Configuration, structuredLogger *zap.SugaredLogger) err
 }
 
 // chatHandler returns a handler that forwards query-string requests to upstream providers.
-func chatHandler(upstreamProviders *providerRouter, validator *modelValidator, requestTimeout time.Duration, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+func chatHandler(upstreamProviders *providerRouter, providers *providerRegistry, requestTimeout time.Duration, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		if rejectClientProviderCredentialsFromQuery(ginContext) {
+			return
+		}
 		requestTenant := authenticatedTenantFromContext(ginContext)
+		validator := newModelValidator(providers.forTenant(requestTenant))
 		chatRequest, ok := chatRequestFromQuery(ginContext, requestTenant.defaults, validator, structuredLogger)
 		if !ok {
 			return
@@ -123,21 +151,27 @@ func chatHandler(upstreamProviders *providerRouter, validator *modelValidator, r
 }
 
 // chatJSONHandler accepts large prompt bodies while preserving the same model validation and response formatting used by GET /.
-func chatJSONHandler(upstreamProviders *providerRouter, validator *modelValidator, requestTimeout time.Duration, maxPromptBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+func chatJSONHandler(upstreamProviders *providerRouter, providers *providerRegistry, requestTimeout time.Duration, maxPromptBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		if rejectClientProviderCredentialsFromQuery(ginContext) {
+			return
+		}
 		requestTenant := authenticatedTenantFromContext(ginContext)
 		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxPromptBytes)
+		bodyBytes, readBodyOK := readJSONProxyBody(ginContext)
+		if !readBodyOK {
+			return
+		}
+		if rejectClientProviderCredentialsFromJSONBody(ginContext, bodyBytes) {
+			return
+		}
 		var payload chatRequestPayload
-		if decodeError := json.NewDecoder(ginContext.Request.Body).Decode(&payload); decodeError != nil {
-			var maxBytesError *http.MaxBytesError
-			if errors.As(decodeError, &maxBytesError) {
-				ginContext.String(http.StatusRequestEntityTooLarge, errorPromptPayloadTooLarge)
-				return
-			}
+		if decodeError := json.Unmarshal(bodyBytes, &payload); decodeError != nil {
 			ginContext.String(http.StatusBadRequest, errorInvalidJSONRequest)
 			return
 		}
 
+		validator := newModelValidator(providers.forTenant(requestTenant))
 		chatRequest, ok := chatRequestFromPayload(ginContext, payload, requestTenant.defaults, validator)
 		if !ok {
 			return
@@ -146,23 +180,29 @@ func chatJSONHandler(upstreamProviders *providerRouter, validator *modelValidato
 	}
 }
 
-func chatV2JSONHandler(upstreamProviders *providerRouter, validator *modelValidator, requestTimeout time.Duration, maxPromptBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerRegistry, requestTimeout time.Duration, maxPromptBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		if rejectClientProviderCredentialsFromQuery(ginContext) {
+			return
+		}
 		requestTenant := authenticatedTenantFromContext(ginContext)
 		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxPromptBytes)
+		bodyBytes, readBodyOK := readJSONProxyBody(ginContext)
+		if !readBodyOK {
+			return
+		}
+		if rejectClientProviderCredentialsFromJSONBody(ginContext, bodyBytes) {
+			return
+		}
 		var payload chatV2RequestPayload
-		jsonDecoder := json.NewDecoder(ginContext.Request.Body)
+		jsonDecoder := json.NewDecoder(strings.NewReader(string(bodyBytes)))
 		jsonDecoder.DisallowUnknownFields()
 		if decodeError := jsonDecoder.Decode(&payload); decodeError != nil {
-			var maxBytesError *http.MaxBytesError
-			if errors.As(decodeError, &maxBytesError) {
-				ginContext.String(http.StatusRequestEntityTooLarge, errorPromptPayloadTooLarge)
-				return
-			}
 			ginContext.String(http.StatusBadRequest, errorInvalidJSONRequest)
 			return
 		}
 
+		validator := newModelValidator(providers.forTenant(requestTenant))
 		chatRequest, ok := chatRequestFromV2Payload(ginContext, payload, requestTenant.defaults, validator)
 		if !ok {
 			return
@@ -370,12 +410,18 @@ func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRoute
 	}
 }
 
-func dictateHandler(upstreamProviders *providerRouter, validator *modelValidator, maxInputAudioBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+func dictateHandler(upstreamProviders *providerRouter, providers *providerRegistry, maxInputAudioBytes int64, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		if rejectClientProviderCredentialsFromQuery(ginContext) {
+			return
+		}
 		requestTenant := authenticatedTenantFromContext(ginContext)
 		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxInputAudioBytes+2*1024*1024)
 		if parseError := ginContext.Request.ParseMultipartForm(maxInputAudioBytes); parseError != nil {
 			ginContext.String(http.StatusBadRequest, errorInvalidAudioForm)
+			return
+		}
+		if rejectClientProviderCredentialsFromForm(ginContext) {
 			return
 		}
 
@@ -397,6 +443,7 @@ func dictateHandler(upstreamProviders *providerRouter, validator *modelValidator
 			}
 		}
 
+		validator := newModelValidator(providers.forTenant(requestTenant))
 		providerDefinition, modelIdentifier, verificationError := validator.ResolveDictation(
 			ginContext.Query(queryParameterProvider),
 			ginContext.Query(queryParameterModel),
