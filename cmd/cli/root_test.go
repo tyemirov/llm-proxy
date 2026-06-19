@@ -51,6 +51,15 @@ server:
   request_timeout_seconds: 7
   max_prompt_bytes: 1024
   max_input_audio_bytes: 2048
+management:
+  enabled: true
+  public_origin: "https://llm-proxy.example"
+  tauth_tenant_id: "llm-proxy"
+  jwt_signing_key: "${P411_TAUTH_JWT_SIGNING_KEY}"
+  jwt_issuer: "tauth"
+  session_cookie_name: "llm_proxy_session"
+  database_dialect: "${P411_MANAGEMENT_DATABASE_DIALECT}"
+  database_dsn: "${P411_MANAGEMENT_DATABASE_DSN}"
 tenants:
   - id: default
     secret: "${P411_SERVICE_SECRET}"
@@ -72,14 +81,14 @@ P411_ZHIPU_KEY=sk-zhipu
 P411_GEMINI_KEY=sk-gemini
 P411_ANTHROPIC_KEY=sk-ant
 P411_GROK_KEY=sk-xai
+P411_TAUTH_JWT_SIGNING_KEY=tauth-signing-key
+P411_MANAGEMENT_DATABASE_DIALECT=sqlite
+P411_MANAGEMENT_DATABASE_DSN=postgres://llm-proxy.example/management
 `)
 	t.Setenv("P411_SERVICE_SECRET", "process-secret")
 
 	var capturedConfiguration proxy.Configuration
 	withServeProxy(t, func(configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) error {
-		if _, buildError := proxy.BuildRouter(configuration, structuredLogger); buildError != nil {
-			t.Fatalf("BuildRouter error: %v", buildError)
-		}
 		capturedConfiguration = configuration
 		return nil
 	})
@@ -108,6 +117,27 @@ P411_GROK_KEY=sk-xai
 	}
 	if capturedConfiguration.Port != 18080 {
 		t.Fatalf("port=%d", capturedConfiguration.Port)
+	}
+	if !capturedConfiguration.Management.Enabled {
+		t.Fatalf("management must be enabled")
+	}
+	if capturedConfiguration.Management.PublicOrigin != "https://llm-proxy.example" {
+		t.Fatalf("management public origin=%q", capturedConfiguration.Management.PublicOrigin)
+	}
+	if capturedConfiguration.Management.TAuthTenantID != "llm-proxy" {
+		t.Fatalf("management tenant id=%q", capturedConfiguration.Management.TAuthTenantID)
+	}
+	if capturedConfiguration.Management.JWTSigningKey != "tauth-signing-key" {
+		t.Fatalf("management signing key=%q", capturedConfiguration.Management.JWTSigningKey)
+	}
+	if capturedConfiguration.Management.SessionCookieName != "llm_proxy_session" {
+		t.Fatalf("management cookie name=%q", capturedConfiguration.Management.SessionCookieName)
+	}
+	if capturedConfiguration.Management.DatabaseDialect != proxy.ManagementDatabaseDialectSQLite {
+		t.Fatalf("management database dialect=%q", capturedConfiguration.Management.DatabaseDialect)
+	}
+	if capturedConfiguration.Management.DatabaseDSN != "postgres://llm-proxy.example/management" {
+		t.Fatalf("management database dsn=%q", capturedConfiguration.Management.DatabaseDSN)
 	}
 	if capturedConfiguration.GeminiKey != "sk-gemini" {
 		t.Fatalf("geminiKey=%q", capturedConfiguration.GeminiKey)
@@ -166,6 +196,27 @@ tenants:
 	executeError := executeRootCommand(t, "--config", configPath)
 	if executeError != nil {
 		t.Fatalf("ExecuteC error: %v", executeError)
+	}
+}
+
+func TestRootCommandRejectsUnsupportedManagementDatabaseDialect(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir, `
+management:
+  enabled: true
+  public_origin: "https://llm-proxy.example"
+  tauth_tenant_id: "llm-proxy"
+  jwt_signing_key: "tauth-signing-key"
+  jwt_issuer: "tauth"
+  session_cookie_name: "llm_proxy_session"
+  database_dialect: "mysql"
+  database_dsn: "mysql://llm-proxy.example/management"
+`+completeLiteralProvidersYAML())
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError == nil || !strings.Contains(executeError.Error(), "management.database_dialect") {
+		t.Fatalf("error=%v want unsupported management database dialect", executeError)
 	}
 }
 
@@ -241,6 +292,66 @@ tenants:
 	executeError := executeRootCommand(t, "--config", configPath)
 	if executeError == nil || !strings.Contains(executeError.Error(), "config_placeholder_missing: names=P411_MISSING_SERVICE_SECRET") {
 		t.Fatalf("error=%v want missing tenant secret placeholder", executeError)
+	}
+}
+
+func TestRootCommandRejectsPlaceholderDefaultSyntax(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir, `
+management:
+  enabled: false
+  database_dialect: "${P411_MISSING_MANAGEMENT_DATABASE_DIALECT:-sqlite}"
+  database_dsn: "${P411_MISSING_MANAGEMENT_DATABASE_DSN:-management.sqlite}"
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: openai
+      model: gpt-4.1
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
+`+completeLiteralProvidersYAML())
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError == nil || !strings.Contains(executeError.Error(), "config_placeholder_missing: names=P411_MISSING_MANAGEMENT_DATABASE_DIALECT:-sqlite,P411_MISSING_MANAGEMENT_DATABASE_DSN:-management.sqlite") {
+		t.Fatalf("error=%v want default placeholder syntax rejected", executeError)
+	}
+}
+
+func TestRootCommandLoadsPackagedConfigWithManagementDatabaseEnvironment(t *testing.T) {
+	tempDir := t.TempDir()
+	packagedConfigPath := filepath.Join("..", "..", "configs", "config.yml")
+	packagedConfig, readError := os.ReadFile(packagedConfigPath)
+	if readError != nil {
+		t.Fatalf("read packaged config: %v", readError)
+	}
+	configPath := filepath.Join(tempDir, testConfigFileName)
+	if writeError := os.WriteFile(configPath, packagedConfig, 0600); writeError != nil {
+		t.Fatalf("write packaged config copy: %v", writeError)
+	}
+	writeTestDotEnv(t, tempDir, `
+SERVICE_SECRET=packaged-secret
+OPENAI_API_KEY=sk-packaged-openai
+LLM_PROXY_MANAGEMENT_DATABASE_DIALECT=sqlite
+LLM_PROXY_MANAGEMENT_DATABASE_DSN=packaged-management.sqlite
+`)
+
+	var capturedConfiguration proxy.Configuration
+	withServeProxy(t, func(configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) error {
+		capturedConfiguration = configuration
+		return nil
+	})
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError != nil {
+		t.Fatalf("ExecuteC error: %v", executeError)
+	}
+	if capturedConfiguration.Management.DatabaseDialect != proxy.ManagementDatabaseDialectSQLite {
+		t.Fatalf("database dialect=%q", capturedConfiguration.Management.DatabaseDialect)
+	}
+	if capturedConfiguration.Management.DatabaseDSN != "packaged-management.sqlite" {
+		t.Fatalf("database dsn=%q", capturedConfiguration.Management.DatabaseDSN)
 	}
 }
 
@@ -337,6 +448,15 @@ func TestRootCommandRejectsMissingDefaultTextProviderKeys(t *testing.T) {
 				values.DashScopeAPIKey = "${P411_MISSING_DASHSCOPE_KEY}"
 			},
 			expectedError: "provider_api_key_required: provider=dashscope field=providers.dashscope.api_key",
+		},
+		{
+			name:     "deepseek canonical",
+			provider: proxy.ProviderNameDeepSeek,
+			model:    proxy.ModelNameDeepSeekV4Flash,
+			missingKey: func(values *providerYAMLValues) {
+				values.DeepSeekAPIKey = "${P411_MISSING_DEEPSEEK_KEY}"
+			},
+			expectedError: "provider_api_key_required: provider=deepseek field=providers.deepseek.api_key",
 		},
 		{
 			name:     "moonshot alias",
@@ -513,6 +633,26 @@ providers:
 	executeError := executeRootCommand(t, "--config", configPath)
 	if executeError == nil || !strings.Contains(executeError.Error(), "config_file_parse_failed") {
 		t.Fatalf("error=%v want config parse failure", executeError)
+	}
+}
+
+func TestRootCommandRejectsUnknownTenantDefaultProviderAfterCredentialCheck(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir, `
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: unknown
+      model: gpt-4.1
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
+`+completeLiteralProvidersYAML())
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError == nil || !strings.Contains(executeError.Error(), "unknown provider") {
+		t.Fatalf("error=%v want unknown provider", executeError)
 	}
 }
 

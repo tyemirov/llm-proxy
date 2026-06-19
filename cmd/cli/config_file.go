@@ -37,7 +37,8 @@ var (
 	errProviderAPIKeyRequired    = errors.New("provider_api_key_required")
 	errProviderBaseURLRequired   = errors.New("provider_base_url_required")
 	errTranscriptionsURLRequired = errors.New("provider_transcriptions_url_required")
-	placeholderPattern           = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+	placeholderPattern           = regexp.MustCompile(`\$\{([^}]+)\}`)
+	placeholderNamePattern       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	optionalAPIKeyLinePattern    = regexp.MustCompile(`^\s*api_key:\s*(?:"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"|'\$\{([A-Za-z_][A-Za-z0-9_]*)\}'|\$\{([A-Za-z_][A-Za-z0-9_]*)\})\s*(?:#.*)?$`)
 	readConfigBytes              = os.ReadFile
 	readDotEnvFile               = gotenv.Read
@@ -45,9 +46,10 @@ var (
 )
 
 type fileConfiguration struct {
-	Server    serverConfiguration    `mapstructure:"server"`
-	Tenants   []tenantConfiguration  `mapstructure:"tenants"`
-	Providers providersConfiguration `mapstructure:"providers"`
+	Server     serverConfiguration     `mapstructure:"server"`
+	Management managementConfiguration `mapstructure:"management"`
+	Tenants    []tenantConfiguration   `mapstructure:"tenants"`
+	Providers  providersConfiguration  `mapstructure:"providers"`
 }
 
 type serverConfiguration struct {
@@ -64,6 +66,17 @@ type tenantConfiguration struct {
 	ID       string               `mapstructure:"id"`
 	Secret   string               `mapstructure:"secret"`
 	Defaults tenantDefaultsConfig `mapstructure:"defaults"`
+}
+
+type managementConfiguration struct {
+	Enabled           bool   `mapstructure:"enabled"`
+	PublicOrigin      string `mapstructure:"public_origin"`
+	TAuthTenantID     string `mapstructure:"tauth_tenant_id"`
+	JWTSigningKey     string `mapstructure:"jwt_signing_key"`
+	JWTIssuer         string `mapstructure:"jwt_issuer"`
+	SessionCookieName string `mapstructure:"session_cookie_name"`
+	DatabaseDialect   string `mapstructure:"database_dialect"`
+	DatabaseDSN       string `mapstructure:"database_dsn"`
 }
 
 type tenantDefaultsConfig struct {
@@ -182,6 +195,10 @@ func expandConfigPlaceholders(configContent string, expansionEnvironment map[str
 		expandedLine := placeholderPattern.ReplaceAllStringFunc(configLine, func(placeholder string) string {
 			placeholderMatches := placeholderPattern.FindStringSubmatch(placeholder)
 			placeholderName := placeholderMatches[1]
+			if !placeholderNamePattern.MatchString(placeholderName) {
+				missingPlaceholders[placeholderName] = struct{}{}
+				return placeholder
+			}
 			placeholderValue, foundValue := expansionEnvironment[placeholderName]
 			if foundValue {
 				return placeholderValue
@@ -222,6 +239,7 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 	}
 	return proxy.NewConfiguration(proxy.Configuration{
 		Tenants:                      tenantConfigurations(configuration.Tenants),
+		Management:                   managementProxyConfiguration(configuration.Management),
 		OpenAIKey:                    configuration.Providers.OpenAI.APIKey,
 		DeepSeekKey:                  configuration.Providers.DeepSeek.APIKey,
 		DashScopeKey:                 configuration.Providers.DashScope.APIKey,
@@ -253,6 +271,19 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		MaxInputAudioBytes:           configuration.Server.MaxInputAudioBytes,
 		ProviderModels:               configuration.Providers.providerModelCatalogs(),
 	})
+}
+
+func managementProxyConfiguration(configuration managementConfiguration) proxy.ManagementConfiguration {
+	return proxy.ManagementConfiguration{
+		Enabled:           configuration.Enabled,
+		PublicOrigin:      configuration.PublicOrigin,
+		TAuthTenantID:     configuration.TAuthTenantID,
+		JWTSigningKey:     configuration.JWTSigningKey,
+		JWTIssuer:         configuration.JWTIssuer,
+		SessionCookieName: configuration.SessionCookieName,
+		DatabaseDialect:   configuration.DatabaseDialect,
+		DatabaseDSN:       configuration.DatabaseDSN,
+	}
 }
 
 func (configuration providersConfiguration) providerModelCatalogs() proxy.ProviderModelCatalogs {
@@ -294,6 +325,9 @@ func (configuration providersConfiguration) providerModelCatalogs() proxy.Provid
 func (configuration fileConfiguration) validateCompleteConfiguration() error {
 	if providerValidationError := configuration.Providers.validateCompleteProviderConfiguration(); providerValidationError != nil {
 		return providerValidationError
+	}
+	if configuration.Management.Enabled {
+		return nil
 	}
 	return configuration.validateTenantDefaultProviderCredentials()
 }
