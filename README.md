@@ -19,7 +19,8 @@ client.
 - Choose the dictation model per request via `model=...` on `/dictate`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
 - Optional per-request web search via `web_search=1|true|yes` when the selected provider/model is configured to support it
 - Optional logging at `debug` or `info` levels
-- Forwards requests using server-side provider API keys
+- Forwards requests using server-side provider API keys, loaded from the database in management mode
+- Optional TAuth-protected self-service UI where signed-in users save their own provider API keys and generate llm-proxy tenant secrets
 - Supports plain text, JSON, XML, or CSV responses
 
 ## REST Contract
@@ -66,9 +67,18 @@ server:
   log_level: info
   workers: 4
   queue_size: 100
-  request_timeout_seconds: 240
+  request_timeout_seconds: 360
   max_prompt_bytes: 4194304
   max_input_audio_bytes: 26214400
+management:
+  enabled: false
+  public_origin: "https://llm-proxy.mprlab.com"
+  tauth_tenant_id: "llm-proxy"
+  jwt_signing_key: "replace-me-tauth-jwt-signing-key"
+  jwt_issuer: "tauth"
+  session_cookie_name: "llm_proxy_session"
+  database_dialect: "${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT}"
+  database_dsn: "${LLM_PROXY_MANAGEMENT_DATABASE_DSN}"
 tenants:
   - id: default
     secret: "${SERVICE_SECRET}"
@@ -348,11 +358,108 @@ gateway. Dictation-capable provider
 `transcriptions_url` values are also explicit config values and are required for
 OpenAI, SiliconFlow, Zhipu, and Grok/xAI. Text model catalogs are required for
 every supported provider, and dictation model catalogs are required for OpenAI,
-SiliconFlow, Zhipu, and Grok/xAI. Startup validates that `tenants` includes at
-least one unique `id` and unique `secret`, then validates each tenant's default
-text provider/model and dictation provider/model against those configured
-catalogs and credentials.
+SiliconFlow, Zhipu, and Grok/xAI. When `management.enabled` is false, startup
+validates that `tenants` includes at least one unique `id` and unique `secret`.
+When management is enabled, static tenants are optional because signed-in users
+can create managed tenants through the UI. Startup validates each configured
+static tenant's default text provider/model and dictation provider/model against
+the configured catalogs and credentials.
 Unknown YAML keys fail startup.
+
+### Self-service management UI
+
+Set `management.enabled: true` to enable TAuth-protected management APIs under
+`/api/management`. The browser UI is static and lives in `site/`, which is
+published by GitHub Pages through `.github/workflows/pages.yml`. The backend
+does not serve management HTML, assets, or `/config-ui.yaml`; `GET /` remains a
+proxy endpoint and returns `403` without a tenant `key`.
+
+The static UI uses the shared MPR shell through `site/config-ui.yaml`, pinned
+`mpr-ui` assets, `<mpr-header>`, `<mpr-user>`, and `<mpr-footer>`. It does not
+load `tauth.js` directly. `site/llm-proxy-config.json` points browser
+management API calls and generated usage examples at the backend origin.
+
+Required hosted values are profile-specific:
+
+| Field | Purpose |
+|-------|---------|
+| `management.public_origin` | Static frontend origin allowed for credentialed management CORS, for example `https://llm-proxy.mprlab.com`. |
+| `management.tauth_tenant_id` | TAuth tenant id that issues accepted sessions. |
+| `management.jwt_signing_key` | Internal signing key used to validate the TAuth session cookie. |
+| `management.jwt_issuer` | JWT issuer, normally `tauth`. |
+| `management.session_cookie_name` | Exact app/environment TAuth session cookie name. |
+| `management.database_dialect` | Required GORM SQL dialect for management persistence. Supported values are `postgres` and `sqlite`. |
+| `management.database_dsn` | Required DSN passed to the selected GORM dialect for tenant-owned provider keys, defaults, and generated-secret digests. |
+
+Signed-in users save provider API keys for any supported provider, choose
+routing defaults, and generate llm-proxy secrets. Management mode requires
+`management.database_dialect` and `management.database_dsn` so signups, enabled
+providers, defaults, and generated secret digests survive restarts in a
+GORM-managed database. `postgres` uses a Postgres DSN, while `sqlite` uses a
+SQLite database path or SQLite DSN. The packaged config uses plain expandable
+placeholders for both fields: `${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT}` and
+`${LLM_PROXY_MANAGEMENT_DATABASE_DSN}`. Local profiles set those values in
+`configs/.env`; placeholders without matching values fail startup. The runtime
+config file is never mutated for user signup or provider enablement, and
+database access must stay on GORM model APIs without raw SQL. Generated secrets
+continue to authenticate the public proxy endpoints with the same
+`key=<tenant secret>` query parameter. Provider API keys are accepted only
+through authenticated management endpoints; after save, the UI/API returns only
+masked key status. Generated tenant secrets are returned once and the database
+retains only their SHA-256 digest. Revoking a generated secret immediately makes
+future public proxy requests with that secret return `403`.
+
+On the first management-mode startup, llm-proxy runs a one-time migration from
+legacy config tenants and nonblank configured provider API keys into the
+database, then records a migration marker. After that marker exists, config-file
+tenants and provider API key fields are ignored by runtime authentication and
+routing, even if stale values remain in YAML. Remove migrated `tenants` and
+provider `api_key` values from config after confirming the DB migration.
+Server/runtime settings, backend auth validation settings, provider base URLs,
+transcription URLs, and model catalogs remain config-file-owned. Browser-facing
+MPR UI and TAuth bootstrap settings live in the static Pages files under
+`site/`.
+
+### Hosted split-origin setup
+
+Production is split-origin:
+
+| Hostname | Owner | Purpose |
+|----------|-------|---------|
+| `llm-proxy.mprlab.com` | GitHub Pages | Static self-service frontend from `site/`. |
+| `llm-proxy-api.mprlab.com` | MPR gateway/backend | llm-proxy API, management API, `/`, `/v2`, and `/dictate`. |
+| `tauth-api.mprlab.com` | TAuth backend | Google login, nonce, logout, `/me`, and session-cookie issuance. |
+
+Add these DNS records:
+
+1. `CNAME llm-proxy.mprlab.com -> tyemirov.github.io`
+2. Point `llm-proxy-api.mprlab.com` at the MPR gateway public endpoint. Use a
+   `CNAME` when the gateway has a hostname, or `A`/`AAAA` records when it is
+   addressed by public IP.
+
+Then configure GitHub Pages for this repository:
+
+1. Use GitHub Actions as the Pages source.
+2. Set the Pages custom domain to `llm-proxy.mprlab.com`.
+3. Keep `site/CNAME` as `llm-proxy.mprlab.com`.
+4. Replace `site/config-ui.yaml` `googleClientId` with the production Google OAuth web client id for the `llm-proxy` TAuth tenant.
+5. Keep `site/llm-proxy-config.json` origins pointed at `https://llm-proxy-api.mprlab.com`.
+
+Configure TAuth for tenant `llm-proxy` with:
+
+- allowed tenant origin `https://llm-proxy.mprlab.com`
+- browser-facing API origin `https://tauth-api.mprlab.com`
+- session cookie name matching `management.session_cookie_name`
+- cookie domain `.mprlab.com`
+- HTTPS-only cookies
+- JWT signing key matching `management.jwt_signing_key`
+
+Configure the gateway/backend route for `llm-proxy-api.mprlab.com` to the
+llm-proxy service, and remove any backend route that still claims
+`llm-proxy.mprlab.com`; that hostname is now owned by GitHub Pages. The backend
+must run with `management.public_origin: "https://llm-proxy.mprlab.com"` so
+`/api/management/*` returns credentialed CORS headers only to the static
+frontend.
 
 Web search is per request and currently supported only on OpenAI models that
 support the OpenAI web search tool.
@@ -379,8 +486,10 @@ Run the service with OpenAI defaults:
 ./llm-proxy --config config.yml
 ```
 
-In the full `config.yml`, set a tenant's default text provider/model to route
-omitted-provider requests to DeepSeek:
+In static config mode, set a tenant's default text provider/model to route
+omitted-provider requests to DeepSeek. In management mode these tenant blocks
+are one-time migration seed data only; after the migration marker exists, manage
+tenant defaults in the UI/DB instead:
 
 ```yaml
 tenants:
@@ -950,7 +1059,8 @@ positive and lets the upstream provider enforce any provider-side model limit.
 ## Security
 
 * All requests must include a configured tenant secret via `key=...`.
-* Client requests must not include upstream provider API keys; configure them on the server.
+* Client requests must not include upstream provider API keys; public proxy endpoints reject provider-key-like query, JSON, and multipart form fields.
+* Self-service provider API keys are accepted only through TAuth-protected management endpoints and are not returned raw after save.
 * Do not expose this service to the public internet without appropriate network controls.
 
 ## Implementation Plans
