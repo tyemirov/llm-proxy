@@ -66,7 +66,7 @@ class ClientConfig:
     base_url: str
     secret: str
     provider: str = ""
-    timeout_seconds: float = 260.0
+    timeout_seconds: float = 390.0
 
     def __post_init__(self) -> None:
         if not self.base_url.strip():
