@@ -40,13 +40,28 @@ require_positive_integer() {
   fi
 }
 
-BUMP="${RELEASE_BUMP:-patch}"
-VERSION="${RELEASE_VERSION:-}"
+env_or_default() {
+  local name="$1"
+  local fallback="$2"
+  local value=""
+  if [[ -v "${name}" ]]; then
+    value="${!name}"
+  fi
+  if [[ -n "${value}" ]]; then
+    printf "%s\n" "${value}"
+  else
+    printf "%s\n" "${fallback}"
+  fi
+}
+
+BUMP="$(env_or_default RELEASE_BUMP patch)"
+VERSION="$(env_or_default RELEASE_VERSION "")"
 DRY_RUN="false"
 SKIP_CI="false"
-RELEASE_REMOTE="${RELEASE_REMOTE:-origin}"
-RELEASE_BRANCH="${RELEASE_BRANCH:-master}"
-CI_TIMEOUT_SECONDS="${RELEASE_CI_TIMEOUT_SECONDS:-${LLM_PROXY_CI_TIMEOUT_SECONDS:-350}}"
+RELEASE_REMOTE="$(env_or_default RELEASE_REMOTE origin)"
+RELEASE_BRANCH="$(env_or_default RELEASE_BRANCH master)"
+LLM_PROXY_CI_TIMEOUT_SECONDS_EFFECTIVE="$(env_or_default LLM_PROXY_CI_TIMEOUT_SECONDS 350)"
+CI_TIMEOUT_SECONDS="$(env_or_default RELEASE_CI_TIMEOUT_SECONDS "${LLM_PROXY_CI_TIMEOUT_SECONDS_EFFECTIVE}")"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -163,9 +178,13 @@ if git rev-parse -q --verify "refs/tags/${next_version}" >/dev/null; then
 fi
 
 if [[ "${DRY_RUN}" == "true" ]]; then
+  latest_tag_effective="${latest_tag}"
+  if [[ -z "${latest_tag_effective}" ]]; then
+    latest_tag_effective="<none>"
+  fi
   echo "release_dry_run=true"
   echo "release_branch=${RELEASE_BRANCH}"
-  echo "latest_tag=${latest_tag:-<none>}"
+  echo "latest_tag=${latest_tag_effective}"
   echo "next_version=${next_version}"
   exit 0
 fi
