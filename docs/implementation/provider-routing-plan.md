@@ -65,6 +65,14 @@ Shared config fields:
 - `server.request_timeout_seconds`
 - `server.max_prompt_bytes`
 - `server.max_input_audio_bytes`
+- `management.enabled`
+- `management.public_origin`
+- `management.tauth_tenant_id`
+- `management.jwt_signing_key`
+- `management.jwt_issuer`
+- `management.session_cookie_name`
+- `management.database_dialect`
+- `management.database_dsn`
 - `tenants[].id`
 - `tenants[].secret`
 - `tenants[].defaults.provider`
@@ -134,11 +142,13 @@ background-response sleeps between polls do not occupy worker capacity; only the
 actual upstream create, poll, continuation, synthesis, chat, native-provider, or
 dictation HTTP operation does.
 
-Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, requires API keys for each tenant's default text and dictation providers, allows non-default provider API keys to be blank so those providers are disabled until configured, requires every configured provider base URL, requires transcription URLs for dictation-capable providers, requires text model catalogs for every provider, requires dictation model catalogs for dictation-capable providers, rejects blank or duplicate model ids, rejects defaults not listed in their model catalog, rejects `web_search` outside OpenAI text model entries, validates OpenAI request profiles, validates each tenant's default text provider/model, and validates endpoint/credential support for each tenant's default dictation provider/model.
+Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, requires API keys for each configured static tenant's default text and dictation providers when management mode is disabled, allows non-default provider API keys to be blank so those providers are disabled until configured, requires every configured provider base URL, requires transcription URLs for dictation-capable providers, requires text model catalogs for every provider, requires dictation model catalogs for dictation-capable providers, rejects blank or duplicate model ids, rejects defaults not listed in their model catalog, rejects `web_search` outside OpenAI text model entries, validates OpenAI request profiles, validates each configured static tenant's default text provider/model, and validates endpoint/credential support for each configured static tenant's default dictation provider/model. When `management.enabled` is false, at least one static tenant is required. When `management.enabled` is true, static tenants are optional because TAuth-authenticated users can create managed tenants and generated client secrets through the browser UI.
+
+The management UI is served as a static GitHub Pages app from `site/` on `https://llm-proxy.mprlab.com`; the Go backend does not serve management HTML, assets, or `/config-ui.yaml`. The static app owns the normal MPR UI contract: `site/config-ui.yaml`, pinned `mpr-ui` assets, `<mpr-header data-config-url="/config-ui.yaml">`, `<mpr-user>`, and `<mpr-footer>`. `site/llm-proxy-config.json` points browser management API calls and generated proxy examples at `https://llm-proxy-api.mprlab.com`. DNS must leave `llm-proxy.mprlab.com` pointed at GitHub Pages and point `llm-proxy-api.mprlab.com` at the MPR gateway; the gateway route for `llm-proxy.mprlab.com` must be removed or moved so the backend only owns the API hostname. Management APIs under `/api/management` validate the configured TAuth session cookie locally with issuer `tauth` unless `management.jwt_issuer` overrides it, and return credentialed CORS headers only for `management.public_origin`. Provider API keys are accepted only through authenticated management endpoints, are stored server-side, and are returned only as masked status. Management mode requires `management.database_dialect` and `management.database_dsn`; supported GORM dialects are `postgres` and `sqlite`. The packaged config sets those fields through strict expandable placeholders: `${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT}` and `${LLM_PROXY_MANAGEMENT_DATABASE_DSN}`; local profiles provide concrete values in `configs/.env`. Signup state, enabled providers, defaults, and generated-secret digests are persisted through GORM and are never stored by mutating the runtime config file. On the first management-mode startup, legacy config tenants and nonblank configured provider API keys are migrated into the DB and a durable migration marker is recorded; after the marker exists, config-file tenants and provider API key fields are obsolete and ignored by runtime authentication/routing. Server/runtime settings, backend auth validation, provider base URLs, transcription URLs, and model catalogs remain config-file-owned. Database access must use GORM model APIs without raw SQL. Generated llm-proxy client secrets are returned once and stored as SHA-256 digests. Managed tenants authenticate the same public proxy endpoints with `key=<generated secret>` and use only their own saved provider credentials.
 
 ## Error Contract
 
-- `400`: unknown provider, unknown model, unsupported capability, unsupported endpoint, conflicting model parameters.
+- `400`: unknown provider, unknown model, unsupported capability, unsupported endpoint, conflicting model parameters, or client-supplied provider API key fields on public proxy requests.
 - `403`: missing or invalid client `key`.
 - `413`: prompt or audio payload too large.
 - `429`: upstream provider rate limiting.
