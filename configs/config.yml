@@ -3,9 +3,18 @@ server:
   log_level: info
   workers: 4
   queue_size: 32
-  request_timeout_seconds: 240
+  request_timeout_seconds: 360
   max_prompt_bytes: 4194304
   max_input_audio_bytes: 26214400
+management:
+  enabled: false
+  public_origin: "https://llm-proxy.mprlab.com"
+  tauth_tenant_id: "llm-proxy"
+  jwt_signing_key: "replace-me-tauth-jwt-signing-key"
+  jwt_issuer: "tauth"
+  session_cookie_name: "llm_proxy_session"
+  database_dialect: "${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT}"
+  database_dsn: "${LLM_PROXY_MANAGEMENT_DATABASE_DSN}"
 tenants:
   - id: default
     secret: "${SERVICE_SECRET}"
