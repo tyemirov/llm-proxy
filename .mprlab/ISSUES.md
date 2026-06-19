@@ -57,7 +57,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   3. Rerun the Russian semantic-stress QA prompt through the full pipeline and verify the client receives either parseable JSON or a structured proxy error, not a thought-prefixed or truncated successful text body.
   ### Resolution
   Added black-box Gemini POST coverage for thought-marked parts returning only final answer text, non-final `finishReason` values mapping to `502`, and missing `finishReason` mapping to `502`. `internal/proxy/gemini.go` now models `parts[].thought` and candidate `finishReason`, returns only non-thought text for completed `STOP` candidates, and treats missing or non-`STOP` finish reasons as provider API errors instead of successful partial output. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test` (total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make lint`, and `timeout -k 350s -s SIGKILL 350s make ci` (total coverage 100.0%).
-- [ ] [B002] (P1) Long semantic-review POSTs fail transport while small requests pass.
+- [x] [B002] (P1) Long semantic-review POSTs fail transport while small requests pass.
   ### Summary
   Camu Russian semantic-stress QA can still fail before materialization on long full-story prompts even though a small `llm-proxy` smoke request succeeds. On 2026-06-09, `po-schuchemu-velenyu` text prep failed three times at the `llm-proxy` stage: one read timeout, then two SSL record-layer failures. A tiny Russian pipeline smoke test using the same Russian-language `pipeline_runner.py` reached `semantic-stress-qa` and `materialize` successfully, so the service is not fully down; the failure appears tied to long-running or larger semantic-review POSTs and/or chunk retry transport handling.
   ### Impact
@@ -111,7 +111,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ```
   Failed variants included normal v2 POST with `--llm-proxy-timeout-seconds 240 --llm-proxy-chunk-chars 1800`, forced chunking with `--llm-proxy-chunk-chars 900`, and forced chunking with `--llm-proxy-model gpt-5-mini --llm-proxy-timeout-seconds 600 --llm-proxy-chunk-chars 450`. This suggests the current branch/local replay fix has not reached, or is not sufficient for, the deployed default live endpoint used by Camu.
 
-  2026-06-10 deployed gateway inspection found the public `llm-proxy` Caddy transport using `response_header_timeout 240s` and `read_timeout 240s`, exactly equal to the canonical `server.request_timeout_seconds: 240` staged from `configs/config.yml`. That can race the proxy-owned final response or structured `504` and surface as an SSL record-layer failure from the public TLS endpoint. The sibling `mprlab-gateway` MG-336 patch now keeps the canonical proxy config unchanged, raises the dedicated Caddy transport to 300 seconds so llm-proxy owns the final success/error response, and adds a narrow `deploy-llm-proxy` gateway target. The llm-proxy deploy wrapper now defaults to that target. B002 remains open until `make deploy-llm-proxy` is completed and the long Camu story is retried against `https://llm-proxy.mprlab.com`; a first deploy attempt paused at `Gateway sudo password:` and was aborted before remote staging because no password was entered.
+  2026-06-10 deployed gateway inspection found the public `llm-proxy` Caddy transport using `response_header_timeout 240s` and `read_timeout 240s`, exactly equal to the canonical `server.request_timeout_seconds: 240` staged from `configs/config.yml`. That can race the proxy-owned final response or structured `504` and surface as an SSL record-layer failure from the public TLS endpoint. A first gateway-side patch raised the dedicated Caddy transport to 300 seconds, but a later Camu production retry with `--llm-proxy-timeout-seconds 300 --llm-proxy-chunk-chars 1800` still failed with the same SSL record-layer transport error. The follow-up raised the proxy runtime deadline to 360 seconds, packaged client defaults and the Russian-language semantic gate to 390 seconds, and the gateway `llm_proxy_transport` to 420 seconds so the service owns completion or structured timeout before Caddy or clients close the socket. After the operator redeployed those changes, hosted long semantic-review replays through `https://llm-proxy.mprlab.com` returned HTTP 200 instead of SSL transport failures.
   ### Expected
   Long semantic-review POSTs should either complete successfully or return a structured proxy/provider error that the client can classify and retry. The proxy should not leave clients with opaque transport failures after the upstream request may still be in progress or recoverable.
   ### Acceptance Criteria
@@ -124,6 +124,8 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   OpenAI Responses text requests now run in background mode by sending `background: true` and `store: true` on initial, continuation, and synthesis payloads, then polling the returned response id instead of holding long semantic-review generations on one synchronous upstream HTTP read. Added black-box integration coverage for a long semantic-review JSON POST that returns a queued background response, polls by response id, and returns the completed body. Python client HTTP and transport failures now include non-secret provider, model, and timeout context, and raw OS/SSL-style failures are typed as `LLMProxyTransportError`. B003 supersedes the remaining manual tuning gap with the final one-shot REST contract.
 
   Validation for the initial background-mode fix passed with `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make python-test` (27 passed), `timeout -k 350s -s SIGKILL 350s make python-lint`, `timeout -k 350s -s SIGKILL 350s make go-lint`, and `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 27 passed). The exact reported forced-chunked semantic-review payload was reconstructed from the failed Camu pipeline state (`chunkIndex=1`, `chunkChars=1800`, request SHA-256 `ba8737a7dd4b81dc0d52e68d9260756fdb0f32e6e12f3be2527d8be55df1a0cd`) and proved that OpenAI could complete the response in about 171 seconds, motivating B003.
+
+  Post-redeploy live validation passed with a hosted `gpt-5.5` v2 smoke returning `OK` in 3.289s, hosted replay of `/tmp/llm-proxy-b002-direct/po-schuchemu-velenyu.chunk-0001.llm-proxy-request.json` returning HTTP 200 in 152.981s with valid JSON, 23 `targetReviews`, and `needsHumanReview=false`, hosted Python v2 `gpt-5.5` replay of the same long semantic-review prompt returning in 151.524s with valid JSON, 23 `targetReviews`, and `needsHumanReview=false`, and `timeout -k 240s -s SIGKILL 240s make test-live-providers LIVE_ENV_FILE=configs/.env LLM_PROXY_LIVE_PROVIDERS=openai` reporting `live provider smoke passed: provider=openai model=omitted status=200`.
 
 - [x] [B003] (P1) OpenAI background semantic-review calls require manual timeout tuning
   ### Summary
@@ -152,7 +154,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   5. Black-box integration tests cover a long background semantic-review POST returning HTTP 200 in the original request after multiple server-side polls.
 
   ### Resolution
-  OpenAI background response polling is now owned by llm-proxy for the normal REST request lifecycle. Initial, continuation, and synthesis OpenAI Responses payloads use `background: true` and `store: true`; when OpenAI returns a non-terminal response id, llm-proxy polls that stored response server-side until completion or the normal `server.request_timeout_seconds` deadline. The public `/responses` resume endpoint and the Go/Python client resume loops were removed, and `upstream_poll_timeout_seconds` was removed from the static config surface. Default `request_timeout_seconds` is now 240 seconds, while the packaged Go CLI and Python client default to a 260-second transport timeout so one normal REST request has room to complete.
+  OpenAI background response polling is now owned by llm-proxy for the normal REST request lifecycle. Initial, continuation, and synthesis OpenAI Responses payloads use `background: true` and `store: true`; when OpenAI returns a non-terminal response id, llm-proxy polls that stored response server-side until completion or the normal `server.request_timeout_seconds` deadline. The public `/responses` resume endpoint and the Go/Python client resume loops were removed, and `upstream_poll_timeout_seconds` was removed from the static config surface. Default `request_timeout_seconds` is now 360 seconds, while the packaged Go CLI and Python client default to a 390-second transport timeout so one normal REST request has room to complete.
 
   Validation passed with `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make python-test` (Python 27 passed), `timeout -k 350s -s SIGKILL 350s make ci` (Go/Python lint clean, Go total coverage 100.0%, Python 27 passed), and `timeout -k 30s -s SIGKILL 30s git diff --check`. Live OpenAI smoke passed with `model` omitted, using the provider default, and HTTP 200. Live exact-payload replay of `/tmp/llm-proxy-b002-direct/po-schuchemu-velenyu.chunk-0001.llm-proxy-request.json` through the local current-branch proxy returned HTTP 200 from one `POST /?provider=openai&format=text/plain` in 150.394s with no `X-LLM-Proxy-Resume-*` or raw upstream response-id headers. The final body was valid JSON with 23 `targetReviews`, `needsHumanReview=true`, and 2 human-review items for `проруби`/`прорубь` stress confirmation.
 
@@ -387,7 +389,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
 ## Features
 
-- [ ] [F001] (P1) Add authenticated self-service API key and tenant secret management UI.
+- [x] [F001] (P1) Add authenticated self-service API key and tenant secret management UI.
   ### Summary
   Users need an authenticated browser UI where they sign in through the MPR/TAuth login surface, ask llm-proxy to create a new client key for them, bring their own upstream provider API keys for any supported provider, choose tenant defaults, and then use the service with the generated llm-proxy tenant secret. This should turn llm-proxy from an operator-provisioned static-tenant service into a self-service tenant onboarding surface without changing the public proxy request contract: clients still call `GET /`, JSON `POST /`, `POST /v2`, and `POST /dictate` with `key=<tenant secret>`, while upstream provider API keys stay server-side.
   ### MPR UI and authentication contract
@@ -419,6 +421,98 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   7. Document the self-service setup flow, generated-secret usage examples, provider-key security model, and hosted profile values required for production deployment.
   8. Add black-box HTTP tests for unauthenticated management `401`, authenticated key save/masking, cross-user tenant isolation, secret generation, generated-secret proxy success, revoked-secret `403`, and rejection of client-supplied provider keys on public proxy endpoints.
   9. Add Playwright browser coverage for the MPR shell rendering, login/session recovery, "create new key" behavior, provider-key form behavior, one-time secret display, revoke/regenerate flow, and copied usage example using the generated secret.
+  ### Resolution
+  Implemented management mode for the self-service browser UI using the MPR UI `/config-ui.yaml` contract, pinned MPR UI assets, `<mpr-header>`, `<mpr-user>`, and `<mpr-footer>`. Added TAuth session-cookie validation for `/api/management/*`, tenant-owned provider-key storage with masked responses, generated llm-proxy client secrets returned once and stored only as SHA-256 digests, default provider/model management, revoke/regenerate behavior, and managed-tenant routing through the existing `key=<tenant secret>` proxy contract. Management mode requires a configured persistent `management.database_dsn`; signup state, enabled providers, defaults, and generated-secret digests are persisted through GORM and are not stored by mutating the runtime config file. Public proxy endpoints now reject client-supplied provider API keys in query, JSON, and multipart inputs. Documented management configuration, production profile values required for deployment, security behavior, usage examples, and the no-raw-SQL GORM-only persistence rule in README/provider-routing docs and binding repo policy. Added black-box HTTP tests plus focused internal edge tests for unauthenticated access, key masking, cross-user isolation, generated-secret proxying, revoked-secret `403`, persistence failures, TAuth validation, and provider-key rejection; performed a local Playwright smoke of the rendered MPR shell because this repository has no committed browser-test harness. Validation passed with `timeout -k 350s -s SIGKILL 350s make test`, `timeout -k 350s -s SIGKILL 350s make lint`, and `timeout -k 350s -s SIGKILL 350s make ci`.
+
+- [x] [F002] (P1) Add one-time migration from legacy config tenants and provider API keys into the DB.
+  ### Summary
+  Management mode needs a one-off migration from legacy YAML tenant/provider-key configuration into the GORM database. After that migration, tenant secrets and provider API keys in the config file are obsolete seed material and runtime proxy authentication should use the database. Server/runtime configuration stays in the config file, including management auth settings, provider base URLs, and provider model catalogs.
+  ### Product contract
+  1. When `management.enabled` is true, startup opens the management DB and records a durable migration marker.
+  2. On the first management-mode startup before that marker exists, configured legacy tenants are imported into DB tenant rows with their configured tenant id, secret digest, defaults, and all nonblank configured provider API keys.
+  3. After the marker exists, startup ignores legacy config tenants and provider API key fields even if they remain in the YAML file.
+  4. Public proxy authentication in management mode is DB-authoritative after startup; static config tenants are migration seed input only.
+  5. Server/runtime settings, TAuth/MPR UI settings, provider base URLs, transcription URLs, and model catalogs remain config-file-owned.
+  ### Acceptance Criteria
+  1. Add black-box HTTP coverage showing a legacy config tenant/key works after first DB migration.
+  2. Add coverage showing the same tenant still works after config tenants/provider API keys are removed.
+  3. Add coverage showing reintroduced stale config credentials do not overwrite the migrated DB data after the marker exists.
+  4. Preserve the GORM-only/no-raw-SQL rule.
+  ### Resolution
+  Added a GORM-tracked static-config migration marker and a management-mode startup migration that imports legacy configured tenants into DB tenant rows with their original tenant id, secret digest, defaults, and every nonblank configured provider API key. After the marker exists, management-mode startup ignores config-file tenants and provider `api_key` values; public proxy authentication and provider credentials are DB-authoritative. Server/runtime settings, TAuth/MPR UI settings, provider base URLs, transcription URLs, and model catalogs remain config-file-owned. Static tenant/default credential validation is skipped in management mode because those fields are seed material only. Added black-box HTTP coverage proving the migrated legacy secret works after first startup, still works after tenant/key YAML removal, and keeps using the migrated DB provider key when stale config credentials are reintroduced. Validation passed with `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 20 passed), `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 20 passed), `timeout -k 30s -s SIGKILL 30s git diff --check`, and GORM/no-stale-store scans for raw SQL/direct SQL and JSON-store wording.
+
+- [x] [F003] (P1) Support explicit GORM database dialects for management persistence.
+  ### Summary
+  Management persistence should support multiple GORM-backed SQL dialects rather than assuming Postgres whenever `management.database_dsn` is present. The initial supported dialects are Postgres and SQLite.
+  ### Product contract
+  1. `management.database_dialect` selects the GORM dialector used for tenant-owned provider keys, defaults, generated-secret digests, and static-config migration markers.
+  2. Supported values are `postgres` and `sqlite`; unknown values fail startup before serving.
+  3. The default remains `postgres` so existing management configs keep the current behavior unless they opt into SQLite.
+  4. `management.database_dsn` remains required in management mode and is passed unchanged to the selected GORM dialector.
+  5. Database access continues to use GORM model APIs only; raw SQL and direct SQL clients remain prohibited.
+  ### Acceptance Criteria
+  1. Add CLI/config loading coverage for `management.database_dialect`.
+  2. Add startup coverage proving SQLite opens through configured management settings without the test-only dialector injection.
+  3. Add startup failure coverage for unsupported dialect values.
+  4. Preserve existing Postgres behavior.
+  ### Resolution
+  Added `management.database_dialect` to the management YAML and runtime configuration, with `postgres` as the default/current behavior and `sqlite` as the second supported GORM dialect. The GORM opener now selects the dialector from the explicit dialect field and passes `management.database_dsn` unchanged to the selected driver. Unsupported dialects fail startup during management config validation. Added CLI coverage for dialect parsing and unsupported dialect rejection, real router/startup coverage that opens SQLite through configured management settings without test-only dialector injection, and direct GORM opener coverage for explicit/default Postgres and invalid dialect behavior. README and provider-routing docs now document supported dialects and DSN semantics, and `.mprlab/AGENTS.GO.md` lists both GORM dialect drivers as approved data dependencies. Validation passed with `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli ./internal/proxy`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 20 passed), `timeout -k 180s -s SIGKILL 180s make build`, `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 20 passed), `timeout -k 30s -s SIGKILL 30s git diff --check`, and a raw-SQL/direct-SQL scan.
+
+- [x] [F004] (P1) Make packaged management DB dialect and DSN configurable through expandable config variables.
+  ### Summary
+  The packaged `configs/config.yml` should expose management DB dialect and DB location keys as expandable environment-backed values, while disabled management mode should not require operators to define management DB variables.
+  ### Product contract
+  1. `configs/config.yml` contains `management.database_dialect` and `management.database_dsn`.
+  2. Those two values are supplied through config placeholders so deployment profiles can set them from environment.
+  3. Placeholder defaults support disabled management mode without requiring DB environment variables.
+  4. Existing missing-placeholder failures remain strict for required fields without defaults.
+  ### Acceptance Criteria
+  1. Add config placeholder support for `${NAME:-default}` values.
+  2. Add packaged `configs/config.yml` management DB keys using expandable variables.
+  3. Add CLI coverage proving placeholder defaults expand and missing non-default placeholders still fail.
+  4. Preserve GORM/no-raw-SQL constraints.
+  ### Resolution
+  Added `${NAME:-default}` placeholder expansion in the config loader while preserving strict `config_placeholder_missing` failures for placeholders without defaults. Updated `configs/config.yml` to include a disabled management block with `management.database_dialect: "${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT:-postgres}"` and `management.database_dsn: "${LLM_PROXY_MANAGEMENT_DATABASE_DSN:-}"`, so deployment profiles can supply DB dialect/path through environment variables and disabled management mode does not require management DB variables. README and provider-routing docs now document the env-backed DB placeholders. Added CLI coverage for non-empty placeholder defaults, empty placeholder defaults, packaged config loading without management DB env vars, and existing strict missing-placeholder behavior. Validation passed with `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 20 passed), `timeout -k 180s -s SIGKILL 180s make build`, `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 20 passed), `timeout -k 30s -s SIGKILL 30s git diff --check`, and a raw-SQL/direct-SQL scan.
+
+- [x] [F005] (P1) Remove placeholder default syntax and source the SQLite management DB path from `.env`.
+  ### Summary
+  Config placeholders should stay strict and simple. The packaged config should refer to environment-backed management DB values, and the local `.env` profile should provide the SQLite dialect and file path.
+  ### Product contract
+  1. `${NAME:-default}` syntax is not supported by the config loader.
+  2. Missing placeholders without a matching `.env` or process environment value fail with `config_placeholder_missing`.
+  3. `configs/config.yml` uses plain `${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT}` and `${LLM_PROXY_MANAGEMENT_DATABASE_DSN}` placeholders.
+  4. The local `configs/.env` profile provides SQLite management DB values.
+  5. Management DB dialect has no implicit fallback; management mode requires an explicit supported dialect.
+  ### Acceptance Criteria
+  1. Remove default placeholder expansion from the loader.
+  2. Add CLI coverage proving default placeholder syntax is rejected.
+  3. Add CLI coverage proving the packaged config loads when `.env` provides SQLite DB variables.
+  4. Remove the implicit management DB dialect default.
+  5. Preserve GORM/no-raw-SQL constraints.
+  ### Resolution
+  Removed `${NAME:-default}` expansion from the config loader and kept placeholder handling strict to plain `${NAME}` values. `configs/config.yml` now uses `${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT}` and `${LLM_PROXY_MANAGEMENT_DATABASE_DSN}` directly, the ignored local `configs/.env` profile provides `sqlite` plus the local management database file path, and `.gitignore` excludes generated `configs/*.sqlite` files. Removed the implicit Postgres fallback for `management.database_dialect`; management mode now requires an explicit `postgres` or `sqlite` value. Added CLI coverage proving default placeholder syntax fails with `config_placeholder_missing` and proving the packaged config loads when `.env` supplies SQLite management DB values. README and provider-routing docs now describe strict `.env`-backed management DB placeholders without default syntax or dialect fallback. Validation passed with `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli ./internal/proxy`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 20 passed), `timeout -k 180s -s SIGKILL 180s make build`, `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 20 passed), `timeout -k 30s -s SIGKILL 30s git diff --check`, `git check-ignore -v configs/llm-proxy-management.sqlite`, and a raw-SQL/direct-SQL scan.
+
+- [x] [F006] (P1) Split the self-service management frontend onto GitHub Pages and keep llm-proxy as an API backend.
+  ### Summary
+  The management browser app should be served from GitHub Pages/CDN instead of being served by the Go backend. llm-proxy remains the API/proxy backend and exposes only API/config endpoints needed by the static frontend. Production uses split origins: frontend on `https://llm-proxy.mprlab.com`, backend on `https://llm-proxy-api.mprlab.com`, and TAuth on `https://tauth-api.mprlab.com`.
+  ### Product contract
+  1. The static frontend lives in a GitHub Pages-ready directory with no server-side template injection or Go embed dependency.
+  2. `https://llm-proxy.mprlab.com/config-ui.yaml` is a static browser-facing MPR UI config that points at browser-reachable TAuth endpoints.
+  3. Browser management API calls go to the configured backend origin, not same-origin `/api/management`.
+  4. The backend allows credentialed browser requests only from the configured management frontend origin and returns `401` for unauthenticated management API calls.
+  5. Public proxy examples generated by the UI point at the backend origin.
+  6. The Go backend does not serve the management frontend HTML/assets in management mode.
+  7. Required production setup is documented: DNS for GitHub Pages frontend, DNS/reverse proxy for the API backend, TAuth tenant origin/cookie settings, and GitHub Pages custom domain settings.
+  ### Acceptance Criteria
+  1. Move the management frontend to a static Pages directory, including `index.html`, assets, and static `config-ui.yaml`.
+  2. Add static frontend runtime config for `managementApiOrigin` and `proxyOrigin`.
+  3. Update frontend API client and usage snippets to use split-origin config with `credentials: "include"`.
+  4. Add backend CORS support for `/api/management/*` using the configured frontend origin.
+  5. Remove Go serving of management HTML/assets while keeping backend `/api/management/*` and proxy endpoints.
+  6. Add black-box HTTP coverage for API-only management mode, CORS preflight/credentials headers, and absence of backend-served management frontend.
+  7. Document the exact DNS/configuration/GitHub Pages steps.
+  ### Resolution
+  Moved the self-service management frontend into the GitHub Pages-ready `site/` directory with static `index.html`, pinned `mpr-ui` assets, `config-ui.yaml`, `llm-proxy-config.json`, `CNAME`, and `.nojekyll`. Added `.github/workflows/pages.yml` to publish `site/` through GitHub Pages and updated the PR workflow trigger for site/workflow changes. The browser management client now loads the static runtime config, calls `https://llm-proxy-api.mprlab.com/api/management/*` with credentials, and generates proxy examples against the configured backend origin. The Go backend no longer serves management HTML/assets or `/config-ui.yaml`; it keeps `/api/management/*` and proxy endpoints and applies credentialed CORS only for `management.public_origin`. Added black-box management tests for API-only root behavior, authenticated/unauthenticated management API behavior, and allowed/blocked CORS preflight handling. README and provider-routing docs now describe the required production setup: `llm-proxy.mprlab.com` on GitHub Pages, `llm-proxy-api.mprlab.com` on the MPR gateway/backend, the TAuth `llm-proxy` tenant/cookie settings, and the GitHub Pages custom domain/source settings. Validation passed with `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli ./internal/proxy`, static JS `node --check`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 20 passed), `timeout -k 180s -s SIGKILL 180s make build`, `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 20 passed), `timeout -k 30s -s SIGKILL 30s git diff --check`, raw-SQL/direct-SQL scan, stale backend-hosted UI symbol scan, and a local Playwright CLI preview of the static Pages app. The preview rendered the MPR UI/TAuth login shell; live sign-in/API calls remain pending production DNS plus a real `llm-proxy` TAuth tenant and Google OAuth client id.
 
 
 ## Planning

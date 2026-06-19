@@ -26,6 +26,7 @@
    - **Prod boundary**: **wrap** with operation + subject + stable code.
 
 6. **No silent fallbacks** or “best-effort” paths unless a product requirement is cited in the commit.
+7. Database access MUST use GORM model APIs only. Raw SQL strings, SQL builders, direct `database/sql`, direct `pgx`, and GORM `Raw`/`Exec` calls are prohibited unless a lead-authored policy exception exists.
 
 ---
 
@@ -70,6 +71,7 @@
 - Re-validating a domain object already built by a smart constructor.
 - Adding "best-effort" fallback without a cited product requirement.
 - Boolean/flag parameters that conflate behaviors when a sum-type or distinct API is clearer.
+- Raw SQL in any form, including SQL strings, SQL builders, direct `database/sql`, direct `pgx`, and GORM `Raw`/`Exec`.
 
 ---
 
