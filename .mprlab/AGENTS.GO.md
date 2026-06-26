@@ -46,7 +46,6 @@ Backend guidance for Go code. Follow AGENTS.md for repo-wide policies, documenta
 - Use zap for logging; no `fmt.Println`.
 - Prefer channels and contexts over shared mutable state.
 - Guard critical sections explicitly.
-- Database code must use GORM model APIs only. Do not import `database/sql` or `pgx` directly in application code; do not use raw SQL strings, SQL builders, GORM `Raw`, or GORM `Exec`.
 
 ---
 
@@ -73,7 +72,7 @@ Backend guidance for Go code. Follow AGENTS.md for repo-wide policies, documenta
 
 - Core: `spf13/viper`, `spf13/cobra`, `uber/zap`.
 - HTTP: `gin-gonic/gin`, `gin-contrib/cors`.
-- Data: `gorm.io/gorm`, `gorm.io/driver/postgres`, `gorm.io/driver/sqlite`.
+- Data: `gorm.io/gorm`, `gorm.io/driver/postgres`, `jackc/pgx/v5`.
 - Auth/Validation: `golang-jwt/jwt/v5`, `go-playground/validator/v10`.
 - Testing: `stretchr/testify`.
 - Optional: `joho/godotenv`, `prometheus/client_golang`, `robfig/cron/v3`.

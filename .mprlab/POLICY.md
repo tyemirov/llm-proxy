@@ -7,6 +7,7 @@
 - **Fail fast** (dev) and **wrap errors with context** at boundaries (prod).
 - **Narrow interfaces**: accept domain types, not loose primitives, when a domain type exists.
 - **No duplicate checks** in core; once validated, don’t re-validate.
+- **No duplicated reusable literals**: define shared paths/keys/operation names/messages once and reference constants.
 - Tests target **contracts/invariants**, not defensive branches.
 - **Inverted test pyramid (integration-first)**: Bias hard toward black-box integration and end-to-end tests that exercise the real code path through public entry points (HTTP endpoints, CLI commands, browser flows).
 - **Integration tests only (default)**: Unit tests are prohibited for Go and Front-End/JS work. Python may allow narrow unit tests only when explicitly permitted by `AGENTS.PY.md`, and never as a substitute for black-box coverage of user-visible behavior.
@@ -26,7 +27,10 @@
    - **Prod boundary**: **wrap** with operation + subject + stable code.
 
 6. **No silent fallbacks** or “best-effort” paths unless a product requirement is cited in the commit.
-7. Database access MUST use GORM model APIs only. Raw SQL strings, SQL builders, direct `database/sql`, direct `pgx`, and GORM `Raw`/`Exec` calls are prohibited unless a lead-authored policy exception exists.
+7. **Timeout inflation is forbidden as a fix**: do not increase test/runtime timeouts to mask failures. Fix the underlying logic/state contract first.
+8. **Centralize reusable constants**: repeated literals (paths, filenames, operation values, shared messages, config keys) MUST have a single canonical declaration.
+9. **Go constant source of truth**: shared literals MUST be exported from a reusable package and consumed via constants, not repeated string literals.
+10. **JS constant/payload rule**: UI logic MUST use shared constants or backend-provided payload values; avoid hardcoded workflow/path literals in feature code.
 
 ---
 
@@ -71,7 +75,31 @@
 - Re-validating a domain object already built by a smart constructor.
 - Adding "best-effort" fallback without a cited product requirement.
 - Boolean/flag parameters that conflate behaviors when a sum-type or distinct API is clearer.
-- Raw SQL in any form, including SQL strings, SQL builders, direct `database/sql`, direct `pgx`, and GORM `Raw`/`Exec`.
+- Increasing timeouts/waits as the primary response to flakiness or failing behavior.
+- Repeating shared string literals across files when a canonical constant exists.
+- Hardcoding frontend workflow/path/message literals when the backend payload already provides those values.
+
+---
+
+## M. Constants & Literals Centralization (binding)
+
+- Treat reusable literals as API: define once, reuse everywhere.
+- Canonical constants must be imported/consumed across packages/modules instead of retyping string literals.
+- For Go shared literals, prefer exported constants in a dedicated package (for example, `issuesspec`) and use those constants in runtime code and tests.
+- For JS/frontend flows, consume backend payload fields (`message`, `operation`, `confirmationMessage`, `contextDirectory`, etc.) and shared constants modules; do not reconstruct canonical strings inline.
+- Add/maintain automated guards that fail CI when protected literals appear outside their canonical source.
+
+---
+
+## L. Timeout & waiting policy (binding)
+
+- Treat waits/timeouts as **diagnostic guards**, not correctness mechanisms.
+- For any timeout-related failure, first identify the missing precondition or stalled contract (API readiness, event delivery, state transition, lock release, etc.).
+- Required remediation order:
+1. Make the state transition explicit and observable.
+2. Gate on deterministic readiness signals.
+3. Remove or reduce blind waiting/retry loops.
+- Only after systemic remediation may timeout values be revisited, and only with a documented justification tied to an external constraint.
 
 ---
 

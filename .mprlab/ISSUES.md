@@ -11,6 +11,29 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
 ## BugFixes
 
+- [!] [B006] (P1) Published production image rejects current management config.
+  ### Summary
+  Production startup fails while parsing the mounted current `config.yml`:
+  ```text
+  config_file_parse_failed: path=config.yml: decoding failed due to the following error(s):
+
+  '' has invalid keys: management
+  ```
+  The current repository source and CLI config tests accept the top-level `management` block, but the published `ghcr.io/tyemirov/llm-proxy:latest` image still rejects it. This indicates the deployed image is stale relative to the current config contract.
+  ### Evidence
+  1. Current source passes the packaged management config loader test:
+  ```bash
+  timeout -k 120s -s SIGKILL 120s go test -count=1 ./cmd/cli -run TestRootCommandLoadsPackagedConfigWithManagementEnvironment
+  ```
+  2. The published production image reproduces the production error with the current config mounted:
+  ```bash
+  docker run --rm -v "$(pwd)/configs/config.yml:/app/config.yml:ro" ghcr.io/tyemirov/llm-proxy:latest /usr/local/bin/llm-proxy --config /app/config.yml
+  ```
+  ### Expected
+  The production image and mounted config must be advanced together. Do not remove `management` from config and do not add a compatibility parser path; `management` is part of the current canonical config contract.
+  ### Blocked
+  Blocked: Requires publishing an image built from the current management-aware source and redeploying the backend through the gateway-owned `deploy-llm-proxy-backend` path. Agent runs must stop before production deployment unless the execution chain or operator performs the publish/deploy step.
+
 - [x] [B001] (P1) Gemini POST responses can return thought or partial text as successful output.
   ### Summary
   A production-comparable Russian semantic-stress QA run sent the full prompt through `POST /?provider=gemini` with `model=gemini-3.5-flash`, but the client received a non-JSON response and failed before materialization. The same prompt contract succeeds only when the proxy returns the model's answer text as parseable JSON or returns a structured proxy/provider error.
@@ -513,6 +536,8 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   7. Document the exact DNS/configuration/GitHub Pages steps.
   ### Resolution
   Moved the self-service management frontend into the GitHub Pages-ready `site/` directory with static `index.html`, pinned `mpr-ui` assets, `config-ui.yaml`, `llm-proxy-config.json`, `CNAME`, and `.nojekyll`. Added `.github/workflows/pages.yml` to publish `site/` through GitHub Pages and updated the PR workflow trigger for site/workflow changes. The browser management client now loads the static runtime config, calls `https://llm-proxy-api.mprlab.com/api/management/*` with credentials, and generates proxy examples against the configured backend origin. The Go backend no longer serves management HTML/assets or `/config-ui.yaml`; it keeps `/api/management/*` and proxy endpoints and applies credentialed CORS only for `management.public_origin`. Added black-box management tests for API-only root behavior, authenticated/unauthenticated management API behavior, and allowed/blocked CORS preflight handling. README and provider-routing docs now describe the required production setup: `llm-proxy.mprlab.com` on GitHub Pages, `llm-proxy-api.mprlab.com` on the MPR gateway/backend, the TAuth `llm-proxy` tenant/cookie settings, and the GitHub Pages custom domain/source settings. Validation passed with `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli ./internal/proxy`, static JS `node --check`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 20 passed), `timeout -k 180s -s SIGKILL 180s make build`, `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 20 passed), `timeout -k 30s -s SIGKILL 30s git diff --check`, raw-SQL/direct-SQL scan, stale backend-hosted UI symbol scan, and a local Playwright CLI preview of the static Pages app. The preview rendered the MPR UI/TAuth login shell; live sign-in/API calls remain pending production DNS plus a real `llm-proxy` TAuth tenant and Google OAuth client id.
+
+  Review follow-up fixed production blockers from the split-origin branch: SQLite management persistence now uses a pure-Go GORM driver compatible with `CGO_ENABLED=0` release builds, the packaged disabled-management config no longer requires unused management DB placeholders, generated deployment metadata routes the backend through `llm-proxy-api.mprlab.com`, `make deploy` defaults to the backend-only gateway target, and `site/config-ui.yaml` carries the production `llm-proxy` Google OAuth web client id.
 
 
 ## Planning
