@@ -319,7 +319,7 @@ tenants:
 	}
 }
 
-func TestRootCommandLoadsPackagedConfigWithManagementDatabaseEnvironment(t *testing.T) {
+func TestRootCommandLoadsPackagedConfigWithManagementEnvironment(t *testing.T) {
 	tempDir := t.TempDir()
 	packagedConfigPath := filepath.Join("..", "..", "configs", "config.yml")
 	packagedConfig, readError := os.ReadFile(packagedConfigPath)
@@ -333,8 +333,14 @@ func TestRootCommandLoadsPackagedConfigWithManagementDatabaseEnvironment(t *test
 	writeTestDotEnv(t, tempDir, `
 SERVICE_SECRET=packaged-secret
 OPENAI_API_KEY=sk-packaged-openai
+LLM_PROXY_MANAGEMENT_ENABLED=true
+LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN=https://llm-proxy.mprlab.com
+LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID=llm-proxy
+LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY=packaged-tauth-signing-key
+LLM_PROXY_MANAGEMENT_JWT_ISSUER=tauth
+LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME=app_session_llm_proxy
 LLM_PROXY_MANAGEMENT_DATABASE_DIALECT=sqlite
-LLM_PROXY_MANAGEMENT_DATABASE_DSN=packaged-management.sqlite
+LLM_PROXY_MANAGEMENT_DATABASE_DSN=llm-proxy-management.sqlite
 `)
 
 	var capturedConfiguration proxy.Configuration
@@ -347,10 +353,19 @@ LLM_PROXY_MANAGEMENT_DATABASE_DSN=packaged-management.sqlite
 	if executeError != nil {
 		t.Fatalf("ExecuteC error: %v", executeError)
 	}
+	if !capturedConfiguration.Management.Enabled {
+		t.Fatalf("packaged config should enable management from environment")
+	}
+	if capturedConfiguration.Management.PublicOrigin != "https://llm-proxy.mprlab.com" {
+		t.Fatalf("public origin=%q", capturedConfiguration.Management.PublicOrigin)
+	}
+	if capturedConfiguration.Management.JWTSigningKey != "packaged-tauth-signing-key" {
+		t.Fatalf("jwt signing key=%q", capturedConfiguration.Management.JWTSigningKey)
+	}
 	if capturedConfiguration.Management.DatabaseDialect != proxy.ManagementDatabaseDialectSQLite {
 		t.Fatalf("database dialect=%q", capturedConfiguration.Management.DatabaseDialect)
 	}
-	if capturedConfiguration.Management.DatabaseDSN != "packaged-management.sqlite" {
+	if capturedConfiguration.Management.DatabaseDSN != "llm-proxy-management.sqlite" {
 		t.Fatalf("database dsn=%q", capturedConfiguration.Management.DatabaseDSN)
 	}
 }
