@@ -6,7 +6,7 @@ environments:
       - "http://localhost:4179"
     auth:
       tauthUrl: "https://tauth-api.mprlab.com"
-      googleClientId: "replace-me-google-client-id"
+      googleClientId: "925457785190-3frk7j3bsr3ucidtkcohrp2sl07e0paa.apps.googleusercontent.com"
       tenantId: "llm-proxy"
       loginPath: "/auth/google"
       logoutPath: "/auth/logout"
