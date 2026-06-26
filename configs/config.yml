@@ -7,12 +7,12 @@ server:
   max_prompt_bytes: 4194304
   max_input_audio_bytes: 26214400
 management:
-  enabled: false
-  public_origin: "https://llm-proxy.mprlab.com"
-  tauth_tenant_id: "llm-proxy"
-  jwt_signing_key: "replace-me-tauth-jwt-signing-key"
-  jwt_issuer: "tauth"
-  session_cookie_name: "llm_proxy_session"
+  enabled: ${LLM_PROXY_MANAGEMENT_ENABLED}
+  public_origin: "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
+  tauth_tenant_id: "${LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID}"
+  jwt_signing_key: "${LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY}"
+  jwt_issuer: "${LLM_PROXY_MANAGEMENT_JWT_ISSUER}"
+  session_cookie_name: "${LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME}"
   database_dialect: "${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT}"
   database_dsn: "${LLM_PROXY_MANAGEMENT_DATABASE_DSN}"
 tenants:
