@@ -19,13 +19,13 @@ mprlab_resources:
       container_port: 8080
       compose_project: mprlab-gateway
     - type: caddy_route
-      name: llm-proxy
-      host: llm-proxy.mprlab.com
+      name: llm-proxy-api
+      host: llm-proxy-api.mprlab.com
       upstream: llm-proxy:8080
       snippet: llm-proxy.caddy
     - type: health_check
-      name: llm-proxy
+      name: llm-proxy-api
       path: /
-      url: https://llm-proxy.mprlab.com/
+      url: https://llm-proxy-api.mprlab.com/
       status_codes:
         - 403
