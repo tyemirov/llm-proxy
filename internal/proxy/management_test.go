@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/glebarez/sqlite"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
 	"go.uber.org/zap"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 

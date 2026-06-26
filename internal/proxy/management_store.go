@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/glebarez/sqlite"
 	"github.com/tyemirov/llm-proxy/internal/constants"
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
