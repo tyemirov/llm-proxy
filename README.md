@@ -71,12 +71,12 @@ server:
   max_prompt_bytes: 4194304
   max_input_audio_bytes: 26214400
 management:
-  enabled: false
-  public_origin: "https://llm-proxy.mprlab.com"
-  tauth_tenant_id: "llm-proxy"
-  jwt_signing_key: "replace-me-tauth-jwt-signing-key"
-  jwt_issuer: "tauth"
-  session_cookie_name: "llm_proxy_session"
+  enabled: ${LLM_PROXY_MANAGEMENT_ENABLED}
+  public_origin: "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
+  tauth_tenant_id: "${LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID}"
+  jwt_signing_key: "${LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY}"
+  jwt_issuer: "${LLM_PROXY_MANAGEMENT_JWT_ISSUER}"
+  session_cookie_name: "${LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME}"
   database_dialect: "${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT}"
   database_dsn: "${LLM_PROXY_MANAGEMENT_DATABASE_DSN}"
 tenants:
@@ -388,7 +388,7 @@ Required hosted values are profile-specific:
 | `management.jwt_signing_key` | Internal signing key used to validate the TAuth session cookie. |
 | `management.jwt_issuer` | JWT issuer, normally `tauth`. |
 | `management.session_cookie_name` | Exact app/environment TAuth session cookie name. |
-| `management.database_dialect` | Required GORM SQL dialect for management persistence. Supported values are `postgres` and `sqlite`. |
+| `management.database_dialect` | Required GORM SQL dialect for management persistence. Supported values are `postgres` and `sqlite`; SQLite uses the pure-Go GORM driver so `CGO_ENABLED=0` builds remain valid. |
 | `management.database_dsn` | Required DSN passed to the selected GORM dialect for tenant-owned provider keys, defaults, and generated-secret digests. |
 
 Signed-in users save provider API keys for any supported provider, choose
@@ -396,12 +396,13 @@ routing defaults, and generate llm-proxy secrets. Management mode requires
 `management.database_dialect` and `management.database_dsn` so signups, enabled
 providers, defaults, and generated secret digests survive restarts in a
 GORM-managed database. `postgres` uses a Postgres DSN, while `sqlite` uses a
-SQLite database path or SQLite DSN. The packaged config uses plain expandable
-placeholders for both fields: `${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT}` and
-`${LLM_PROXY_MANAGEMENT_DATABASE_DSN}`. Local profiles set those values in
-`configs/.env`; placeholders without matching values fail startup. The runtime
-config file is never mutated for user signup or provider enablement, and
-database access must stay on GORM model APIs without raw SQL. Generated secrets
+SQLite database path or SQLite DSN. The packaged management config uses strict
+expandable placeholders for the hosted profile values; define every
+`LLM_PROXY_MANAGEMENT_*` key in the runtime environment or local `configs/.env`.
+Placeholders without matching values fail startup. The runtime config file is
+never mutated for user signup or provider enablement, and database access must
+stay on GORM model APIs without raw SQL.
+Generated secrets
 continue to authenticate the public proxy endpoints with the same
 `key=<tenant secret>` query parameter. Provider API keys are accepted only
 through authenticated management endpoints; after save, the UI/API returns only
@@ -442,7 +443,7 @@ Then configure GitHub Pages for this repository:
 1. Use GitHub Actions as the Pages source.
 2. Set the Pages custom domain to `llm-proxy.mprlab.com`.
 3. Keep `site/CNAME` as `llm-proxy.mprlab.com`.
-4. Replace `site/config-ui.yaml` `googleClientId` with the production Google OAuth web client id for the `llm-proxy` TAuth tenant.
+4. Keep `site/config-ui.yaml` `googleClientId` aligned with the production Google OAuth web client id for the `llm-proxy` TAuth tenant.
 5. Keep `site/llm-proxy-config.json` origins pointed at `https://llm-proxy-api.mprlab.com`.
 
 Configure TAuth for tenant `llm-proxy` with:
@@ -586,7 +587,7 @@ command-specific `RELEASE_CI_TIMEOUT_SECONDS`, `PUBLISH_CI_TIMEOUT_SECONDS`,
 and `DEPLOY_CI_TIMEOUT_SECONDS` variables.
 
 `llm-proxy` is a gateway-local service in `mprlab-gateway`, so `make deploy`
-defaults to the gateway `deploy-llm-proxy` target. Override the checkout or target
+defaults to the gateway `deploy-llm-proxy-backend` target. Override the checkout or target
 with `GATEWAY_DIR=/path/to/mprlab-gateway` or
 `GATEWAY_DEPLOY_TARGET=<target>`.
 
