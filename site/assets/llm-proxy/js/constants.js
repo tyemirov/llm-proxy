@@ -49,7 +49,6 @@ export const COPY = Object.freeze({
   textModel: "Text model",
   dictationProvider: "Dictation provider",
   dictationModel: "Dictation model",
-  noDictationDefault: "No dictation default",
   noDictationModel: "No dictation model",
   systemPrompt: "System prompt",
   saveDefaults: "Save defaults",

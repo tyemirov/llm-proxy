@@ -103,7 +103,6 @@
                   <label>
                     <span x-text="copy.dictationProvider"></span>
                     <select x-model="defaults.dictation_provider" x-on:change="selectDictationProviderDefaultModel()">
-                      <option value="" x-text="copy.noDictationDefault"></option>
                       <template x-for="provider in dictationProviders" x-bind:key="provider.id">
                         <option x-bind:value="provider.id" x-text="provider.label"></option>
                       </template>
