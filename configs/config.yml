@@ -9,12 +9,24 @@ server:
 management:
   enabled: ${LLM_PROXY_MANAGEMENT_ENABLED}
   public_origin: "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
+  ui_description: "${LLM_PROXY_MANAGEMENT_UI_DESCRIPTION}"
+  ui_origins:
+    - "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
+    - "${LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN}"
+    - "${LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN}"
+  tauth_url: "${LLM_PROXY_MANAGEMENT_TAUTH_URL}"
   tauth_tenant_id: "${LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID}"
+  google_client_id: "${LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID}"
+  login_path: "${LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH}"
+  logout_path: "${LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH}"
+  nonce_path: "${LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH}"
   jwt_signing_key: "${LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY}"
   jwt_issuer: "${LLM_PROXY_MANAGEMENT_JWT_ISSUER}"
   session_cookie_name: "${LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME}"
   database_dialect: "${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT}"
   database_dsn: "${LLM_PROXY_MANAGEMENT_DATABASE_DSN}"
+  management_api_origin: "${LLM_PROXY_MANAGEMENT_API_ORIGIN}"
+  proxy_origin: "${LLM_PROXY_MANAGEMENT_PROXY_ORIGIN}"
 tenants:
   - id: default
     secret: "${SERVICE_SECRET}"
