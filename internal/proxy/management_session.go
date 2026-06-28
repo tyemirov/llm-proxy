@@ -70,6 +70,9 @@ func (validator *managementSessionValidator) validateToken(rawToken string) (man
 		return managementPrincipal{}, fmt.Errorf("management_session.validate_token: %w", errManagementSessionInvalid)
 	}
 	claims := parsedToken.Claims.(*managementSessionClaims)
+	if claims.ExpiresAt == nil {
+		return managementPrincipal{}, fmt.Errorf("management_session.validate_token: %w", errManagementSessionInvalid)
+	}
 	if claims.Issuer != validator.issuer {
 		return managementPrincipal{}, fmt.Errorf("management_session.validate_token: %w", errManagementSessionInvalid)
 	}

@@ -263,6 +263,17 @@ func (registry *providerRegistry) resolveProvider(rawProvider string, defaultPro
 }
 
 func (registry *providerRegistry) resolveTextRequest(rawProvider string, rawModel string, defaultProvider string, defaultModel string, webSearchEnabled bool) (providerDefinition, textModelDefinition, error) {
+	definition, resolvedModel, resolutionError := registry.resolveTextModel(rawProvider, rawModel, defaultProvider, defaultModel, webSearchEnabled)
+	if resolutionError != nil {
+		return providerDefinition{}, textModelDefinition{}, resolutionError
+	}
+	if definition.credentialFor(endpointKindText) == constants.EmptyString {
+		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindText)
+	}
+	return definition, resolvedModel, nil
+}
+
+func (registry *providerRegistry) resolveTextModel(rawProvider string, rawModel string, defaultProvider string, defaultModel string, webSearchEnabled bool) (providerDefinition, textModelDefinition, error) {
 	definition, providerError := registry.resolveProvider(rawProvider, defaultProvider)
 	if providerError != nil {
 		return providerDefinition{}, textModelDefinition{}, providerError
@@ -282,13 +293,21 @@ func (registry *providerRegistry) resolveTextRequest(rawProvider string, rawMode
 	if webSearchEnabled && !resolvedModel.supportsWebSearch {
 		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: provider=%s model=%s capability=web_search", ErrUnsupportedCapability, definition.identifier.string(), resolvedModel.string())
 	}
-	if definition.credentialFor(endpointKindText) == constants.EmptyString {
-		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindText)
-	}
 	return definition, resolvedModel, nil
 }
 
 func (registry *providerRegistry) resolveDictationRequest(rawProvider string, rawModel string, defaultProvider string, defaultModel string) (providerDefinition, modelID, error) {
+	definition, resolvedModel, resolutionError := registry.resolveDictationModel(rawProvider, rawModel, defaultProvider, defaultModel)
+	if resolutionError != nil {
+		return providerDefinition{}, modelID(""), resolutionError
+	}
+	if definition.credentialFor(endpointKindDictation) == constants.EmptyString {
+		return providerDefinition{}, modelID(""), fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindDictation)
+	}
+	return definition, resolvedModel, nil
+}
+
+func (registry *providerRegistry) resolveDictationModel(rawProvider string, rawModel string, defaultProvider string, defaultModel string) (providerDefinition, modelID, error) {
 	definition, providerError := registry.resolveProvider(rawProvider, defaultProvider)
 	if providerError != nil {
 		return providerDefinition{}, modelID(""), providerError
@@ -307,9 +326,6 @@ func (registry *providerRegistry) resolveDictationRequest(rawProvider string, ra
 	resolvedModel, modelError := resolveModelFromSet(definition.transcriptionModels, modelIdentifier)
 	if modelError != nil {
 		return providerDefinition{}, modelID(""), modelError
-	}
-	if definition.credentialFor(endpointKindDictation) == constants.EmptyString {
-		return providerDefinition{}, modelID(""), fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindDictation)
 	}
 	return definition, resolvedModel, nil
 }

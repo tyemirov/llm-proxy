@@ -164,6 +164,7 @@ func TestManagementRejectsInvalidSessionsAndRequests(t *testing.T) {
 	router := newManagementRouter(t, proxy.Configuration{})
 	invalidCookies := []*http.Cookie{
 		{Name: testManagementCookieName, Value: "not-a-jwt"},
+		managementSessionCookieWithoutExpiration(t),
 		managementSessionCookieWithClaims(t, jwt.MapClaims{"iss": "wrong", "tenant_id": testManagementTenantID, "user_id": "user"}),
 		managementSessionCookieWithClaims(t, jwt.MapClaims{"iss": "tauth", "tenant_id": "wrong-tenant", "user_id": "user"}),
 		managementSessionCookieWithClaims(t, jwt.MapClaims{"iss": "tauth", "tenant_id": testManagementTenantID, "user_id": "user", "iat": time.Now().UTC().Add(time.Hour).Unix()}),
@@ -335,6 +336,81 @@ func TestManagementMigratesLegacyConfigOnceThenUsesDatabase(t *testing.T) {
 		if authorization != "Bearer "+legacyDeepSeekKey {
 			t.Fatalf("authorization %d=%q want=%q", authorizationIndex, authorization, "Bearer "+legacyDeepSeekKey)
 		}
+	}
+}
+
+func TestManagementAcceptsLegacyTenantDefaultsWithoutStaticCredentials(t *testing.T) {
+	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{
+		Tenants: proxy.SingleTenantConfigurationsWithDefaults("legacy", "legacy-secret", proxy.TenantDefaults{
+			Provider:          proxy.ProviderNameDeepSeek,
+			Model:             proxy.ModelNameDeepSeekV4Flash,
+			DictationProvider: proxy.ProviderNameOpenAI,
+			DictationModel:    proxy.DefaultDictationModel,
+		}),
+	}, filepath.Join(t.TempDir(), "managed-tenants.db"))
+	_, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+}
+
+func TestManagementRejectsInvalidLegacyTenantDefaults(t *testing.T) {
+	testCases := []struct {
+		name          string
+		defaults      proxy.TenantDefaults
+		expectedError string
+	}{
+		{
+			name: "unknown text provider",
+			defaults: proxy.TenantDefaults{
+				Provider:          "missing-provider",
+				Model:             proxy.DefaultModel,
+				DictationProvider: proxy.ProviderNameOpenAI,
+				DictationModel:    proxy.DefaultDictationModel,
+			},
+			expectedError: "unknown provider: missing-provider",
+		},
+		{
+			name: "unknown text model",
+			defaults: proxy.TenantDefaults{
+				Provider:          proxy.ProviderNameDeepSeek,
+				Model:             "deepseek-typo",
+				DictationProvider: proxy.ProviderNameOpenAI,
+				DictationModel:    proxy.DefaultDictationModel,
+			},
+			expectedError: "unknown model: deepseek-typo",
+		},
+		{
+			name: "unsupported dictation provider",
+			defaults: proxy.TenantDefaults{
+				Provider:          proxy.ProviderNameDeepSeek,
+				Model:             proxy.ModelNameDeepSeekV4Flash,
+				DictationProvider: proxy.ProviderNameGemini,
+				DictationModel:    proxy.DefaultDictationModel,
+			},
+			expectedError: "unsupported provider endpoint: provider=gemini endpoint=dictation",
+		},
+		{
+			name: "unknown dictation model",
+			defaults: proxy.TenantDefaults{
+				Provider:          proxy.ProviderNameDeepSeek,
+				Model:             proxy.ModelNameDeepSeekV4Flash,
+				DictationProvider: proxy.ProviderNameOpenAI,
+				DictationModel:    "dictation-typo",
+			},
+			expectedError: "unknown model: dictation-typo",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			configuration := managementConfigurationWithDatabasePath(proxy.Configuration{
+				Tenants: proxy.SingleTenantConfigurationsWithDefaults("legacy", "legacy-secret", testCase.defaults),
+			}, filepath.Join(subTest.TempDir(), "managed-tenants.db"))
+			_, buildError := buildRouterWithCatalogs(subTest, configuration, zap.NewNop().Sugar())
+			if buildError == nil || !strings.Contains(buildError.Error(), testCase.expectedError) {
+				subTest.Fatalf("error=%v want contains %q", buildError, testCase.expectedError)
+			}
+		})
 	}
 }
 
@@ -686,6 +762,20 @@ func managementSessionCookieWithClaims(t *testing.T, claims jwt.MapClaims) *http
 	if _, hasExpiry := claims["exp"]; !hasExpiry {
 		claims["exp"] = time.Now().UTC().Add(time.Hour).Unix()
 	}
+	return signedManagementSessionCookie(t, claims)
+}
+
+func managementSessionCookieWithoutExpiration(t *testing.T) *http.Cookie {
+	t.Helper()
+	return signedManagementSessionCookie(t, jwt.MapClaims{
+		"iss":       "tauth",
+		"tenant_id": testManagementTenantID,
+		"user_id":   "user-without-expiration",
+	})
+}
+
+func signedManagementSessionCookie(t *testing.T, claims jwt.MapClaims) *http.Cookie {
+	t.Helper()
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signedToken, signingError := token.SignedString([]byte(testManagementSigningKey))
 	if signingError != nil {

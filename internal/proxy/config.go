@@ -34,6 +34,7 @@ const (
 	ManagementDatabaseDialectPostgres = "postgres"
 	// ManagementDatabaseDialectSQLite selects the GORM SQLite dialector.
 	ManagementDatabaseDialectSQLite = "sqlite"
+	tenantValidationErrorFormat     = "%w: tenant=%s"
 )
 
 // Configuration holds runtime settings.
@@ -128,18 +129,39 @@ func validateConfig(configuration Configuration) (tenantRegistry, error) {
 		return tenantRegistry{}, modelCatalogError
 	}
 	providers := newProviderRegistry(configuration)
-	if !configuration.Management.Enabled {
-		validator := newModelValidator(providers)
-		for _, currentTenant := range tenants.tenants {
-			if _, _, verificationError := validator.ResolveText(constants.EmptyString, constants.EmptyString, currentTenant.defaults.provider, currentTenant.defaults.model, false); verificationError != nil {
-				return tenantRegistry{}, fmt.Errorf("%w: tenant=%s", verificationError, currentTenant.identifier.string())
+	validator := newModelValidator(providers)
+	for _, currentTenant := range tenants.tenants {
+		if configuration.Management.Enabled {
+			if validationError := validateTenantDefaultCatalogs(validator, currentTenant); validationError != nil {
+				return tenantRegistry{}, validationError
 			}
-			if _, _, verificationError := validator.ResolveDictation(constants.EmptyString, constants.EmptyString, currentTenant.defaults.dictationProvider, currentTenant.defaults.dictationModel); verificationError != nil {
-				return tenantRegistry{}, fmt.Errorf("%w: tenant=%s", verificationError, currentTenant.identifier.string())
-			}
+			continue
+		}
+		if validationError := validateTenantDefaultRuntime(validator, currentTenant); validationError != nil {
+			return tenantRegistry{}, validationError
 		}
 	}
 	return tenants, nil
+}
+
+func validateTenantDefaultRuntime(validator *modelValidator, currentTenant tenant) error {
+	if _, _, verificationError := validator.ResolveText(constants.EmptyString, constants.EmptyString, currentTenant.defaults.provider, currentTenant.defaults.model, false); verificationError != nil {
+		return fmt.Errorf(tenantValidationErrorFormat, verificationError, currentTenant.identifier.string())
+	}
+	if _, _, verificationError := validator.ResolveDictation(constants.EmptyString, constants.EmptyString, currentTenant.defaults.dictationProvider, currentTenant.defaults.dictationModel); verificationError != nil {
+		return fmt.Errorf(tenantValidationErrorFormat, verificationError, currentTenant.identifier.string())
+	}
+	return nil
+}
+
+func validateTenantDefaultCatalogs(validator *modelValidator, currentTenant tenant) error {
+	if validationError := validator.validateTextDefault(currentTenant.defaults.provider, currentTenant.defaults.model); validationError != nil {
+		return fmt.Errorf(tenantValidationErrorFormat, validationError, currentTenant.identifier.string())
+	}
+	if validationError := validator.validateDictationDefault(currentTenant.defaults.dictationProvider, currentTenant.defaults.dictationModel); validationError != nil {
+		return fmt.Errorf(tenantValidationErrorFormat, validationError, currentTenant.identifier.string())
+	}
+	return nil
 }
 
 // ErrUpstreamIncomplete indicates that the upstream provider returned an incomplete response before the request deadline.
