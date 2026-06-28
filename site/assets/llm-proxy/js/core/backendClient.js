@@ -104,8 +104,10 @@ async function requestJSON(path, options) {
     credentials: "include",
     headers: {},
   };
-  if (options.body !== undefined) {
+  if (options.method !== "GET") {
     requestInit.headers = { [HEADER_CONTENT_TYPE]: MIME_JSON };
+  }
+  if (options.body !== undefined) {
     requestInit.body = JSON.stringify(options.body);
   }
   const response = await fetch(`${runtimeConfig.managementApiOrigin}${path}`, requestInit);
