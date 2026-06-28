@@ -24,8 +24,11 @@ const (
 	headerAccessControlAllowHeaders     = "Access-Control-Allow-Headers"
 	headerAccessControlAllowMethods     = "Access-Control-Allow-Methods"
 	headerAccessControlAllowOrigin      = "Access-Control-Allow-Origin"
+	headerCacheControl                  = "Cache-Control"
 	headerOrigin                        = "Origin"
 	headerVary                          = "Vary"
+	cacheControlNoStore                 = "no-store"
+	mimeApplicationYAML                 = "application/yaml; charset=utf-8"
 )
 
 var (
@@ -120,6 +123,9 @@ func newManagementService(configuration ManagementConfiguration, store *managedT
 }
 
 func (service *managementService) registerRoutes(router *gin.Engine) {
+	router.GET(ManagementConfigUIPath, service.corsMiddleware(), service.configUIHandler())
+	router.OPTIONS(ManagementConfigUIPath, service.corsMiddleware(), service.corsPreflightHandler())
+
 	managementGroup := router.Group(managementAPIPath)
 	managementGroup.Use(service.corsMiddleware())
 	managementGroup.OPTIONS("/*path", service.corsPreflightHandler())
@@ -141,6 +147,13 @@ func (service *managementService) sessionMiddleware() gin.HandlerFunc {
 		}
 		ginContext.Set(contextKeyManagementPrincipal, principal)
 		ginContext.Next()
+	}
+}
+
+func (service *managementService) configUIHandler() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		ginContext.Header(headerCacheControl, cacheControlNoStore)
+		ginContext.Data(http.StatusOK, mimeApplicationYAML, []byte(RenderManagementConfigUI(service.configuration)))
 	}
 }
 

@@ -47,53 +47,21 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 	indexHTML := string(indexBytes)
 	requiredFragments := []string{
 		"mpr-ui-config.js",
-		"data-mpr-ui-bundle-src",
+		`src="/assets/llm-proxy/js/app.js"`,
 		`<mpr-header`,
-		`data-config-url="/config-ui.yaml"`,
 		`<mpr-user`,
 		`<mpr-footer`,
-		`https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.js`,
 	}
 	for _, requiredFragment := range requiredFragments {
 		if !strings.Contains(indexHTML, requiredFragment) {
 			t.Fatalf("static index missing %q", requiredFragment)
 		}
 	}
-	forbiddenFragments := []string{"tauth.js", "tauth-login-path", "tauth-logout-path", "tauth-nonce-path", "{{MPR_UI_VERSION}}"}
+	forbiddenFragments := []string{"tauth.js", "data-config-url=\"/config-ui.yaml\"", "data-mpr-ui-bundle-src", "tauth-login-path", "tauth-logout-path", "tauth-nonce-path", "{{MPR_UI_VERSION}}"}
 	for _, forbiddenFragment := range forbiddenFragments {
 		if strings.Contains(indexHTML, forbiddenFragment) {
 			t.Fatalf("static index must not include %q", forbiddenFragment)
 		}
-	}
-
-	staticConfigResponse, configError := http.Get(staticServer.URL + "/config-ui.yaml")
-	if configError != nil {
-		t.Fatalf("static config request: %v", configError)
-	}
-	defer staticConfigResponse.Body.Close()
-	configBytes, readConfigError := io.ReadAll(staticConfigResponse.Body)
-	if readConfigError != nil {
-		t.Fatalf("read static config: %v", readConfigError)
-	}
-	configBody := string(configBytes)
-	if !strings.Contains(configBody, `https://llm-proxy.mprlab.com`) || !strings.Contains(configBody, `tauthUrl: "https://tauth-api.mprlab.com"`) || !strings.Contains(configBody, `tenantId: "llm-proxy"`) {
-		t.Fatalf("config-ui.yaml=%s", configBody)
-	}
-
-	runtimeConfigResponse, runtimeConfigError := http.Get(staticServer.URL + "/llm-proxy-config.json")
-	if runtimeConfigError != nil {
-		t.Fatalf("runtime config request: %v", runtimeConfigError)
-	}
-	defer runtimeConfigResponse.Body.Close()
-	var runtimeConfig struct {
-		ManagementAPIOrigin string `json:"managementApiOrigin"`
-		ProxyOrigin         string `json:"proxyOrigin"`
-	}
-	if decodeError := json.NewDecoder(runtimeConfigResponse.Body).Decode(&runtimeConfig); decodeError != nil {
-		t.Fatalf("decode runtime config: %v", decodeError)
-	}
-	if runtimeConfig.ManagementAPIOrigin != "https://llm-proxy-api.mprlab.com" || runtimeConfig.ProxyOrigin != "https://llm-proxy-api.mprlab.com" {
-		t.Fatalf("runtime config=%+v", runtimeConfig)
 	}
 
 	router := newManagementRouter(t, proxy.Configuration{})
@@ -105,11 +73,38 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		t.Fatalf("backend index status=%d want=%d", indexResponse.Code, http.StatusForbidden)
 	}
 
-	configRequest := httptest.NewRequest(http.MethodGet, "/config-ui.yaml", nil)
+	configRequest := httptest.NewRequest(http.MethodGet, proxy.ManagementConfigUIPath, nil)
+	configRequest.Header.Set("Origin", "http://localhost:8080")
 	configResponse := httptest.NewRecorder()
 	router.ServeHTTP(configResponse, configRequest)
-	if configResponse.Code != http.StatusNotFound {
-		t.Fatalf("backend config status=%d want=%d", configResponse.Code, http.StatusNotFound)
+	if configResponse.Code != http.StatusOK {
+		t.Fatalf("backend config status=%d want=%d body=%s", configResponse.Code, http.StatusOK, configResponse.Body.String())
+	}
+	configBody := configResponse.Body.String()
+	for _, requiredFragment := range []string{
+		`llmProxy:`,
+		`managementApiOrigin: "http://localhost:8080"`,
+		`proxyOrigin: "http://localhost:8080"`,
+		`description: "LLM Proxy"`,
+		`- "http://localhost:8080"`,
+		`tauthUrl: "http://localhost:8443"`,
+		`googleClientId: "google-client-id"`,
+		`tenantId: "llm-proxy-test"`,
+		`loginPath: "/auth/google"`,
+	} {
+		if !strings.Contains(configBody, requiredFragment) {
+			t.Fatalf("%s missing %q in %s", proxy.ManagementConfigUIFileName, requiredFragment, configBody)
+		}
+	}
+	if configResponse.Header().Get("Access-Control-Allow-Origin") != "http://localhost:8080" || configResponse.Header().Get("Access-Control-Allow-Credentials") != "true" {
+		t.Fatalf("config headers=%v", configResponse.Header())
+	}
+
+	removedRuntimeConfigRequest := httptest.NewRequest(http.MethodGet, "/llm-proxy-config.json", nil)
+	removedRuntimeConfigResponse := httptest.NewRecorder()
+	router.ServeHTTP(removedRuntimeConfigResponse, removedRuntimeConfigRequest)
+	if removedRuntimeConfigResponse.Code != http.StatusNotFound {
+		t.Fatalf("removed runtime config status=%d want=%d", removedRuntimeConfigResponse.Code, http.StatusNotFound)
 	}
 
 	assetRequest := httptest.NewRequest(http.MethodGet, "/assets/llm-proxy/styles.css", nil)
@@ -355,6 +350,20 @@ func TestManagementConfigurationValidationRequiresBackendAuthFields(t *testing.T
 	_, buildError = buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
 	if buildError == nil || !strings.Contains(buildError.Error(), "management.database_dsn") {
 		t.Fatalf("BuildRouter error=%v want missing management.database_dsn", buildError)
+	}
+
+	configuration = managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "store.db"))
+	configuration.Management.UIOrigins = nil
+	_, buildError = buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if buildError == nil || !strings.Contains(buildError.Error(), "management.ui_origins") {
+		t.Fatalf("BuildRouter error=%v want missing management.ui_origins", buildError)
+	}
+
+	configuration = managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "store.db"))
+	configuration.Management.UIOrigins = []string{"http://localhost:8080", " "}
+	_, buildError = buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if buildError == nil || !strings.Contains(buildError.Error(), "management.ui_origins") {
+		t.Fatalf("BuildRouter error=%v want blank management.ui_origins", buildError)
 	}
 
 	configuration = managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "store.db"))
@@ -633,14 +642,23 @@ func managementConfigurationWithDatabasePath(configuration proxy.Configuration, 
 		databaseDialector = nil
 	}
 	configuration.Management = proxy.ManagementConfiguration{
-		Enabled:           true,
-		PublicOrigin:      "http://localhost:8080",
-		TAuthTenantID:     testManagementTenantID,
-		JWTSigningKey:     testManagementSigningKey,
-		SessionCookieName: testManagementCookieName,
-		DatabaseDialect:   proxy.ManagementDatabaseDialectSQLite,
-		DatabaseDSN:       databaseDSN,
-		DatabaseDialector: databaseDialector,
+		Enabled:             true,
+		PublicOrigin:        "http://localhost:8080",
+		UIDescription:       "LLM Proxy",
+		UIOrigins:           []string{"http://localhost:8080", "http://127.0.0.1:4179", "http://localhost:4179"},
+		TAuthURL:            "http://localhost:8443",
+		TAuthTenantID:       testManagementTenantID,
+		GoogleClientID:      "google-client-id",
+		LoginPath:           "/auth/google",
+		LogoutPath:          "/auth/logout",
+		NoncePath:           "/auth/nonce",
+		JWTSigningKey:       testManagementSigningKey,
+		SessionCookieName:   testManagementCookieName,
+		DatabaseDialect:     proxy.ManagementDatabaseDialectSQLite,
+		DatabaseDSN:         databaseDSN,
+		ManagementAPIOrigin: "http://localhost:8080",
+		ProxyOrigin:         "http://localhost:8080",
+		DatabaseDialector:   databaseDialector,
 	}
 	configuration.LogLevel = proxy.LogLevelInfo
 	configuration.WorkerCount = 1
