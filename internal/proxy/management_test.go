@@ -25,6 +25,7 @@ const (
 	testManagementSigningKey  = "management-signing-key"
 	testManagementTenantID    = "llm-proxy-test"
 	testManagementCookieName  = "llm_proxy_test_session"
+	testManagementOpenAIKey   = "sk-user-openai"
 	testManagementDeepSeekKey = "sk-user-deepseek"
 )
 
@@ -152,6 +153,43 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		t.Fatalf("disallowed preflight status=%d want=%d", disallowedPreflightResponse.Code, http.StatusForbidden)
 	}
 
+	originSessionCookie := managementSessionCookie(t, "tauth-origin-user")
+	disallowedMutationRequest := authenticatedJSONRequest(http.MethodPost, "/api/management/secrets", `{}`, originSessionCookie)
+	disallowedMutationRequest.Header.Set("Origin", "https://other.example")
+	disallowedMutationResponse := httptest.NewRecorder()
+	router.ServeHTTP(disallowedMutationResponse, disallowedMutationRequest)
+	if disallowedMutationResponse.Code != http.StatusForbidden {
+		t.Fatalf("disallowed mutation status=%d want=%d", disallowedMutationResponse.Code, http.StatusForbidden)
+	}
+
+	missingContentTypeMutationRequest := httptest.NewRequest(http.MethodPost, "/api/management/secrets", strings.NewReader(""))
+	missingContentTypeMutationRequest.AddCookie(originSessionCookie)
+	missingContentTypeMutationResponse := httptest.NewRecorder()
+	router.ServeHTTP(missingContentTypeMutationResponse, missingContentTypeMutationRequest)
+	if missingContentTypeMutationResponse.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("missing content type mutation status=%d want=%d", missingContentTypeMutationResponse.Code, http.StatusUnsupportedMediaType)
+	}
+
+	simpleMutationRequest := httptest.NewRequest(http.MethodPost, "/api/management/secrets", strings.NewReader(""))
+	simpleMutationRequest.Header.Set("Content-Type", "text/plain")
+	simpleMutationRequest.AddCookie(originSessionCookie)
+	simpleMutationResponse := httptest.NewRecorder()
+	router.ServeHTTP(simpleMutationResponse, simpleMutationRequest)
+	if simpleMutationResponse.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("simple mutation status=%d want=%d", simpleMutationResponse.Code, http.StatusUnsupportedMediaType)
+	}
+
+	allowedMutationRequest := authenticatedJSONRequest(http.MethodPost, "/api/management/secrets", `{}`, originSessionCookie)
+	allowedMutationRequest.Header.Set("Origin", "http://localhost:8080")
+	allowedMutationResponse := httptest.NewRecorder()
+	router.ServeHTTP(allowedMutationResponse, allowedMutationRequest)
+	if allowedMutationResponse.Code != http.StatusOK {
+		t.Fatalf("allowed mutation status=%d want=%d body=%s", allowedMutationResponse.Code, http.StatusOK, allowedMutationResponse.Body.String())
+	}
+	if allowedMutationResponse.Header().Get("Access-Control-Allow-Origin") != "http://localhost:8080" || allowedMutationResponse.Header().Get("Access-Control-Allow-Credentials") != "true" {
+		t.Fatalf("allowed mutation headers=%v", allowedMutationResponse.Header())
+	}
+
 	missingSecretRequest := httptest.NewRequest(http.MethodGet, "/?key=", nil)
 	missingSecretResponse := httptest.NewRecorder()
 	router.ServeHTTP(missingSecretResponse, missingSecretRequest)
@@ -218,6 +256,21 @@ func TestManagementRejectsInvalidSessionsAndRequests(t *testing.T) {
 		t.Fatalf("dictation defaults status=%d body=%s", dictationDefaultsResponse.Code, dictationDefaultsResponse.Body.String())
 	}
 
+	deepSeekOnlyCookie := managementSessionCookie(t, "tauth-deepseek-only")
+	saveDeepSeekRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/deepseek", `{"api_key":"`+testManagementDeepSeekKey+`"}`, deepSeekOnlyCookie)
+	saveDeepSeekResponse := httptest.NewRecorder()
+	router.ServeHTTP(saveDeepSeekResponse, saveDeepSeekRequest)
+	if saveDeepSeekResponse.Code != http.StatusOK {
+		t.Fatalf("save deepseek key status=%d body=%s", saveDeepSeekResponse.Code, saveDeepSeekResponse.Body.String())
+	}
+	blankDictationDefaults := `{"provider":"deepseek","model":"` + proxy.ModelNameDeepSeekV4Flash + `","dictation_provider":"","dictation_model":"","system_prompt":""}`
+	blankDictationDefaultsRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/defaults", blankDictationDefaults, deepSeekOnlyCookie)
+	blankDictationDefaultsResponse := httptest.NewRecorder()
+	router.ServeHTTP(blankDictationDefaultsResponse, blankDictationDefaultsRequest)
+	if blankDictationDefaultsResponse.Code != http.StatusBadRequest {
+		t.Fatalf("blank dictation defaults status=%d want=%d body=%s", blankDictationDefaultsResponse.Code, http.StatusBadRequest, blankDictationDefaultsResponse.Body.String())
+	}
+
 	removeRequest := authenticatedJSONRequest(http.MethodDelete, "/api/management/provider-keys/openai", `{}`, sessionCookie)
 	removeResponse := httptest.NewRecorder()
 	router.ServeHTTP(removeResponse, removeRequest)
@@ -242,7 +295,13 @@ func TestManagementDatabasePersistenceAndOpenFailures(t *testing.T) {
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save key status=%d body=%s", saveKeyResponse.Code, saveKeyResponse.Body.String())
 	}
-	defaultsBody := `{"provider":"deepseek","model":"` + proxy.ModelNameDeepSeekV4Flash + `","dictation_provider":"","dictation_model":"","system_prompt":""}`
+	saveOpenAIKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/openai", `{"api_key":"`+testManagementOpenAIKey+`"}`, sessionCookie)
+	saveOpenAIKeyResponse := httptest.NewRecorder()
+	router.ServeHTTP(saveOpenAIKeyResponse, saveOpenAIKeyRequest)
+	if saveOpenAIKeyResponse.Code != http.StatusOK {
+		t.Fatalf("save openai key status=%d body=%s", saveOpenAIKeyResponse.Code, saveOpenAIKeyResponse.Body.String())
+	}
+	defaultsBody := `{"provider":"deepseek","model":"` + proxy.ModelNameDeepSeekV4Flash + `","dictation_provider":"openai","dictation_model":"` + proxy.DefaultDictationModel + `","system_prompt":""}`
 	defaultsRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/defaults", defaultsBody, sessionCookie)
 	defaultsResponse := httptest.NewRecorder()
 	router.ServeHTTP(defaultsResponse, defaultsRequest)
@@ -584,7 +643,14 @@ func TestManagementGeneratedSecretRoutesWithTenantProviderKey(t *testing.T) {
 		t.Fatalf("provider key response leaked or failed to mask key: %s", saveKeyResponse.Body.String())
 	}
 
-	defaultsBody := `{"provider":"deepseek","model":"` + proxy.ModelNameDeepSeekV4Flash + `","dictation_provider":"","dictation_model":"","system_prompt":""}`
+	saveOpenAIKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/openai", `{"api_key":"`+testManagementOpenAIKey+`"}`, userOneCookie)
+	saveOpenAIKeyResponse := httptest.NewRecorder()
+	router.ServeHTTP(saveOpenAIKeyResponse, saveOpenAIKeyRequest)
+	if saveOpenAIKeyResponse.Code != http.StatusOK {
+		t.Fatalf("save openai key status=%d body=%s", saveOpenAIKeyResponse.Code, saveOpenAIKeyResponse.Body.String())
+	}
+
+	defaultsBody := `{"provider":"deepseek","model":"` + proxy.ModelNameDeepSeekV4Flash + `","dictation_provider":"openai","dictation_model":"` + proxy.DefaultDictationModel + `","system_prompt":""}`
 	defaultsRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/defaults", defaultsBody, userOneCookie)
 	defaultsResponse := httptest.NewRecorder()
 	router.ServeHTTP(defaultsResponse, defaultsRequest)

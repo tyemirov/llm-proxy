@@ -130,6 +130,7 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.Use(service.corsMiddleware())
 	managementGroup.OPTIONS("/*path", service.corsPreflightHandler())
 	managementGroup.Use(service.sessionMiddleware())
+	managementGroup.Use(service.managementMutationMiddleware())
 	managementGroup.GET(managementProfilePath, service.profileHandler())
 	managementGroup.PUT(managementProviderKeysPath, service.saveProviderKeyHandler())
 	managementGroup.DELETE(managementProviderKeysPath, service.removeProviderKeyHandler())
@@ -160,6 +161,25 @@ func (service *managementService) configUIHandler() gin.HandlerFunc {
 func (service *managementService) corsMiddleware() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		service.applyCORSHeaders(ginContext)
+		ginContext.Next()
+	}
+}
+
+func (service *managementService) managementMutationMiddleware() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		if !managementMethodUnsafe(ginContext.Request.Method) {
+			ginContext.Next()
+			return
+		}
+		requestOrigin := strings.TrimSpace(ginContext.GetHeader(headerOrigin))
+		if requestOrigin != constants.EmptyString && requestOrigin != service.configuration.PublicOrigin {
+			ginContext.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+		if !managementRequestJSON(ginContext.GetHeader(headerContentType)) {
+			ginContext.AbortWithStatus(http.StatusUnsupportedMediaType)
+			return
+		}
 		ginContext.Next()
 	}
 }
@@ -351,12 +371,28 @@ func (service *managementService) validateManagedTextDefaults(providerAPIKeys ma
 	if _, _, validationError := validator.ResolveText(constants.EmptyString, constants.EmptyString, requestTenant.defaults.provider, requestTenant.defaults.model, false); validationError != nil {
 		return fmt.Errorf("%w: %v", errManagementDefaults, validationError)
 	}
-	if strings.TrimSpace(defaults.DictationProvider) != constants.EmptyString || strings.TrimSpace(defaults.DictationModel) != constants.EmptyString {
-		if _, _, validationError := validator.ResolveDictation(constants.EmptyString, constants.EmptyString, requestTenant.defaults.dictationProvider, requestTenant.defaults.dictationModel); validationError != nil {
-			return fmt.Errorf("%w: %v", errManagementDefaults, validationError)
-		}
+	if _, _, validationError := validator.ResolveDictation(constants.EmptyString, constants.EmptyString, requestTenant.defaults.dictationProvider, requestTenant.defaults.dictationModel); validationError != nil {
+		return fmt.Errorf("%w: %v", errManagementDefaults, validationError)
 	}
 	return nil
+}
+
+func managementMethodUnsafe(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	default:
+		return true
+	}
+}
+
+func managementRequestJSON(rawContentType string) bool {
+	contentType := strings.TrimSpace(strings.ToLower(rawContentType))
+	if contentType == constants.EmptyString {
+		return false
+	}
+	mediaType, _, _ := strings.Cut(contentType, ";")
+	return strings.TrimSpace(mediaType) == mimeApplicationJSON
 }
 
 func decodeManagementJSON(ginContext *gin.Context, target any) error {
