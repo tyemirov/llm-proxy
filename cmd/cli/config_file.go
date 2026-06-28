@@ -69,14 +69,23 @@ type tenantConfiguration struct {
 }
 
 type managementConfiguration struct {
-	Enabled           bool   `mapstructure:"enabled"`
-	PublicOrigin      string `mapstructure:"public_origin"`
-	TAuthTenantID     string `mapstructure:"tauth_tenant_id"`
-	JWTSigningKey     string `mapstructure:"jwt_signing_key"`
-	JWTIssuer         string `mapstructure:"jwt_issuer"`
-	SessionCookieName string `mapstructure:"session_cookie_name"`
-	DatabaseDialect   string `mapstructure:"database_dialect"`
-	DatabaseDSN       string `mapstructure:"database_dsn"`
+	Enabled             bool     `mapstructure:"enabled"`
+	PublicOrigin        string   `mapstructure:"public_origin"`
+	UIDescription       string   `mapstructure:"ui_description"`
+	UIOrigins           []string `mapstructure:"ui_origins"`
+	TAuthURL            string   `mapstructure:"tauth_url"`
+	TAuthTenantID       string   `mapstructure:"tauth_tenant_id"`
+	GoogleClientID      string   `mapstructure:"google_client_id"`
+	LoginPath           string   `mapstructure:"login_path"`
+	LogoutPath          string   `mapstructure:"logout_path"`
+	NoncePath           string   `mapstructure:"nonce_path"`
+	JWTSigningKey       string   `mapstructure:"jwt_signing_key"`
+	JWTIssuer           string   `mapstructure:"jwt_issuer"`
+	SessionCookieName   string   `mapstructure:"session_cookie_name"`
+	DatabaseDialect     string   `mapstructure:"database_dialect"`
+	DatabaseDSN         string   `mapstructure:"database_dsn"`
+	ManagementAPIOrigin string   `mapstructure:"management_api_origin"`
+	ProxyOrigin         string   `mapstructure:"proxy_origin"`
 }
 
 type tenantDefaultsConfig struct {
@@ -275,14 +284,23 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 
 func managementProxyConfiguration(configuration managementConfiguration) proxy.ManagementConfiguration {
 	return proxy.ManagementConfiguration{
-		Enabled:           configuration.Enabled,
-		PublicOrigin:      configuration.PublicOrigin,
-		TAuthTenantID:     configuration.TAuthTenantID,
-		JWTSigningKey:     configuration.JWTSigningKey,
-		JWTIssuer:         configuration.JWTIssuer,
-		SessionCookieName: configuration.SessionCookieName,
-		DatabaseDialect:   configuration.DatabaseDialect,
-		DatabaseDSN:       configuration.DatabaseDSN,
+		Enabled:             configuration.Enabled,
+		PublicOrigin:        configuration.PublicOrigin,
+		UIDescription:       configuration.UIDescription,
+		UIOrigins:           configuration.UIOrigins,
+		TAuthURL:            configuration.TAuthURL,
+		TAuthTenantID:       configuration.TAuthTenantID,
+		GoogleClientID:      configuration.GoogleClientID,
+		LoginPath:           configuration.LoginPath,
+		LogoutPath:          configuration.LogoutPath,
+		NoncePath:           configuration.NoncePath,
+		JWTSigningKey:       configuration.JWTSigningKey,
+		JWTIssuer:           configuration.JWTIssuer,
+		SessionCookieName:   configuration.SessionCookieName,
+		DatabaseDialect:     configuration.DatabaseDialect,
+		DatabaseDSN:         configuration.DatabaseDSN,
+		ManagementAPIOrigin: configuration.ManagementAPIOrigin,
+		ProxyOrigin:         configuration.ProxyOrigin,
 	}
 }
 
