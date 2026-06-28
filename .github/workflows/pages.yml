@@ -6,6 +6,12 @@ on:
       - master
     paths:
       - "site/**"
+      - "cmd/cli/**"
+      - "internal/constants/**"
+      - "internal/proxy/**"
+      - "configs/config.yml"
+      - "go.mod"
+      - "go.sum"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -13,6 +19,9 @@ permissions:
   contents: read
   pages: write
   id-token: write
+
+env:
+  GO_VERSION: '1.24'
 
 concurrency:
   group: pages
@@ -24,15 +33,41 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    env:
+      SERVICE_SECRET: pages-render-unused-secret
+      LLM_PROXY_MANAGEMENT_ENABLED: ${{ vars.LLM_PROXY_MANAGEMENT_ENABLED }}
+      LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN: ${{ vars.LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN }}
+      LLM_PROXY_MANAGEMENT_UI_DESCRIPTION: ${{ vars.LLM_PROXY_MANAGEMENT_UI_DESCRIPTION }}
+      LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN: ${{ vars.LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN }}
+      LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN: ${{ vars.LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN }}
+      LLM_PROXY_MANAGEMENT_TAUTH_URL: ${{ vars.LLM_PROXY_MANAGEMENT_TAUTH_URL }}
+      LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID: ${{ vars.LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID }}
+      LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID: ${{ vars.LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID }}
+      LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH: ${{ vars.LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH }}
+      LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH: ${{ vars.LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH }}
+      LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH: ${{ vars.LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH }}
+      LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY: pages-render-unused-signing-key
+      LLM_PROXY_MANAGEMENT_JWT_ISSUER: ${{ vars.LLM_PROXY_MANAGEMENT_JWT_ISSUER }}
+      LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME: ${{ vars.LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME }}
+      LLM_PROXY_MANAGEMENT_DATABASE_DIALECT: ${{ vars.LLM_PROXY_MANAGEMENT_DATABASE_DIALECT }}
+      LLM_PROXY_MANAGEMENT_DATABASE_DSN: pages-render-unused-dsn
+      LLM_PROXY_MANAGEMENT_API_ORIGIN: ${{ vars.LLM_PROXY_MANAGEMENT_API_ORIGIN }}
+      LLM_PROXY_MANAGEMENT_PROXY_ORIGIN: ${{ vars.LLM_PROXY_MANAGEMENT_PROXY_ORIGIN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Render Pages site config
+        run: go run ./cmd/cli --config configs/config.yml --render-site-output "${RUNNER_TEMP}/llm-proxy-site"
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: ${{ runner.temp }}/llm-proxy-site
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v4
