@@ -2,6 +2,54 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.19] - 2026-06-28
+
+### Changes
+- Merge pull request #178 from tyemirov/gix/add-self-service-tenant-management-ui-and-db-migration
+- fix: set Content-Type header only for non-GET requests in backendClient.js
+- feat(management): add mutation middleware to enforce CORS and JSON content type
+- fix: reject invalid origins and content types in management API mutations
+- fix(ui): remove unused noDictationDefault copy and option element
+- validate tenant defaults separately for runtime and catalog management modes
+- docs: add detailed management mode issues and resolutions in .mprlab/ISSUES.md
+- feat: integrate MPR UI shell with dynamic YAML config loading
+- feat(management): add UI config YAML endpoint and expand management settings
+- docs: update management UI and API hosting details in provider-routing-plan.md
+- chore: add new management server config options to config.yml
+- feat(cli): add management UI config and site rendering command
+- docs: update management UI config and GitHub Pages deployment instructions
+- chore: move management frontend to GitHub Pages with API-served config
+- chore: update .gitignore to exclude new config and site files
+- ci: enhance GitHub Pages workflow to build site from CLI
+- docs: add detailed recurring maintenance issues to ISSUES.md
+- fix: update Google client ID in UI config for authentication integration
+- chore: replace gorm.io/driver/sqlite with github.com/glebarez/sqlite in proxy packages
+- chore: update dependencies and replace go-sqlite3 with glebarez/go-sqlite
+- chore: replace mattn/go-sqlite3 with glebarez/sqlite and update deps
+- docs: clarify management mode SQLite driver and config environment requirements
+- fix(ansible): update llm-proxy resource names and hosts to llm-proxy-api
+- chore: parameterize management config with environment variables
+- test: enhance root command test for management environment config
+- docs: update README with environment variable placeholders and deployment notes
+- fix: update default gateway deploy target in Makefile to backend
+- docs: add forward-only contract discipline to AGENTS.md
+- chore: remove AGENTS.md, update AGENTS.GO.md and POLICY.md for DB and libs
+- feat(site): add key management UI and backend client integration
+- add Ansible resource definitions for llm-proxy deployment
+- fix: update default deploy target and env var handling in deploy and release scripts
+- fix: increase default client timeout from 260s to 390s
+- chore: increase default timeout from 260s to 390s in llm-proxy-client
+- feat(management): add authenticated management API and configuration support
+- chore: update go.sum with new dependencies and module versions
+- chore: add JWT and GORM dependencies to go.mod for auth and DB support
+- docs: document management mode config, validation, and UI deployment details
+- config: increase request timeout and add management API config section
+- feat: add management API config support with validation and tests
+- docs: add detailed self-service management UI and split-origin setup instructions
+- chore: enforce GORM-only DB access and update data driver in backend guidance
+- chore: ignore SQLite database files in configs directory
+- ci: add GitHub Actions workflow to deploy GitHub Pages
+
 ## [v0.2.18] - 2026-06-10
 
 ### Changes
