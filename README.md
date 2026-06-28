@@ -19,7 +19,8 @@ client.
 - Choose the dictation model per request via `model=...` on `/dictate`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
 - Optional per-request web search via `web_search=1|true|yes` when the selected provider/model is configured to support it
 - Optional logging at `debug` or `info` levels
-- Forwards requests using server-side provider API keys
+- Forwards requests using server-side provider API keys, loaded from the database in management mode
+- Optional TAuth-protected self-service UI where signed-in users save their own provider API keys and generate llm-proxy tenant secrets
 - Supports plain text, JSON, XML, or CSV responses
 
 ## REST Contract
@@ -66,9 +67,30 @@ server:
   log_level: info
   workers: 4
   queue_size: 100
-  request_timeout_seconds: 240
+  request_timeout_seconds: 360
   max_prompt_bytes: 4194304
   max_input_audio_bytes: 26214400
+management:
+  enabled: ${LLM_PROXY_MANAGEMENT_ENABLED}
+  public_origin: "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
+  ui_description: "${LLM_PROXY_MANAGEMENT_UI_DESCRIPTION}"
+  ui_origins:
+    - "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
+    - "${LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN}"
+    - "${LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN}"
+  tauth_url: "${LLM_PROXY_MANAGEMENT_TAUTH_URL}"
+  tauth_tenant_id: "${LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID}"
+  google_client_id: "${LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID}"
+  login_path: "${LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH}"
+  logout_path: "${LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH}"
+  nonce_path: "${LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH}"
+  jwt_signing_key: "${LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY}"
+  jwt_issuer: "${LLM_PROXY_MANAGEMENT_JWT_ISSUER}"
+  session_cookie_name: "${LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME}"
+  database_dialect: "${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT}"
+  database_dsn: "${LLM_PROXY_MANAGEMENT_DATABASE_DSN}"
+  management_api_origin: "${LLM_PROXY_MANAGEMENT_API_ORIGIN}"
+  proxy_origin: "${LLM_PROXY_MANAGEMENT_PROXY_ORIGIN}"
 tenants:
   - id: default
     secret: "${SERVICE_SECRET}"
@@ -348,11 +370,150 @@ gateway. Dictation-capable provider
 `transcriptions_url` values are also explicit config values and are required for
 OpenAI, SiliconFlow, Zhipu, and Grok/xAI. Text model catalogs are required for
 every supported provider, and dictation model catalogs are required for OpenAI,
-SiliconFlow, Zhipu, and Grok/xAI. Startup validates that `tenants` includes at
-least one unique `id` and unique `secret`, then validates each tenant's default
-text provider/model and dictation provider/model against those configured
-catalogs and credentials.
+SiliconFlow, Zhipu, and Grok/xAI. When `management.enabled` is false, startup
+validates that `tenants` includes at least one unique `id` and unique `secret`.
+When management is enabled, static tenants are optional migration seed data
+because signed-in users can create managed tenants through the UI, and
+DB-authoritative runtime authentication does not validate static tenant
+provider credentials.
 Unknown YAML keys fail startup.
+
+### Self-service management UI
+
+Set `management.enabled: true` to enable TAuth-protected management APIs under
+`/api/management`. The browser UI is static and lives in `site/`, which is
+published by GitHub Pages through `.github/workflows/pages.yml`. The backend
+does not serve management HTML or assets; `GET /` remains a proxy endpoint and
+returns `403` without a tenant `key`. The backend does serve public
+`/config-ui.yaml` from the loaded management config so a GitHub Pages frontend
+can consume the current llm-proxy runtime, MPR UI, and TAuth bootstrap values
+from `llm-proxy-api`.
+
+The static UI uses the shared MPR shell through API-served `config-ui.yaml`,
+pinned `mpr-ui` assets, `<mpr-header>`, `<mpr-user>`, and `<mpr-footer>`. It
+does not load `tauth.js` directly. The Pages renderer injects the configured
+API `config-ui.yaml` URL into `index.html`; the single API-served YAML then
+points browser management API calls, generated usage examples, and MPR UI/TAuth
+at the configured origins. Browser-facing values are projected from the
+already-loaded `config.yml`; there is no second environment expansion path for
+Pages.
+
+Required hosted values are profile-specific:
+
+| Field | Purpose |
+|-------|---------|
+| `management.public_origin` | Static frontend origin allowed for credentialed management CORS, for example `https://llm-proxy.mprlab.com`. |
+| `management.ui_description` | Browser-facing MPR UI environment description. |
+| `management.ui_origins` | Browser-facing MPR UI allowed origins served from `/config-ui.yaml`. |
+| `management.tauth_url` | Browser-facing TAuth API origin served from `/config-ui.yaml`. |
+| `management.tauth_tenant_id` | TAuth tenant id that issues accepted sessions. |
+| `management.google_client_id` | Browser-facing Google OAuth web client id for the `llm-proxy` TAuth tenant. |
+| `management.login_path` | Browser-facing TAuth Google login path. |
+| `management.logout_path` | Browser-facing TAuth logout path. |
+| `management.nonce_path` | Browser-facing TAuth nonce path. |
+| `management.jwt_signing_key` | Internal signing key used to validate the TAuth session cookie. |
+| `management.jwt_issuer` | JWT issuer, normally `tauth`. |
+| `management.session_cookie_name` | Exact app/environment TAuth session cookie name. |
+| `management.database_dialect` | Required GORM SQL dialect for management persistence. Supported values are `postgres` and `sqlite`; SQLite uses the pure-Go GORM driver so `CGO_ENABLED=0` builds remain valid. |
+| `management.database_dsn` | Required DSN passed to the selected GORM dialect for tenant-owned provider keys, defaults, and generated-secret digests. |
+| `management.management_api_origin` | Browser-facing management API origin served from `/config-ui.yaml` under `llmProxy.managementApiOrigin`. |
+| `management.proxy_origin` | Browser-facing public proxy origin served from `/config-ui.yaml` under `llmProxy.proxyOrigin` for generated examples. |
+
+Signed-in users save provider API keys for any supported provider, choose
+routing defaults, and generate llm-proxy secrets. Management mode requires
+`management.database_dialect` and `management.database_dsn` so signups, enabled
+providers, defaults, and generated secret digests survive restarts in a
+GORM-managed database. `postgres` uses a Postgres DSN, while `sqlite` uses a
+SQLite database path or SQLite DSN. The packaged management config uses strict
+expandable placeholders for the hosted profile values; define every
+`LLM_PROXY_MANAGEMENT_*` key in the runtime environment or local `configs/.env`.
+Placeholders without matching values fail startup. The runtime config file is
+never mutated for user signup or provider enablement, and database access must
+stay on GORM model APIs without raw SQL.
+Generated secrets
+continue to authenticate the public proxy endpoints with the same
+`key=<tenant secret>` query parameter. Provider API keys are accepted only
+through authenticated management endpoints; after save, the UI/API returns only
+masked key status. Generated tenant secrets are returned once and the database
+retains only their SHA-256 digest. Revoking a generated secret immediately makes
+future public proxy requests with that secret return `403`.
+
+On the first management-mode startup, llm-proxy runs a one-time migration from
+legacy config tenants and nonblank configured provider API keys into the
+database, then records a migration marker. After that marker exists, config-file
+tenants and provider API key fields are ignored by runtime authentication and
+routing, even if stale values remain in YAML. Remove migrated `tenants` and
+provider `api_key` values from config after confirming the DB migration.
+Server/runtime settings, backend auth validation settings, provider base URLs,
+transcription URLs, model catalogs, and browser-facing MPR UI/TAuth bootstrap
+settings remain config-file-owned. The GitHub Pages artifact and API-served
+browser config endpoints are projections of `config.yml`, not independent
+configuration sources.
+
+### Hosted split-origin setup
+
+Production is split-origin:
+
+| Hostname | Owner | Purpose |
+|----------|-------|---------|
+| `llm-proxy.mprlab.com` | GitHub Pages | Static self-service frontend from `site/`. |
+| `llm-proxy-api.mprlab.com` | MPR gateway/backend | llm-proxy API, management API, `/`, `/v2`, and `/dictate`. |
+| `tauth-api.mprlab.com` | TAuth backend | Google login, nonce, logout, `/me`, and session-cookie issuance. |
+
+Add these DNS records:
+
+1. `CNAME llm-proxy.mprlab.com -> tyemirov.github.io`
+2. Point `llm-proxy-api.mprlab.com` at the MPR gateway public endpoint. Use a
+   `CNAME` when the gateway has a hostname, or `A`/`AAAA` records when it is
+   addressed by public IP.
+
+Then configure GitHub Pages for this repository:
+
+1. Use GitHub Actions as the Pages source.
+2. Set the Pages custom domain to `llm-proxy.mprlab.com`.
+3. Configure the repository variables referenced by `configs/config.yml`:
+   `LLM_PROXY_MANAGEMENT_ENABLED`,
+   `LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN`,
+   `LLM_PROXY_MANAGEMENT_UI_DESCRIPTION`,
+   `LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN`,
+   `LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN`,
+   `LLM_PROXY_MANAGEMENT_TAUTH_URL`,
+   `LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID`,
+   `LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID`,
+   `LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH`,
+   `LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH`,
+   `LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH`,
+   `LLM_PROXY_MANAGEMENT_JWT_ISSUER`,
+   `LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME`,
+   `LLM_PROXY_MANAGEMENT_DATABASE_DIALECT`,
+   `LLM_PROXY_MANAGEMENT_API_ORIGIN`, and
+   `LLM_PROXY_MANAGEMENT_PROXY_ORIGIN`.
+4. Configure real backend deployment secrets outside the Pages job:
+   `SERVICE_SECRET`, `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`, and
+   `LLM_PROXY_MANAGEMENT_DATABASE_DSN`.
+5. The Pages workflow runs the Go CLI with `--config configs/config.yml` and
+   `--render-site-output` to emit `CNAME` and a rendered `index.html` whose
+   `data-config-url` points to the API-served `config-ui.yaml`. The workflow
+   supplies non-sensitive render placeholders for backend-only secret fields
+   because static rendering does not open the DB or validate TAuth sessions.
+   Missing public config placeholders still fail through the same config loader
+   used by the backend; `${VAR:-default}` syntax is intentionally unsupported.
+
+Configure TAuth for tenant `llm-proxy` with:
+
+- allowed tenant origin `https://llm-proxy.mprlab.com`
+- browser-facing API origin `https://tauth-api.mprlab.com`
+- session cookie name matching `management.session_cookie_name`
+- cookie domain `.mprlab.com`
+- HTTPS-only cookies
+- JWT signing key matching `management.jwt_signing_key`
+
+Configure the gateway/backend route for `llm-proxy-api.mprlab.com` to the
+llm-proxy service, and remove any backend route that still claims
+`llm-proxy.mprlab.com`; that hostname is now owned by GitHub Pages. The backend
+must run with `management.public_origin: "https://llm-proxy.mprlab.com"` so
+`/config-ui.yaml` and `/api/management/*` return credentialed CORS headers only
+to the static frontend.
 
 Web search is per request and currently supported only on OpenAI models that
 support the OpenAI web search tool.
@@ -379,8 +540,10 @@ Run the service with OpenAI defaults:
 ./llm-proxy --config config.yml
 ```
 
-In the full `config.yml`, set a tenant's default text provider/model to route
-omitted-provider requests to DeepSeek:
+In static config mode, set a tenant's default text provider/model to route
+omitted-provider requests to DeepSeek. In management mode these tenant blocks
+are one-time migration seed data only; after the migration marker exists, manage
+tenant defaults in the UI/DB instead:
 
 ```yaml
 tenants:
@@ -477,7 +640,7 @@ command-specific `RELEASE_CI_TIMEOUT_SECONDS`, `PUBLISH_CI_TIMEOUT_SECONDS`,
 and `DEPLOY_CI_TIMEOUT_SECONDS` variables.
 
 `llm-proxy` is a gateway-local service in `mprlab-gateway`, so `make deploy`
-defaults to the gateway `deploy-llm-proxy` target. Override the checkout or target
+defaults to the gateway `deploy-llm-proxy-backend` target. Override the checkout or target
 with `GATEWAY_DIR=/path/to/mprlab-gateway` or
 `GATEWAY_DEPLOY_TARGET=<target>`.
 
@@ -950,7 +1113,8 @@ positive and lets the upstream provider enforce any provider-side model limit.
 ## Security
 
 * All requests must include a configured tenant secret via `key=...`.
-* Client requests must not include upstream provider API keys; configure them on the server.
+* Client requests must not include upstream provider API keys; public proxy endpoints reject provider-key-like query, JSON, and multipart form fields.
+* Self-service provider API keys are accepted only through TAuth-protected management endpoints and are not returned raw after save.
 * Do not expose this service to the public internet without appropriate network controls.
 
 ## Implementation Plans

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,6 +52,26 @@ server:
   request_timeout_seconds: 7
   max_prompt_bytes: 1024
   max_input_audio_bytes: 2048
+management:
+  enabled: true
+  public_origin: "https://llm-proxy.example"
+  ui_description: "LLM Proxy"
+  ui_origins:
+    - "https://llm-proxy.example"
+    - "http://127.0.0.1:4179"
+  tauth_url: "https://tauth.example"
+  tauth_tenant_id: "llm-proxy"
+  google_client_id: "google-client-id"
+  login_path: "/auth/google"
+  logout_path: "/auth/logout"
+  nonce_path: "/auth/nonce"
+  jwt_signing_key: "${P411_TAUTH_JWT_SIGNING_KEY}"
+  jwt_issuer: "tauth"
+  session_cookie_name: "llm_proxy_session"
+  database_dialect: "${P411_MANAGEMENT_DATABASE_DIALECT}"
+  database_dsn: "${P411_MANAGEMENT_DATABASE_DSN}"
+  management_api_origin: "https://llm-proxy-api.example"
+  proxy_origin: "https://llm-proxy-api.example"
 tenants:
   - id: default
     secret: "${P411_SERVICE_SECRET}"
@@ -72,14 +93,14 @@ P411_ZHIPU_KEY=sk-zhipu
 P411_GEMINI_KEY=sk-gemini
 P411_ANTHROPIC_KEY=sk-ant
 P411_GROK_KEY=sk-xai
+P411_TAUTH_JWT_SIGNING_KEY=tauth-signing-key
+P411_MANAGEMENT_DATABASE_DIALECT=sqlite
+P411_MANAGEMENT_DATABASE_DSN=postgres://llm-proxy.example/management
 `)
 	t.Setenv("P411_SERVICE_SECRET", "process-secret")
 
 	var capturedConfiguration proxy.Configuration
 	withServeProxy(t, func(configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) error {
-		if _, buildError := proxy.BuildRouter(configuration, structuredLogger); buildError != nil {
-			t.Fatalf("BuildRouter error: %v", buildError)
-		}
 		capturedConfiguration = configuration
 		return nil
 	})
@@ -108,6 +129,45 @@ P411_GROK_KEY=sk-xai
 	}
 	if capturedConfiguration.Port != 18080 {
 		t.Fatalf("port=%d", capturedConfiguration.Port)
+	}
+	if !capturedConfiguration.Management.Enabled {
+		t.Fatalf("management must be enabled")
+	}
+	if capturedConfiguration.Management.PublicOrigin != "https://llm-proxy.example" {
+		t.Fatalf("management public origin=%q", capturedConfiguration.Management.PublicOrigin)
+	}
+	if capturedConfiguration.Management.UIDescription != "LLM Proxy" {
+		t.Fatalf("management ui description=%q", capturedConfiguration.Management.UIDescription)
+	}
+	if len(capturedConfiguration.Management.UIOrigins) != 2 || capturedConfiguration.Management.UIOrigins[1] != "http://127.0.0.1:4179" {
+		t.Fatalf("management ui origins=%q", capturedConfiguration.Management.UIOrigins)
+	}
+	if capturedConfiguration.Management.TAuthURL != "https://tauth.example" {
+		t.Fatalf("management tauth url=%q", capturedConfiguration.Management.TAuthURL)
+	}
+	if capturedConfiguration.Management.TAuthTenantID != "llm-proxy" {
+		t.Fatalf("management tenant id=%q", capturedConfiguration.Management.TAuthTenantID)
+	}
+	if capturedConfiguration.Management.GoogleClientID != "google-client-id" {
+		t.Fatalf("management google client id=%q", capturedConfiguration.Management.GoogleClientID)
+	}
+	if capturedConfiguration.Management.LoginPath != "/auth/google" || capturedConfiguration.Management.LogoutPath != "/auth/logout" || capturedConfiguration.Management.NoncePath != "/auth/nonce" {
+		t.Fatalf("management auth paths=%q %q %q", capturedConfiguration.Management.LoginPath, capturedConfiguration.Management.LogoutPath, capturedConfiguration.Management.NoncePath)
+	}
+	if capturedConfiguration.Management.JWTSigningKey != "tauth-signing-key" {
+		t.Fatalf("management signing key=%q", capturedConfiguration.Management.JWTSigningKey)
+	}
+	if capturedConfiguration.Management.SessionCookieName != "llm_proxy_session" {
+		t.Fatalf("management cookie name=%q", capturedConfiguration.Management.SessionCookieName)
+	}
+	if capturedConfiguration.Management.DatabaseDialect != proxy.ManagementDatabaseDialectSQLite {
+		t.Fatalf("management database dialect=%q", capturedConfiguration.Management.DatabaseDialect)
+	}
+	if capturedConfiguration.Management.DatabaseDSN != "postgres://llm-proxy.example/management" {
+		t.Fatalf("management database dsn=%q", capturedConfiguration.Management.DatabaseDSN)
+	}
+	if capturedConfiguration.Management.ManagementAPIOrigin != "https://llm-proxy-api.example" || capturedConfiguration.Management.ProxyOrigin != "https://llm-proxy-api.example" {
+		t.Fatalf("management api origins=%q %q", capturedConfiguration.Management.ManagementAPIOrigin, capturedConfiguration.Management.ProxyOrigin)
 	}
 	if capturedConfiguration.GeminiKey != "sk-gemini" {
 		t.Fatalf("geminiKey=%q", capturedConfiguration.GeminiKey)
@@ -166,6 +226,37 @@ tenants:
 	executeError := executeRootCommand(t, "--config", configPath)
 	if executeError != nil {
 		t.Fatalf("ExecuteC error: %v", executeError)
+	}
+}
+
+func TestRootCommandRejectsUnsupportedManagementDatabaseDialect(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir, `
+management:
+  enabled: true
+  public_origin: "https://llm-proxy.example"
+  ui_description: "LLM Proxy"
+  ui_origins:
+    - "https://llm-proxy.example"
+  tauth_url: "https://tauth.example"
+  tauth_tenant_id: "llm-proxy"
+  google_client_id: "google-client-id"
+  login_path: "/auth/google"
+  logout_path: "/auth/logout"
+  nonce_path: "/auth/nonce"
+  jwt_signing_key: "tauth-signing-key"
+  jwt_issuer: "tauth"
+  session_cookie_name: "llm_proxy_session"
+  database_dialect: "mysql"
+  database_dsn: "mysql://llm-proxy.example/management"
+  management_api_origin: "https://llm-proxy-api.example"
+  proxy_origin: "https://llm-proxy-api.example"
+`+completeLiteralProvidersYAML())
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError == nil || !strings.Contains(executeError.Error(), "management.database_dialect") {
+		t.Fatalf("error=%v want unsupported management database dialect", executeError)
 	}
 }
 
@@ -241,6 +332,508 @@ tenants:
 	executeError := executeRootCommand(t, "--config", configPath)
 	if executeError == nil || !strings.Contains(executeError.Error(), "config_placeholder_missing: names=P411_MISSING_SERVICE_SECRET") {
 		t.Fatalf("error=%v want missing tenant secret placeholder", executeError)
+	}
+}
+
+func TestRootCommandRejectsPlaceholderDefaultSyntax(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir, `
+management:
+  enabled: false
+  database_dialect: "${P411_MISSING_MANAGEMENT_DATABASE_DIALECT:-sqlite}"
+  database_dsn: "${P411_MISSING_MANAGEMENT_DATABASE_DSN:-management.sqlite}"
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: openai
+      model: gpt-4.1
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
+`+completeLiteralProvidersYAML())
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError == nil || !strings.Contains(executeError.Error(), "config_placeholder_missing: names=P411_MISSING_MANAGEMENT_DATABASE_DIALECT:-sqlite,P411_MISSING_MANAGEMENT_DATABASE_DSN:-management.sqlite") {
+		t.Fatalf("error=%v want default placeholder syntax rejected", executeError)
+	}
+}
+
+func TestRootCommandLoadsPackagedConfigWithManagementEnvironment(t *testing.T) {
+	tempDir := t.TempDir()
+	packagedConfigPath := filepath.Join("..", "..", "configs", "config.yml")
+	packagedConfig, readError := os.ReadFile(packagedConfigPath)
+	if readError != nil {
+		t.Fatalf("read packaged config: %v", readError)
+	}
+	configPath := filepath.Join(tempDir, testConfigFileName)
+	if writeError := os.WriteFile(configPath, packagedConfig, 0600); writeError != nil {
+		t.Fatalf("write packaged config copy: %v", writeError)
+	}
+	writeTestDotEnv(t, tempDir, `
+SERVICE_SECRET=packaged-secret
+OPENAI_API_KEY=sk-packaged-openai
+LLM_PROXY_MANAGEMENT_ENABLED=true
+LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN=https://llm-proxy.mprlab.com
+LLM_PROXY_MANAGEMENT_UI_DESCRIPTION=LLM Proxy
+LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN=http://127.0.0.1:4179
+LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN=http://localhost:4179
+LLM_PROXY_MANAGEMENT_TAUTH_URL=https://tauth-api.mprlab.com
+LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID=llm-proxy
+LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID=925457785190-3frk7j3bsr3ucidtkcohrp2sl07e0paa.apps.googleusercontent.com
+LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH=/auth/google
+LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH=/auth/logout
+LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH=/auth/nonce
+LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY=packaged-tauth-signing-key
+LLM_PROXY_MANAGEMENT_JWT_ISSUER=tauth
+LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME=app_session_llm_proxy
+LLM_PROXY_MANAGEMENT_DATABASE_DIALECT=sqlite
+LLM_PROXY_MANAGEMENT_DATABASE_DSN=llm-proxy-management.sqlite
+LLM_PROXY_MANAGEMENT_API_ORIGIN=https://llm-proxy-api.mprlab.com
+LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
+`)
+
+	var capturedConfiguration proxy.Configuration
+	withServeProxy(t, func(configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) error {
+		capturedConfiguration = configuration
+		return nil
+	})
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError != nil {
+		t.Fatalf("ExecuteC error: %v", executeError)
+	}
+	if !capturedConfiguration.Management.Enabled {
+		t.Fatalf("packaged config should enable management from environment")
+	}
+	if capturedConfiguration.Management.PublicOrigin != "https://llm-proxy.mprlab.com" {
+		t.Fatalf("public origin=%q", capturedConfiguration.Management.PublicOrigin)
+	}
+	if capturedConfiguration.Management.TAuthURL != "https://tauth-api.mprlab.com" {
+		t.Fatalf("tauth url=%q", capturedConfiguration.Management.TAuthURL)
+	}
+	if capturedConfiguration.Management.GoogleClientID != "925457785190-3frk7j3bsr3ucidtkcohrp2sl07e0paa.apps.googleusercontent.com" {
+		t.Fatalf("google client id=%q", capturedConfiguration.Management.GoogleClientID)
+	}
+	if capturedConfiguration.Management.JWTSigningKey != "packaged-tauth-signing-key" {
+		t.Fatalf("jwt signing key=%q", capturedConfiguration.Management.JWTSigningKey)
+	}
+	if capturedConfiguration.Management.DatabaseDialect != proxy.ManagementDatabaseDialectSQLite {
+		t.Fatalf("database dialect=%q", capturedConfiguration.Management.DatabaseDialect)
+	}
+	if capturedConfiguration.Management.DatabaseDSN != "llm-proxy-management.sqlite" {
+		t.Fatalf("database dsn=%q", capturedConfiguration.Management.DatabaseDSN)
+	}
+	if capturedConfiguration.Management.ManagementAPIOrigin != "https://llm-proxy-api.mprlab.com" || capturedConfiguration.Management.ProxyOrigin != "https://llm-proxy-api.mprlab.com" {
+		t.Fatalf("management api origins=%q %q", capturedConfiguration.Management.ManagementAPIOrigin, capturedConfiguration.Management.ProxyOrigin)
+	}
+}
+
+func TestRootCommandRendersSiteFromConfigFile(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir, `
+management:
+  enabled: true
+  public_origin: "https://llm-proxy.example"
+  ui_description: "LLM Proxy Test"
+  ui_origins:
+    - "https://llm-proxy.example"
+    - "http://127.0.0.1:4179"
+    - "http://localhost:4179"
+  tauth_url: "https://tauth.example"
+  tauth_tenant_id: "llm-proxy"
+  google_client_id: "google-client-id"
+  login_path: "/auth/google"
+  logout_path: "/auth/logout"
+  nonce_path: "/auth/nonce"
+  jwt_signing_key: "tauth-signing-key"
+  jwt_issuer: "tauth"
+  session_cookie_name: "llm_proxy_session"
+  database_dialect: "sqlite"
+  database_dsn: "management.sqlite"
+  management_api_origin: "https://llm-proxy-api.example"
+  proxy_origin: "https://llm-proxy-api.example"
+tenants:
+  - id: default
+    secret: "sekret"
+`+completeLiteralProvidersYAML())
+	outputDirectory := filepath.Join(tempDir, "rendered-site")
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath, "--site-source", filepath.Join("..", "..", "site"), "--render-site-output", outputDirectory)
+	if executeError != nil {
+		t.Fatalf("ExecuteC error: %v", executeError)
+	}
+
+	cnameBytes, readCNAMEError := os.ReadFile(filepath.Join(outputDirectory, "CNAME"))
+	if readCNAMEError != nil {
+		t.Fatalf("read CNAME: %v", readCNAMEError)
+	}
+	if string(cnameBytes) != "llm-proxy.example\n" {
+		t.Fatalf("CNAME=%q", string(cnameBytes))
+	}
+	if _, statError := os.Stat(filepath.Join(outputDirectory, proxy.ManagementConfigUIFileName)); !os.IsNotExist(statError) {
+		t.Fatalf("rendered %s stat error=%v want absent", proxy.ManagementConfigUIFileName, statError)
+	}
+	if _, statError := os.Stat(filepath.Join(outputDirectory, "llm-proxy-config.json")); !os.IsNotExist(statError) {
+		t.Fatalf("rendered llm-proxy-config.json stat error=%v want absent", statError)
+	}
+	indexBytes, readIndexError := os.ReadFile(filepath.Join(outputDirectory, "index.html"))
+	if readIndexError != nil {
+		t.Fatalf("rendered index.html: %v", readIndexError)
+	}
+	indexHTML := string(indexBytes)
+	if !strings.Contains(indexHTML, `data-config-url="https://llm-proxy-api.example/config-ui.yaml"`) ||
+		strings.Contains(indexHTML, siteConfigURLPlaceholder) {
+		t.Fatalf("rendered index.html=%s", indexHTML)
+	}
+	if _, statError := os.Stat(filepath.Join(outputDirectory, "assets", "llm-proxy", "js", "app.js")); statError != nil {
+		t.Fatalf("rendered app.js: %v", statError)
+	}
+}
+
+func TestRootCommandRendersSiteFromDefaultSourceDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeRenderableSiteConfig(t, tempDir, "https://llm-proxy.example")
+	outputDirectory := filepath.Join(tempDir, "rendered-site")
+	t.Chdir(filepath.Join("..", ".."))
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath, "--site-source", "", "--render-site-output", outputDirectory)
+	if executeError != nil {
+		t.Fatalf("ExecuteC error: %v", executeError)
+	}
+	if _, statError := os.Stat(filepath.Join(outputDirectory, "index.html")); statError != nil {
+		t.Fatalf("rendered default-source index.html: %v", statError)
+	}
+}
+
+func TestRootCommandRenderSiteRemovesSourceConfigUI(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeRenderableSiteConfig(t, tempDir, "https://llm-proxy.example")
+	sourceDirectory := filepath.Join(tempDir, "site-source")
+	outputDirectory := filepath.Join(tempDir, "rendered-site")
+	writeTestSiteSource(t, sourceDirectory)
+	if writeError := os.WriteFile(filepath.Join(sourceDirectory, proxy.ManagementConfigUIFileName), []byte("stale config\n"), 0600); writeError != nil {
+		t.Fatalf("write stale config-ui.yaml: %v", writeError)
+	}
+	if writeError := os.WriteFile(filepath.Join(sourceDirectory, "llm-proxy-config.json"), []byte("{}\n"), 0600); writeError != nil {
+		t.Fatalf("write stale llm-proxy-config.json: %v", writeError)
+	}
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath, "--site-source", sourceDirectory, "--render-site-output", outputDirectory)
+	if executeError != nil {
+		t.Fatalf("ExecuteC error: %v", executeError)
+	}
+	if _, statError := os.Stat(filepath.Join(outputDirectory, proxy.ManagementConfigUIFileName)); !os.IsNotExist(statError) {
+		t.Fatalf("rendered stale %s stat error=%v want absent", proxy.ManagementConfigUIFileName, statError)
+	}
+	if _, statError := os.Stat(filepath.Join(outputDirectory, "llm-proxy-config.json")); !os.IsNotExist(statError) {
+		t.Fatalf("rendered stale llm-proxy-config.json stat error=%v want absent", statError)
+	}
+}
+
+func TestRootCommandRenderSiteUsesConfigPlaceholderGate(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir, `
+management:
+  enabled: true
+  public_origin: "https://llm-proxy.example"
+  ui_description: "LLM Proxy Test"
+  ui_origins:
+    - "https://llm-proxy.example"
+  tauth_url: "https://tauth.example"
+  tauth_tenant_id: "llm-proxy"
+  google_client_id: "${P411_MISSING_GOOGLE_CLIENT_ID}"
+  login_path: "/auth/google"
+  logout_path: "/auth/logout"
+  nonce_path: "/auth/nonce"
+  jwt_signing_key: "tauth-signing-key"
+  jwt_issuer: "tauth"
+  session_cookie_name: "llm_proxy_session"
+  database_dialect: "sqlite"
+  database_dsn: "management.sqlite"
+  management_api_origin: "https://llm-proxy-api.example"
+  proxy_origin: "https://llm-proxy-api.example"
+tenants:
+  - id: default
+    secret: "sekret"
+`+completeLiteralProvidersYAML())
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath, "--site-source", filepath.Join("..", "..", "site"), "--render-site-output", filepath.Join(tempDir, "rendered-site"))
+	if executeError == nil || !strings.Contains(executeError.Error(), "config_placeholder_missing: names=P411_MISSING_GOOGLE_CLIENT_ID") {
+		t.Fatalf("error=%v want config placeholder gate", executeError)
+	}
+}
+
+func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
+	testCases := []struct {
+		name          string
+		setup         func(*testing.T, string) (string, string, string)
+		expectedError string
+	}{
+		{
+			name: "blank output",
+			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
+				configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example")
+				sourceDirectory := filepath.Join(tempDir, "site-source")
+				writeTestSiteSource(subTest, sourceDirectory)
+				return configPath, sourceDirectory, ""
+			},
+			expectedError: "output directory is required",
+		},
+		{
+			name: "missing source",
+			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
+				configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example")
+				return configPath, filepath.Join(tempDir, "missing-site-source"), filepath.Join(tempDir, "rendered-site")
+			},
+			expectedError: "source=",
+		},
+		{
+			name: "source file",
+			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
+				configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example")
+				sourcePath := filepath.Join(tempDir, "site-source-file")
+				if writeError := os.WriteFile(sourcePath, []byte("not a directory"), 0600); writeError != nil {
+					subTest.Fatalf("write source file: %v", writeError)
+				}
+				return configPath, sourcePath, filepath.Join(tempDir, "rendered-site")
+			},
+			expectedError: "is not a directory",
+		},
+		{
+			name: "existing output",
+			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
+				configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example")
+				sourceDirectory := filepath.Join(tempDir, "site-source")
+				outputDirectory := filepath.Join(tempDir, "rendered-site")
+				writeTestSiteSource(subTest, sourceDirectory)
+				if mkdirError := os.Mkdir(outputDirectory, 0700); mkdirError != nil {
+					subTest.Fatalf("create output directory: %v", mkdirError)
+				}
+				return configPath, sourceDirectory, outputDirectory
+			},
+			expectedError: "already exists",
+		},
+		{
+			name: "output stat failure",
+			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
+				configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example")
+				sourceDirectory := filepath.Join(tempDir, "site-source")
+				outputParentFile := filepath.Join(tempDir, "output-parent-file")
+				writeTestSiteSource(subTest, sourceDirectory)
+				if writeError := os.WriteFile(outputParentFile, []byte("not a directory"), 0600); writeError != nil {
+					subTest.Fatalf("write output parent file: %v", writeError)
+				}
+				return configPath, sourceDirectory, filepath.Join(outputParentFile, "rendered-site")
+			},
+			expectedError: "not a directory",
+		},
+		{
+			name: "output inside source",
+			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
+				configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example")
+				sourceDirectory := filepath.Join(tempDir, "site-source")
+				writeTestSiteSource(subTest, sourceDirectory)
+				return configPath, sourceDirectory, filepath.Join(sourceDirectory, "rendered-site")
+			},
+			expectedError: "is inside source",
+		},
+		{
+			name: "public origin without host",
+			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
+				configPath := writeRenderableSiteConfig(subTest, tempDir, "llm-proxy.example")
+				sourceDirectory := filepath.Join(tempDir, "site-source")
+				writeTestSiteSource(subTest, sourceDirectory)
+				return configPath, sourceDirectory, filepath.Join(tempDir, "rendered-site")
+			},
+			expectedError: "has no host",
+		},
+		{
+			name: "public origin with port",
+			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
+				configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example:4179")
+				sourceDirectory := filepath.Join(tempDir, "site-source")
+				writeTestSiteSource(subTest, sourceDirectory)
+				return configPath, sourceDirectory, filepath.Join(tempDir, "rendered-site")
+			},
+			expectedError: "must not include a port",
+		},
+		{
+			name: "malformed public origin",
+			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
+				configPath := writeRenderableSiteConfig(subTest, tempDir, "%")
+				sourceDirectory := filepath.Join(tempDir, "site-source")
+				writeTestSiteSource(subTest, sourceDirectory)
+				return configPath, sourceDirectory, filepath.Join(tempDir, "rendered-site")
+			},
+			expectedError: "invalid URL escape",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			tempDir := subTest.TempDir()
+			configPath, sourceDirectory, outputDirectory := testCase.setup(subTest, tempDir)
+			withServeProxy(subTest, failingServeProxy(subTest))
+
+			executeError := executeRootCommand(subTest, "--config", configPath, "--site-source", sourceDirectory, "--render-site-output", outputDirectory)
+			if executeError == nil || !strings.Contains(executeError.Error(), testCase.expectedError) {
+				subTest.Fatalf("error=%v want contains %q", executeError, testCase.expectedError)
+			}
+		})
+	}
+}
+
+func TestRootCommandRejectsSiteRenderInjectedFilesystemFailures(t *testing.T) {
+	testCases := []struct {
+		name          string
+		setup         func(*testing.T, string, string)
+		expectedError string
+	}{
+		{
+			name: "source absolute path failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				sitePathAbs = func(rawPath string) (string, error) {
+					return "", errors.New("source abs failed")
+				}
+			},
+			expectedError: "source abs failed",
+		},
+		{
+			name: "output absolute path failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				pathCalls := 0
+				sitePathAbs = func(rawPath string) (string, error) {
+					pathCalls++
+					if pathCalls == 2 {
+						return "", errors.New("output abs failed")
+					}
+					return filepath.Abs(rawPath)
+				}
+			},
+			expectedError: "output abs failed",
+		},
+		{
+			name: "relative path failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				sitePathRel = func(basePath string, targetPath string) (string, error) {
+					return "", errors.New("relative path failed")
+				}
+			},
+			expectedError: "relative path failed",
+		},
+		{
+			name: "output stat failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				originalSiteStat := siteStat
+				siteStat = func(rawPath string) (os.FileInfo, error) {
+					if rawPath == sourceDirectory {
+						return originalSiteStat(rawPath)
+					}
+					return nil, errors.New("output stat failed")
+				}
+			},
+			expectedError: "output stat failed",
+		},
+		{
+			name: "copy failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				siteCopyFS = func(outputPath string, sourceFileSystem fs.FS) error {
+					return errors.New("copy failed")
+				}
+			},
+			expectedError: "copy failed",
+		},
+		{
+			name: "write failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				siteWriteFile = func(outputPath string, outputContent []byte, fileMode os.FileMode) error {
+					return errors.New("write failed")
+				}
+			},
+			expectedError: "write failed",
+		},
+		{
+			name: "cname write failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				siteWriteFile = func(outputPath string, outputContent []byte, fileMode os.FileMode) error {
+					if filepath.Base(outputPath) == siteCNAMEFileName {
+						return errors.New("cname write failed")
+					}
+					return os.WriteFile(outputPath, outputContent, fileMode)
+				}
+			},
+			expectedError: "cname write failed",
+		},
+		{
+			name: "index read failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				siteReadFile = func(rawPath string) ([]byte, error) {
+					return nil, errors.New("read failed")
+				}
+			},
+			expectedError: "read failed",
+		},
+		{
+			name: "stale config removal failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				siteRemove = func(rawPath string) error {
+					return errors.New("remove failed")
+				}
+			},
+			expectedError: "remove failed",
+		},
+		{
+			name: "stale runtime config removal failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				siteRemove = func(rawPath string) error {
+					if filepath.Base(rawPath) == "llm-proxy-config.json" {
+						return errors.New("runtime remove failed")
+					}
+					return nil
+				}
+			},
+			expectedError: "runtime remove failed",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			tempDir := subTest.TempDir()
+			configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example")
+			sourceDirectory := filepath.Join(tempDir, "site-source")
+			outputDirectory := filepath.Join(tempDir, "rendered-site")
+			writeTestSiteSource(subTest, sourceDirectory)
+			withSiteRendererDependencies(subTest)
+			testCase.setup(subTest, sourceDirectory, outputDirectory)
+			withServeProxy(subTest, failingServeProxy(subTest))
+
+			executeError := executeRootCommand(subTest, "--config", configPath, "--site-source", sourceDirectory, "--render-site-output", outputDirectory)
+			if executeError == nil || !strings.Contains(executeError.Error(), testCase.expectedError) {
+				subTest.Fatalf("error=%v want contains %q", executeError, testCase.expectedError)
+			}
+		})
+	}
+}
+
+func TestRootCommandRejectsSiteRenderIndexWithoutConfigPlaceholder(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeRenderableSiteConfig(t, tempDir, "https://llm-proxy.example")
+	sourceDirectory := filepath.Join(tempDir, "site-source")
+	outputDirectory := filepath.Join(tempDir, "rendered-site")
+	writeTestSiteSource(t, sourceDirectory)
+	if writeError := os.WriteFile(filepath.Join(sourceDirectory, "index.html"), []byte("<!doctype html>\n"), 0600); writeError != nil {
+		t.Fatalf("write placeholder-free index.html: %v", writeError)
+	}
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath, "--site-source", sourceDirectory, "--render-site-output", outputDirectory)
+	if executeError == nil || !strings.Contains(executeError.Error(), "missing "+siteConfigURLPlaceholder) {
+		t.Fatalf("error=%v want missing site config URL placeholder", executeError)
 	}
 }
 
@@ -337,6 +930,15 @@ func TestRootCommandRejectsMissingDefaultTextProviderKeys(t *testing.T) {
 				values.DashScopeAPIKey = "${P411_MISSING_DASHSCOPE_KEY}"
 			},
 			expectedError: "provider_api_key_required: provider=dashscope field=providers.dashscope.api_key",
+		},
+		{
+			name:     "deepseek canonical",
+			provider: proxy.ProviderNameDeepSeek,
+			model:    proxy.ModelNameDeepSeekV4Flash,
+			missingKey: func(values *providerYAMLValues) {
+				values.DeepSeekAPIKey = "${P411_MISSING_DEEPSEEK_KEY}"
+			},
+			expectedError: "provider_api_key_required: provider=deepseek field=providers.deepseek.api_key",
 		},
 		{
 			name:     "moonshot alias",
@@ -513,6 +1115,26 @@ providers:
 	executeError := executeRootCommand(t, "--config", configPath)
 	if executeError == nil || !strings.Contains(executeError.Error(), "config_file_parse_failed") {
 		t.Fatalf("error=%v want config parse failure", executeError)
+	}
+}
+
+func TestRootCommandRejectsUnknownTenantDefaultProviderAfterCredentialCheck(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir, `
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: unknown
+      model: gpt-4.1
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
+`+completeLiteralProvidersYAML())
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError == nil || !strings.Contains(executeError.Error(), "unknown provider") {
+		t.Fatalf("error=%v want unknown provider", executeError)
 	}
 }
 
@@ -856,9 +1478,18 @@ func executeRootCommand(t *testing.T, arguments ...string) error {
 
 func resetConfigFlag(t *testing.T) {
 	t.Helper()
-	if flagError := rootCmd.Flags().Set(flagConfig, defaultConfigPath); flagError != nil {
-		t.Fatalf("reset config flag: %v", flagError)
+	resetStringFlag(t, flagConfig, defaultConfigPath)
+	resetStringFlag(t, flagRenderSiteOutput, "")
+	resetStringFlag(t, flagSiteSource, defaultSiteSourceDirectory)
+}
+
+func resetStringFlag(t *testing.T, flagName string, flagValue string) {
+	t.Helper()
+	commandFlags := rootCmd.Flags()
+	if flagError := commandFlags.Set(flagName, flagValue); flagError != nil {
+		t.Fatalf("reset %s flag: %v", flagName, flagError)
 	}
+	commandFlags.Lookup(flagName).Changed = false
 }
 
 func withServeProxy(t *testing.T, replacement func(proxy.Configuration, *zap.SugaredLogger) error) {
@@ -881,6 +1512,28 @@ func failingServeProxy(t *testing.T) func(proxy.Configuration, *zap.SugaredLogge
 	}
 }
 
+func withSiteRendererDependencies(t *testing.T) {
+	t.Helper()
+	originalSiteCopyFS := siteCopyFS
+	originalSitePathAbs := sitePathAbs
+	originalSitePathRel := sitePathRel
+	originalSiteReadFile := siteReadFile
+	originalSiteRemove := siteRemove
+	originalSiteStat := siteStat
+	originalSiteURLParse := siteURLParse
+	originalSiteWriteFile := siteWriteFile
+	t.Cleanup(func() {
+		siteCopyFS = originalSiteCopyFS
+		sitePathAbs = originalSitePathAbs
+		sitePathRel = originalSitePathRel
+		siteReadFile = originalSiteReadFile
+		siteRemove = originalSiteRemove
+		siteStat = originalSiteStat
+		siteURLParse = originalSiteURLParse
+		siteWriteFile = originalSiteWriteFile
+	})
+}
+
 func writeTestConfig(t *testing.T, tempDir string, configContent string) string {
 	t.Helper()
 	configPath := filepath.Join(tempDir, testConfigFileName)
@@ -895,6 +1548,49 @@ func writeTestDotEnv(t *testing.T, tempDir string, dotEnvContent string) {
 	dotEnvPath := filepath.Join(tempDir, testDotEnvFileName)
 	if writeError := os.WriteFile(dotEnvPath, []byte(strings.TrimSpace(dotEnvContent)+"\n"), 0600); writeError != nil {
 		t.Fatalf("write dotenv: %v", writeError)
+	}
+}
+
+func writeRenderableSiteConfig(t *testing.T, tempDir string, publicOrigin string) string {
+	t.Helper()
+	return writeTestConfig(t, tempDir, `
+management:
+  enabled: true
+  public_origin: "`+publicOrigin+`"
+  ui_description: "LLM Proxy Test"
+  ui_origins:
+    - "https://llm-proxy.example"
+  tauth_url: "https://tauth.example"
+  tauth_tenant_id: "llm-proxy"
+  google_client_id: "google-client-id"
+  login_path: "/auth/google"
+  logout_path: "/auth/logout"
+  nonce_path: "/auth/nonce"
+  jwt_signing_key: "tauth-signing-key"
+  jwt_issuer: "tauth"
+  session_cookie_name: "llm_proxy_session"
+  database_dialect: "sqlite"
+  database_dsn: "management.sqlite"
+  management_api_origin: "https://llm-proxy-api.example"
+  proxy_origin: "https://llm-proxy-api.example"
+tenants:
+  - id: default
+    secret: "sekret"
+`+completeLiteralProvidersYAML())
+}
+
+func writeTestSiteSource(t *testing.T, sourceDirectory string) {
+	t.Helper()
+	if mkdirError := os.MkdirAll(filepath.Join(sourceDirectory, "assets"), 0700); mkdirError != nil {
+		t.Fatalf("create test site source: %v", mkdirError)
+	}
+	if writeError := os.WriteFile(filepath.Join(sourceDirectory, "index.html"), []byte(`<!doctype html>
+<mpr-header data-config-url="`+siteConfigURLPlaceholder+`"></mpr-header>
+`), 0600); writeError != nil {
+		t.Fatalf("write index.html: %v", writeError)
+	}
+	if writeError := os.WriteFile(filepath.Join(sourceDirectory, "assets", "app.js"), []byte("export {};\n"), 0600); writeError != nil {
+		t.Fatalf("write app.js: %v", writeError)
 	}
 }
 

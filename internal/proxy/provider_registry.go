@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
@@ -10,6 +11,17 @@ import (
 type providerRegistry struct {
 	definitions map[providerID]providerDefinition
 	aliases     map[string]providerID
+}
+
+type providerSummary struct {
+	identifier            string
+	label                 string
+	aliases               []string
+	textDefaultModel      string
+	textModels            []string
+	supportsDictation     bool
+	dictationDefaultModel string
+	dictationModels       []string
 }
 
 func newProviderRegistry(configuration Configuration) *providerRegistry {
@@ -156,6 +168,87 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 	return registry
 }
 
+func configuredProviderAPIKeys(configuration Configuration) map[providerID]string {
+	providerAPIKeys := map[providerID]string{}
+	configuredProviderAPIKey(configuration.OpenAIKey, ProviderNameOpenAI, providerAPIKeys)
+	configuredProviderAPIKey(configuration.DeepSeekKey, ProviderNameDeepSeek, providerAPIKeys)
+	configuredProviderAPIKey(configuration.DashScopeKey, ProviderNameDashScope, providerAPIKeys)
+	configuredProviderAPIKey(configuration.MoonshotKey, ProviderNameMoonshot, providerAPIKeys)
+	configuredProviderAPIKey(configuration.SiliconFlowKey, ProviderNameSiliconFlow, providerAPIKeys)
+	configuredProviderAPIKey(configuration.ZhipuKey, ProviderNameZhipu, providerAPIKeys)
+	configuredProviderAPIKey(configuration.GeminiKey, ProviderNameGemini, providerAPIKeys)
+	configuredProviderAPIKey(configuration.AnthropicKey, ProviderNameAnthropic, providerAPIKeys)
+	configuredProviderAPIKey(configuration.GrokKey, ProviderNameGrok, providerAPIKeys)
+	return providerAPIKeys
+}
+
+func configuredProviderAPIKey(rawAPIKey string, rawProvider string, providerAPIKeys map[providerID]string) {
+	apiKey := strings.TrimSpace(rawAPIKey)
+	if apiKey == constants.EmptyString {
+		return
+	}
+	providerAPIKeys[newProviderID(rawProvider)] = apiKey
+}
+
+func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegistry {
+	if !requestTenant.managed {
+		return registry
+	}
+	definitions := make(map[providerID]providerDefinition, len(registry.definitions))
+	for identifier, definition := range registry.definitions {
+		definition.textAPIKey = constants.EmptyString
+		definition.transcriptionAPIKey = constants.EmptyString
+		if apiKey, configured := requestTenant.providerAPIKeys[identifier]; configured {
+			definition.textAPIKey = apiKey
+			if definition.supportsDictation {
+				definition.transcriptionAPIKey = apiKey
+			}
+		}
+		definitions[identifier] = definition
+	}
+	return &providerRegistry{
+		definitions: definitions,
+		aliases:     registry.aliases,
+	}
+}
+
+func (registry *providerRegistry) canonicalProviderID(rawProvider string) (providerID, error) {
+	definition, providerError := registry.resolveProvider(rawProvider, constants.EmptyString)
+	if providerError != nil {
+		return providerID(""), providerError
+	}
+	return definition.identifier, nil
+}
+
+func (registry *providerRegistry) providerSummaries() []providerSummary {
+	identifiers := make([]string, 0, len(registry.definitions))
+	identifierLookup := map[string]providerID{}
+	for identifier := range registry.definitions {
+		identifierString := identifier.string()
+		identifiers = append(identifiers, identifierString)
+		identifierLookup[identifierString] = identifier
+	}
+	sort.Strings(identifiers)
+	summaries := make([]providerSummary, 0, len(identifiers))
+	for _, identifierString := range identifiers {
+		identifier := identifierLookup[identifierString]
+		definition := registry.definitions[identifier]
+		aliases := append([]string(nil), definition.aliases...)
+		sort.Strings(aliases)
+		summaries = append(summaries, providerSummary{
+			identifier:            definition.identifier.string(),
+			label:                 providerLabel(definition.identifier),
+			aliases:               aliases,
+			textDefaultModel:      definition.defaultTextModel.string(),
+			textModels:            sortedTextModels(definition.textModels),
+			supportsDictation:     definition.supportsDictation,
+			dictationDefaultModel: definition.defaultTranscriptionModel.string(),
+			dictationModels:       sortedDictationModels(definition.transcriptionModels),
+		})
+	}
+	return summaries
+}
+
 func (registry *providerRegistry) resolveProvider(rawProvider string, defaultProvider string) (providerDefinition, error) {
 	providerCandidate := strings.TrimSpace(rawProvider)
 	if providerCandidate == constants.EmptyString {
@@ -170,6 +263,17 @@ func (registry *providerRegistry) resolveProvider(rawProvider string, defaultPro
 }
 
 func (registry *providerRegistry) resolveTextRequest(rawProvider string, rawModel string, defaultProvider string, defaultModel string, webSearchEnabled bool) (providerDefinition, textModelDefinition, error) {
+	definition, resolvedModel, resolutionError := registry.resolveTextModel(rawProvider, rawModel, defaultProvider, defaultModel, webSearchEnabled)
+	if resolutionError != nil {
+		return providerDefinition{}, textModelDefinition{}, resolutionError
+	}
+	if definition.credentialFor(endpointKindText) == constants.EmptyString {
+		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindText)
+	}
+	return definition, resolvedModel, nil
+}
+
+func (registry *providerRegistry) resolveTextModel(rawProvider string, rawModel string, defaultProvider string, defaultModel string, webSearchEnabled bool) (providerDefinition, textModelDefinition, error) {
 	definition, providerError := registry.resolveProvider(rawProvider, defaultProvider)
 	if providerError != nil {
 		return providerDefinition{}, textModelDefinition{}, providerError
@@ -189,13 +293,21 @@ func (registry *providerRegistry) resolveTextRequest(rawProvider string, rawMode
 	if webSearchEnabled && !resolvedModel.supportsWebSearch {
 		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: provider=%s model=%s capability=web_search", ErrUnsupportedCapability, definition.identifier.string(), resolvedModel.string())
 	}
-	if definition.credentialFor(endpointKindText) == constants.EmptyString {
-		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindText)
-	}
 	return definition, resolvedModel, nil
 }
 
 func (registry *providerRegistry) resolveDictationRequest(rawProvider string, rawModel string, defaultProvider string, defaultModel string) (providerDefinition, modelID, error) {
+	definition, resolvedModel, resolutionError := registry.resolveDictationModel(rawProvider, rawModel, defaultProvider, defaultModel)
+	if resolutionError != nil {
+		return providerDefinition{}, modelID(""), resolutionError
+	}
+	if definition.credentialFor(endpointKindDictation) == constants.EmptyString {
+		return providerDefinition{}, modelID(""), fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindDictation)
+	}
+	return definition, resolvedModel, nil
+}
+
+func (registry *providerRegistry) resolveDictationModel(rawProvider string, rawModel string, defaultProvider string, defaultModel string) (providerDefinition, modelID, error) {
 	definition, providerError := registry.resolveProvider(rawProvider, defaultProvider)
 	if providerError != nil {
 		return providerDefinition{}, modelID(""), providerError
@@ -215,9 +327,6 @@ func (registry *providerRegistry) resolveDictationRequest(rawProvider string, ra
 	if modelError != nil {
 		return providerDefinition{}, modelID(""), modelError
 	}
-	if definition.credentialFor(endpointKindDictation) == constants.EmptyString {
-		return providerDefinition{}, modelID(""), fmt.Errorf("%w: provider=%s endpoint=%s", ErrProviderNotConfigured, definition.identifier.string(), endpointKindDictation)
-	}
 	return definition, resolvedModel, nil
 }
 
@@ -235,4 +344,59 @@ func resolveTextModelFromSet(modelIdentifiers map[string]textModelDefinition, ra
 		return modelIdentifier, nil
 	}
 	return textModelDefinition{}, fmt.Errorf("%w: %s", ErrUnknownModel, resolvedModel.string())
+}
+
+func sortedTextModels(modelIdentifiers map[string]textModelDefinition) []string {
+	models := make([]string, 0, len(modelIdentifiers))
+	seenModels := map[string]struct{}{}
+	for _, modelDefinition := range modelIdentifiers {
+		modelIdentifier := modelDefinition.string()
+		if _, seen := seenModels[modelIdentifier]; seen {
+			continue
+		}
+		seenModels[modelIdentifier] = struct{}{}
+		models = append(models, modelIdentifier)
+	}
+	sort.Strings(models)
+	return models
+}
+
+func sortedDictationModels(modelIdentifiers map[string]modelID) []string {
+	models := make([]string, 0, len(modelIdentifiers))
+	seenModels := map[string]struct{}{}
+	for _, modelIdentifier := range modelIdentifiers {
+		modelIdentifierString := modelIdentifier.string()
+		if _, seen := seenModels[modelIdentifierString]; seen {
+			continue
+		}
+		seenModels[modelIdentifierString] = struct{}{}
+		models = append(models, modelIdentifierString)
+	}
+	sort.Strings(models)
+	return models
+}
+
+func providerLabel(identifier providerID) string {
+	switch identifier.string() {
+	case ProviderNameOpenAI:
+		return "OpenAI"
+	case ProviderNameDeepSeek:
+		return "DeepSeek"
+	case ProviderNameDashScope:
+		return "DashScope"
+	case ProviderNameMoonshot:
+		return "Moonshot"
+	case ProviderNameSiliconFlow:
+		return "SiliconFlow"
+	case ProviderNameZhipu:
+		return "Zhipu"
+	case ProviderNameGemini:
+		return "Gemini"
+	case ProviderNameAnthropic:
+		return "Anthropic"
+	case ProviderNameGrok:
+		return "Grok"
+	default:
+		return identifier.string()
+	}
 }

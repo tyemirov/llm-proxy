@@ -7,7 +7,7 @@ This document describes the canonical ISSUES.md layout and the section-aware ide
 - The file starts with a title line (for example, `# ISSUES`),
   followed by optional guidance text.
 - Issues are grouped under level-2 headings (`## ...`).
-- Optional subheadings (`### ...`) may be used within a section for organization (for example, "Recurring"), but IDs must still match the parent section.
+- Optional subheadings (`### ...`) may be used within a section for organization (for example, "Recurring"), but IDs must still match the parent section. Recurring semantics are canonically represented by the identifier suffix; parsers normalize entries under a `Recurring` subheading to that suffix.
 - Sections are:
   - BugFixes
   - Improvements
@@ -36,7 +36,7 @@ Rules:
 
 ## Identifiers
 
-Format: `<SectionLetter><SequenceNumber>` with no repo prefix.
+Format: `<SectionLetter><SequenceNumber>[R]` with no repo prefix.
 
 Section letters:
 
@@ -50,6 +50,13 @@ Identifiers must match the section they appear in. Numbers increment
 independently per section. Use three digits (`001`-`999`) per section; after a
 section reaches its max (example: after B999), the next auto-number wraps to
 B001.
+A capital `R` suffix inside the identifier marks the entry as recurring
+(example: `[M001R]`). A separate `R` token after the identifier is invalid.
+Parsers accept lowercase `r` while reading and render uppercase `R` in
+canonical output.
+Recurring entries represent standing or repeated work that should remain
+visible during cleanup. Scheduling, timers, and job IDs are outside the
+ISSUES.md format.
 Legacy repo-prefixed identifiers (for example `IM-###`) are invalid.
 
 ## Priority and dependencies
@@ -64,6 +71,15 @@ Legacy repo-prefixed identifiers (for example `IM-###`) are invalid.
 - Additional body lines may follow on subsequent lines; indent by two spaces
   to keep them attached to the issue.
 - Fenced code blocks are allowed in the body; indent them by two spaces as well.
+- Structured issue bodies should use plain labels rather than Markdown
+  headings. The canonical labels are `Goal:`, `Requirements:`,
+  `Deliverables:`, `Validation:`, and `Blocked:`.
+- `Goal:`, `Requirements:`, `Deliverables:`, and `Validation:` are recommended
+  guidance for human and AI producers. Parsers recognize them but do not require
+  every free-form issue body to contain all four labels.
+- `Blocked:` is required only for blocked issues (`[!]`) and must include the
+  concrete external dependency, missing input, or policy decision preventing
+  progress.
 
 ## Example
 
@@ -72,6 +88,18 @@ Legacy repo-prefixed identifiers (for example `IM-###`) are invalid.
 
 ## BugFixes
 - [!] [B042] (P0) Fix crash on startup
+  Goal:
+  Prevent startup crashes during repository initialization.
+
+  Requirements:
+  Preserve the existing configuration loading contract.
+
+  Deliverables:
+  Patch the initialization path and document the failure mode.
+
+  Validation:
+  Reproduce the startup path with the affected configuration.
+
   Blocked: waiting on upstream API credentials.
   ```bash
   timeout -k 30s -s SIGKILL 30s make test

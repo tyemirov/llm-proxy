@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	ErrMissingTenants = errors.New("tenants must include at least one tenant")
-	ErrInvalidTenant  = errors.New("invalid tenant")
+	ErrMissingTenants                 = errors.New("tenants must include at least one tenant")
+	ErrInvalidTenant                  = errors.New("invalid tenant")
+	ErrInvalidManagementConfiguration = errors.New("invalid management configuration")
 )
 
 // TenantConfiguration is the config-file shape for one authenticated tenant.
@@ -73,9 +74,11 @@ func newTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
 }
 
 type tenant struct {
-	identifier   tenantID
-	secretDigest [sha256.Size]byte
-	defaults     tenantDefaults
+	identifier      tenantID
+	secretDigest    [sha256.Size]byte
+	defaults        tenantDefaults
+	managed         bool
+	providerAPIKeys map[providerID]string
 }
 
 func newTenant(rawTenant TenantConfiguration) (tenant, error) {
@@ -98,8 +101,11 @@ type tenantRegistry struct {
 	tenants []tenant
 }
 
-func newTenantRegistry(rawTenants []TenantConfiguration) (tenantRegistry, error) {
+func newTenantRegistry(rawTenants []TenantConfiguration, allowEmpty bool) (tenantRegistry, error) {
 	if len(rawTenants) == 0 {
+		if allowEmpty {
+			return tenantRegistry{}, nil
+		}
 		return tenantRegistry{}, ErrMissingTenants
 	}
 	seenIdentifiers := map[string]struct{}{}
@@ -137,6 +143,15 @@ func (registry tenantRegistry) authenticate(rawSecret string) (tenant, bool) {
 		}
 	}
 	return matchedTenant, matched
+}
+
+func (registry tenantRegistry) containsSecretDigest(secretDigest [sha256.Size]byte) bool {
+	for _, candidate := range registry.tenants {
+		if constantTimeDigestEquals(candidate.secretDigest, secretDigest) {
+			return true
+		}
+	}
+	return false
 }
 
 // DefaultTenantDefaults returns the built-in request defaults for a single tenant.

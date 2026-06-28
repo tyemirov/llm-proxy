@@ -10,9 +10,11 @@ import (
 )
 
 const (
-	defaultConfigPath = "config.yml"
-	flagConfig        = "config"
-	logEventStarting  = "starting proxy"
+	defaultConfigPath    = "config.yml"
+	flagConfig           = "config"
+	flagRenderSiteOutput = "render-site-output"
+	flagSiteSource       = "site-source"
+	logEventStarting     = "starting proxy"
 )
 
 var runtimeConfiguration proxy.Configuration
@@ -54,6 +56,12 @@ var rootCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(command *cobra.Command, arguments []string) error {
+		renderSiteOutput, _ := command.Flags().GetString(flagRenderSiteOutput)
+		if command.Flags().Changed(flagRenderSiteOutput) {
+			siteSource, _ := command.Flags().GetString(flagSiteSource)
+			return renderSiteArtifact(siteSource, renderSiteOutput, runtimeConfiguration)
+		}
+
 		logger := loggerForLevel(runtimeConfiguration.LogLevel)
 		defer func() { _ = logger.Sync() }()
 		structuredLogger := logger.Sugar()
@@ -80,4 +88,6 @@ func loggerForLevel(logLevel string) *zap.Logger {
 
 func init() {
 	rootCmd.Flags().String(flagConfig, defaultConfigPath, "path to authoritative config.yml")
+	rootCmd.Flags().String(flagRenderSiteOutput, "", "render the GitHub Pages site artifact to this output directory")
+	rootCmd.Flags().String(flagSiteSource, defaultSiteSourceDirectory, "static site source directory for render-site-output")
 }

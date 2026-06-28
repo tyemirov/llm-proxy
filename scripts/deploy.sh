@@ -8,11 +8,11 @@ Usage:
 
 Deploys llm-proxy through mprlab-gateway after verifying the release image has
 been published. llm-proxy is gateway-colocated, so the default gateway target is
-deploy-llm-proxy.
+deploy-llm-proxy-backend.
 
 Options:
   --gateway-dir <path>  Gateway checkout. Default: $GATEWAY_DIR or sibling ../mprlab-gateway
-  --gateway-target <target> Gateway make target. Default: $GATEWAY_DEPLOY_TARGET or deploy-llm-proxy
+  --gateway-target <target> Gateway make target. Default: $GATEWAY_DEPLOY_TARGET or deploy-llm-proxy-backend
   --image <value>       Image repository. Default: $DOCKER_IMAGE or ghcr.io/tyemirov/llm-proxy
   --tag <value>         Release tag. Default: v* tag pointing at HEAD
   --skip-ci             Skip the local make ci deployment gate
@@ -49,15 +49,16 @@ env_or_default() {
 }
 
 GATEWAY_DIR="$(env_or_default GATEWAY_DIR "")"
-GATEWAY_TARGET="$(env_or_default GATEWAY_DEPLOY_TARGET deploy-llm-proxy)"
+GATEWAY_TARGET="$(env_or_default GATEWAY_DEPLOY_TARGET deploy-llm-proxy-backend)"
 IMAGE_REPOSITORY="$(env_or_default DOCKER_IMAGE ghcr.io/tyemirov/llm-proxy)"
 TAG="$(env_or_default DEPLOY_TAG "")"
 SKIP_CI="false"
 SKIP_IMAGE_VERIFY="false"
 SKIP_GATEWAY="false"
-DEPLOY_BRANCH="${DEPLOY_BRANCH:-master}"
-DEPLOY_REMOTE="${DEPLOY_REMOTE:-origin}"
-CI_TIMEOUT_SECONDS="${DEPLOY_CI_TIMEOUT_SECONDS:-${LLM_PROXY_CI_TIMEOUT_SECONDS:-350}}"
+DEPLOY_BRANCH="$(env_or_default DEPLOY_BRANCH master)"
+DEPLOY_REMOTE="$(env_or_default DEPLOY_REMOTE origin)"
+LLM_PROXY_CI_TIMEOUT_SECONDS_EFFECTIVE="$(env_or_default LLM_PROXY_CI_TIMEOUT_SECONDS 350)"
+CI_TIMEOUT_SECONDS="$(env_or_default DEPLOY_CI_TIMEOUT_SECONDS "${LLM_PROXY_CI_TIMEOUT_SECONDS_EFFECTIVE}")"
 
 resolve_release_tag() {
   if [[ -n "${TAG}" ]]; then

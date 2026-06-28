@@ -16,8 +16,10 @@ on:
       - 'go.sum'
       - 'Makefile'
       - 'scripts/**'
+      - 'site/**'
       - '.github/workflows/test.yml'
       - '.github/workflows/release.yml'
+      - '.github/workflows/pages.yml'
       - 'Dockerfile'
 
 env:

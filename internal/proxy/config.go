@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
+	"gorm.io/gorm"
 )
 
 const (
@@ -23,16 +24,23 @@ const (
 	DefaultDictationProvider = ProviderNameOpenAI
 
 	// DefaultRequestTimeoutSeconds is the overall app-side request timeout.
-	DefaultRequestTimeoutSeconds = 240
+	DefaultRequestTimeoutSeconds = 360
 	// DefaultMaxPromptBytes limits JSON LLM request bodies accepted by POST /.
-	DefaultMaxPromptBytes     = 4 * 1024 * 1024
-	DefaultDictationModel     = "gpt-4o-mini-transcribe"
-	DefaultMaxInputAudioBytes = 25 * 1024 * 1024
+	DefaultMaxPromptBytes      = 4 * 1024 * 1024
+	DefaultDictationModel      = "gpt-4o-mini-transcribe"
+	DefaultMaxInputAudioBytes  = 25 * 1024 * 1024
+	DefaultManagementJWTIssuer = "tauth"
+	// ManagementDatabaseDialectPostgres selects the GORM Postgres dialector.
+	ManagementDatabaseDialectPostgres = "postgres"
+	// ManagementDatabaseDialectSQLite selects the GORM SQLite dialector.
+	ManagementDatabaseDialectSQLite = "sqlite"
+	tenantValidationErrorFormat     = "%w: tenant=%s"
 )
 
 // Configuration holds runtime settings.
 type Configuration struct {
 	Tenants                      []TenantConfiguration
+	Management                   ManagementConfiguration
 	OpenAIKey                    string
 	DeepSeekKey                  string
 	DashScopeKey                 string
@@ -68,6 +76,28 @@ type Configuration struct {
 	validated                    bool
 }
 
+// ManagementConfiguration holds authenticated browser UI and self-service tenant settings.
+type ManagementConfiguration struct {
+	Enabled             bool
+	PublicOrigin        string
+	UIDescription       string
+	UIOrigins           []string
+	TAuthURL            string
+	TAuthTenantID       string
+	GoogleClientID      string
+	LoginPath           string
+	LogoutPath          string
+	NoncePath           string
+	JWTSigningKey       string
+	JWTIssuer           string
+	SessionCookieName   string
+	DatabaseDialect     string
+	DatabaseDSN         string
+	ManagementAPIOrigin string
+	ProxyOrigin         string
+	DatabaseDialector   gorm.Dialector
+}
+
 // NewConfiguration returns a normalized runtime configuration after validating startup invariants.
 func NewConfiguration(configuration Configuration) (Configuration, error) {
 	configuration.ApplyTunables()
@@ -88,9 +118,12 @@ func ensureValidatedConfiguration(configuration Configuration) (Configuration, e
 }
 
 func validateConfig(configuration Configuration) (tenantRegistry, error) {
-	tenants, tenantError := newTenantRegistry(configuration.Tenants)
+	tenants, tenantError := newTenantRegistry(configuration.Tenants, configuration.Management.Enabled)
 	if tenantError != nil {
 		return tenantRegistry{}, tenantError
+	}
+	if managementValidationError := validateManagementConfiguration(configuration.Management); managementValidationError != nil {
+		return tenantRegistry{}, managementValidationError
 	}
 	if modelCatalogError := validateProviderModelCatalogs(configuration.ProviderModels); modelCatalogError != nil {
 		return tenantRegistry{}, modelCatalogError
@@ -98,14 +131,37 @@ func validateConfig(configuration Configuration) (tenantRegistry, error) {
 	providers := newProviderRegistry(configuration)
 	validator := newModelValidator(providers)
 	for _, currentTenant := range tenants.tenants {
-		if _, _, verificationError := validator.ResolveText(constants.EmptyString, constants.EmptyString, currentTenant.defaults.provider, currentTenant.defaults.model, false); verificationError != nil {
-			return tenantRegistry{}, fmt.Errorf("%w: tenant=%s", verificationError, currentTenant.identifier.string())
+		if configuration.Management.Enabled {
+			if validationError := validateTenantDefaultCatalogs(validator, currentTenant); validationError != nil {
+				return tenantRegistry{}, validationError
+			}
+			continue
 		}
-		if _, _, verificationError := validator.ResolveDictation(constants.EmptyString, constants.EmptyString, currentTenant.defaults.dictationProvider, currentTenant.defaults.dictationModel); verificationError != nil {
-			return tenantRegistry{}, fmt.Errorf("%w: tenant=%s", verificationError, currentTenant.identifier.string())
+		if validationError := validateTenantDefaultRuntime(validator, currentTenant); validationError != nil {
+			return tenantRegistry{}, validationError
 		}
 	}
 	return tenants, nil
+}
+
+func validateTenantDefaultRuntime(validator *modelValidator, currentTenant tenant) error {
+	if _, _, verificationError := validator.ResolveText(constants.EmptyString, constants.EmptyString, currentTenant.defaults.provider, currentTenant.defaults.model, false); verificationError != nil {
+		return fmt.Errorf(tenantValidationErrorFormat, verificationError, currentTenant.identifier.string())
+	}
+	if _, _, verificationError := validator.ResolveDictation(constants.EmptyString, constants.EmptyString, currentTenant.defaults.dictationProvider, currentTenant.defaults.dictationModel); verificationError != nil {
+		return fmt.Errorf(tenantValidationErrorFormat, verificationError, currentTenant.identifier.string())
+	}
+	return nil
+}
+
+func validateTenantDefaultCatalogs(validator *modelValidator, currentTenant tenant) error {
+	if validationError := validator.validateTextDefault(currentTenant.defaults.provider, currentTenant.defaults.model); validationError != nil {
+		return fmt.Errorf(tenantValidationErrorFormat, validationError, currentTenant.identifier.string())
+	}
+	if validationError := validator.validateDictationDefault(currentTenant.defaults.dictationProvider, currentTenant.defaults.dictationModel); validationError != nil {
+		return fmt.Errorf(tenantValidationErrorFormat, validationError, currentTenant.identifier.string())
+	}
+	return nil
 }
 
 // ErrUpstreamIncomplete indicates that the upstream provider returned an incomplete response before the request deadline.
@@ -115,6 +171,7 @@ var errQueueFull = errors.New(errorQueueFull)
 
 // ApplyTunables ensures tunable configuration values have sensible defaults.
 func (configuration *Configuration) ApplyTunables() {
+	configuration.Management.ApplyTunables()
 	configuration.OpenAIKey = strings.TrimSpace(configuration.OpenAIKey)
 	configuration.DeepSeekKey = strings.TrimSpace(configuration.DeepSeekKey)
 	configuration.DashScopeKey = strings.TrimSpace(configuration.DashScopeKey)
@@ -191,4 +248,81 @@ func (configuration *Configuration) ApplyTunables() {
 	if strings.TrimSpace(configuration.GrokTranscriptionsURL) == constants.EmptyString {
 		configuration.GrokTranscriptionsURL = defaultGrokTranscriptionsURL
 	}
+}
+
+// ApplyTunables normalizes optional management settings.
+func (configuration *ManagementConfiguration) ApplyTunables() {
+	configuration.PublicOrigin = strings.TrimSpace(configuration.PublicOrigin)
+	configuration.UIDescription = strings.TrimSpace(configuration.UIDescription)
+	for originIndex, originValue := range configuration.UIOrigins {
+		configuration.UIOrigins[originIndex] = strings.TrimSpace(originValue)
+	}
+	configuration.TAuthURL = strings.TrimSpace(configuration.TAuthURL)
+	configuration.TAuthTenantID = strings.TrimSpace(configuration.TAuthTenantID)
+	configuration.GoogleClientID = strings.TrimSpace(configuration.GoogleClientID)
+	configuration.LoginPath = strings.TrimSpace(configuration.LoginPath)
+	configuration.LogoutPath = strings.TrimSpace(configuration.LogoutPath)
+	configuration.NoncePath = strings.TrimSpace(configuration.NoncePath)
+	configuration.JWTSigningKey = strings.TrimSpace(configuration.JWTSigningKey)
+	configuration.JWTIssuer = strings.TrimSpace(configuration.JWTIssuer)
+	if configuration.JWTIssuer == constants.EmptyString {
+		configuration.JWTIssuer = DefaultManagementJWTIssuer
+	}
+	configuration.SessionCookieName = strings.TrimSpace(configuration.SessionCookieName)
+	configuration.DatabaseDialect = strings.ToLower(strings.TrimSpace(configuration.DatabaseDialect))
+	configuration.DatabaseDSN = strings.TrimSpace(configuration.DatabaseDSN)
+	configuration.ManagementAPIOrigin = strings.TrimSpace(configuration.ManagementAPIOrigin)
+	configuration.ProxyOrigin = strings.TrimSpace(configuration.ProxyOrigin)
+}
+
+func validateManagementConfiguration(configuration ManagementConfiguration) error {
+	if !configuration.Enabled {
+		return nil
+	}
+	requiredFields := []struct {
+		fieldName  string
+		fieldValue string
+	}{
+		{fieldName: "management.public_origin", fieldValue: configuration.PublicOrigin},
+		{fieldName: "management.ui_description", fieldValue: configuration.UIDescription},
+		{fieldName: "management.tauth_url", fieldValue: configuration.TAuthURL},
+		{fieldName: "management.tauth_tenant_id", fieldValue: configuration.TAuthTenantID},
+		{fieldName: "management.google_client_id", fieldValue: configuration.GoogleClientID},
+		{fieldName: "management.login_path", fieldValue: configuration.LoginPath},
+		{fieldName: "management.logout_path", fieldValue: configuration.LogoutPath},
+		{fieldName: "management.nonce_path", fieldValue: configuration.NoncePath},
+		{fieldName: "management.jwt_signing_key", fieldValue: configuration.JWTSigningKey},
+		{fieldName: "management.jwt_issuer", fieldValue: configuration.JWTIssuer},
+		{fieldName: "management.session_cookie_name", fieldValue: configuration.SessionCookieName},
+		{fieldName: "management.database_dialect", fieldValue: configuration.DatabaseDialect},
+		{fieldName: "management.database_dsn", fieldValue: configuration.DatabaseDSN},
+		{fieldName: "management.management_api_origin", fieldValue: configuration.ManagementAPIOrigin},
+		{fieldName: "management.proxy_origin", fieldValue: configuration.ProxyOrigin},
+	}
+	for _, requiredField := range requiredFields {
+		if strings.TrimSpace(requiredField.fieldValue) == constants.EmptyString {
+			return fmt.Errorf("%w: field=%s", ErrInvalidManagementConfiguration, requiredField.fieldName)
+		}
+	}
+	if len(configuration.UIOrigins) == 0 {
+		return fmt.Errorf("%w: field=management.ui_origins", ErrInvalidManagementConfiguration)
+	}
+	for _, originValue := range configuration.UIOrigins {
+		if strings.TrimSpace(originValue) == constants.EmptyString {
+			return fmt.Errorf("%w: field=management.ui_origins", ErrInvalidManagementConfiguration)
+		}
+	}
+	if !supportedManagementDatabaseDialect(configuration.DatabaseDialect) {
+		return fmt.Errorf("%w: field=management.database_dialect value=%s", ErrInvalidManagementConfiguration, configuration.DatabaseDialect)
+	}
+	return nil
+}
+
+func supportedManagementDatabaseDialect(databaseDialect string) bool {
+	supportedDialects := map[string]struct{}{
+		ManagementDatabaseDialectPostgres: {},
+		ManagementDatabaseDialectSQLite:   {},
+	}
+	_, supportedDialect := supportedDialects[databaseDialect]
+	return supportedDialect
 }
