@@ -51,6 +51,7 @@
 
 /**
  * @typedef {{
+ *   configUrl: string,
  *   managementApiOrigin: string,
  *   proxyOrigin: string
  * }} FrontendRuntimeConfig

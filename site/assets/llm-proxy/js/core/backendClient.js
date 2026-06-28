@@ -1,7 +1,8 @@
 // @ts-check
 
+import { MPR_UI } from "../constants.js";
+
 const MANAGEMENT_BASE_PATH = "/api/management";
-const FRONTEND_CONFIG_PATH = "/llm-proxy-config.json";
 const HEADER_CONTENT_TYPE = "Content-Type";
 const MIME_JSON = "application/json";
 const EMPTY_STRING = "";
@@ -78,14 +79,15 @@ export function revokeSecret() {
  */
 export function loadFrontendRuntimeConfig() {
   if (!frontendRuntimeConfigPromise) {
-    frontendRuntimeConfigPromise = fetch(FRONTEND_CONFIG_PATH, { credentials: "same-origin" })
+    const configUrl = frontendConfigURL();
+    frontendRuntimeConfigPromise = fetch(configUrl, { credentials: "include" })
       .then(async (response) => {
         if (!response.ok) {
           throw new BackendClientError(await response.text(), response.status);
         }
-        return response.json();
+        return response.text();
       })
-      .then((rawConfig) => createFrontendRuntimeConfig(rawConfig));
+      .then((configText) => createFrontendRuntimeConfig(parseFrontendConfig(configText), configUrl));
   }
   return frontendRuntimeConfigPromise;
 }
@@ -115,17 +117,46 @@ async function requestJSON(path, options) {
 
 /**
  * @param {unknown} rawConfig
+ * @param {string} configUrl
  * @returns {import("../types.d.js").FrontendRuntimeConfig}
  */
-function createFrontendRuntimeConfig(rawConfig) {
+function createFrontendRuntimeConfig(rawConfig, configUrl) {
   if (!rawConfig || typeof rawConfig !== "object") {
     throw new Error("frontend_config_invalid");
   }
-  const configRecord = /** @type {{ managementApiOrigin?: unknown, proxyOrigin?: unknown }} */ (rawConfig);
+  const configRecord = /** @type {{ llmProxy?: { managementApiOrigin?: unknown, proxyOrigin?: unknown } }} */ (rawConfig);
+  if (!configRecord.llmProxy || typeof configRecord.llmProxy !== "object") {
+    throw new Error("frontend_config_invalid: llmProxy");
+  }
   return {
-    managementApiOrigin: normalizedOrigin(configRecord.managementApiOrigin, "managementApiOrigin"),
-    proxyOrigin: normalizedOrigin(configRecord.proxyOrigin, "proxyOrigin"),
+    configUrl,
+    managementApiOrigin: normalizedOrigin(configRecord.llmProxy.managementApiOrigin, "llmProxy.managementApiOrigin"),
+    proxyOrigin: normalizedOrigin(configRecord.llmProxy.proxyOrigin, "llmProxy.proxyOrigin"),
   };
+}
+
+/**
+ * @returns {string}
+ */
+function frontendConfigURL() {
+  const header = document.getElementById(MPR_UI.HEADER_ID);
+  const configUrl = String(header ? header.getAttribute(MPR_UI.CONFIG_URL_ATTRIBUTE) : EMPTY_STRING).trim();
+  if (!configUrl || configUrl === MPR_UI.CONFIG_URL_PLACEHOLDER) {
+    throw new Error("frontend_config_url_missing");
+  }
+  return new URL(configUrl, window.location.href).toString();
+}
+
+/**
+ * @param {string} configText
+ * @returns {unknown}
+ */
+function parseFrontendConfig(configText) {
+  const runtimeGlobal = /** @type {typeof globalThis & { jsyaml?: { load?: (source: string) => unknown } }} */ (globalThis);
+  if (!runtimeGlobal.jsyaml || typeof runtimeGlobal.jsyaml.load !== "function") {
+    throw new Error(MPR_UI.YAML_LOADER_MISSING);
+  }
+  return runtimeGlobal.jsyaml.load(configText);
 }
 
 /**
