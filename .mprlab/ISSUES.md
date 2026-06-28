@@ -34,6 +34,37 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Blocked
   Blocked: Requires publishing an image built from the current management-aware source and redeploying the backend through the gateway-owned `deploy-llm-proxy-backend` path. Agent runs must stop before production deployment unless the execution chain or operator performs the publish/deploy step.
 
+- [x] [B007] (P2) Validate management migration seed tenant defaults at startup.
+  ### Summary
+  Management mode allows an empty static `tenants` list because runtime authentication is DB-authoritative, but configured legacy tenants are still first-run migration seed data. Startup skipped tenant default provider/model validation whenever management mode was enabled, so a typoed seed default could be persisted and fail later at request time.
+  ### Acceptance Criteria
+  1. Management mode still accepts an empty static `tenants` list.
+  2. Management mode validates any configured legacy tenant default text provider/model against the current provider catalog before migration.
+  3. Management mode validates any configured legacy tenant default dictation provider/model against endpoint support and the current provider catalog before migration.
+  4. Static provider credentials remain optional for management-mode seed validation because provider keys are DB-owned after migration.
+  ### Resolution
+  Split provider catalog resolution from request credential resolution. Static non-management startup still validates tenant defaults through the credential-aware request path, while management-mode seed tenants use catalog-only default validation before the migration runs. Added management startup coverage proving valid seed defaults do not require static provider credentials and invalid text/dictation default providers or models fail startup. Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run 'TestManagement(AcceptsLegacyTenantDefaultsWithoutStaticCredentials|RejectsInvalidLegacyTenantDefaults|MigratesLegacyConfigOnceThenUsesDatabase)'`, `timeout -k 350s -s SIGKILL 350s make go-test` (total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make ci`.
+
+- [x] [B008] (P2) Require expiration on management session JWTs.
+  ### Summary
+  Management session validation accepted a signed TAuth session JWT with the correct tenant and user claims when the token omitted `exp`. Because the JWT library validates expiration only when the claim exists, this could leave `/api/management/*` usable with a non-expiring signed cookie.
+  ### Acceptance Criteria
+  1. Management session validation rejects signed JWTs that omit `exp`.
+  2. Existing valid TAuth session cookies with `exp` still authenticate management API requests.
+  3. The regression is covered through the public management API route.
+  ### Resolution
+  `managementSessionValidator.validateToken` now rejects tokens whose registered claims do not include `ExpiresAt` before constructing a management principal. Added management API coverage for a signed session cookie with valid issuer, tenant, and user claims but no `exp`; `/api/management/profile` returns `401`. Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run TestManagementRejectsInvalidSessionsAndRequests`, `timeout -k 350s -s SIGKILL 350s make go-test` (total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make ci`.
+
+- [x] [B009] (P2) Remove unsupported no-dictation default option from management UI.
+  ### Summary
+  The management UI exposed a blank "No dictation default" option, but the backend has no persisted no-dictation state and normalizes empty dictation defaults back to the canonical OpenAI default. Selecting the blank option could make a text-only defaults save appear to work before the profile reloaded with OpenAI selected again.
+  ### Acceptance Criteria
+  1. The dictation-provider dropdown offers only concrete dictation-capable providers.
+  2. The UI no longer sends empty dictation-provider defaults through a "none" selection.
+  3. Removed UI copy is not left as a stale constant.
+  ### Resolution
+  Removed the blank dictation-provider `<option>` from `site/index.html` and deleted the unused `noDictationDefault` copy key. The dictation-provider select now lists only real dictation-capable providers from the backend profile. Validation passed with `timeout -k 30s -s SIGKILL 30s node --check` for the static JS modules and `timeout -k 350s -s SIGKILL 350s make ci`.
+
 - [x] [B001] (P1) Gemini POST responses can return thought or partial text as successful output.
   ### Summary
   A production-comparable Russian semantic-stress QA run sent the full prompt through `POST /?provider=gemini` with `model=gemini-3.5-flash`, but the client received a non-JSON response and failed before materialization. The same prompt contract succeeds only when the proxy returns the model's answer text as parseable JSON or returns a structured proxy/provider error.
