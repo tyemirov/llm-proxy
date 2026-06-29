@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.21] - 2026-06-29
+
+### Changes
+- Merge pull request #179 from tyemirov/gix/align-management-header-avatar-to-right-edge-in-llm
+- style: align header actions to the right in llm-proxy UI
+- docs: document header avatar alignment to right edge in static site CSS
+
 ## [v0.2.20] - 2026-06-29
 
 ### Changes
