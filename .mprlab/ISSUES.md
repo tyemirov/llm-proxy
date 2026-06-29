@@ -80,6 +80,17 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Blocked
   Blocked: The public frontend still returns GitHub Pages 404 until this workflow fix is committed to `master` and the GitHub Pages workflow completes successfully.
 
+- [x] [B011] (P2) Fix F007 review issues in usage loading and usage queries.
+  ### Summary
+  F007 review found two dashboard/settings defects: authenticated profile loading could remain stuck on the loading panel when `/api/management/usage` failed, and the 30-day usage summary store query loaded every historical user usage event before filtering in memory.
+  ### Acceptance Criteria
+  1. A successful profile load transitions the UI into the authenticated workspace even when usage summary loading fails.
+  2. The usage dashboard shows an error notice and empty usage state when usage loading fails, while Settings remains reachable from the avatar menu.
+  3. The usage store query accepts the dashboard period start and only reads rows in the returned window.
+  4. The usage event table has an index suitable for user/time usage summary reads.
+  ### Resolution
+  Decoupled frontend profile loading from usage loading, so profile success unlocks the authenticated dashboard and usage failures reset usage to an empty summary with a visible error notice. Added Playwright coverage for profile success plus usage failure still opening Settings. Changed the managed usage database interface to `usageEventsByUserIDSince`, passed the computed 30-day period start from `usageSummary`, filtered fake and GORM store reads at the database boundary, and added a composite GORM index on usage `user_id` plus `created_at`. Validation passed for this review-fix scope with `timeout -k 120s -s SIGKILL 120s go test -count=1 ./internal/proxy -run 'TestManagedTenantStoreUsageEdges|TestManagedUsageSummaryBucketsAndOrdering|TestManagementUsageSummaryRecordsManagedProxyRequests'`, `timeout -k 120s -s SIGKILL 120s make frontend-lint`, and `timeout -k 180s -s SIGKILL 180s make frontend-test` (3 Playwright tests passed). An initial full `timeout -k 350s -s SIGKILL 350s make ci` passed before unrelated admin/session edits appeared; a later current-worktree `make ci` stopped at check-format because unrelated `internal/proxy/management_session.go` needs gofmt.
+
 - [x] [B001] (P1) Gemini POST responses can return thought or partial text as successful output.
   ### Summary
   A production-comparable Russian semantic-stress QA run sent the full prompt through `POST /?provider=gemini` with `model=gemini-3.5-flash`, but the client received a non-JSON response and failed before materialization. The same prompt contract succeeds only when the proxy returns the model's answer text as parseable JSON or returns a structured proxy/provider error.
@@ -454,6 +465,50 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Resolution:
   Added a scoped `#llm-proxy-header .mpr-header__actions` CSS override so the shared MPR header actions region uses `margin-left: auto`. Browser preview validation rendered the real static Pages app and CDN MPR UI bundle with local mock config/profile responses: desktop geometry placed the brand at x=100 and avatar at x=1146..1180, while mobile 390px geometry placed the brand at x=24..111 and avatar at x=332..366 with no overlap. Validation passed with `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/app.js`, `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/core/mprShell.js`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
 
+- [x] [I015] (P2) Add LLM Proxy icon and favicon assets.
+  Goal:
+  Give the static management site a recognizable LLM Proxy product icon and browser favicon instead of the current empty favicon placeholder.
+
+  Requirements:
+  - Keep the assets local to the static Pages site.
+  - Use the existing dark MPR UI palette and a proxy-routing mark that remains legible at favicon size.
+  - Avoid introducing generated binary assets or external image dependencies.
+
+  Deliverables:
+  - Add SVG app-icon and favicon assets under `site/assets/llm-proxy/img/`.
+  - Point `site/index.html` at the favicon and app icon.
+  - Add focused static-site coverage for the icon links and SVG assets.
+
+  Validation:
+  - Run focused frontend syntax/tests for the touched static-site path.
+
+  Resolution:
+  Added local SVG app-icon and favicon assets under `site/assets/llm-proxy/img/` using the existing MPR Lab LLM Proxy project-card mark from `../marcopolo.github.io/assets/projects/llm-proxy/icon.svg`: dark teal/green gradient, gold routing paths, cyan endpoints, and a central proxy node. Replaced the empty favicon placeholder in `site/index.html` with real SVG favicon/app-icon links and the MPR favicon theme color. Added focused Playwright/static-site coverage that verifies the links, SVG content type, and MPR gold/cyan palette. Validation passed with `timeout -k 120s -s SIGKILL 120s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s npx playwright test tests/e2e/management-ui.spec.js -g "site exposes product icon"`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
+
+- [x] [I016] (P2) Encrypt managed provider API keys at rest.
+  Goal:
+  Store tenant-owned upstream provider API keys encrypted at rest while preserving the existing management UI and generated-secret proxy routing behavior.
+
+  Requirements:
+  - Add one canonical management config field for the provider-key encryption key.
+  - Require a valid base64-encoded 32-byte encryption key whenever management mode is enabled.
+  - Encrypt every newly saved managed provider API key before database persistence.
+  - Migrate existing plaintext provider-key rows into encrypted records and clear plaintext values.
+  - Keep generated tenant secrets digest-only and provider keys masked in management/admin API responses.
+  - Document this as an encrypted-at-rest guarantee, not as user-only decryption or zero-knowledge.
+
+  Deliverables:
+  - Extend config parsing, packaged config, Pages render environment, and docs.
+  - Add AES-GCM provider-key storage with row-bound associated data.
+  - Add focused Go coverage for config validation, encrypted persistence, plaintext migration, and runtime decrypt routing.
+
+  Validation:
+  - Run focused management store/API and CLI config tests.
+  - Run broader Go validation before marking resolved.
+
+  Resolution:
+  Added required `management.provider_key_encryption_key` configuration with base64 32-byte validation, AES-GCM encrypted provider-key persistence, row-bound associated data, and startup migration that encrypts and clears legacy plaintext `api_key` rows. Updated config templates, Pages render env, README, and provider-routing docs to state the exact encrypted-at-rest guarantee and explicitly distinguish it from zero-knowledge/user-only decryption. Added focused Go coverage for config parsing, validation, encrypted storage, plaintext migration, decrypt failures, and generated-secret proxy routing. Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run 'TestManagedTenant(StoreInternalEdges|StoreStaticConfigMigrationEdges|GORMDatabaseEncryptsProviderKeysAtRest)|TestManagementConfigurationValidationRequiresBackendAuthFields|TestManagementGeneratedSecretRoutesWithTenantProviderKey|TestManagementGeneratedSecretSupportsDictationAndRejectsMultipartProviderKeys'`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./cmd/cli -run 'TestRootCommand(RunsConfiguredProxyFromConfigFile|LoadsPackagedConfigWithManagementEnvironment|RendersSiteFromConfigFile|RejectsUnsupportedManagementDatabaseDialect)'`, `timeout -k 350s -s SIGKILL 350s make go-test`, `timeout -k 30s -s SIGKILL 30s make check-format`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
+
 
 ## Maintenance
 
@@ -816,6 +871,35 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
   ### Resolution
   Retuned the management UI stylesheet toward the compact `../ISSUES.md` operator style: 960px centered shell, 15px base type, charcoal MPR token palette, flatter panels, 6px borders, tighter grid gaps, shorter usage metric cards, lower chart height, smaller headings, denser forms/buttons, compact provider cards, and a tighter Settings modal. Preserved the F007 dashboard/modal behavior and information architecture. Validation passed with `make frontend-lint`, `make frontend-test` (2 Playwright tests passed), and `git diff --check`.
+
+- [x] [F009] (P1) Add administrator visibility for all managed users.
+  Goal:
+  Give configured administrators a management dashboard view across all managed users without exposing raw provider API keys or generated tenant secrets.
+
+  Requirements:
+  - Add administrators as normalized email addresses in `management.admin_emails`, populated from environment placeholders in public config.
+  - Treat admin status as a management-session property derived from the authenticated TAuth email and validated config.
+  - Show an Admin menu option only to administrators.
+  - Admins can list managed users and see tenant facts plus 30-day usage summaries for each user.
+  - Admin responses must not include provider API keys, masked provider key values, generated tenant secrets, secret digests, prompts, responses, audio names, or transcripts.
+  - Non-admin authenticated users must receive `403` from admin-only APIs.
+
+  Deliverables:
+  - Extend management config parsing, validation, and docs for `management.admin_emails`.
+  - Add an admin-only management API under `/api/management/admin/users`.
+  - Add backend black-box coverage for admin access, non-admin rejection, and no key leakage.
+  - Add a compact admin browser view reachable from the avatar menu only for admins.
+  - Add browser-visible coverage for the Admin menu item and all-users dashboard.
+
+  Validation:
+  - Run focused Go management tests.
+  - Run frontend syntax checks for edited browser modules.
+  - Run the browser test path covering the admin menu/dashboard.
+
+  ### Resolution
+  Added `management.admin_emails` as the config-owned administrator list, validates configured email values at startup, derives `user.is_admin` from the validated TAuth session email, and keeps public config on environment placeholders for admin addresses. Added admin-only `GET /api/management/admin/users`, returning all managed users with tenant facts and 30-day usage summaries while excluding provider API keys, masked key strings, generated secrets, secret digests, prompts, responses, audio names, and transcripts. Non-admin authenticated sessions receive `403`. The static Pages UI now inserts an `Admin` avatar-menu item only for admin profiles and renders a compact all-users dashboard. README and provider-routing docs describe the admin contract.
+
+  Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run 'TestManagement(AdminUsersDashboard|UsageSummaryRecordsManagedProxyRequests|ConfigurationValidationRequiresBackendAuthFields)'`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./cmd/cli -run 'TestRootCommand|TestRender'`, `timeout -k 240s -s SIGKILL 240s go test -count=1 ./internal/proxy`, `timeout -k 30s -s SIGKILL 30s npm run frontend:lint`, `timeout -k 180s -s SIGKILL 180s npm run frontend:test -- management-ui.spec.js`, and `git diff --check`.
 
 
 ## Planning
