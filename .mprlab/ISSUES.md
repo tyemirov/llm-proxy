@@ -770,6 +770,53 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
   Review follow-up hardened management mutations and defaults validation: authenticated unsafe `/api/management/*` requests now reject non-public `Origin` values and non-JSON content types, the static client sends JSON content type for secret generate/revoke mutations, and defaults updates validate normalized dictation defaults instead of accepting blank API fields that silently normalize to OpenAI. Added black-box HTTP coverage for blocked wrong-origin/simple mutation requests and DeepSeek-only blank dictation defaults. Validation passed with `go test -count=1 ./internal/proxy -run 'TestManagement(StaticPagesAndUnauthenticatedAPI|RejectsInvalidSessionsAndRequests|DatabasePersistenceAndOpenFailures|GeneratedSecretRoutesWithTenantProviderKey)'`, `go test -count=1 ./cmd/cli ./internal/proxy`, static JS `node --check`, `make go-test`, `make ci`, and `git diff --check`.
 
+- [x] [F007] (P1) Move management settings into an avatar-menu modal and make the dashboard usage-focused.
+  Goal:
+  Keep the authenticated management experience self-service, but make the first screen a usage dashboard with graphs while moving the current key, provider, default-routing, and request-example controls into a large Settings modal opened from the authenticated avatar dropdown before Sign Out.
+
+  Requirements:
+  - Keep the split-origin Pages frontend plus backend-only `/api/management/*` contract.
+  - Keep using the shared `<mpr-header>` and `<mpr-user>` components; add Settings through the `mpr-user` menu item contract rather than forking `mpr-ui`.
+  - The Settings modal contains the current dashboard controls: generated tenant secret actions, tenant facts, one-time secret display/copy, routing defaults, usage examples, and provider API key management.
+  - The main dashboard shows tenant usage summaries and graphs for managed-tenant requests, including text/dictation request counts, status counts, token totals when available, provider/model breakdown, and recent daily buckets.
+  - Usage persistence must be tenant-isolated and must not store prompts, model responses, uploaded audio names, provider API keys, generated secrets, or raw TAuth identity payloads.
+  - Persist usage through the existing GORM management store only; do not add raw SQL or a second persistence path.
+  - Preserve existing proxy response behavior, token usage headers, management auth, CORS, and generated-secret routing.
+
+  Deliverables:
+  - Add a managed usage event store, recorder, authenticated usage-summary API, and black-box HTTP coverage.
+  - Refactor the static management UI into dashboard, modal settings, and usage chart pieces while keeping user-facing strings in `site/assets/llm-proxy/js/constants.js`.
+  - Add Settings as an avatar dropdown item before Sign Out and wire it to open the modal.
+  - Add browser-visible coverage for dashboard charts and the avatar-menu Settings modal.
+  - Update README/docs for the new dashboard/settings/usage contract.
+
+  Validation:
+  - Run focused Go management tests for usage recording, aggregation, and cross-user isolation.
+  - Run static JS syntax checks for edited browser modules.
+  - Run the browser test path covering Settings menu/modal behavior and dashboard graph rendering.
+  - Run `timeout -k 350s -s SIGKILL 350s make ci` before marking the issue resolved.
+
+  ### Resolution
+  Added managed usage-event persistence through the existing GORM management store and exposed authenticated `GET /api/management/usage` summaries with 30-day totals, daily buckets, provider/model/status breakdowns, latency, and normalized token counts. Managed proxy text and dictation requests now record usage metadata for generated-secret tenants without storing prompts, responses, audio names, provider keys, generated secrets, or raw TAuth payloads; persistence failures are logged without changing proxy responses. Refactored the static management UI so the authenticated first screen is a usage dashboard with metric cards, SVG request/token graphs, and provider/model breakdowns. Moved tenant access, generated-secret controls, routing defaults, request examples, and provider key management into a large Settings modal opened by a `Settings` item inserted into the shared `<mpr-user>` avatar dropdown before `Sign out`. Added frontend usage presentation helpers, backend/management usage tests, internal usage edge coverage, a pinned Playwright browser harness, frontend syntax checking, CI Node/Playwright setup, and docs for the new usage/settings contract. Validation passed with `go test -count=1 ./internal/proxy -run 'TestManagement(UsageSummaryRecordsManagedProxyRequests|GeneratedSecretRoutesWithTenantProviderKey|GeneratedSecretSupportsDictationAndRejectsMultipartProviderKeys)'`, `make go-test` (Go total coverage 100.0%), `make frontend-lint`, `make frontend-test` (2 Playwright tests passed), `npm install` with 0 audit vulnerabilities after dependency pin updates, and `make ci` (Go/Python/frontend lint clean, Go total coverage 100.0%, Python 20 passed, Playwright 2 passed).
+
+- [x] [F008] (P2) Make the management dashboard and Settings modal more compact.
+  Goal:
+  Tighten the F007 dashboard/modal visual treatment to match the compact operator-facing style in sibling `../ISSUES.md`.
+
+  Requirements:
+  - Preserve the dashboard/settings information architecture and behavior.
+  - Keep the MPR dark, compact, workbench-like style: narrower shell, smaller type, tighter spacing, thin borders, restrained shadows, and compact controls.
+  - Use the sibling ISSUES.md app as inspiration without copying its issue-tracker layout or semantics.
+  - Keep desktop and mobile layouts readable without overlapping text or controls.
+
+  Validation:
+  - Run frontend syntax checks.
+  - Run the browser test path covering dashboard rendering and Settings modal behavior.
+  - Run whitespace checks.
+
+  ### Resolution
+  Retuned the management UI stylesheet toward the compact `../ISSUES.md` operator style: 960px centered shell, 15px base type, charcoal MPR token palette, flatter panels, 6px borders, tighter grid gaps, shorter usage metric cards, lower chart height, smaller headings, denser forms/buttons, compact provider cards, and a tighter Settings modal. Preserved the F007 dashboard/modal behavior and information architecture. Validation passed with `make frontend-lint`, `make frontend-test` (2 Playwright tests passed), and `git diff --check`.
+
 
 ## Planning
 *do not implement yet*
