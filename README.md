@@ -78,6 +78,8 @@ management:
     - "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
     - "${LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN}"
     - "${LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN}"
+  admin_emails:
+    - "${LLM_PROXY_MANAGEMENT_ADMIN_EMAIL}"
   tauth_url: "${LLM_PROXY_MANAGEMENT_TAUTH_URL}"
   tauth_tenant_id: "${LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID}"
   google_client_id: "${LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID}"
@@ -89,6 +91,7 @@ management:
   session_cookie_name: "${LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME}"
   database_dialect: "${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT}"
   database_dsn: "${LLM_PROXY_MANAGEMENT_DATABASE_DSN}"
+  provider_key_encryption_key: "${LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY}"
   management_api_origin: "${LLM_PROXY_MANAGEMENT_API_ORIGIN}"
   proxy_origin: "${LLM_PROXY_MANAGEMENT_PROXY_ORIGIN}"
 tenants:
@@ -405,6 +408,7 @@ Required hosted values are profile-specific:
 | `management.public_origin` | Static frontend origin allowed for credentialed management CORS, for example `https://llm-proxy.mprlab.com`. |
 | `management.ui_description` | Browser-facing MPR UI environment description. |
 | `management.ui_origins` | Browser-facing MPR UI allowed origins served from `/config-ui.yaml`. |
+| `management.admin_emails` | Exact administrator email addresses. In public config, populate this with environment placeholders such as `${LLM_PROXY_MANAGEMENT_ADMIN_EMAIL}` so personal admin addresses stay out of the repository. |
 | `management.tauth_url` | Browser-facing TAuth API origin served from `/config-ui.yaml`. |
 | `management.tauth_tenant_id` | TAuth tenant id that issues accepted sessions. |
 | `management.google_client_id` | Browser-facing Google OAuth web client id for the `llm-proxy` TAuth tenant. |
@@ -416,6 +420,7 @@ Required hosted values are profile-specific:
 | `management.session_cookie_name` | Exact app/environment TAuth session cookie name. |
 | `management.database_dialect` | Required GORM SQL dialect for management persistence. Supported values are `postgres` and `sqlite`; SQLite uses the pure-Go GORM driver so `CGO_ENABLED=0` builds remain valid. |
 | `management.database_dsn` | Required DSN passed to the selected GORM dialect for tenant-owned provider keys, defaults, generated-secret digests, and usage events. |
+| `management.provider_key_encryption_key` | Required base64-encoded 32-byte key used for AES-GCM encryption of tenant-owned provider API keys at rest. Generate with `openssl rand -base64 32` and store it with backend deployment secrets. |
 | `management.management_api_origin` | Browser-facing management API origin served from `/config-ui.yaml` under `llmProxy.managementApiOrigin`. |
 | `management.proxy_origin` | Browser-facing public proxy origin served from `/config-ui.yaml` under `llmProxy.proxyOrigin` for generated examples. |
 
@@ -432,10 +437,15 @@ never mutated for user signup, provider enablement, or usage tracking, and
 database access must stay on GORM model APIs without raw SQL. Generated secrets
 continue to authenticate the public proxy endpoints with the same
 `key=<tenant secret>` query parameter. Provider API keys are accepted only
-through authenticated management endpoints; after save, the UI/API returns only
-masked key status. Generated tenant secrets are returned once and the database
-retains only their SHA-256 digest. Revoking a generated secret immediately makes
-future public proxy requests with that secret return `403`.
+through authenticated management endpoints, are encrypted at rest with AES-GCM
+before database persistence, and after save the UI/API returns only masked key
+status. Existing plaintext provider-key rows are encrypted and cleared during
+management startup. The backend decrypts provider keys only inside the runtime
+path that routes requests to upstream providers, so this protects database
+dumps, backups, and direct storage access; it is not a user-only decryption or
+zero-knowledge guarantee. Generated tenant secrets are returned once and the
+database retains only their SHA-256 digest. Revoking a generated secret
+immediately makes future public proxy requests with that secret return `403`.
 
 The authenticated landing screen is a usage dashboard. It shows 30-day request
 and token graphs, total request and token counts, success rate, and provider and
@@ -444,6 +454,17 @@ controls now live in a large Settings modal opened from the avatar dropdown;
 the `Settings` menu item is inserted before `Sign out` through the shared
 `<mpr-user>` menu contract. The modal contains client access, generated secret,
 routing defaults, request examples, and provider key management.
+
+Administrators are configured only through `management.admin_emails`; use
+environment placeholders in public config files and define the real values in
+the runtime environment or ignored `configs/.env`. When the validated TAuth
+session email matches that list, the profile response includes
+`user.is_admin: true`, the shared avatar menu gets an `Admin` item, and
+`GET /api/management/admin/users` returns all managed users with tenant facts
+and 30-day usage summaries. Admin responses never include provider API keys,
+masked provider-key strings, generated tenant secrets, secret digests, prompts,
+audio names, transcripts, or model responses. Authenticated non-admin users get
+`403 Forbidden` from admin-only APIs.
 
 `GET /api/management/usage` returns the dashboard data for the authenticated
 user. Usage events are recorded only for managed tenants when they call the
@@ -492,7 +513,8 @@ Then configure GitHub Pages for this repository:
    repository variables.
 4. Configure real backend deployment secrets outside the Pages job:
    `SERVICE_SECRET`, `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`, and
-   `LLM_PROXY_MANAGEMENT_DATABASE_DSN`.
+   `LLM_PROXY_MANAGEMENT_DATABASE_DSN`,
+   `LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY`.
 5. The Pages workflow runs the Go CLI with `--config configs/config.yml` and
    `--render-site-output` to emit `CNAME` and a rendered `index.html` whose
    `data-config-url` points to the API-served `config-ui.yaml`. The workflow
