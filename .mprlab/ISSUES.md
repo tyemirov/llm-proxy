@@ -65,6 +65,21 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Removed the blank dictation-provider `<option>` from `site/index.html` and deleted the unused `noDictationDefault` copy key. The dictation-provider select now lists only real dictation-capable providers from the backend profile. Validation passed with `timeout -k 30s -s SIGKILL 30s node --check` for the static JS modules and `timeout -k 350s -s SIGKILL 350s make ci`.
 
+- [!] [B010] (P1) GitHub Pages frontend remains unavailable until the workflow fix reaches master.
+  ### Summary
+  `https://llm-proxy.mprlab.com/` presented GitHub's default `*.github.io` certificate and a Pages 404 because repository Pages was disabled and the Pages workflow render job depended on unset repository variables. The current split-origin contract requires `llm-proxy.mprlab.com` to be owned by GitHub Pages, not by the gateway backend.
+  ### Evidence
+  1. `dig +short llm-proxy.mprlab.com` points at `tyemirov.github.io` and GitHub Pages IPs.
+  2. `curl -I https://llm-proxy.mprlab.com/` failed with `SSL: no alternative certificate subject name matches target host name 'llm-proxy.mprlab.com'`.
+  3. `gh api repos/tyemirov/llm-proxy/pages` returned 404 before Pages was enabled.
+  4. The latest Pages workflow failed while rendering `configs/config.yml` with empty `LLM_PROXY_MANAGEMENT_*` values and no render-only OpenAI key.
+  ### Local Resolution
+  `.github/workflows/pages.yml` now owns the non-secret production frontend values directly and supplies inert render-only placeholders for backend-only secret fields and the default OpenAI tenant key. README now documents that these public frontend values are workflow-owned, not GitHub repository variables. Local static rendering succeeds with `CNAME: llm-proxy.mprlab.com` and `data-config-url="https://llm-proxy-api.mprlab.com/config-ui.yaml"`. Focused CLI renderer tests, `make go-test`, and `git diff --check` pass.
+  ### Remote State
+  GitHub Pages has been enabled for this repository with `build_type=workflow`, `cname=llm-proxy.mprlab.com`, an approved `llm-proxy.mprlab.com` certificate, and HTTPS enforcement enabled.
+  ### Blocked
+  Blocked: The public frontend still returns GitHub Pages 404 until this workflow fix is committed to `master` and the GitHub Pages workflow completes successfully.
+
 - [x] [B001] (P1) Gemini POST responses can return thought or partial text as successful output.
   ### Summary
   A production-comparable Russian semantic-stress QA run sent the full prompt through `POST /?provider=gemini` with `model=gemini-3.5-flash`, but the client received a non-JSON response and failed before materialization. The same prompt contract succeeds only when the proxy returns the model's answer text as parseable JSON or returns a structured proxy/provider error.

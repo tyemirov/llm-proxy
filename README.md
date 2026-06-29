@@ -471,33 +471,22 @@ Then configure GitHub Pages for this repository:
 
 1. Use GitHub Actions as the Pages source.
 2. Set the Pages custom domain to `llm-proxy.mprlab.com`.
-3. Configure the repository variables referenced by `configs/config.yml`:
-   `LLM_PROXY_MANAGEMENT_ENABLED`,
-   `LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN`,
-   `LLM_PROXY_MANAGEMENT_UI_DESCRIPTION`,
-   `LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN`,
-   `LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN`,
-   `LLM_PROXY_MANAGEMENT_TAUTH_URL`,
-   `LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID`,
-   `LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID`,
-   `LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH`,
-   `LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH`,
-   `LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH`,
-   `LLM_PROXY_MANAGEMENT_JWT_ISSUER`,
-   `LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME`,
-   `LLM_PROXY_MANAGEMENT_DATABASE_DIALECT`,
-   `LLM_PROXY_MANAGEMENT_API_ORIGIN`, and
-   `LLM_PROXY_MANAGEMENT_PROXY_ORIGIN`.
+3. Keep `.github/workflows/pages.yml` as the owner of non-secret production
+   frontend values: `llm-proxy.mprlab.com`, `llm-proxy-api.mprlab.com`,
+   `tauth-api.mprlab.com`, the `llm-proxy` TAuth tenant id, and the
+   browser-facing Google OAuth client id. These public values are not GitHub
+   repository variables.
 4. Configure real backend deployment secrets outside the Pages job:
    `SERVICE_SECRET`, `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`, and
    `LLM_PROXY_MANAGEMENT_DATABASE_DSN`.
 5. The Pages workflow runs the Go CLI with `--config configs/config.yml` and
    `--render-site-output` to emit `CNAME` and a rendered `index.html` whose
    `data-config-url` points to the API-served `config-ui.yaml`. The workflow
-   supplies non-sensitive render placeholders for backend-only secret fields
-   because static rendering does not open the DB or validate TAuth sessions.
-   Missing public config placeholders still fail through the same config loader
-   used by the backend; `${VAR:-default}` syntax is intentionally unsupported.
+   supplies non-sensitive render placeholders for backend-only secret fields and
+   the default OpenAI tenant key because static rendering does not open the DB,
+   validate TAuth sessions, or call upstream providers. Missing public config
+   placeholders still fail through the same config loader used by the backend;
+   `${VAR:-default}` syntax is intentionally unsupported.
 
 Configure TAuth for tenant `llm-proxy` with:
 
