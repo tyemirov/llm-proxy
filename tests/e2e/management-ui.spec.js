@@ -9,10 +9,15 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const siteRoot = path.join(repoRoot, "site");
 const configPath = "/config-ui.yaml";
 const configPlaceholder = "__LLM_PROXY_CONFIG_URL__";
+const faviconPath = "/assets/llm-proxy/img/favicon.svg";
+const appIconPath = "/assets/llm-proxy/img/llm-proxy-icon.svg";
+const httpOK = 200;
+const httpInternalServerError = 500;
 const mimeTypes = Object.freeze({
   ".css": "text/css",
   ".html": "text/html",
   ".js": "application/javascript",
+  ".svg": "image/svg+xml",
   ".yaml": "application/yaml",
 });
 
@@ -41,6 +46,31 @@ test.afterAll(async () => {
       resolve();
     });
   });
+});
+
+test("site exposes product icon and favicon assets", async ({ request }) => {
+  const htmlResponse = await request.get(baseURL);
+  expect(htmlResponse.status()).toBe(httpOK);
+  const html = await htmlResponse.text();
+  expect(html).toContain('<meta name="theme-color" content="#0076c3">');
+  expect(html).toContain(`<link rel="icon" type="image/svg+xml" href="${faviconPath}">`);
+  expect(html).toContain(`<link rel="apple-touch-icon" href="${appIconPath}">`);
+
+  const faviconResponse = await request.get(`${baseURL}${faviconPath}`);
+  expect(faviconResponse.status()).toBe(httpOK);
+  expect(faviconResponse.headers()["content-type"]).toContain(mimeTypes[".svg"]);
+  const faviconSVG = await faviconResponse.text();
+  expect(faviconSVG).toContain("LLM Proxy favicon");
+  expect(faviconSVG).toContain("#ffd369");
+  expect(faviconSVG).toContain("#4ad3d9");
+
+  const appIconResponse = await request.get(`${baseURL}${appIconPath}`);
+  expect(appIconResponse.status()).toBe(httpOK);
+  expect(appIconResponse.headers()["content-type"]).toContain(mimeTypes[".svg"]);
+  const appIconSVG = await appIconResponse.text();
+  expect(appIconSVG).toContain("LLM Proxy icon");
+  expect(appIconSVG).toContain("#ffd369");
+  expect(appIconSVG).toContain("#4ad3d9");
 });
 
 test("dashboard shows usage and settings opens from avatar menu before sign out", async ({ page }) => {
@@ -85,6 +115,40 @@ test("settings modal remains usable on narrow screens", async ({ page }) => {
   await expect(page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: "Close" })).toBeVisible();
 });
 
+test("settings stays reachable when usage summary fails", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { usageStatus: httpInternalServerError });
+
+  await page.goto(baseURL);
+
+  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("0");
+  await expect(page.getByText("Request failed")).toBeVisible();
+
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+});
+
+test("admin menu opens all users dashboard", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { admin: true });
+
+  await page.goto(baseURL);
+
+  await page.getByTestId("avatar-menu").click();
+  await expect(page.getByTestId("avatar-menu-item").nth(0)).toHaveText("Admin");
+  await expect(page.getByTestId("avatar-menu-item").nth(1)).toHaveText("Settings");
+
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  await expect(page.getByRole("heading", { name: "All users" })).toBeVisible();
+  await expect(page.locator("admin-user-card").filter({ hasText: "owner@example.com" })).toContainText("37");
+  await expect(page.locator("admin-user-card").filter({ hasText: "teammate@example.com" })).toContainText("0");
+  await expect(page.locator("admin-dashboard")).not.toContainText("sk-");
+  await expect(page.locator("admin-dashboard")).not.toContainText("masked_key");
+});
+
 /**
  * @param {import("@playwright/test").Page} page
  * @returns {Promise<void>}
@@ -111,14 +175,18 @@ async function installAssetRoutes(page) {
 
 /**
  * @param {import("@playwright/test").Page} page
+ * @param {{ usageStatus?: number, admin?: boolean }} options
  * @returns {Promise<void>}
  */
-async function installManagementRoutes(page) {
+async function installManagementRoutes(page, options = {}) {
   await page.route(`${baseURL}/api/management/profile`, async (route) => {
-    await route.fulfill({ json: managementProfile() });
+    await route.fulfill({ json: managementProfile(options.admin || false) });
   });
   await page.route(`${baseURL}/api/management/usage`, async (route) => {
-    await route.fulfill({ json: managementUsage() });
+    await route.fulfill({ status: options.usageStatus || httpOK, json: managementUsage() });
+  });
+  await page.route(`${baseURL}/api/management/admin/users`, async (route) => {
+    await route.fulfill({ json: managementAdminUsers() });
   });
 }
 
@@ -168,14 +236,16 @@ async function staticSiteHandler(request, response) {
 }
 
 /**
+ * @param {boolean} isAdmin
  * @returns {object}
  */
-function managementProfile() {
+function managementProfile(isAdmin = false) {
   return {
     user: {
       id: "user_1",
       email: "owner@example.com",
       display_name: "Owner",
+      is_admin: isAdmin,
     },
     tenant: {
       id: "tenant_1",
@@ -218,6 +288,53 @@ function managementProfile() {
       v2_path: "/v2",
       dictation_path: "/dictate",
     },
+  };
+}
+
+/**
+ * @returns {object}
+ */
+function managementAdminUsers() {
+  return {
+    period_days: 30,
+    users: [
+      {
+        user: {
+          id: "user_1",
+          email: "owner@example.com",
+          display_name: "Owner",
+          is_admin: true,
+        },
+        tenant: {
+          id: "tenant_1",
+          has_secret: true,
+          created_at: "2026-06-01T00:00:00Z",
+          updated_at: "2026-06-29T00:00:00Z",
+        },
+        usage: managementUsage(),
+      },
+      {
+        user: {
+          id: "user_2",
+          email: "teammate@example.com",
+          display_name: "Teammate",
+          is_admin: false,
+        },
+        tenant: {
+          id: "tenant_2",
+          has_secret: false,
+          created_at: "2026-06-10T00:00:00Z",
+          updated_at: "2026-06-10T00:00:00Z",
+        },
+        usage: {
+          ...managementUsage(),
+          totals: usageAggregate(),
+          providers: [],
+          models: [],
+          status_codes: [],
+        },
+      },
+    ],
   };
 }
 
