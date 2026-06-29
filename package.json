@@ -1,0 +1,14 @@
+{
+  "name": "llm-proxy",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "frontend:lint": "node scripts/check_frontend_syntax.mjs",
+    "frontend:test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "alpinejs": "3.13.5",
+    "js-yaml": "4.3.0"
+  }
+}
