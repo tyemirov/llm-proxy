@@ -490,6 +490,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Rerun the repository-native audit, lint, or dependency checks used for the pass.
   - Confirm every finding is either filed, fixed under a separate issue, or explicitly marked not applicable with evidence.
   - Confirm no secrets or private payloads were written into the tracker.
+  Last run: 2026-06-29.
 - [ ] [M005R] (P1) CI, release, and artifact health.
   Goal:
   Keep the repository's validation, release, publication, and generated artifact surfaces trustworthy.
