@@ -70,6 +70,7 @@ management:
   session_cookie_name: "llm_proxy_session"
   database_dialect: "${P411_MANAGEMENT_DATABASE_DIALECT}"
   database_dsn: "${P411_MANAGEMENT_DATABASE_DSN}"
+  provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   management_api_origin: "https://llm-proxy-api.example"
   proxy_origin: "https://llm-proxy-api.example"
 tenants:
@@ -96,6 +97,7 @@ P411_GROK_KEY=sk-xai
 P411_TAUTH_JWT_SIGNING_KEY=tauth-signing-key
 P411_MANAGEMENT_DATABASE_DIALECT=sqlite
 P411_MANAGEMENT_DATABASE_DSN=postgres://llm-proxy.example/management
+P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 `)
 	t.Setenv("P411_SERVICE_SECRET", "process-secret")
 
@@ -165,6 +167,9 @@ P411_MANAGEMENT_DATABASE_DSN=postgres://llm-proxy.example/management
 	}
 	if capturedConfiguration.Management.DatabaseDSN != "postgres://llm-proxy.example/management" {
 		t.Fatalf("management database dsn=%q", capturedConfiguration.Management.DatabaseDSN)
+	}
+	if capturedConfiguration.Management.ProviderKeyEncryptionKey != "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=" {
+		t.Fatalf("management provider key encryption key=%q", capturedConfiguration.Management.ProviderKeyEncryptionKey)
 	}
 	if capturedConfiguration.Management.ManagementAPIOrigin != "https://llm-proxy-api.example" || capturedConfiguration.Management.ProxyOrigin != "https://llm-proxy-api.example" {
 		t.Fatalf("management api origins=%q %q", capturedConfiguration.Management.ManagementAPIOrigin, capturedConfiguration.Management.ProxyOrigin)
@@ -249,6 +254,7 @@ management:
   session_cookie_name: "llm_proxy_session"
   database_dialect: "mysql"
   database_dsn: "mysql://llm-proxy.example/management"
+  provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   management_api_origin: "https://llm-proxy-api.example"
   proxy_origin: "https://llm-proxy-api.example"
 `+completeLiteralProvidersYAML())
@@ -342,6 +348,7 @@ management:
   enabled: false
   database_dialect: "${P411_MISSING_MANAGEMENT_DATABASE_DIALECT:-sqlite}"
   database_dsn: "${P411_MISSING_MANAGEMENT_DATABASE_DSN:-management.sqlite}"
+  provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 tenants:
   - id: default
     secret: "sekret"
@@ -378,6 +385,7 @@ LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN=https://llm-proxy.mprlab.com
 LLM_PROXY_MANAGEMENT_UI_DESCRIPTION=LLM Proxy
 LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN=http://127.0.0.1:4179
 LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN=http://localhost:4179
+LLM_PROXY_MANAGEMENT_ADMIN_EMAIL=admin@example.invalid
 LLM_PROXY_MANAGEMENT_TAUTH_URL=https://tauth-api.mprlab.com
 LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID=llm-proxy
 LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID=925457785190-3frk7j3bsr3ucidtkcohrp2sl07e0paa.apps.googleusercontent.com
@@ -389,6 +397,7 @@ LLM_PROXY_MANAGEMENT_JWT_ISSUER=tauth
 LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME=app_session_llm_proxy
 LLM_PROXY_MANAGEMENT_DATABASE_DIALECT=sqlite
 LLM_PROXY_MANAGEMENT_DATABASE_DSN=llm-proxy-management.sqlite
+LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 LLM_PROXY_MANAGEMENT_API_ORIGIN=https://llm-proxy-api.mprlab.com
 LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
 `)
@@ -424,6 +433,9 @@ LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
 	if capturedConfiguration.Management.DatabaseDSN != "llm-proxy-management.sqlite" {
 		t.Fatalf("database dsn=%q", capturedConfiguration.Management.DatabaseDSN)
 	}
+	if capturedConfiguration.Management.ProviderKeyEncryptionKey != "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=" {
+		t.Fatalf("provider key encryption key=%q", capturedConfiguration.Management.ProviderKeyEncryptionKey)
+	}
 	if capturedConfiguration.Management.ManagementAPIOrigin != "https://llm-proxy-api.mprlab.com" || capturedConfiguration.Management.ProxyOrigin != "https://llm-proxy-api.mprlab.com" {
 		t.Fatalf("management api origins=%q %q", capturedConfiguration.Management.ManagementAPIOrigin, capturedConfiguration.Management.ProxyOrigin)
 	}
@@ -451,6 +463,7 @@ management:
   session_cookie_name: "llm_proxy_session"
   database_dialect: "sqlite"
   database_dsn: "management.sqlite"
+  provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   management_api_origin: "https://llm-proxy-api.example"
   proxy_origin: "https://llm-proxy-api.example"
 tenants:
@@ -554,6 +567,7 @@ management:
   session_cookie_name: "llm_proxy_session"
   database_dialect: "sqlite"
   database_dsn: "management.sqlite"
+  provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   management_api_origin: "https://llm-proxy-api.example"
   proxy_origin: "https://llm-proxy-api.example"
 tenants:
@@ -1571,6 +1585,7 @@ management:
   session_cookie_name: "llm_proxy_session"
   database_dialect: "sqlite"
   database_dsn: "management.sqlite"
+  provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   management_api_origin: "https://llm-proxy-api.example"
   proxy_origin: "https://llm-proxy-api.example"
 tenants:
