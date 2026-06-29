@@ -14,6 +14,8 @@ management:
     - "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
     - "${LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN}"
     - "${LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN}"
+  admin_emails:
+    - "${LLM_PROXY_MANAGEMENT_ADMIN_EMAIL}"
   tauth_url: "${LLM_PROXY_MANAGEMENT_TAUTH_URL}"
   tauth_tenant_id: "${LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID}"
   google_client_id: "${LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID}"
@@ -25,6 +27,7 @@ management:
   session_cookie_name: "${LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME}"
   database_dialect: "${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT}"
   database_dsn: "${LLM_PROXY_MANAGEMENT_DATABASE_DSN}"
+  provider_key_encryption_key: "${LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY}"
   management_api_origin: "${LLM_PROXY_MANAGEMENT_API_ORIGIN}"
   proxy_origin: "${LLM_PROXY_MANAGEMENT_PROXY_ORIGIN}"
 tenants:
