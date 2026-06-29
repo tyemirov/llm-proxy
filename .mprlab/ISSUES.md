@@ -6,17 +6,16 @@ Read @AGENTS.md (Workflow section), @POLICY.md, and relevant stack guides before
 
 Format: `- [ ] [B042] (P1) {I007} Title`
 
-- `[ ]` open, `[!]` blocked, `[x]` closed.
+- `[ ]` open, `[-]` taken, `[!]` blocked, `[x]` closed.
 - Blocked issues (`[!]`) must include a `Blocked:` line in the body.
 
 ## BugFixes
 
-- [!] [B006] (P1) Published production image rejects current management config.
+- [!] [B001] (P1) Published production image rejects current management config.
   ### Summary
   Production startup fails while parsing the mounted current `config.yml`:
   ```text
   config_file_parse_failed: path=config.yml: decoding failed due to the following error(s):
-
   '' has invalid keys: management
   ```
   The current repository source and CLI config tests accept the top-level `management` block, but the published `ghcr.io/tyemirov/llm-proxy:latest` image still rejects it. This indicates the deployed image is stale relative to the current config contract.
@@ -33,8 +32,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   The production image and mounted config must be advanced together. Do not remove `management` from config and do not add a compatibility parser path; `management` is part of the current canonical config contract.
   ### Blocked
   Blocked: Requires publishing an image built from the current management-aware source and redeploying the backend through the gateway-owned `deploy-llm-proxy-backend` path. Agent runs must stop before production deployment unless the execution chain or operator performs the publish/deploy step.
-
-- [x] [B007] (P2) Validate management migration seed tenant defaults at startup.
+- [x] [B002] (P2) Validate management migration seed tenant defaults at startup.
   ### Summary
   Management mode allows an empty static `tenants` list because runtime authentication is DB-authoritative, but configured legacy tenants are still first-run migration seed data. Startup skipped tenant default provider/model validation whenever management mode was enabled, so a typoed seed default could be persisted and fail later at request time.
   ### Acceptance Criteria
@@ -44,8 +42,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   4. Static provider credentials remain optional for management-mode seed validation because provider keys are DB-owned after migration.
   ### Resolution
   Split provider catalog resolution from request credential resolution. Static non-management startup still validates tenant defaults through the credential-aware request path, while management-mode seed tenants use catalog-only default validation before the migration runs. Added management startup coverage proving valid seed defaults do not require static provider credentials and invalid text/dictation default providers or models fail startup. Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run 'TestManagement(AcceptsLegacyTenantDefaultsWithoutStaticCredentials|RejectsInvalidLegacyTenantDefaults|MigratesLegacyConfigOnceThenUsesDatabase)'`, `timeout -k 350s -s SIGKILL 350s make go-test` (total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make ci`.
-
-- [x] [B008] (P2) Require expiration on management session JWTs.
+- [x] [B003] (P2) Require expiration on management session JWTs.
   ### Summary
   Management session validation accepted a signed TAuth session JWT with the correct tenant and user claims when the token omitted `exp`. Because the JWT library validates expiration only when the claim exists, this could leave `/api/management/*` usable with a non-expiring signed cookie.
   ### Acceptance Criteria
@@ -54,8 +51,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   3. The regression is covered through the public management API route.
   ### Resolution
   `managementSessionValidator.validateToken` now rejects tokens whose registered claims do not include `ExpiresAt` before constructing a management principal. Added management API coverage for a signed session cookie with valid issuer, tenant, and user claims but no `exp`; `/api/management/profile` returns `401`. Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run TestManagementRejectsInvalidSessionsAndRequests`, `timeout -k 350s -s SIGKILL 350s make go-test` (total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make ci`.
-
-- [x] [B009] (P2) Remove unsupported no-dictation default option from management UI.
+- [x] [B004] (P2) Remove unsupported no-dictation default option from management UI.
   ### Summary
   The management UI exposed a blank "No dictation default" option, but the backend has no persisted no-dictation state and normalizes empty dictation defaults back to the canonical OpenAI default. Selecting the blank option could make a text-only defaults save appear to work before the profile reloaded with OpenAI selected again.
   ### Acceptance Criteria
@@ -64,8 +60,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   3. Removed UI copy is not left as a stale constant.
   ### Resolution
   Removed the blank dictation-provider `<option>` from `site/index.html` and deleted the unused `noDictationDefault` copy key. The dictation-provider select now lists only real dictation-capable providers from the backend profile. Validation passed with `timeout -k 30s -s SIGKILL 30s node --check` for the static JS modules and `timeout -k 350s -s SIGKILL 350s make ci`.
-
-- [!] [B010] (P1) GitHub Pages frontend remains unavailable until the workflow fix reaches master.
+- [!] [B005] (P1) GitHub Pages frontend remains unavailable until the workflow fix reaches master.
   ### Summary
   `https://llm-proxy.mprlab.com/` presented GitHub's default `*.github.io` certificate and a Pages 404 because repository Pages was disabled and the Pages workflow render job depended on unset repository variables. The current split-origin contract requires `llm-proxy.mprlab.com` to be owned by GitHub Pages, not by the gateway backend.
   ### Evidence
@@ -79,8 +74,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   GitHub Pages has been enabled for this repository with `build_type=workflow`, `cname=llm-proxy.mprlab.com`, an approved `llm-proxy.mprlab.com` certificate, and HTTPS enforcement enabled.
   ### Blocked
   Blocked: The public frontend still returns GitHub Pages 404 until this workflow fix is committed to `master` and the GitHub Pages workflow completes successfully.
-
-- [x] [B001] (P1) Gemini POST responses can return thought or partial text as successful output.
+- [x] [B006] (P1) Gemini POST responses can return thought or partial text as successful output.
   ### Summary
   A production-comparable Russian semantic-stress QA run sent the full prompt through `POST /?provider=gemini` with `model=gemini-3.5-flash`, but the client received a non-JSON response and failed before materialization. The same prompt contract succeeds only when the proxy returns the model's answer text as parseable JSON or returns a structured proxy/provider error.
   ### Impact
@@ -126,7 +120,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   3. Rerun the Russian semantic-stress QA prompt through the full pipeline and verify the client receives either parseable JSON or a structured proxy error, not a thought-prefixed or truncated successful text body.
   ### Resolution
   Added black-box Gemini POST coverage for thought-marked parts returning only final answer text, non-final `finishReason` values mapping to `502`, and missing `finishReason` mapping to `502`. `internal/proxy/gemini.go` now models `parts[].thought` and candidate `finishReason`, returns only non-thought text for completed `STOP` candidates, and treats missing or non-`STOP` finish reasons as provider API errors instead of successful partial output. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test` (total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make lint`, and `timeout -k 350s -s SIGKILL 350s make ci` (total coverage 100.0%).
-- [x] [B002] (P1) Long semantic-review POSTs fail transport while small requests pass.
+- [x] [B007] (P1) Long semantic-review POSTs fail transport while small requests pass.
   ### Summary
   Camu Russian semantic-stress QA can still fail before materialization on long full-story prompts even though a small `llm-proxy` smoke request succeeds. On 2026-06-09, `po-schuchemu-velenyu` text prep failed three times at the `llm-proxy` stage: one read timeout, then two SSL record-layer failures. A tiny Russian pipeline smoke test using the same Russian-language `pipeline_runner.py` reached `semantic-stress-qa` and `materialize` successfully, so the service is not fully down; the failure appears tied to long-running or larger semantic-review POSTs and/or chunk retry transport handling.
   ### Impact
@@ -172,14 +166,12 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   [SSL] record layer failure (_ssl.c:2658)
   ```
   The forced-chunked `gpt-5-mini` retry also failed with the same SSL record-layer error before materialization. The small control request reported `semantic-stress-qa` passed with `transport: post`, `invocationMode: single`, and `materialize` passed.
-
   2026-06-10 live retry after updating the Russian-language caller to the current v2 Python client contract (`ClientMessagesRequest` + `POST /v2`) still failed against `https://llm-proxy.mprlab.com` for the 8,528-character Camu story. Focused Russian-language transport tests passed, and a tiny live v2 pipeline smoke reached `semantic-stress-qa` and `materialize`. The long story failed before materialization with:
   ```text
   llm_proxy_client_transport_failure: provider=omitted model=gpt-5.5 timeout_seconds=240 reason=[SSL] record layer failure (_ssl.c:2658)
   llm_proxy_client_transport_failure: provider=omitted model=gpt-5-mini timeout_seconds=600 reason=[SSL] record layer failure (_ssl.c:2658)
   ```
   Failed variants included normal v2 POST with `--llm-proxy-timeout-seconds 240 --llm-proxy-chunk-chars 1800`, forced chunking with `--llm-proxy-chunk-chars 900`, and forced chunking with `--llm-proxy-model gpt-5-mini --llm-proxy-timeout-seconds 600 --llm-proxy-chunk-chars 450`. This suggests the current branch/local replay fix has not reached, or is not sufficient for, the deployed default live endpoint used by Camu.
-
   2026-06-10 deployed gateway inspection found the public `llm-proxy` Caddy transport using `response_header_timeout 240s` and `read_timeout 240s`, exactly equal to the canonical `server.request_timeout_seconds: 240` staged from `configs/config.yml`. That can race the proxy-owned final response or structured `504` and surface as an SSL record-layer failure from the public TLS endpoint. A first gateway-side patch raised the dedicated Caddy transport to 300 seconds, but a later Camu production retry with `--llm-proxy-timeout-seconds 300 --llm-proxy-chunk-chars 1800` still failed with the same SSL record-layer transport error. The follow-up raised the proxy runtime deadline to 360 seconds, packaged client defaults and the Russian-language semantic gate to 390 seconds, and the gateway `llm_proxy_transport` to 420 seconds so the service owns completion or structured timeout before Caddy or clients close the socket. After the operator redeployed those changes, hosted long semantic-review replays through `https://llm-proxy.mprlab.com` returned HTTP 200 instead of SSL transport failures.
   ### Expected
   Long semantic-review POSTs should either complete successfully or return a structured proxy/provider error that the client can classify and retry. The proxy should not leave clients with opaque transport failures after the upstream request may still be in progress or recoverable.
@@ -188,64 +180,46 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   2. Add coverage for chunked semantic-review retry behavior so chunk transport failures are reported with chunk index, provider, model, timeout, and upstream status when available.
   3. Verify the Russian-language `po-schuchemu-velenyu` materialization path reaches `materialize` or returns a structured proxy error instead of `read operation timed out` or SSL record-layer failure.
   4. Preserve the existing successful behavior for small POST requests.
-
   ### Resolution
   OpenAI Responses text requests now run in background mode by sending `background: true` and `store: true` on initial, continuation, and synthesis payloads, then polling the returned response id instead of holding long semantic-review generations on one synchronous upstream HTTP read. Added black-box integration coverage for a long semantic-review JSON POST that returns a queued background response, polls by response id, and returns the completed body. Python client HTTP and transport failures now include non-secret provider, model, and timeout context, and raw OS/SSL-style failures are typed as `LLMProxyTransportError`. B003 supersedes the remaining manual tuning gap with the final one-shot REST contract.
-
   Validation for the initial background-mode fix passed with `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make python-test` (27 passed), `timeout -k 350s -s SIGKILL 350s make python-lint`, `timeout -k 350s -s SIGKILL 350s make go-lint`, and `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 27 passed). The exact reported forced-chunked semantic-review payload was reconstructed from the failed Camu pipeline state (`chunkIndex=1`, `chunkChars=1800`, request SHA-256 `ba8737a7dd4b81dc0d52e68d9260756fdb0f32e6e12f3be2527d8be55df1a0cd`) and proved that OpenAI could complete the response in about 171 seconds, motivating B003.
-
   Post-redeploy live validation passed with a hosted `gpt-5.5` v2 smoke returning `OK` in 3.289s, hosted replay of `/tmp/llm-proxy-b002-direct/po-schuchemu-velenyu.chunk-0001.llm-proxy-request.json` returning HTTP 200 in 152.981s with valid JSON, 23 `targetReviews`, and `needsHumanReview=false`, hosted Python v2 `gpt-5.5` replay of the same long semantic-review prompt returning in 151.524s with valid JSON, 23 `targetReviews`, and `needsHumanReview=false`, and `timeout -k 240s -s SIGKILL 240s make test-live-providers LIVE_ENV_FILE=configs/.env LLM_PROXY_LIVE_PROVIDERS=openai` reporting `live provider smoke passed: provider=openai model=omitted status=200`.
-
-- [x] [B003] (P1) OpenAI background semantic-review calls require manual timeout tuning
+- [x] [B008] (P1) OpenAI background semantic-review calls require manual timeout tuning.
   ### Summary
   B002 moved long OpenAI Responses calls into background mode, but the successful manual replay still required hand-editing timeout knobs. A normal llm-proxy REST call should not require operators, downstream workflows, or client libraries to guess provider polling behavior for a semantic-review payload.
-
   ### Impact
   Downstream callers can still fail a viable OpenAI background response, then retry from scratch or require caller-specific timeout overrides. This keeps long semantic review fragile even though the provider can complete the response.
-
   ### Reproduction
   Reuse the reported `po-schuchemu-velenyu` forced-chunked semantic-review request reconstructed from the failed Camu pipeline state:
-
   ```text
   /tmp/llm-proxy-b002-direct/po-schuchemu-velenyu.chunk-0001.llm-proxy-request.json
   ```
-
   Before this fix, the default proxy returned a classified 504 after about 60 seconds. With a temporary larger timeout, the same request returned HTTP 200 after about 171 seconds and validated as a full semantic-review response.
-
   ### Expected
   The proxy should own long OpenAI background response completion. A simple REST caller should issue one `GET /`, `POST /`, or `POST /v2` request through llm-proxy and receive the final answer without streaming, client-side polling, or a resume-token protocol.
-
   ### Acceptance Criteria
   1. OpenAI background response polling is server-side and bounded only by `server.request_timeout_seconds`.
   2. The public `GET /`, `POST /`, and `POST /v2` contract does not require streaming, client-side polling, or `/responses` resume calls.
   3. The obsolete poll-timeout configuration is removed from the public static config surface.
   4. Bundled Go and Python clients remain simple one-request REST transports; they do not implement OpenAI background polling.
   5. Black-box integration tests cover a long background semantic-review POST returning HTTP 200 in the original request after multiple server-side polls.
-
   ### Resolution
   OpenAI background response polling is now owned by llm-proxy for the normal REST request lifecycle. Initial, continuation, and synthesis OpenAI Responses payloads use `background: true` and `store: true`; when OpenAI returns a non-terminal response id, llm-proxy polls that stored response server-side until completion or the normal `server.request_timeout_seconds` deadline. The public `/responses` resume endpoint and the Go/Python client resume loops were removed, and `upstream_poll_timeout_seconds` was removed from the static config surface. Default `request_timeout_seconds` is now 360 seconds, while the packaged Go CLI and Python client default to a 390-second transport timeout so one normal REST request has room to complete.
-
   Validation passed with `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make python-test` (Python 27 passed), `timeout -k 350s -s SIGKILL 350s make ci` (Go/Python lint clean, Go total coverage 100.0%, Python 27 passed), and `timeout -k 30s -s SIGKILL 30s git diff --check`. Live OpenAI smoke passed with `model` omitted, using the provider default, and HTTP 200. Live exact-payload replay of `/tmp/llm-proxy-b002-direct/po-schuchemu-velenyu.chunk-0001.llm-proxy-request.json` through the local current-branch proxy returned HTTP 200 from one `POST /?provider=openai&format=text/plain` in 150.394s with no `X-LLM-Proxy-Resume-*` or raw upstream response-id headers. The final body was valid JSON with 23 `targetReviews`, `needsHumanReview=true`, and 2 human-review items for `проруби`/`прорубь` stress confirmation.
-
-- [x] [B004] (P1) Polled OpenAI terminal responses skip continuation and synthesis handling
+- [x] [B009] (P1) Polled OpenAI terminal responses skip continuation and synthesis handling.
   ### Summary
   B003 made OpenAI Responses run in background mode, so terminal OpenAI response payloads commonly arrive from the server-side GET poll path. The initial POST path still handled `status: "incomplete"` max-token continuations and completed responses without a final assistant message, but the poll path collapsed terminal responses to text too early and could return `502` or fallback text instead of continuing or synthesizing the final answer.
-
   ### Impact
   A simple REST caller could still fail a viable long OpenAI response when the stored response reached `incomplete_details.reason=max_output_tokens` during polling, or receive an unhelpful tool-call fallback when a polled completed response lacked a final assistant message.
-
   ### Acceptance Criteria
   1. Initial POST and GET poll OpenAI Responses terminal payloads share the same continuation and synthesis rules.
   2. A polled `status: "incomplete"` response with `max_tokens`/`max_output_tokens` incomplete reason starts a stored continuation and returns the final answer in the original REST response.
   3. A polled completed response without a final assistant message starts synthesis before returning to the caller.
   4. Existing background polling, timeout, and malformed-upstream error behavior remains covered by black-box HTTP tests.
-
   ### Resolution
   OpenAI response handling now parses initial and polled Responses payloads into a shared response snapshot and resolves terminal states through one lifecycle handler. The shared handler preserves max-token continuation, completed-without-final-message synthesis, usage merging, malformed JSON classification, and the blocking one-shot REST contract for both initial POST responses and polled GET responses. Added black-box router coverage for polled incomplete continuation and polled completed tool-only synthesis.
-
   Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run TestCoverageOpenAILifecycleBranches`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./tests/integration -run 'TestIntegration(LargeSemanticReviewPost|BackgroundPollSleepDoesNotOccupyUpstreamWorker)'`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy`, `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make ci` (Go lint/staticcheck/ineffassign clean, Python mypy clean, Go total coverage 100.0%, Python 27 passed, root import smoke passed).
-
-- [x] [B005] (P1) PR merge CI drops limiter coverage below 100%
+- [x] [B010] (P1) PR merge CI drops limiter coverage below 100%.
   ### Summary
   GitHub Actions ran PR #175 on the generated pull-request merge ref with Go 1.24.13 and failed `make go-test` at total coverage 99.8%. The function table showed partial coverage for `internal/proxy/limited_http.go` `Do` and `acquire`, even though branch-head local runs reached 100.0%.
   ### Impact
@@ -256,8 +230,8 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   3. The Go 1.24 merged coverage gate reports total 100.0%.
   ### Resolution
   Added router-level coverage for a blocked DeepSeek-compatible upstream request holding the only active worker while a second admitted request times out before acquiring that worker. The scenario covers the limiter `acquire` context-cancel path and `Do` admission-release path deterministically.
-
   Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 180s -s SIGKILL 180s env GOTOOLCHAIN=go1.24.13 go test -count=1 ./internal/proxy -run 'TestCoverageProviderRoutingEdges/admitted_provider_request_timeout_releases_queue_slot_before_acquiring_worker'`, `timeout -k 350s -s SIGKILL 350s env GOTOOLCHAIN=go1.24.13 make go-test` (Go total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make ci` (Go lint/staticcheck/ineffassign clean, Python mypy clean, Go total coverage 100.0%, Python 20 passed, root import smoke passed).
+
 
 ## Improvements
 
@@ -363,7 +337,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   5. Black-box CLI/config tests cover missing required provider credentials.
   ### Resolution
   `configs/config.yml` now uses `${...}` placeholders for every supported provider API key and explicit URLs for every provider `base_url` plus SiliconFlow `transcriptions_url`. The config-file loader now rejects blank provider API keys, blank provider base URLs, and blank SiliconFlow transcription URLs before building runtime configuration. README and provider-routing docs now describe provider keys as required and provider URLs as explicit config values. Black-box CLI config tests cover complete startup config, missing provider key, missing provider base URL, missing SiliconFlow transcription URL, and omitted tenant defaults. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./cmd/cli -run 'TestRootCommand(RunsConfiguredProxyFromConfigFile|RunsProductionLoggerFromConfigFile|RejectsIncompleteStaticProviderConfig)'`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 26 passed), `timeout -k 350s -s SIGKILL 350s make lint`, and `timeout -k 350s -s SIGKILL 350s make ci`.
-- [x] [I011] (P1) Decouple OpenAI background polling from text worker occupancy
+- [x] [I010] (P1) Decouple OpenAI background polling from text worker occupancy.
   ### Summary
   B003 made long OpenAI background Responses calls succeed through one blocking REST request, but the internal text worker queue still treats the whole request lifecycle as occupying a scarce worker. A long semantic-review call can spend most of its time sleeping between server-side polls while preventing other text requests from starting.
   ### Impact
@@ -379,10 +353,9 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Text requests now run provider work in per-request goroutines while the shared `limitedHTTPDoer` enforces `server.workers` as active upstream HTTP operation concurrency and `server.queue_size` as the pending upstream HTTP operation queue. OpenAI background-response sleeps release worker capacity between polls, and the same limiter is shared by OpenAI Responses, OpenAI-compatible chat providers, Gemini, Anthropic, and dictation. `/dictate` now propagates the inbound request context to upstream transcription calls. README and provider-routing docs describe the internal concurrency contract without changing the blocking REST caller contract.
   Validation passed with `timeout -k 120s -s SIGKILL 120s go test -count=1 ./tests/integration -run 'TestIntegration(BackgroundPollSleepDoesNotOccupyUpstreamWorker|HighLoadQueue|GatewayContextTimeoutCancelsUpstreamRequest|UpstreamRequestTimeoutTriggersGatewayTimeout)'`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./tests/llm-proxy -run 'TestEndpoint_Returns(ServiceUnavailableWhenQueueFull|GatewayTimeoutWhenWaitingForUpstreamWorker)'`, `timeout -k 350s -s SIGKILL 350s make go-test` (total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make ci` (Go lint/staticcheck/ineffassign, Python mypy, Go total coverage 100.0%, Python 27 passed, root import smoke), `timeout -k 30s -s SIGKILL 30s git diff --check`, and `timeout -k 180s -s SIGKILL 180s make test-live-providers LIVE_ENV_FILE=configs/.env LLM_PROXY_LIVE_PROVIDERS=openai` (`model` omitted for OpenAI, HTTP 200). Live exact-payload replay of `/tmp/llm-proxy-b002-direct/po-schuchemu-velenyu.chunk-0001.llm-proxy-request.json` through a temporary current-branch local proxy returned HTTP 200 in 159.191s from one `POST /?provider=openai&format=text/plain` and parsed as valid JSON with 23 `targetReviews`, `needsHumanReview=false`, and 0 `reviewItems`.
-- [x] [I012] (P1) Codify provider default model selection for omitted JSON model fields
+- [x] [I011] (P1) Codify provider default model selection for omitted JSON model fields.
   ### Summary
   Request model identifiers are provider-scoped, so `provider=gemini` with `model=gpt-5-mini` correctly returns `400`. When the client omits `model`, the selected provider's configured default model must be used universally for `GET /`, `POST /`, and `POST /v2`, and a provider with an API key must have a configured default model.
-
   ### Acceptance Criteria
   1. `POST /?provider=gemini` without a JSON body `model` routes to Gemini's configured text `default_model`.
   2. `POST /v2?provider=gemini` without a JSON body `model` routes to Gemini's configured text `default_model`.
@@ -390,12 +363,10 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   4. README and provider-routing docs state that omitted `model` uses the selected provider default and that keyed providers require valid defaults.
   5. Live Gemini provider smoke proves the configured default works without a model override.
   6. Bundled Go, CLI, and Python clients omit `model` when callers do not specify a model while still preserving the selected provider.
-
   ### Resolution
   The existing provider registry already used the selected provider's configured default model when `model` was omitted. Added black-box JSON POST coverage for `POST /?provider=gemini` and `POST /v2?provider=gemini` without `model`, both asserting the upstream Gemini default path `/models/gemini-2.5-flash:generateContent`. Added CLI config validation coverage for a keyed Gemini provider with a blank text `default_model`. README and provider-routing docs now explicitly connect configured provider keys, required default models, and omitted-model request behavior. Added bundled Go, CLI, and Python client coverage proving provider-selected requests omit stale query/body `model` values when the caller does not specify a model. Python client failure context now reports omitted provider/model values as `provider=omitted model=omitted` instead of inventing a default model label.
-
   Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./internal/proxy -run TestProviderRoutingUsesGeminiDefaultModelForJSONPosts`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./cmd/cli -run TestRootCommandRejectsIncompleteStaticProviderConfig/blank_keyed_gemini_text_default_model`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./pkg/llmproxyclient -run TestClientOmitsModelWhenRequestUsesProviderDefault`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./llm-proxy-client -run TestCommandReadsPromptFileAndOptionalBodyFields`, `timeout -k 120s -s SIGKILL 120s bash -lc 'cd python && uv run --group dev pytest tests/test_client.py -k "omits_model or read_timeout"'`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./cmd/cli`, `bash -n scripts/test_live_providers.sh scripts/test_live_gemini.sh`, `timeout -k 180s -s SIGKILL 180s make test-live-providers LIVE_ENV_FILE=configs/.env LLM_PROXY_LIVE_PROVIDERS=gemini` (`model=omitted`, HTTP 200), `timeout -k 30s -s SIGKILL 30s git diff --check`, and `timeout -k 350s -s SIGKILL 350s make ci` (Go/Python lint clean, Go total coverage 100.0%, Python 28 passed).
-- [x] [I013] (P1) Make bundled clients canonical v2-only transports
+- [x] [I012] (P1) Make bundled clients canonical v2-only transports.
   ### Summary
   The public server remains a blocking REST proxy with `GET /`, compatibility JSON `POST /`, and canonical `POST /v2`, but bundled client libraries should not keep two text request shapes. They should expose only the canonical v2 messages contract so downstream callers do not have to choose between prompt JSON and messages JSON.
   ### Acceptance Criteria
@@ -406,9 +377,8 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   5. Black-box Go CLI, Go client, and Python client tests cover the v2-only path and omitted-model provider-default behavior.
   ### Resolution
   Removed the legacy Go `Request`/`NewRequest`/`Client.Post` API and the Python `ClientRequest`/`Client.post` API. The Go CLI now maps prompt inputs into v2 `messages[]`, sends through `Client.PostMessages`, preserves the clearer `missing prompt` boundary error, and still omits `model` when `--model` is not provided. README and provider-routing docs now state that bundled clients are v2-only while direct server callers may still use `GET /`, compatibility `POST /`, or canonical `POST /v2`.
-
   Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./pkg/llmproxyclient`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./llm-proxy-client`, `timeout -k 120s -s SIGKILL 120s bash -lc 'cd python && uv run --group dev pytest tests/test_client.py'` (Python 20 passed), `timeout -k 350s -s SIGKILL 350s make ci` (Go/Python lint clean, Go total coverage 100.0%, Python 20 passed, root import smoke passed), and `timeout -k 30s -s SIGKILL 30s git diff --check`.
-- [ ] [I010] (P0) Limit upstream HTTP call rate in shared HTTP client for text and dictation, without provider‑specific logic.
+- [ ] [I013] (P0) Limit upstream HTTP call rate in shared HTTP client for text and dictation, without provider‑specific logic.
   Goal:
   Ensure the shared HTTP client layer enforces a consistent, configurable limit on upstream HTTP calls across both text and dictation flows, so that provider rate limits and system resource usage are controlled without duplicating provider-specific throttling logic in multiple places.
   
@@ -434,204 +404,166 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Verify through logs/metrics that limiting events are emitted as expected when thresholds are reached.
   - Validate that typical workloads for text and dictation still succeed without unexpected errors when limits are set to realistic production values.
   - Perform a targeted regression check to ensure existing integrations using the shared HTTP client behave as before when limits are configured to be non-restrictive (e.g., effectively off).
-
 - [x] [I014] (P2) Align the management header avatar with the right edge.
   Goal:
   Move the MPR header avatar/login control to the far right of the header content measure so it balances the left-side LLM Proxy brand title instead of sitting immediately beside it.
-
   Requirements:
   - Keep using the shared `<mpr-header>` and `<mpr-user>` components.
   - Scope the layout change to the llm-proxy static site rather than changing the shared MPR UI package.
   - Preserve authenticated avatar and unauthenticated login placement through the same header actions container.
-
   Deliverables:
   - Static-site CSS that pushes the MPR header actions region to the right edge.
-
   Validation:
   - Verify the rendered header in a browser preview at desktop and mobile widths.
   - Run focused frontend syntax checks for edited static files.
-
   Resolution:
   Added a scoped `#llm-proxy-header .mpr-header__actions` CSS override so the shared MPR header actions region uses `margin-left: auto`. Browser preview validation rendered the real static Pages app and CDN MPR UI bundle with local mock config/profile responses: desktop geometry placed the brand at x=100 and avatar at x=1146..1180, while mobile 390px geometry placed the brand at x=24..111 and avatar at x=332..366 with no overlap. Validation passed with `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/app.js`, `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/core/mprShell.js`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
 
 
 ## Maintenance
 
-### Recurring
-
-- [ ] [M400R] (P2) Backlog hygiene and archive
+- [ ] [M001R] (P2) Backlog hygiene and archive.
   Goal:
   Keep the issue tracker reliable, readable, and focused on active work while preserving resolved history in the appropriate archive.
-
   Requirements:
   - Cadence: run weekly during active development and before each release cut.
   - Validate section names, identifier prefixes, recurrence suffixes, priority markers, dependencies, and duplicate IDs against the current `issues-md-format.md`.
   - Reconcile stale statuses, duplicate issues, broken references, obsolete instructions, and entries filed under the wrong section.
   - Move completed non-recurring history to the repository issue archive or durable documentation when the active tracker becomes noisy.
   - Keep active, blocked, planning, and recurring entries visible in `ISSUES.md`.
-
   Deliverables:
   - Normalized `ISSUES.md` structure and statuses.
   - Updated issue archive or docs when completed entries are removed from the active tracker.
   - A short `Last run:` note summarizing the cleanup and any follow-up issues filed.
-
   Validation:
   - Re-read `ISSUES.md` after edits and confirm every issue is under the right section with a unique section-aware ID.
   - Confirm recurring entries remain open and keep the `R` suffix.
   - Confirm no active, blocked, recurring, or planning work was archived.
-
-- [ ] [M401R] (P2) Polish open issues
+- [ ] [M002R] (P2) Polish open issues.
   Goal:
   Keep unresolved work executable by making each open issue concrete, ordered, and testable.
-
   Requirements:
   - Cadence: run weekly during active development and before handing a repo to automated execution.
   - Review every unresolved non-recurring issue for missing context, dependencies, repro steps, acceptance criteria, and validation expectations.
   - Make priorities concrete and ensure each open issue has actionable deliverables.
   - Merge duplicate open issues or add explicit dependency links when separate entries must remain.
   - Do not close or implement issues as part of this polish pass unless that work is separately requested.
-
   Deliverables:
   - Open issues with enough detail for a person or agent to execute without rediscovery.
   - New or updated dependency markers where ordering matters.
   - A short `Last run:` note listing the number of issues polished and any blockers found.
-
   Validation:
   - Sample the open entries after the pass and confirm each has clear next actions and validation expectations.
   - Confirm no recurring runbook was marked complete.
   - Confirm duplicates were merged or explicitly cross-referenced.
-
-- [ ] [M402R] (P2) Architecture and policy review
+- [ ] [M003R] (P2) Architecture and policy review.
   Goal:
   Catch architecture, policy, and workflow drift before it becomes hidden maintenance debt.
-
   Requirements:
   - Cadence: run monthly, before large refactors, and after major framework or runtime changes.
   - Review the codebase, docs, and workflow against `AGENTS.md`, `POLICY.md`, stack guides, and the current architecture notes.
   - Look for drift from forward-only contracts, edge-validation boundaries, smart-constructor usage, testing policy, and module ownership.
   - Record findings as new Maintenance issues with concrete scope, priority, and validation.
   - Close the pass with a no-action note only when the review finds no actionable drift.
-
   Deliverables:
   - New Maintenance issues for each actionable architecture or policy drift finding.
   - Updated notes on areas reviewed and areas intentionally left unchanged.
   - A short `Last run:` note with the review scope and outcome.
-
   Validation:
   - Confirm every finding is represented as an issue with owner-readable context and validation criteria.
   - Confirm no implementation changes were mixed into the review runbook unless separately requested.
   - Confirm all recurring runbooks remain open.
-
-- [ ] [M403R] (P1) Dependency and security audit
+- [ ] [M004R] (P1) Dependency and security audit.
   Goal:
   Keep third-party dependencies, runtime versions, and security-sensitive configuration within the current supported contract.
-
   Requirements:
   - Cadence: run weekly for active apps and before each release cut.
   - Inspect package managers, lockfiles, language toolchains, container bases, and generated clients for known vulnerabilities or stale direct dependencies.
   - Review auth, secret, CORS, CSP, SQL, network, and permission-sensitive configuration for drift from the current contract.
   - Prefer current supported dependencies; do not add compatibility shims for obsolete dependency behavior.
   - File separate Maintenance or BugFix issues for each actionable vulnerability, unsupported runtime, or security-contract gap.
-
   Deliverables:
   - Documented audit commands or data sources used for the pass.
   - Updated issues for each actionable dependency or security finding.
   - A short `Last run:` note with clean result or follow-up issue IDs.
-
   Validation:
   - Rerun the repository-native audit, lint, or dependency checks used for the pass.
   - Confirm every finding is either filed, fixed under a separate issue, or explicitly marked not applicable with evidence.
   - Confirm no secrets or private payloads were written into the tracker.
-
-- [ ] [M404R] (P1) CI, release, and artifact health
+- [ ] [M005R] (P1) CI, release, and artifact health.
   Goal:
   Keep the repository's validation, release, publication, and generated artifact surfaces trustworthy.
-
   Requirements:
   - Cadence: run before every release, publish, or deploy, and weekly for critical services.
   - Verify repository-native CI, lint, format, coverage, release, publish, Docker image, Pages, and artifact workflows still match the documented contract.
   - Check generated artifacts, release tags, published images, and Pages outputs for source-to-public drift.
   - File concrete follow-up issues for failing gates, stale artifacts, missing release prerequisites, or undocumented workflow changes.
   - Do not perform production deployment from this runbook unless the operator explicitly requests that deployment.
-
   Deliverables:
   - Recorded gate status and artifact surfaces inspected.
   - Follow-up issues for each reproducible CI, release, publish, or artifact drift problem.
   - A short `Last run:` note with commands run and any skipped surfaces.
-
   Validation:
   - Use repository-native `make` targets or documented release helpers for checks.
   - Confirm release and deployment ownership boundaries remain separate.
   - Confirm public or published artifacts match the intended source revision when that surface is inspected.
-
-- [ ] [M405R] (P1) Code contract and static hygiene
+- [ ] [M006R] (P1) Code contract and static hygiene.
   Goal:
   Keep source contracts explicit, current, and statically guarded against policy drift.
-
   Requirements:
   - Cadence: run monthly and before large refactors.
   - Scan for dead code, unused exports, duplicated literals, silent fallbacks, legacy aliases, compatibility reads, and zero-but-invalid domain states.
   - Check static analysis, coverage, schema, and contract guards that are supposed to prevent drift.
   - File focused Maintenance issues for each concrete violation instead of broad cleanup placeholders.
   - Keep the current canonical contract only; do not preserve obsolete behavior unless a product requirement explicitly says so.
-
   Deliverables:
   - Issue entries for each actionable static hygiene or contract violation.
   - Notes on static tools, searches, and contract guards used during the pass.
   - A short `Last run:` note with clean result or follow-up issue IDs.
-
   Validation:
   - Rerun the relevant static checks, contract tests, or repository searches used to identify drift.
   - Confirm every finding has a narrow follow-up issue and does not duplicate existing backlog work.
   - Confirm no implementation changes were mixed into the audit unless separately requested.
-
-- [ ] [M406R] (P1) Production drift and health
+- [ ] [M007R] (P1) Production drift and health.
   Goal:
   Detect when production, public, or scheduled runtime state has drifted from the intended repository contract.
-
   Requirements:
   - Cadence: run weekly for deployed services and after each publish or deploy.
   - Compare current source, runtime configuration, published images, public routes, scheduled jobs, and health checks for drift.
   - Inspect real operator-facing surfaces rather than assuming merged source is deployed.
   - File follow-up issues for stale images, stale Pages output, missing routes, failed monitors, invalid production config, or undocumented runtime differences.
   - Stop before production deploy or destructive operator actions unless the operator explicitly requests them.
-
   Deliverables:
   - Recorded source revision, public artifact, route, image, or health surfaces inspected.
   - Follow-up issues for each source-to-runtime drift finding.
   - A short `Last run:` note with evidence links or commands used.
-
   Validation:
   - Verify inspected production or public surfaces directly where access is available.
   - Confirm any deploy-required finding is filed with the exact publish/deploy boundary and owner.
   - Confirm no production state was changed by the audit unless explicitly requested.
-
-- [ ] [M407R] (P2) Documentation and runbook hygiene
+- [ ] [M008R] (P2) Documentation and runbook hygiene.
   Goal:
   Keep durable documentation and runbooks aligned with the current behavior users and operators actually rely on.
-
   Requirements:
   - Cadence: run before release cuts and after merge bursts that change user-facing or operator-facing behavior.
   - Review README, ARCHITECTURE, PRD, CHANGELOG, docs, runbooks, setup guides, and local workflow notes for stale behavior or missing new contracts.
   - Update docs when closed issues changed durable behavior, public APIs, operator workflows, release semantics, or deployment expectations.
   - Remove or rewrite stale instructions instead of preserving obsolete alternatives.
   - File separate issues for documentation gaps that require product or implementation decisions.
-
   Deliverables:
   - Updated documentation or filed follow-up issues for each gap.
   - A short `Last run:` note listing docs inspected and changes made.
   - Cross-references from archived issue history to durable docs when useful.
-
   Validation:
   - Check links, command names, paths, and public contract descriptions touched by the pass.
   - Confirm docs describe the current canonical path only.
   - Confirm issue archive and active tracker references remain consistent.
-
-- [x] [M001] (P1) Consolidate repository runbook documents under `.mprlab/`.
+- [x] [M009R] (P1) Consolidate repository runbook documents under `.mprlab/`.
   ### Summary
   The repository had duplicate runbook and issue-tracker documents under `issues.md/`, `.mprl/`, and `.mprlab/`. Keep the active tracker and relevant recurring procedures under `.mprlab/`, then remove the old duplicate locations.
   ### Resolution
   Consolidated the current policy, planning, issue-format, and stack-guide documents under `.mprlab/`; kept `.mprlab/ISSUES.md` as the active tracker; carried forward recurring housekeeping runbooks from `issues.md/ISSUES.md`; updated stale runbook path references; and removed the duplicate `issues.md/` and `.mprl/` directories.
+
 
 ## Features
 
@@ -669,7 +601,6 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   9. Add Playwright browser coverage for the MPR shell rendering, login/session recovery, "create new key" behavior, provider-key form behavior, one-time secret display, revoke/regenerate flow, and copied usage example using the generated secret.
   ### Resolution
   Implemented management mode for the self-service browser UI using the MPR UI `/config-ui.yaml` contract, pinned MPR UI assets, `<mpr-header>`, `<mpr-user>`, and `<mpr-footer>`. Added TAuth session-cookie validation for `/api/management/*`, tenant-owned provider-key storage with masked responses, generated llm-proxy client secrets returned once and stored only as SHA-256 digests, default provider/model management, revoke/regenerate behavior, and managed-tenant routing through the existing `key=<tenant secret>` proxy contract. Management mode requires a configured persistent `management.database_dsn`; signup state, enabled providers, defaults, and generated-secret digests are persisted through GORM and are not stored by mutating the runtime config file. Public proxy endpoints now reject client-supplied provider API keys in query, JSON, and multipart inputs. Documented management configuration, production profile values required for deployment, security behavior, usage examples, and the no-raw-SQL GORM-only persistence rule in README/provider-routing docs and binding repo policy. Added black-box HTTP tests plus focused internal edge tests for unauthenticated access, key masking, cross-user isolation, generated-secret proxying, revoked-secret `403`, persistence failures, TAuth validation, and provider-key rejection; performed a local Playwright smoke of the rendered MPR shell because this repository has no committed browser-test harness. Validation passed with `timeout -k 350s -s SIGKILL 350s make test`, `timeout -k 350s -s SIGKILL 350s make lint`, and `timeout -k 350s -s SIGKILL 350s make ci`.
-
 - [x] [F002] (P1) Add one-time migration from legacy config tenants and provider API keys into the DB.
   ### Summary
   Management mode needs a one-off migration from legacy YAML tenant/provider-key configuration into the GORM database. After that migration, tenant secrets and provider API keys in the config file are obsolete seed material and runtime proxy authentication should use the database. Server/runtime configuration stays in the config file, including management auth settings, provider base URLs, and provider model catalogs.
@@ -686,7 +617,6 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   4. Preserve the GORM-only/no-raw-SQL rule.
   ### Resolution
   Added a GORM-tracked static-config migration marker and a management-mode startup migration that imports legacy configured tenants into DB tenant rows with their original tenant id, secret digest, defaults, and every nonblank configured provider API key. After the marker exists, management-mode startup ignores config-file tenants and provider `api_key` values; public proxy authentication and provider credentials are DB-authoritative. Server/runtime settings, TAuth/MPR UI settings, provider base URLs, transcription URLs, and model catalogs remain config-file-owned. Static tenant/default credential validation is skipped in management mode because those fields are seed material only. Added black-box HTTP coverage proving the migrated legacy secret works after first startup, still works after tenant/key YAML removal, and keeps using the migrated DB provider key when stale config credentials are reintroduced. Validation passed with `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 20 passed), `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 20 passed), `timeout -k 30s -s SIGKILL 30s git diff --check`, and GORM/no-stale-store scans for raw SQL/direct SQL and JSON-store wording.
-
 - [x] [F003] (P1) Support explicit GORM database dialects for management persistence.
   ### Summary
   Management persistence should support multiple GORM-backed SQL dialects rather than assuming Postgres whenever `management.database_dsn` is present. The initial supported dialects are Postgres and SQLite.
@@ -703,7 +633,6 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   4. Preserve existing Postgres behavior.
   ### Resolution
   Added `management.database_dialect` to the management YAML and runtime configuration, with `postgres` as the default/current behavior and `sqlite` as the second supported GORM dialect. The GORM opener now selects the dialector from the explicit dialect field and passes `management.database_dsn` unchanged to the selected driver. Unsupported dialects fail startup during management config validation. Added CLI coverage for dialect parsing and unsupported dialect rejection, real router/startup coverage that opens SQLite through configured management settings without test-only dialector injection, and direct GORM opener coverage for explicit/default Postgres and invalid dialect behavior. README and provider-routing docs now document supported dialects and DSN semantics, and `.mprlab/AGENTS.GO.md` lists both GORM dialect drivers as approved data dependencies. Validation passed with `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli ./internal/proxy`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 20 passed), `timeout -k 180s -s SIGKILL 180s make build`, `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 20 passed), `timeout -k 30s -s SIGKILL 30s git diff --check`, and a raw-SQL/direct-SQL scan.
-
 - [x] [F004] (P1) Make packaged management DB dialect and DSN configurable through expandable config variables.
   ### Summary
   The packaged `configs/config.yml` should expose management DB dialect and DB location keys as expandable environment-backed values, while disabled management mode should not require operators to define management DB variables.
@@ -719,7 +648,6 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   4. Preserve GORM/no-raw-SQL constraints.
   ### Resolution
   Added `${NAME:-default}` placeholder expansion in the config loader while preserving strict `config_placeholder_missing` failures for placeholders without defaults. Updated `configs/config.yml` to include a disabled management block with `management.database_dialect: "${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT:-postgres}"` and `management.database_dsn: "${LLM_PROXY_MANAGEMENT_DATABASE_DSN:-}"`, so deployment profiles can supply DB dialect/path through environment variables and disabled management mode does not require management DB variables. README and provider-routing docs now document the env-backed DB placeholders. Added CLI coverage for non-empty placeholder defaults, empty placeholder defaults, packaged config loading without management DB env vars, and existing strict missing-placeholder behavior. Validation passed with `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 20 passed), `timeout -k 180s -s SIGKILL 180s make build`, `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 20 passed), `timeout -k 30s -s SIGKILL 30s git diff --check`, and a raw-SQL/direct-SQL scan.
-
 - [x] [F005] (P1) Remove placeholder default syntax and source the SQLite management DB path from `.env`.
   ### Summary
   Config placeholders should stay strict and simple. The packaged config should refer to environment-backed management DB values, and the local `.env` profile should provide the SQLite dialect and file path.
@@ -737,7 +665,6 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   5. Preserve GORM/no-raw-SQL constraints.
   ### Resolution
   Removed `${NAME:-default}` expansion from the config loader and kept placeholder handling strict to plain `${NAME}` values. `configs/config.yml` now uses `${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT}` and `${LLM_PROXY_MANAGEMENT_DATABASE_DSN}` directly, the ignored local `configs/.env` profile provides `sqlite` plus the local management database file path, and `.gitignore` excludes generated `configs/*.sqlite` files. Removed the implicit Postgres fallback for `management.database_dialect`; management mode now requires an explicit `postgres` or `sqlite` value. Added CLI coverage proving default placeholder syntax fails with `config_placeholder_missing` and proving the packaged config loads when `.env` supplies SQLite management DB values. README and provider-routing docs now describe strict `.env`-backed management DB placeholders without default syntax or dialect fallback. Validation passed with `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli ./internal/proxy`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 20 passed), `timeout -k 180s -s SIGKILL 180s make build`, `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 20 passed), `timeout -k 30s -s SIGKILL 30s git diff --check`, `git check-ignore -v configs/llm-proxy-management.sqlite`, and a raw-SQL/direct-SQL scan.
-
 - [x] [F006] (P1) Split the self-service management frontend onto GitHub Pages and keep llm-proxy as an API backend.
   ### Summary
   The management browser app should be served from GitHub Pages/CDN instead of being served by the Go backend. llm-proxy remains the API/proxy backend and exposes only API/config endpoints needed by the static frontend. Production uses split origins: frontend on `https://llm-proxy.mprlab.com`, backend on `https://llm-proxy-api.mprlab.com`, and TAuth on `https://tauth-api.mprlab.com`.
@@ -759,17 +686,13 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   7. Document the exact DNS/configuration/GitHub Pages steps.
   ### Resolution
   Moved the self-service management frontend into the GitHub Pages-ready `site/` directory with static `index.html`, pinned `mpr-ui` assets, generated `CNAME`, and `.nojekyll`. Added `.github/workflows/pages.yml` to publish a rendered static site through GitHub Pages and updated the PR workflow trigger for site/workflow changes. The browser management client consumes API-served `https://llm-proxy-api.mprlab.com/config-ui.yaml`, calls `https://llm-proxy-api.mprlab.com/api/management/*` with credentials, and generates proxy examples against the configured backend origin from that same YAML. The Go backend no longer serves management HTML/assets; it keeps `/config-ui.yaml`, `/api/management/*`, and proxy endpoints, and applies credentialed CORS only for `management.public_origin`. Added black-box management tests for API-only root behavior, API-served browser config, authenticated/unauthenticated management API behavior, and allowed/blocked CORS preflight handling. README and provider-routing docs now describe the required production setup: `llm-proxy.mprlab.com` on GitHub Pages, `llm-proxy-api.mprlab.com` on the MPR gateway/backend, the TAuth `llm-proxy` tenant/cookie settings, and the GitHub Pages custom domain/source settings. Validation passed with `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli ./internal/proxy`, static JS `node --check`, `timeout -k 350s -s SIGKILL 350s make test` (Go total coverage 100.0%, Python 20 passed), `timeout -k 180s -s SIGKILL 180s make build`, `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 20 passed), `timeout -k 30s -s SIGKILL 30s git diff --check`, raw-SQL/direct-SQL scan, stale backend-hosted UI symbol scan, and a local Playwright CLI preview of the static Pages app. The preview rendered the MPR UI/TAuth login shell; live sign-in/API calls remain pending production DNS plus a real `llm-proxy` TAuth tenant and Google OAuth client id.
-
   Review follow-up fixed production blockers from the split-origin branch: SQLite management persistence now uses a pure-Go GORM driver compatible with `CGO_ENABLED=0` release builds, the packaged disabled-management config no longer requires unused management DB placeholders, generated deployment metadata routes the backend through `llm-proxy-api.mprlab.com`, `make deploy` defaults to the backend-only gateway target, and the Pages config renders the production `llm-proxy` Google OAuth web client id from the authoritative `config.yml`.
-
   Review follow-up replaced tracked literal Pages config outputs with a Go CLI projection from the already-loaded `config.yml`. Browser-facing management fields now live under the `management` config block, the existing config loader remains the only environment-expansion gate, and the Pages workflow runs `llm-proxy --config configs/config.yml --render-site-output ...` to emit `CNAME` and a rendered `index.html` that points at API-served `/config-ui.yaml`. Google OAuth client exports are ignored so client secrets are not staged. Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./cmd/cli ./internal/proxy`, `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), and `timeout -k 500s -s SIGKILL 500s make ci` (Go/Python lint clean, Go total coverage 100.0%, Python 20 passed).
-
   Review follow-up made browser/TAuth config consumable from `llm-proxy-api`: the backend now serves `/config-ui.yaml` from the validated management config with frontend-origin CORS, the Pages artifact keeps only `CNAME` plus the rendered `index.html` config URL, and the static frontend parses llm-proxy runtime origins from the same API-served YAML before bootstrapping `mpr-ui` and Alpine. The Pages workflow no longer receives production backend secrets; it uses non-sensitive placeholders for backend-only config fields during render. The renderer rejects public origins with ports before writing `CNAME` and removes any stale copied browser config files from the artifact. Validation passed with `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/app.js`, `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/core/backendClient.js`, `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/core/mprShell.js`, `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli ./internal/proxy`, `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), `timeout -k 30s -s SIGKILL 30s git diff --check`, raw-SQL/direct-SQL scan, stale static-config scan, and `timeout -k 500s -s SIGKILL 500s make ci` (Go/Python lint clean, Go total coverage 100.0%, Python 20 passed).
-
   Final single-file follow-up collapsed the remaining two-config-file design: `/llm-proxy-config.json` is no longer routed or generated, `/config-ui.yaml` now includes `llmProxy.managementApiOrigin` and `llmProxy.proxyOrigin`, the rendered Pages `index.html` only carries the API YAML URL, and frontend code parses the same YAML before loading MPR UI. Validation passed with `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/app.js`, `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/core/backendClient.js`, `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/core/mprShell.js`, `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli ./internal/proxy`, `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), `timeout -k 30s -s SIGKILL 30s git diff --check`, raw-SQL/direct-SQL scan, stale-contract scan with no active docs or route symbols for the removed JSON contract, and `timeout -k 500s -s SIGKILL 500s make ci` (Go/Python lint clean, Go total coverage 100.0%, Python 20 passed).
-
   Review follow-up hardened management mutations and defaults validation: authenticated unsafe `/api/management/*` requests now reject non-public `Origin` values and non-JSON content types, the static client sends JSON content type for secret generate/revoke mutations, and defaults updates validate normalized dictation defaults instead of accepting blank API fields that silently normalize to OpenAI. Added black-box HTTP coverage for blocked wrong-origin/simple mutation requests and DeepSeek-only blank dictation defaults. Validation passed with `go test -count=1 ./internal/proxy -run 'TestManagement(StaticPagesAndUnauthenticatedAPI|RejectsInvalidSessionsAndRequests|DatabasePersistenceAndOpenFailures|GeneratedSecretRoutesWithTenantProviderKey)'`, `go test -count=1 ./cmd/cli ./internal/proxy`, static JS `node --check`, `make go-test`, `make ci`, and `git diff --check`.
 
 
 ## Planning
 *do not implement yet*
+
