@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.20] - 2026-06-29
+
+### Changes
+- docs: update GitHub Pages workflow and documentation files
+
 ## [v0.2.19] - 2026-06-28
 
 ### Changes
