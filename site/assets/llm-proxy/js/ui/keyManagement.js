@@ -241,6 +241,7 @@ export function createKeyManagement() {
         this.usage = await fetchUsageSummary();
         this.setNotice(NOTICE_KINDS.SUCCESS, COPY.usageRefreshed);
       } catch (requestError) {
+        this.usage = emptyUsageSummary();
         this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
       } finally {
         this.busy = false;
