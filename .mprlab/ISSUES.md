@@ -435,6 +435,25 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Validate that typical workloads for text and dictation still succeed without unexpected errors when limits are set to realistic production values.
   - Perform a targeted regression check to ensure existing integrations using the shared HTTP client behave as before when limits are configured to be non-restrictive (e.g., effectively off).
 
+- [x] [I014] (P2) Align the management header avatar with the right edge.
+  Goal:
+  Move the MPR header avatar/login control to the far right of the header content measure so it balances the left-side LLM Proxy brand title instead of sitting immediately beside it.
+
+  Requirements:
+  - Keep using the shared `<mpr-header>` and `<mpr-user>` components.
+  - Scope the layout change to the llm-proxy static site rather than changing the shared MPR UI package.
+  - Preserve authenticated avatar and unauthenticated login placement through the same header actions container.
+
+  Deliverables:
+  - Static-site CSS that pushes the MPR header actions region to the right edge.
+
+  Validation:
+  - Verify the rendered header in a browser preview at desktop and mobile widths.
+  - Run focused frontend syntax checks for edited static files.
+
+  Resolution:
+  Added a scoped `#llm-proxy-header .mpr-header__actions` CSS override so the shared MPR header actions region uses `margin-left: auto`. Browser preview validation rendered the real static Pages app and CDN MPR UI bundle with local mock config/profile responses: desktop geometry placed the brand at x=100 and avatar at x=1146..1180, while mobile 390px geometry placed the brand at x=24..111 and avatar at x=332..366 with no overlap. Validation passed with `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/app.js`, `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/core/mprShell.js`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
+
 
 ## Maintenance
 

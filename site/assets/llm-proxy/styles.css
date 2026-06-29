@@ -44,6 +44,10 @@ secret-output {
   display: block;
 }
 
+#llm-proxy-header .mpr-header__actions {
+  margin-left: auto;
+}
+
 .llm-proxy-main {
   width: min(1180px, calc(100vw - 32px));
   margin: 0 auto;
