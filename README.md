@@ -415,28 +415,42 @@ Required hosted values are profile-specific:
 | `management.jwt_issuer` | JWT issuer, normally `tauth`. |
 | `management.session_cookie_name` | Exact app/environment TAuth session cookie name. |
 | `management.database_dialect` | Required GORM SQL dialect for management persistence. Supported values are `postgres` and `sqlite`; SQLite uses the pure-Go GORM driver so `CGO_ENABLED=0` builds remain valid. |
-| `management.database_dsn` | Required DSN passed to the selected GORM dialect for tenant-owned provider keys, defaults, and generated-secret digests. |
+| `management.database_dsn` | Required DSN passed to the selected GORM dialect for tenant-owned provider keys, defaults, generated-secret digests, and usage events. |
 | `management.management_api_origin` | Browser-facing management API origin served from `/config-ui.yaml` under `llmProxy.managementApiOrigin`. |
 | `management.proxy_origin` | Browser-facing public proxy origin served from `/config-ui.yaml` under `llmProxy.proxyOrigin` for generated examples. |
 
 Signed-in users save provider API keys for any supported provider, choose
 routing defaults, and generate llm-proxy secrets. Management mode requires
 `management.database_dialect` and `management.database_dsn` so signups, enabled
-providers, defaults, and generated secret digests survive restarts in a
-GORM-managed database. `postgres` uses a Postgres DSN, while `sqlite` uses a
-SQLite database path or SQLite DSN. The packaged management config uses strict
-expandable placeholders for the hosted profile values; define every
+providers, defaults, generated secret digests, and usage events survive restarts
+in a GORM-managed database. `postgres` uses a Postgres DSN, while `sqlite` uses
+a SQLite database path or SQLite DSN. The packaged management config uses
+strict expandable placeholders for the hosted profile values; define every
 `LLM_PROXY_MANAGEMENT_*` key in the runtime environment or local `configs/.env`.
 Placeholders without matching values fail startup. The runtime config file is
-never mutated for user signup or provider enablement, and database access must
-stay on GORM model APIs without raw SQL.
-Generated secrets
+never mutated for user signup, provider enablement, or usage tracking, and
+database access must stay on GORM model APIs without raw SQL. Generated secrets
 continue to authenticate the public proxy endpoints with the same
 `key=<tenant secret>` query parameter. Provider API keys are accepted only
 through authenticated management endpoints; after save, the UI/API returns only
 masked key status. Generated tenant secrets are returned once and the database
 retains only their SHA-256 digest. Revoking a generated secret immediately makes
 future public proxy requests with that secret return `403`.
+
+The authenticated landing screen is a usage dashboard. It shows 30-day request
+and token graphs, total request and token counts, success rate, and provider and
+model breakdowns for the signed-in user's managed tenant. The prior dashboard
+controls now live in a large Settings modal opened from the avatar dropdown;
+the `Settings` menu item is inserted before `Sign out` through the shared
+`<mpr-user>` menu contract. The modal contains client access, generated secret,
+routing defaults, request examples, and provider key management.
+
+`GET /api/management/usage` returns the dashboard data for the authenticated
+user. Usage events are recorded only for managed tenants when they call the
+public proxy endpoints with a generated secret. Stored usage metadata includes
+endpoint, provider, model, status code, success flag, latency, and normalized
+request/response/total token counts. Prompts, audio, transcripts, responses,
+tenant secrets, and provider API keys are not stored in usage events.
 
 On the first management-mode startup, llm-proxy runs a one-time migration from
 legacy config tenants and nonblank configured provider API keys into the
@@ -582,7 +596,8 @@ This repository exposes the standard local targets used by MPR app repos:
 
 | Command | Purpose |
 |---------|---------|
-| `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, the 100% coverage-gated Go test suite, and Python pytest. |
+| `npm ci` | Install pinned frontend validation dependencies before running local frontend checks. |
+| `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, and Playwright browser tests. |
 | `make test-live-providers` | Generate a complete temporary config and run live text smoke tests for every provider whose API key is present; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
 | `make release` | Cut a `v*` release from `master`, update `CHANGELOG.md` when needed, and push the release tag. |
