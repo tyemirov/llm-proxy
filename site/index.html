@@ -4,7 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>LLM Proxy</title>
-    <link rel="icon" href="data:,">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -40,99 +42,143 @@
             <section class="dashboard-hero">
               <header class="section-header">
                 <div>
-                  <p class="eyebrow" x-text="copy.dashboardEyebrow"></p>
-                  <h1 x-text="copy.dashboardTitle"></h1>
+                  <p class="eyebrow" x-text="dashboardEyebrow"></p>
+                  <h1 x-text="dashboardTitle"></h1>
                 </div>
-                <button type="button" x-on:click="refreshUsage()" x-bind:disabled="busy" x-text="copy.refreshUsage"></button>
+                <dashboard-actions>
+                  <button type="button" x-show="dashboardView === dashboardViews.ADMIN" x-on:click="openUsageDashboard()" x-text="copy.openUsageDashboard"></button>
+                  <button type="button" x-on:click="refreshDashboard()" x-bind:disabled="busy" x-text="dashboardRefreshCopy"></button>
+                </dashboard-actions>
               </header>
             </section>
 
-            <usage-metrics>
-              <usage-card>
-                <span x-text="copy.usageRequests"></span>
-                <strong x-text="usageTotalRequests"></strong>
-              </usage-card>
-              <usage-card>
-                <span x-text="copy.usageTokens"></span>
-                <strong x-text="usageTotalTokens"></strong>
-              </usage-card>
-              <usage-card>
-                <span x-text="copy.usageSuccessRate"></span>
-                <strong x-text="usageSuccessRate"></strong>
-              </usage-card>
-              <usage-card>
-                <span x-text="copy.usageProviders"></span>
-                <strong x-text="usageProviderCount"></strong>
-              </usage-card>
-            </usage-metrics>
+            <template x-if="dashboardView === dashboardViews.USAGE">
+              <usage-dashboard>
+                <usage-metrics>
+                  <usage-card>
+                    <span x-text="copy.usageRequests"></span>
+                    <strong x-text="usageTotalRequests"></strong>
+                  </usage-card>
+                  <usage-card>
+                    <span x-text="copy.usageTokens"></span>
+                    <strong x-text="usageTotalTokens"></strong>
+                  </usage-card>
+                  <usage-card>
+                    <span x-text="copy.usageSuccessRate"></span>
+                    <strong x-text="usageSuccessRate"></strong>
+                  </usage-card>
+                  <usage-card>
+                    <span x-text="copy.usageProviders"></span>
+                    <strong x-text="usageProviderCount"></strong>
+                  </usage-card>
+                </usage-metrics>
 
-            <section class="dashboard-grid">
-              <usage-chart-panel class="llm-panel">
-                <header class="section-header compact">
-                  <div>
-                    <p class="eyebrow" x-text="copy.usageRequestTrend"></p>
-                    <h2 x-text="copy.usageRequests"></h2>
-                  </div>
-                </header>
-                <svg class="usage-chart-svg" x-show="hasUsage" x-bind:viewBox="chartViewBox" x-bind:aria-label="copy.usageRequestTrend" role="img">
-                  <polyline x-bind:points="usageRequestPolyline"></polyline>
-                </svg>
-                <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
-              </usage-chart-panel>
+                <section class="dashboard-grid">
+                  <usage-chart-panel class="llm-panel">
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.usageRequestTrend"></p>
+                        <h2 x-text="copy.usageRequests"></h2>
+                      </div>
+                    </header>
+                    <svg class="usage-chart-svg" x-show="hasUsage" x-bind:viewBox="chartViewBox" x-bind:aria-label="copy.usageRequestTrend" role="img">
+                      <polyline x-bind:points="usageRequestPolyline"></polyline>
+                    </svg>
+                    <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
+                  </usage-chart-panel>
 
-              <usage-chart-panel class="llm-panel">
-                <header class="section-header compact">
-                  <div>
-                    <p class="eyebrow" x-text="copy.usageTokenTrend"></p>
-                    <h2 x-text="copy.usageTokens"></h2>
-                  </div>
-                </header>
-                <svg class="usage-chart-svg" x-show="hasUsage" x-bind:viewBox="chartViewBox" x-bind:aria-label="copy.usageTokenTrend" role="img">
-                  <polyline x-bind:points="usageTokenPolyline"></polyline>
-                </svg>
-                <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
-              </usage-chart-panel>
-            </section>
+                  <usage-chart-panel class="llm-panel">
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.usageTokenTrend"></p>
+                        <h2 x-text="copy.usageTokens"></h2>
+                      </div>
+                    </header>
+                    <svg class="usage-chart-svg" x-show="hasUsage" x-bind:viewBox="chartViewBox" x-bind:aria-label="copy.usageTokenTrend" role="img">
+                      <polyline x-bind:points="usageTokenPolyline"></polyline>
+                    </svg>
+                    <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
+                  </usage-chart-panel>
+                </section>
 
-            <section class="dashboard-grid">
-              <usage-breakdown class="llm-panel">
-                <header class="section-header compact">
-                  <div>
-                    <p class="eyebrow" x-text="copy.usageByProvider"></p>
-                    <h2 x-text="copy.usageProviders"></h2>
-                  </div>
-                </header>
-                <usage-row-list x-show="hasUsage">
-                  <template x-for="row in providerUsageRows" x-bind:key="row.label">
-                    <usage-row>
-                      <span x-text="row.label"></span>
-                      <strong x-text="row.requests"></strong>
-                      <usage-bar><i x-bind:style="`width: ${row.width}`"></i></usage-bar>
-                    </usage-row>
+                <section class="dashboard-grid">
+                  <usage-breakdown class="llm-panel">
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.usageByProvider"></p>
+                        <h2 x-text="copy.usageProviders"></h2>
+                      </div>
+                    </header>
+                    <usage-row-list x-show="hasUsage">
+                      <template x-for="row in providerUsageRows" x-bind:key="row.label">
+                        <usage-row>
+                          <span x-text="row.label"></span>
+                          <strong x-text="row.requests"></strong>
+                          <usage-bar><i x-bind:style="`width: ${row.width}`"></i></usage-bar>
+                        </usage-row>
+                      </template>
+                    </usage-row-list>
+                    <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
+                  </usage-breakdown>
+
+                  <usage-breakdown class="llm-panel">
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.usageByModel"></p>
+                        <h2 x-text="copy.usageByModel"></h2>
+                      </div>
+                    </header>
+                    <usage-row-list x-show="hasUsage">
+                      <template x-for="row in modelUsageRows" x-bind:key="row.label">
+                        <usage-row>
+                          <span x-text="row.label"></span>
+                          <strong x-text="row.requests"></strong>
+                          <usage-bar><i x-bind:style="`width: ${row.width}`"></i></usage-bar>
+                        </usage-row>
+                      </template>
+                    </usage-row-list>
+                    <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
+                  </usage-breakdown>
+                </section>
+              </usage-dashboard>
+            </template>
+
+            <template x-if="dashboardView === dashboardViews.ADMIN">
+              <admin-dashboard class="llm-panel">
+                <admin-user-list x-show="hasAdminUsers">
+                  <template x-for="adminUser in adminUsers" x-bind:key="adminUser.user.id">
+                    <admin-user-card>
+                      <header>
+                        <div>
+                          <h2 x-text="adminUserLabel(adminUser)"></h2>
+                          <p x-text="adminUser.user.display_name || adminUser.user.id"></p>
+                        </div>
+                        <span x-text="adminUser.tenant.has_secret ? copy.adminSecretReady : copy.adminSecretMissing"></span>
+                      </header>
+                      <dl class="admin-user-facts">
+                        <div>
+                          <dt x-text="copy.adminTenant"></dt>
+                          <dd x-text="adminUser.tenant.id"></dd>
+                        </div>
+                        <div>
+                          <dt x-text="copy.usageRequests"></dt>
+                          <dd x-text="adminUserRequests(adminUser)"></dd>
+                        </div>
+                        <div>
+                          <dt x-text="copy.usageTokens"></dt>
+                          <dd x-text="adminUserTokens(adminUser)"></dd>
+                        </div>
+                        <div>
+                          <dt x-text="copy.usageSuccessRate"></dt>
+                          <dd x-text="adminUserSuccessRate(adminUser)"></dd>
+                        </div>
+                      </dl>
+                    </admin-user-card>
                   </template>
-                </usage-row-list>
-                <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
-              </usage-breakdown>
-
-              <usage-breakdown class="llm-panel">
-                <header class="section-header compact">
-                  <div>
-                    <p class="eyebrow" x-text="copy.usageByModel"></p>
-                    <h2 x-text="copy.usageByModel"></h2>
-                  </div>
-                </header>
-                <usage-row-list x-show="hasUsage">
-                  <template x-for="row in modelUsageRows" x-bind:key="row.label">
-                    <usage-row>
-                      <span x-text="row.label"></span>
-                      <strong x-text="row.requests"></strong>
-                      <usage-bar><i x-bind:style="`width: ${row.width}`"></i></usage-bar>
-                    </usage-row>
-                  </template>
-                </usage-row-list>
-                <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
-              </usage-breakdown>
-            </section>
+                </admin-user-list>
+                <p class="usage-empty" x-show="!hasAdminUsers" x-text="copy.adminEmpty"></p>
+              </admin-dashboard>
+            </template>
 
             <settings-overlay
               x-cloak

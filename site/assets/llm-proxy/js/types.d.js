@@ -35,7 +35,7 @@
 
 /**
  * @typedef {{
- *   user: { id: string, email?: string, display_name?: string, avatar_url?: string },
+ *   user: { id: string, email?: string, display_name?: string, avatar_url?: string, is_admin: boolean },
  *   tenant: TenantProfile,
  *   providers: ProviderProfile[],
  *   proxy: { text_path: string, v2_path: string, dictation_path: string }
@@ -80,6 +80,21 @@
  *   models: Array<{ provider: string, model: string, data: UsageAggregate }>,
  *   status_codes: Array<{ status_code: number, requests: number }>
  * }} ManagementUsageSummary
+ */
+
+/**
+ * @typedef {{
+ *   user: { id: string, email?: string, display_name?: string, avatar_url?: string, is_admin: boolean },
+ *   tenant: { id: string, has_secret: boolean, created_at?: string, updated_at?: string },
+ *   usage: ManagementUsageSummary
+ * }} ManagementAdminUser
+ */
+
+/**
+ * @typedef {{
+ *   period_days: number,
+ *   users: ManagementAdminUser[]
+ * }} ManagementAdminUsersResponse
  */
 
 export {};

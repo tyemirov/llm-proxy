@@ -41,6 +41,8 @@ llm-proxy-key-management,
 workspace-surface,
 tenant-actions,
 defaults-editor,
+dashboard-actions,
+usage-dashboard,
 usage-panel,
 usage-metrics,
 usage-card,
@@ -49,6 +51,9 @@ usage-breakdown,
 usage-row-list,
 usage-row,
 usage-bar,
+admin-dashboard,
+admin-user-list,
+admin-user-card,
 provider-list,
 provider-key-card,
 secret-output,
@@ -82,6 +87,17 @@ settings-section {
 }
 
 workspace-surface {
+  display: grid;
+  gap: 0.5rem;
+}
+
+dashboard-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+usage-dashboard {
   display: grid;
   gap: 0.5rem;
 }
@@ -206,6 +222,70 @@ usage-bar i {
   height: 100%;
   border-radius: inherit;
   background: var(--llm-good);
+}
+
+admin-user-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.5rem;
+}
+
+admin-user-card {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-panel-strong);
+  padding: 0.65rem;
+}
+
+admin-user-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+admin-user-card header div {
+  min-width: 0;
+}
+
+admin-user-card h2,
+admin-user-card p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+admin-user-card p {
+  margin-bottom: 0;
+  color: var(--llm-muted);
+  font-size: 0.72rem;
+}
+
+admin-user-card header span {
+  flex: 0 0 auto;
+  border: 1px solid var(--llm-border);
+  border-radius: 999px;
+  color: var(--llm-subtle);
+  padding: 0.15rem 0.45rem;
+  font-size: 0.68rem;
+}
+
+.admin-user-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.admin-user-facts div {
+  min-width: 0;
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-bg);
+  padding: 0.4rem 0.5rem;
 }
 
 .llm-grid {
@@ -541,6 +621,7 @@ settings-section {
 
   .section-header,
   .settings-header,
+  dashboard-actions,
   tenant-actions,
   .provider-key-form {
     align-items: stretch;

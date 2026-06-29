@@ -1,6 +1,6 @@
 // @ts-check
 
-import { MPR_UI, USER_MENU_ITEMS } from "../constants.js";
+import { ADMIN_USER_MENU_ITEMS, MPR_UI, USER_MENU_ITEMS } from "../constants.js";
 import { loadFrontendRuntimeConfig } from "./backendClient.js";
 
 /**
@@ -9,7 +9,7 @@ import { loadFrontendRuntimeConfig } from "./backendClient.js";
 export async function initializeMprShell() {
   const runtimeConfig = await loadFrontendRuntimeConfig();
   applyHeaderConfigURL(runtimeConfig.configUrl);
-  applyUserMenuItems();
+  applyUserMenuItems(false);
   await applyMprUIConfig(runtimeConfig.configUrl);
   await loadMprUIBundle();
 }
@@ -24,10 +24,13 @@ function applyHeaderConfigURL(configUrl) {
   }
 }
 
-function applyUserMenuItems() {
+/**
+ * @param {boolean} isAdmin
+ */
+export function applyUserMenuItems(isAdmin) {
   const userMenu = document.querySelector(MPR_UI.USER_SELECTOR);
   if (userMenu) {
-    userMenu.setAttribute(MPR_UI.USER_MENU_ITEMS_ATTRIBUTE, JSON.stringify(USER_MENU_ITEMS));
+    userMenu.setAttribute(MPR_UI.USER_MENU_ITEMS_ATTRIBUTE, JSON.stringify(isAdmin ? ADMIN_USER_MENU_ITEMS : USER_MENU_ITEMS));
   }
 }
 

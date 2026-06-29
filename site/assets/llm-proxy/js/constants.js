@@ -20,7 +20,13 @@ export const EVENTS = Object.freeze({
 });
 
 export const MENU_ACTIONS = Object.freeze({
+  OPEN_ADMIN: "open-admin",
   OPEN_SETTINGS: "open-settings",
+});
+
+export const DASHBOARD_VIEWS = Object.freeze({
+  USAGE: "usage",
+  ADMIN: "admin",
 });
 
 export const USER_MENU_ITEMS = Object.freeze([
@@ -28,6 +34,14 @@ export const USER_MENU_ITEMS = Object.freeze([
     label: "Settings",
     action: MENU_ACTIONS.OPEN_SETTINGS,
   }),
+]);
+
+export const ADMIN_USER_MENU_ITEMS = Object.freeze([
+  Object.freeze({
+    label: "Admin",
+    action: MENU_ACTIONS.OPEN_ADMIN,
+  }),
+  ...USER_MENU_ITEMS,
 ]);
 
 export const MPR_UI = Object.freeze({
@@ -49,7 +63,11 @@ export const COPY = Object.freeze({
   signedOutTitle: "Sign in to manage llm-proxy keys",
   dashboardEyebrow: "Dashboard",
   dashboardTitle: "Usage overview",
+  adminDashboardEyebrow: "Admin",
+  adminDashboardTitle: "All users",
   refreshUsage: "Refresh",
+  refreshAdmin: "Refresh",
+  openUsageDashboard: "Usage overview",
   usageRequests: "Requests",
   usageTokens: "Tokens",
   usageSuccessRate: "Success rate",
@@ -59,6 +77,13 @@ export const COPY = Object.freeze({
   usageByProvider: "Provider usage",
   usageByModel: "Model usage",
   usageEmpty: "No usage recorded",
+  adminEmpty: "No managed users",
+  adminTenant: "Tenant",
+  adminSecret: "Secret",
+  adminSecretReady: "Created",
+  adminSecretMissing: "Missing",
+  adminUpdated: "Updated",
+  adminUserFallback: "Unnamed user",
   settingsEyebrow: "Workspace",
   settingsTitle: "Settings",
   closeSettings: "Close",

@@ -37,6 +37,13 @@ export function fetchUsageSummary() {
 }
 
 /**
+ * @returns {Promise<import("../types.d.js").ManagementAdminUsersResponse>}
+ */
+export function fetchAdminUsers() {
+  return requestJSON(`${MANAGEMENT_BASE_PATH}/admin/users`, { method: "GET" });
+}
+
+/**
  * @param {string} provider
  * @param {string} apiKey
  * @returns {Promise<import("../types.d.js").ManagementProfile>}
