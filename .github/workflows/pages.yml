@@ -41,6 +41,7 @@ jobs:
       LLM_PROXY_MANAGEMENT_UI_DESCRIPTION: LLM Proxy
       LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN: http://127.0.0.1:4179
       LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN: http://localhost:4179
+      LLM_PROXY_MANAGEMENT_ADMIN_EMAIL: pages-render-admin@example.invalid
       LLM_PROXY_MANAGEMENT_TAUTH_URL: https://tauth-api.mprlab.com
       LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID: llm-proxy
       LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID: 925457785190-3frk7j3bsr3ucidtkcohrp2sl07e0paa.apps.googleusercontent.com
@@ -52,6 +53,7 @@ jobs:
       LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME: app_session_llm_proxy
       LLM_PROXY_MANAGEMENT_DATABASE_DIALECT: sqlite
       LLM_PROXY_MANAGEMENT_DATABASE_DSN: pages-render-unused-dsn
+      LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       LLM_PROXY_MANAGEMENT_API_ORIGIN: https://llm-proxy-api.mprlab.com
       LLM_PROXY_MANAGEMENT_PROXY_ORIGIN: https://llm-proxy-api.mprlab.com
     steps:
