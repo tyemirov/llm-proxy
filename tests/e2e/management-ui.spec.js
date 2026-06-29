@@ -130,6 +130,24 @@ test("settings stays reachable when usage summary fails", async ({ page }) => {
   await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
 });
 
+test("usage refresh clears stale metrics when summary reload fails", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+
+  await page.goto(baseURL);
+
+  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("37");
+  await page.unroute(`${baseURL}/api/management/usage`);
+  await page.route(`${baseURL}/api/management/usage`, async (route) => {
+    await route.fulfill({ status: httpInternalServerError, json: { error: "usage_failed" } });
+  });
+  await page.getByRole("button", { name: "Refresh" }).click();
+
+  await expect(page.getByText("Request failed")).toBeVisible();
+  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("0");
+  await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
+});
+
 test("admin menu opens all users dashboard", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page, { admin: true });
