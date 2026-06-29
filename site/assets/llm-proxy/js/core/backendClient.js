@@ -30,6 +30,13 @@ export function fetchProfile() {
 }
 
 /**
+ * @returns {Promise<import("../types.d.js").ManagementUsageSummary>}
+ */
+export function fetchUsageSummary() {
+  return requestJSON(`${MANAGEMENT_BASE_PATH}/usage`, { method: "GET" });
+}
+
+/**
  * @param {string} provider
  * @param {string} apiKey
  * @returns {Promise<import("../types.d.js").ManagementProfile>}

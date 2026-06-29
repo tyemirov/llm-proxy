@@ -1,9 +1,10 @@
 // @ts-check
 
-import { AUTH_STATES, COPY, EVENTS, NOTICE_KINDS } from "../constants.js";
+import { AUTH_STATES, COPY, EVENTS, MENU_ACTIONS, NOTICE_KINDS } from "../constants.js";
 import {
   BackendClientError,
   fetchProfile,
+  fetchUsageSummary,
   generateSecret as requestGeneratedSecret,
   loadFrontendRuntimeConfig,
   removeProviderKey as requestRemoveProviderKey,
@@ -11,6 +12,15 @@ import {
   saveProviderKey as requestSaveProviderKey,
   updateDefaults as requestUpdateDefaults,
 } from "../core/backendClient.js";
+import {
+  emptyUsageSummary,
+  modelRows,
+  providerRows,
+  successRateLabel,
+  usagePolyline,
+  USAGE_CHART,
+  USAGE_METRICS,
+} from "./usagePresentation.js";
 
 const EMPTY_SECRET_PLACEHOLDER = "<generated-secret>";
 const EMPTY_STRING = "";
@@ -35,7 +45,10 @@ export function createKeyManagement() {
     providerInputs: {},
     /** @type {import("../types.d.js").TenantDefaults} */
     defaults: emptyDefaults(),
+    /** @type {import("../types.d.js").ManagementUsageSummary} */
+    usage: emptyUsageSummary(),
     generatedSecret: EMPTY_STRING,
+    settingsOpen: false,
     notice: {
       kind: NOTICE_KINDS.INFO,
       message: EMPTY_STRING,
@@ -49,6 +62,9 @@ export function createKeyManagement() {
         this.clearAuthenticatedState();
         this.authState = AUTH_STATES.UNAUTHENTICATED;
         dispatchManagementReady();
+      });
+      document.addEventListener(EVENTS.USER_MENU_ITEM, (event) => {
+        this.handleUserMenuItem(event);
       });
       void this.start();
     },
@@ -76,6 +92,50 @@ export function createKeyManagement() {
     get selectedDictationModels() {
       const provider = this.providers.find((candidateProvider) => candidateProvider.id === this.defaults.dictation_provider);
       return provider ? provider.dictation_models : [];
+    },
+
+    get chartViewBox() {
+      return `0 0 ${USAGE_CHART.width} ${USAGE_CHART.height}`;
+    },
+
+    get hasUsage() {
+      return this.usage.totals.requests > 0;
+    },
+
+    get usageTotals() {
+      return this.usage.totals;
+    },
+
+    get usageTotalRequests() {
+      return formatNumber(this.usage.totals.requests);
+    },
+
+    get usageTotalTokens() {
+      return formatNumber(this.usage.totals.total_tokens);
+    },
+
+    get usageSuccessRate() {
+      return successRateLabel(this.usage.totals);
+    },
+
+    get usageProviderCount() {
+      return formatNumber(this.usage.providers.length);
+    },
+
+    get usageRequestPolyline() {
+      return usagePolyline(this.usage, USAGE_METRICS.REQUESTS);
+    },
+
+    get usageTokenPolyline() {
+      return usagePolyline(this.usage, USAGE_METRICS.TOTAL_TOKENS);
+    },
+
+    get providerUsageRows() {
+      return providerRows(this.usage);
+    },
+
+    get modelUsageRows() {
+      return modelRows(this.usage);
     },
 
     get usageCurl() {
@@ -113,8 +173,9 @@ export function createKeyManagement() {
     async loadProfile() {
       this.busy = true;
       try {
-        const loadedProfile = await fetchProfile();
+        const [loadedProfile, loadedUsage] = await Promise.all([fetchProfile(), fetchUsageSummary()]);
         this.applyProfile(loadedProfile);
+        this.usage = loadedUsage;
         this.authState = AUTH_STATES.AUTHENTICATED;
         this.setNotice(NOTICE_KINDS.SUCCESS, COPY.profileLoaded);
       } catch (requestError) {
@@ -129,6 +190,42 @@ export function createKeyManagement() {
         this.busy = false;
         dispatchManagementReady();
       }
+    },
+
+    async refreshUsage() {
+      this.busy = true;
+      try {
+        this.usage = await fetchUsageSummary();
+        this.setNotice(NOTICE_KINDS.SUCCESS, COPY.usageRefreshed);
+      } catch (requestError) {
+        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    /**
+     * @param {Event} event
+     */
+    handleUserMenuItem(event) {
+      const customEvent = /** @type {CustomEvent<{ action?: string }>} */ (event);
+      if (!customEvent.detail || customEvent.detail.action !== MENU_ACTIONS.OPEN_SETTINGS) {
+        return;
+      }
+      this.openSettings();
+    },
+
+    openSettings() {
+      this.settingsOpen = true;
+      requestAnimationFrame(() => {
+        if (this.$refs.settingsClose) {
+          this.$refs.settingsClose.focus();
+        }
+      });
+    },
+
+    closeSettings() {
+      this.settingsOpen = false;
     },
 
     /**
@@ -235,7 +332,9 @@ export function createKeyManagement() {
       this.providers = [];
       this.providerInputs = {};
       this.defaults = emptyDefaults();
+      this.usage = emptyUsageSummary();
       this.generatedSecret = EMPTY_STRING;
+      this.settingsOpen = false;
     },
 
     /**
@@ -263,4 +362,12 @@ function emptyDefaults() {
 
 function dispatchManagementReady() {
   document.dispatchEvent(new CustomEvent(EVENTS.MANAGEMENT_READY));
+}
+
+/**
+ * @param {number} value
+ * @returns {string}
+ */
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString("en-US");
 }

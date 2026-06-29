@@ -57,4 +57,29 @@
  * }} FrontendRuntimeConfig
  */
 
+/**
+ * @typedef {{
+ *   requests: number,
+ *   successful_requests: number,
+ *   failed_requests: number,
+ *   text_requests: number,
+ *   dictation_requests: number,
+ *   request_tokens: number,
+ *   response_tokens: number,
+ *   total_tokens: number,
+ *   average_latency_ms: number
+ * }} UsageAggregate
+ */
+
+/**
+ * @typedef {{
+ *   period_days: number,
+ *   totals: UsageAggregate,
+ *   daily: Array<{ date: string, data: UsageAggregate }>,
+ *   providers: Array<{ provider: string, data: UsageAggregate }>,
+ *   models: Array<{ provider: string, model: string, data: UsageAggregate }>,
+ *   status_codes: Array<{ status_code: number, requests: number }>
+ * }} ManagementUsageSummary
+ */
+
 export {};

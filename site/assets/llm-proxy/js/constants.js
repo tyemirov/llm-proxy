@@ -15,8 +15,20 @@ export const NOTICE_KINDS = Object.freeze({
 export const EVENTS = Object.freeze({
   AUTHENTICATED: "mpr-ui:auth:authenticated",
   UNAUTHENTICATED: "mpr-ui:auth:unauthenticated",
+  USER_MENU_ITEM: "mpr-user:menu-item",
   MANAGEMENT_READY: "llm-proxy:management-ready",
 });
+
+export const MENU_ACTIONS = Object.freeze({
+  OPEN_SETTINGS: "open-settings",
+});
+
+export const USER_MENU_ITEMS = Object.freeze([
+  Object.freeze({
+    label: "Settings",
+    action: MENU_ACTIONS.OPEN_SETTINGS,
+  }),
+]);
 
 export const MPR_UI = Object.freeze({
   BUNDLE_URL: "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.js",
@@ -25,6 +37,8 @@ export const MPR_UI = Object.freeze({
   CONFIG_LOADER_MISSING: "llm_proxy_mpr_ui_config_loader_missing",
   HEADER_ID: "llm-proxy-header",
   SCRIPT_ID: "llm-proxy-mpr-ui-script",
+  USER_SELECTOR: "mpr-user",
+  USER_MENU_ITEMS_ATTRIBUTE: "menu-items",
   YAML_LOADER_MISSING: "llm_proxy_yaml_loader_missing",
 });
 
@@ -33,6 +47,21 @@ export const COPY = Object.freeze({
   loadingTitle: "Loading key workspace",
   signedOutEyebrow: "Authentication",
   signedOutTitle: "Sign in to manage llm-proxy keys",
+  dashboardEyebrow: "Dashboard",
+  dashboardTitle: "Usage overview",
+  refreshUsage: "Refresh",
+  usageRequests: "Requests",
+  usageTokens: "Tokens",
+  usageSuccessRate: "Success rate",
+  usageProviders: "Providers",
+  usageRequestTrend: "Requests",
+  usageTokenTrend: "Tokens",
+  usageByProvider: "Provider usage",
+  usageByModel: "Model usage",
+  usageEmpty: "No usage recorded",
+  settingsEyebrow: "Workspace",
+  settingsTitle: "Settings",
+  closeSettings: "Close",
   tenantEyebrow: "Tenant",
   tenantTitle: "Client access",
   generateSecret: "Create key",
@@ -52,8 +81,8 @@ export const COPY = Object.freeze({
   noDictationModel: "No dictation model",
   systemPrompt: "System prompt",
   saveDefaults: "Save defaults",
-  usageEyebrow: "Usage",
-  usageTitle: "Request example",
+  examplesEyebrow: "Usage",
+  examplesTitle: "Request examples",
   providersEyebrow: "Providers",
   providersTitle: "Provider keys",
   providerMissing: "No key saved",
@@ -62,6 +91,7 @@ export const COPY = Object.freeze({
   updateProviderKey: "Update key",
   saveProviderKey: "Save key",
   profileLoaded: "Workspace loaded",
+  usageRefreshed: "Usage refreshed",
   providerKeySaved: "Provider key saved",
   providerKeyRemoved: "Provider key removed",
   defaultsSaved: "Defaults saved",
