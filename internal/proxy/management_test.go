@@ -604,6 +604,109 @@ func TestManagementGeneratedSecretSupportsDictationAndRejectsMultipartProviderKe
 	}
 }
 
+func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
+	chatServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/chat/completions" {
+			t.Fatalf("chat path=%s want=/chat/completions", request.URL.Path)
+		}
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"managed usage ok"}}],"usage":{"prompt_tokens":4,"completion_tokens":6,"total_tokens":10}}`))
+	}))
+	defer chatServer.Close()
+	dictationServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		http.Error(responseWriter, "dictation unavailable", http.StatusBadGateway)
+	}))
+	defer dictationServer.Close()
+
+	router := newManagementRouter(t, proxy.Configuration{
+		DeepSeekBaseURL:         chatServer.URL,
+		OpenAITranscriptionsURL: dictationServer.URL,
+	})
+	userOneCookie := managementSessionCookie(t, "usage-user-one")
+	userTwoCookie := managementSessionCookie(t, "usage-user-two")
+
+	emptyUsage := requestManagementUsage(t, router, userOneCookie)
+	if emptyUsage.PeriodDays != 30 || len(emptyUsage.Daily) != 30 || emptyUsage.Totals.Requests != 0 {
+		t.Fatalf("empty usage=%+v daily=%d", emptyUsage.Totals, len(emptyUsage.Daily))
+	}
+
+	saveDeepSeekKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/deepseek", `{"api_key":"`+testManagementDeepSeekKey+`"}`, userOneCookie)
+	saveDeepSeekKeyResponse := httptest.NewRecorder()
+	router.ServeHTTP(saveDeepSeekKeyResponse, saveDeepSeekKeyRequest)
+	if saveDeepSeekKeyResponse.Code != http.StatusOK {
+		t.Fatalf("save deepseek key status=%d body=%s", saveDeepSeekKeyResponse.Code, saveDeepSeekKeyResponse.Body.String())
+	}
+	saveOpenAIKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/openai", `{"api_key":"`+testManagementOpenAIKey+`"}`, userOneCookie)
+	saveOpenAIKeyResponse := httptest.NewRecorder()
+	router.ServeHTTP(saveOpenAIKeyResponse, saveOpenAIKeyRequest)
+	if saveOpenAIKeyResponse.Code != http.StatusOK {
+		t.Fatalf("save openai key status=%d body=%s", saveOpenAIKeyResponse.Code, saveOpenAIKeyResponse.Body.String())
+	}
+	defaultsBody := `{"provider":"deepseek","model":"` + proxy.ModelNameDeepSeekV4Flash + `","dictation_provider":"openai","dictation_model":"` + proxy.DefaultDictationModel + `","system_prompt":""}`
+	defaultsRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/defaults", defaultsBody, userOneCookie)
+	defaultsResponse := httptest.NewRecorder()
+	router.ServeHTTP(defaultsResponse, defaultsRequest)
+	if defaultsResponse.Code != http.StatusOK {
+		t.Fatalf("defaults status=%d body=%s", defaultsResponse.Code, defaultsResponse.Body.String())
+	}
+	secretRequest := authenticatedJSONRequest(http.MethodPost, "/api/management/secrets", `{}`, userOneCookie)
+	secretResponse := httptest.NewRecorder()
+	router.ServeHTTP(secretResponse, secretRequest)
+	if secretResponse.Code != http.StatusOK {
+		t.Fatalf("secret status=%d body=%s", secretResponse.Code, secretResponse.Body.String())
+	}
+	var secretPayload struct {
+		Secret string `json:"secret"`
+	}
+	if decodeError := json.Unmarshal(secretResponse.Body.Bytes(), &secretPayload); decodeError != nil {
+		t.Fatalf("decode secret: %v", decodeError)
+	}
+
+	textRequest := httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(secretPayload.Secret)+"&prompt=hello", nil)
+	textResponse := httptest.NewRecorder()
+	router.ServeHTTP(textResponse, textRequest)
+	if textResponse.Code != http.StatusOK || strings.TrimSpace(textResponse.Body.String()) != "managed usage ok" {
+		t.Fatalf("text status=%d body=%s", textResponse.Code, textResponse.Body.String())
+	}
+
+	audioBody := &bytes.Buffer{}
+	audioWriter := multipart.NewWriter(audioBody)
+	filePart, createError := audioWriter.CreateFormFile("audio", "recording.webm")
+	if createError != nil {
+		t.Fatalf("CreateFormFile error: %v", createError)
+	}
+	if _, writeError := filePart.Write([]byte("audio")); writeError != nil {
+		t.Fatalf("write audio: %v", writeError)
+	}
+	if closeError := audioWriter.Close(); closeError != nil {
+		t.Fatalf("close multipart: %v", closeError)
+	}
+	dictationRequest := httptest.NewRequest(http.MethodPost, "/dictate?key="+url.QueryEscape(secretPayload.Secret), audioBody)
+	dictationRequest.Header.Set("Content-Type", audioWriter.FormDataContentType())
+	dictationResponse := httptest.NewRecorder()
+	router.ServeHTTP(dictationResponse, dictationRequest)
+	if dictationResponse.Code != http.StatusBadGateway {
+		t.Fatalf("dictation status=%d body=%s", dictationResponse.Code, dictationResponse.Body.String())
+	}
+
+	usage := requestManagementUsage(t, router, userOneCookie)
+	if usage.Totals.Requests != 2 || usage.Totals.SuccessfulRequests != 1 || usage.Totals.FailedRequests != 1 {
+		t.Fatalf("usage totals=%+v", usage.Totals)
+	}
+	if usage.Totals.TextRequests != 1 || usage.Totals.DictationRequests != 1 || usage.Totals.RequestTokens != 4 || usage.Totals.ResponseTokens != 6 || usage.Totals.TotalTokens != 10 {
+		t.Fatalf("usage totals=%+v", usage.Totals)
+	}
+	if usage.Providers[0].Provider != proxy.ProviderNameDeepSeek || usage.Providers[0].Data.Requests != 1 {
+		t.Fatalf("providers=%+v", usage.Providers)
+	}
+	if len(usage.StatusCodes) != 2 || usage.StatusCodes[0].StatusCode != http.StatusOK || usage.StatusCodes[1].StatusCode != http.StatusBadGateway {
+		t.Fatalf("status codes=%+v", usage.StatusCodes)
+	}
+	if isolatedUsage := requestManagementUsage(t, router, userTwoCookie); isolatedUsage.Totals.Requests != 0 {
+		t.Fatalf("user two usage leaked: %+v", isolatedUsage.Totals)
+	}
+}
+
 func TestManagementGeneratedSecretRoutesWithTenantProviderKey(t *testing.T) {
 	var capturedAuthorization string
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
@@ -855,6 +958,52 @@ func authenticatedJSONRequest(method string, path string, body string, sessionCo
 	request.Header.Set("Content-Type", "application/json")
 	request.AddCookie(sessionCookie)
 	return request
+}
+
+type managementUsageTestResponse struct {
+	PeriodDays int `json:"period_days"`
+	Totals     struct {
+		Requests           int `json:"requests"`
+		SuccessfulRequests int `json:"successful_requests"`
+		FailedRequests     int `json:"failed_requests"`
+		TextRequests       int `json:"text_requests"`
+		DictationRequests  int `json:"dictation_requests"`
+		RequestTokens      int `json:"request_tokens"`
+		ResponseTokens     int `json:"response_tokens"`
+		TotalTokens        int `json:"total_tokens"`
+	} `json:"totals"`
+	Daily []struct {
+		Date string `json:"date"`
+		Data struct {
+			Requests int `json:"requests"`
+		} `json:"data"`
+	} `json:"daily"`
+	Providers []struct {
+		Provider string `json:"provider"`
+		Data     struct {
+			Requests int `json:"requests"`
+		} `json:"data"`
+	} `json:"providers"`
+	StatusCodes []struct {
+		StatusCode int `json:"status_code"`
+		Requests   int `json:"requests"`
+	} `json:"status_codes"`
+}
+
+func requestManagementUsage(t *testing.T, router http.Handler, sessionCookie *http.Cookie) managementUsageTestResponse {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodGet, "/api/management/usage", nil)
+	request.AddCookie(sessionCookie)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("usage status=%d body=%s", response.Code, response.Body.String())
+	}
+	var usage managementUsageTestResponse
+	if decodeError := json.Unmarshal(response.Body.Bytes(), &usage); decodeError != nil {
+		t.Fatalf("decode usage: %v", decodeError)
+	}
+	return usage
 }
 
 func requestLegacyConfigSecret(t *testing.T, router http.Handler, secret string) *httptest.ResponseRecorder {

@@ -15,6 +15,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 	"gorm.io/gorm"
 )
 
@@ -204,6 +206,119 @@ func TestManagedTenantStoreDatabaseErrorEdges(t *testing.T) {
 	}
 	if _, digestValid := managedRecordSecretDigest(managedTenantRecord{SecretDigest: "abc"}); digestValid {
 		t.Fatalf("short digest must be invalid")
+	}
+}
+
+func TestManagedTenantStoreUsageEdges(t *testing.T) {
+	fixedTime := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	principal := managementPrincipal{userID: "tauth-usage-error-user"}
+	managedTenant := tenant{identifier: tenantID("managed-usage"), userID: principal.userID, managed: true}
+
+	noOpDatabase := newFakeManagedTenantDatabase()
+	noOpStore := newManagedTenantStoreWithDatabase(noOpDatabase)
+	if recordError := noOpStore.recordUsage(tenant{identifier: tenantID("static-usage")}, managedUsageEvent{statusCode: http.StatusOK}); recordError != nil {
+		t.Fatalf("unmanaged record usage error=%v", recordError)
+	}
+	if recordError := noOpStore.recordUsage(tenant{identifier: tenantID("missing-user"), managed: true}, managedUsageEvent{statusCode: http.StatusOK}); recordError != nil {
+		t.Fatalf("missing user record usage error=%v", recordError)
+	}
+	if len(noOpDatabase.usageEvents) != 0 {
+		t.Fatalf("no-op usage events=%+v", noOpDatabase.usageEvents)
+	}
+
+	createErrorDatabase := newFakeManagedTenantDatabase()
+	createErrorDatabase.createUsageEventError = errInternalTestDatabase
+	createErrorStore := newManagedTenantStoreWithDatabase(createErrorDatabase)
+	createErrorStore.now = func() time.Time { return fixedTime }
+	recordError := createErrorStore.recordUsage(managedTenant, managedUsageEvent{
+		endpoint:            usageEndpointText,
+		providerIdentifier:  ProviderNameOpenAI,
+		modelIdentifier:     ModelNameGPT41,
+		statusCode:          http.StatusOK,
+		latencyMilliseconds: 17,
+		usage:               &tokenUsage{RequestTokens: 1, ResponseTokens: 2, TotalTokens: 3},
+	})
+	if !errors.Is(recordError, errManagedTenantStorePersist) {
+		t.Fatalf("record usage error=%v want %v", recordError, errManagedTenantStorePersist)
+	}
+
+	queryRecordErrorDatabase := newFakeManagedTenantDatabase()
+	queryRecordErrorDatabase.userQueryErrors = []error{errInternalTestDatabase}
+	queryRecordErrorStore := newManagedTenantStoreWithDatabase(queryRecordErrorDatabase)
+	if _, summaryError := queryRecordErrorStore.usageSummary(principal); !errors.Is(summaryError, errManagedTenantStorePersist) {
+		t.Fatalf("usage summary record error=%v want %v", summaryError, errManagedTenantStorePersist)
+	}
+
+	queryUsageErrorDatabase := newFakeManagedTenantDatabase()
+	queryUsageErrorDatabase.records[principal.userID] = internalManagedTenantRecord(principal.userID, "", fixedTime)
+	queryUsageErrorDatabase.usageEventsQueryError = errInternalTestDatabase
+	queryUsageErrorStore := newManagedTenantStoreWithDatabase(queryUsageErrorDatabase)
+	if _, summaryError := queryUsageErrorStore.usageSummary(principal); !errors.Is(summaryError, errManagedTenantStorePersist) {
+		t.Fatalf("usage summary usage error=%v want %v", summaryError, errManagedTenantStorePersist)
+	}
+
+	observedCore, observedLogs := observer.New(zapcore.WarnLevel)
+	recordManagedUsage(createErrorStore, zap.New(observedCore).Sugar(), managedTenant, usageEndpointText, ProviderNameOpenAI, ModelNameGPT41, http.StatusOK, nil, fixedTime.Add(-time.Second))
+	if observedLogs.Len() != 1 || observedLogs.All()[0].Message != logEventUsageRecordFailed {
+		t.Fatalf("usage record logs=%+v", observedLogs.All())
+	}
+
+	service := newInternalManagementService(queryUsageErrorDatabase)
+	status := executeInternalManagementHandler(service.usageHandler(), http.MethodGet, "/api/management/usage", "", nil, principal)
+	if status != http.StatusInternalServerError {
+		t.Fatalf("usage handler status=%d want=%d", status, http.StatusInternalServerError)
+	}
+}
+
+func TestManagedUsageSummaryBucketsAndOrdering(t *testing.T) {
+	now := time.Date(2026, 6, 30, 12, 0, 0, 0, time.UTC)
+	summary := summarizeManagedUsage([]managedUsageEventRecord{
+		{UserID: "user", ProviderID: "old", ModelID: "old-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: now.AddDate(0, 0, -managedUsageSummaryDays)},
+		{UserID: "user", ProviderID: "current", ModelID: "current-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: now},
+	}, now)
+	if summary.totals.requests != 1 || summary.providers[0].providerIdentifier != "current" {
+		t.Fatalf("summary totals=%+v providers=%+v", summary.totals, summary.providers)
+	}
+
+	providers := usageProviderBucketList(map[string]managedUsageAggregate{
+		"beta":  {requests: 1},
+		"alpha": {requests: 1},
+		"gamma": {requests: 2},
+	})
+	if len(providers) != 3 || providers[0].providerIdentifier != "gamma" || providers[1].providerIdentifier != "alpha" || providers[2].providerIdentifier != "beta" {
+		t.Fatalf("providers=%+v", providers)
+	}
+
+	models := usageModelBucketList(map[string]managedUsageModelBucket{
+		"beta/model": {
+			providerIdentifier: "beta",
+			modelIdentifier:    "model",
+			aggregate:          managedUsageAggregate{requests: 1},
+		},
+		"alpha/zeta": {
+			providerIdentifier: "alpha",
+			modelIdentifier:    "zeta",
+			aggregate:          managedUsageAggregate{requests: 1},
+		},
+		"alpha/alpha": {
+			providerIdentifier: "alpha",
+			modelIdentifier:    "alpha",
+			aggregate:          managedUsageAggregate{requests: 1},
+		},
+		"gamma/model": {
+			providerIdentifier: "gamma",
+			modelIdentifier:    "model",
+			aggregate:          managedUsageAggregate{requests: 2},
+		},
+	})
+	if len(models) != 4 ||
+		models[0].providerIdentifier != "gamma" ||
+		models[1].providerIdentifier != "alpha" ||
+		models[1].modelIdentifier != "alpha" ||
+		models[2].providerIdentifier != "alpha" ||
+		models[2].modelIdentifier != "zeta" ||
+		models[3].providerIdentifier != "beta" {
+		t.Fatalf("models=%+v", models)
 	}
 }
 
@@ -451,6 +566,7 @@ func newFakeManagedTenantDatabase() *fakeManagedTenantDatabase {
 
 type fakeManagedTenantDatabase struct {
 	records                map[string]managedTenantRecord
+	usageEvents            []managedUsageEventRecord
 	migrations             map[string]managedStaticConfigMigrationRecord
 	userQueryErrors        []error
 	secretQueryErrors      []error
@@ -461,6 +577,8 @@ type fakeManagedTenantDatabase struct {
 	saveTenantErrors       []error
 	saveProviderKeyError   error
 	deleteProviderKeyError error
+	createUsageEventError  error
+	usageEventsQueryError  error
 	createMigrationError   error
 }
 
@@ -550,6 +668,28 @@ func (database *fakeManagedTenantDatabase) deleteProviderKey(record managedProvi
 	tenantRecord.ProviderAPIKeys = updatedProviderKeys
 	database.records[record.UserID] = cloneManagedTenantRecord(tenantRecord)
 	return nil
+}
+
+func (database *fakeManagedTenantDatabase) createUsageEvent(record managedUsageEventRecord) error {
+	if database.createUsageEventError != nil {
+		return database.createUsageEventError
+	}
+	record.ID = uint(len(database.usageEvents) + 1)
+	database.usageEvents = append(database.usageEvents, record)
+	return nil
+}
+
+func (database *fakeManagedTenantDatabase) usageEventsByUserID(userID string) ([]managedUsageEventRecord, error) {
+	if database.usageEventsQueryError != nil {
+		return nil, database.usageEventsQueryError
+	}
+	records := make([]managedUsageEventRecord, 0, len(database.usageEvents))
+	for _, record := range database.usageEvents {
+		if record.UserID == userID {
+			records = append(records, record)
+		}
+	}
+	return records, nil
 }
 
 func (database *fakeManagedTenantDatabase) staticConfigMigrationByID(identifier string) (managedStaticConfigMigrationRecord, error) {

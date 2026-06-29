@@ -27,6 +27,7 @@ const (
 	managedTenantIdentifierHashBytes = 12
 	maskedSecretPrefixLength         = 3
 	maskedSecretSuffixLength         = 4
+	managedUsageSummaryDays          = 30
 )
 
 var (
@@ -51,6 +52,8 @@ type managedTenantDatabase interface {
 	saveTenant(record managedTenantRecord) error
 	saveProviderKey(record managedProviderAPIKeyRecord) error
 	deleteProviderKey(record managedProviderAPIKeyRecord) error
+	createUsageEvent(record managedUsageEventRecord) error
+	usageEventsByUserID(userID string) ([]managedUsageEventRecord, error)
 	staticConfigMigrationByID(identifier string) (managedStaticConfigMigrationRecord, error)
 	createStaticConfigMigration(record managedStaticConfigMigrationRecord) error
 }
@@ -82,6 +85,22 @@ type managedProviderAPIKeyRecord struct {
 	APIKey     string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+}
+
+type managedUsageEventRecord struct {
+	ID                  uint   `gorm:"primaryKey"`
+	UserID              string `gorm:"index"`
+	TenantID            string
+	Endpoint            string
+	ProviderID          string
+	ModelID             string
+	StatusCode          int
+	Success             bool
+	LatencyMilliseconds int64
+	RequestTokens       int
+	ResponseTokens      int
+	TotalTokens         int
+	CreatedAt           time.Time
 }
 
 type managedStaticConfigMigrationRecord struct {
@@ -128,7 +147,7 @@ func newGORMManagedTenantDatabase(configuration ManagementConfiguration) (*gormM
 	if openError != nil {
 		return nil, fmt.Errorf("%w: %v", errManagedTenantStoreOpen, openError)
 	}
-	if migrateError := database.AutoMigrate(&managedTenantRecord{}, &managedProviderAPIKeyRecord{}, &managedStaticConfigMigrationRecord{}); migrateError != nil {
+	if migrateError := database.AutoMigrate(&managedTenantRecord{}, &managedProviderAPIKeyRecord{}, &managedUsageEventRecord{}, &managedStaticConfigMigrationRecord{}); migrateError != nil {
 		return nil, fmt.Errorf("%w: migrate: %v", errManagedTenantStoreOpen, migrateError)
 	}
 	return &gormManagedTenantDatabase{database: database}, nil
@@ -184,6 +203,19 @@ func (database *gormManagedTenantDatabase) saveProviderKey(record managedProvide
 
 func (database *gormManagedTenantDatabase) deleteProviderKey(record managedProviderAPIKeyRecord) error {
 	return database.database.Where(&record).Delete(&managedProviderAPIKeyRecord{}).Error
+}
+
+func (database *gormManagedTenantDatabase) createUsageEvent(record managedUsageEventRecord) error {
+	return database.database.Create(&record).Error
+}
+
+func (database *gormManagedTenantDatabase) usageEventsByUserID(userID string) ([]managedUsageEventRecord, error) {
+	var records []managedUsageEventRecord
+	queryError := database.database.
+		Where(&managedUsageEventRecord{UserID: userID}).
+		Find(&records).
+		Error
+	return records, queryError
 }
 
 func (database *gormManagedTenantDatabase) staticConfigMigrationByID(identifier string) (managedStaticConfigMigrationRecord, error) {
@@ -490,6 +522,7 @@ func (record managedTenantRecord) defaults() TenantDefaults {
 func (record managedTenantRecord) tenant(secretDigest [sha256.Size]byte) tenant {
 	return tenant{
 		identifier:      tenantID(record.TenantID),
+		userID:          record.UserID,
 		secretDigest:    secretDigest,
 		defaults:        newTenantDefaults(record.defaults()),
 		managed:         true,

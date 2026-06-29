@@ -19,6 +19,7 @@ const (
 	managementProviderKeysPath          = "/provider-keys/:provider"
 	managementDefaultsPath              = "/defaults"
 	managementSecretsPath               = "/secrets"
+	managementUsagePath                 = "/usage"
 	contextKeyManagementPrincipal       = "management_principal"
 	headerAccessControlAllowCredentials = "Access-Control-Allow-Credentials"
 	headerAccessControlAllowHeaders     = "Access-Control-Allow-Headers"
@@ -99,6 +100,48 @@ type managementSecretResponse struct {
 	Profile managementProfileResponse `json:"profile"`
 }
 
+type managementUsageSummaryResponse struct {
+	PeriodDays  int                               `json:"period_days"`
+	Totals      managementUsageAggregateResponse  `json:"totals"`
+	Daily       []managementUsageDailyResponse    `json:"daily"`
+	Providers   []managementUsageProviderResponse `json:"providers"`
+	Models      []managementUsageModelResponse    `json:"models"`
+	StatusCodes []managementUsageStatusResponse   `json:"status_codes"`
+}
+
+type managementUsageAggregateResponse struct {
+	Requests                   int   `json:"requests"`
+	SuccessfulRequests         int   `json:"successful_requests"`
+	FailedRequests             int   `json:"failed_requests"`
+	TextRequests               int   `json:"text_requests"`
+	DictationRequests          int   `json:"dictation_requests"`
+	RequestTokens              int   `json:"request_tokens"`
+	ResponseTokens             int   `json:"response_tokens"`
+	TotalTokens                int   `json:"total_tokens"`
+	AverageLatencyMilliseconds int64 `json:"average_latency_ms"`
+}
+
+type managementUsageDailyResponse struct {
+	Date string                           `json:"date"`
+	Data managementUsageAggregateResponse `json:"data"`
+}
+
+type managementUsageProviderResponse struct {
+	Provider string                           `json:"provider"`
+	Data     managementUsageAggregateResponse `json:"data"`
+}
+
+type managementUsageModelResponse struct {
+	Provider string                           `json:"provider"`
+	Model    string                           `json:"model"`
+	Data     managementUsageAggregateResponse `json:"data"`
+}
+
+type managementUsageStatusResponse struct {
+	StatusCode int `json:"status_code"`
+	Requests   int `json:"requests"`
+}
+
 type managementProviderKeyRequest struct {
 	APIKey string `json:"api_key"`
 }
@@ -132,6 +175,7 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.Use(service.sessionMiddleware())
 	managementGroup.Use(service.managementMutationMiddleware())
 	managementGroup.GET(managementProfilePath, service.profileHandler())
+	managementGroup.GET(managementUsagePath, service.usageHandler())
 	managementGroup.PUT(managementProviderKeysPath, service.saveProviderKeyHandler())
 	managementGroup.DELETE(managementProviderKeysPath, service.removeProviderKeyHandler())
 	managementGroup.PUT(managementDefaultsPath, service.updateDefaultsHandler())
@@ -215,6 +259,18 @@ func (service *managementService) profileHandler() gin.HandlerFunc {
 			return
 		}
 		ginContext.JSON(http.StatusOK, service.profileResponse(snapshot))
+	}
+}
+
+func (service *managementService) usageHandler() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		principal := managementPrincipalFromContext(ginContext)
+		summary, summaryError := service.store.usageSummary(principal)
+		if summaryError != nil {
+			ginContext.String(http.StatusInternalServerError, summaryError.Error())
+			return
+		}
+		ginContext.JSON(http.StatusOK, managementUsageSummary(summary))
 	}
 }
 
@@ -417,4 +473,74 @@ func managementDefaultsResponse(defaults TenantDefaults) managementTenantDefault
 		DictationModel:    normalizedDefaults.dictationModel,
 		SystemPrompt:      normalizedDefaults.systemPrompt,
 	}
+}
+
+func managementUsageSummary(summary managedUsageSummary) managementUsageSummaryResponse {
+	return managementUsageSummaryResponse{
+		PeriodDays:  summary.periodDays,
+		Totals:      managementUsageAggregate(summary.totals),
+		Daily:       managementUsageDaily(summary.daily),
+		Providers:   managementUsageProviders(summary.providers),
+		Models:      managementUsageModels(summary.models),
+		StatusCodes: managementUsageStatuses(summary.statusCodes),
+	}
+}
+
+func managementUsageAggregate(aggregate managedUsageAggregate) managementUsageAggregateResponse {
+	return managementUsageAggregateResponse{
+		Requests:                   aggregate.requests,
+		SuccessfulRequests:         aggregate.successfulRequests,
+		FailedRequests:             aggregate.failedRequests,
+		TextRequests:               aggregate.textRequests,
+		DictationRequests:          aggregate.dictationRequests,
+		RequestTokens:              aggregate.requestTokens,
+		ResponseTokens:             aggregate.responseTokens,
+		TotalTokens:                aggregate.totalTokens,
+		AverageLatencyMilliseconds: aggregate.averageLatencyMillis,
+	}
+}
+
+func managementUsageDaily(daily []managedUsageDailyBucket) []managementUsageDailyResponse {
+	responses := make([]managementUsageDailyResponse, 0, len(daily))
+	for _, bucket := range daily {
+		responses = append(responses, managementUsageDailyResponse{
+			Date: bucket.date,
+			Data: managementUsageAggregate(bucket.aggregate),
+		})
+	}
+	return responses
+}
+
+func managementUsageProviders(providers []managedUsageProviderBucket) []managementUsageProviderResponse {
+	responses := make([]managementUsageProviderResponse, 0, len(providers))
+	for _, bucket := range providers {
+		responses = append(responses, managementUsageProviderResponse{
+			Provider: bucket.providerIdentifier,
+			Data:     managementUsageAggregate(bucket.aggregate),
+		})
+	}
+	return responses
+}
+
+func managementUsageModels(models []managedUsageModelBucket) []managementUsageModelResponse {
+	responses := make([]managementUsageModelResponse, 0, len(models))
+	for _, bucket := range models {
+		responses = append(responses, managementUsageModelResponse{
+			Provider: bucket.providerIdentifier,
+			Model:    bucket.modelIdentifier,
+			Data:     managementUsageAggregate(bucket.aggregate),
+		})
+	}
+	return responses
+}
+
+func managementUsageStatuses(statusCodes []managedUsageStatusBucket) []managementUsageStatusResponse {
+	responses := make([]managementUsageStatusResponse, 0, len(statusCodes))
+	for _, bucket := range statusCodes {
+		responses = append(responses, managementUsageStatusResponse{
+			StatusCode: bucket.statusCode,
+			Requests:   bucket.requests,
+		})
+	}
+	return responses
 }
