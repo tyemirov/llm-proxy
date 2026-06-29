@@ -712,17 +712,45 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 		t.Fatalf("dictation status=%d body=%s", dictationResponse.Code, dictationResponse.Body.String())
 	}
 
+	invalidTextRequest := httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(secretPayload.Secret)+"&prompt=hello&max_tokens=0", nil)
+	invalidTextResponse := httptest.NewRecorder()
+	router.ServeHTTP(invalidTextResponse, invalidTextRequest)
+	if invalidTextResponse.Code != http.StatusBadRequest {
+		t.Fatalf("invalid text status=%d body=%s", invalidTextResponse.Code, invalidTextResponse.Body.String())
+	}
+
+	invalidV2Request := httptest.NewRequest(http.MethodPost, "/v2?key="+url.QueryEscape(secretPayload.Secret), bytes.NewBufferString(`{"messages":[{"role":"user","content":"hello"}],"max_tokens":0}`))
+	invalidV2Request.Header.Set("Content-Type", "application/json")
+	invalidV2Response := httptest.NewRecorder()
+	router.ServeHTTP(invalidV2Response, invalidV2Request)
+	if invalidV2Response.Code != http.StatusBadRequest {
+		t.Fatalf("invalid v2 status=%d body=%s", invalidV2Response.Code, invalidV2Response.Body.String())
+	}
+
+	invalidDictationBody := &bytes.Buffer{}
+	invalidDictationWriter := multipart.NewWriter(invalidDictationBody)
+	if closeError := invalidDictationWriter.Close(); closeError != nil {
+		t.Fatalf("close invalid multipart: %v", closeError)
+	}
+	invalidDictationRequest := httptest.NewRequest(http.MethodPost, "/dictate?key="+url.QueryEscape(secretPayload.Secret), invalidDictationBody)
+	invalidDictationRequest.Header.Set("Content-Type", invalidDictationWriter.FormDataContentType())
+	invalidDictationResponse := httptest.NewRecorder()
+	router.ServeHTTP(invalidDictationResponse, invalidDictationRequest)
+	if invalidDictationResponse.Code != http.StatusBadRequest {
+		t.Fatalf("invalid dictation status=%d body=%s", invalidDictationResponse.Code, invalidDictationResponse.Body.String())
+	}
+
 	usage := requestManagementUsage(t, router, userOneCookie)
-	if usage.Totals.Requests != 2 || usage.Totals.SuccessfulRequests != 1 || usage.Totals.FailedRequests != 1 {
+	if usage.Totals.Requests != 5 || usage.Totals.SuccessfulRequests != 1 || usage.Totals.FailedRequests != 4 {
 		t.Fatalf("usage totals=%+v", usage.Totals)
 	}
-	if usage.Totals.TextRequests != 1 || usage.Totals.DictationRequests != 1 || usage.Totals.RequestTokens != 4 || usage.Totals.ResponseTokens != 6 || usage.Totals.TotalTokens != 10 {
+	if usage.Totals.TextRequests != 3 || usage.Totals.DictationRequests != 2 || usage.Totals.RequestTokens != 4 || usage.Totals.ResponseTokens != 6 || usage.Totals.TotalTokens != 10 {
 		t.Fatalf("usage totals=%+v", usage.Totals)
 	}
-	if usage.Providers[0].Provider != proxy.ProviderNameDeepSeek || usage.Providers[0].Data.Requests != 1 {
+	if len(usage.Providers) != 2 || usage.Providers[0].Provider != proxy.ProviderNameDeepSeek || usage.Providers[0].Data.Requests != 3 || usage.Providers[1].Provider != proxy.ProviderNameOpenAI || usage.Providers[1].Data.Requests != 2 {
 		t.Fatalf("providers=%+v", usage.Providers)
 	}
-	if len(usage.StatusCodes) != 2 || usage.StatusCodes[0].StatusCode != http.StatusOK || usage.StatusCodes[1].StatusCode != http.StatusBadGateway {
+	if len(usage.StatusCodes) != 3 || usage.StatusCodes[0].StatusCode != http.StatusOK || usage.StatusCodes[0].Requests != 1 || usage.StatusCodes[1].StatusCode != http.StatusBadRequest || usage.StatusCodes[1].Requests != 3 || usage.StatusCodes[2].StatusCode != http.StatusBadGateway || usage.StatusCodes[2].Requests != 1 {
 		t.Fatalf("status codes=%+v", usage.StatusCodes)
 	}
 	if isolatedUsage := requestManagementUsage(t, router, userTwoCookie); isolatedUsage.Totals.Requests != 0 {

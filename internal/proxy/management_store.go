@@ -115,7 +115,7 @@ type managedUsageEventRecord struct {
 	RequestTokens       int
 	ResponseTokens      int
 	TotalTokens         int
-	CreatedAt           time.Time `gorm:"index:idx_managed_usage_user_created"`
+	CreatedAt           time.Time `gorm:"index:idx_managed_usage_user_created;index:idx_managed_usage_created_at"`
 }
 
 type managedStaticConfigMigrationRecord struct {

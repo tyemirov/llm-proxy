@@ -653,6 +653,21 @@ func TestManagedTenantGORMDatabaseEncryptsProviderKeysAtRest(t *testing.T) {
 	}
 }
 
+func TestManagedTenantGORMDatabaseMigratesUsageIndexes(t *testing.T) {
+	database, databaseError := newGORMManagedTenantDatabase(ManagementConfiguration{
+		DatabaseDialect: ManagementDatabaseDialectSQLite,
+		DatabaseDSN:     filepath.Join(t.TempDir(), "managed-usage-indexes.db"),
+	})
+	if databaseError != nil {
+		t.Fatalf("new gorm database: %v", databaseError)
+	}
+	for _, indexName := range []string{"idx_managed_usage_user_created", "idx_managed_usage_created_at"} {
+		if !database.database.Migrator().HasIndex(&managedUsageEventRecord{}, indexName) {
+			t.Fatalf("missing usage index %s", indexName)
+		}
+	}
+}
+
 func TestManagementHandlerStoreErrorEdges(t *testing.T) {
 	fixedTime := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
 	principal := managementPrincipal{userID: "tauth-handler-error-user"}
@@ -875,9 +890,7 @@ func (database *fakeManagedTenantDatabase) providerKeys() ([]managedProviderAPIK
 	}
 	records := []managedProviderAPIKeyRecord{}
 	for _, tenantRecord := range database.records {
-		for _, providerKeyRecord := range tenantRecord.ProviderAPIKeys {
-			records = append(records, providerKeyRecord)
-		}
+		records = append(records, tenantRecord.ProviderAPIKeys...)
 	}
 	return records, nil
 }

@@ -137,13 +137,16 @@ func Serve(configuration Configuration, structuredLogger *zap.SugaredLogger) err
 // chatHandler returns a handler that forwards query-string requests to upstream providers.
 func chatHandler(upstreamProviders *providerRouter, providers *providerRegistry, requestTimeout time.Duration, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		requestStart := time.Now()
+		requestTenant := authenticatedTenantFromContext(ginContext)
 		if rejectClientProviderCredentialsFromQuery(ginContext) {
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointText, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, constants.EmptyString, requestTenant.defaults), requestStart)
 			return
 		}
-		requestTenant := authenticatedTenantFromContext(ginContext)
 		validator := newModelValidator(providers.forTenant(requestTenant))
 		chatRequest, ok := chatRequestFromQuery(ginContext, requestTenant.defaults, validator, structuredLogger)
 		if !ok {
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointText, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, constants.EmptyString, requestTenant.defaults), requestStart)
 			return
 		}
 		submitChatRequest(ginContext, upstreamProviders, chatRequest, requestTenant, usageEndpointText, requestTimeout, managedTenants, structuredLogger)
@@ -153,27 +156,33 @@ func chatHandler(upstreamProviders *providerRouter, providers *providerRegistry,
 // chatJSONHandler accepts large prompt bodies while preserving the same model validation and response formatting used by GET /.
 func chatJSONHandler(upstreamProviders *providerRouter, providers *providerRegistry, requestTimeout time.Duration, maxPromptBytes int64, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		requestStart := time.Now()
+		requestTenant := authenticatedTenantFromContext(ginContext)
 		if rejectClientProviderCredentialsFromQuery(ginContext) {
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointText, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, constants.EmptyString, requestTenant.defaults), requestStart)
 			return
 		}
-		requestTenant := authenticatedTenantFromContext(ginContext)
 		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxPromptBytes)
 		bodyBytes, readBodyOK := readJSONProxyBody(ginContext)
 		if !readBodyOK {
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointText, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, constants.EmptyString, requestTenant.defaults), requestStart)
 			return
 		}
 		if rejectClientProviderCredentialsFromJSONBody(ginContext, bodyBytes) {
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointText, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, constants.EmptyString, requestTenant.defaults), requestStart)
 			return
 		}
 		var payload chatRequestPayload
 		if decodeError := json.Unmarshal(bodyBytes, &payload); decodeError != nil {
 			ginContext.String(http.StatusBadRequest, errorInvalidJSONRequest)
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointText, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, constants.EmptyString, requestTenant.defaults), requestStart)
 			return
 		}
 
 		validator := newModelValidator(providers.forTenant(requestTenant))
 		chatRequest, ok := chatRequestFromPayload(ginContext, payload, requestTenant.defaults, validator)
 		if !ok {
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointText, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, payload.Model, requestTenant.defaults), requestStart)
 			return
 		}
 		submitChatRequest(ginContext, upstreamProviders, chatRequest, requestTenant, usageEndpointText, requestTimeout, managedTenants, structuredLogger)
@@ -182,16 +191,20 @@ func chatJSONHandler(upstreamProviders *providerRouter, providers *providerRegis
 
 func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerRegistry, requestTimeout time.Duration, maxPromptBytes int64, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		requestStart := time.Now()
+		requestTenant := authenticatedTenantFromContext(ginContext)
 		if rejectClientProviderCredentialsFromQuery(ginContext) {
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, constants.EmptyString, requestTenant.defaults), requestStart)
 			return
 		}
-		requestTenant := authenticatedTenantFromContext(ginContext)
 		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxPromptBytes)
 		bodyBytes, readBodyOK := readJSONProxyBody(ginContext)
 		if !readBodyOK {
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, constants.EmptyString, requestTenant.defaults), requestStart)
 			return
 		}
 		if rejectClientProviderCredentialsFromJSONBody(ginContext, bodyBytes) {
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, constants.EmptyString, requestTenant.defaults), requestStart)
 			return
 		}
 		var payload chatV2RequestPayload
@@ -199,12 +212,14 @@ func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerReg
 		jsonDecoder.DisallowUnknownFields()
 		if decodeError := jsonDecoder.Decode(&payload); decodeError != nil {
 			ginContext.String(http.StatusBadRequest, errorInvalidJSONRequest)
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, constants.EmptyString, requestTenant.defaults), requestStart)
 			return
 		}
 
 		validator := newModelValidator(providers.forTenant(requestTenant))
 		chatRequest, ok := chatRequestFromV2Payload(ginContext, payload, requestTenant.defaults, validator)
 		if !ok {
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, payload.Model, requestTenant.defaults), requestStart)
 			return
 		}
 		submitChatRequest(ginContext, upstreamProviders, chatRequest, requestTenant, usageEndpointV2, requestTimeout, managedTenants, structuredLogger)
@@ -418,16 +433,19 @@ func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRoute
 func dictateHandler(upstreamProviders *providerRouter, providers *providerRegistry, maxInputAudioBytes int64, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		requestStart := time.Now()
+		requestTenant := authenticatedTenantFromContext(ginContext)
 		if rejectClientProviderCredentialsFromQuery(ginContext) {
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, usageDictationProviderIdentifier(ginContext, requestTenant.defaults), usageDictationModelIdentifier(ginContext, requestTenant.defaults), requestStart)
 			return
 		}
-		requestTenant := authenticatedTenantFromContext(ginContext)
 		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxInputAudioBytes+2*1024*1024)
 		if parseError := ginContext.Request.ParseMultipartForm(maxInputAudioBytes); parseError != nil {
 			ginContext.String(http.StatusBadRequest, errorInvalidAudioForm)
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, usageDictationProviderIdentifier(ginContext, requestTenant.defaults), usageDictationModelIdentifier(ginContext, requestTenant.defaults), requestStart)
 			return
 		}
 		if rejectClientProviderCredentialsFromForm(ginContext) {
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, usageDictationProviderIdentifier(ginContext, requestTenant.defaults), usageDictationModelIdentifier(ginContext, requestTenant.defaults), requestStart)
 			return
 		}
 
@@ -436,6 +454,7 @@ func dictateHandler(upstreamProviders *providerRouter, providers *providerRegist
 			audioFile, header, fileError = ginContext.Request.FormFile(formFieldFile)
 			if fileError != nil {
 				ginContext.String(http.StatusBadRequest, errorMissingAudioFile)
+				recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, usageDictationProviderIdentifier(ginContext, requestTenant.defaults), usageDictationModelIdentifier(ginContext, requestTenant.defaults), requestStart)
 				return
 			}
 		}
@@ -458,6 +477,7 @@ func dictateHandler(upstreamProviders *providerRouter, providers *providerRegist
 		)
 		if verificationError != nil {
 			ginContext.String(statusCodeForError(verificationError), responseMessageForError(verificationError))
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, usageDictationProviderIdentifier(ginContext, requestTenant.defaults), usageDictationModelIdentifier(ginContext, requestTenant.defaults), requestStart)
 			return
 		}
 
@@ -503,6 +523,47 @@ func recordManagedUsage(managedTenants *managedTenantStore, structuredLogger *za
 			constants.LogFieldError, recordError,
 		)
 	}
+}
+
+func recordManagedUsageValidationFailure(managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, ginContext *gin.Context, requestTenant tenant, endpoint string, providerIdentifier string, modelIdentifier string, requestStart time.Time) {
+	statusCode := ginContext.Writer.Status()
+	recordManagedUsage(managedTenants, structuredLogger, requestTenant, endpoint, providerIdentifier, modelIdentifier, statusCode, nil, requestStart)
+}
+
+func usageTextProviderIdentifier(ginContext *gin.Context, defaults tenantDefaults) string {
+	providerIdentifier := strings.TrimSpace(ginContext.Query(queryParameterProvider))
+	if providerIdentifier != constants.EmptyString {
+		return providerIdentifier
+	}
+	return defaults.provider
+}
+
+func usageTextModelIdentifier(ginContext *gin.Context, bodyModel string, defaults tenantDefaults) string {
+	modelIdentifier := strings.TrimSpace(ginContext.Query(queryParameterModel))
+	if modelIdentifier != constants.EmptyString {
+		return modelIdentifier
+	}
+	modelIdentifier = strings.TrimSpace(bodyModel)
+	if modelIdentifier != constants.EmptyString {
+		return modelIdentifier
+	}
+	return defaults.model
+}
+
+func usageDictationProviderIdentifier(ginContext *gin.Context, defaults tenantDefaults) string {
+	providerIdentifier := strings.TrimSpace(ginContext.Query(queryParameterProvider))
+	if providerIdentifier != constants.EmptyString {
+		return providerIdentifier
+	}
+	return defaults.dictationProvider
+}
+
+func usageDictationModelIdentifier(ginContext *gin.Context, defaults tenantDefaults) string {
+	modelIdentifier := strings.TrimSpace(ginContext.Query(queryParameterModel))
+	if modelIdentifier != constants.EmptyString {
+		return modelIdentifier
+	}
+	return defaults.dictationModel
 }
 
 func parseWebSearchParameter(rawValue string) (bool, error) {
