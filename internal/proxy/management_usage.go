@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
@@ -104,11 +105,44 @@ func (store *managedTenantStore) usageSummary(principal managementPrincipal) (ma
 	if recordError != nil {
 		return managedUsageSummary{}, recordError
 	}
-	records, recordsError := store.database.usageEventsByUserID(record.UserID)
+	timestamp := store.now()
+	records, recordsError := store.database.usageEventsByUserIDSince(record.UserID, usagePeriodStart(timestamp))
 	if recordsError != nil {
 		return managedUsageSummary{}, fmt.Errorf("%w: user_id=%s: %v", errManagedTenantStorePersist, record.UserID, recordsError)
 	}
-	return summarizeManagedUsage(records, store.now()), nil
+	return summarizeManagedUsage(records, timestamp), nil
+}
+
+func (store *managedTenantStore) adminUsersSummary() ([]managedAdminUserSnapshot, error) {
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+	timestamp := store.now()
+	periodStart := usagePeriodStart(timestamp)
+	tenantRecords, tenantRecordsError := store.database.tenants()
+	if tenantRecordsError != nil {
+		return nil, fmt.Errorf("%w: admin_users: %v", errManagedTenantStorePersist, tenantRecordsError)
+	}
+	usageRecords, usageRecordsError := store.database.usageEventsSince(periodStart)
+	if usageRecordsError != nil {
+		return nil, fmt.Errorf("%w: admin_usage: %v", errManagedTenantStorePersist, usageRecordsError)
+	}
+	usageRecordsByUserID := make(map[string][]managedUsageEventRecord, len(tenantRecords))
+	for _, usageRecord := range usageRecords {
+		usageRecordsByUserID[usageRecord.UserID] = append(usageRecordsByUserID[usageRecord.UserID], usageRecord)
+	}
+	adminSnapshots := make([]managedAdminUserSnapshot, 0, len(tenantRecords))
+	for _, tenantRecord := range tenantRecords {
+		adminSnapshots = append(adminSnapshots, tenantRecord.adminSnapshot(summarizeManagedUsage(usageRecordsByUserID[tenantRecord.UserID], timestamp)))
+	}
+	sort.Slice(adminSnapshots, func(firstIndex int, secondIndex int) bool {
+		firstEmail := strings.ToLower(adminSnapshots[firstIndex].userEmail)
+		secondEmail := strings.ToLower(adminSnapshots[secondIndex].userEmail)
+		if firstEmail == secondEmail {
+			return adminSnapshots[firstIndex].userID < adminSnapshots[secondIndex].userID
+		}
+		return firstEmail < secondEmail
+	})
+	return adminSnapshots, nil
 }
 
 func summarizeManagedUsage(records []managedUsageEventRecord, now time.Time) managedUsageSummary {

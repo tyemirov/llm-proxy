@@ -1,8 +1,11 @@
 package proxy
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -15,45 +18,56 @@ import (
 	"github.com/tyemirov/llm-proxy/internal/constants"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const (
-	generatedTenantSecretBytes       = 32
-	generatedTenantSecretAttempts    = 16
-	generatedTenantSecretPrefix      = "llmp_"
-	staticConfigMigrationID          = "static-config-v1"
-	staticConfigTenantUserIDPrefix   = "static-config:"
-	managedTenantIdentifierPrefix    = "managed-"
-	managedTenantIdentifierHashBytes = 12
-	maskedSecretPrefixLength         = 3
-	maskedSecretSuffixLength         = 4
-	managedUsageSummaryDays          = 30
+	generatedTenantSecretBytes         = 32
+	generatedTenantSecretAttempts      = 16
+	generatedTenantSecretPrefix        = "llmp_"
+	staticConfigMigrationID            = "static-config-v1"
+	staticConfigTenantUserIDPrefix     = "static-config:"
+	managedTenantIdentifierPrefix      = "managed-"
+	managedTenantIdentifierHashBytes   = 12
+	managedTenantUserEmailColumn       = "user_email"
+	managedTenantUserIDColumn          = "user_id"
+	managedUsageCreatedAtColumn        = "created_at"
+	managedProviderKeyCiphertextPrefix = "llmpk1:"
+	maskedSecretPrefixLength           = 3
+	maskedSecretSuffixLength           = 4
+	managedUsageSummaryDays            = 30
 )
 
 var (
-	errManagedTenantStoreOpen    = errors.New("managed_tenant_store_open_failed")
-	errManagedTenantStorePersist = errors.New("managed_tenant_store_persist_failed")
-	errManagedProviderKeyInvalid = errors.New("managed_provider_key_invalid")
-	errManagedSecretGeneration   = errors.New("managed_secret_generation_failed")
-	errManagedSecretCollision    = errors.New("managed_secret_collision")
+	errManagedTenantStoreOpen       = errors.New("managed_tenant_store_open_failed")
+	errManagedTenantStorePersist    = errors.New("managed_tenant_store_persist_failed")
+	errManagedProviderKeyInvalid    = errors.New("managed_provider_key_invalid")
+	errManagedProviderKeyEncryption = errors.New("managed_provider_key_encryption_failed")
+	errManagedProviderKeyDecryption = errors.New("managed_provider_key_decryption_failed")
+	errManagedSecretGeneration      = errors.New("managed_secret_generation_failed")
+	errManagedSecretCollision       = errors.New("managed_secret_collision")
 )
 
 type managedTenantStore struct {
-	mutex        sync.RWMutex
-	database     managedTenantDatabase
-	randomReader io.Reader
-	now          func() time.Time
+	mutex             sync.RWMutex
+	database          managedTenantDatabase
+	providerKeyCipher managedProviderKeyCipher
+	randomReader      io.Reader
+	now               func() time.Time
 }
 
 type managedTenantDatabase interface {
 	tenantByUserID(userID string) (managedTenantRecord, error)
 	tenantBySecretDigest(secretDigest string) (managedTenantRecord, error)
+	tenants() ([]managedTenantRecord, error)
+	providerKeys() ([]managedProviderAPIKeyRecord, error)
 	createTenant(record managedTenantRecord) error
 	saveTenant(record managedTenantRecord) error
 	saveProviderKey(record managedProviderAPIKeyRecord) error
 	deleteProviderKey(record managedProviderAPIKeyRecord) error
 	createUsageEvent(record managedUsageEventRecord) error
-	usageEventsByUserID(userID string) ([]managedUsageEventRecord, error)
+	usageEventsByUserIDSince(userID string, periodStart time.Time) ([]managedUsageEventRecord, error)
+	usageEventsSince(periodStart time.Time) ([]managedUsageEventRecord, error)
 	staticConfigMigrationByID(identifier string) (managedStaticConfigMigrationRecord, error)
 	createStaticConfigMigration(record managedStaticConfigMigrationRecord) error
 }
@@ -80,16 +94,17 @@ type managedTenantRecord struct {
 }
 
 type managedProviderAPIKeyRecord struct {
-	UserID     string `gorm:"primaryKey"`
-	ProviderID string `gorm:"primaryKey"`
-	APIKey     string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	UserID          string `gorm:"primaryKey"`
+	ProviderID      string `gorm:"primaryKey"`
+	APIKey          string `gorm:"column:api_key"`
+	EncryptedAPIKey string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type managedUsageEventRecord struct {
 	ID                  uint   `gorm:"primaryKey"`
-	UserID              string `gorm:"index"`
+	UserID              string `gorm:"index:idx_managed_usage_user_created"`
 	TenantID            string
 	Endpoint            string
 	ProviderID          string
@@ -100,7 +115,7 @@ type managedUsageEventRecord struct {
 	RequestTokens       int
 	ResponseTokens      int
 	TotalTokens         int
-	CreatedAt           time.Time
+	CreatedAt           time.Time `gorm:"index:idx_managed_usage_user_created"`
 }
 
 type managedStaticConfigMigrationRecord struct {
@@ -122,20 +137,107 @@ type managedTenantSnapshot struct {
 	updatedAt       time.Time
 }
 
+type managedAdminUserSnapshot struct {
+	userID          string
+	userEmail       string
+	userDisplayName string
+	userAvatarURL   string
+	tenantID        string
+	hasSecret       bool
+	createdAt       time.Time
+	updatedAt       time.Time
+	usage           managedUsageSummary
+}
+
+type managedProviderKeyCipher struct {
+	aeadCipher cipher.AEAD
+}
+
 func newManagedTenantStore(configuration ManagementConfiguration) (*managedTenantStore, error) {
 	database, databaseError := newGORMManagedTenantDatabase(configuration)
 	if databaseError != nil {
 		return nil, databaseError
 	}
-	return newManagedTenantStoreWithDatabase(database), nil
+	providerKeyCipher, cipherError := newManagedProviderKeyCipher(configuration.ProviderKeyEncryptionKey)
+	if cipherError != nil {
+		return nil, fmt.Errorf("%w: field=management.provider_key_encryption_key: %v", errManagedTenantStoreOpen, cipherError)
+	}
+	store := newManagedTenantStoreWithDatabaseAndCipher(database, providerKeyCipher)
+	if migrationError := store.migratePlaintextProviderKeys(); migrationError != nil {
+		return nil, migrationError
+	}
+	return store, nil
 }
 
 func newManagedTenantStoreWithDatabase(database managedTenantDatabase) *managedTenantStore {
+	return newManagedTenantStoreWithDatabaseAndCipher(database, internalManagedProviderKeyCipher())
+}
+
+func newManagedTenantStoreWithDatabaseAndCipher(database managedTenantDatabase, providerKeyCipher managedProviderKeyCipher) *managedTenantStore {
 	return &managedTenantStore{
-		database:     database,
-		randomReader: rand.Reader,
-		now:          func() time.Time { return time.Now().UTC() },
+		database:          database,
+		providerKeyCipher: providerKeyCipher,
+		randomReader:      rand.Reader,
+		now:               func() time.Time { return time.Now().UTC() },
 	}
+}
+
+func newManagedProviderKeyCipher(rawEncryptionKey string) (managedProviderKeyCipher, error) {
+	encryptionKey, decodeError := decodeManagedProviderKey(rawEncryptionKey)
+	if decodeError != nil {
+		return managedProviderKeyCipher{}, decodeError
+	}
+	blockCipher, _ := aes.NewCipher(encryptionKey[:])
+	aeadCipher, _ := cipher.NewGCM(blockCipher)
+	return managedProviderKeyCipher{aeadCipher: aeadCipher}, nil
+}
+
+func internalManagedProviderKeyCipher() managedProviderKeyCipher {
+	providerKeyCipher, _ := newManagedProviderKeyCipher("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+	return providerKeyCipher
+}
+
+func (providerKeyCipher managedProviderKeyCipher) encrypt(randomReader io.Reader, userID string, providerIdentifier string, rawAPIKey string) (string, error) {
+	apiKey := strings.TrimSpace(rawAPIKey)
+	if apiKey == constants.EmptyString {
+		return constants.EmptyString, fmt.Errorf("%w: provider=%s", errManagedProviderKeyInvalid, providerIdentifier)
+	}
+	nonce := make([]byte, providerKeyCipher.aeadCipher.NonceSize())
+	if _, readError := io.ReadFull(randomReader, nonce); readError != nil {
+		return constants.EmptyString, fmt.Errorf("%w: provider=%s: %v", errManagedProviderKeyEncryption, providerIdentifier, readError)
+	}
+	sealedAPIKey := providerKeyCipher.aeadCipher.Seal(nil, nonce, []byte(apiKey), managedProviderKeyAssociatedData(userID, providerIdentifier))
+	sealedPayload := append(nonce, sealedAPIKey...)
+	return managedProviderKeyCiphertextPrefix + base64.StdEncoding.EncodeToString(sealedPayload), nil
+}
+
+func (providerKeyCipher managedProviderKeyCipher) decrypt(record managedProviderAPIKeyRecord) (string, error) {
+	encryptedAPIKey := strings.TrimSpace(record.EncryptedAPIKey)
+	if encryptedAPIKey == constants.EmptyString {
+		return constants.EmptyString, fmt.Errorf("%w: provider=%s", errManagedProviderKeyDecryption, record.ProviderID)
+	}
+	if !strings.HasPrefix(encryptedAPIKey, managedProviderKeyCiphertextPrefix) {
+		return constants.EmptyString, fmt.Errorf("%w: provider=%s", errManagedProviderKeyDecryption, record.ProviderID)
+	}
+	encodedPayload := strings.TrimPrefix(encryptedAPIKey, managedProviderKeyCiphertextPrefix)
+	sealedPayload, decodeError := base64.StdEncoding.DecodeString(encodedPayload)
+	if decodeError != nil {
+		return constants.EmptyString, fmt.Errorf("%w: provider=%s: %v", errManagedProviderKeyDecryption, record.ProviderID, decodeError)
+	}
+	if len(sealedPayload) <= providerKeyCipher.aeadCipher.NonceSize() {
+		return constants.EmptyString, fmt.Errorf("%w: provider=%s", errManagedProviderKeyDecryption, record.ProviderID)
+	}
+	nonce := sealedPayload[:providerKeyCipher.aeadCipher.NonceSize()]
+	ciphertext := sealedPayload[providerKeyCipher.aeadCipher.NonceSize():]
+	apiKeyBytes, decryptError := providerKeyCipher.aeadCipher.Open(nil, nonce, ciphertext, managedProviderKeyAssociatedData(record.UserID, record.ProviderID))
+	if decryptError != nil {
+		return constants.EmptyString, fmt.Errorf("%w: provider=%s: %v", errManagedProviderKeyDecryption, record.ProviderID, decryptError)
+	}
+	return strings.TrimSpace(string(apiKeyBytes)), nil
+}
+
+func managedProviderKeyAssociatedData(userID string, providerIdentifier string) []byte {
+	return []byte(strings.TrimSpace(userID) + "\x00" + strings.TrimSpace(providerIdentifier))
 }
 
 func newGORMManagedTenantDatabase(configuration ManagementConfiguration) (*gormManagedTenantDatabase, error) {
@@ -189,6 +291,26 @@ func (database *gormManagedTenantDatabase) tenantBySecretDigest(secretDigest str
 	return record, queryError
 }
 
+func (database *gormManagedTenantDatabase) tenants() ([]managedTenantRecord, error) {
+	var records []managedTenantRecord
+	queryError := database.database.
+		Order(clause.OrderBy{Columns: []clause.OrderByColumn{
+			{Column: clause.Column{Name: managedTenantUserEmailColumn}},
+			{Column: clause.Column{Name: managedTenantUserIDColumn}},
+		}}).
+		Find(&records).
+		Error
+	return records, queryError
+}
+
+func (database *gormManagedTenantDatabase) providerKeys() ([]managedProviderAPIKeyRecord, error) {
+	var records []managedProviderAPIKeyRecord
+	queryError := database.database.
+		Find(&records).
+		Error
+	return records, queryError
+}
+
 func (database *gormManagedTenantDatabase) createTenant(record managedTenantRecord) error {
 	return database.database.Create(&record).Error
 }
@@ -209,10 +331,20 @@ func (database *gormManagedTenantDatabase) createUsageEvent(record managedUsageE
 	return database.database.Create(&record).Error
 }
 
-func (database *gormManagedTenantDatabase) usageEventsByUserID(userID string) ([]managedUsageEventRecord, error) {
+func (database *gormManagedTenantDatabase) usageEventsByUserIDSince(userID string, periodStart time.Time) ([]managedUsageEventRecord, error) {
 	var records []managedUsageEventRecord
 	queryError := database.database.
 		Where(&managedUsageEventRecord{UserID: userID}).
+		Where(clause.Gte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: periodStart}).
+		Find(&records).
+		Error
+	return records, queryError
+}
+
+func (database *gormManagedTenantDatabase) usageEventsSince(periodStart time.Time) ([]managedUsageEventRecord, error) {
+	var records []managedUsageEventRecord
+	queryError := database.database.
+		Where(clause.Gte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: periodStart}).
 		Find(&records).
 		Error
 	return records, queryError
@@ -229,6 +361,35 @@ func (database *gormManagedTenantDatabase) staticConfigMigrationByID(identifier 
 
 func (database *gormManagedTenantDatabase) createStaticConfigMigration(record managedStaticConfigMigrationRecord) error {
 	return database.database.Create(&record).Error
+}
+
+func (store *managedTenantStore) migratePlaintextProviderKeys() error {
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+	providerKeyRecords, queryError := store.database.providerKeys()
+	if queryError != nil {
+		return fmt.Errorf("%w: provider_keys: %v", errManagedTenantStorePersist, queryError)
+	}
+	timestamp := store.now()
+	for _, providerKeyRecord := range providerKeyRecords {
+		plaintextAPIKey := strings.TrimSpace(providerKeyRecord.APIKey)
+		if plaintextAPIKey == constants.EmptyString {
+			continue
+		}
+		if strings.TrimSpace(providerKeyRecord.EncryptedAPIKey) == constants.EmptyString {
+			encryptedAPIKey, encryptionError := store.providerKeyCipher.encrypt(store.randomReader, providerKeyRecord.UserID, providerKeyRecord.ProviderID, plaintextAPIKey)
+			if encryptionError != nil {
+				return encryptionError
+			}
+			providerKeyRecord.EncryptedAPIKey = encryptedAPIKey
+		}
+		providerKeyRecord.APIKey = constants.EmptyString
+		providerKeyRecord.UpdatedAt = timestamp
+		if persistError := store.database.saveProviderKey(providerKeyRecord); persistError != nil {
+			return fmt.Errorf("%w: provider=%s: %v", errManagedTenantStorePersist, providerKeyRecord.ProviderID, persistError)
+		}
+	}
+	return nil
 }
 
 func (store *managedTenantStore) migrateStaticConfiguration(configuration Configuration) error {
@@ -248,12 +409,16 @@ func (store *managedTenantStore) migrateStaticConfiguration(configuration Config
 			return fmt.Errorf("%w: tenant=%s: %v", errManagedTenantStorePersist, record.TenantID, persistError)
 		}
 		for providerIdentifier, apiKey := range providerAPIKeys {
+			encryptedAPIKey, encryptionError := store.providerKeyCipher.encrypt(store.randomReader, record.UserID, providerIdentifier.string(), apiKey)
+			if encryptionError != nil {
+				return encryptionError
+			}
 			if persistError := store.database.saveProviderKey(managedProviderAPIKeyRecord{
-				UserID:     record.UserID,
-				ProviderID: providerIdentifier.string(),
-				APIKey:     apiKey,
-				CreatedAt:  timestamp,
-				UpdatedAt:  timestamp,
+				UserID:          record.UserID,
+				ProviderID:      providerIdentifier.string(),
+				EncryptedAPIKey: encryptedAPIKey,
+				CreatedAt:       timestamp,
+				UpdatedAt:       timestamp,
 			}); persistError != nil {
 				return fmt.Errorf("%w: tenant=%s provider=%s: %v", errManagedTenantStorePersist, record.TenantID, providerIdentifier.string(), persistError)
 			}
@@ -276,7 +441,7 @@ func (store *managedTenantStore) profile(principal managementPrincipal) (managed
 	if recordError != nil {
 		return managedTenantSnapshot{}, recordError
 	}
-	return record.snapshot(), nil
+	return store.snapshot(record)
 }
 
 func (store *managedTenantStore) saveProviderKey(principal managementPrincipal, providerIdentifier providerID, rawAPIKey string) (managedTenantSnapshot, error) {
@@ -291,12 +456,16 @@ func (store *managedTenantStore) saveProviderKey(principal managementPrincipal, 
 		return managedTenantSnapshot{}, recordError
 	}
 	timestamp := store.now()
+	encryptedAPIKey, encryptionError := store.providerKeyCipher.encrypt(store.randomReader, record.UserID, providerIdentifier.string(), apiKey)
+	if encryptionError != nil {
+		return managedTenantSnapshot{}, encryptionError
+	}
 	if persistError := store.database.saveProviderKey(managedProviderAPIKeyRecord{
-		UserID:     record.UserID,
-		ProviderID: providerIdentifier.string(),
-		APIKey:     apiKey,
-		CreatedAt:  timestamp,
-		UpdatedAt:  timestamp,
+		UserID:          record.UserID,
+		ProviderID:      providerIdentifier.string(),
+		EncryptedAPIKey: encryptedAPIKey,
+		CreatedAt:       timestamp,
+		UpdatedAt:       timestamp,
 	}); persistError != nil {
 		return managedTenantSnapshot{}, fmt.Errorf("%w: provider=%s: %v", errManagedTenantStorePersist, providerIdentifier.string(), persistError)
 	}
@@ -400,7 +569,11 @@ func (store *managedTenantStore) authenticate(rawSecret string) (tenant, bool) {
 	if !digestValid || !constantTimeDigestEquals(recordDigest, presentedDigest) {
 		return tenant{}, false
 	}
-	return record.tenant(recordDigest), true
+	authenticatedTenant, tenantError := store.tenant(record, recordDigest)
+	if tenantError != nil {
+		return tenant{}, false
+	}
+	return authenticatedTenant, true
 }
 
 func (store *managedTenantStore) containsSecretDigestLocked(secretDigest [sha256.Size]byte) bool {
@@ -437,7 +610,7 @@ func (store *managedTenantStore) snapshotByUserIDLocked(userID string) (managedT
 	if recordError != nil {
 		return managedTenantSnapshot{}, fmt.Errorf("%w: user_id=%s: %v", errManagedTenantStorePersist, userID, recordError)
 	}
-	return record.snapshot(), nil
+	return store.snapshot(record)
 }
 
 func (store *managedTenantStore) newTenantSecret() (string, [sha256.Size]byte, error) {
@@ -494,7 +667,11 @@ func (record *managedTenantRecord) applyDefaults(defaults TenantDefaults) {
 	record.DefaultSystemPrompt = normalizedDefaults.systemPrompt
 }
 
-func (record managedTenantRecord) snapshot() managedTenantSnapshot {
+func (store *managedTenantStore) snapshot(record managedTenantRecord) (managedTenantSnapshot, error) {
+	providerAPIKeys, providerKeyError := store.providerAPIKeyMap(record.ProviderAPIKeys)
+	if providerKeyError != nil {
+		return managedTenantSnapshot{}, providerKeyError
+	}
 	return managedTenantSnapshot{
 		userID:          record.UserID,
 		userEmail:       record.UserEmail,
@@ -502,10 +679,24 @@ func (record managedTenantRecord) snapshot() managedTenantSnapshot {
 		userAvatarURL:   record.UserAvatarURL,
 		tenantID:        record.TenantID,
 		hasSecret:       record.SecretDigest != constants.EmptyString,
-		providerAPIKeys: record.providerAPIKeyMap(),
+		providerAPIKeys: providerAPIKeys,
 		defaults:        record.defaults(),
 		createdAt:       record.CreatedAt,
 		updatedAt:       record.UpdatedAt,
+	}, nil
+}
+
+func (record managedTenantRecord) adminSnapshot(usageSummary managedUsageSummary) managedAdminUserSnapshot {
+	return managedAdminUserSnapshot{
+		userID:          record.UserID,
+		userEmail:       record.UserEmail,
+		userDisplayName: record.UserDisplayName,
+		userAvatarURL:   record.UserAvatarURL,
+		tenantID:        record.TenantID,
+		hasSecret:       record.SecretDigest != constants.EmptyString,
+		createdAt:       record.CreatedAt,
+		updatedAt:       record.UpdatedAt,
+		usage:           usageSummary,
 	}
 }
 
@@ -519,27 +710,37 @@ func (record managedTenantRecord) defaults() TenantDefaults {
 	}
 }
 
-func (record managedTenantRecord) tenant(secretDigest [sha256.Size]byte) tenant {
+func (store *managedTenantStore) tenant(record managedTenantRecord, secretDigest [sha256.Size]byte) (tenant, error) {
+	providerAPIKeys, providerKeyError := store.providerAPIKeyMap(record.ProviderAPIKeys)
+	if providerKeyError != nil {
+		return tenant{}, providerKeyError
+	}
 	return tenant{
 		identifier:      tenantID(record.TenantID),
 		userID:          record.UserID,
 		secretDigest:    secretDigest,
 		defaults:        newTenantDefaults(record.defaults()),
 		managed:         true,
-		providerAPIKeys: record.providerAPIKeyMap(),
-	}
+		providerAPIKeys: providerAPIKeys,
+	}, nil
 }
 
-func (record managedTenantRecord) providerAPIKeyMap() map[providerID]string {
-	providerAPIKeys := make(map[providerID]string, len(record.ProviderAPIKeys))
-	for _, providerKeyRecord := range record.ProviderAPIKeys {
+func (store *managedTenantStore) providerAPIKeyMap(providerKeyRecords []managedProviderAPIKeyRecord) (map[providerID]string, error) {
+	providerAPIKeys := make(map[providerID]string, len(providerKeyRecords))
+	for _, providerKeyRecord := range providerKeyRecords {
 		providerIdentifier := newProviderID(providerKeyRecord.ProviderID)
-		apiKey := strings.TrimSpace(providerKeyRecord.APIKey)
+		if providerIdentifier.string() == constants.EmptyString {
+			continue
+		}
+		apiKey, decryptError := store.providerKeyCipher.decrypt(providerKeyRecord)
+		if decryptError != nil {
+			return nil, decryptError
+		}
 		if providerIdentifier.string() != constants.EmptyString && apiKey != constants.EmptyString {
 			providerAPIKeys[providerIdentifier] = apiKey
 		}
 	}
-	return providerAPIKeys
+	return providerAPIKeys, nil
 }
 
 func managedRecordSecretDigest(record managedTenantRecord) ([sha256.Size]byte, bool) {

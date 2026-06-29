@@ -1,8 +1,10 @@
 package proxy
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/mail"
 	"strings"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
@@ -34,6 +36,7 @@ const (
 	ManagementDatabaseDialectPostgres = "postgres"
 	// ManagementDatabaseDialectSQLite selects the GORM SQLite dialector.
 	ManagementDatabaseDialectSQLite = "sqlite"
+	managedProviderKeyBytes         = 32
 	tenantValidationErrorFormat     = "%w: tenant=%s"
 )
 
@@ -78,24 +81,26 @@ type Configuration struct {
 
 // ManagementConfiguration holds authenticated browser UI and self-service tenant settings.
 type ManagementConfiguration struct {
-	Enabled             bool
-	PublicOrigin        string
-	UIDescription       string
-	UIOrigins           []string
-	TAuthURL            string
-	TAuthTenantID       string
-	GoogleClientID      string
-	LoginPath           string
-	LogoutPath          string
-	NoncePath           string
-	JWTSigningKey       string
-	JWTIssuer           string
-	SessionCookieName   string
-	DatabaseDialect     string
-	DatabaseDSN         string
-	ManagementAPIOrigin string
-	ProxyOrigin         string
-	DatabaseDialector   gorm.Dialector
+	Enabled                  bool
+	PublicOrigin             string
+	UIDescription            string
+	UIOrigins                []string
+	AdminEmails              []string
+	TAuthURL                 string
+	TAuthTenantID            string
+	GoogleClientID           string
+	LoginPath                string
+	LogoutPath               string
+	NoncePath                string
+	JWTSigningKey            string
+	JWTIssuer                string
+	SessionCookieName        string
+	DatabaseDialect          string
+	DatabaseDSN              string
+	ProviderKeyEncryptionKey string
+	ManagementAPIOrigin      string
+	ProxyOrigin              string
+	DatabaseDialector        gorm.Dialector
 }
 
 // NewConfiguration returns a normalized runtime configuration after validating startup invariants.
@@ -257,6 +262,9 @@ func (configuration *ManagementConfiguration) ApplyTunables() {
 	for originIndex, originValue := range configuration.UIOrigins {
 		configuration.UIOrigins[originIndex] = strings.TrimSpace(originValue)
 	}
+	for emailIndex, emailValue := range configuration.AdminEmails {
+		configuration.AdminEmails[emailIndex] = strings.ToLower(strings.TrimSpace(emailValue))
+	}
 	configuration.TAuthURL = strings.TrimSpace(configuration.TAuthURL)
 	configuration.TAuthTenantID = strings.TrimSpace(configuration.TAuthTenantID)
 	configuration.GoogleClientID = strings.TrimSpace(configuration.GoogleClientID)
@@ -271,6 +279,7 @@ func (configuration *ManagementConfiguration) ApplyTunables() {
 	configuration.SessionCookieName = strings.TrimSpace(configuration.SessionCookieName)
 	configuration.DatabaseDialect = strings.ToLower(strings.TrimSpace(configuration.DatabaseDialect))
 	configuration.DatabaseDSN = strings.TrimSpace(configuration.DatabaseDSN)
+	configuration.ProviderKeyEncryptionKey = strings.TrimSpace(configuration.ProviderKeyEncryptionKey)
 	configuration.ManagementAPIOrigin = strings.TrimSpace(configuration.ManagementAPIOrigin)
 	configuration.ProxyOrigin = strings.TrimSpace(configuration.ProxyOrigin)
 }
@@ -296,6 +305,7 @@ func validateManagementConfiguration(configuration ManagementConfiguration) erro
 		{fieldName: "management.session_cookie_name", fieldValue: configuration.SessionCookieName},
 		{fieldName: "management.database_dialect", fieldValue: configuration.DatabaseDialect},
 		{fieldName: "management.database_dsn", fieldValue: configuration.DatabaseDSN},
+		{fieldName: "management.provider_key_encryption_key", fieldValue: configuration.ProviderKeyEncryptionKey},
 		{fieldName: "management.management_api_origin", fieldValue: configuration.ManagementAPIOrigin},
 		{fieldName: "management.proxy_origin", fieldValue: configuration.ProxyOrigin},
 	}
@@ -312,10 +322,43 @@ func validateManagementConfiguration(configuration ManagementConfiguration) erro
 			return fmt.Errorf("%w: field=management.ui_origins", ErrInvalidManagementConfiguration)
 		}
 	}
+	for _, emailValue := range configuration.AdminEmails {
+		if _, emailError := normalizeManagementAdminEmail(emailValue); emailError != nil {
+			return fmt.Errorf("%w: field=management.admin_emails value=%s", ErrInvalidManagementConfiguration, emailValue)
+		}
+	}
 	if !supportedManagementDatabaseDialect(configuration.DatabaseDialect) {
 		return fmt.Errorf("%w: field=management.database_dialect value=%s", ErrInvalidManagementConfiguration, configuration.DatabaseDialect)
 	}
+	if _, keyError := newManagedProviderKeyCipher(configuration.ProviderKeyEncryptionKey); keyError != nil {
+		return fmt.Errorf("%w: field=management.provider_key_encryption_key: %v", ErrInvalidManagementConfiguration, keyError)
+	}
 	return nil
+}
+
+func decodeManagedProviderKey(rawEncryptionKey string) ([managedProviderKeyBytes]byte, error) {
+	decodedKey, decodeError := base64.StdEncoding.DecodeString(strings.TrimSpace(rawEncryptionKey))
+	if decodeError != nil {
+		return [managedProviderKeyBytes]byte{}, fmt.Errorf("invalid_base64")
+	}
+	if len(decodedKey) != managedProviderKeyBytes {
+		return [managedProviderKeyBytes]byte{}, fmt.Errorf("invalid_length=%d", len(decodedKey))
+	}
+	var encryptionKey [managedProviderKeyBytes]byte
+	copy(encryptionKey[:], decodedKey)
+	return encryptionKey, nil
+}
+
+func normalizeManagementAdminEmail(rawEmail string) (string, error) {
+	email := strings.ToLower(strings.TrimSpace(rawEmail))
+	if email == constants.EmptyString {
+		return constants.EmptyString, ErrInvalidManagementConfiguration
+	}
+	parsedAddress, parseError := mail.ParseAddress(email)
+	if parseError != nil || parsedAddress.Address != email || parsedAddress.Name != constants.EmptyString {
+		return constants.EmptyString, ErrInvalidManagementConfiguration
+	}
+	return email, nil
 }
 
 func supportedManagementDatabaseDialect(databaseDialect string) bool {

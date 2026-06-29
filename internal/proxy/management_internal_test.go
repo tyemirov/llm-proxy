@@ -3,10 +3,13 @@ package proxy
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -23,6 +26,8 @@ import (
 var errInternalTestDatabase = errors.New("database failed")
 var errInternalTestRead = errors.New("read failed")
 
+const testManagedProviderKeyEncryptionKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+
 func TestManagedTenantStoreInternalEdges(t *testing.T) {
 	fixedTime := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
 	principal := managementPrincipal{userID: "tauth-internal-user"}
@@ -34,6 +39,45 @@ func TestManagedTenantStoreInternalEdges(t *testing.T) {
 	if profileError != nil || snapshot.userID != principal.userID {
 		t.Fatalf("profile snapshot=%+v error=%v", snapshot, profileError)
 	}
+	keySnapshot, saveKeyError := inMemoryStore.saveProviderKey(principal, newProviderID("openai"), "sk-openai")
+	if saveKeyError != nil {
+		t.Fatalf("save provider key error=%v", saveKeyError)
+	}
+	if keySnapshot.providerAPIKeys[newProviderID("openai")] != "sk-openai" {
+		t.Fatalf("snapshot provider keys=%+v", keySnapshot.providerAPIKeys)
+	}
+	keyRecord := inMemoryDatabase.records[principal.userID].ProviderAPIKeys[0]
+	if keyRecord.APIKey != "" || !strings.HasPrefix(keyRecord.EncryptedAPIKey, managedProviderKeyCiphertextPrefix) || strings.Contains(keyRecord.EncryptedAPIKey, "sk-openai") {
+		t.Fatalf("provider key record=%+v", keyRecord)
+	}
+	for _, invalidRecord := range []managedProviderAPIKeyRecord{
+		{UserID: principal.userID, ProviderID: "openai"},
+		{UserID: principal.userID, ProviderID: "openai", EncryptedAPIKey: "plaintext"},
+		{UserID: principal.userID, ProviderID: "openai", EncryptedAPIKey: managedProviderKeyCiphertextPrefix + "%"},
+		{UserID: principal.userID, ProviderID: "openai", EncryptedAPIKey: managedProviderKeyCiphertextPrefix + "AQID"},
+		{UserID: principal.userID, ProviderID: "deepseek", EncryptedAPIKey: keyRecord.EncryptedAPIKey},
+	} {
+		if _, decryptError := inMemoryStore.providerKeyCipher.decrypt(invalidRecord); !errors.Is(decryptError, errManagedProviderKeyDecryption) {
+			t.Fatalf("decrypt error=%v want %v", decryptError, errManagedProviderKeyDecryption)
+		}
+	}
+	emptyProviderMap, emptyProviderMapError := inMemoryStore.providerAPIKeyMap([]managedProviderAPIKeyRecord{
+		{UserID: principal.userID, ProviderID: "", EncryptedAPIKey: "ignored"},
+		internalBlankManagedProviderKeyRecord(t, principal.userID, "openai", fixedTime),
+	})
+	if emptyProviderMapError != nil || len(emptyProviderMap) != 0 {
+		t.Fatalf("empty provider map=%+v error=%v", emptyProviderMap, emptyProviderMapError)
+	}
+	brokenProviderRecord := internalManagedTenantRecord("broken-provider-user", "", fixedTime)
+	brokenProviderRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{{UserID: "broken-provider-user", ProviderID: "openai", EncryptedAPIKey: "bad"}}
+	if _, brokenSnapshotError := inMemoryStore.snapshot(brokenProviderRecord); !errors.Is(brokenSnapshotError, errManagedProviderKeyDecryption) {
+		t.Fatalf("broken snapshot error=%v want %v", brokenSnapshotError, errManagedProviderKeyDecryption)
+	}
+	brokenSecretDigest := sha256.Sum256([]byte("broken-secret"))
+	brokenProviderRecord.SecretDigest = hex.EncodeToString(brokenSecretDigest[:])
+	if _, brokenTenantError := inMemoryStore.tenant(brokenProviderRecord, brokenSecretDigest); !errors.Is(brokenTenantError, errManagedProviderKeyDecryption) {
+		t.Fatalf("broken tenant error=%v want %v", brokenTenantError, errManagedProviderKeyDecryption)
+	}
 	if _, authenticated := inMemoryStore.authenticate(" "); authenticated {
 		t.Fatalf("blank generated secret authenticated")
 	}
@@ -43,6 +87,15 @@ func TestManagedTenantStoreInternalEdges(t *testing.T) {
 	_, _, generationError := readErrorStore.generateSecret(principal, func([sha256.Size]byte) bool { return false })
 	if !errors.Is(generationError, errManagedSecretGeneration) {
 		t.Fatalf("generation error=%v want %v", generationError, errManagedSecretGeneration)
+	}
+	if _, encryptionError := readErrorStore.saveProviderKey(principal, newProviderID("openai"), "sk-openai"); !errors.Is(encryptionError, errManagedProviderKeyEncryption) {
+		t.Fatalf("provider key encryption error=%v want %v", encryptionError, errManagedProviderKeyEncryption)
+	}
+	if _, invalidProviderKeyError := readErrorStore.saveProviderKey(principal, newProviderID("openai"), " "); !errors.Is(invalidProviderKeyError, errManagedProviderKeyInvalid) {
+		t.Fatalf("provider key invalid error=%v want %v", invalidProviderKeyError, errManagedProviderKeyInvalid)
+	}
+	if _, invalidProviderKeyError := internalManagedProviderKeyCipher().encrypt(randReaderForProviderKeyTests(), principal.userID, "openai", " "); !errors.Is(invalidProviderKeyError, errManagedProviderKeyInvalid) {
+		t.Fatalf("provider key direct invalid error=%v want %v", invalidProviderKeyError, errManagedProviderKeyInvalid)
 	}
 
 	collisionDatabase := newFakeManagedTenantDatabase()
@@ -56,6 +109,57 @@ func TestManagedTenantStoreInternalEdges(t *testing.T) {
 	_, _, collisionError := collisionStore.generateSecret(principal, func([sha256.Size]byte) bool { return false })
 	if !errors.Is(collisionError, errManagedSecretCollision) {
 		t.Fatalf("collision error=%v want %v", collisionError, errManagedSecretCollision)
+	}
+
+	legacyDatabase := newFakeManagedTenantDatabase()
+	legacyRecord := internalManagedTenantRecord("legacy-user", "", fixedTime)
+	legacyRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{{UserID: "legacy-user", ProviderID: "openai", APIKey: "sk-legacy", CreatedAt: fixedTime, UpdatedAt: fixedTime}}
+	legacyDatabase.records[legacyRecord.UserID] = legacyRecord
+	legacyStore := newManagedTenantStoreWithDatabase(legacyDatabase)
+	legacyStore.now = func() time.Time { return fixedTime }
+	if migrationError := legacyStore.migratePlaintextProviderKeys(); migrationError != nil {
+		t.Fatalf("provider key migration error=%v", migrationError)
+	}
+	migratedKeyRecord := legacyDatabase.records[legacyRecord.UserID].ProviderAPIKeys[0]
+	if migratedKeyRecord.APIKey != "" || !strings.HasPrefix(migratedKeyRecord.EncryptedAPIKey, managedProviderKeyCiphertextPrefix) {
+		t.Fatalf("migrated provider key record=%+v", migratedKeyRecord)
+	}
+	legacySnapshot, legacySnapshotError := legacyStore.profile(managementPrincipal{userID: legacyRecord.UserID})
+	if legacySnapshotError != nil || legacySnapshot.providerAPIKeys[newProviderID("openai")] != "sk-legacy" {
+		t.Fatalf("legacy snapshot=%+v error=%v", legacySnapshot, legacySnapshotError)
+	}
+
+	migrationQueryDatabase := newFakeManagedTenantDatabase()
+	migrationQueryDatabase.userQueryErrors = []error{errInternalTestDatabase}
+	if migrationError := newManagedTenantStoreWithDatabase(migrationQueryDatabase).migratePlaintextProviderKeys(); !errors.Is(migrationError, errManagedTenantStorePersist) {
+		t.Fatalf("provider key migration query error=%v want %v", migrationError, errManagedTenantStorePersist)
+	}
+
+	migrationSaveDatabase := newFakeManagedTenantDatabase()
+	migrationSaveRecord := internalManagedTenantRecord("migration-save-user", "", fixedTime)
+	migrationSaveRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{{UserID: migrationSaveRecord.UserID, ProviderID: "openai", APIKey: "sk-save"}}
+	migrationSaveDatabase.records[migrationSaveRecord.UserID] = migrationSaveRecord
+	migrationSaveDatabase.saveProviderKeyError = errInternalTestDatabase
+	if migrationError := newManagedTenantStoreWithDatabase(migrationSaveDatabase).migratePlaintextProviderKeys(); !errors.Is(migrationError, errManagedTenantStorePersist) {
+		t.Fatalf("provider key migration save error=%v want %v", migrationError, errManagedTenantStorePersist)
+	}
+
+	migrationEncryptionDatabase := newFakeManagedTenantDatabase()
+	migrationEncryptionRecord := internalManagedTenantRecord("migration-encryption-user", "", fixedTime)
+	migrationEncryptionRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{{UserID: migrationEncryptionRecord.UserID, ProviderID: "openai", APIKey: "sk-encryption"}}
+	migrationEncryptionDatabase.records[migrationEncryptionRecord.UserID] = migrationEncryptionRecord
+	migrationEncryptionStore := newManagedTenantStoreWithDatabase(migrationEncryptionDatabase)
+	migrationEncryptionStore.randomReader = strings.NewReader("")
+	if migrationError := migrationEncryptionStore.migratePlaintextProviderKeys(); !errors.Is(migrationError, errManagedProviderKeyEncryption) {
+		t.Fatalf("provider key migration encryption error=%v want %v", migrationError, errManagedProviderKeyEncryption)
+	}
+
+	authProviderKeyDatabase := newFakeManagedTenantDatabase()
+	authProviderKeyRecord := internalManagedTenantRecord("auth-provider-key-user", hex.EncodeToString(brokenSecretDigest[:]), fixedTime)
+	authProviderKeyRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{{UserID: authProviderKeyRecord.UserID, ProviderID: "openai", EncryptedAPIKey: "bad"}}
+	authProviderKeyDatabase.secretQueryRecord = &authProviderKeyRecord
+	if _, authenticated := newManagedTenantStoreWithDatabase(authProviderKeyDatabase).authenticate("broken-secret"); authenticated {
+		t.Fatalf("broken provider key authenticated")
 	}
 }
 
@@ -110,7 +214,7 @@ func TestManagedTenantStoreDatabaseErrorEdges(t *testing.T) {
 
 	deleteProviderKeyErrorDatabase := newFakeManagedTenantDatabase()
 	deleteRecord := internalManagedTenantRecord(principal.userID, "", fixedTime)
-	deleteRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{{UserID: principal.userID, ProviderID: "openai", APIKey: "sk-openai"}}
+	deleteRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{internalManagedProviderKeyRecord(t, principal.userID, "openai", "sk-openai", fixedTime)}
 	deleteProviderKeyErrorDatabase.records[principal.userID] = deleteRecord
 	deleteProviderKeyErrorDatabase.saveTenantErrors = []error{nil}
 	deleteProviderKeyErrorDatabase.deleteProviderKeyError = errInternalTestDatabase
@@ -257,6 +361,22 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 		t.Fatalf("usage summary usage error=%v want %v", summaryError, errManagedTenantStorePersist)
 	}
 
+	boundedUsageDatabase := newFakeManagedTenantDatabase()
+	boundedUsageDatabase.records[principal.userID] = internalManagedTenantRecord(principal.userID, "", fixedTime)
+	boundedUsageDatabase.usageEvents = []managedUsageEventRecord{
+		{UserID: principal.userID, ProviderID: "old", ModelID: "old-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: fixedTime.AddDate(0, 0, -managedUsageSummaryDays)},
+		{UserID: principal.userID, ProviderID: "current", ModelID: "current-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: fixedTime},
+	}
+	boundedUsageStore := newManagedTenantStoreWithDatabase(boundedUsageDatabase)
+	boundedUsageStore.now = func() time.Time { return fixedTime }
+	boundedSummary, boundedSummaryError := boundedUsageStore.usageSummary(principal)
+	if boundedSummaryError != nil {
+		t.Fatalf("bounded usage summary error=%v", boundedSummaryError)
+	}
+	if boundedSummary.totals.requests != 1 || !boundedUsageDatabase.usageEventsQueryPeriodStart.Equal(usagePeriodStart(fixedTime)) {
+		t.Fatalf("bounded summary=%+v period_start=%s", boundedSummary.totals, boundedUsageDatabase.usageEventsQueryPeriodStart)
+	}
+
 	observedCore, observedLogs := observer.New(zapcore.WarnLevel)
 	recordManagedUsage(createErrorStore, zap.New(observedCore).Sugar(), managedTenant, usageEndpointText, ProviderNameOpenAI, ModelNameGPT41, http.StatusOK, nil, fixedTime.Add(-time.Second))
 	if observedLogs.Len() != 1 || observedLogs.All()[0].Message != logEventUsageRecordFailed {
@@ -267,6 +387,31 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 	status := executeInternalManagementHandler(service.usageHandler(), http.MethodGet, "/api/management/usage", "", nil, principal)
 	if status != http.StatusInternalServerError {
 		t.Fatalf("usage handler status=%d want=%d", status, http.StatusInternalServerError)
+	}
+
+	adminTenantQueryErrorDatabase := newFakeManagedTenantDatabase()
+	adminTenantQueryErrorDatabase.userQueryErrors = []error{errInternalTestDatabase}
+	if _, adminError := newManagedTenantStoreWithDatabase(adminTenantQueryErrorDatabase).adminUsersSummary(); !errors.Is(adminError, errManagedTenantStorePersist) {
+		t.Fatalf("admin tenant query error=%v want %v", adminError, errManagedTenantStorePersist)
+	}
+
+	adminUsageQueryErrorDatabase := newFakeManagedTenantDatabase()
+	adminUsageQueryErrorDatabase.records[principal.userID] = internalManagedTenantRecord(principal.userID, "", fixedTime)
+	adminUsageQueryErrorDatabase.usageEventsQueryError = errInternalTestDatabase
+	if _, adminError := newManagedTenantStoreWithDatabase(adminUsageQueryErrorDatabase).adminUsersSummary(); !errors.Is(adminError, errManagedTenantStorePersist) {
+		t.Fatalf("admin usage query error=%v want %v", adminError, errManagedTenantStorePersist)
+	}
+
+	adminOrderingDatabase := newFakeManagedTenantDatabase()
+	firstAdminRecord := internalManagedTenantRecord("admin-user-b", "", fixedTime)
+	firstAdminRecord.UserEmail = "same@example.com"
+	secondAdminRecord := internalManagedTenantRecord("admin-user-a", "", fixedTime)
+	secondAdminRecord.UserEmail = "same@example.com"
+	adminOrderingDatabase.records[firstAdminRecord.UserID] = firstAdminRecord
+	adminOrderingDatabase.records[secondAdminRecord.UserID] = secondAdminRecord
+	adminSnapshots, adminSnapshotsError := newManagedTenantStoreWithDatabase(adminOrderingDatabase).adminUsersSummary()
+	if adminSnapshotsError != nil || len(adminSnapshots) != 2 || adminSnapshots[0].userID != "admin-user-a" {
+		t.Fatalf("admin snapshots=%+v error=%v", adminSnapshots, adminSnapshotsError)
 	}
 }
 
@@ -354,7 +499,10 @@ func TestManagedTenantStoreStaticConfigMigrationEdges(t *testing.T) {
 	if record.TenantID != "legacy" || record.SecretDigest != hex.EncodeToString(legacyTenantSecretDigest[:]) {
 		t.Fatalf("legacy record=%+v", record)
 	}
-	providerAPIKeys := record.providerAPIKeyMap()
+	providerAPIKeys, providerKeyError := store.providerAPIKeyMap(record.ProviderAPIKeys)
+	if providerKeyError != nil {
+		t.Fatalf("provider key map error=%v", providerKeyError)
+	}
 	if providerAPIKeys[newProviderID(ProviderNameOpenAI)] != "sk-openai" || providerAPIKeys[newProviderID(ProviderNameDeepSeek)] != "sk-deepseek" {
 		t.Fatalf("provider keys=%v", providerAPIKeys)
 	}
@@ -388,6 +536,12 @@ func TestManagedTenantStoreStaticConfigMigrationEdges(t *testing.T) {
 		t.Fatalf("migration provider key error=%v want %v", migrationError, errManagedTenantStorePersist)
 	}
 
+	migrationEncryptionErrorStore := newManagedTenantStoreWithDatabase(newFakeManagedTenantDatabase())
+	migrationEncryptionErrorStore.randomReader = strings.NewReader("")
+	if migrationError := migrationEncryptionErrorStore.migrateStaticConfiguration(configuration); !errors.Is(migrationError, errManagedProviderKeyEncryption) {
+		t.Fatalf("migration provider key encryption error=%v want %v", migrationError, errManagedProviderKeyEncryption)
+	}
+
 	migrationMarkerErrorDatabase := newFakeManagedTenantDatabase()
 	migrationMarkerErrorDatabase.createMigrationError = errInternalTestDatabase
 	migrationMarkerErrorStore := newManagedTenantStoreWithDatabase(migrationMarkerErrorDatabase)
@@ -400,6 +554,14 @@ func TestManagedTenantGORMDatabaseOpenError(t *testing.T) {
 	_, storeError := newGORMManagedTenantDatabase(ManagementConfiguration{DatabaseDialect: ManagementDatabaseDialectPostgres, DatabaseDSN: "postgres://%"})
 	if !errors.Is(storeError, errManagedTenantStoreOpen) {
 		t.Fatalf("gorm store error=%v want %v", storeError, errManagedTenantStoreOpen)
+	}
+	_, managedStoreError := newManagedTenantStore(ManagementConfiguration{
+		DatabaseDialect:          ManagementDatabaseDialectPostgres,
+		DatabaseDSN:              "postgres://%",
+		ProviderKeyEncryptionKey: testManagedProviderKeyEncryptionKey,
+	})
+	if !errors.Is(managedStoreError, errManagedTenantStoreOpen) {
+		t.Fatalf("managed store error=%v want %v", managedStoreError, errManagedTenantStoreOpen)
 	}
 
 	_, missingDialectError := newGORMManagedTenantDatabase(ManagementConfiguration{DatabaseDSN: "postgres://%"})
@@ -422,6 +584,73 @@ func TestManagedTenantGORMDatabaseOpenError(t *testing.T) {
 	if !errors.Is(migrationError, errManagedTenantStoreOpen) {
 		t.Fatalf("gorm migration error=%v want %v", migrationError, errManagedTenantStoreOpen)
 	}
+
+	_, invalidKeyStoreError := newManagedTenantStore(ManagementConfiguration{
+		DatabaseDialect:          ManagementDatabaseDialectSQLite,
+		DatabaseDSN:              filepath.Join(t.TempDir(), "invalid-key.db"),
+		ProviderKeyEncryptionKey: "not-base64",
+	})
+	if !errors.Is(invalidKeyStoreError, errManagedTenantStoreOpen) {
+		t.Fatalf("invalid key store error=%v want %v", invalidKeyStoreError, errManagedTenantStoreOpen)
+	}
+
+	readonlyDatabasePath := filepath.Join(t.TempDir(), "readonly-migration.db")
+	readonlySeedDatabase, readonlySeedError := newGORMManagedTenantDatabase(ManagementConfiguration{
+		DatabaseDialect: ManagementDatabaseDialectSQLite,
+		DatabaseDSN:     readonlyDatabasePath,
+	})
+	if readonlySeedError != nil {
+		t.Fatalf("readonly seed database error=%v", readonlySeedError)
+	}
+	readonlyTenantRecord := internalManagedTenantRecord("readonly-migration-user", "", time.Now().UTC())
+	if createError := readonlySeedDatabase.createTenant(readonlyTenantRecord); createError != nil {
+		t.Fatalf("readonly seed create tenant error=%v", createError)
+	}
+	if saveError := readonlySeedDatabase.saveProviderKey(managedProviderAPIKeyRecord{
+		UserID:     readonlyTenantRecord.UserID,
+		ProviderID: "openai",
+		APIKey:     "sk-readonly",
+	}); saveError != nil {
+		t.Fatalf("readonly seed provider key error=%v", saveError)
+	}
+	_, readonlyStoreError := newManagedTenantStore(ManagementConfiguration{
+		DatabaseDialect:          ManagementDatabaseDialectSQLite,
+		DatabaseDSN:              "file:" + readonlyDatabasePath + "?mode=ro",
+		ProviderKeyEncryptionKey: testManagedProviderKeyEncryptionKey,
+	})
+	if !errors.Is(readonlyStoreError, errManagedTenantStorePersist) {
+		t.Fatalf("readonly migration store error=%v want %v", readonlyStoreError, errManagedTenantStorePersist)
+	}
+}
+
+func TestManagedTenantGORMDatabaseEncryptsProviderKeysAtRest(t *testing.T) {
+	store, storeError := newManagedTenantStore(ManagementConfiguration{
+		DatabaseDialect:          ManagementDatabaseDialectSQLite,
+		DatabaseDSN:              filepath.Join(t.TempDir(), "managed-tenants.db"),
+		ProviderKeyEncryptionKey: testManagedProviderKeyEncryptionKey,
+	})
+	if storeError != nil {
+		t.Fatalf("new managed tenant store: %v", storeError)
+	}
+	principal := managementPrincipal{userID: "tauth-gorm-encryption-user"}
+	if _, saveError := store.saveProviderKey(principal, newProviderID("openai"), "sk-openai"); saveError != nil {
+		t.Fatalf("save provider key: %v", saveError)
+	}
+	record, recordError := store.database.tenantByUserID(principal.userID)
+	if recordError != nil {
+		t.Fatalf("load record: %v", recordError)
+	}
+	if len(record.ProviderAPIKeys) != 1 {
+		t.Fatalf("provider key records=%+v", record.ProviderAPIKeys)
+	}
+	providerKeyRecord := record.ProviderAPIKeys[0]
+	if providerKeyRecord.APIKey != "" || !strings.HasPrefix(providerKeyRecord.EncryptedAPIKey, managedProviderKeyCiphertextPrefix) || strings.Contains(providerKeyRecord.EncryptedAPIKey, "sk-openai") {
+		t.Fatalf("provider key record=%+v", providerKeyRecord)
+	}
+	snapshot, snapshotError := store.profile(principal)
+	if snapshotError != nil || snapshot.providerAPIKeys[newProviderID("openai")] != "sk-openai" {
+		t.Fatalf("snapshot=%+v error=%v", snapshot, snapshotError)
+	}
 }
 
 func TestManagementHandlerStoreErrorEdges(t *testing.T) {
@@ -437,13 +666,21 @@ func TestManagementHandlerStoreErrorEdges(t *testing.T) {
 
 	removeErrorDatabase := newFakeManagedTenantDatabase()
 	removeRecord := internalManagedTenantRecord(principal.userID, "", fixedTime)
-	removeRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{{UserID: principal.userID, ProviderID: "openai", APIKey: "sk-openai"}}
+	removeRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{internalManagedProviderKeyRecord(t, principal.userID, "openai", "sk-openai", fixedTime)}
 	removeErrorDatabase.records[principal.userID] = removeRecord
 	removeErrorDatabase.saveTenantErrors = []error{nil}
 	removeErrorDatabase.deleteProviderKeyError = errInternalTestDatabase
 	removeErrorService := newInternalManagementService(removeErrorDatabase)
 	if responseCode := executeInternalManagementHandler(removeErrorService.removeProviderKeyHandler(), http.MethodDelete, "/api/management/provider-keys/openai", "", gin.Params{{Key: "provider", Value: "openai"}}, principal); responseCode != http.StatusInternalServerError {
 		t.Fatalf("remove error status=%d want=%d", responseCode, http.StatusInternalServerError)
+	}
+
+	adminErrorDatabase := newFakeManagedTenantDatabase()
+	adminErrorDatabase.userQueryErrors = []error{errInternalTestDatabase}
+	adminErrorService := newInternalManagementService(adminErrorDatabase)
+	adminPrincipal := managementPrincipal{userID: "tauth-admin-error-user", isAdmin: true}
+	if responseCode := executeInternalManagementHandler(adminErrorService.adminUsersHandler(), http.MethodGet, "/api/management/admin/users", "", nil, adminPrincipal); responseCode != http.StatusInternalServerError {
+		t.Fatalf("admin error status=%d want=%d", responseCode, http.StatusInternalServerError)
 	}
 
 	defaultsProfileErrorDatabase := newFakeManagedTenantDatabase()
@@ -456,7 +693,7 @@ func TestManagementHandlerStoreErrorEdges(t *testing.T) {
 
 	defaultsStoreErrorDatabase := newFakeManagedTenantDatabase()
 	defaultsRecord := internalManagedTenantRecord(principal.userID, "", fixedTime)
-	defaultsRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{{UserID: principal.userID, ProviderID: "openai", APIKey: "sk-openai"}}
+	defaultsRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{internalManagedProviderKeyRecord(t, principal.userID, "openai", "sk-openai", fixedTime)}
 	defaultsStoreErrorDatabase.records[principal.userID] = defaultsRecord
 	defaultsStoreErrorDatabase.saveTenantErrors = []error{nil, nil, errInternalTestDatabase}
 	defaultsStoreErrorService := newInternalManagementService(defaultsStoreErrorDatabase)
@@ -534,6 +771,18 @@ func TestProviderSummaryInternalEdges(t *testing.T) {
 	}
 }
 
+func TestManagementConfigurationInternalEdges(t *testing.T) {
+	shortKey := base64.StdEncoding.EncodeToString([]byte("short"))
+	if _, decodeError := decodeManagedProviderKey(shortKey); decodeError == nil || !strings.Contains(decodeError.Error(), "invalid_length") {
+		t.Fatalf("short key decode error=%v want invalid_length", decodeError)
+	}
+	for _, rawEmail := range []string{" ", "Admin <admin@example.com>"} {
+		if _, emailError := normalizeManagementAdminEmail(rawEmail); !errors.Is(emailError, ErrInvalidManagementConfiguration) {
+			t.Fatalf("admin email error=%v want %v", emailError, ErrInvalidManagementConfiguration)
+		}
+	}
+}
+
 func TestTenantRegistryContainsSecretDigestEdges(t *testing.T) {
 	secretDigest := sha256.Sum256([]byte("service-secret"))
 	serviceTenantID, tenantIDError := newTenantID("service")
@@ -565,21 +814,22 @@ func newFakeManagedTenantDatabase() *fakeManagedTenantDatabase {
 }
 
 type fakeManagedTenantDatabase struct {
-	records                map[string]managedTenantRecord
-	usageEvents            []managedUsageEventRecord
-	migrations             map[string]managedStaticConfigMigrationRecord
-	userQueryErrors        []error
-	secretQueryErrors      []error
-	migrationQueryErrors   []error
-	secretQueryRecord      *managedTenantRecord
-	createError            error
-	saveTenantError        error
-	saveTenantErrors       []error
-	saveProviderKeyError   error
-	deleteProviderKeyError error
-	createUsageEventError  error
-	usageEventsQueryError  error
-	createMigrationError   error
+	records                     map[string]managedTenantRecord
+	usageEvents                 []managedUsageEventRecord
+	migrations                  map[string]managedStaticConfigMigrationRecord
+	userQueryErrors             []error
+	secretQueryErrors           []error
+	migrationQueryErrors        []error
+	secretQueryRecord           *managedTenantRecord
+	createError                 error
+	saveTenantError             error
+	saveTenantErrors            []error
+	saveProviderKeyError        error
+	deleteProviderKeyError      error
+	createUsageEventError       error
+	usageEventsQueryError       error
+	usageEventsQueryPeriodStart time.Time
+	createMigrationError        error
 }
 
 func (database *fakeManagedTenantDatabase) tenantByUserID(userID string) (managedTenantRecord, error) {
@@ -606,6 +856,30 @@ func (database *fakeManagedTenantDatabase) tenantBySecretDigest(secretDigest str
 		}
 	}
 	return managedTenantRecord{}, gorm.ErrRecordNotFound
+}
+
+func (database *fakeManagedTenantDatabase) tenants() ([]managedTenantRecord, error) {
+	if queryError, hasQueryError := database.popUserQueryError(); hasQueryError {
+		return nil, queryError
+	}
+	records := make([]managedTenantRecord, 0, len(database.records))
+	for _, record := range database.records {
+		records = append(records, cloneManagedTenantRecord(record))
+	}
+	return records, nil
+}
+
+func (database *fakeManagedTenantDatabase) providerKeys() ([]managedProviderAPIKeyRecord, error) {
+	if queryError, hasQueryError := database.popUserQueryError(); hasQueryError {
+		return nil, queryError
+	}
+	records := []managedProviderAPIKeyRecord{}
+	for _, tenantRecord := range database.records {
+		for _, providerKeyRecord := range tenantRecord.ProviderAPIKeys {
+			records = append(records, providerKeyRecord)
+		}
+	}
+	return records, nil
 }
 
 func (database *fakeManagedTenantDatabase) createTenant(record managedTenantRecord) error {
@@ -679,13 +953,28 @@ func (database *fakeManagedTenantDatabase) createUsageEvent(record managedUsageE
 	return nil
 }
 
-func (database *fakeManagedTenantDatabase) usageEventsByUserID(userID string) ([]managedUsageEventRecord, error) {
+func (database *fakeManagedTenantDatabase) usageEventsByUserIDSince(userID string, periodStart time.Time) ([]managedUsageEventRecord, error) {
 	if database.usageEventsQueryError != nil {
 		return nil, database.usageEventsQueryError
 	}
+	database.usageEventsQueryPeriodStart = periodStart
 	records := make([]managedUsageEventRecord, 0, len(database.usageEvents))
 	for _, record := range database.usageEvents {
-		if record.UserID == userID {
+		if record.UserID == userID && !record.CreatedAt.Before(periodStart) {
+			records = append(records, record)
+		}
+	}
+	return records, nil
+}
+
+func (database *fakeManagedTenantDatabase) usageEventsSince(periodStart time.Time) ([]managedUsageEventRecord, error) {
+	if database.usageEventsQueryError != nil {
+		return nil, database.usageEventsQueryError
+	}
+	database.usageEventsQueryPeriodStart = periodStart
+	records := make([]managedUsageEventRecord, 0, len(database.usageEvents))
+	for _, record := range database.usageEvents {
+		if !record.CreatedAt.Before(periodStart) {
 			records = append(records, record)
 		}
 	}
@@ -756,20 +1045,21 @@ func newInternalManagementService(database *fakeManagedTenantDatabase) *manageme
 	store := newManagedTenantStoreWithDatabase(database)
 	return newManagementService(
 		ManagementConfiguration{
-			PublicOrigin:        "http://localhost:8080",
-			UIDescription:       "LLM Proxy",
-			UIOrigins:           []string{"http://localhost:8080"},
-			TAuthURL:            "http://localhost:8443",
-			TAuthTenantID:       "llm-proxy-test",
-			GoogleClientID:      "google-client-id",
-			LoginPath:           "/auth/google",
-			LogoutPath:          "/auth/logout",
-			NoncePath:           "/auth/nonce",
-			JWTSigningKey:       "management-signing-key",
-			JWTIssuer:           DefaultManagementJWTIssuer,
-			SessionCookieName:   "llm_proxy_test_session",
-			ManagementAPIOrigin: "http://localhost:8080",
-			ProxyOrigin:         "http://localhost:8080",
+			PublicOrigin:             "http://localhost:8080",
+			UIDescription:            "LLM Proxy",
+			UIOrigins:                []string{"http://localhost:8080"},
+			TAuthURL:                 "http://localhost:8443",
+			TAuthTenantID:            "llm-proxy-test",
+			GoogleClientID:           "google-client-id",
+			LoginPath:                "/auth/google",
+			LogoutPath:               "/auth/logout",
+			NoncePath:                "/auth/nonce",
+			JWTSigningKey:            "management-signing-key",
+			JWTIssuer:                DefaultManagementJWTIssuer,
+			SessionCookieName:        "llm_proxy_test_session",
+			ProviderKeyEncryptionKey: testManagedProviderKeyEncryptionKey,
+			ManagementAPIOrigin:      "http://localhost:8080",
+			ProxyOrigin:              "http://localhost:8080",
 		},
 		store,
 		internalManagementProviderRegistry(),
@@ -800,23 +1090,24 @@ func internalManagementProviderRegistry() *providerRegistry {
 func internalManagementRouterConfiguration() Configuration {
 	return Configuration{
 		Management: ManagementConfiguration{
-			Enabled:             true,
-			PublicOrigin:        "http://localhost:8080",
-			UIDescription:       "LLM Proxy",
-			UIOrigins:           []string{"http://localhost:8080"},
-			TAuthURL:            "http://localhost:8443",
-			TAuthTenantID:       "llm-proxy-test",
-			GoogleClientID:      "google-client-id",
-			LoginPath:           "/auth/google",
-			LogoutPath:          "/auth/logout",
-			NoncePath:           "/auth/nonce",
-			JWTSigningKey:       "management-signing-key",
-			JWTIssuer:           DefaultManagementJWTIssuer,
-			SessionCookieName:   "llm_proxy_test_session",
-			DatabaseDialect:     ManagementDatabaseDialectSQLite,
-			DatabaseDSN:         "sqlite-test-management",
-			ManagementAPIOrigin: "http://localhost:8080",
-			ProxyOrigin:         "http://localhost:8080",
+			Enabled:                  true,
+			PublicOrigin:             "http://localhost:8080",
+			UIDescription:            "LLM Proxy",
+			UIOrigins:                []string{"http://localhost:8080"},
+			TAuthURL:                 "http://localhost:8443",
+			TAuthTenantID:            "llm-proxy-test",
+			GoogleClientID:           "google-client-id",
+			LoginPath:                "/auth/google",
+			LogoutPath:               "/auth/logout",
+			NoncePath:                "/auth/nonce",
+			JWTSigningKey:            "management-signing-key",
+			JWTIssuer:                DefaultManagementJWTIssuer,
+			SessionCookieName:        "llm_proxy_test_session",
+			DatabaseDialect:          ManagementDatabaseDialectSQLite,
+			DatabaseDSN:              "sqlite-test-management",
+			ProviderKeyEncryptionKey: testManagedProviderKeyEncryptionKey,
+			ManagementAPIOrigin:      "http://localhost:8080",
+			ProxyOrigin:              "http://localhost:8080",
 		},
 		ProviderModels: internalProviderModelCatalogs(),
 		LogLevel:       LogLevelInfo,
@@ -880,6 +1171,39 @@ func internalManagedTenantRecord(userID string, secretDigest string, now time.Ti
 	}
 	record.applyDefaults(DefaultTenantDefaults())
 	return record
+}
+
+func internalManagedProviderKeyRecord(t *testing.T, userID string, providerIdentifier string, apiKey string, now time.Time) managedProviderAPIKeyRecord {
+	t.Helper()
+	encryptedAPIKey, encryptionError := internalManagedProviderKeyCipher().encrypt(randReaderForProviderKeyTests(), userID, providerIdentifier, apiKey)
+	if encryptionError != nil {
+		t.Fatalf("encrypt provider key: %v", encryptionError)
+	}
+	return managedProviderAPIKeyRecord{
+		UserID:          userID,
+		ProviderID:      providerIdentifier,
+		EncryptedAPIKey: encryptedAPIKey,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+}
+
+func internalBlankManagedProviderKeyRecord(t *testing.T, userID string, providerIdentifier string, now time.Time) managedProviderAPIKeyRecord {
+	t.Helper()
+	providerKeyCipher := internalManagedProviderKeyCipher()
+	nonce := bytes.Repeat([]byte{2}, providerKeyCipher.aeadCipher.NonceSize())
+	sealedAPIKey := providerKeyCipher.aeadCipher.Seal(nil, nonce, []byte(" "), managedProviderKeyAssociatedData(userID, providerIdentifier))
+	return managedProviderAPIKeyRecord{
+		UserID:          userID,
+		ProviderID:      providerIdentifier,
+		EncryptedAPIKey: managedProviderKeyCiphertextPrefix + base64.StdEncoding.EncodeToString(append(nonce, sealedAPIKey...)),
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+}
+
+func randReaderForProviderKeyTests() io.Reader {
+	return bytes.NewReader(bytes.Repeat([]byte{1}, 64))
 }
 
 type failingReadCloser struct{}

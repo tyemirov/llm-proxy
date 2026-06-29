@@ -20,6 +20,7 @@ const (
 	managementDefaultsPath              = "/defaults"
 	managementSecretsPath               = "/secrets"
 	managementUsagePath                 = "/usage"
+	managementAdminUsersPath            = "/admin/users"
 	contextKeyManagementPrincipal       = "management_principal"
 	headerAccessControlAllowCredentials = "Access-Control-Allow-Credentials"
 	headerAccessControlAllowHeaders     = "Access-Control-Allow-Headers"
@@ -58,6 +59,7 @@ type managementUserResponse struct {
 	Email       string `json:"email,omitempty"`
 	DisplayName string `json:"display_name,omitempty"`
 	AvatarURL   string `json:"avatar_url,omitempty"`
+	IsAdmin     bool   `json:"is_admin"`
 }
 
 type managementTenantResponse struct {
@@ -142,6 +144,24 @@ type managementUsageStatusResponse struct {
 	Requests   int `json:"requests"`
 }
 
+type managementAdminUsersResponse struct {
+	PeriodDays int                           `json:"period_days"`
+	Users      []managementAdminUserResponse `json:"users"`
+}
+
+type managementAdminUserResponse struct {
+	User   managementUserResponse         `json:"user"`
+	Tenant managementAdminTenantResponse  `json:"tenant"`
+	Usage  managementUsageSummaryResponse `json:"usage"`
+}
+
+type managementAdminTenantResponse struct {
+	ID        string `json:"id"`
+	HasSecret bool   `json:"has_secret"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 type managementProviderKeyRequest struct {
 	APIKey string `json:"api_key"`
 }
@@ -176,6 +196,7 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.Use(service.managementMutationMiddleware())
 	managementGroup.GET(managementProfilePath, service.profileHandler())
 	managementGroup.GET(managementUsagePath, service.usageHandler())
+	managementGroup.GET(managementAdminUsersPath, service.adminUsersHandler())
 	managementGroup.PUT(managementProviderKeysPath, service.saveProviderKeyHandler())
 	managementGroup.DELETE(managementProviderKeysPath, service.removeProviderKeyHandler())
 	managementGroup.PUT(managementDefaultsPath, service.updateDefaultsHandler())
@@ -258,7 +279,7 @@ func (service *managementService) profileHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusInternalServerError, snapshotError.Error())
 			return
 		}
-		ginContext.JSON(http.StatusOK, service.profileResponse(snapshot))
+		ginContext.JSON(http.StatusOK, service.profileResponse(principal, snapshot))
 	}
 }
 
@@ -271,6 +292,22 @@ func (service *managementService) usageHandler() gin.HandlerFunc {
 			return
 		}
 		ginContext.JSON(http.StatusOK, managementUsageSummary(summary))
+	}
+}
+
+func (service *managementService) adminUsersHandler() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		principal := managementPrincipalFromContext(ginContext)
+		if !principal.isAdmin {
+			ginContext.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+		summary, summaryError := service.store.adminUsersSummary()
+		if summaryError != nil {
+			ginContext.String(http.StatusInternalServerError, summaryError.Error())
+			return
+		}
+		ginContext.JSON(http.StatusOK, service.adminUsersResponse(summary))
 	}
 }
 
@@ -292,7 +329,7 @@ func (service *managementService) saveProviderKeyHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusBadRequest, storeError.Error())
 			return
 		}
-		ginContext.JSON(http.StatusOK, service.profileResponse(snapshot))
+		ginContext.JSON(http.StatusOK, service.profileResponse(principal, snapshot))
 	}
 }
 
@@ -309,7 +346,7 @@ func (service *managementService) removeProviderKeyHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusInternalServerError, storeError.Error())
 			return
 		}
-		ginContext.JSON(http.StatusOK, service.profileResponse(snapshot))
+		ginContext.JSON(http.StatusOK, service.profileResponse(principal, snapshot))
 	}
 }
 
@@ -336,7 +373,7 @@ func (service *managementService) updateDefaultsHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusInternalServerError, storeError.Error())
 			return
 		}
-		ginContext.JSON(http.StatusOK, service.profileResponse(snapshot))
+		ginContext.JSON(http.StatusOK, service.profileResponse(principal, snapshot))
 	}
 }
 
@@ -350,7 +387,7 @@ func (service *managementService) generateSecretHandler() gin.HandlerFunc {
 		}
 		ginContext.JSON(http.StatusOK, managementSecretResponse{
 			Secret:  rawSecret,
-			Profile: service.profileResponse(snapshot),
+			Profile: service.profileResponse(principal, snapshot),
 		})
 	}
 }
@@ -363,17 +400,18 @@ func (service *managementService) revokeSecretHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusInternalServerError, storeError.Error())
 			return
 		}
-		ginContext.JSON(http.StatusOK, service.profileResponse(snapshot))
+		ginContext.JSON(http.StatusOK, service.profileResponse(principal, snapshot))
 	}
 }
 
-func (service *managementService) profileResponse(snapshot managedTenantSnapshot) managementProfileResponse {
+func (service *managementService) profileResponse(principal managementPrincipal, snapshot managedTenantSnapshot) managementProfileResponse {
 	return managementProfileResponse{
 		User: managementUserResponse{
 			ID:          snapshot.userID,
 			Email:       snapshot.userEmail,
 			DisplayName: snapshot.userDisplayName,
 			AvatarURL:   snapshot.userAvatarURL,
+			IsAdmin:     principal.isAdmin,
 		},
 		Tenant: managementTenantResponse{
 			ID:        snapshot.tenantID,
@@ -543,4 +581,31 @@ func managementUsageStatuses(statusCodes []managedUsageStatusBucket) []managemen
 		})
 	}
 	return responses
+}
+
+func (service *managementService) adminUsersResponse(snapshots []managedAdminUserSnapshot) managementAdminUsersResponse {
+	users := make([]managementAdminUserResponse, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		_, userIsAdmin := service.sessionValidator.adminEmails[strings.ToLower(strings.TrimSpace(snapshot.userEmail))]
+		users = append(users, managementAdminUserResponse{
+			User: managementUserResponse{
+				ID:          snapshot.userID,
+				Email:       snapshot.userEmail,
+				DisplayName: snapshot.userDisplayName,
+				AvatarURL:   snapshot.userAvatarURL,
+				IsAdmin:     userIsAdmin,
+			},
+			Tenant: managementAdminTenantResponse{
+				ID:        snapshot.tenantID,
+				HasSecret: snapshot.hasSecret,
+				CreatedAt: snapshot.createdAt.Format(time.RFC3339),
+				UpdatedAt: snapshot.updatedAt.Format(time.RFC3339),
+			},
+			Usage: managementUsageSummary(snapshot.usage),
+		})
+	}
+	return managementAdminUsersResponse{
+		PeriodDays: managedUsageSummaryDays,
+		Users:      users,
+	}
 }

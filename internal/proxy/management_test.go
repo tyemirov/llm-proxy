@@ -22,11 +22,13 @@ import (
 )
 
 const (
-	testManagementSigningKey  = "management-signing-key"
-	testManagementTenantID    = "llm-proxy-test"
-	testManagementCookieName  = "llm_proxy_test_session"
-	testManagementOpenAIKey   = "sk-user-openai"
-	testManagementDeepSeekKey = "sk-user-deepseek"
+	testManagementSigningKey               = "management-signing-key"
+	testManagementTenantID                 = "llm-proxy-test"
+	testManagementCookieName               = "llm_proxy_test_session"
+	testManagementAdminEmail               = "admin@example.com"
+	testManagementProviderKeyEncryptionKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+	testManagementOpenAIKey                = "sk-user-openai"
+	testManagementDeepSeekKey              = "sk-user-deepseek"
 )
 
 func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
@@ -514,6 +516,27 @@ func TestManagementConfigurationValidationRequiresBackendAuthFields(t *testing.T
 	if buildError == nil || !strings.Contains(buildError.Error(), "management.database_dialect") {
 		t.Fatalf("BuildRouter error=%v want missing management.database_dialect", buildError)
 	}
+
+	configuration = managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "store.db"))
+	configuration.Management.AdminEmails = []string{"not an email"}
+	_, buildError = buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if buildError == nil || !strings.Contains(buildError.Error(), "management.admin_emails") {
+		t.Fatalf("BuildRouter error=%v want invalid management.admin_emails", buildError)
+	}
+
+	configuration = managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "store.db"))
+	configuration.Management.ProviderKeyEncryptionKey = " "
+	_, buildError = buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if buildError == nil || !strings.Contains(buildError.Error(), "management.provider_key_encryption_key") {
+		t.Fatalf("BuildRouter error=%v want missing management.provider_key_encryption_key", buildError)
+	}
+
+	configuration = managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "store.db"))
+	configuration.Management.ProviderKeyEncryptionKey = "not-base64"
+	_, buildError = buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if buildError == nil || !strings.Contains(buildError.Error(), "management.provider_key_encryption_key") {
+		t.Fatalf("BuildRouter error=%v want invalid management.provider_key_encryption_key", buildError)
+	}
 }
 
 func TestManagementSQLiteDialectOpensConfiguredDatabase(t *testing.T) {
@@ -707,6 +730,103 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 	}
 }
 
+func TestManagementAdminUsersDashboard(t *testing.T) {
+	chatServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"admin usage ok"}}],"usage":{"prompt_tokens":7,"completion_tokens":11,"total_tokens":18}}`))
+	}))
+	defer chatServer.Close()
+
+	router := newManagementRouter(t, proxy.Configuration{DeepSeekBaseURL: chatServer.URL})
+	userOneCookie := managementSessionCookie(t, "admin-visible-user-one")
+	userTwoCookie := managementSessionCookie(t, "admin-visible-user-two")
+	adminCookie := managementSessionCookieWithEmail(t, "admin-user", testManagementAdminEmail)
+
+	saveKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/deepseek", `{"api_key":"`+testManagementDeepSeekKey+`"}`, userOneCookie)
+	saveKeyResponse := httptest.NewRecorder()
+	router.ServeHTTP(saveKeyResponse, saveKeyRequest)
+	if saveKeyResponse.Code != http.StatusOK {
+		t.Fatalf("save key status=%d body=%s", saveKeyResponse.Code, saveKeyResponse.Body.String())
+	}
+	saveOpenAIKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/openai", `{"api_key":"`+testManagementOpenAIKey+`"}`, userOneCookie)
+	saveOpenAIKeyResponse := httptest.NewRecorder()
+	router.ServeHTTP(saveOpenAIKeyResponse, saveOpenAIKeyRequest)
+	if saveOpenAIKeyResponse.Code != http.StatusOK {
+		t.Fatalf("save openai key status=%d body=%s", saveOpenAIKeyResponse.Code, saveOpenAIKeyResponse.Body.String())
+	}
+	defaultsBody := `{"provider":"deepseek","model":"` + proxy.ModelNameDeepSeekV4Flash + `","dictation_provider":"openai","dictation_model":"` + proxy.DefaultDictationModel + `","system_prompt":""}`
+	defaultsRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/defaults", defaultsBody, userOneCookie)
+	defaultsResponse := httptest.NewRecorder()
+	router.ServeHTTP(defaultsResponse, defaultsRequest)
+	if defaultsResponse.Code != http.StatusOK {
+		t.Fatalf("defaults status=%d body=%s", defaultsResponse.Code, defaultsResponse.Body.String())
+	}
+	secretRequest := authenticatedJSONRequest(http.MethodPost, "/api/management/secrets", `{}`, userOneCookie)
+	secretResponse := httptest.NewRecorder()
+	router.ServeHTTP(secretResponse, secretRequest)
+	if secretResponse.Code != http.StatusOK {
+		t.Fatalf("secret status=%d body=%s", secretResponse.Code, secretResponse.Body.String())
+	}
+	var secretPayload struct {
+		Secret string `json:"secret"`
+	}
+	if decodeError := json.Unmarshal(secretResponse.Body.Bytes(), &secretPayload); decodeError != nil {
+		t.Fatalf("decode secret: %v", decodeError)
+	}
+
+	textRequest := httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(secretPayload.Secret)+"&prompt=hello", nil)
+	textResponse := httptest.NewRecorder()
+	router.ServeHTTP(textResponse, textRequest)
+	if textResponse.Code != http.StatusOK {
+		t.Fatalf("text status=%d body=%s", textResponse.Code, textResponse.Body.String())
+	}
+
+	profileRequest := authenticatedJSONRequest(http.MethodGet, "/api/management/profile", "", userTwoCookie)
+	profileResponse := httptest.NewRecorder()
+	router.ServeHTTP(profileResponse, profileRequest)
+	if profileResponse.Code != http.StatusOK {
+		t.Fatalf("profile status=%d body=%s", profileResponse.Code, profileResponse.Body.String())
+	}
+
+	forbiddenRequest := authenticatedJSONRequest(http.MethodGet, "/api/management/admin/users", "", userOneCookie)
+	forbiddenResponse := httptest.NewRecorder()
+	router.ServeHTTP(forbiddenResponse, forbiddenRequest)
+	if forbiddenResponse.Code != http.StatusForbidden {
+		t.Fatalf("admin users non-admin status=%d want=%d body=%s", forbiddenResponse.Code, http.StatusForbidden, forbiddenResponse.Body.String())
+	}
+
+	adminRequest := authenticatedJSONRequest(http.MethodGet, "/api/management/admin/users", "", adminCookie)
+	adminResponse := httptest.NewRecorder()
+	router.ServeHTTP(adminResponse, adminRequest)
+	if adminResponse.Code != http.StatusOK {
+		t.Fatalf("admin users status=%d body=%s", adminResponse.Code, adminResponse.Body.String())
+	}
+	adminBody := adminResponse.Body.String()
+	forbiddenFragments := []string{testManagementDeepSeekKey, secretPayload.Secret, "masked_key", "SecretDigest"}
+	for _, forbiddenFragment := range forbiddenFragments {
+		if strings.Contains(adminBody, forbiddenFragment) {
+			t.Fatalf("admin response leaked %q: %s", forbiddenFragment, adminBody)
+		}
+	}
+	var adminUsers managementAdminUsersTestResponse
+	if decodeError := json.Unmarshal(adminResponse.Body.Bytes(), &adminUsers); decodeError != nil {
+		t.Fatalf("decode admin users: %v", decodeError)
+	}
+	if adminUsers.PeriodDays != 30 || len(adminUsers.Users) != 2 {
+		t.Fatalf("admin users=%+v", adminUsers)
+	}
+	userUsageByID := map[string]int{}
+	for _, user := range adminUsers.Users {
+		userUsageByID[user.User.ID] = user.Usage.Totals.Requests
+		if user.Tenant.ID == "" || user.User.Email == "" {
+			t.Fatalf("admin user missing tenant/email: %+v", user)
+		}
+	}
+	if userUsageByID["admin-visible-user-one"] != 1 || userUsageByID["admin-visible-user-two"] != 0 {
+		t.Fatalf("admin usage by user=%+v", userUsageByID)
+	}
+}
+
 func TestManagementGeneratedSecretRoutesWithTenantProviderKey(t *testing.T) {
 	var capturedAuthorization string
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
@@ -887,23 +1007,25 @@ func managementConfigurationWithDatabasePath(configuration proxy.Configuration, 
 		databaseDialector = nil
 	}
 	configuration.Management = proxy.ManagementConfiguration{
-		Enabled:             true,
-		PublicOrigin:        "http://localhost:8080",
-		UIDescription:       "LLM Proxy",
-		UIOrigins:           []string{"http://localhost:8080", "http://127.0.0.1:4179", "http://localhost:4179"},
-		TAuthURL:            "http://localhost:8443",
-		TAuthTenantID:       testManagementTenantID,
-		GoogleClientID:      "google-client-id",
-		LoginPath:           "/auth/google",
-		LogoutPath:          "/auth/logout",
-		NoncePath:           "/auth/nonce",
-		JWTSigningKey:       testManagementSigningKey,
-		SessionCookieName:   testManagementCookieName,
-		DatabaseDialect:     proxy.ManagementDatabaseDialectSQLite,
-		DatabaseDSN:         databaseDSN,
-		ManagementAPIOrigin: "http://localhost:8080",
-		ProxyOrigin:         "http://localhost:8080",
-		DatabaseDialector:   databaseDialector,
+		Enabled:                  true,
+		PublicOrigin:             "http://localhost:8080",
+		UIDescription:            "LLM Proxy",
+		UIOrigins:                []string{"http://localhost:8080", "http://127.0.0.1:4179", "http://localhost:4179"},
+		AdminEmails:              []string{testManagementAdminEmail},
+		TAuthURL:                 "http://localhost:8443",
+		TAuthTenantID:            testManagementTenantID,
+		GoogleClientID:           "google-client-id",
+		LoginPath:                "/auth/google",
+		LogoutPath:               "/auth/logout",
+		NoncePath:                "/auth/nonce",
+		JWTSigningKey:            testManagementSigningKey,
+		SessionCookieName:        testManagementCookieName,
+		DatabaseDialect:          proxy.ManagementDatabaseDialectSQLite,
+		DatabaseDSN:              databaseDSN,
+		ProviderKeyEncryptionKey: testManagementProviderKeyEncryptionKey,
+		ManagementAPIOrigin:      "http://localhost:8080",
+		ProxyOrigin:              "http://localhost:8080",
+		DatabaseDialector:        databaseDialector,
 	}
 	configuration.LogLevel = proxy.LogLevelInfo
 	configuration.WorkerCount = 1
@@ -914,12 +1036,17 @@ func managementConfigurationWithDatabasePath(configuration proxy.Configuration, 
 
 func managementSessionCookie(t *testing.T, userID string) *http.Cookie {
 	t.Helper()
+	return managementSessionCookieWithEmail(t, userID, userID+"@example.com")
+}
+
+func managementSessionCookieWithEmail(t *testing.T, userID string, userEmail string) *http.Cookie {
+	t.Helper()
 	now := time.Now().UTC()
 	return managementSessionCookieWithClaims(t, jwt.MapClaims{
 		"iss":               "tauth",
 		"tenant_id":         testManagementTenantID,
 		"user_id":           userID,
-		"user_email":        userID + "@example.com",
+		"user_email":        userEmail,
 		"user_display_name": userID,
 		"iat":               now.Add(-time.Minute).Unix(),
 		"exp":               now.Add(time.Hour).Unix(),
@@ -988,6 +1115,23 @@ type managementUsageTestResponse struct {
 		StatusCode int `json:"status_code"`
 		Requests   int `json:"requests"`
 	} `json:"status_codes"`
+}
+
+type managementAdminUsersTestResponse struct {
+	PeriodDays int `json:"period_days"`
+	Users      []struct {
+		User struct {
+			ID          string `json:"id"`
+			Email       string `json:"email"`
+			DisplayName string `json:"display_name"`
+			IsAdmin     bool   `json:"is_admin"`
+		} `json:"user"`
+		Tenant struct {
+			ID        string `json:"id"`
+			HasSecret bool   `json:"has_secret"`
+		} `json:"tenant"`
+		Usage managementUsageTestResponse `json:"usage"`
+	} `json:"users"`
 }
 
 func requestManagementUsage(t *testing.T, router http.Handler, sessionCookie *http.Cookie) managementUsageTestResponse {
