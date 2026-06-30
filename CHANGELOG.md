@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.22] - 2026-06-30
+
+### Changes
+- test: improve coverage and assertions in client main_test.go
+- Merge pull request #180 from tyemirov/feature/F007-dashboard-settings-modal
+- Merge branch 'master' into feature/F007-dashboard-settings-modal
+- Merge pull request #181 from tyemirov/issues-md-1782774534841
+- Apply ISSUES.md execution changes
+- Update ISSUES.md
+- test: verify usage refresh clears stale metrics on summary reload failure
+- fix(key-management): reset usage summary on fetch error
+- fix(proxy): record usage validation failures and add missing usage indexes
+- docs(issues): document usage dashboard validation and index fixes in B012
+- test: add admin users dashboard and asset route coverage to management UI
+- feat: add admin dashboard view with managed user usage and UI polish
+- feat(management): add admin user listing and encrypted provider key support
+- docs: document admin_emails and provider_key_encryption_key requirements
+- feat(config): add admin_emails and provider_key_encryption_key to management config
+- feat(cli): add provider_key_encryption_key to management config
+- docs: document admin_emails and provider_key_encryption_key config fields
+- docs(issues): record B011 usage fixes, I015 icon, I016 key encryption, F009 admin UI
+- ci: add admin email and provider key encryption to Pages workflow env
+- test(e2e): add management UI end-to-end tests for dashboard and settings modal
+- feat(scripts): add frontend JavaScript syntax check script
+- chore: add Playwright config for end-to-end tests
+- chore: add package.json with frontend lint and test scripts
+- chore: add package-lock.json to lock dependencies versions
+- feat(ui): add usage dashboard and settings menu integration
+- feat(management): add usage summary API and usage event recording
+- docs: add usage-focused details for authenticated management landing view
+- docs: update management mode usage dashboard and API details
+- build: add frontend lint and test targets to Makefile
+- feat(management): add usage dashboard and Settings modal in avatar menu
+- chore: update .gitignore to exclude node_modules and test artifacts
+- ci: add Node.js and Playwright setup to test workflow
+
 ## [v0.2.21] - 2026-06-29
 
 ### Changes
