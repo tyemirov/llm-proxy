@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.24] - 2026-06-30
+
+### Changes
+- Merge pull request #183 from tyemirov/gix/store-per-provider-text-model-and-system-prompt-in
+- test: add management UI tests for settings request examples and secret generation
+- feat(ui): add provider model and system prompt editing to settings panel
+- feat(management): support tenant text model and system prompt per provider
+- docs: update provider key record/storage contract for model and system prompt
+- docs: clarify provider key UI, text model, and system prompt management
+- feat: enable per-provider model and prompt settings in management UI
+
 ## [v0.2.23] - 2026-06-30
 
 ### Changes
