@@ -49,12 +49,14 @@ export function fetchAdminUsers() {
 /**
  * @param {string} provider
  * @param {string} apiKey
+ * @param {string} textModel
+ * @param {string} systemPrompt
  * @returns {Promise<import("../types.d.js").ManagementProfile>}
  */
-export function saveProviderKey(provider, apiKey) {
+export function saveProviderKey(provider, apiKey, textModel, systemPrompt) {
   return requestJSON(`${MANAGEMENT_BASE_PATH}/provider-keys/${encodeURIComponent(provider)}`, {
     method: "PUT",
-    body: { api_key: apiKey },
+    body: { api_key: apiKey, text_model: textModel, system_prompt: systemPrompt },
   });
 }
 

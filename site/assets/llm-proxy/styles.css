@@ -54,8 +54,9 @@ usage-bar,
 admin-dashboard,
 admin-user-list,
 admin-user-card,
-provider-list,
-provider-key-card,
+provider-editor,
+provider-settings-fields,
+provider-status,
 secret-output,
 settings-overlay,
 settings-modal,
@@ -375,8 +376,7 @@ dd {
 }
 
 tenant-actions,
-.secret-row,
-.provider-key-form {
+.secret-row {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -482,28 +482,26 @@ secret-output {
   overflow-wrap: anywhere;
 }
 
-provider-list {
+.provider-settings-form {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.5rem;
+  gap: 0.55rem;
 }
 
-provider-key-card {
-  border: 1px solid var(--llm-border);
-  border-radius: 6px;
-  background: var(--llm-panel-strong);
-  padding: 0.65rem;
+provider-settings-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
 }
 
-provider-key-card header {
+provider-status {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  grid-column: 1 / -1;
 }
 
-provider-key-card p {
+provider-status p {
   margin-bottom: 0;
   color: var(--llm-muted);
   font-size: 0.72rem;
@@ -574,13 +572,12 @@ settings-section {
   justify-self: start;
 }
 
-.provider-key-form {
-  align-items: flex-end;
+.provider-system-prompt {
+  grid-column: 1 / -1;
 }
 
-.provider-key-form label {
-  flex: 1;
-  min-width: 0;
+provider-settings-fields button[type="submit"] {
+  justify-self: start;
 }
 
 .notice {
@@ -615,15 +612,15 @@ settings-section {
   .tenant-facts,
   usage-metrics,
   .dashboard-grid,
-  .settings-grid-form {
+  .settings-grid-form,
+  provider-settings-fields {
     grid-template-columns: 1fr;
   }
 
   .section-header,
   .settings-header,
   dashboard-actions,
-  tenant-actions,
-  .provider-key-form {
+  tenant-actions {
     align-items: stretch;
     flex-direction: column;
   }
