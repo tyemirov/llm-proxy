@@ -384,21 +384,23 @@ Unknown YAML keys fail startup.
 
 Set `management.enabled: true` to enable TAuth-protected management APIs under
 `/api/management`. The browser UI is static and lives in `site/`, which is
-published by GitHub Pages through `.github/workflows/pages.yml`. The backend
-does not serve management HTML or assets; `GET /` remains a proxy endpoint and
+published to the `gh-pages` branch by `make publish-pages`, `make publish`, or
+`make deploy`. GitHub Actions is not used for Pages deployment. The backend does
+not serve management HTML or assets; `GET /` remains a proxy endpoint and
 returns `403` without a tenant `key`. The backend does serve public
-`/config-ui.yaml` from the loaded management config so a GitHub Pages frontend
+`/config-ui.yaml` from the loaded management config so the GitHub Pages frontend
 can consume the current llm-proxy runtime, MPR UI, and TAuth bootstrap values
 from `llm-proxy-api`.
 
 The static UI uses the shared MPR shell through API-served `config-ui.yaml`,
 pinned `mpr-ui` assets, `<mpr-header>`, `<mpr-user>`, and `<mpr-footer>`. It
-does not load `tauth.js` directly. The Pages renderer injects the configured
-API `config-ui.yaml` URL into `index.html`; the single API-served YAML then
-points browser management API calls, generated usage examples, and MPR UI/TAuth
-at the configured origins. Browser-facing values are projected from the
-already-loaded `config.yml`; there is no second environment expansion path for
-Pages.
+does not load `tauth.js` directly. The Pages artifact contains no static
+`config-ui.yaml`, no `llm-proxy-config.json`, and no rendered config URL in
+`index.html`; the frontend fetches the backend `/config-ui.yaml` endpoint at
+runtime. That single API-served YAML points browser management API calls,
+generated usage examples, and MPR UI/TAuth at the configured origins.
+Browser-facing values are projected from the already-loaded backend
+`config.yml`; there is no second environment expansion path for Pages.
 
 Required hosted values are profile-specific:
 
@@ -481,9 +483,9 @@ routing, even if stale values remain in YAML. Remove migrated `tenants` and
 provider `api_key` values from config after confirming the DB migration.
 Server/runtime settings, backend auth validation settings, provider base URLs,
 transcription URLs, model catalogs, and browser-facing MPR UI/TAuth bootstrap
-settings remain config-file-owned. The GitHub Pages artifact and API-served
-browser config endpoints are projections of `config.yml`, not independent
-configuration sources.
+settings remain config-file-owned. The GitHub Pages artifact is only the static
+shell; API-served browser config endpoints are projections of backend
+`config.yml`, not independent configuration sources.
 
 ### Hosted split-origin setup
 
@@ -504,26 +506,21 @@ Add these DNS records:
 
 Then configure GitHub Pages for this repository:
 
-1. Use GitHub Actions as the Pages source.
+1. Use branch publishing from `gh-pages` at `/`.
 2. Set the Pages custom domain to `llm-proxy.mprlab.com`.
-3. Keep `.github/workflows/pages.yml` as the owner of non-secret production
-   frontend values: `llm-proxy.mprlab.com`, `llm-proxy-api.mprlab.com`,
-   `tauth-api.mprlab.com`, the `llm-proxy` TAuth tenant id, and the
-   browser-facing Google OAuth client id. These public values are not GitHub
-   repository variables.
-4. Configure real backend deployment secrets outside the Pages job:
+3. Publish Pages from this repository with `make publish-pages`, or as part of
+   `make publish` and `make deploy`. The publisher renders `site/`, verifies no
+   static browser config files or rendered config URL are present, pushes the
+   `gh-pages` branch, and configures the repository Pages source through the
+   GitHub API unless `--skip-configure` is passed.
+4. Configure real backend deployment secrets outside the Pages artifact:
    `SERVICE_SECRET`, `LLM_PROXY_MANAGEMENT_ADMIN_EMAILS`,
    `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`,
    `LLM_PROXY_MANAGEMENT_DATABASE_DSN`,
    `LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY`.
-5. The Pages workflow runs the Go CLI with `--config configs/config.yml` and
-   `--render-site-output` to emit `CNAME` and a rendered `index.html` whose
-   `data-config-url` points to the API-served `config-ui.yaml`. The workflow
-   supplies non-sensitive render placeholders for backend-only secret fields and
-   the default OpenAI tenant key because static rendering does not open the DB,
-   validate TAuth sessions, or call upstream providers. Missing public config
-   placeholders still fail through the same config loader used by the backend;
-   `${VAR:-default}` syntax is intentionally unsupported.
+5. Do not store browser runtime config in the Pages branch. Production browser
+   config is served only by `https://llm-proxy-api.mprlab.com/config-ui.yaml`
+   from the running backend's loaded management config.
 
 Configure TAuth for tenant `llm-proxy` with:
 
@@ -624,8 +621,9 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make test-live-providers` | Generate a complete temporary config and run live text smoke tests for every provider whose API key is present; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
 | `make release` | Cut a `v*` release from `master`, update `CHANGELOG.md` when needed, and push the release tag. |
-| `make publish` | Validate the release source and publish `ghcr.io/tyemirov/llm-proxy:<tag>` plus `:latest`. |
-| `make deploy` | Verify the published image and deploy through the sibling `../mprlab-gateway` checkout. |
+| `make publish-pages` | Render `site/`, verify it has no static browser config, push the `gh-pages` branch, and configure branch-based GitHub Pages without Actions. |
+| `make publish` | Validate the release source, publish `ghcr.io/tyemirov/llm-proxy:<tag>` plus `:latest`, and publish the Pages branch. |
+| `make deploy` | Verify the published image, publish the Pages branch, and deploy the backend through the sibling `../mprlab-gateway` checkout. |
 
 Live provider smoke tests are intentionally not part of `make ci`; they call
 paid upstream APIs and depend on local or CI secret availability. The dynamic
@@ -667,9 +665,12 @@ command-specific `RELEASE_CI_TIMEOUT_SECONDS`, `PUBLISH_CI_TIMEOUT_SECONDS`,
 and `DEPLOY_CI_TIMEOUT_SECONDS` variables.
 
 `llm-proxy` is a gateway-local service in `mprlab-gateway`, so `make deploy`
-defaults to the gateway `deploy-llm-proxy-backend` target. Override the checkout or target
-with `GATEWAY_DIR=/path/to/mprlab-gateway` or
-`GATEWAY_DEPLOY_TARGET=<target>`.
+defaults to the gateway `deploy-llm-proxy-backend` target. Override the
+checkout or target with `GATEWAY_DIR=/path/to/mprlab-gateway` or
+`GATEWAY_DEPLOY_TARGET=<target>`. Override Pages publishing with
+`PAGES_BRANCH=<branch>`, `PAGES_DOMAIN=<domain>`, or
+`PUBLISH_PAGES_ARGS="--skip-configure"` when an operator must separate the
+GitHub API source configuration from the branch push.
 
 ## Usage
 
@@ -1164,9 +1165,13 @@ commit when needed, and pushes the `v*` tag. Tags that begin with `v` trigger
 the release workflow, which builds and publishes release artifacts and uses the
 matching changelog section as release notes.
 
-Use `make publish` only when you need to publish the release image manually.
-Use `make deploy` after the release image is published and `:latest` points at
-the same digest as the release tag.
+Use `make publish` when you need to manually publish the release image and
+refresh the GitHub Pages branch from the same source revision. Use
+`make publish-pages` only for a Pages-only refresh. Use `make deploy` after the
+release image is published and `:latest` points at the same digest as the
+release tag; deploy republishes Pages before the gateway backend target. Pages
+deployment is intentionally owned by these Makefile commands, not by GitHub
+Actions.
 
 ## License
 
