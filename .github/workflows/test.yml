@@ -23,7 +23,6 @@ on:
       - 'tests/e2e/**'
       - '.github/workflows/test.yml'
       - '.github/workflows/release.yml'
-      - '.github/workflows/pages.yml'
       - 'Dockerfile'
 
 env:
