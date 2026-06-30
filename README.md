@@ -425,8 +425,9 @@ Required hosted values are profile-specific:
 | `management.management_api_origin` | Browser-facing management API origin served from `/config-ui.yaml` under `llmProxy.managementApiOrigin`. |
 | `management.proxy_origin` | Browser-facing public proxy origin served from `/config-ui.yaml` under `llmProxy.proxyOrigin` for generated examples. |
 
-Signed-in users save provider API keys for any supported provider, choose
-routing defaults, and generate llm-proxy secrets. Management mode requires
+Signed-in users save provider API keys for any supported provider, choose each
+provider's text model and provider-specific system prompt, choose routing
+defaults, and generate llm-proxy secrets. Management mode requires
 `management.database_dialect` and `management.database_dsn` so signups, enabled
 providers, defaults, generated secret digests, and usage events survive restarts
 in a GORM-managed database. `postgres` uses a Postgres DSN, while `sqlite` uses
@@ -440,8 +441,14 @@ continue to authenticate the public proxy endpoints with the same
 `key=<tenant secret>` query parameter. Provider API keys are accepted only
 through authenticated management endpoints, are encrypted at rest with AES-GCM
 before database persistence, and after save the UI/API returns only masked key
-status. Existing plaintext provider-key rows are encrypted and cleared during
-management startup. The backend decrypts provider keys only inside the runtime
+status. Provider-key records also store the selected text model and
+provider-specific system prompt for that provider. Managed text requests that
+select a provider and omit `model` use the saved provider text model; when
+request-level system instructions are omitted, the provider-specific system
+prompt is injected before routing upstream. Existing plaintext provider-key
+rows are encrypted and cleared during management startup. Existing provider-key
+rows without a text model are normalized to the current configured provider
+default model at startup. The backend decrypts provider keys only inside the runtime
 path that routes requests to upstream providers, so this protects database
 dumps, backups, and direct storage access; it is not a user-only decryption or
 zero-knowledge guarantee. Generated tenant secrets are returned once and the
@@ -454,7 +461,8 @@ model breakdowns for the signed-in user's managed tenant. The prior dashboard
 controls now live in a large Settings modal opened from the avatar dropdown;
 the `Settings` menu item is inserted before `Sign out` through the shared
 `<mpr-user>` menu contract. The modal contains client access, generated secret,
-routing defaults, request examples, and provider key management.
+routing defaults, request examples, and one selected-provider editor for API
+key, provider text model, and provider system prompt settings.
 
 Administrators are configured only through `management.admin_emails`; use the
 plural `${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` placeholder in public config files
