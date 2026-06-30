@@ -11,6 +11,7 @@ Publishes the llm-proxy Docker image from the release branch by:
   2. validating a pushed v* release tag points at HEAD
   3. running make ci
   4. building and pushing the multi-arch Docker image
+  5. rendering and publishing the GitHub Pages branch without GitHub Actions
 
 Options:
   --image <value>       Full image name without tag. Default: $DOCKER_IMAGE or ghcr.io/tyemirov/llm-proxy
@@ -21,6 +22,9 @@ Options:
   --no-latest           Do not push :latest
   --dry-run             Run source checks and make ci without pushing images
   --skip-checks         Skip the local make ci gate
+  --skip-pages          Skip GitHub Pages branch publishing
+  --pages-branch <value> Pages branch to publish. Default: $PAGES_BRANCH or gh-pages
+  --pages-domain <value> Pages custom domain. Default: $PAGES_DOMAIN or llm-proxy.mprlab.com
   --username <value>    Registry username. Default: gh auth user login
   --token <value>       Registry token/password. Default: $GHCR_TOKEN or $GITHUB_TOKEN or $GH_TOKEN or gh auth token
   --help                Show this help text
@@ -50,6 +54,9 @@ TOKEN="${GHCR_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
 PUBLISH_BRANCH="${PUBLISH_BRANCH:-master}"
 PUBLISH_REMOTE="${PUBLISH_REMOTE:-origin}"
 CI_TIMEOUT_SECONDS="${PUBLISH_CI_TIMEOUT_SECONDS:-${LLM_PROXY_CI_TIMEOUT_SECONDS:-350}}"
+SKIP_PAGES="${PUBLISH_SKIP_PAGES:-false}"
+PAGES_BRANCH="${PAGES_BRANCH:-gh-pages}"
+PAGES_DOMAIN="${PAGES_DOMAIN:-llm-proxy.mprlab.com}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -89,6 +96,20 @@ while [[ $# -gt 0 ]]; do
     --skip-checks)
       SKIP_CHECKS="true"
       shift
+      ;;
+    --skip-pages)
+      SKIP_PAGES="true"
+      shift
+      ;;
+    --pages-branch)
+      [[ $# -ge 2 ]] || { echo "error: --pages-branch requires a value" >&2; exit 1; }
+      PAGES_BRANCH="$2"
+      shift 2
+      ;;
+    --pages-domain)
+      [[ $# -ge 2 ]] || { echo "error: --pages-domain requires a value" >&2; exit 1; }
+      PAGES_DOMAIN="$2"
+      shift 2
       ;;
     --username)
       [[ $# -ge 2 ]] || { echo "error: --username requires a value" >&2; exit 1; }
@@ -170,6 +191,9 @@ if [[ "${DRY_RUN}" == "true" || "${DRY_RUN}" == "1" ]]; then
   if [[ "${PUSH_LATEST}" == "true" ]]; then
     echo "image=${IMAGE}:latest"
   fi
+  if [[ "${SKIP_PAGES}" != "true" ]]; then
+    ./scripts/publish_pages.sh --remote "${PUBLISH_REMOTE}" --branch "${PAGES_BRANCH}" --domain "${PAGES_DOMAIN}" --dry-run
+  fi
   exit 0
 fi
 
@@ -206,4 +230,9 @@ build_args+=(.)
 echo "Published image: ${IMAGE}:${TAG}"
 if [[ "${PUSH_LATEST}" == "true" ]]; then
   echo "Published image: ${IMAGE}:latest"
+fi
+
+if [[ "${SKIP_PAGES}" != "true" ]]; then
+  echo "==> [publish] Publishing GitHub Pages branch ${PAGES_BRANCH}"
+  ./scripts/publish_pages.sh --remote "${PUBLISH_REMOTE}" --branch "${PAGES_BRANCH}" --domain "${PAGES_DOMAIN}"
 fi
