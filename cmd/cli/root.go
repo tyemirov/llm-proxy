@@ -47,6 +47,9 @@ var rootCmd = &cobra.Command{
 	Long:    rootCmdLong,
 	Example: rootCmdExample,
 	PreRunE: func(command *cobra.Command, arguments []string) error {
+		if command.Flags().Changed(flagRenderSiteOutput) {
+			return nil
+		}
 		configPath, _ := command.Flags().GetString(flagConfig)
 		configuration, loadError := loadConfiguration(configPath)
 		if loadError != nil {
@@ -59,7 +62,7 @@ var rootCmd = &cobra.Command{
 		renderSiteOutput, _ := command.Flags().GetString(flagRenderSiteOutput)
 		if command.Flags().Changed(flagRenderSiteOutput) {
 			siteSource, _ := command.Flags().GetString(flagSiteSource)
-			return renderSiteArtifact(siteSource, renderSiteOutput, runtimeConfiguration)
+			return renderSiteArtifact(siteSource, renderSiteOutput)
 		}
 
 		logger := loggerForLevel(runtimeConfiguration.LogLevel)
