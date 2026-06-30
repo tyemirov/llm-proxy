@@ -11,6 +11,17 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
 ## BugFixes
 
+- [x] [B015] (P1) Move Pages deployment out of GitHub Actions and keep browser config backend-owned.
+  ### Summary
+  GitHub Pages deployment must not spend GitHub Actions minutes. The management frontend also must not publish browser runtime config as a static Pages file or rendered HTML value; config belongs to the backend `/config-ui.yaml` projection.
+  ### Acceptance Criteria
+  1. Remove the GitHub Actions Pages deployment workflow.
+  2. `make publish-pages`, `make publish`, and `make deploy` render and publish the Pages branch without Actions.
+  3. The rendered Pages artifact contains no static `config-ui.yaml`, no `llm-proxy-config.json`, and no rendered `data-config-url`.
+  4. The browser fetches runtime management config from the backend `/config-ui.yaml` endpoint.
+  5. README and implementation docs describe the branch-published Pages contract and backend-owned browser config.
+  ### Resolution
+  Removed `.github/workflows/pages.yml` and the PR trigger entry for it. Added `scripts/publish_pages.sh` plus `make publish-pages`, wired `make publish` and `make deploy` to render and publish the `gh-pages` branch without GitHub Actions, and kept `--skip-pages`/`--skip-configure` operator controls. The Pages renderer no longer loads backend config, no longer writes static browser config, rejects retired static config URL markers, and removes stale `config-ui.yaml`/`llm-proxy-config.json` files from the artifact. The static frontend now resolves the backend config endpoint at runtime and fetches `/config-ui.yaml`; production uses `https://llm-proxy-api.mprlab.com/config-ui.yaml`, while local previews use same-origin `/config-ui.yaml`. README and provider-routing notes now document branch-published Pages and backend-owned browser config. Validation passed with `timeout -k 30s -s SIGKILL 30s bash -n scripts/publish_pages.sh scripts/publish.sh scripts/deploy.sh`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./cmd/cli -run 'TestRootCommand(Render|RejectsSite)'`, static JS `node --check`, `timeout -k 120s -s SIGKILL 120s ./scripts/publish_pages.sh --dry-run`, `timeout -k 350s -s SIGKILL 350s make go-test`, `timeout -k 180s -s SIGKILL 180s make frontend-lint`, `timeout -k 240s -s SIGKILL 240s make frontend-test`, `timeout -k 30s -s SIGKILL 30s git diff --check`, and `env -u LLM_PROXY_SECRET -u LLM_PROXY_BASE_URL timeout -k 500s -s SIGKILL 500s make ci`.
 - [x] [B014] (P1) Make management admin configuration plural and deployable.
   ### Summary
   Gateway deployment failed when the hosted management config expected missing admin and provider-key encryption placeholders. The admin config was also represented as one env-backed list entry even though management supports multiple administrator emails.
@@ -79,7 +90,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   3. Removed UI copy is not left as a stale constant.
   ### Resolution
   Removed the blank dictation-provider `<option>` from `site/index.html` and deleted the unused `noDictationDefault` copy key. The dictation-provider select now lists only real dictation-capable providers from the backend profile. Validation passed with `timeout -k 30s -s SIGKILL 30s node --check` for the static JS modules and `timeout -k 350s -s SIGKILL 350s make ci`.
-- [!] [B005] (P1) GitHub Pages frontend remains unavailable until the workflow fix reaches master.
+- [x] [B005] (P1) GitHub Pages frontend remains unavailable until the workflow fix reaches master.
   ### Summary
   `https://llm-proxy.mprlab.com/` presented GitHub's default `*.github.io` certificate and a Pages 404 because repository Pages was disabled and the Pages workflow render job depended on unset repository variables. The current split-origin contract requires `llm-proxy.mprlab.com` to be owned by GitHub Pages, not by the gateway backend.
   ### Evidence
@@ -88,11 +99,9 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   3. `gh api repos/tyemirov/llm-proxy/pages` returned 404 before Pages was enabled.
   4. The latest Pages workflow failed while rendering `configs/config.yml` with empty `LLM_PROXY_MANAGEMENT_*` values and no render-only OpenAI key.
   ### Local Resolution
-  `.github/workflows/pages.yml` now owns the non-secret production frontend values directly and supplies inert render-only placeholders for backend-only secret fields and the default OpenAI tenant key. README now documents that these public frontend values are workflow-owned, not GitHub repository variables. Local static rendering succeeds with `CNAME: llm-proxy.mprlab.com` and `data-config-url="https://llm-proxy-api.mprlab.com/config-ui.yaml"`. Focused CLI renderer tests, `make go-test`, and `git diff --check` pass.
+  Superseded by B015. Pages deployment is now Makefile-owned through `make publish-pages`, `make publish`, and `make deploy`; `.github/workflows/pages.yml` is removed. Local static rendering succeeds with `CNAME: llm-proxy.mprlab.com`, no static browser config files, and no rendered `data-config-url`.
   ### Remote State
-  GitHub Pages has been enabled for this repository with `build_type=workflow`, `cname=llm-proxy.mprlab.com`, an approved `llm-proxy.mprlab.com` certificate, and HTTPS enforcement enabled.
-  ### Blocked
-  Blocked: The public frontend still returns GitHub Pages 404 until this workflow fix is committed to `master` and the GitHub Pages workflow completes successfully.
+  GitHub Pages should be configured for branch publishing from `gh-pages` at `/`, with `cname=llm-proxy.mprlab.com` and HTTPS enforcement enabled. `scripts/publish_pages.sh` configures this source through the GitHub API unless `--skip-configure` is passed. Public availability still requires an operator to run the publish/deploy command after this branch reaches the release path.
 
 - [x] [B011] (P2) Fix F007 review issues in usage loading and usage queries.
   ### Summary
