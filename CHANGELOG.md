@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.23] - 2026-06-30
+
+### Changes
+- Merge pull request #182 from tyemirov/gix/make-management-admin-config-plural-and-env-backed
+- test: update management UI E2E to assert config url is not exposed
+- refactor(frontend): simplify config URL detection and remove placeholder attribute
+- chore(scripts): add publish_pages.sh for static GitHub Pages publishing
+- refactor: remove unused ManagementConfigUIURL function
+- docs: clarify GitHub Pages deployment and artifacts in management UI section
+- refactor(cli): decouple static site render from backend config, update tests
+- docs: clarify GitHub Pages branch setup, publishing, and runtime config
+- build(makefile): add publish-pages target and support for pages env vars
+- docs(issues): record B015 Pages deployment exit from Actions, backend-owned config
+- ci: remove GitHub Pages workflow and references from test workflow
+- docs: clarify admin email env placeholder in management config section
+- feat(config): add .env.sample and allow multiple admin emails via env variable
+- test(cli): add support for multiple management admin emails in config
+- docs: update admin_emails config usage and environment placeholder guidance
+- docs(issues): document fix for plural and deployable management admin config
+
 ## [v0.2.22] - 2026-06-30
 
 ### Changes
