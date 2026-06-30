@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LLM Proxy</title>
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui-config.js"></script>
+    <script type="module" src="/assets/llm-proxy/js/app.js"></script>
+  </head>
+  <body>
+    <mpr-header
+      id="llm-proxy-header"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your key workspace.","completionEvent":"llm-proxy:management-ready"}'
+    >
+      <mpr-user slot="aux" display-mode="avatar" logout-url="/" logout-label="Sign out"></mpr-user>
+    </mpr-header>
+
+    <main class="llm-proxy-main">
+      <llm-proxy-key-management x-data="llmProxyKeyManagement" x-init="init()" x-bind:data-auth-state="authState">
+        <section class="llm-panel" x-cloak x-show="authState === states.loading">
+          <p class="eyebrow" x-text="copy.loadingEyebrow"></p>
+          <h1 x-text="copy.loadingTitle"></h1>
+        </section>
+
+        <section class="llm-panel" x-cloak x-show="authState === states.unauthenticated">
+          <p class="eyebrow" x-text="copy.signedOutEyebrow"></p>
+          <h1 x-text="copy.signedOutTitle"></h1>
+        </section>
+
+        <template x-if="authState === states.authenticated">
+          <workspace-surface>
+            <section class="dashboard-hero">
+              <header class="section-header">
+                <div>
+                  <p class="eyebrow" x-text="dashboardEyebrow"></p>
+                  <h1 x-text="dashboardTitle"></h1>
+                </div>
+                <dashboard-actions>
+                  <button type="button" x-show="dashboardView === dashboardViews.ADMIN" x-on:click="openUsageDashboard()" x-text="copy.openUsageDashboard"></button>
+                  <button type="button" x-on:click="refreshDashboard()" x-bind:disabled="busy" x-text="dashboardRefreshCopy"></button>
+                </dashboard-actions>
+              </header>
+            </section>
+
+            <template x-if="dashboardView === dashboardViews.USAGE">
+              <usage-dashboard>
+                <usage-metrics>
+                  <usage-card>
+                    <span x-text="copy.usageRequests"></span>
+                    <strong x-text="usageTotalRequests"></strong>
+                  </usage-card>
+                  <usage-card>
+                    <span x-text="copy.usageTokens"></span>
+                    <strong x-text="usageTotalTokens"></strong>
+                  </usage-card>
+                  <usage-card>
+                    <span x-text="copy.usageSuccessRate"></span>
+                    <strong x-text="usageSuccessRate"></strong>
+                  </usage-card>
+                  <usage-card>
+                    <span x-text="copy.usageProviders"></span>
+                    <strong x-text="usageProviderCount"></strong>
+                  </usage-card>
+                </usage-metrics>
+
+                <section class="dashboard-grid">
+                  <usage-chart-panel class="llm-panel">
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.usageRequestTrend"></p>
+                        <h2 x-text="copy.usageRequests"></h2>
+                      </div>
+                    </header>
+                    <svg class="usage-chart-svg" x-show="hasUsage" x-bind:viewBox="chartViewBox" x-bind:aria-label="copy.usageRequestTrend" role="img">
+                      <polyline x-bind:points="usageRequestPolyline"></polyline>
+                    </svg>
+                    <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
+                  </usage-chart-panel>
+
+                  <usage-chart-panel class="llm-panel">
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.usageTokenTrend"></p>
+                        <h2 x-text="copy.usageTokens"></h2>
+                      </div>
+                    </header>
+                    <svg class="usage-chart-svg" x-show="hasUsage" x-bind:viewBox="chartViewBox" x-bind:aria-label="copy.usageTokenTrend" role="img">
+                      <polyline x-bind:points="usageTokenPolyline"></polyline>
+                    </svg>
+                    <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
+                  </usage-chart-panel>
+                </section>
+
+                <section class="dashboard-grid">
+                  <usage-breakdown class="llm-panel">
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.usageByProvider"></p>
+                        <h2 x-text="copy.usageProviders"></h2>
+                      </div>
+                    </header>
+                    <usage-row-list x-show="hasUsage">
+                      <template x-for="row in providerUsageRows" x-bind:key="row.label">
+                        <usage-row>
+                          <span x-text="row.label"></span>
+                          <strong x-text="row.requests"></strong>
+                          <usage-bar><i x-bind:style="`width: ${row.width}`"></i></usage-bar>
+                        </usage-row>
+                      </template>
+                    </usage-row-list>
+                    <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
+                  </usage-breakdown>
+
+                  <usage-breakdown class="llm-panel">
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.usageByModel"></p>
+                        <h2 x-text="copy.usageByModel"></h2>
+                      </div>
+                    </header>
+                    <usage-row-list x-show="hasUsage">
+                      <template x-for="row in modelUsageRows" x-bind:key="row.label">
+                        <usage-row>
+                          <span x-text="row.label"></span>
+                          <strong x-text="row.requests"></strong>
+                          <usage-bar><i x-bind:style="`width: ${row.width}`"></i></usage-bar>
+                        </usage-row>
+                      </template>
+                    </usage-row-list>
+                    <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
+                  </usage-breakdown>
+                </section>
+              </usage-dashboard>
+            </template>
+
+            <template x-if="dashboardView === dashboardViews.ADMIN">
+              <admin-dashboard class="llm-panel">
+                <admin-user-list x-show="hasAdminUsers">
+                  <template x-for="adminUser in adminUsers" x-bind:key="adminUser.user.id">
+                    <admin-user-card>
+                      <header>
+                        <div>
+                          <h2 x-text="adminUserLabel(adminUser)"></h2>
+                          <p x-text="adminUser.user.display_name || adminUser.user.id"></p>
+                        </div>
+                        <span x-text="adminUser.tenant.has_secret ? copy.adminSecretReady : copy.adminSecretMissing"></span>
+                      </header>
+                      <dl class="admin-user-facts">
+                        <div>
+                          <dt x-text="copy.adminTenant"></dt>
+                          <dd x-text="adminUser.tenant.id"></dd>
+                        </div>
+                        <div>
+                          <dt x-text="copy.usageRequests"></dt>
+                          <dd x-text="adminUserRequests(adminUser)"></dd>
+                        </div>
+                        <div>
+                          <dt x-text="copy.usageTokens"></dt>
+                          <dd x-text="adminUserTokens(adminUser)"></dd>
+                        </div>
+                        <div>
+                          <dt x-text="copy.usageSuccessRate"></dt>
+                          <dd x-text="adminUserSuccessRate(adminUser)"></dd>
+                        </div>
+                      </dl>
+                    </admin-user-card>
+                  </template>
+                </admin-user-list>
+                <p class="usage-empty" x-show="!hasAdminUsers" x-text="copy.adminEmpty"></p>
+              </admin-dashboard>
+            </template>
+
+            <settings-overlay
+              x-cloak
+              x-show="settingsOpen"
+              x-on:click.self="closeSettings()"
+              x-on:keydown.escape.window="closeSettings()"
+              role="presentation"
+            >
+              <settings-modal role="dialog" aria-modal="true" aria-labelledby="settings-title">
+                <header class="settings-header">
+                  <div>
+                    <p class="eyebrow" x-text="copy.settingsEyebrow"></p>
+                    <h2 id="settings-title" x-text="copy.settingsTitle"></h2>
+                  </div>
+                  <button type="button" x-ref="settingsClose" x-on:click="closeSettings()" x-text="copy.closeSettings"></button>
+                </header>
+
+                <settings-body>
+                  <settings-section>
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.tenantEyebrow"></p>
+                        <h2 x-text="copy.tenantTitle"></h2>
+                      </div>
+                      <tenant-actions>
+                        <button type="button" class="icon-button" x-on:click="generateSecret()" x-bind:disabled="busy" x-bind:title="copy.generateSecret">
+                          <span aria-hidden="true">+</span>
+                          <span x-text="copy.generateSecret"></span>
+                        </button>
+                        <button type="button" class="icon-button danger" x-on:click="revokeSecret()" x-bind:disabled="busy || !hasSecret" x-bind:title="copy.revokeSecret">
+                          <span aria-hidden="true">x</span>
+                          <span x-text="copy.revokeSecret"></span>
+                        </button>
+                      </tenant-actions>
+                    </header>
+
+                    <dl class="tenant-facts">
+                      <div>
+                        <dt x-text="copy.tenantId"></dt>
+                        <dd x-text="tenantId"></dd>
+                      </div>
+                      <div>
+                        <dt x-text="copy.secretStatus"></dt>
+                        <dd x-text="hasSecret ? copy.secretReady : copy.secretMissing"></dd>
+                      </div>
+                    </dl>
+
+                    <secret-output x-show="generatedSecret" x-cloak>
+                      <label for="generated-secret" x-text="copy.generatedSecret"></label>
+                      <div class="secret-row">
+                        <input id="generated-secret" type="text" readonly x-bind:value="generatedSecret">
+                        <button type="button" class="icon-only" x-on:click="copyGeneratedSecret()" x-bind:title="copy.copySecret" x-bind:aria-label="copy.copySecret">[]</button>
+                      </div>
+                    </secret-output>
+                  </settings-section>
+
+                  <settings-section>
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.defaultsEyebrow"></p>
+                        <h2 x-text="copy.defaultsTitle"></h2>
+                      </div>
+                    </header>
+                    <form class="settings-grid-form" x-on:submit.prevent="saveDefaults()">
+                      <label>
+                        <span x-text="copy.textProvider"></span>
+                        <select x-model="defaults.provider" x-on:change="selectTextProviderDefaultModel()">
+                          <template x-for="provider in providers" x-bind:key="provider.id">
+                            <option x-bind:value="provider.id" x-text="provider.label"></option>
+                          </template>
+                        </select>
+                      </label>
+                      <label>
+                        <span x-text="copy.textModel"></span>
+                        <select x-model="defaults.model">
+                          <template x-for="model in selectedTextModels" x-bind:key="model">
+                            <option x-bind:value="model" x-text="model"></option>
+                          </template>
+                        </select>
+                      </label>
+                      <label>
+                        <span x-text="copy.dictationProvider"></span>
+                        <select x-model="defaults.dictation_provider" x-on:change="selectDictationProviderDefaultModel()">
+                          <template x-for="provider in dictationProviders" x-bind:key="provider.id">
+                            <option x-bind:value="provider.id" x-text="provider.label"></option>
+                          </template>
+                        </select>
+                      </label>
+                      <label>
+                        <span x-text="copy.dictationModel"></span>
+                        <select x-model="defaults.dictation_model" x-bind:disabled="!defaults.dictation_provider">
+                          <option value="" x-text="copy.noDictationModel"></option>
+                          <template x-for="model in selectedDictationModels" x-bind:key="model">
+                            <option x-bind:value="model" x-text="model"></option>
+                          </template>
+                        </select>
+                      </label>
+                      <label class="settings-form-wide">
+                        <span x-text="copy.systemPrompt"></span>
+                        <textarea rows="4" x-model="defaults.system_prompt"></textarea>
+                      </label>
+                      <button type="submit" x-bind:disabled="busy" x-text="copy.saveDefaults"></button>
+                    </form>
+                  </settings-section>
+
+                  <settings-section>
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.examplesEyebrow"></p>
+                        <h2 x-text="copy.examplesTitle"></h2>
+                      </div>
+                    </header>
+                    <pre class="usage-snippet" x-text="usageCurl"></pre>
+                  </settings-section>
+
+                  <settings-section>
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.providersEyebrow"></p>
+                        <h2 x-text="copy.providersTitle"></h2>
+                      </div>
+                    </header>
+                    <provider-list>
+                      <template x-for="provider in providers" x-bind:key="provider.id">
+                        <provider-key-card>
+                          <header>
+                            <div>
+                              <h3 x-text="provider.label"></h3>
+                              <p x-text="provider.has_key ? provider.masked_key : copy.providerMissing"></p>
+                            </div>
+                            <button type="button" class="icon-only danger" x-on:click="removeProviderKey(provider)" x-bind:disabled="busy || !provider.has_key" x-bind:title="copy.removeProviderKey" x-bind:aria-label="copy.removeProviderKey">x</button>
+                          </header>
+                          <form class="provider-key-form" x-on:submit.prevent="saveProviderKey(provider)">
+                            <label>
+                              <span x-text="provider.label + copy.providerKeySuffix"></span>
+                              <input type="password" autocomplete="off" x-model="providerInputs[provider.id]">
+                            </label>
+                            <button type="submit" x-bind:disabled="busy" x-text="provider.has_key ? copy.updateProviderKey : copy.saveProviderKey"></button>
+                          </form>
+                        </provider-key-card>
+                      </template>
+                    </provider-list>
+                  </settings-section>
+                </settings-body>
+              </settings-modal>
+            </settings-overlay>
+
+            <output class="notice" x-cloak x-show="notice.message" x-bind:data-kind="notice.kind" x-text="notice.message"></output>
+          </workspace-surface>
+        </template>
+      </llm-proxy-key-management>
+    </main>
+
+    <mpr-footer theme-switcher="square"></mpr-footer>
+  </body>
+</html>
