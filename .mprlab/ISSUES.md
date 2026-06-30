@@ -11,6 +11,16 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
 ## BugFixes
 
+- [x] [B014] (P1) Make management admin configuration plural and deployable.
+  ### Summary
+  Gateway deployment failed when the hosted management config expected missing admin and provider-key encryption placeholders. The admin config was also represented as one env-backed list entry even though management supports multiple administrator emails.
+  ### Acceptance Criteria
+  1. Packaged `configs/config.yml` uses one plural admin-email placeholder that expands to the complete `management.admin_emails` list.
+  2. The app repo owns a tracked hosted env sample for every packaged management placeholder, including admin emails and provider-key encryption.
+  3. CLI config coverage proves the packaged config loads multiple admin emails through the real config entrypoint.
+  4. Local ignored management env values include a generated provider-key encryption key without exposing the key in output.
+  ### Resolution
+  `configs/config.yml` now uses `LLM_PROXY_MANAGEMENT_ADMIN_EMAILS` as a YAML flow sequence for the full admin list. Added `configs/.env.sample` as the app-owned hosted env contract, updated README and implementation docs, and extended `TestRootCommandLoadsPackagedConfigWithManagementEnvironment` to load two admin emails through the packaged config path. The ignored local `configs/.env` was updated with the plural admin list and a generated stable provider-key encryption key without printing secret values. Validation passed with `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli -run TestRootCommandLoadsPackagedConfigWithManagementEnvironment` and `timeout -k 350s -s SIGKILL 350s make go-test`.
 - [x] [B013] (P1) Make llm-proxy-client invalid-input tests immune to ambient client env.
   ### Summary
   `make release` failed in `TestCommandRejectsInvalidInputs/missing_secret` when the shell already had `LLM_PROXY_SECRET` set. The CLI correctly supports `LLM_PROXY_BASE_URL` and `LLM_PROXY_SECRET` as edge configuration, but the invalid-input table did not clear those inputs, so the missing-secret case proceeded to a real `example.test` POST instead of failing at config validation.
