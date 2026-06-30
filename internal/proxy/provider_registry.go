@@ -198,7 +198,12 @@ func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegis
 	for identifier, definition := range registry.definitions {
 		definition.textAPIKey = constants.EmptyString
 		definition.transcriptionAPIKey = constants.EmptyString
-		if apiKey, configured := requestTenant.providerAPIKeys[identifier]; configured {
+		if providerSettings, configured := requestTenant.providerSettings[identifier]; configured {
+			definition.textAPIKey = providerSettings.apiKey
+			if definition.supportsDictation {
+				definition.transcriptionAPIKey = providerSettings.apiKey
+			}
+		} else if apiKey, configured := requestTenant.providerAPIKeys[identifier]; configured {
 			definition.textAPIKey = apiKey
 			if definition.supportsDictation {
 				definition.transcriptionAPIKey = apiKey
@@ -280,7 +285,7 @@ func (registry *providerRegistry) resolveTextModel(rawProvider string, rawModel 
 	}
 	modelIdentifier := strings.TrimSpace(rawModel)
 	if modelIdentifier == constants.EmptyString {
-		if strings.TrimSpace(rawProvider) == constants.EmptyString && strings.TrimSpace(defaultModel) != constants.EmptyString {
+		if strings.TrimSpace(defaultModel) != constants.EmptyString {
 			modelIdentifier = defaultModel
 		} else {
 			modelIdentifier = definition.defaultTextModel.string()

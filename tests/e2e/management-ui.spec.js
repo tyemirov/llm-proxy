@@ -98,7 +98,66 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(settingsDialog.getByRole("heading", { name: "Client access" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Routing defaults" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Request examples" })).toBeVisible();
-  await expect(settingsDialog.getByRole("heading", { name: "Provider keys" })).toBeVisible();
+  await expect(settingsDialog.locator(".usage-snippet")).toContainText("curl --get");
+  await expect(settingsDialog.locator(".usage-snippet")).toContainText("/v2?key=<generated-secret>");
+  await expect(settingsDialog.locator(".usage-snippet")).toContainText("/dictate?key=<generated-secret>");
+  await expect(settingsDialog.getByRole("heading", { name: "Provider settings" })).toBeVisible();
+  const providerEditor = settingsDialog.locator("provider-editor");
+  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider" });
+  await expect(providerEditor.locator("provider-settings-fields")).toHaveCount(1);
+  await expect(settingsDialog.locator("provider-key-card")).toHaveCount(0);
+  await expect(providerSelector).toHaveValue("openai");
+  await expect(providerEditor.locator("provider-status")).toContainText("OpenAI");
+  await expect(providerEditor.locator("provider-status")).toContainText("sk-...1234");
+  await expect(providerEditor.getByRole("combobox", { name: "Text model" })).toHaveValue("gpt-4.1");
+  await expect(providerEditor.getByRole("textbox", { name: "System prompt" })).toHaveValue("Use concise answers.");
+
+  await providerSelector.selectOption("deepseek");
+  await expect(providerEditor.locator("provider-status")).toContainText("DeepSeek");
+  await expect(providerEditor.locator("provider-status")).toContainText("sk-...5678");
+  await expect(providerEditor.getByRole("textbox", { name: "DeepSeek API key" })).toBeVisible();
+  await expect(providerEditor.getByRole("combobox", { name: "Text model" })).toHaveValue("deepseek-chat");
+  await expect(providerEditor.getByRole("textbox", { name: "System prompt" })).toHaveValue("");
+});
+
+test("settings shows placeholder request examples before generated secret exists", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { hasSecret: false });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await expect(settingsDialog).toBeVisible();
+  await expect(settingsDialog.getByRole("heading", { name: "Request examples" })).toBeVisible();
+  await expect(settingsDialog.locator(".usage-snippet")).toContainText("curl --get");
+  await expect(settingsDialog.locator(".usage-snippet")).toContainText("key=<generated-secret>");
+  await expect(settingsDialog.locator(".usage-snippet")).toContainText("/v2?key=<generated-secret>");
+  await expect(settingsDialog.locator(".usage-snippet")).toContainText("/dictate?key=<generated-secret>");
+  await expect(settingsDialog.getByRole("heading", { name: "Provider settings" })).toBeVisible();
+});
+
+test("settings request examples use the freshly generated secret", async ({ page }) => {
+  const generatedSecret = "llmp_test_generated_secret";
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { hasSecret: false, generatedSecret });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const usageSnippet = settingsDialog.locator(".usage-snippet");
+  await expect(usageSnippet).toContainText("key=<generated-secret>");
+
+  await settingsDialog.getByRole("button", { name: "Create key" }).click();
+
+  await expect(settingsDialog.getByLabel("Generated secret")).toHaveValue(generatedSecret);
+  await expect(usageSnippet).toContainText(`key=${generatedSecret}`);
+  await expect(usageSnippet).toContainText(`/v2?key=${generatedSecret}`);
+  await expect(usageSnippet).toContainText(`/dictate?key=${generatedSecret}`);
+  await expect(usageSnippet).not.toContainText("<generated-secret>");
 });
 
 test("settings modal remains usable on narrow screens", async ({ page }) => {
@@ -194,18 +253,30 @@ async function installAssetRoutes(page) {
 
 /**
  * @param {import("@playwright/test").Page} page
- * @param {{ usageStatus?: number, admin?: boolean }} options
+ * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string }} options
  * @returns {Promise<void>}
  */
 async function installManagementRoutes(page, options = {}) {
   await page.route(`${baseURL}/api/management/profile`, async (route) => {
-    await route.fulfill({ json: managementProfile(options.admin || false) });
+    await route.fulfill({ json: managementProfile(options.admin || false, options.hasSecret !== false) });
   });
   await page.route(`${baseURL}/api/management/usage`, async (route) => {
     await route.fulfill({ status: options.usageStatus || httpOK, json: managementUsage() });
   });
   await page.route(`${baseURL}/api/management/admin/users`, async (route) => {
     await route.fulfill({ json: managementAdminUsers() });
+  });
+  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+    if (route.request().method() === "POST") {
+      await route.fulfill({
+        json: {
+          secret: options.generatedSecret || "llmp_test_generated_secret",
+          profile: managementProfile(options.admin || false, true),
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: managementProfile(options.admin || false, false) });
   });
 }
 
@@ -256,9 +327,10 @@ async function staticSiteHandler(request, response) {
 
 /**
  * @param {boolean} isAdmin
+ * @param {boolean} hasSecret
  * @returns {object}
  */
-function managementProfile(isAdmin = false) {
+function managementProfile(isAdmin = false, hasSecret = true) {
   return {
     user: {
       id: "user_1",
@@ -268,7 +340,7 @@ function managementProfile(isAdmin = false) {
     },
     tenant: {
       id: "tenant_1",
-      has_secret: true,
+      has_secret: hasSecret,
       defaults: {
         provider: "openai",
         model: "gpt-4.1",
@@ -284,6 +356,8 @@ function managementProfile(isAdmin = false) {
         aliases: [],
         has_key: true,
         masked_key: "sk-...1234",
+        text_model: "gpt-4.1",
+        system_prompt: "Use concise answers.",
         text_default_model: "gpt-4.1",
         text_models: ["gpt-4.1", "gpt-4o-mini"],
         supports_dictation: true,
@@ -296,6 +370,8 @@ function managementProfile(isAdmin = false) {
         aliases: [],
         has_key: true,
         masked_key: "sk-...5678",
+        text_model: "deepseek-chat",
+        system_prompt: "",
         text_default_model: "deepseek-chat",
         text_models: ["deepseek-chat"],
         supports_dictation: false,

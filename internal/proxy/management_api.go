@@ -84,6 +84,8 @@ type managementProviderResponse struct {
 	Aliases               []string `json:"aliases"`
 	HasKey                bool     `json:"has_key"`
 	MaskedKey             string   `json:"masked_key,omitempty"`
+	TextModel             string   `json:"text_model"`
+	SystemPrompt          string   `json:"system_prompt"`
 	TextDefaultModel      string   `json:"text_default_model"`
 	TextModels            []string `json:"text_models"`
 	SupportsDictation     bool     `json:"supports_dictation"`
@@ -163,7 +165,9 @@ type managementAdminTenantResponse struct {
 }
 
 type managementProviderKeyRequest struct {
-	APIKey string `json:"api_key"`
+	APIKey       string `json:"api_key"`
+	TextModel    string `json:"text_model"`
+	SystemPrompt string `json:"system_prompt"`
 }
 
 type managementDefaultsRequest struct {
@@ -324,7 +328,11 @@ func (service *managementService) saveProviderKeyHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusBadRequest, decodeError.Error())
 			return
 		}
-		snapshot, storeError := service.store.saveProviderKey(principal, providerIdentifier, request.APIKey)
+		if providerSettingsError := service.validateManagedProviderSettings(providerIdentifier, request); providerSettingsError != nil {
+			ginContext.String(http.StatusBadRequest, providerSettingsError.Error())
+			return
+		}
+		snapshot, storeError := service.store.saveProviderKey(principal, providerIdentifier, request.APIKey, request.TextModel, request.SystemPrompt)
 		if storeError != nil {
 			ginContext.String(http.StatusBadRequest, storeError.Error())
 			return
@@ -420,7 +428,7 @@ func (service *managementService) profileResponse(principal managementPrincipal,
 			CreatedAt: snapshot.createdAt.Format(time.RFC3339),
 			UpdatedAt: snapshot.updatedAt.Format(time.RFC3339),
 		},
-		Providers: service.providerResponses(snapshot.providerAPIKeys),
+		Providers: service.providerResponses(snapshot.providerSettings),
 		Proxy: managementProxyResponse{
 			TextPath:      rootPath,
 			V2Path:        v2Path,
@@ -429,17 +437,19 @@ func (service *managementService) profileResponse(principal managementPrincipal,
 	}
 }
 
-func (service *managementService) providerResponses(providerAPIKeys map[providerID]string) []managementProviderResponse {
+func (service *managementService) providerResponses(providerSettings map[providerID]managedProviderSettings) []managementProviderResponse {
 	summaries := service.providers.providerSummaries()
 	responses := make([]managementProviderResponse, 0, len(summaries))
 	for _, summary := range summaries {
 		providerIdentifier := providerID(summary.identifier)
-		apiKey, hasKey := providerAPIKeys[providerIdentifier]
+		settings, hasKey := providerSettings[providerIdentifier]
 		response := managementProviderResponse{
 			ID:                    summary.identifier,
 			Label:                 summary.label,
 			Aliases:               summary.aliases,
 			HasKey:                hasKey,
+			TextModel:             summary.textDefaultModel,
+			SystemPrompt:          constants.EmptyString,
 			TextDefaultModel:      summary.textDefaultModel,
 			TextModels:            summary.textModels,
 			SupportsDictation:     summary.supportsDictation,
@@ -447,11 +457,24 @@ func (service *managementService) providerResponses(providerAPIKeys map[provider
 			DictationModels:       summary.dictationModels,
 		}
 		if hasKey {
-			response.MaskedKey = maskedAPIKey(apiKey)
+			response.MaskedKey = maskedAPIKey(settings.apiKey)
+			response.TextModel = settings.textModel
+			response.SystemPrompt = settings.systemPrompt
 		}
 		responses = append(responses, response)
 	}
 	return responses
+}
+
+func (service *managementService) validateManagedProviderSettings(providerIdentifier providerID, request managementProviderKeyRequest) error {
+	textModel := strings.TrimSpace(request.TextModel)
+	if textModel == constants.EmptyString {
+		return fmt.Errorf("%w: provider=%s field=text_model", errManagementBadRequest, providerIdentifier.string())
+	}
+	if _, _, validationError := service.providers.resolveTextModel(providerIdentifier.string(), textModel, providerIdentifier.string(), textModel, false); validationError != nil {
+		return fmt.Errorf("%w: %v", errManagementDefaults, validationError)
+	}
+	return nil
 }
 
 func (service *managementService) validateManagedTextDefaults(providerAPIKeys map[providerID]string, defaults TenantDefaults) error {

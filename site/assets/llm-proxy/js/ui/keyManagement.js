@@ -45,6 +45,7 @@ export function createKeyManagement() {
     runtimeConfig: null,
     /** @type {import("../types.d.js").ProviderProfile[]} */
     providers: [],
+    selectedProviderID: EMPTY_STRING,
     /** @type {Record<string, string>} */
     providerInputs: {},
     /** @type {import("../types.d.js").TenantDefaults} */
@@ -120,6 +121,11 @@ export function createKeyManagement() {
       return provider ? provider.dictation_models : [];
     },
 
+    /** @returns {import("../types.d.js").ProviderProfile | null} */
+    get selectedProvider() {
+      return this.providers.find((candidateProvider) => candidateProvider.id === this.selectedProviderID) || null;
+    },
+
     get chartViewBox() {
       return `0 0 ${USAGE_CHART.width} ${USAGE_CHART.height}`;
     },
@@ -165,10 +171,7 @@ export function createKeyManagement() {
     },
 
     get usageCurl() {
-      const secret = this.generatedSecret || (this.hasSecret ? EMPTY_SECRET_PLACEHOLDER : EMPTY_STRING);
-      if (!secret) {
-        return EMPTY_STRING;
-      }
+      const secret = this.generatedSecret || EMPTY_SECRET_PLACEHOLDER;
       const proxyOrigin = this.runtimeConfig ? this.runtimeConfig.proxyOrigin : window.location.origin;
       return [
         `curl --get ${JSON.stringify(`${proxyOrigin}/`)} \\`,
@@ -306,16 +309,33 @@ export function createKeyManagement() {
       this.settingsOpen = false;
     },
 
+    async saveSelectedProviderKey() {
+      if (!this.selectedProvider) {
+        return;
+      }
+      await this.saveProviderKey(this.selectedProvider);
+    },
+
+    async removeSelectedProviderKey() {
+      if (!this.selectedProvider) {
+        return;
+      }
+      await this.removeProviderKey(this.selectedProvider);
+    },
+
     /**
      * @param {import("../types.d.js").ProviderProfile} provider
      */
     async saveProviderKey(provider) {
       const apiKey = String(this.providerInputs[provider.id] || EMPTY_STRING).trim();
-      if (!apiKey) {
+      if (!apiKey && !provider.has_key) {
         this.setNotice(NOTICE_KINDS.ERROR, COPY.providerMissing);
         return;
       }
-      await this.runProfileMutation(async () => requestSaveProviderKey(provider.id, apiKey), COPY.providerKeySaved);
+      await this.runProfileMutation(
+        async () => requestSaveProviderKey(provider.id, apiKey, provider.text_model, provider.system_prompt),
+        COPY.providerKeySaved,
+      );
       this.providerInputs[provider.id] = EMPTY_STRING;
     },
 
@@ -404,11 +424,16 @@ export function createKeyManagement() {
           this.providerInputs[provider.id] = EMPTY_STRING;
         }
       }
+      if (!this.providers.find((provider) => provider.id === this.selectedProviderID)) {
+        const defaultProvider = this.providers.find((provider) => provider.id === nextProfile.tenant.defaults.provider);
+        this.selectedProviderID = defaultProvider ? defaultProvider.id : (this.providers[0] ? this.providers[0].id : EMPTY_STRING);
+      }
     },
 
     clearAuthenticatedState() {
       this.profile = null;
       this.providers = [];
+      this.selectedProviderID = EMPTY_STRING;
       this.providerInputs = {};
       this.defaults = emptyDefaults();
       this.usage = emptyUsageSummary();

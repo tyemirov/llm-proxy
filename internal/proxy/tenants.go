@@ -73,13 +73,20 @@ func newTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
 	return defaults
 }
 
+type managedProviderSettings struct {
+	apiKey       string
+	textModel    string
+	systemPrompt string
+}
+
 type tenant struct {
-	identifier      tenantID
-	userID          string
-	secretDigest    [sha256.Size]byte
-	defaults        tenantDefaults
-	managed         bool
-	providerAPIKeys map[providerID]string
+	identifier       tenantID
+	userID           string
+	secretDigest     [sha256.Size]byte
+	defaults         tenantDefaults
+	managed          bool
+	providerAPIKeys  map[providerID]string
+	providerSettings map[providerID]managedProviderSettings
 }
 
 func newTenant(rawTenant TenantConfiguration) (tenant, error) {

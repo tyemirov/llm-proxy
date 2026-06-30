@@ -11,6 +11,39 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
 ## BugFixes
 
+- [x] [B018] (P2) Present provider settings through a selected-provider editor.
+  ### Summary
+  The Settings modal should not show one full provider-settings card for every supported provider. Routing defaults and request examples should stay as their own sections, and provider key/model/system prompt settings should be edited through one selected-provider form.
+  ### Acceptance Criteria
+  1. Routing defaults and request examples remain separate sections in Settings.
+  2. The provider settings section exposes a provider selector.
+  3. The selected provider editor lets users update API key, provider text model, and provider system prompt together.
+  4. The selected provider editor shows masked key status and supports removing the selected provider key.
+  5. Browser coverage proves provider selection updates the visible editor fields.
+  ### Resolution
+  The Settings modal now keeps routing defaults and request examples as separate sections, then shows one Provider settings editor with a provider selector. Selecting a provider updates the visible masked-key status, API-key input label, provider text model choices, and provider system prompt field. The save/remove actions operate on the selected provider while keeping the existing provider-settings API contract. README and provider-routing docs now describe the selected-provider editor. Validation passed with `timeout -k 180s -s SIGKILL 180s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s make frontend-test`, and `git diff --check`.
+- [x] [B017] (P2) Store text model and system prompt with each managed provider.
+  ### Summary
+  Provider key editing only collected API keys, while text model and system prompt lived in one global routing-default form. Managed tenants should own text model and system prompt settings per saved provider so provider-selected requests have complete provider-specific routing context.
+  ### Acceptance Criteria
+  1. Each managed provider profile includes a selected text model and provider-specific system prompt.
+  2. Saving a provider key requires and validates the selected text model for that provider.
+  3. Managed text requests that select a provider and omit `model` use that provider's saved text model.
+  4. Managed text requests that select a provider and omit request-level system instructions use that provider's saved system prompt.
+  5. The Settings provider editor lets users edit API key, text model, and provider system prompt together.
+  6. Tests cover the API/store routing contract and the browser-visible provider controls.
+  ### Resolution
+  Managed provider-key records now include the selected text model and provider-specific system prompt. The management API validates provider text models on save, preserves an existing encrypted provider key when only model/prompt settings are changed, and returns provider settings in each profile provider. Managed text requests that select a provider and omit request-level model or system instructions now use that provider's saved text model and system prompt. Existing provider-key rows without text settings are normalized at startup to the current provider catalog default model. The Settings provider editor now exposes API key, text model, and system prompt controls together, and README/provider-routing docs describe the current contract. Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run 'TestManagement|TestManagedTenant|TestBuildRouterReturns|TestTextRequestDefaults'`, `timeout -k 300s -s SIGKILL 300s make go-test`, `timeout -k 180s -s SIGKILL 180s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s make frontend-test`, and `git diff --check`.
+- [x] [B016] (P2) Populate management request examples before secret generation.
+  ### Summary
+  The Settings modal should render useful request examples even before the signed-in user generates a client secret. The examples should use the generated secret when one was just created, and otherwise use the documented `<generated-secret>` placeholder.
+  ### Acceptance Criteria
+  1. The Settings modal always renders populated request examples for authenticated users.
+  2. Users with a freshly generated secret see examples using the real generated secret.
+  3. Users without a freshly generated secret see populated text, `/v2`, and dictation examples using `<generated-secret>`.
+  4. Browser coverage proves the generated-secret and no-secret placeholder states through the real Settings modal.
+  ### Resolution
+  The Settings modal always renders the request examples section for authenticated users. The curl examples use the real generated secret immediately after secret generation, and otherwise use the `<generated-secret>` placeholder so users without a generated secret still see complete text, `/v2`, and dictation examples. Playwright coverage now asserts the populated placeholder state before secret generation and the populated generated-secret state. Validation passed with `timeout -k 180s -s SIGKILL 180s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s make frontend-test`, and `git diff --check`.
 - [x] [B015] (P1) Move Pages deployment out of GitHub Actions and keep browser config backend-owned.
   ### Summary
   GitHub Pages deployment must not spend GitHub Actions minutes. The management frontend also must not publish browser runtime config as a static Pages file or rendered HTML value; config belongs to the backend `/config-ui.yaml` projection.
