@@ -1,9 +1,11 @@
 // @ts-check
 
-import { AUTH_STATES, COPY, EVENTS, NOTICE_KINDS } from "../constants.js";
+import { AUTH_STATES, COPY, DASHBOARD_VIEWS, EVENTS, MENU_ACTIONS, NOTICE_KINDS } from "../constants.js";
 import {
   BackendClientError,
+  fetchAdminUsers,
   fetchProfile,
+  fetchUsageSummary,
   generateSecret as requestGeneratedSecret,
   loadFrontendRuntimeConfig,
   removeProviderKey as requestRemoveProviderKey,
@@ -11,6 +13,16 @@ import {
   saveProviderKey as requestSaveProviderKey,
   updateDefaults as requestUpdateDefaults,
 } from "../core/backendClient.js";
+import {
+  emptyUsageSummary,
+  modelRows,
+  providerRows,
+  successRateLabel,
+  usagePolyline,
+  USAGE_CHART,
+  USAGE_METRICS,
+} from "./usagePresentation.js";
+import { applyUserMenuItems } from "../core/mprShell.js";
 
 const EMPTY_SECRET_PLACEHOLDER = "<generated-secret>";
 const EMPTY_STRING = "";
@@ -22,9 +34,11 @@ export function createKeyManagement() {
       authenticated: AUTH_STATES.AUTHENTICATED,
       unauthenticated: AUTH_STATES.UNAUTHENTICATED,
     },
+    dashboardViews: DASHBOARD_VIEWS,
     copy: COPY,
     authState: AUTH_STATES.LOADING,
     busy: false,
+    dashboardView: DASHBOARD_VIEWS.USAGE,
     /** @type {import("../types.d.js").ManagementProfile | null} */
     profile: null,
     /** @type {import("../types.d.js").FrontendRuntimeConfig | null} */
@@ -35,7 +49,12 @@ export function createKeyManagement() {
     providerInputs: {},
     /** @type {import("../types.d.js").TenantDefaults} */
     defaults: emptyDefaults(),
+    /** @type {import("../types.d.js").ManagementUsageSummary} */
+    usage: emptyUsageSummary(),
+    /** @type {import("../types.d.js").ManagementAdminUser[]} */
+    adminUsers: [],
     generatedSecret: EMPTY_STRING,
+    settingsOpen: false,
     notice: {
       kind: NOTICE_KINDS.INFO,
       message: EMPTY_STRING,
@@ -50,11 +69,34 @@ export function createKeyManagement() {
         this.authState = AUTH_STATES.UNAUTHENTICATED;
         dispatchManagementReady();
       });
+      document.addEventListener(EVENTS.USER_MENU_ITEM, (event) => {
+        this.handleUserMenuItem(event);
+      });
       void this.start();
     },
 
     get hasSecret() {
       return Boolean(this.profile && this.profile.tenant.has_secret);
+    },
+
+    get isAdmin() {
+      return Boolean(this.profile && this.profile.user.is_admin);
+    },
+
+    get dashboardEyebrow() {
+      return this.dashboardView === DASHBOARD_VIEWS.ADMIN ? COPY.adminDashboardEyebrow : COPY.dashboardEyebrow;
+    },
+
+    get dashboardTitle() {
+      return this.dashboardView === DASHBOARD_VIEWS.ADMIN ? COPY.adminDashboardTitle : COPY.dashboardTitle;
+    },
+
+    get dashboardRefreshCopy() {
+      return this.dashboardView === DASHBOARD_VIEWS.ADMIN ? COPY.refreshAdmin : COPY.refreshUsage;
+    },
+
+    get hasAdminUsers() {
+      return this.adminUsers.length > 0;
     },
 
     get tenantId() {
@@ -76,6 +118,50 @@ export function createKeyManagement() {
     get selectedDictationModels() {
       const provider = this.providers.find((candidateProvider) => candidateProvider.id === this.defaults.dictation_provider);
       return provider ? provider.dictation_models : [];
+    },
+
+    get chartViewBox() {
+      return `0 0 ${USAGE_CHART.width} ${USAGE_CHART.height}`;
+    },
+
+    get hasUsage() {
+      return this.usage.totals.requests > 0;
+    },
+
+    get usageTotals() {
+      return this.usage.totals;
+    },
+
+    get usageTotalRequests() {
+      return formatNumber(this.usage.totals.requests);
+    },
+
+    get usageTotalTokens() {
+      return formatNumber(this.usage.totals.total_tokens);
+    },
+
+    get usageSuccessRate() {
+      return successRateLabel(this.usage.totals);
+    },
+
+    get usageProviderCount() {
+      return formatNumber(this.usage.providers.length);
+    },
+
+    get usageRequestPolyline() {
+      return usagePolyline(this.usage, USAGE_METRICS.REQUESTS);
+    },
+
+    get usageTokenPolyline() {
+      return usagePolyline(this.usage, USAGE_METRICS.TOTAL_TOKENS);
+    },
+
+    get providerUsageRows() {
+      return providerRows(this.usage);
+    },
+
+    get modelUsageRows() {
+      return modelRows(this.usage);
     },
 
     get usageCurl() {
@@ -117,6 +203,7 @@ export function createKeyManagement() {
         this.applyProfile(loadedProfile);
         this.authState = AUTH_STATES.AUTHENTICATED;
         this.setNotice(NOTICE_KINDS.SUCCESS, COPY.profileLoaded);
+        await this.loadUsageForAuthenticatedProfile();
       } catch (requestError) {
         if (requestError instanceof BackendClientError && requestError.status === 401) {
           this.clearAuthenticatedState();
@@ -129,6 +216,94 @@ export function createKeyManagement() {
         this.busy = false;
         dispatchManagementReady();
       }
+    },
+
+    async loadUsageForAuthenticatedProfile() {
+      try {
+        this.usage = await fetchUsageSummary();
+      } catch {
+        this.usage = emptyUsageSummary();
+        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+      }
+    },
+
+    async refreshDashboard() {
+      if (this.dashboardView === DASHBOARD_VIEWS.ADMIN) {
+        await this.refreshAdminUsers();
+        return;
+      }
+      await this.refreshUsage();
+    },
+
+    async refreshUsage() {
+      this.busy = true;
+      try {
+        this.usage = await fetchUsageSummary();
+        this.setNotice(NOTICE_KINDS.SUCCESS, COPY.usageRefreshed);
+      } catch (requestError) {
+        this.usage = emptyUsageSummary();
+        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    async refreshAdminUsers() {
+      if (!this.isAdmin) {
+        return;
+      }
+      this.busy = true;
+      try {
+        const adminUsersResponse = await fetchAdminUsers();
+        this.adminUsers = adminUsersResponse.users;
+        this.setNotice(NOTICE_KINDS.SUCCESS, COPY.usageRefreshed);
+      } catch (requestError) {
+        this.adminUsers = [];
+        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    /**
+     * @param {Event} event
+     */
+    handleUserMenuItem(event) {
+      const customEvent = /** @type {CustomEvent<{ action?: string }>} */ (event);
+      if (!customEvent.detail) {
+        return;
+      }
+      if (customEvent.detail.action === MENU_ACTIONS.OPEN_ADMIN) {
+        void this.openAdminDashboard();
+      }
+      if (customEvent.detail.action === MENU_ACTIONS.OPEN_SETTINGS) {
+        this.openSettings();
+      }
+    },
+
+    async openAdminDashboard() {
+      if (!this.isAdmin) {
+        return;
+      }
+      this.dashboardView = DASHBOARD_VIEWS.ADMIN;
+      await this.refreshAdminUsers();
+    },
+
+    openUsageDashboard() {
+      this.dashboardView = DASHBOARD_VIEWS.USAGE;
+    },
+
+    openSettings() {
+      this.settingsOpen = true;
+      requestAnimationFrame(() => {
+        if (this.$refs.settingsClose) {
+          this.$refs.settingsClose.focus();
+        }
+      });
+    },
+
+    closeSettings() {
+      this.settingsOpen = false;
     },
 
     /**
@@ -215,6 +390,7 @@ export function createKeyManagement() {
      */
     applyProfile(nextProfile) {
       this.profile = nextProfile;
+      applyUserMenuItems(Boolean(nextProfile.user.is_admin));
       this.providers = nextProfile.providers;
       this.defaults = {
         provider: nextProfile.tenant.defaults.provider,
@@ -235,7 +411,44 @@ export function createKeyManagement() {
       this.providers = [];
       this.providerInputs = {};
       this.defaults = emptyDefaults();
+      this.usage = emptyUsageSummary();
+      this.adminUsers = [];
       this.generatedSecret = EMPTY_STRING;
+      this.settingsOpen = false;
+      this.dashboardView = DASHBOARD_VIEWS.USAGE;
+      applyUserMenuItems(false);
+    },
+
+    /**
+     * @param {import("../types.d.js").ManagementAdminUser} adminUser
+     * @returns {string}
+     */
+    adminUserLabel(adminUser) {
+      return adminUser.user.email || adminUser.user.display_name || adminUser.user.id || COPY.adminUserFallback;
+    },
+
+    /**
+     * @param {import("../types.d.js").ManagementAdminUser} adminUser
+     * @returns {string}
+     */
+    adminUserRequests(adminUser) {
+      return formatNumber(adminUser.usage.totals.requests);
+    },
+
+    /**
+     * @param {import("../types.d.js").ManagementAdminUser} adminUser
+     * @returns {string}
+     */
+    adminUserTokens(adminUser) {
+      return formatNumber(adminUser.usage.totals.total_tokens);
+    },
+
+    /**
+     * @param {import("../types.d.js").ManagementAdminUser} adminUser
+     * @returns {string}
+     */
+    adminUserSuccessRate(adminUser) {
+      return successRateLabel(adminUser.usage.totals);
     },
 
     /**
@@ -263,4 +476,12 @@ function emptyDefaults() {
 
 function dispatchManagementReady() {
   document.dispatchEvent(new CustomEvent(EVENTS.MANAGEMENT_READY));
+}
+
+/**
+ * @param {number} value
+ * @returns {string}
+ */
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString("en-US");
 }

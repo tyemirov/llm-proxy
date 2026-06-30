@@ -25,6 +25,9 @@ site/llm-proxy-config.json
 # Build output
 bin/
 dist/
+node_modules/
+playwright-report/
+test-results/
 tmp/
 __pycache__/
 *.py[cod]

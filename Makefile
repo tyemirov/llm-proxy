@@ -2,6 +2,7 @@ SHELL := /bin/bash
 
 GO ?= go
 GOFMT ?= gofmt
+NPM ?= npm
 UV ?= uv
 BIN_DIR ?= bin
 BINARY_NAME ?= llm-proxy
@@ -18,7 +19,7 @@ GATEWAY_DEPLOY_TARGET ?= deploy-llm-proxy-backend
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint go-lint python-lint test go-test python-test python-root-import-test test-live-providers test-live-gemini build clean ci release publish deploy
+.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-root-import-test frontend-test test-live-providers test-live-gemini build clean ci release publish deploy
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -31,7 +32,7 @@ check-format:
 		exit 1; \
 	fi
 
-lint: go-lint python-lint
+lint: go-lint python-lint frontend-lint
 
 go-lint:
 	$(GO) vet ./...
@@ -41,7 +42,10 @@ go-lint:
 python-lint:
 	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev mypy --strict llm_proxy_client
 
-test: go-test python-test
+frontend-lint:
+	$(NPM) run frontend:lint
+
+test: go-test python-test frontend-test
 
 go-test:
 	@GO="$(GO)" ./scripts/check_coverage.sh
@@ -52,6 +56,9 @@ python-test:
 
 python-root-import-test:
 	$(UV) run --no-project --with-editable . python -c 'from llm_proxy_client import Client, ClientConfig, ClientMessage, ClientMessagesRequest; assert Client and ClientConfig and ClientMessage and ClientMessagesRequest'
+
+frontend-test:
+	$(NPM) run frontend:test
 
 test-live-providers:
 	@GO="$(GO)" ./scripts/test_live_providers.sh

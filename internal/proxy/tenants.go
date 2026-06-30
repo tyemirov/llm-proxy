@@ -75,6 +75,7 @@ func newTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
 
 type tenant struct {
 	identifier      tenantID
+	userID          string
 	secretDigest    [sha256.Size]byte
 	defaults        tenantDefaults
 	managed         bool

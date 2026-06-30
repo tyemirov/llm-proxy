@@ -19,6 +19,8 @@ const (
 	managementProviderKeysPath          = "/provider-keys/:provider"
 	managementDefaultsPath              = "/defaults"
 	managementSecretsPath               = "/secrets"
+	managementUsagePath                 = "/usage"
+	managementAdminUsersPath            = "/admin/users"
 	contextKeyManagementPrincipal       = "management_principal"
 	headerAccessControlAllowCredentials = "Access-Control-Allow-Credentials"
 	headerAccessControlAllowHeaders     = "Access-Control-Allow-Headers"
@@ -57,6 +59,7 @@ type managementUserResponse struct {
 	Email       string `json:"email,omitempty"`
 	DisplayName string `json:"display_name,omitempty"`
 	AvatarURL   string `json:"avatar_url,omitempty"`
+	IsAdmin     bool   `json:"is_admin"`
 }
 
 type managementTenantResponse struct {
@@ -99,6 +102,66 @@ type managementSecretResponse struct {
 	Profile managementProfileResponse `json:"profile"`
 }
 
+type managementUsageSummaryResponse struct {
+	PeriodDays  int                               `json:"period_days"`
+	Totals      managementUsageAggregateResponse  `json:"totals"`
+	Daily       []managementUsageDailyResponse    `json:"daily"`
+	Providers   []managementUsageProviderResponse `json:"providers"`
+	Models      []managementUsageModelResponse    `json:"models"`
+	StatusCodes []managementUsageStatusResponse   `json:"status_codes"`
+}
+
+type managementUsageAggregateResponse struct {
+	Requests                   int   `json:"requests"`
+	SuccessfulRequests         int   `json:"successful_requests"`
+	FailedRequests             int   `json:"failed_requests"`
+	TextRequests               int   `json:"text_requests"`
+	DictationRequests          int   `json:"dictation_requests"`
+	RequestTokens              int   `json:"request_tokens"`
+	ResponseTokens             int   `json:"response_tokens"`
+	TotalTokens                int   `json:"total_tokens"`
+	AverageLatencyMilliseconds int64 `json:"average_latency_ms"`
+}
+
+type managementUsageDailyResponse struct {
+	Date string                           `json:"date"`
+	Data managementUsageAggregateResponse `json:"data"`
+}
+
+type managementUsageProviderResponse struct {
+	Provider string                           `json:"provider"`
+	Data     managementUsageAggregateResponse `json:"data"`
+}
+
+type managementUsageModelResponse struct {
+	Provider string                           `json:"provider"`
+	Model    string                           `json:"model"`
+	Data     managementUsageAggregateResponse `json:"data"`
+}
+
+type managementUsageStatusResponse struct {
+	StatusCode int `json:"status_code"`
+	Requests   int `json:"requests"`
+}
+
+type managementAdminUsersResponse struct {
+	PeriodDays int                           `json:"period_days"`
+	Users      []managementAdminUserResponse `json:"users"`
+}
+
+type managementAdminUserResponse struct {
+	User   managementUserResponse         `json:"user"`
+	Tenant managementAdminTenantResponse  `json:"tenant"`
+	Usage  managementUsageSummaryResponse `json:"usage"`
+}
+
+type managementAdminTenantResponse struct {
+	ID        string `json:"id"`
+	HasSecret bool   `json:"has_secret"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 type managementProviderKeyRequest struct {
 	APIKey string `json:"api_key"`
 }
@@ -132,6 +195,8 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.Use(service.sessionMiddleware())
 	managementGroup.Use(service.managementMutationMiddleware())
 	managementGroup.GET(managementProfilePath, service.profileHandler())
+	managementGroup.GET(managementUsagePath, service.usageHandler())
+	managementGroup.GET(managementAdminUsersPath, service.adminUsersHandler())
 	managementGroup.PUT(managementProviderKeysPath, service.saveProviderKeyHandler())
 	managementGroup.DELETE(managementProviderKeysPath, service.removeProviderKeyHandler())
 	managementGroup.PUT(managementDefaultsPath, service.updateDefaultsHandler())
@@ -214,7 +279,35 @@ func (service *managementService) profileHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusInternalServerError, snapshotError.Error())
 			return
 		}
-		ginContext.JSON(http.StatusOK, service.profileResponse(snapshot))
+		ginContext.JSON(http.StatusOK, service.profileResponse(principal, snapshot))
+	}
+}
+
+func (service *managementService) usageHandler() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		principal := managementPrincipalFromContext(ginContext)
+		summary, summaryError := service.store.usageSummary(principal)
+		if summaryError != nil {
+			ginContext.String(http.StatusInternalServerError, summaryError.Error())
+			return
+		}
+		ginContext.JSON(http.StatusOK, managementUsageSummary(summary))
+	}
+}
+
+func (service *managementService) adminUsersHandler() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		principal := managementPrincipalFromContext(ginContext)
+		if !principal.isAdmin {
+			ginContext.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+		summary, summaryError := service.store.adminUsersSummary()
+		if summaryError != nil {
+			ginContext.String(http.StatusInternalServerError, summaryError.Error())
+			return
+		}
+		ginContext.JSON(http.StatusOK, service.adminUsersResponse(summary))
 	}
 }
 
@@ -236,7 +329,7 @@ func (service *managementService) saveProviderKeyHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusBadRequest, storeError.Error())
 			return
 		}
-		ginContext.JSON(http.StatusOK, service.profileResponse(snapshot))
+		ginContext.JSON(http.StatusOK, service.profileResponse(principal, snapshot))
 	}
 }
 
@@ -253,7 +346,7 @@ func (service *managementService) removeProviderKeyHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusInternalServerError, storeError.Error())
 			return
 		}
-		ginContext.JSON(http.StatusOK, service.profileResponse(snapshot))
+		ginContext.JSON(http.StatusOK, service.profileResponse(principal, snapshot))
 	}
 }
 
@@ -280,7 +373,7 @@ func (service *managementService) updateDefaultsHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusInternalServerError, storeError.Error())
 			return
 		}
-		ginContext.JSON(http.StatusOK, service.profileResponse(snapshot))
+		ginContext.JSON(http.StatusOK, service.profileResponse(principal, snapshot))
 	}
 }
 
@@ -294,7 +387,7 @@ func (service *managementService) generateSecretHandler() gin.HandlerFunc {
 		}
 		ginContext.JSON(http.StatusOK, managementSecretResponse{
 			Secret:  rawSecret,
-			Profile: service.profileResponse(snapshot),
+			Profile: service.profileResponse(principal, snapshot),
 		})
 	}
 }
@@ -307,17 +400,18 @@ func (service *managementService) revokeSecretHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusInternalServerError, storeError.Error())
 			return
 		}
-		ginContext.JSON(http.StatusOK, service.profileResponse(snapshot))
+		ginContext.JSON(http.StatusOK, service.profileResponse(principal, snapshot))
 	}
 }
 
-func (service *managementService) profileResponse(snapshot managedTenantSnapshot) managementProfileResponse {
+func (service *managementService) profileResponse(principal managementPrincipal, snapshot managedTenantSnapshot) managementProfileResponse {
 	return managementProfileResponse{
 		User: managementUserResponse{
 			ID:          snapshot.userID,
 			Email:       snapshot.userEmail,
 			DisplayName: snapshot.userDisplayName,
 			AvatarURL:   snapshot.userAvatarURL,
+			IsAdmin:     principal.isAdmin,
 		},
 		Tenant: managementTenantResponse{
 			ID:        snapshot.tenantID,
@@ -416,5 +510,102 @@ func managementDefaultsResponse(defaults TenantDefaults) managementTenantDefault
 		DictationProvider: normalizedDefaults.dictationProvider,
 		DictationModel:    normalizedDefaults.dictationModel,
 		SystemPrompt:      normalizedDefaults.systemPrompt,
+	}
+}
+
+func managementUsageSummary(summary managedUsageSummary) managementUsageSummaryResponse {
+	return managementUsageSummaryResponse{
+		PeriodDays:  summary.periodDays,
+		Totals:      managementUsageAggregate(summary.totals),
+		Daily:       managementUsageDaily(summary.daily),
+		Providers:   managementUsageProviders(summary.providers),
+		Models:      managementUsageModels(summary.models),
+		StatusCodes: managementUsageStatuses(summary.statusCodes),
+	}
+}
+
+func managementUsageAggregate(aggregate managedUsageAggregate) managementUsageAggregateResponse {
+	return managementUsageAggregateResponse{
+		Requests:                   aggregate.requests,
+		SuccessfulRequests:         aggregate.successfulRequests,
+		FailedRequests:             aggregate.failedRequests,
+		TextRequests:               aggregate.textRequests,
+		DictationRequests:          aggregate.dictationRequests,
+		RequestTokens:              aggregate.requestTokens,
+		ResponseTokens:             aggregate.responseTokens,
+		TotalTokens:                aggregate.totalTokens,
+		AverageLatencyMilliseconds: aggregate.averageLatencyMillis,
+	}
+}
+
+func managementUsageDaily(daily []managedUsageDailyBucket) []managementUsageDailyResponse {
+	responses := make([]managementUsageDailyResponse, 0, len(daily))
+	for _, bucket := range daily {
+		responses = append(responses, managementUsageDailyResponse{
+			Date: bucket.date,
+			Data: managementUsageAggregate(bucket.aggregate),
+		})
+	}
+	return responses
+}
+
+func managementUsageProviders(providers []managedUsageProviderBucket) []managementUsageProviderResponse {
+	responses := make([]managementUsageProviderResponse, 0, len(providers))
+	for _, bucket := range providers {
+		responses = append(responses, managementUsageProviderResponse{
+			Provider: bucket.providerIdentifier,
+			Data:     managementUsageAggregate(bucket.aggregate),
+		})
+	}
+	return responses
+}
+
+func managementUsageModels(models []managedUsageModelBucket) []managementUsageModelResponse {
+	responses := make([]managementUsageModelResponse, 0, len(models))
+	for _, bucket := range models {
+		responses = append(responses, managementUsageModelResponse{
+			Provider: bucket.providerIdentifier,
+			Model:    bucket.modelIdentifier,
+			Data:     managementUsageAggregate(bucket.aggregate),
+		})
+	}
+	return responses
+}
+
+func managementUsageStatuses(statusCodes []managedUsageStatusBucket) []managementUsageStatusResponse {
+	responses := make([]managementUsageStatusResponse, 0, len(statusCodes))
+	for _, bucket := range statusCodes {
+		responses = append(responses, managementUsageStatusResponse{
+			StatusCode: bucket.statusCode,
+			Requests:   bucket.requests,
+		})
+	}
+	return responses
+}
+
+func (service *managementService) adminUsersResponse(snapshots []managedAdminUserSnapshot) managementAdminUsersResponse {
+	users := make([]managementAdminUserResponse, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		_, userIsAdmin := service.sessionValidator.adminEmails[strings.ToLower(strings.TrimSpace(snapshot.userEmail))]
+		users = append(users, managementAdminUserResponse{
+			User: managementUserResponse{
+				ID:          snapshot.userID,
+				Email:       snapshot.userEmail,
+				DisplayName: snapshot.userDisplayName,
+				AvatarURL:   snapshot.userAvatarURL,
+				IsAdmin:     userIsAdmin,
+			},
+			Tenant: managementAdminTenantResponse{
+				ID:        snapshot.tenantID,
+				HasSecret: snapshot.hasSecret,
+				CreatedAt: snapshot.createdAt.Format(time.RFC3339),
+				UpdatedAt: snapshot.updatedAt.Format(time.RFC3339),
+			},
+			Usage: managementUsageSummary(snapshot.usage),
+		})
+	}
+	return managementAdminUsersResponse{
+		PeriodDays: managedUsageSummaryDays,
+		Users:      users,
 	}
 }

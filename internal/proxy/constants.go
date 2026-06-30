@@ -161,6 +161,9 @@ const (
 	logFieldStatus       = "status"
 	logFieldValue        = "value"
 	logFieldTenantID     = "tenant_id"
+	logFieldEndpoint     = "endpoint"
+	logFieldProvider     = "provider"
+	logFieldModel        = "model"
 	// logFieldID identifies the response identifier logged for traceability.
 	logFieldID = "id"
 
@@ -180,6 +183,7 @@ const (
 	logEventResponseSent                  = "response sent"
 	logEventBuildHTTPRequest              = "build HTTP request failed"
 	logEventParseWebSearchParameterFailed = "parse web_search parameter failed"
+	logEventUsageRecordFailed             = "management usage record failed"
 
 	responseRequestAttribute = "request"
 )

@@ -17,11 +17,12 @@ var (
 )
 
 type managementSessionValidator struct {
-	signingKey []byte
-	issuer     string
-	cookieName string
-	tenantID   string
-	now        func() time.Time
+	signingKey  []byte
+	issuer      string
+	cookieName  string
+	tenantID    string
+	adminEmails map[string]struct{}
+	now         func() time.Time
 }
 
 type managementSessionClaims struct {
@@ -40,15 +41,17 @@ type managementPrincipal struct {
 	userDisplayName string
 	userAvatarURL   string
 	tenantID        string
+	isAdmin         bool
 }
 
 func newManagementSessionValidator(configuration ManagementConfiguration) *managementSessionValidator {
 	return &managementSessionValidator{
-		signingKey: []byte(configuration.JWTSigningKey),
-		issuer:     configuration.JWTIssuer,
-		cookieName: configuration.SessionCookieName,
-		tenantID:   configuration.TAuthTenantID,
-		now:        time.Now,
+		signingKey:  []byte(configuration.JWTSigningKey),
+		issuer:      configuration.JWTIssuer,
+		cookieName:  configuration.SessionCookieName,
+		tenantID:    configuration.TAuthTenantID,
+		adminEmails: managementAdminEmailSet(configuration.AdminEmails),
+		now:         time.Now,
 	}
 }
 
@@ -82,19 +85,33 @@ func (validator *managementSessionValidator) validateToken(rawToken string) (man
 	if strings.TrimSpace(claims.TenantID) != validator.tenantID {
 		return managementPrincipal{}, fmt.Errorf("management_session.validate_token: %w", errManagementSessionWrongTenant)
 	}
-	return newManagementPrincipal(claims)
+	return validator.newManagementPrincipal(claims)
 }
 
-func newManagementPrincipal(claims *managementSessionClaims) (managementPrincipal, error) {
+func (validator *managementSessionValidator) newManagementPrincipal(claims *managementSessionClaims) (managementPrincipal, error) {
 	userID := strings.TrimSpace(claims.UserID)
 	if userID == "" {
 		return managementPrincipal{}, fmt.Errorf("management_session.principal: %w", errManagementSessionInvalid)
 	}
+	userEmail := strings.ToLower(strings.TrimSpace(claims.UserEmail))
+	_, userIsAdmin := validator.adminEmails[userEmail]
 	return managementPrincipal{
 		userID:          userID,
-		userEmail:       strings.TrimSpace(claims.UserEmail),
+		userEmail:       userEmail,
 		userDisplayName: strings.TrimSpace(claims.UserDisplayName),
 		userAvatarURL:   strings.TrimSpace(claims.UserAvatarURL),
 		tenantID:        strings.TrimSpace(claims.TenantID),
+		isAdmin:         userIsAdmin,
 	}, nil
+}
+
+func managementAdminEmailSet(adminEmails []string) map[string]struct{} {
+	adminEmailSet := make(map[string]struct{}, len(adminEmails))
+	for _, emailValue := range adminEmails {
+		normalizedEmail, emailError := normalizeManagementAdminEmail(emailValue)
+		if emailError == nil {
+			adminEmailSet[normalizedEmail] = struct{}{}
+		}
+	}
+	return adminEmailSet
 }
