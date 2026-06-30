@@ -6,6 +6,9 @@ const MANAGEMENT_BASE_PATH = "/api/management";
 const HEADER_CONTENT_TYPE = "Content-Type";
 const MIME_JSON = "application/json";
 const EMPTY_STRING = "";
+const CONFIG_UI_PATH = "/config-ui.yaml";
+const PRODUCTION_FRONTEND_HOST = "llm-proxy.mprlab.com";
+const PRODUCTION_BACKEND_ORIGIN = "https://llm-proxy-api.mprlab.com";
 
 /** @type {Promise<import("../types.d.js").FrontendRuntimeConfig> | null} */
 let frontendRuntimeConfigPromise = null;
@@ -155,12 +158,10 @@ function createFrontendRuntimeConfig(rawConfig, configUrl) {
  * @returns {string}
  */
 function frontendConfigURL() {
-  const header = document.getElementById(MPR_UI.HEADER_ID);
-  const configUrl = String(header ? header.getAttribute(MPR_UI.CONFIG_URL_ATTRIBUTE) : EMPTY_STRING).trim();
-  if (!configUrl || configUrl === MPR_UI.CONFIG_URL_PLACEHOLDER) {
-    throw new Error("frontend_config_url_missing");
+  if (window.location.hostname === PRODUCTION_FRONTEND_HOST) {
+    return new URL(CONFIG_UI_PATH, PRODUCTION_BACKEND_ORIGIN).toString();
   }
-  return new URL(configUrl, window.location.href).toString();
+  return new URL(CONFIG_UI_PATH, window.location.href).toString();
 }
 
 /**

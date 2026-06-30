@@ -3,37 +3,34 @@ package main
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
-	"github.com/tyemirov/llm-proxy/internal/proxy"
 )
 
 const (
 	siteCNAMEFileName          = "CNAME"
 	siteIndexFileName          = "index.html"
 	siteConfigURLPlaceholder   = "__LLM_PROXY_CONFIG_URL__"
-	renderedSiteFilePerm       = 0o644
+	siteConfigURLAttribute     = "data-config-url"
+	siteLegacyRuntimeConfig    = "llm-proxy-config.json"
 	defaultSiteSourceDirectory = "site"
 )
 
 var errSiteRenderFailed = errors.New("site_render_failed")
 
 var (
-	siteCopyFS    = os.CopyFS
-	sitePathAbs   = filepath.Abs
-	sitePathRel   = filepath.Rel
-	siteReadFile  = os.ReadFile
-	siteRemove    = os.Remove
-	siteStat      = os.Stat
-	siteURLParse  = url.Parse
-	siteWriteFile = os.WriteFile
+	siteCopyFS   = os.CopyFS
+	sitePathAbs  = filepath.Abs
+	sitePathRel  = filepath.Rel
+	siteReadFile = os.ReadFile
+	siteRemove   = os.Remove
+	siteStat     = os.Stat
 )
 
-func renderSiteArtifact(sourceDirectory string, outputDirectory string, configuration proxy.Configuration) error {
+func renderSiteArtifact(sourceDirectory string, outputDirectory string) error {
 	siteSourceDirectory := strings.TrimSpace(sourceDirectory)
 	if siteSourceDirectory == constants.EmptyString {
 		siteSourceDirectory = defaultSiteSourceDirectory
@@ -62,7 +59,7 @@ func renderSiteArtifact(sourceDirectory string, outputDirectory string, configur
 	if copyError := copyStaticSiteSource(siteSourceDirectory, siteOutputDirectory); copyError != nil {
 		return copyError
 	}
-	if writeError := writeRenderedSiteConfig(siteOutputDirectory, configuration.Management); writeError != nil {
+	if writeError := writeRenderedSiteShell(siteOutputDirectory); writeError != nil {
 		return writeError
 	}
 	return nil
@@ -94,28 +91,17 @@ func copyStaticSiteSource(sourceDirectory string, outputDirectory string) error 
 	return nil
 }
 
-func writeRenderedSiteConfig(outputDirectory string, configuration proxy.ManagementConfiguration) error {
-	siteDomain, domainError := managementSiteDomain(configuration.PublicOrigin)
-	if domainError != nil {
-		return domainError
+func writeRenderedSiteShell(outputDirectory string) error {
+	for _, staticConfigFile := range []string{"config-ui.yaml", siteLegacyRuntimeConfig} {
+		if removeError := removeCopiedStaticConfig(outputDirectory, staticConfigFile); removeError != nil {
+			return removeError
+		}
 	}
-	if removeError := removeCopiedStaticConfig(outputDirectory, proxy.ManagementConfigUIFileName); removeError != nil {
-		return removeError
-	}
-	if removeError := removeCopiedStaticConfig(outputDirectory, "llm-proxy-config.json"); removeError != nil {
-		return removeError
-	}
-	if indexError := writeRenderedSiteIndex(outputDirectory, proxy.ManagementConfigUIURL(configuration.ManagementAPIOrigin)); indexError != nil {
+	if indexError := validateRenderedSiteIndex(outputDirectory); indexError != nil {
 		return indexError
 	}
-	files := map[string]string{
-		siteCNAMEFileName: siteDomain + "\n",
-	}
-	for fileName, fileContent := range files {
-		outputPath := filepath.Join(outputDirectory, fileName)
-		if writeError := siteWriteFile(outputPath, []byte(fileContent), renderedSiteFilePerm); writeError != nil {
-			return fmt.Errorf("%w: output=%s: %v", errSiteRenderFailed, outputPath, writeError)
-		}
+	if _, statError := siteStat(filepath.Join(outputDirectory, siteCNAMEFileName)); statError != nil {
+		return fmt.Errorf("%w: output=%s: %v", errSiteRenderFailed, filepath.Join(outputDirectory, siteCNAMEFileName), statError)
 	}
 	return nil
 }
@@ -128,33 +114,18 @@ func removeCopiedStaticConfig(outputDirectory string, fileName string) error {
 	return nil
 }
 
-func writeRenderedSiteIndex(outputDirectory string, configURL string) error {
+func validateRenderedSiteIndex(outputDirectory string) error {
 	outputPath := filepath.Join(outputDirectory, siteIndexFileName)
 	indexBytes, readError := siteReadFile(outputPath)
 	if readError != nil {
 		return fmt.Errorf("%w: output=%s: %v", errSiteRenderFailed, outputPath, readError)
 	}
 	indexHTML := string(indexBytes)
-	if !strings.Contains(indexHTML, siteConfigURLPlaceholder) {
-		return fmt.Errorf("%w: output=%s missing %s", errSiteRenderFailed, outputPath, siteConfigURLPlaceholder)
+	if strings.Contains(indexHTML, siteConfigURLPlaceholder) {
+		return fmt.Errorf("%w: output=%s contains retired %s", errSiteRenderFailed, outputPath, siteConfigURLPlaceholder)
 	}
-	renderedHTML := strings.ReplaceAll(indexHTML, siteConfigURLPlaceholder, configURL)
-	if writeError := siteWriteFile(outputPath, []byte(renderedHTML), renderedSiteFilePerm); writeError != nil {
-		return fmt.Errorf("%w: output=%s: %v", errSiteRenderFailed, outputPath, writeError)
+	if strings.Contains(indexHTML, siteConfigURLAttribute) {
+		return fmt.Errorf("%w: output=%s contains static %s", errSiteRenderFailed, outputPath, siteConfigURLAttribute)
 	}
 	return nil
-}
-
-func managementSiteDomain(publicOrigin string) (string, error) {
-	parsedOrigin, parseError := siteURLParse(publicOrigin)
-	if parseError != nil {
-		return constants.EmptyString, fmt.Errorf("%w: management.public_origin=%s: %v", errSiteRenderFailed, publicOrigin, parseError)
-	}
-	if parsedOrigin.Host == constants.EmptyString {
-		return constants.EmptyString, fmt.Errorf("%w: management.public_origin=%s has no host", errSiteRenderFailed, publicOrigin)
-	}
-	if parsedOrigin.Port() != constants.EmptyString {
-		return constants.EmptyString, fmt.Errorf("%w: management.public_origin=%s must not include a port for CNAME", errSiteRenderFailed, publicOrigin)
-	}
-	return parsedOrigin.Hostname(), nil
 }

@@ -20,7 +20,7 @@ export async function initializeMprShell() {
 function applyHeaderConfigURL(configUrl) {
   const header = document.getElementById(MPR_UI.HEADER_ID);
   if (header) {
-    header.setAttribute("data-config-url", configUrl);
+    header.setAttribute(MPR_UI.CONFIG_URL_ATTRIBUTE, configUrl);
   }
 }
 

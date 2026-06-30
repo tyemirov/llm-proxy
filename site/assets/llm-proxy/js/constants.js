@@ -47,7 +47,6 @@ export const ADMIN_USER_MENU_ITEMS = Object.freeze([
 export const MPR_UI = Object.freeze({
   BUNDLE_URL: "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.js",
   CONFIG_URL_ATTRIBUTE: "data-config-url",
-  CONFIG_URL_PLACEHOLDER: "__LLM_PROXY_CONFIG_URL__",
   CONFIG_LOADER_MISSING: "llm_proxy_mpr_ui_config_loader_missing",
   HEADER_ID: "llm-proxy-header",
   SCRIPT_ID: "llm-proxy-mpr-ui-script",

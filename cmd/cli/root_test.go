@@ -385,7 +385,7 @@ LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN=https://llm-proxy.mprlab.com
 LLM_PROXY_MANAGEMENT_UI_DESCRIPTION=LLM Proxy
 LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN=http://127.0.0.1:4179
 LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN=http://localhost:4179
-LLM_PROXY_MANAGEMENT_ADMIN_EMAIL=admin@example.invalid
+LLM_PROXY_MANAGEMENT_ADMIN_EMAILS=["admin@example.invalid","ops@example.invalid"]
 LLM_PROXY_MANAGEMENT_TAUTH_URL=https://tauth-api.mprlab.com
 LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID=llm-proxy
 LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID=925457785190-3frk7j3bsr3ucidtkcohrp2sl07e0paa.apps.googleusercontent.com
@@ -436,40 +436,19 @@ LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
 	if capturedConfiguration.Management.ProviderKeyEncryptionKey != "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=" {
 		t.Fatalf("provider key encryption key=%q", capturedConfiguration.Management.ProviderKeyEncryptionKey)
 	}
+	if len(capturedConfiguration.Management.AdminEmails) != 2 ||
+		capturedConfiguration.Management.AdminEmails[0] != "admin@example.invalid" ||
+		capturedConfiguration.Management.AdminEmails[1] != "ops@example.invalid" {
+		t.Fatalf("admin emails=%#v", capturedConfiguration.Management.AdminEmails)
+	}
 	if capturedConfiguration.Management.ManagementAPIOrigin != "https://llm-proxy-api.mprlab.com" || capturedConfiguration.Management.ProxyOrigin != "https://llm-proxy-api.mprlab.com" {
 		t.Fatalf("management api origins=%q %q", capturedConfiguration.Management.ManagementAPIOrigin, capturedConfiguration.Management.ProxyOrigin)
 	}
 }
 
-func TestRootCommandRendersSiteFromConfigFile(t *testing.T) {
+func TestRootCommandRendersStaticSiteWithoutBackendConfig(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := writeTestConfig(t, tempDir, `
-management:
-  enabled: true
-  public_origin: "https://llm-proxy.example"
-  ui_description: "LLM Proxy Test"
-  ui_origins:
-    - "https://llm-proxy.example"
-    - "http://127.0.0.1:4179"
-    - "http://localhost:4179"
-  tauth_url: "https://tauth.example"
-  tauth_tenant_id: "llm-proxy"
-  google_client_id: "google-client-id"
-  login_path: "/auth/google"
-  logout_path: "/auth/logout"
-  nonce_path: "/auth/nonce"
-  jwt_signing_key: "tauth-signing-key"
-  jwt_issuer: "tauth"
-  session_cookie_name: "llm_proxy_session"
-  database_dialect: "sqlite"
-  database_dsn: "management.sqlite"
-  provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
-  management_api_origin: "https://llm-proxy-api.example"
-  proxy_origin: "https://llm-proxy-api.example"
-tenants:
-  - id: default
-    secret: "sekret"
-`+completeLiteralProvidersYAML())
+	configPath := filepath.Join(tempDir, "missing-backend-config.yml")
 	outputDirectory := filepath.Join(tempDir, "rendered-site")
 	withServeProxy(t, failingServeProxy(t))
 
@@ -482,22 +461,23 @@ tenants:
 	if readCNAMEError != nil {
 		t.Fatalf("read CNAME: %v", readCNAMEError)
 	}
-	if string(cnameBytes) != "llm-proxy.example\n" {
+	if string(cnameBytes) != "llm-proxy.mprlab.com\n" {
 		t.Fatalf("CNAME=%q", string(cnameBytes))
 	}
 	if _, statError := os.Stat(filepath.Join(outputDirectory, proxy.ManagementConfigUIFileName)); !os.IsNotExist(statError) {
 		t.Fatalf("rendered %s stat error=%v want absent", proxy.ManagementConfigUIFileName, statError)
 	}
-	if _, statError := os.Stat(filepath.Join(outputDirectory, "llm-proxy-config.json")); !os.IsNotExist(statError) {
-		t.Fatalf("rendered llm-proxy-config.json stat error=%v want absent", statError)
+	if _, statError := os.Stat(filepath.Join(outputDirectory, siteLegacyRuntimeConfig)); !os.IsNotExist(statError) {
+		t.Fatalf("rendered %s stat error=%v want absent", siteLegacyRuntimeConfig, statError)
 	}
 	indexBytes, readIndexError := os.ReadFile(filepath.Join(outputDirectory, "index.html"))
 	if readIndexError != nil {
 		t.Fatalf("rendered index.html: %v", readIndexError)
 	}
 	indexHTML := string(indexBytes)
-	if !strings.Contains(indexHTML, `data-config-url="https://llm-proxy-api.example/config-ui.yaml"`) ||
-		strings.Contains(indexHTML, siteConfigURLPlaceholder) {
+	if strings.Contains(indexHTML, siteConfigURLAttribute) ||
+		strings.Contains(indexHTML, siteConfigURLPlaceholder) ||
+		strings.Contains(indexHTML, proxy.ManagementConfigUIFileName) {
 		t.Fatalf("rendered index.html=%s", indexHTML)
 	}
 	if _, statError := os.Stat(filepath.Join(outputDirectory, "assets", "llm-proxy", "js", "app.js")); statError != nil {
@@ -507,7 +487,7 @@ tenants:
 
 func TestRootCommandRendersSiteFromDefaultSourceDirectory(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := writeRenderableSiteConfig(t, tempDir, "https://llm-proxy.example")
+	configPath := filepath.Join(tempDir, "missing-backend-config.yml")
 	outputDirectory := filepath.Join(tempDir, "rendered-site")
 	t.Chdir(filepath.Join("..", ".."))
 	withServeProxy(t, failingServeProxy(t))
@@ -523,15 +503,15 @@ func TestRootCommandRendersSiteFromDefaultSourceDirectory(t *testing.T) {
 
 func TestRootCommandRenderSiteRemovesSourceConfigUI(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := writeRenderableSiteConfig(t, tempDir, "https://llm-proxy.example")
+	configPath := filepath.Join(tempDir, "missing-backend-config.yml")
 	sourceDirectory := filepath.Join(tempDir, "site-source")
 	outputDirectory := filepath.Join(tempDir, "rendered-site")
 	writeTestSiteSource(t, sourceDirectory)
 	if writeError := os.WriteFile(filepath.Join(sourceDirectory, proxy.ManagementConfigUIFileName), []byte("stale config\n"), 0600); writeError != nil {
 		t.Fatalf("write stale config-ui.yaml: %v", writeError)
 	}
-	if writeError := os.WriteFile(filepath.Join(sourceDirectory, "llm-proxy-config.json"), []byte("{}\n"), 0600); writeError != nil {
-		t.Fatalf("write stale llm-proxy-config.json: %v", writeError)
+	if writeError := os.WriteFile(filepath.Join(sourceDirectory, siteLegacyRuntimeConfig), []byte("{}\n"), 0600); writeError != nil {
+		t.Fatalf("write stale %s: %v", siteLegacyRuntimeConfig, writeError)
 	}
 	withServeProxy(t, failingServeProxy(t))
 
@@ -542,12 +522,12 @@ func TestRootCommandRenderSiteRemovesSourceConfigUI(t *testing.T) {
 	if _, statError := os.Stat(filepath.Join(outputDirectory, proxy.ManagementConfigUIFileName)); !os.IsNotExist(statError) {
 		t.Fatalf("rendered stale %s stat error=%v want absent", proxy.ManagementConfigUIFileName, statError)
 	}
-	if _, statError := os.Stat(filepath.Join(outputDirectory, "llm-proxy-config.json")); !os.IsNotExist(statError) {
-		t.Fatalf("rendered stale llm-proxy-config.json stat error=%v want absent", statError)
+	if _, statError := os.Stat(filepath.Join(outputDirectory, siteLegacyRuntimeConfig)); !os.IsNotExist(statError) {
+		t.Fatalf("rendered stale %s stat error=%v want absent", siteLegacyRuntimeConfig, statError)
 	}
 }
 
-func TestRootCommandRenderSiteUsesConfigPlaceholderGate(t *testing.T) {
+func TestRootCommandRenderSiteDoesNotLoadBackendConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir, `
 management:
@@ -577,8 +557,8 @@ tenants:
 	withServeProxy(t, failingServeProxy(t))
 
 	executeError := executeRootCommand(t, "--config", configPath, "--site-source", filepath.Join("..", "..", "site"), "--render-site-output", filepath.Join(tempDir, "rendered-site"))
-	if executeError == nil || !strings.Contains(executeError.Error(), "config_placeholder_missing: names=P411_MISSING_GOOGLE_CLIENT_ID") {
-		t.Fatalf("error=%v want config placeholder gate", executeError)
+	if executeError != nil {
+		t.Fatalf("ExecuteC error: %v", executeError)
 	}
 }
 
@@ -591,7 +571,7 @@ func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
 		{
 			name: "blank output",
 			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
-				configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example")
+				configPath := filepath.Join(tempDir, "missing-backend-config.yml")
 				sourceDirectory := filepath.Join(tempDir, "site-source")
 				writeTestSiteSource(subTest, sourceDirectory)
 				return configPath, sourceDirectory, ""
@@ -601,7 +581,7 @@ func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
 		{
 			name: "missing source",
 			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
-				configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example")
+				configPath := filepath.Join(tempDir, "missing-backend-config.yml")
 				return configPath, filepath.Join(tempDir, "missing-site-source"), filepath.Join(tempDir, "rendered-site")
 			},
 			expectedError: "source=",
@@ -609,7 +589,7 @@ func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
 		{
 			name: "source file",
 			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
-				configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example")
+				configPath := filepath.Join(tempDir, "missing-backend-config.yml")
 				sourcePath := filepath.Join(tempDir, "site-source-file")
 				if writeError := os.WriteFile(sourcePath, []byte("not a directory"), 0600); writeError != nil {
 					subTest.Fatalf("write source file: %v", writeError)
@@ -621,7 +601,7 @@ func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
 		{
 			name: "existing output",
 			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
-				configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example")
+				configPath := filepath.Join(tempDir, "missing-backend-config.yml")
 				sourceDirectory := filepath.Join(tempDir, "site-source")
 				outputDirectory := filepath.Join(tempDir, "rendered-site")
 				writeTestSiteSource(subTest, sourceDirectory)
@@ -635,7 +615,7 @@ func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
 		{
 			name: "output stat failure",
 			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
-				configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example")
+				configPath := filepath.Join(tempDir, "missing-backend-config.yml")
 				sourceDirectory := filepath.Join(tempDir, "site-source")
 				outputParentFile := filepath.Join(tempDir, "output-parent-file")
 				writeTestSiteSource(subTest, sourceDirectory)
@@ -649,42 +629,12 @@ func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
 		{
 			name: "output inside source",
 			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
-				configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example")
+				configPath := filepath.Join(tempDir, "missing-backend-config.yml")
 				sourceDirectory := filepath.Join(tempDir, "site-source")
 				writeTestSiteSource(subTest, sourceDirectory)
 				return configPath, sourceDirectory, filepath.Join(sourceDirectory, "rendered-site")
 			},
 			expectedError: "is inside source",
-		},
-		{
-			name: "public origin without host",
-			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
-				configPath := writeRenderableSiteConfig(subTest, tempDir, "llm-proxy.example")
-				sourceDirectory := filepath.Join(tempDir, "site-source")
-				writeTestSiteSource(subTest, sourceDirectory)
-				return configPath, sourceDirectory, filepath.Join(tempDir, "rendered-site")
-			},
-			expectedError: "has no host",
-		},
-		{
-			name: "public origin with port",
-			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
-				configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example:4179")
-				sourceDirectory := filepath.Join(tempDir, "site-source")
-				writeTestSiteSource(subTest, sourceDirectory)
-				return configPath, sourceDirectory, filepath.Join(tempDir, "rendered-site")
-			},
-			expectedError: "must not include a port",
-		},
-		{
-			name: "malformed public origin",
-			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
-				configPath := writeRenderableSiteConfig(subTest, tempDir, "%")
-				sourceDirectory := filepath.Join(tempDir, "site-source")
-				writeTestSiteSource(subTest, sourceDirectory)
-				return configPath, sourceDirectory, filepath.Join(tempDir, "rendered-site")
-			},
-			expectedError: "invalid URL escape",
 		},
 	}
 
@@ -763,25 +713,13 @@ func TestRootCommandRejectsSiteRenderInjectedFilesystemFailures(t *testing.T) {
 			expectedError: "copy failed",
 		},
 		{
-			name: "write failure",
+			name: "missing CNAME",
 			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
-				siteWriteFile = func(outputPath string, outputContent []byte, fileMode os.FileMode) error {
-					return errors.New("write failed")
+				if removeError := os.Remove(filepath.Join(sourceDirectory, siteCNAMEFileName)); removeError != nil {
+					subTest.Fatalf("remove CNAME: %v", removeError)
 				}
 			},
-			expectedError: "write failed",
-		},
-		{
-			name: "cname write failure",
-			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
-				siteWriteFile = func(outputPath string, outputContent []byte, fileMode os.FileMode) error {
-					if filepath.Base(outputPath) == siteCNAMEFileName {
-						return errors.New("cname write failed")
-					}
-					return os.WriteFile(outputPath, outputContent, fileMode)
-				}
-			},
-			expectedError: "cname write failed",
+			expectedError: "CNAME",
 		},
 		{
 			name: "index read failure",
@@ -805,7 +743,7 @@ func TestRootCommandRejectsSiteRenderInjectedFilesystemFailures(t *testing.T) {
 			name: "stale runtime config removal failure",
 			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
 				siteRemove = func(rawPath string) error {
-					if filepath.Base(rawPath) == "llm-proxy-config.json" {
+					if filepath.Base(rawPath) == siteLegacyRuntimeConfig {
 						return errors.New("runtime remove failed")
 					}
 					return nil
@@ -818,7 +756,7 @@ func TestRootCommandRejectsSiteRenderInjectedFilesystemFailures(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
 			tempDir := subTest.TempDir()
-			configPath := writeRenderableSiteConfig(subTest, tempDir, "https://llm-proxy.example")
+			configPath := filepath.Join(tempDir, "missing-backend-config.yml")
 			sourceDirectory := filepath.Join(tempDir, "site-source")
 			outputDirectory := filepath.Join(tempDir, "rendered-site")
 			writeTestSiteSource(subTest, sourceDirectory)
@@ -834,20 +772,40 @@ func TestRootCommandRejectsSiteRenderInjectedFilesystemFailures(t *testing.T) {
 	}
 }
 
-func TestRootCommandRejectsSiteRenderIndexWithoutConfigPlaceholder(t *testing.T) {
-	tempDir := t.TempDir()
-	configPath := writeRenderableSiteConfig(t, tempDir, "https://llm-proxy.example")
-	sourceDirectory := filepath.Join(tempDir, "site-source")
-	outputDirectory := filepath.Join(tempDir, "rendered-site")
-	writeTestSiteSource(t, sourceDirectory)
-	if writeError := os.WriteFile(filepath.Join(sourceDirectory, "index.html"), []byte("<!doctype html>\n"), 0600); writeError != nil {
-		t.Fatalf("write placeholder-free index.html: %v", writeError)
+func TestRootCommandRejectsSiteRenderIndexWithStaticConfigURL(t *testing.T) {
+	testCases := []struct {
+		name          string
+		indexHTML     string
+		expectedError string
+	}{
+		{
+			name:          "retired placeholder",
+			indexHTML:     `<!doctype html><mpr-header data-config-url="` + siteConfigURLPlaceholder + `"></mpr-header>`,
+			expectedError: siteConfigURLPlaceholder,
+		},
+		{
+			name:          "static config url",
+			indexHTML:     `<!doctype html><mpr-header data-config-url="https://llm-proxy-api.example/config-ui.yaml"></mpr-header>`,
+			expectedError: siteConfigURLAttribute,
+		},
 	}
-	withServeProxy(t, failingServeProxy(t))
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			tempDir := subTest.TempDir()
+			configPath := filepath.Join(tempDir, "missing-backend-config.yml")
+			sourceDirectory := filepath.Join(tempDir, "site-source")
+			outputDirectory := filepath.Join(tempDir, "rendered-site")
+			writeTestSiteSource(subTest, sourceDirectory)
+			if writeError := os.WriteFile(filepath.Join(sourceDirectory, "index.html"), []byte(testCase.indexHTML+"\n"), 0600); writeError != nil {
+				subTest.Fatalf("write index.html: %v", writeError)
+			}
+			withServeProxy(subTest, failingServeProxy(subTest))
 
-	executeError := executeRootCommand(t, "--config", configPath, "--site-source", sourceDirectory, "--render-site-output", outputDirectory)
-	if executeError == nil || !strings.Contains(executeError.Error(), "missing "+siteConfigURLPlaceholder) {
-		t.Fatalf("error=%v want missing site config URL placeholder", executeError)
+			executeError := executeRootCommand(subTest, "--config", configPath, "--site-source", sourceDirectory, "--render-site-output", outputDirectory)
+			if executeError == nil || !strings.Contains(executeError.Error(), testCase.expectedError) {
+				subTest.Fatalf("error=%v want contains %q", executeError, testCase.expectedError)
+			}
+		})
 	}
 }
 
@@ -1534,8 +1492,6 @@ func withSiteRendererDependencies(t *testing.T) {
 	originalSiteReadFile := siteReadFile
 	originalSiteRemove := siteRemove
 	originalSiteStat := siteStat
-	originalSiteURLParse := siteURLParse
-	originalSiteWriteFile := siteWriteFile
 	t.Cleanup(func() {
 		siteCopyFS = originalSiteCopyFS
 		sitePathAbs = originalSitePathAbs
@@ -1543,8 +1499,6 @@ func withSiteRendererDependencies(t *testing.T) {
 		siteReadFile = originalSiteReadFile
 		siteRemove = originalSiteRemove
 		siteStat = originalSiteStat
-		siteURLParse = originalSiteURLParse
-		siteWriteFile = originalSiteWriteFile
 	})
 }
 
@@ -1565,44 +1519,18 @@ func writeTestDotEnv(t *testing.T, tempDir string, dotEnvContent string) {
 	}
 }
 
-func writeRenderableSiteConfig(t *testing.T, tempDir string, publicOrigin string) string {
-	t.Helper()
-	return writeTestConfig(t, tempDir, `
-management:
-  enabled: true
-  public_origin: "`+publicOrigin+`"
-  ui_description: "LLM Proxy Test"
-  ui_origins:
-    - "https://llm-proxy.example"
-  tauth_url: "https://tauth.example"
-  tauth_tenant_id: "llm-proxy"
-  google_client_id: "google-client-id"
-  login_path: "/auth/google"
-  logout_path: "/auth/logout"
-  nonce_path: "/auth/nonce"
-  jwt_signing_key: "tauth-signing-key"
-  jwt_issuer: "tauth"
-  session_cookie_name: "llm_proxy_session"
-  database_dialect: "sqlite"
-  database_dsn: "management.sqlite"
-  provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
-  management_api_origin: "https://llm-proxy-api.example"
-  proxy_origin: "https://llm-proxy-api.example"
-tenants:
-  - id: default
-    secret: "sekret"
-`+completeLiteralProvidersYAML())
-}
-
 func writeTestSiteSource(t *testing.T, sourceDirectory string) {
 	t.Helper()
 	if mkdirError := os.MkdirAll(filepath.Join(sourceDirectory, "assets"), 0700); mkdirError != nil {
 		t.Fatalf("create test site source: %v", mkdirError)
 	}
 	if writeError := os.WriteFile(filepath.Join(sourceDirectory, "index.html"), []byte(`<!doctype html>
-<mpr-header data-config-url="`+siteConfigURLPlaceholder+`"></mpr-header>
+<mpr-header></mpr-header>
 `), 0600); writeError != nil {
 		t.Fatalf("write index.html: %v", writeError)
+	}
+	if writeError := os.WriteFile(filepath.Join(sourceDirectory, siteCNAMEFileName), []byte("llm-proxy.mprlab.com\n"), 0600); writeError != nil {
+		t.Fatalf("write CNAME: %v", writeError)
 	}
 	if writeError := os.WriteFile(filepath.Join(sourceDirectory, "assets", "app.js"), []byte("export {};\n"), 0600); writeError != nil {
 		t.Fatalf("write app.js: %v", writeError)

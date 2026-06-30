@@ -6,9 +6,10 @@ usage() {
 Usage:
   scripts/deploy.sh [options]
 
-Deploys llm-proxy through mprlab-gateway after verifying the release image has
-been published. llm-proxy is gateway-colocated, so the default gateway target is
-deploy-llm-proxy-backend.
+Deploys llm-proxy after verifying the release image has been published. The
+static GitHub Pages branch is rendered and pushed without GitHub Actions, then
+the backend deploy runs through mprlab-gateway. llm-proxy is gateway-colocated,
+so the default gateway target is deploy-llm-proxy-backend.
 
 Options:
   --gateway-dir <path>  Gateway checkout. Default: $GATEWAY_DIR or sibling ../mprlab-gateway
@@ -17,6 +18,9 @@ Options:
   --tag <value>         Release tag. Default: v* tag pointing at HEAD
   --skip-ci             Skip the local make ci deployment gate
   --skip-image-verify   Skip release/latest image digest verification
+  --skip-pages          Skip GitHub Pages branch publishing
+  --pages-branch <value> Pages branch to publish. Default: $PAGES_BRANCH or gh-pages
+  --pages-domain <value> Pages custom domain. Default: $PAGES_DOMAIN or llm-proxy.mprlab.com
   --skip-gateway        Skip gateway deployment
   --help                Show this help text
 
@@ -55,6 +59,9 @@ TAG="$(env_or_default DEPLOY_TAG "")"
 SKIP_CI="false"
 SKIP_IMAGE_VERIFY="false"
 SKIP_GATEWAY="false"
+SKIP_PAGES="$(env_or_default DEPLOY_SKIP_PAGES false)"
+PAGES_BRANCH="$(env_or_default PAGES_BRANCH gh-pages)"
+PAGES_DOMAIN="$(env_or_default PAGES_DOMAIN llm-proxy.mprlab.com)"
 DEPLOY_BRANCH="$(env_or_default DEPLOY_BRANCH master)"
 DEPLOY_REMOTE="$(env_or_default DEPLOY_REMOTE origin)"
 LLM_PROXY_CI_TIMEOUT_SECONDS_EFFECTIVE="$(env_or_default LLM_PROXY_CI_TIMEOUT_SECONDS 350)"
@@ -102,6 +109,20 @@ while [[ $# -gt 0 ]]; do
     --skip-image-verify)
       SKIP_IMAGE_VERIFY="true"
       shift
+      ;;
+    --skip-pages)
+      SKIP_PAGES="true"
+      shift
+      ;;
+    --pages-branch)
+      [[ $# -ge 2 ]] || { echo "error: --pages-branch requires a value" >&2; exit 1; }
+      PAGES_BRANCH="$2"
+      shift 2
+      ;;
+    --pages-domain)
+      [[ $# -ge 2 ]] || { echo "error: --pages-domain requires a value" >&2; exit 1; }
+      PAGES_DOMAIN="$2"
+      shift 2
       ;;
     --skip-gateway)
       SKIP_GATEWAY="true"
@@ -192,6 +213,11 @@ if [[ "${SKIP_IMAGE_VERIFY}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then
     echo "error: ${IMAGE_REPOSITORY}:latest digest ${latest_digest} does not match ${release_tag} digest ${release_digest}; run make publish first" >&2
     exit 1
   fi
+fi
+
+if [[ "${SKIP_PAGES}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then
+  echo "==> [deploy] Publishing GitHub Pages branch ${PAGES_BRANCH}"
+  ./scripts/publish_pages.sh --remote "${DEPLOY_REMOTE}" --branch "${PAGES_BRANCH}" --domain "${PAGES_DOMAIN}"
 fi
 
 if [[ "${SKIP_GATEWAY}" != "true" ]]; then

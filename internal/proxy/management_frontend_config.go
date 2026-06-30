@@ -51,7 +51,3 @@ func RenderManagementConfigUI(configuration ManagementConfiguration) string {
 	builder.WriteString("\n")
 	return builder.String()
 }
-
-func ManagementConfigUIURL(managementAPIOrigin string) string {
-	return strings.TrimRight(managementAPIOrigin, "/") + ManagementConfigUIPath
-}
