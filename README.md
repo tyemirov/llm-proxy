@@ -78,8 +78,7 @@ management:
     - "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
     - "${LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN}"
     - "${LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN}"
-  admin_emails:
-    - "${LLM_PROXY_MANAGEMENT_ADMIN_EMAIL}"
+  admin_emails: ${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}
   tauth_url: "${LLM_PROXY_MANAGEMENT_TAUTH_URL}"
   tauth_tenant_id: "${LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID}"
   google_client_id: "${LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID}"
@@ -408,7 +407,7 @@ Required hosted values are profile-specific:
 | `management.public_origin` | Static frontend origin allowed for credentialed management CORS, for example `https://llm-proxy.mprlab.com`. |
 | `management.ui_description` | Browser-facing MPR UI environment description. |
 | `management.ui_origins` | Browser-facing MPR UI allowed origins served from `/config-ui.yaml`. |
-| `management.admin_emails` | Exact administrator email addresses. In public config, populate this with environment placeholders such as `${LLM_PROXY_MANAGEMENT_ADMIN_EMAIL}` so personal admin addresses stay out of the repository. |
+| `management.admin_emails` | Exact administrator email addresses. In public config, populate this from `${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` as a YAML flow sequence such as `["admin@example.invalid","ops@example.invalid"]` so personal admin addresses stay out of the repository. |
 | `management.tauth_url` | Browser-facing TAuth API origin served from `/config-ui.yaml`. |
 | `management.tauth_tenant_id` | TAuth tenant id that issues accepted sessions. |
 | `management.google_client_id` | Browser-facing Google OAuth web client id for the `llm-proxy` TAuth tenant. |
@@ -455,9 +454,10 @@ the `Settings` menu item is inserted before `Sign out` through the shared
 `<mpr-user>` menu contract. The modal contains client access, generated secret,
 routing defaults, request examples, and provider key management.
 
-Administrators are configured only through `management.admin_emails`; use
-environment placeholders in public config files and define the real values in
-the runtime environment or ignored `configs/.env`. When the validated TAuth
+Administrators are configured only through `management.admin_emails`; use the
+plural `${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` placeholder in public config files
+and define the real value as a YAML flow sequence in the runtime environment or
+ignored `configs/.env`. When the validated TAuth
 session email matches that list, the profile response includes
 `user.is_admin: true`, the shared avatar menu gets an `Admin` item, and
 `GET /api/management/admin/users` returns all managed users with tenant facts
@@ -512,7 +512,8 @@ Then configure GitHub Pages for this repository:
    browser-facing Google OAuth client id. These public values are not GitHub
    repository variables.
 4. Configure real backend deployment secrets outside the Pages job:
-   `SERVICE_SECRET`, `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`, and
+   `SERVICE_SECRET`, `LLM_PROXY_MANAGEMENT_ADMIN_EMAILS`,
+   `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`,
    `LLM_PROXY_MANAGEMENT_DATABASE_DSN`,
    `LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY`.
 5. The Pages workflow runs the Go CLI with `--config configs/config.yml` and
