@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const siteRoot = path.join(repoRoot, "site");
 const configPath = "/config-ui.yaml";
-const configPlaceholder = "__LLM_PROXY_CONFIG_URL__";
 const faviconPath = "/assets/llm-proxy/img/favicon.svg";
 const appIconPath = "/assets/llm-proxy/img/llm-proxy-icon.svg";
 const httpOK = 200;
@@ -55,6 +54,8 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain('<meta name="theme-color" content="#0076c3">');
   expect(html).toContain(`<link rel="icon" type="image/svg+xml" href="${faviconPath}">`);
   expect(html).toContain(`<link rel="apple-touch-icon" href="${appIconPath}">`);
+  expect(html).not.toContain("data-config-url");
+  expect(html).not.toContain(configPath);
 
   const faviconResponse = await request.get(`${baseURL}${faviconPath}`);
   expect(faviconResponse.status()).toBe(httpOK);
@@ -245,7 +246,7 @@ async function staticSiteHandler(request, response) {
   if (path.basename(filePath) === "index.html") {
     const html = await readFile(filePath, "utf8");
     response.writeHead(200, { "Content-Type": mimeTypes[".html"] });
-    response.end(html.replace(configPlaceholder, `${baseURL}${configPath}`));
+    response.end(html);
     return;
   }
 
