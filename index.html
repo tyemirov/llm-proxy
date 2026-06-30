@@ -300,26 +300,46 @@
                         <h2 x-text="copy.providersTitle"></h2>
                       </div>
                     </header>
-                    <provider-list>
-                      <template x-for="provider in providers" x-bind:key="provider.id">
-                        <provider-key-card>
-                          <header>
-                            <div>
-                              <h3 x-text="provider.label"></h3>
-                              <p x-text="provider.has_key ? provider.masked_key : copy.providerMissing"></p>
-                            </div>
-                            <button type="button" class="icon-only danger" x-on:click="removeProviderKey(provider)" x-bind:disabled="busy || !provider.has_key" x-bind:title="copy.removeProviderKey" x-bind:aria-label="copy.removeProviderKey">x</button>
-                          </header>
-                          <form class="provider-key-form" x-on:submit.prevent="saveProviderKey(provider)">
+                    <provider-editor>
+                      <form class="provider-settings-form" x-on:submit.prevent="saveSelectedProviderKey()">
+                        <label>
+                          <span x-text="copy.providerSelector"></span>
+                          <select x-model="selectedProviderID">
+                            <template x-for="provider in providers" x-bind:key="provider.id">
+                              <option x-bind:value="provider.id" x-text="provider.label"></option>
+                            </template>
+                          </select>
+                        </label>
+                        <template x-if="selectedProvider">
+                          <provider-settings-fields>
+                            <provider-status>
+                              <div>
+                                <strong x-text="selectedProvider.label"></strong>
+                                <p x-text="selectedProvider.has_key ? selectedProvider.masked_key : copy.providerMissing"></p>
+                              </div>
+                              <button type="button" class="icon-only danger" x-on:click="removeSelectedProviderKey()" x-bind:disabled="busy || !selectedProvider.has_key" x-bind:title="copy.removeProviderKey" x-bind:aria-label="copy.removeProviderKey">x</button>
+                            </provider-status>
                             <label>
-                              <span x-text="provider.label + copy.providerKeySuffix"></span>
-                              <input type="password" autocomplete="off" x-model="providerInputs[provider.id]">
+                              <span x-text="selectedProvider.label + copy.providerKeySuffix"></span>
+                              <input type="password" autocomplete="off" x-model="providerInputs[selectedProvider.id]">
                             </label>
-                            <button type="submit" x-bind:disabled="busy" x-text="provider.has_key ? copy.updateProviderKey : copy.saveProviderKey"></button>
-                          </form>
-                        </provider-key-card>
-                      </template>
-                    </provider-list>
+                            <label>
+                              <span x-text="copy.providerTextModel"></span>
+                              <select x-model="selectedProvider.text_model">
+                                <template x-for="model in selectedProvider.text_models" x-bind:key="model">
+                                  <option x-bind:value="model" x-text="model"></option>
+                                </template>
+                              </select>
+                            </label>
+                            <label class="provider-system-prompt">
+                              <span x-text="copy.providerSystemPrompt"></span>
+                              <textarea rows="3" x-model="selectedProvider.system_prompt"></textarea>
+                            </label>
+                            <button type="submit" x-bind:disabled="busy" x-text="selectedProvider.has_key ? copy.updateProviderKey : copy.saveProviderKey"></button>
+                          </provider-settings-fields>
+                        </template>
+                      </form>
+                    </provider-editor>
                   </settings-section>
                 </settings-body>
               </settings-modal>

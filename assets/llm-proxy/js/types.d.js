@@ -17,6 +17,8 @@
  *   aliases: string[],
  *   has_key: boolean,
  *   masked_key?: string,
+ *   text_model: string,
+ *   system_prompt: string,
  *   text_default_model: string,
  *   text_models: string[],
  *   supports_dictation: boolean,
