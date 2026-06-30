@@ -39,16 +39,30 @@ func TestManagedTenantStoreInternalEdges(t *testing.T) {
 	if profileError != nil || snapshot.userID != principal.userID {
 		t.Fatalf("profile snapshot=%+v error=%v", snapshot, profileError)
 	}
-	keySnapshot, saveKeyError := inMemoryStore.saveProviderKey(principal, newProviderID("openai"), "sk-openai")
+	keySnapshot, saveKeyError := inMemoryStore.saveProviderKey(principal, newProviderID("openai"), "sk-openai", ModelNameGPT41, "provider system")
 	if saveKeyError != nil {
 		t.Fatalf("save provider key error=%v", saveKeyError)
 	}
 	if keySnapshot.providerAPIKeys[newProviderID("openai")] != "sk-openai" {
 		t.Fatalf("snapshot provider keys=%+v", keySnapshot.providerAPIKeys)
 	}
+	if keySnapshot.providerSettings[newProviderID("openai")].textModel != ModelNameGPT41 || keySnapshot.providerSettings[newProviderID("openai")].systemPrompt != "provider system" {
+		t.Fatalf("snapshot provider settings=%+v", keySnapshot.providerSettings)
+	}
 	keyRecord := inMemoryDatabase.records[principal.userID].ProviderAPIKeys[0]
 	if keyRecord.APIKey != "" || !strings.HasPrefix(keyRecord.EncryptedAPIKey, managedProviderKeyCiphertextPrefix) || strings.Contains(keyRecord.EncryptedAPIKey, "sk-openai") {
 		t.Fatalf("provider key record=%+v", keyRecord)
+	}
+	updatedKeySnapshot, updateKeyError := inMemoryStore.saveProviderKey(principal, newProviderID("openai"), "", ModelNameGPT41, "updated provider system")
+	if updateKeyError != nil {
+		t.Fatalf("update provider settings error=%v", updateKeyError)
+	}
+	if updatedKeySnapshot.providerSettings[newProviderID("openai")].systemPrompt != "updated provider system" {
+		t.Fatalf("updated provider settings=%+v", updatedKeySnapshot.providerSettings)
+	}
+	updatedKeyRecord := inMemoryDatabase.records[principal.userID].ProviderAPIKeys[0]
+	if updatedKeyRecord.EncryptedAPIKey != keyRecord.EncryptedAPIKey {
+		t.Fatalf("updated provider key re-encrypted or changed: before=%s after=%s", keyRecord.EncryptedAPIKey, updatedKeyRecord.EncryptedAPIKey)
 	}
 	for _, invalidRecord := range []managedProviderAPIKeyRecord{
 		{UserID: principal.userID, ProviderID: "openai"},
@@ -78,6 +92,9 @@ func TestManagedTenantStoreInternalEdges(t *testing.T) {
 	if _, brokenTenantError := inMemoryStore.tenant(brokenProviderRecord, brokenSecretDigest); !errors.Is(brokenTenantError, errManagedProviderKeyDecryption) {
 		t.Fatalf("broken tenant error=%v want %v", brokenTenantError, errManagedProviderKeyDecryption)
 	}
+	if _, providerMapError := inMemoryStore.providerAPIKeyMap([]managedProviderAPIKeyRecord{{UserID: "broken-provider-user", ProviderID: "openai", EncryptedAPIKey: "bad"}}); !errors.Is(providerMapError, errManagedProviderKeyDecryption) {
+		t.Fatalf("provider map error=%v want %v", providerMapError, errManagedProviderKeyDecryption)
+	}
 	if _, authenticated := inMemoryStore.authenticate(" "); authenticated {
 		t.Fatalf("blank generated secret authenticated")
 	}
@@ -88,10 +105,10 @@ func TestManagedTenantStoreInternalEdges(t *testing.T) {
 	if !errors.Is(generationError, errManagedSecretGeneration) {
 		t.Fatalf("generation error=%v want %v", generationError, errManagedSecretGeneration)
 	}
-	if _, encryptionError := readErrorStore.saveProviderKey(principal, newProviderID("openai"), "sk-openai"); !errors.Is(encryptionError, errManagedProviderKeyEncryption) {
+	if _, encryptionError := readErrorStore.saveProviderKey(principal, newProviderID("openai"), "sk-openai", ModelNameGPT41, ""); !errors.Is(encryptionError, errManagedProviderKeyEncryption) {
 		t.Fatalf("provider key encryption error=%v want %v", encryptionError, errManagedProviderKeyEncryption)
 	}
-	if _, invalidProviderKeyError := readErrorStore.saveProviderKey(principal, newProviderID("openai"), " "); !errors.Is(invalidProviderKeyError, errManagedProviderKeyInvalid) {
+	if _, invalidProviderKeyError := readErrorStore.saveProviderKey(principal, newProviderID("openai"), " ", ModelNameGPT41, ""); !errors.Is(invalidProviderKeyError, errManagedProviderKeyInvalid) {
 		t.Fatalf("provider key invalid error=%v want %v", invalidProviderKeyError, errManagedProviderKeyInvalid)
 	}
 	if _, invalidProviderKeyError := internalManagedProviderKeyCipher().encrypt(randReaderForProviderKeyTests(), principal.userID, "openai", " "); !errors.Is(invalidProviderKeyError, errManagedProviderKeyInvalid) {
@@ -128,11 +145,37 @@ func TestManagedTenantStoreInternalEdges(t *testing.T) {
 	if legacySnapshotError != nil || legacySnapshot.providerAPIKeys[newProviderID("openai")] != "sk-legacy" {
 		t.Fatalf("legacy snapshot=%+v error=%v", legacySnapshot, legacySnapshotError)
 	}
+	if migrationError := legacyStore.migrateProviderTextSettings(internalManagementProviderRegistry()); migrationError != nil {
+		t.Fatalf("provider text settings migration error=%v", migrationError)
+	}
+	migratedSettingsRecord := legacyDatabase.records[legacyRecord.UserID].ProviderAPIKeys[0]
+	if migratedSettingsRecord.TextModel != ModelNameGPT41 {
+		t.Fatalf("migrated text model=%q", migratedSettingsRecord.TextModel)
+	}
+	migrationSkipDatabase := newFakeManagedTenantDatabase()
+	migrationSkipRecord := internalManagedTenantRecord("migration-skip-user", "", fixedTime)
+	migrationSkipRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{
+		{UserID: migrationSkipRecord.UserID, ProviderID: "openai", EncryptedAPIKey: migratedSettingsRecord.EncryptedAPIKey, TextModel: ModelNameGPT55},
+		{UserID: migrationSkipRecord.UserID, ProviderID: "unknown", EncryptedAPIKey: migratedSettingsRecord.EncryptedAPIKey},
+	}
+	migrationSkipDatabase.records[migrationSkipRecord.UserID] = migrationSkipRecord
+	if migrationError := newManagedTenantStoreWithDatabase(migrationSkipDatabase).migrateProviderTextSettings(internalManagementProviderRegistry()); migrationError != nil {
+		t.Fatalf("provider text settings skip migration error=%v", migrationError)
+	}
+	skippedProviderKeys := migrationSkipDatabase.records[migrationSkipRecord.UserID].ProviderAPIKeys
+	if skippedProviderKeys[0].TextModel != ModelNameGPT55 || skippedProviderKeys[1].TextModel != "" {
+		t.Fatalf("skipped provider key records=%+v", skippedProviderKeys)
+	}
 
 	migrationQueryDatabase := newFakeManagedTenantDatabase()
 	migrationQueryDatabase.userQueryErrors = []error{errInternalTestDatabase}
 	if migrationError := newManagedTenantStoreWithDatabase(migrationQueryDatabase).migratePlaintextProviderKeys(); !errors.Is(migrationError, errManagedTenantStorePersist) {
 		t.Fatalf("provider key migration query error=%v want %v", migrationError, errManagedTenantStorePersist)
+	}
+	providerSettingsQueryDatabase := newFakeManagedTenantDatabase()
+	providerSettingsQueryDatabase.userQueryErrors = []error{errInternalTestDatabase}
+	if migrationError := newManagedTenantStoreWithDatabase(providerSettingsQueryDatabase).migrateProviderTextSettings(internalManagementProviderRegistry()); !errors.Is(migrationError, errManagedTenantStorePersist) {
+		t.Fatalf("provider settings migration query error=%v want %v", migrationError, errManagedTenantStorePersist)
 	}
 
 	migrationSaveDatabase := newFakeManagedTenantDatabase()
@@ -142,6 +185,9 @@ func TestManagedTenantStoreInternalEdges(t *testing.T) {
 	migrationSaveDatabase.saveProviderKeyError = errInternalTestDatabase
 	if migrationError := newManagedTenantStoreWithDatabase(migrationSaveDatabase).migratePlaintextProviderKeys(); !errors.Is(migrationError, errManagedTenantStorePersist) {
 		t.Fatalf("provider key migration save error=%v want %v", migrationError, errManagedTenantStorePersist)
+	}
+	if migrationError := newManagedTenantStoreWithDatabase(migrationSaveDatabase).migrateProviderTextSettings(internalManagementProviderRegistry()); !errors.Is(migrationError, errManagedTenantStorePersist) {
+		t.Fatalf("provider settings migration save error=%v want %v", migrationError, errManagedTenantStorePersist)
 	}
 
 	migrationEncryptionDatabase := newFakeManagedTenantDatabase()
@@ -193,7 +239,7 @@ func TestManagedTenantStoreDatabaseErrorEdges(t *testing.T) {
 	saveProviderKeyErrorDatabase.records[principal.userID] = internalManagedTenantRecord(principal.userID, "", fixedTime)
 	saveProviderKeyErrorDatabase.saveProviderKeyError = errInternalTestDatabase
 	saveProviderKeyErrorStore := newManagedTenantStoreWithDatabase(saveProviderKeyErrorDatabase)
-	if _, saveError := saveProviderKeyErrorStore.saveProviderKey(principal, newProviderID("openai"), "sk-openai"); !errors.Is(saveError, errManagedTenantStorePersist) {
+	if _, saveError := saveProviderKeyErrorStore.saveProviderKey(principal, newProviderID("openai"), "sk-openai", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
 		t.Fatalf("provider key save error=%v want %v", saveError, errManagedTenantStorePersist)
 	}
 
@@ -201,14 +247,14 @@ func TestManagedTenantStoreDatabaseErrorEdges(t *testing.T) {
 	saveProviderKeyTenantErrorDatabase.records[principal.userID] = internalManagedTenantRecord(principal.userID, "", fixedTime)
 	saveProviderKeyTenantErrorDatabase.saveTenantErrors = []error{nil, errInternalTestDatabase}
 	saveProviderKeyTenantErrorStore := newManagedTenantStoreWithDatabase(saveProviderKeyTenantErrorDatabase)
-	if _, saveError := saveProviderKeyTenantErrorStore.saveProviderKey(principal, newProviderID("openai"), "sk-openai"); !errors.Is(saveError, errManagedTenantStorePersist) {
+	if _, saveError := saveProviderKeyTenantErrorStore.saveProviderKey(principal, newProviderID("openai"), "sk-openai", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
 		t.Fatalf("provider key tenant save error=%v want %v", saveError, errManagedTenantStorePersist)
 	}
 
 	saveProviderKeyRecordErrorDatabase := newFakeManagedTenantDatabase()
 	saveProviderKeyRecordErrorDatabase.userQueryErrors = []error{errInternalTestDatabase}
 	saveProviderKeyRecordErrorStore := newManagedTenantStoreWithDatabase(saveProviderKeyRecordErrorDatabase)
-	if _, saveError := saveProviderKeyRecordErrorStore.saveProviderKey(principal, newProviderID("openai"), "sk-openai"); !errors.Is(saveError, errManagedTenantStorePersist) {
+	if _, saveError := saveProviderKeyRecordErrorStore.saveProviderKey(principal, newProviderID("openai"), "sk-openai", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
 		t.Fatalf("provider key record error=%v want %v", saveError, errManagedTenantStorePersist)
 	}
 
@@ -633,7 +679,7 @@ func TestManagedTenantGORMDatabaseEncryptsProviderKeysAtRest(t *testing.T) {
 		t.Fatalf("new managed tenant store: %v", storeError)
 	}
 	principal := managementPrincipal{userID: "tauth-gorm-encryption-user"}
-	if _, saveError := store.saveProviderKey(principal, newProviderID("openai"), "sk-openai"); saveError != nil {
+	if _, saveError := store.saveProviderKey(principal, newProviderID("openai"), "sk-openai", ModelNameGPT41, "provider system"); saveError != nil {
 		t.Fatalf("save provider key: %v", saveError)
 	}
 	record, recordError := store.database.tenantByUserID(principal.userID)
@@ -646,6 +692,9 @@ func TestManagedTenantGORMDatabaseEncryptsProviderKeysAtRest(t *testing.T) {
 	providerKeyRecord := record.ProviderAPIKeys[0]
 	if providerKeyRecord.APIKey != "" || !strings.HasPrefix(providerKeyRecord.EncryptedAPIKey, managedProviderKeyCiphertextPrefix) || strings.Contains(providerKeyRecord.EncryptedAPIKey, "sk-openai") {
 		t.Fatalf("provider key record=%+v", providerKeyRecord)
+	}
+	if providerKeyRecord.TextModel != ModelNameGPT41 || providerKeyRecord.SystemPrompt != "provider system" {
+		t.Fatalf("provider key settings=%+v", providerKeyRecord)
 	}
 	snapshot, snapshotError := store.profile(principal)
 	if snapshotError != nil || snapshot.providerAPIKeys[newProviderID("openai")] != "sk-openai" {
@@ -740,6 +789,62 @@ func TestBuildRouterReturnsStaticConfigMigrationError(t *testing.T) {
 	})
 	if !errors.Is(buildError, errManagedTenantStorePersist) {
 		t.Fatalf("BuildRouter error=%v want %v", buildError, errManagedTenantStorePersist)
+	}
+}
+
+func TestBuildRouterReturnsProviderTextSettingsMigrationError(t *testing.T) {
+	failingDatabase := newFakeManagedTenantDatabase()
+	failingDatabase.userQueryErrors = []error{errInternalTestDatabase}
+	_, buildError := buildRouter(internalManagementRouterConfiguration(), zap.NewNop().Sugar(), func(ManagementConfiguration) (*managedTenantStore, error) {
+		return newManagedTenantStoreWithDatabase(failingDatabase), nil
+	})
+	if !errors.Is(buildError, errManagedTenantStorePersist) {
+		t.Fatalf("BuildRouter error=%v want %v", buildError, errManagedTenantStorePersist)
+	}
+}
+
+func TestTextRequestDefaultsForProviderInternalEdges(t *testing.T) {
+	providers := newProviderRegistry(Configuration{
+		OpenAIKey:      "sk-openai",
+		DeepSeekKey:    "sk-deepseek",
+		ProviderModels: internalProviderModelCatalogs(),
+	})
+	staticTenant := tenant{
+		defaults: newTenantDefaults(TenantDefaults{
+			Provider:     ProviderNameOpenAI,
+			Model:        ModelNameGPT41,
+			SystemPrompt: "tenant system",
+		}),
+	}
+	staticExplicitDefaults := textRequestDefaultsForProvider(ProviderNameDeepSeek, staticTenant, providers)
+	if staticExplicitDefaults.model != "" || staticExplicitDefaults.systemPrompt != "tenant system" {
+		t.Fatalf("static explicit defaults=%+v", staticExplicitDefaults)
+	}
+
+	managedTenant := staticTenant
+	managedTenant.managed = true
+	managedNoSettingsDefaults := textRequestDefaultsForProvider(ProviderNameOpenAI, managedTenant, providers)
+	if managedNoSettingsDefaults.model != "" || managedNoSettingsDefaults.systemPrompt != "tenant system" {
+		t.Fatalf("managed no-settings defaults=%+v", managedNoSettingsDefaults)
+	}
+	managedUnknownProviderDefaults := textRequestDefaultsForProvider("unknown-provider", managedTenant, providers)
+	if managedUnknownProviderDefaults.model != "" || managedUnknownProviderDefaults.systemPrompt != "tenant system" {
+		t.Fatalf("managed unknown-provider defaults=%+v", managedUnknownProviderDefaults)
+	}
+
+	managedTenant.providerSettings = map[providerID]managedProviderSettings{
+		newProviderID(ProviderNameOpenAI): {
+			textModel:    ModelNameGPT55,
+			systemPrompt: "saved system",
+		},
+	}
+	managedSavedOmittedDefaults := textRequestDefaultsForProvider("", managedTenant, providers)
+	if managedSavedOmittedDefaults.model != ModelNameGPT41 || managedSavedOmittedDefaults.systemPrompt != "tenant system" {
+		t.Fatalf("managed saved omitted defaults=%+v", managedSavedOmittedDefaults)
+	}
+	managedSavedExplicitDefaults := textRequestDefaultsForProvider(ProviderNameOpenAI, managedTenant, providers)
+	if managedSavedExplicitDefaults.model != ModelNameGPT55 || managedSavedExplicitDefaults.systemPrompt != "saved system" {
+		t.Fatalf("managed saved explicit defaults=%+v", managedSavedExplicitDefaults)
 	}
 }
 
@@ -1196,6 +1301,7 @@ func internalManagedProviderKeyRecord(t *testing.T, userID string, providerIdent
 		UserID:          userID,
 		ProviderID:      providerIdentifier,
 		EncryptedAPIKey: encryptedAPIKey,
+		TextModel:       ModelNameGPT41,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}

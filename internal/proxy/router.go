@@ -108,6 +108,9 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		if migrationError := managedTenants.migrateStaticConfiguration(configuration); migrationError != nil {
 			return nil, migrationError
 		}
+		if migrationError := managedTenants.migrateProviderTextSettings(providers); migrationError != nil {
+			return nil, migrationError
+		}
 		runtimeStaticTenants = tenantRegistry{}
 	}
 	tenantAuthenticator := newTenantAuthenticator(runtimeStaticTenants, managedTenants)
@@ -144,7 +147,8 @@ func chatHandler(upstreamProviders *providerRouter, providers *providerRegistry,
 			return
 		}
 		validator := newModelValidator(providers.forTenant(requestTenant))
-		chatRequest, ok := chatRequestFromQuery(ginContext, requestTenant.defaults, validator, structuredLogger)
+		textDefaults := textRequestDefaultsForProvider(ginContext.Query(queryParameterProvider), requestTenant, providers)
+		chatRequest, ok := chatRequestFromQuery(ginContext, textDefaults, validator, structuredLogger)
 		if !ok {
 			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointText, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, constants.EmptyString, requestTenant.defaults), requestStart)
 			return
@@ -180,7 +184,8 @@ func chatJSONHandler(upstreamProviders *providerRouter, providers *providerRegis
 		}
 
 		validator := newModelValidator(providers.forTenant(requestTenant))
-		chatRequest, ok := chatRequestFromPayload(ginContext, payload, requestTenant.defaults, validator)
+		textDefaults := textRequestDefaultsForProvider(ginContext.Query(queryParameterProvider), requestTenant, providers)
+		chatRequest, ok := chatRequestFromPayload(ginContext, payload, textDefaults, validator)
 		if !ok {
 			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointText, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, payload.Model, requestTenant.defaults), requestStart)
 			return
@@ -217,7 +222,8 @@ func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerReg
 		}
 
 		validator := newModelValidator(providers.forTenant(requestTenant))
-		chatRequest, ok := chatRequestFromV2Payload(ginContext, payload, requestTenant.defaults, validator)
+		textDefaults := textRequestDefaultsForProvider(ginContext.Query(queryParameterProvider), requestTenant, providers)
+		chatRequest, ok := chatRequestFromV2Payload(ginContext, payload, textDefaults, validator)
 		if !ok {
 			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, payload.Model, requestTenant.defaults), requestStart)
 			return
@@ -226,7 +232,40 @@ func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerReg
 	}
 }
 
-func chatRequestFromQuery(ginContext *gin.Context, defaults tenantDefaults, validator *modelValidator, structuredLogger *zap.SugaredLogger) (chatRequestParameters, bool) {
+type textRequestDefaults struct {
+	provider     string
+	model        string
+	systemPrompt string
+}
+
+func textRequestDefaultsForProvider(rawProvider string, requestTenant tenant, providers *providerRegistry) textRequestDefaults {
+	providerExplicit := strings.TrimSpace(rawProvider) != constants.EmptyString
+	defaults := textRequestDefaults{
+		provider:     requestTenant.defaults.provider,
+		model:        requestTenant.defaults.model,
+		systemPrompt: requestTenant.defaults.systemPrompt,
+	}
+	if providerExplicit {
+		defaults.model = constants.EmptyString
+	}
+	if !requestTenant.managed || !providerExplicit {
+		return defaults
+	}
+	providerCandidate := strings.TrimSpace(rawProvider)
+	providerIdentifier, providerError := providers.canonicalProviderID(providerCandidate)
+	if providerError != nil {
+		return defaults
+	}
+	settings, hasSettings := requestTenant.providerSettings[providerIdentifier]
+	if !hasSettings {
+		return defaults
+	}
+	defaults.model = settings.textModel
+	defaults.systemPrompt = settings.systemPrompt
+	return defaults
+}
+
+func chatRequestFromQuery(ginContext *gin.Context, defaults textRequestDefaults, validator *modelValidator, structuredLogger *zap.SugaredLogger) (chatRequestParameters, bool) {
 	userPrompt := ginContext.Query(queryParameterPrompt)
 	systemPrompt := ginContext.Query(queryParameterSystemPrompt)
 	systemPromptVisibleInResponse := systemPrompt != constants.EmptyString
@@ -279,7 +318,7 @@ func chatRequestFromQuery(ginContext *gin.Context, defaults tenantDefaults, vali
 	}, true
 }
 
-func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload, defaults tenantDefaults, validator *modelValidator) (chatRequestParameters, bool) {
+func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload, defaults textRequestDefaults, validator *modelValidator) (chatRequestParameters, bool) {
 	hasPrompt := payload.Prompt != constants.EmptyString
 	hasMessages := payload.Messages != nil
 	if hasPrompt && hasMessages {
@@ -346,7 +385,7 @@ func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload,
 	}, true
 }
 
-func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayload, defaults tenantDefaults, validator *modelValidator) (chatRequestParameters, bool) {
+func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayload, defaults textRequestDefaults, validator *modelValidator) (chatRequestParameters, bool) {
 	if payload.Prompt != nil {
 		ginContext.String(http.StatusBadRequest, errorUnsupportedPromptParameter)
 		return chatRequestParameters{}, false
