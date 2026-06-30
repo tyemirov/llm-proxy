@@ -385,7 +385,7 @@ LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN=https://llm-proxy.mprlab.com
 LLM_PROXY_MANAGEMENT_UI_DESCRIPTION=LLM Proxy
 LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN=http://127.0.0.1:4179
 LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN=http://localhost:4179
-LLM_PROXY_MANAGEMENT_ADMIN_EMAIL=admin@example.invalid
+LLM_PROXY_MANAGEMENT_ADMIN_EMAILS=["admin@example.invalid","ops@example.invalid"]
 LLM_PROXY_MANAGEMENT_TAUTH_URL=https://tauth-api.mprlab.com
 LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID=llm-proxy
 LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID=925457785190-3frk7j3bsr3ucidtkcohrp2sl07e0paa.apps.googleusercontent.com
@@ -435,6 +435,11 @@ LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
 	}
 	if capturedConfiguration.Management.ProviderKeyEncryptionKey != "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=" {
 		t.Fatalf("provider key encryption key=%q", capturedConfiguration.Management.ProviderKeyEncryptionKey)
+	}
+	if len(capturedConfiguration.Management.AdminEmails) != 2 ||
+		capturedConfiguration.Management.AdminEmails[0] != "admin@example.invalid" ||
+		capturedConfiguration.Management.AdminEmails[1] != "ops@example.invalid" {
+		t.Fatalf("admin emails=%#v", capturedConfiguration.Management.AdminEmails)
 	}
 	if capturedConfiguration.Management.ManagementAPIOrigin != "https://llm-proxy-api.mprlab.com" || capturedConfiguration.Management.ProxyOrigin != "https://llm-proxy-api.mprlab.com" {
 		t.Fatalf("management api origins=%q %q", capturedConfiguration.Management.ManagementAPIOrigin, capturedConfiguration.Management.ProxyOrigin)
