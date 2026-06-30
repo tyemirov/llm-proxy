@@ -157,8 +157,8 @@ func TestCommandReadsEnvironmentAndStdin(t *testing.T) {
 		_, _ = responseWriter.Write([]byte("stdin-ok"))
 	}))
 	t.Cleanup(server.Close)
-	t.Setenv("LLM_PROXY_BASE_URL", server.URL)
-	t.Setenv("LLM_PROXY_SECRET", "env-secret")
+	t.Setenv(envNameBaseURL, server.URL)
+	t.Setenv(envNameSecret, "env-secret")
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -256,6 +256,9 @@ func TestCommandReadsPromptFileAndOptionalBodyFields(t *testing.T) {
 }
 
 func TestCommandRejectsInvalidInputs(t *testing.T) {
+	t.Setenv(envNameBaseURL, "")
+	t.Setenv(envNameSecret, "")
+
 	testCases := []struct {
 		name        string
 		arguments   []string
