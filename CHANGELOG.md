@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.25] - 2026-06-30
+
+### Changes
+- feat: update key management UI and provider routing documentation
+
 ## [v0.2.24] - 2026-06-30
 
 ### Changes
