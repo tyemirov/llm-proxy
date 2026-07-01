@@ -11,6 +11,18 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
 ## BugFixes
 
+- [x] [B019] (P2) Make management request examples copyable and provider-specific.
+  ### Summary
+  The Settings modal renders request examples as one inert snippet. Users need default examples and selected-provider examples as separate copyable commands so they can copy the exact public proxy request shape they intend to use.
+  ### Acceptance Criteria
+  1. Default text, v2, and dictation examples remain visible before a generated secret exists and use the documented `<generated-secret>` placeholder.
+  2. Each default example has its own copy action.
+  3. The Settings modal shows provider-specific text and v2 examples for the currently selected provider.
+  4. Provider-specific examples update when the selected provider changes.
+  5. Freshly generated secrets replace the placeholder across default and provider-specific examples.
+  6. Browser coverage proves the examples render and can be copied.
+  ### Resolution
+  The Settings modal now renders separate default text, default v2, default dictation, selected-provider text, and selected-provider v2 examples, plus selected-provider dictation when the provider supports `/dictate`. Each example has its own copy action, uses the configured proxy origin, uses `<generated-secret>` before secret creation, and updates to the freshly generated secret immediately after key generation. Provider-specific examples track the selected provider and selected provider text model. README and provider-routing docs describe the copyable default/provider examples contract. Validation passed with `timeout -k 180s -s SIGKILL 180s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s npm run frontend:test -- management-ui.spec.js`, `timeout -k 180s -s SIGKILL 180s make frontend-test`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
 - [x] [B018] (P2) Present provider settings through a selected-provider editor.
   ### Summary
   The Settings modal should not show one full provider-settings card for every supported provider. Routing defaults and request examples should stay as their own sections, and provider key/model/system prompt settings should be edited through one selected-provider form.

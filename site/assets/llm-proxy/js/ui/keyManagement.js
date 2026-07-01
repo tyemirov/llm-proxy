@@ -26,6 +26,15 @@ import { applyUserMenuItems } from "../core/mprShell.js";
 
 const EMPTY_SECRET_PLACEHOLDER = "<generated-secret>";
 const EMPTY_STRING = "";
+const DEFAULT_TEXT_EXAMPLE_ID = "default-text";
+const DEFAULT_V2_EXAMPLE_ID = "default-v2";
+const DEFAULT_DICTATION_EXAMPLE_ID = "default-dictation";
+const PROVIDER_TEXT_EXAMPLE_ID = "provider-text";
+const PROVIDER_V2_EXAMPLE_ID = "provider-v2";
+const PROVIDER_DICTATION_EXAMPLE_ID = "provider-dictation";
+const JSON_CONTENT_TYPE_HEADER = "Content-Type: application/json";
+const SAMPLE_TEXT_PROMPT = "Hello";
+const SAMPLE_AUDIO_FILE = "recording.webm";
 
 export function createKeyManagement() {
   return {
@@ -170,20 +179,109 @@ export function createKeyManagement() {
       return modelRows(this.usage);
     },
 
-    get usageCurl() {
-      const secret = this.generatedSecret || EMPTY_SECRET_PLACEHOLDER;
-      const proxyOrigin = this.runtimeConfig ? this.runtimeConfig.proxyOrigin : window.location.origin;
+    get requestExamples() {
+      const defaultExamples = [
+        createRequestExample(DEFAULT_TEXT_EXAMPLE_ID, COPY.defaultTextExample, this.defaultTextCurl()),
+        createRequestExample(DEFAULT_V2_EXAMPLE_ID, COPY.defaultV2Example, this.defaultV2Curl()),
+        createRequestExample(DEFAULT_DICTATION_EXAMPLE_ID, COPY.defaultDictationExample, this.defaultDictationCurl()),
+      ];
+      if (!this.selectedProvider) {
+        return defaultExamples;
+      }
+      const providerExamples = [
+        createRequestExample(
+          PROVIDER_TEXT_EXAMPLE_ID,
+          `${this.selectedProvider.label}${COPY.providerTextExampleSuffix}`,
+          this.providerTextCurl(this.selectedProvider),
+        ),
+        createRequestExample(
+          PROVIDER_V2_EXAMPLE_ID,
+          `${this.selectedProvider.label}${COPY.providerV2ExampleSuffix}`,
+          this.providerV2Curl(this.selectedProvider),
+        ),
+      ];
+      if (this.selectedProvider.supports_dictation) {
+        providerExamples.push(
+          createRequestExample(
+            PROVIDER_DICTATION_EXAMPLE_ID,
+            `${this.selectedProvider.label}${COPY.providerDictationExampleSuffix}`,
+            this.providerDictationCurl(this.selectedProvider),
+          ),
+        );
+      }
+      return [...defaultExamples, ...providerExamples];
+    },
+
+    get exampleSecret() {
+      return this.generatedSecret || EMPTY_SECRET_PLACEHOLDER;
+    },
+
+    get proxyOrigin() {
+      return this.runtimeConfig ? this.runtimeConfig.proxyOrigin : window.location.origin;
+    },
+
+    defaultTextCurl() {
       return [
-        `curl --get ${JSON.stringify(`${proxyOrigin}/`)} \\`,
-        `  --data-urlencode 'key=${secret}' \\`,
-        "  --data-urlencode 'prompt=Hello'",
-        "",
-        `curl -sS ${JSON.stringify(`${proxyOrigin}/v2?key=${secret}`)} \\`,
-        "  -H 'Content-Type: application/json' \\",
-        "  --data '{\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}'",
-        "",
-        `curl -sS -X POST ${JSON.stringify(`${proxyOrigin}/dictate?key=${secret}`)} \\`,
-        "  -F 'audio=@recording.webm'",
+        `curl --get ${JSON.stringify(`${this.proxyOrigin}/`)} \\`,
+        `  --data-urlencode 'key=${this.exampleSecret}' \\`,
+        `  --data-urlencode 'prompt=${SAMPLE_TEXT_PROMPT}'`,
+      ].join("\n");
+    },
+
+    defaultV2Curl() {
+      const secret = this.generatedSecret || EMPTY_SECRET_PLACEHOLDER;
+      return [
+        `curl -sS ${JSON.stringify(`${this.proxyOrigin}/v2?key=${secret}`)} \\`,
+        `  -H '${JSON_CONTENT_TYPE_HEADER}' \\`,
+        `  --data '${JSON.stringify({ messages: [{ role: "user", content: SAMPLE_TEXT_PROMPT }] })}'`,
+      ].join("\n");
+    },
+
+    defaultDictationCurl() {
+      return [
+        `curl -sS -X POST ${JSON.stringify(`${this.proxyOrigin}/dictate?key=${this.exampleSecret}`)} \\`,
+        `  -F 'audio=@${SAMPLE_AUDIO_FILE}'`,
+      ].join("\n");
+    },
+
+    /**
+     * @param {import("../types.d.js").ProviderProfile} provider
+     * @returns {string}
+     */
+    providerTextCurl(provider) {
+      return [
+        `curl --get ${JSON.stringify(`${this.proxyOrigin}/`)} \\`,
+        `  --data-urlencode 'key=${this.exampleSecret}' \\`,
+        `  --data-urlencode 'provider=${provider.id}' \\`,
+        `  --data-urlencode 'model=${provider.text_model}' \\`,
+        `  --data-urlencode 'prompt=${SAMPLE_TEXT_PROMPT}'`,
+      ].join("\n");
+    },
+
+    /**
+     * @param {import("../types.d.js").ProviderProfile} provider
+     * @returns {string}
+     */
+    providerV2Curl(provider) {
+      const requestBody = {
+        messages: [{ role: "user", content: SAMPLE_TEXT_PROMPT }],
+        model: provider.text_model,
+      };
+      return [
+        `curl -sS ${JSON.stringify(`${this.proxyOrigin}/v2?key=${this.exampleSecret}&provider=${provider.id}`)} \\`,
+        `  -H '${JSON_CONTENT_TYPE_HEADER}' \\`,
+        `  --data '${JSON.stringify(requestBody)}'`,
+      ].join("\n");
+    },
+
+    /**
+     * @param {import("../types.d.js").ProviderProfile} provider
+     * @returns {string}
+     */
+    providerDictationCurl(provider) {
+      return [
+        `curl -sS -X POST ${JSON.stringify(`${this.proxyOrigin}/dictate?key=${this.exampleSecret}&provider=${provider.id}`)} \\`,
+        `  -F 'audio=@${SAMPLE_AUDIO_FILE}'`,
       ].join("\n");
     },
 
@@ -378,6 +476,18 @@ export function createKeyManagement() {
       this.setNotice(NOTICE_KINDS.SUCCESS, COPY.secretCopied);
     },
 
+    /**
+     * @param {string} command
+     */
+    async copyRequestExample(command) {
+      if (!navigator.clipboard) {
+        this.setNotice(NOTICE_KINDS.ERROR, COPY.copyUnavailable);
+        return;
+      }
+      await navigator.clipboard.writeText(command);
+      this.setNotice(NOTICE_KINDS.SUCCESS, COPY.exampleCopied);
+    },
+
     selectTextProviderDefaultModel() {
       const provider = this.providers.find((candidateProvider) => candidateProvider.id === this.defaults.provider);
       this.defaults.model = provider ? provider.text_default_model : EMPTY_STRING;
@@ -501,6 +611,16 @@ function emptyDefaults() {
 
 function dispatchManagementReady() {
   document.dispatchEvent(new CustomEvent(EVENTS.MANAGEMENT_READY));
+}
+
+/**
+ * @param {string} id
+ * @param {string} title
+ * @param {string} command
+ * @returns {import("../types.d.js").RequestExample}
+ */
+function createRequestExample(id, title, command) {
+  return { id, title, command };
 }
 
 /**

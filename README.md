@@ -461,8 +461,10 @@ model breakdowns for the signed-in user's managed tenant. The prior dashboard
 controls now live in a large Settings modal opened from the avatar dropdown;
 the `Settings` menu item is inserted before `Sign out` through the shared
 `<mpr-user>` menu contract. The modal contains client access, generated secret,
-routing defaults, request examples, and one selected-provider editor for API
-key, provider text model, and provider system prompt settings.
+routing defaults, copyable default request examples, copyable selected-provider
+request examples, and one selected-provider editor for API key, provider text
+model, and provider system prompt settings. Default examples omit `provider`;
+selected-provider examples include the current provider selector and text model.
 
 Administrators are configured only through `management.admin_emails`; use the
 plural `${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` placeholder in public config files

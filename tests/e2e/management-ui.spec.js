@@ -98,9 +98,23 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(settingsDialog.getByRole("heading", { name: "Client access" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Routing defaults" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Request examples" })).toBeVisible();
-  await expect(settingsDialog.locator(".usage-snippet")).toContainText("curl --get");
-  await expect(settingsDialog.locator(".usage-snippet")).toContainText("/v2?key=<generated-secret>");
-  await expect(settingsDialog.locator(".usage-snippet")).toContainText("/dictate?key=<generated-secret>");
+  await expect(settingsDialog.locator("request-example")).toHaveCount(6);
+  await expect(settingsDialog.locator('request-example[data-example-id="default-text"]')).toContainText("Default text");
+  await expect(settingsDialog.locator('request-example[data-example-id="default-v2"] .usage-snippet')).toContainText(
+    "/v2?key=<generated-secret>",
+  );
+  await expect(settingsDialog.locator('request-example[data-example-id="default-dictation"] .usage-snippet')).toContainText(
+    "/dictate?key=<generated-secret>",
+  );
+  await expect(settingsDialog.locator('request-example[data-example-id="provider-text"] .usage-snippet')).toContainText(
+    "provider=openai",
+  );
+  await expect(settingsDialog.locator('request-example[data-example-id="provider-v2"] .usage-snippet')).toContainText(
+    "provider=openai",
+  );
+  await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"] .usage-snippet')).toContainText(
+    "provider=openai",
+  );
   await expect(settingsDialog.getByRole("heading", { name: "Provider settings" })).toBeVisible();
   const providerEditor = settingsDialog.locator("provider-editor");
   const providerSelector = providerEditor.getByRole("combobox", { name: "Provider" });
@@ -118,9 +132,18 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(providerEditor.getByRole("textbox", { name: "DeepSeek API key" })).toBeVisible();
   await expect(providerEditor.getByRole("combobox", { name: "Text model" })).toHaveValue("deepseek-chat");
   await expect(providerEditor.getByRole("textbox", { name: "System prompt" })).toHaveValue("");
+  await expect(settingsDialog.locator("request-example")).toHaveCount(5);
+  await expect(settingsDialog.locator('request-example[data-example-id="provider-text"] .usage-snippet')).toContainText(
+    "provider=deepseek",
+  );
+  await expect(settingsDialog.locator('request-example[data-example-id="provider-v2"] .usage-snippet')).toContainText(
+    "provider=deepseek",
+  );
+  await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
 });
 
 test("settings shows placeholder request examples before generated secret exists", async ({ page }) => {
+  await installClipboardMock(page);
   await installAssetRoutes(page);
   await installManagementRoutes(page, { hasSecret: false });
 
@@ -131,10 +154,21 @@ test("settings shows placeholder request examples before generated secret exists
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await expect(settingsDialog).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Request examples" })).toBeVisible();
-  await expect(settingsDialog.locator(".usage-snippet")).toContainText("curl --get");
-  await expect(settingsDialog.locator(".usage-snippet")).toContainText("key=<generated-secret>");
-  await expect(settingsDialog.locator(".usage-snippet")).toContainText("/v2?key=<generated-secret>");
-  await expect(settingsDialog.locator(".usage-snippet")).toContainText("/dictate?key=<generated-secret>");
+  await expect(settingsDialog.locator('request-example[data-example-id="default-text"] .usage-snippet')).toContainText(
+    "key=<generated-secret>",
+  );
+  await expect(settingsDialog.locator('request-example[data-example-id="default-v2"] .usage-snippet')).toContainText(
+    "/v2?key=<generated-secret>",
+  );
+  await expect(settingsDialog.locator('request-example[data-example-id="default-dictation"] .usage-snippet')).toContainText(
+    "/dictate?key=<generated-secret>",
+  );
+  await settingsDialog.locator('request-example[data-example-id="default-v2"]').getByRole("button", { name: "Copy" }).click();
+  expect(await copiedText(page)).toContain("/v2?key=<generated-secret>");
+  await settingsDialog.locator('request-example[data-example-id="provider-v2"]').getByRole("button", { name: "Copy" }).click();
+  expect(await copiedText(page)).toContain("provider=openai");
+  expect(await copiedText(page)).toContain("key=<generated-secret>");
+  await expect(page.getByText("Example copied")).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Provider settings" })).toBeVisible();
 });
 
@@ -148,16 +182,23 @@ test("settings request examples use the freshly generated secret", async ({ page
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const usageSnippet = settingsDialog.locator(".usage-snippet");
-  await expect(usageSnippet).toContainText("key=<generated-secret>");
+  const defaultTextExample = settingsDialog.locator('request-example[data-example-id="default-text"] .usage-snippet');
+  const providerV2Example = settingsDialog.locator('request-example[data-example-id="provider-v2"] .usage-snippet');
+  await expect(defaultTextExample).toContainText("key=<generated-secret>");
+  await expect(providerV2Example).toContainText("key=<generated-secret>");
 
   await settingsDialog.getByRole("button", { name: "Create key" }).click();
 
   await expect(settingsDialog.getByLabel("Generated secret")).toHaveValue(generatedSecret);
-  await expect(usageSnippet).toContainText(`key=${generatedSecret}`);
-  await expect(usageSnippet).toContainText(`/v2?key=${generatedSecret}`);
-  await expect(usageSnippet).toContainText(`/dictate?key=${generatedSecret}`);
-  await expect(usageSnippet).not.toContainText("<generated-secret>");
+  await expect(defaultTextExample).toContainText(`key=${generatedSecret}`);
+  await expect(settingsDialog.locator('request-example[data-example-id="default-v2"] .usage-snippet')).toContainText(
+    `/v2?key=${generatedSecret}`,
+  );
+  await expect(settingsDialog.locator('request-example[data-example-id="default-dictation"] .usage-snippet')).toContainText(
+    `/dictate?key=${generatedSecret}`,
+  );
+  await expect(providerV2Example).toContainText(`key=${generatedSecret}`);
+  await expect(settingsDialog.locator("example-list")).not.toContainText("<generated-secret>");
 });
 
 test("settings modal remains usable on narrow screens", async ({ page }) => {
@@ -249,6 +290,31 @@ async function installAssetRoutes(page) {
   await page.route("**/mpr-ui.js", async (route) =>
     route.fulfill({ body: mprUIBundleMock(), contentType: "application/javascript" }),
   );
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @returns {Promise<void>}
+ */
+async function installClipboardMock(page) {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text) => {
+          window.__llmProxyCopiedText = String(text);
+        },
+      },
+    });
+  });
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @returns {Promise<string>}
+ */
+async function copiedText(page) {
+  return page.evaluate(() => window.__llmProxyCopiedText || "");
 }
 
 /**
