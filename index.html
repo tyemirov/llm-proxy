@@ -290,7 +290,23 @@
                         <h2 x-text="copy.examplesTitle"></h2>
                       </div>
                     </header>
-                    <pre class="usage-snippet" x-text="usageCurl"></pre>
+                    <example-list>
+                      <template x-for="example in requestExamples" x-bind:key="example.id">
+                        <request-example x-bind:data-example-id="example.id">
+                          <header class="example-header">
+                            <h3 x-text="example.title"></h3>
+                            <button
+                              type="button"
+                              x-on:click="copyRequestExample(example.command)"
+                              x-bind:title="copy.copyExample"
+                              x-bind:aria-label="copy.copyExample"
+                              x-text="copy.copyExample"
+                            ></button>
+                          </header>
+                          <pre class="usage-snippet" x-text="example.command"></pre>
+                        </request-example>
+                      </template>
+                    </example-list>
                   </settings-section>
 
                   <settings-section>

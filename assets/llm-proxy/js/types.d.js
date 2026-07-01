@@ -61,6 +61,14 @@
 
 /**
  * @typedef {{
+ *   id: string,
+ *   title: string,
+ *   command: string
+ * }} RequestExample
+ */
+
+/**
+ * @typedef {{
  *   requests: number,
  *   successful_requests: number,
  *   failed_requests: number,

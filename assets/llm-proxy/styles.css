@@ -54,6 +54,8 @@ usage-bar,
 admin-dashboard,
 admin-user-list,
 admin-user-card,
+example-list,
+request-example,
 provider-editor,
 provider-settings-fields,
 provider-status,
@@ -468,7 +470,6 @@ secret-output {
 }
 
 .usage-snippet {
-  min-height: 120px;
   margin: 0;
   overflow: auto;
   border: 1px solid var(--llm-border);
@@ -480,6 +481,35 @@ secret-output {
   line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+example-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+request-example {
+  display: grid;
+  gap: 0.35rem;
+}
+
+request-example + request-example {
+  border-top: 1px solid var(--llm-border);
+  padding-top: 0.55rem;
+}
+
+.example-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.example-header h3 {
+  margin-bottom: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .provider-settings-form {
