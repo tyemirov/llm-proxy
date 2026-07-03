@@ -18,7 +18,7 @@
   --llm-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
   /* Above the sticky MPR header/footer and the built-in MPR modal layer. */
   --llm-z-settings-overlay: 2200;
-  --llm-z-notice: 2300;
+  --llm-z-notice: 2100;
 }
 
 html,
