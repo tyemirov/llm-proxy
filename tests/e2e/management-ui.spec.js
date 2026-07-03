@@ -246,10 +246,13 @@ test("settings modal overlays MPR header and footer layers", async ({ page }) =>
     const layerFacts = await settingsLayerFacts(page);
     expect(layerFacts.overlayZIndex).toBeGreaterThan(layerFacts.headerZIndex);
     expect(layerFacts.overlayZIndex).toBeGreaterThan(layerFacts.footerZIndex);
+    expect(layerFacts.overlayZIndex).toBeGreaterThan(layerFacts.noticeZIndex);
     expect(layerFacts.closeButtonHit.inSettingsModal).toBe(true);
     expect(layerFacts.closeButtonHit.inMprHeader).toBe(false);
     expect(layerFacts.modalBottomHit.inSettingsModal || layerFacts.modalBottomHit.inSettingsOverlay).toBe(true);
     expect(layerFacts.modalBottomHit.inMprFooter).toBe(false);
+    expect(layerFacts.noticeHit.inSettingsModal || layerFacts.noticeHit.inSettingsOverlay).toBe(true);
+    expect(layerFacts.noticeHit.inNotice).toBe(false);
     expect(layerFacts.headerHit.inSettingsModal || layerFacts.headerHit.inSettingsOverlay).toBe(true);
     expect(layerFacts.headerHit.inMprHeader).toBe(false);
     expect(layerFacts.footerHit.inSettingsModal || layerFacts.footerHit.inSettingsOverlay).toBe(true);
@@ -376,8 +379,10 @@ async function copiedText(page) {
  *   overlayZIndex: number,
  *   headerZIndex: number,
  *   footerZIndex: number,
+ *   noticeZIndex: number,
  *   closeButtonHit: { inSettingsModal: boolean, inSettingsOverlay: boolean, inMprHeader: boolean, inMprFooter: boolean },
  *   modalBottomHit: { inSettingsModal: boolean, inSettingsOverlay: boolean, inMprHeader: boolean, inMprFooter: boolean },
+ *   noticeHit: { inSettingsModal: boolean, inSettingsOverlay: boolean, inMprHeader: boolean, inMprFooter: boolean, inNotice: boolean },
  *   headerHit: { inSettingsModal: boolean, inSettingsOverlay: boolean, inMprHeader: boolean, inMprFooter: boolean },
  *   footerHit: { inSettingsModal: boolean, inSettingsOverlay: boolean, inMprHeader: boolean, inMprFooter: boolean },
  * }>}
@@ -389,7 +394,8 @@ async function settingsLayerFacts(page) {
     const closeButton = modalElement?.querySelector(".settings-header button");
     const headerElement = document.querySelector("mpr-header");
     const footerElement = document.querySelector("mpr-footer");
-    if (!overlayElement || !modalElement || !closeButton || !headerElement || !footerElement) {
+    const noticeElement = document.querySelector(".notice");
+    if (!overlayElement || !modalElement || !closeButton || !headerElement || !footerElement || !noticeElement) {
       throw new Error("settings_layer_elements_missing");
     }
 
@@ -397,6 +403,7 @@ async function settingsLayerFacts(page) {
     const closeButtonRect = closeButton.getBoundingClientRect();
     const headerRect = headerElement.getBoundingClientRect();
     const footerRect = footerElement.getBoundingClientRect();
+    const noticeRect = noticeElement.getBoundingClientRect();
     const viewportWidth = document.documentElement.clientWidth;
     const hitAt = (xCoordinate, yCoordinate) => {
       const element = document.elementFromPoint(xCoordinate, yCoordinate);
@@ -405,6 +412,7 @@ async function settingsLayerFacts(page) {
         inSettingsOverlay: Boolean(element?.closest("settings-overlay")),
         inMprHeader: Boolean(element?.closest("mpr-header")),
         inMprFooter: Boolean(element?.closest("mpr-footer")),
+        inNotice: Boolean(element?.closest(".notice")),
       };
     };
     const safeBandCenter = (rect) => rect.top + Math.min(Math.max(rect.height / 2, 2), Math.max(rect.height - 2, 2));
@@ -413,11 +421,13 @@ async function settingsLayerFacts(page) {
       overlayZIndex: Number.parseInt(getComputedStyle(overlayElement).zIndex, 10),
       headerZIndex: Number.parseInt(getComputedStyle(headerElement).zIndex, 10),
       footerZIndex: Number.parseInt(getComputedStyle(footerElement).zIndex, 10),
+      noticeZIndex: Number.parseInt(getComputedStyle(noticeElement).zIndex, 10),
       closeButtonHit: hitAt(
         closeButtonRect.left + closeButtonRect.width / 2,
         closeButtonRect.top + closeButtonRect.height / 2,
       ),
       modalBottomHit: hitAt(modalRect.left + modalRect.width / 2, modalRect.bottom - 4),
+      noticeHit: hitAt(noticeRect.left + noticeRect.width / 2, noticeRect.top + noticeRect.height / 2),
       headerHit: hitAt(viewportWidth / 2, safeBandCenter(headerRect)),
       footerHit: hitAt(viewportWidth / 2, safeBandCenter(footerRect)),
     };
