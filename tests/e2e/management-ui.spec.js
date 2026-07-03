@@ -98,7 +98,13 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(settingsDialog.getByRole("heading", { name: "Client access" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Routing defaults" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Request examples" })).toBeVisible();
+  const requestExamplesSection = settingsDialog.locator(".usage-examples-section");
+  await expect(requestExamplesSection).not.toHaveAttribute("open", "");
+  await expect(settingsDialog.locator('request-example[data-example-id="default-text"]')).toBeHidden();
+  await requestExamplesSection.locator("summary").click();
+  await expect(requestExamplesSection).toHaveAttribute("open", "");
   await expect(settingsDialog.locator("request-example")).toHaveCount(6);
+  await expect(settingsDialog.locator('request-example[data-example-id="default-text"]')).toBeVisible();
   await expect(settingsDialog.locator('request-example[data-example-id="default-text"]')).toContainText("Default text");
   await expect(settingsDialog.locator('request-example[data-example-id="default-v2"] .usage-snippet')).toContainText(
     "/v2?key=<generated-secret>",
@@ -154,6 +160,7 @@ test("settings shows placeholder request examples before generated secret exists
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await expect(settingsDialog).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Request examples" })).toBeVisible();
+  await settingsDialog.locator(".usage-examples-section summary").click();
   await expect(settingsDialog.locator('request-example[data-example-id="default-text"] .usage-snippet')).toContainText(
     "key=<generated-secret>",
   );
@@ -182,6 +189,7 @@ test("settings request examples use the freshly generated secret", async ({ page
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await settingsDialog.locator(".usage-examples-section summary").click();
   const defaultTextExample = settingsDialog.locator('request-example[data-example-id="default-text"] .usage-snippet');
   const providerV2Example = settingsDialog.locator('request-example[data-example-id="provider-v2"] .usage-snippet');
   await expect(defaultTextExample).toContainText("key=<generated-secret>");
