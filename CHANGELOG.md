@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.26] - 2026-07-03
+
+### Changes
+- Merge pull request #186 from tyemirov/gix/ensure-settings-modal-layers-above-mpr-header-footer
+- test: add assertions for notice layer and z-index in settings modal overlay
+- fix(ui): lower z-index of notice overlay to 2100
+- docs: clarify notice and modal overlay stacking in Settings resolution
+- test: verify settings modal overlays MPR header/footer with correct stacking
+- fix(ui): update z-index for settings overlay and notices for better stacking
+- docs(issues): mark settings modal layout as complete and add resolution details
+- chore(gitignore): ignore Playwright output directory
+- Merge pull request #185 from tyemirov/gix/fold-settings-request-examples-as-a-single-usage-segment
+- Merge remote-tracking branch 'origin/master' into gix/fold-settings-request-examples-as-a-single-usage-segment
+- test: expand request examples section in settings before asserting visibility
+- feat(ui): add collapsible usage examples section to management UI
+- chore(deploy): remove obsolete Ansible resources definition
+- feat(ui): fold Settings request examples into collapsible usage segment
+- Merge pull request #184 from tyemirov/issues-md-1783111819653
+- Update ISSUES.md
+- Update ISSUES.md
+- Update ISSUES.md
+
 ## [v0.2.25] - 2026-06-30
 
 ### Changes
