@@ -324,8 +324,30 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Added router-level coverage for a blocked DeepSeek-compatible upstream request holding the only active worker while a second admitted request times out before acquiring that worker. The scenario covers the limiter `acquire` context-cancel path and `Do` admission-release path deterministically.
   Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 180s -s SIGKILL 180s env GOTOOLCHAIN=go1.24.13 go test -count=1 ./internal/proxy -run 'TestCoverageProviderRoutingEdges/admitted_provider_request_timeout_releases_queue_slot_before_acquiring_worker'`, `timeout -k 350s -s SIGKILL 350s env GOTOOLCHAIN=go1.24.13 make go-test` (Go total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make ci` (Go lint/staticcheck/ineffassign clean, Python mypy clean, Go total coverage 100.0%, Python 20 passed, root import smoke passed).
-- [ ] [B020] (P0) place the setting model between header and footer or in front of header and footer or sandwich between but do not place it underneath.
-  ![image](images/1783111894663_image.png)
+- [ ] [B020] (P0) Adjust settings modal layout relative to header and footer.
+  Goal:
+  Ensure the settings modal is visually positioned between the header and footer (or layered in front of them) rather than appearing underneath them, so users can always see and interact with the modal contents.
+  
+  Requirements:
+  - The settings modal must not render visually below or obscured by the header or footer.
+  - The modal should either:
+    - appear between the header and footer in the visual stacking order, or
+    - appear in front of both header and footer as a proper overlay.
+  - Preserve existing modal functionality and behavior (open/close, focus handling, scrolling, etc.).
+  - Do not introduce layout regressions for other modals or pages that use the same layout system.
+  - Respect existing design system tokens (spacing, colors, z-index scale) and responsive breakpoints.
+  
+  Deliverables:
+  - Updated layout or styling for the settings modal to correct its stacking/placement relative to the header and footer.
+  - Any necessary adjustments to shared layout/container components or z-index utilities to support the intended layering.
+  - Inline code comments or brief documentation describing how the modal should be layered relative to header/footer to avoid future regressions.
+  - Screenshot(s) or short clip demonstrating the corrected modal position on common viewports (e.g., desktop and one mobile size).
+  
+  Validation:
+  - Open the settings modal and confirm it is fully visible and interactive, not hidden behind or rendered underneath the header or footer.
+  - Resize the viewport across supported breakpoints and verify the modal remains correctly layered between or in front of header and footer.
+  - Confirm that closing/opening the modal multiple times does not cause layout shifts or stacking anomalies.
+  - Verify that other modals or overlays still appear correctly and are not negatively impacted by the changes.
 
 
 ## Improvements
