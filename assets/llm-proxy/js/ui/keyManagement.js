@@ -65,6 +65,7 @@ export function createKeyManagement() {
     adminUsers: [],
     generatedSecret: EMPTY_STRING,
     settingsOpen: false,
+    usageExamplesOpen: false,
     notice: {
       kind: NOTICE_KINDS.INFO,
       message: EMPTY_STRING,
@@ -395,6 +396,7 @@ export function createKeyManagement() {
     },
 
     openSettings() {
+      this.usageExamplesOpen = false;
       this.settingsOpen = true;
       requestAnimationFrame(() => {
         if (this.$refs.settingsClose) {
