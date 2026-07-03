@@ -11,7 +11,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
 ## BugFixes
 
-- [x] [B019] (P2) Make management request examples copyable and provider-specific.
+- [x] [B001] (P2) Make management request examples copyable and provider-specific.
   ### Summary
   The Settings modal renders request examples as one inert snippet. Users need default examples and selected-provider examples as separate copyable commands so they can copy the exact public proxy request shape they intend to use.
   ### Acceptance Criteria
@@ -23,7 +23,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   6. Browser coverage proves the examples render and can be copied.
   ### Resolution
   The Settings modal now renders separate default text, default v2, default dictation, selected-provider text, and selected-provider v2 examples, plus selected-provider dictation when the provider supports `/dictate`. Each example has its own copy action, uses the configured proxy origin, uses `<generated-secret>` before secret creation, and updates to the freshly generated secret immediately after key generation. Provider-specific examples track the selected provider and selected provider text model. README and provider-routing docs describe the copyable default/provider examples contract. Validation passed with `timeout -k 180s -s SIGKILL 180s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s npm run frontend:test -- management-ui.spec.js`, `timeout -k 180s -s SIGKILL 180s make frontend-test`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
-- [x] [B018] (P2) Present provider settings through a selected-provider editor.
+- [x] [B002] (P2) Present provider settings through a selected-provider editor.
   ### Summary
   The Settings modal should not show one full provider-settings card for every supported provider. Routing defaults and request examples should stay as their own sections, and provider key/model/system prompt settings should be edited through one selected-provider form.
   ### Acceptance Criteria
@@ -34,7 +34,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   5. Browser coverage proves provider selection updates the visible editor fields.
   ### Resolution
   The Settings modal now keeps routing defaults and request examples as separate sections, then shows one Provider settings editor with a provider selector. Selecting a provider updates the visible masked-key status, API-key input label, provider text model choices, and provider system prompt field. The save/remove actions operate on the selected provider while keeping the existing provider-settings API contract. README and provider-routing docs now describe the selected-provider editor. Validation passed with `timeout -k 180s -s SIGKILL 180s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s make frontend-test`, and `git diff --check`.
-- [x] [B017] (P2) Store text model and system prompt with each managed provider.
+- [x] [B003] (P2) Store text model and system prompt with each managed provider.
   ### Summary
   Provider key editing only collected API keys, while text model and system prompt lived in one global routing-default form. Managed tenants should own text model and system prompt settings per saved provider so provider-selected requests have complete provider-specific routing context.
   ### Acceptance Criteria
@@ -46,7 +46,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   6. Tests cover the API/store routing contract and the browser-visible provider controls.
   ### Resolution
   Managed provider-key records now include the selected text model and provider-specific system prompt. The management API validates provider text models on save, preserves an existing encrypted provider key when only model/prompt settings are changed, and returns provider settings in each profile provider. Managed text requests that select a provider and omit request-level model or system instructions now use that provider's saved text model and system prompt. Existing provider-key rows without text settings are normalized at startup to the current provider catalog default model. The Settings provider editor now exposes API key, text model, and system prompt controls together, and README/provider-routing docs describe the current contract. Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run 'TestManagement|TestManagedTenant|TestBuildRouterReturns|TestTextRequestDefaults'`, `timeout -k 300s -s SIGKILL 300s make go-test`, `timeout -k 180s -s SIGKILL 180s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s make frontend-test`, and `git diff --check`.
-- [x] [B016] (P2) Populate management request examples before secret generation.
+- [x] [B004] (P2) Populate management request examples before secret generation.
   ### Summary
   The Settings modal should render useful request examples even before the signed-in user generates a client secret. The examples should use the generated secret when one was just created, and otherwise use the documented `<generated-secret>` placeholder.
   ### Acceptance Criteria
@@ -56,7 +56,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   4. Browser coverage proves the generated-secret and no-secret placeholder states through the real Settings modal.
   ### Resolution
   The Settings modal always renders the request examples section for authenticated users. The curl examples use the real generated secret immediately after secret generation, and otherwise use the `<generated-secret>` placeholder so users without a generated secret still see complete text, `/v2`, and dictation examples. Playwright coverage now asserts the populated placeholder state before secret generation and the populated generated-secret state. Validation passed with `timeout -k 180s -s SIGKILL 180s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s make frontend-test`, and `git diff --check`.
-- [x] [B015] (P1) Move Pages deployment out of GitHub Actions and keep browser config backend-owned.
+- [x] [B005] (P1) Move Pages deployment out of GitHub Actions and keep browser config backend-owned.
   ### Summary
   GitHub Pages deployment must not spend GitHub Actions minutes. The management frontend also must not publish browser runtime config as a static Pages file or rendered HTML value; config belongs to the backend `/config-ui.yaml` projection.
   ### Acceptance Criteria
@@ -67,7 +67,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   5. README and implementation docs describe the branch-published Pages contract and backend-owned browser config.
   ### Resolution
   Removed `.github/workflows/pages.yml` and the PR trigger entry for it. Added `scripts/publish_pages.sh` plus `make publish-pages`, wired `make publish` and `make deploy` to render and publish the `gh-pages` branch without GitHub Actions, and kept `--skip-pages`/`--skip-configure` operator controls. The Pages renderer no longer loads backend config, no longer writes static browser config, rejects retired static config URL markers, and removes stale `config-ui.yaml`/`llm-proxy-config.json` files from the artifact. The static frontend now resolves the backend config endpoint at runtime and fetches `/config-ui.yaml`; production uses `https://llm-proxy-api.mprlab.com/config-ui.yaml`, while local previews use same-origin `/config-ui.yaml`. README and provider-routing notes now document branch-published Pages and backend-owned browser config. Validation passed with `timeout -k 30s -s SIGKILL 30s bash -n scripts/publish_pages.sh scripts/publish.sh scripts/deploy.sh`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./cmd/cli -run 'TestRootCommand(Render|RejectsSite)'`, static JS `node --check`, `timeout -k 120s -s SIGKILL 120s ./scripts/publish_pages.sh --dry-run`, `timeout -k 350s -s SIGKILL 350s make go-test`, `timeout -k 180s -s SIGKILL 180s make frontend-lint`, `timeout -k 240s -s SIGKILL 240s make frontend-test`, `timeout -k 30s -s SIGKILL 30s git diff --check`, and `env -u LLM_PROXY_SECRET -u LLM_PROXY_BASE_URL timeout -k 500s -s SIGKILL 500s make ci`.
-- [x] [B014] (P1) Make management admin configuration plural and deployable.
+- [x] [B006] (P1) Make management admin configuration plural and deployable.
   ### Summary
   Gateway deployment failed when the hosted management config expected missing admin and provider-key encryption placeholders. The admin config was also represented as one env-backed list entry even though management supports multiple administrator emails.
   ### Acceptance Criteria
@@ -77,7 +77,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   4. Local ignored management env values include a generated provider-key encryption key without exposing the key in output.
   ### Resolution
   `configs/config.yml` now uses `LLM_PROXY_MANAGEMENT_ADMIN_EMAILS` as a YAML flow sequence for the full admin list. Added `configs/.env.sample` as the app-owned hosted env contract, updated README and implementation docs, and extended `TestRootCommandLoadsPackagedConfigWithManagementEnvironment` to load two admin emails through the packaged config path. The ignored local `configs/.env` was updated with the plural admin list and a generated stable provider-key encryption key without printing secret values. Validation passed with `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli -run TestRootCommandLoadsPackagedConfigWithManagementEnvironment` and `timeout -k 350s -s SIGKILL 350s make go-test`.
-- [x] [B013] (P1) Make llm-proxy-client invalid-input tests immune to ambient client env.
+- [x] [B007] (P1) Make llm-proxy-client invalid-input tests immune to ambient client env.
   ### Summary
   `make release` failed in `TestCommandRejectsInvalidInputs/missing_secret` when the shell already had `LLM_PROXY_SECRET` set. The CLI correctly supports `LLM_PROXY_BASE_URL` and `LLM_PROXY_SECRET` as edge configuration, but the invalid-input table did not clear those inputs, so the missing-secret case proceeded to a real `example.test` POST instead of failing at config validation.
   ### Acceptance Criteria
@@ -86,7 +86,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   3. Focused `llm-proxy-client` tests pass when the process has ambient `LLM_PROXY_SECRET` and `LLM_PROXY_BASE_URL`.
   ### Resolution
   `TestCommandRejectsInvalidInputs` now clears `LLM_PROXY_BASE_URL` and `LLM_PROXY_SECRET` at the test boundary, so every invalid-input scenario owns the external CLI configuration it is asserting. `TestCommandReadsEnvironmentAndStdin` still sets the same environment names explicitly and continues to prove env-backed client configuration. Validation passed with `env LLM_PROXY_SECRET=ambient-secret LLM_PROXY_BASE_URL=http://ambient.example timeout -k 120s -s SIGKILL 120s go test -count=1 ./llm-proxy-client -run TestCommandRejectsInvalidInputs`, `env LLM_PROXY_SECRET=ambient-secret LLM_PROXY_BASE_URL=http://ambient.example timeout -k 350s -s SIGKILL 350s make go-test`, and `env LLM_PROXY_SECRET=ambient-secret LLM_PROXY_BASE_URL=http://ambient.example timeout -k 350s -s SIGKILL 350s make ci`.
-- [!] [B001] (P1) Published production image rejects current management config.
+- [!] [B008] (P1) Published production image rejects current management config.
   ### Summary
   Production startup fails while parsing the mounted current `config.yml`:
   ```text
@@ -107,7 +107,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   The production image and mounted config must be advanced together. Do not remove `management` from config and do not add a compatibility parser path; `management` is part of the current canonical config contract.
   ### Blocked
   Blocked: Requires publishing an image built from the current management-aware source and redeploying the backend through the gateway-owned `deploy-llm-proxy-backend` path. Agent runs must stop before production deployment unless the execution chain or operator performs the publish/deploy step.
-- [x] [B002] (P2) Validate management migration seed tenant defaults at startup.
+- [x] [B009] (P2) Validate management migration seed tenant defaults at startup.
   ### Summary
   Management mode allows an empty static `tenants` list because runtime authentication is DB-authoritative, but configured legacy tenants are still first-run migration seed data. Startup skipped tenant default provider/model validation whenever management mode was enabled, so a typoed seed default could be persisted and fail later at request time.
   ### Acceptance Criteria
@@ -117,7 +117,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   4. Static provider credentials remain optional for management-mode seed validation because provider keys are DB-owned after migration.
   ### Resolution
   Split provider catalog resolution from request credential resolution. Static non-management startup still validates tenant defaults through the credential-aware request path, while management-mode seed tenants use catalog-only default validation before the migration runs. Added management startup coverage proving valid seed defaults do not require static provider credentials and invalid text/dictation default providers or models fail startup. Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run 'TestManagement(AcceptsLegacyTenantDefaultsWithoutStaticCredentials|RejectsInvalidLegacyTenantDefaults|MigratesLegacyConfigOnceThenUsesDatabase)'`, `timeout -k 350s -s SIGKILL 350s make go-test` (total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make ci`.
-- [x] [B003] (P2) Require expiration on management session JWTs.
+- [x] [B010] (P2) Require expiration on management session JWTs.
   ### Summary
   Management session validation accepted a signed TAuth session JWT with the correct tenant and user claims when the token omitted `exp`. Because the JWT library validates expiration only when the claim exists, this could leave `/api/management/*` usable with a non-expiring signed cookie.
   ### Acceptance Criteria
@@ -126,7 +126,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   3. The regression is covered through the public management API route.
   ### Resolution
   `managementSessionValidator.validateToken` now rejects tokens whose registered claims do not include `ExpiresAt` before constructing a management principal. Added management API coverage for a signed session cookie with valid issuer, tenant, and user claims but no `exp`; `/api/management/profile` returns `401`. Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run TestManagementRejectsInvalidSessionsAndRequests`, `timeout -k 350s -s SIGKILL 350s make go-test` (total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make ci`.
-- [x] [B004] (P2) Remove unsupported no-dictation default option from management UI.
+- [x] [B011] (P2) Remove unsupported no-dictation default option from management UI.
   ### Summary
   The management UI exposed a blank "No dictation default" option, but the backend has no persisted no-dictation state and normalizes empty dictation defaults back to the canonical OpenAI default. Selecting the blank option could make a text-only defaults save appear to work before the profile reloaded with OpenAI selected again.
   ### Acceptance Criteria
@@ -135,7 +135,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   3. Removed UI copy is not left as a stale constant.
   ### Resolution
   Removed the blank dictation-provider `<option>` from `site/index.html` and deleted the unused `noDictationDefault` copy key. The dictation-provider select now lists only real dictation-capable providers from the backend profile. Validation passed with `timeout -k 30s -s SIGKILL 30s node --check` for the static JS modules and `timeout -k 350s -s SIGKILL 350s make ci`.
-- [x] [B005] (P1) GitHub Pages frontend remains unavailable until the workflow fix reaches master.
+- [x] [B012] (P1) GitHub Pages frontend remains unavailable until the workflow fix reaches master.
   ### Summary
   `https://llm-proxy.mprlab.com/` presented GitHub's default `*.github.io` certificate and a Pages 404 because repository Pages was disabled and the Pages workflow render job depended on unset repository variables. The current split-origin contract requires `llm-proxy.mprlab.com` to be owned by GitHub Pages, not by the gateway backend.
   ### Evidence
@@ -147,8 +147,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Superseded by B015. Pages deployment is now Makefile-owned through `make publish-pages`, `make publish`, and `make deploy`; `.github/workflows/pages.yml` is removed. Local static rendering succeeds with `CNAME: llm-proxy.mprlab.com`, no static browser config files, and no rendered `data-config-url`.
   ### Remote State
   GitHub Pages should be configured for branch publishing from `gh-pages` at `/`, with `cname=llm-proxy.mprlab.com` and HTTPS enforcement enabled. `scripts/publish_pages.sh` configures this source through the GitHub API unless `--skip-configure` is passed. Public availability still requires an operator to run the publish/deploy command after this branch reaches the release path.
-
-- [x] [B011] (P2) Fix F007 review issues in usage loading and usage queries.
+- [x] [B013] (P2) Fix F007 review issues in usage loading and usage queries.
   ### Summary
   F007 review found two dashboard/settings defects: authenticated profile loading could remain stuck on the loading panel when `/api/management/usage` failed, and the 30-day usage summary store query loaded every historical user usage event before filtering in memory.
   ### Acceptance Criteria
@@ -158,8 +157,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   4. The usage event table has an index suitable for user/time usage summary reads.
   ### Resolution
   Decoupled frontend profile loading from usage loading, so profile success unlocks the authenticated dashboard and usage failures reset usage to an empty summary with a visible error notice. Added Playwright coverage for profile success plus usage failure still opening Settings. Changed the managed usage database interface to `usageEventsByUserIDSince`, passed the computed 30-day period start from `usageSummary`, filtered fake and GORM store reads at the database boundary, and added a composite GORM index on usage `user_id` plus `created_at`. Validation passed for this review-fix scope with `timeout -k 120s -s SIGKILL 120s go test -count=1 ./internal/proxy -run 'TestManagedTenantStoreUsageEdges|TestManagedUsageSummaryBucketsAndOrdering|TestManagementUsageSummaryRecordsManagedProxyRequests'`, `timeout -k 120s -s SIGKILL 120s make frontend-lint`, and `timeout -k 180s -s SIGKILL 180s make frontend-test` (3 Playwright tests passed). An initial full `timeout -k 350s -s SIGKILL 350s make ci` passed before unrelated admin/session edits appeared; a later current-worktree `make ci` stopped at check-format because unrelated `internal/proxy/management_session.go` needs gofmt.
-
-- [x] [B012] (P2) Fix F007 usage dashboard follow-up review findings.
+- [x] [B014] (P2) Fix F007 usage dashboard follow-up review findings.
   ### Summary
   F007 follow-up review found three defects: validation failures after managed tenant authentication were not counted in usage summaries, admin usage range reads lacked a created-at-only index, and manual usage refresh failures left stale dashboard metrics visible.
   ### Acceptance Criteria
@@ -169,8 +167,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   4. Focused Go and Playwright coverage proves the fixes.
   ### Resolution
   Authenticated managed proxy handlers now record validation failures after rejection responses using only endpoint, provider/model identifiers, status code, and latency metadata. Added the `created_at` usage index alongside the user/time composite index and covered both indexes in the GORM migration test. Manual usage refresh failures now reset the usage summary to the empty state, with Playwright coverage proving stale counts disappear while the dashboard remains usable. Validation passed with `timeout -k 120s -s SIGKILL 120s go test -count=1 ./internal/proxy -run 'TestManagementUsageSummaryRecordsManagedProxyRequests|TestManagedTenantGORMDatabaseMigratesUsageIndexes|TestManagedTenantStoreUsageEdges'`, `timeout -k 120s -s SIGKILL 120s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s make frontend-test`, and `env -u LLM_PROXY_SECRET timeout -k 350s -s SIGKILL 350s make ci`. A plain `make ci` attempt in this shell first failed because ambient `LLM_PROXY_SECRET` bypassed the missing-secret CLI test; the clean-env CI run passed.
-
-- [x] [B001] (P1) Gemini POST responses can return thought or partial text as successful output.
+- [x] [B015] (P1) Gemini POST responses can return thought or partial text as successful output.
   ### Summary
   A production-comparable Russian semantic-stress QA run sent the full prompt through `POST /?provider=gemini` with `model=gemini-3.5-flash`, but the client received a non-JSON response and failed before materialization. The same prompt contract succeeds only when the proxy returns the model's answer text as parseable JSON or returns a structured proxy/provider error.
   ### Impact
@@ -216,7 +213,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   3. Rerun the Russian semantic-stress QA prompt through the full pipeline and verify the client receives either parseable JSON or a structured proxy error, not a thought-prefixed or truncated successful text body.
   ### Resolution
   Added black-box Gemini POST coverage for thought-marked parts returning only final answer text, non-final `finishReason` values mapping to `502`, and missing `finishReason` mapping to `502`. `internal/proxy/gemini.go` now models `parts[].thought` and candidate `finishReason`, returns only non-thought text for completed `STOP` candidates, and treats missing or non-`STOP` finish reasons as provider API errors instead of successful partial output. Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 350s -s SIGKILL 350s make test` (total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make lint`, and `timeout -k 350s -s SIGKILL 350s make ci` (total coverage 100.0%).
-- [x] [B007] (P1) Long semantic-review POSTs fail transport while small requests pass.
+- [x] [B016] (P1) Long semantic-review POSTs fail transport while small requests pass.
   ### Summary
   Camu Russian semantic-stress QA can still fail before materialization on long full-story prompts even though a small `llm-proxy` smoke request succeeds. On 2026-06-09, `po-schuchemu-velenyu` text prep failed three times at the `llm-proxy` stage: one read timeout, then two SSL record-layer failures. A tiny Russian pipeline smoke test using the same Russian-language `pipeline_runner.py` reached `semantic-stress-qa` and `materialize` successfully, so the service is not fully down; the failure appears tied to long-running or larger semantic-review POSTs and/or chunk retry transport handling.
   ### Impact
@@ -280,7 +277,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   OpenAI Responses text requests now run in background mode by sending `background: true` and `store: true` on initial, continuation, and synthesis payloads, then polling the returned response id instead of holding long semantic-review generations on one synchronous upstream HTTP read. Added black-box integration coverage for a long semantic-review JSON POST that returns a queued background response, polls by response id, and returns the completed body. Python client HTTP and transport failures now include non-secret provider, model, and timeout context, and raw OS/SSL-style failures are typed as `LLMProxyTransportError`. B003 supersedes the remaining manual tuning gap with the final one-shot REST contract.
   Validation for the initial background-mode fix passed with `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make python-test` (27 passed), `timeout -k 350s -s SIGKILL 350s make python-lint`, `timeout -k 350s -s SIGKILL 350s make go-lint`, and `timeout -k 350s -s SIGKILL 350s make ci` (Go total coverage 100.0%, Python 27 passed). The exact reported forced-chunked semantic-review payload was reconstructed from the failed Camu pipeline state (`chunkIndex=1`, `chunkChars=1800`, request SHA-256 `ba8737a7dd4b81dc0d52e68d9260756fdb0f32e6e12f3be2527d8be55df1a0cd`) and proved that OpenAI could complete the response in about 171 seconds, motivating B003.
   Post-redeploy live validation passed with a hosted `gpt-5.5` v2 smoke returning `OK` in 3.289s, hosted replay of `/tmp/llm-proxy-b002-direct/po-schuchemu-velenyu.chunk-0001.llm-proxy-request.json` returning HTTP 200 in 152.981s with valid JSON, 23 `targetReviews`, and `needsHumanReview=false`, hosted Python v2 `gpt-5.5` replay of the same long semantic-review prompt returning in 151.524s with valid JSON, 23 `targetReviews`, and `needsHumanReview=false`, and `timeout -k 240s -s SIGKILL 240s make test-live-providers LIVE_ENV_FILE=configs/.env LLM_PROXY_LIVE_PROVIDERS=openai` reporting `live provider smoke passed: provider=openai model=omitted status=200`.
-- [x] [B008] (P1) OpenAI background semantic-review calls require manual timeout tuning.
+- [x] [B017] (P1) OpenAI background semantic-review calls require manual timeout tuning.
   ### Summary
   B002 moved long OpenAI Responses calls into background mode, but the successful manual replay still required hand-editing timeout knobs. A normal llm-proxy REST call should not require operators, downstream workflows, or client libraries to guess provider polling behavior for a semantic-review payload.
   ### Impact
@@ -302,7 +299,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   OpenAI background response polling is now owned by llm-proxy for the normal REST request lifecycle. Initial, continuation, and synthesis OpenAI Responses payloads use `background: true` and `store: true`; when OpenAI returns a non-terminal response id, llm-proxy polls that stored response server-side until completion or the normal `server.request_timeout_seconds` deadline. The public `/responses` resume endpoint and the Go/Python client resume loops were removed, and `upstream_poll_timeout_seconds` was removed from the static config surface. Default `request_timeout_seconds` is now 360 seconds, while the packaged Go CLI and Python client default to a 390-second transport timeout so one normal REST request has room to complete.
   Validation passed with `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make python-test` (Python 27 passed), `timeout -k 350s -s SIGKILL 350s make ci` (Go/Python lint clean, Go total coverage 100.0%, Python 27 passed), and `timeout -k 30s -s SIGKILL 30s git diff --check`. Live OpenAI smoke passed with `model` omitted, using the provider default, and HTTP 200. Live exact-payload replay of `/tmp/llm-proxy-b002-direct/po-schuchemu-velenyu.chunk-0001.llm-proxy-request.json` through the local current-branch proxy returned HTTP 200 from one `POST /?provider=openai&format=text/plain` in 150.394s with no `X-LLM-Proxy-Resume-*` or raw upstream response-id headers. The final body was valid JSON with 23 `targetReviews`, `needsHumanReview=true`, and 2 human-review items for `проруби`/`прорубь` stress confirmation.
-- [x] [B009] (P1) Polled OpenAI terminal responses skip continuation and synthesis handling.
+- [x] [B018] (P1) Polled OpenAI terminal responses skip continuation and synthesis handling.
   ### Summary
   B003 made OpenAI Responses run in background mode, so terminal OpenAI response payloads commonly arrive from the server-side GET poll path. The initial POST path still handled `status: "incomplete"` max-token continuations and completed responses without a final assistant message, but the poll path collapsed terminal responses to text too early and could return `502` or fallback text instead of continuing or synthesizing the final answer.
   ### Impact
@@ -315,7 +312,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   OpenAI response handling now parses initial and polled Responses payloads into a shared response snapshot and resolves terminal states through one lifecycle handler. The shared handler preserves max-token continuation, completed-without-final-message synthesis, usage merging, malformed JSON classification, and the blocking one-shot REST contract for both initial POST responses and polled GET responses. Added black-box router coverage for polled incomplete continuation and polled completed tool-only synthesis.
   Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run TestCoverageOpenAILifecycleBranches`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./tests/integration -run 'TestIntegration(LargeSemanticReviewPost|BackgroundPollSleepDoesNotOccupyUpstreamWorker)'`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy`, `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make ci` (Go lint/staticcheck/ineffassign clean, Python mypy clean, Go total coverage 100.0%, Python 27 passed, root import smoke passed).
-- [x] [B010] (P1) PR merge CI drops limiter coverage below 100%.
+- [x] [B019] (P1) PR merge CI drops limiter coverage below 100%.
   ### Summary
   GitHub Actions ran PR #175 on the generated pull-request merge ref with Go 1.24.13 and failed `make go-test` at total coverage 99.8%. The function table showed partial coverage for `internal/proxy/limited_http.go` `Do` and `acquire`, even though branch-head local runs reached 100.0%.
   ### Impact
@@ -327,6 +324,30 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Added router-level coverage for a blocked DeepSeek-compatible upstream request holding the only active worker while a second admitted request times out before acquiring that worker. The scenario covers the limiter `acquire` context-cancel path and `Do` admission-release path deterministically.
   Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 180s -s SIGKILL 180s env GOTOOLCHAIN=go1.24.13 go test -count=1 ./internal/proxy -run 'TestCoverageProviderRoutingEdges/admitted_provider_request_timeout_releases_queue_slot_before_acquiring_worker'`, `timeout -k 350s -s SIGKILL 350s env GOTOOLCHAIN=go1.24.13 make go-test` (Go total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make ci` (Go lint/staticcheck/ineffassign clean, Python mypy clean, Go total coverage 100.0%, Python 20 passed, root import smoke passed).
+- [ ] [B020] (P0) Adjust settings modal layout relative to header and footer.
+  Goal:
+  Ensure the settings modal is visually positioned between the header and footer (or layered in front of them) rather than appearing underneath them, so users can always see and interact with the modal contents.
+  
+  Requirements:
+  - The settings modal must not render visually below or obscured by the header or footer.
+  - The modal should either:
+    - appear between the header and footer in the visual stacking order, or
+    - appear in front of both header and footer as a proper overlay.
+  - Preserve existing modal functionality and behavior (open/close, focus handling, scrolling, etc.).
+  - Do not introduce layout regressions for other modals or pages that use the same layout system.
+  - Respect existing design system tokens (spacing, colors, z-index scale) and responsive breakpoints.
+  
+  Deliverables:
+  - Updated layout or styling for the settings modal to correct its stacking/placement relative to the header and footer.
+  - Any necessary adjustments to shared layout/container components or z-index utilities to support the intended layering.
+  - Inline code comments or brief documentation describing how the modal should be layered relative to header/footer to avoid future regressions.
+  - Screenshot(s) or short clip demonstrating the corrected modal position on common viewports (e.g., desktop and one mobile size).
+  
+  Validation:
+  - Open the settings modal and confirm it is fully visible and interactive, not hidden behind or rendered underneath the header or footer.
+  - Resize the viewport across supported breakpoints and verify the modal remains correctly layered between or in front of header and footer.
+  - Confirm that closing/opening the modal multiple times does not cause layout shifts or stacking anomalies.
+  - Verify that other modals or overlays still appear correctly and are not negatively impacted by the changes.
 
 
 ## Improvements
@@ -514,31 +535,24 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Run focused frontend syntax checks for edited static files.
   Resolution:
   Added a scoped `#llm-proxy-header .mpr-header__actions` CSS override so the shared MPR header actions region uses `margin-left: auto`. Browser preview validation rendered the real static Pages app and CDN MPR UI bundle with local mock config/profile responses: desktop geometry placed the brand at x=100 and avatar at x=1146..1180, while mobile 390px geometry placed the brand at x=24..111 and avatar at x=332..366 with no overlap. Validation passed with `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/app.js`, `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/core/mprShell.js`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
-
 - [x] [I015] (P2) Add LLM Proxy icon and favicon assets.
   Goal:
   Give the static management site a recognizable LLM Proxy product icon and browser favicon instead of the current empty favicon placeholder.
-
   Requirements:
   - Keep the assets local to the static Pages site.
   - Use the existing dark MPR UI palette and a proxy-routing mark that remains legible at favicon size.
   - Avoid introducing generated binary assets or external image dependencies.
-
   Deliverables:
   - Add SVG app-icon and favicon assets under `site/assets/llm-proxy/img/`.
   - Point `site/index.html` at the favicon and app icon.
   - Add focused static-site coverage for the icon links and SVG assets.
-
   Validation:
   - Run focused frontend syntax/tests for the touched static-site path.
-
   Resolution:
   Added local SVG app-icon and favicon assets under `site/assets/llm-proxy/img/` using the existing MPR Lab LLM Proxy project-card mark from `../marcopolo.github.io/assets/projects/llm-proxy/icon.svg`: dark teal/green gradient, gold routing paths, cyan endpoints, and a central proxy node. Replaced the empty favicon placeholder in `site/index.html` with real SVG favicon/app-icon links and the MPR favicon theme color. Added focused Playwright/static-site coverage that verifies the links, SVG content type, and MPR gold/cyan palette. Validation passed with `timeout -k 120s -s SIGKILL 120s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s npx playwright test tests/e2e/management-ui.spec.js -g "site exposes product icon"`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
-
 - [x] [I016] (P2) Encrypt managed provider API keys at rest.
   Goal:
   Store tenant-owned upstream provider API keys encrypted at rest while preserving the existing management UI and generated-secret proxy routing behavior.
-
   Requirements:
   - Add one canonical management config field for the provider-key encryption key.
   - Require a valid base64-encoded 32-byte encryption key whenever management mode is enabled.
@@ -546,16 +560,13 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Migrate existing plaintext provider-key rows into encrypted records and clear plaintext values.
   - Keep generated tenant secrets digest-only and provider keys masked in management/admin API responses.
   - Document this as an encrypted-at-rest guarantee, not as user-only decryption or zero-knowledge.
-
   Deliverables:
   - Extend config parsing, packaged config, Pages render environment, and docs.
   - Add AES-GCM provider-key storage with row-bound associated data.
   - Add focused Go coverage for config validation, encrypted persistence, plaintext migration, and runtime decrypt routing.
-
   Validation:
   - Run focused management store/API and CLI config tests.
   - Run broader Go validation before marking resolved.
-
   Resolution:
   Added required `management.provider_key_encryption_key` configuration with base64 32-byte validation, AES-GCM encrypted provider-key persistence, row-bound associated data, and startup migration that encrypts and clears legacy plaintext `api_key` rows. Updated config templates, Pages render env, README, and provider-routing docs to state the exact encrypted-at-rest guarantee and explicitly distinguish it from zero-knowledge/user-only decryption. Added focused Go coverage for config parsing, validation, encrypted storage, plaintext migration, decrypt failures, and generated-secret proxy routing. Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run 'TestManagedTenant(StoreInternalEdges|StoreStaticConfigMigrationEdges|GORMDatabaseEncryptsProviderKeysAtRest)|TestManagementConfigurationValidationRequiresBackendAuthFields|TestManagementGeneratedSecretRoutesWithTenantProviderKey|TestManagementGeneratedSecretSupportsDictationAndRejectsMultipartProviderKeys'`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./cmd/cli -run 'TestRootCommand(RunsConfiguredProxyFromConfigFile|LoadsPackagedConfigWithManagementEnvironment|RendersSiteFromConfigFile|RejectsUnsupportedManagementDatabaseDialect)'`, `timeout -k 350s -s SIGKILL 350s make go-test`, `timeout -k 30s -s SIGKILL 30s make check-format`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
 
@@ -852,11 +863,9 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Review follow-up made browser/TAuth config consumable from `llm-proxy-api`: the backend now serves `/config-ui.yaml` from the validated management config with frontend-origin CORS, the Pages artifact keeps only `CNAME` plus the rendered `index.html` config URL, and the static frontend parses llm-proxy runtime origins from the same API-served YAML before bootstrapping `mpr-ui` and Alpine. The Pages workflow no longer receives production backend secrets; it uses non-sensitive placeholders for backend-only config fields during render. The renderer rejects public origins with ports before writing `CNAME` and removes any stale copied browser config files from the artifact. Validation passed with `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/app.js`, `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/core/backendClient.js`, `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/core/mprShell.js`, `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli ./internal/proxy`, `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), `timeout -k 30s -s SIGKILL 30s git diff --check`, raw-SQL/direct-SQL scan, stale static-config scan, and `timeout -k 500s -s SIGKILL 500s make ci` (Go/Python lint clean, Go total coverage 100.0%, Python 20 passed).
   Final single-file follow-up collapsed the remaining two-config-file design: `/llm-proxy-config.json` is no longer routed or generated, `/config-ui.yaml` now includes `llmProxy.managementApiOrigin` and `llmProxy.proxyOrigin`, the rendered Pages `index.html` only carries the API YAML URL, and frontend code parses the same YAML before loading MPR UI. Validation passed with `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/app.js`, `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/core/backendClient.js`, `timeout -k 30s -s SIGKILL 30s node --check site/assets/llm-proxy/js/core/mprShell.js`, `timeout -k 240s -s SIGKILL 240s go test -count=1 ./cmd/cli ./internal/proxy`, `timeout -k 350s -s SIGKILL 350s make go-test` (Go total coverage 100.0%), `timeout -k 30s -s SIGKILL 30s git diff --check`, raw-SQL/direct-SQL scan, stale-contract scan with no active docs or route symbols for the removed JSON contract, and `timeout -k 500s -s SIGKILL 500s make ci` (Go/Python lint clean, Go total coverage 100.0%, Python 20 passed).
   Review follow-up hardened management mutations and defaults validation: authenticated unsafe `/api/management/*` requests now reject non-public `Origin` values and non-JSON content types, the static client sends JSON content type for secret generate/revoke mutations, and defaults updates validate normalized dictation defaults instead of accepting blank API fields that silently normalize to OpenAI. Added black-box HTTP coverage for blocked wrong-origin/simple mutation requests and DeepSeek-only blank dictation defaults. Validation passed with `go test -count=1 ./internal/proxy -run 'TestManagement(StaticPagesAndUnauthenticatedAPI|RejectsInvalidSessionsAndRequests|DatabasePersistenceAndOpenFailures|GeneratedSecretRoutesWithTenantProviderKey)'`, `go test -count=1 ./cmd/cli ./internal/proxy`, static JS `node --check`, `make go-test`, `make ci`, and `git diff --check`.
-
 - [x] [F007] (P1) Move management settings into an avatar-menu modal and make the dashboard usage-focused.
   Goal:
   Keep the authenticated management experience self-service, but make the first screen a usage dashboard with graphs while moving the current key, provider, default-routing, and request-example controls into a large Settings modal opened from the authenticated avatar dropdown before Sign Out.
-
   Requirements:
   - Keep the split-origin Pages frontend plus backend-only `/api/management/*` contract.
   - Keep using the shared `<mpr-header>` and `<mpr-user>` components; add Settings through the `mpr-user` menu item contract rather than forking `mpr-ui`.
@@ -865,45 +874,36 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Usage persistence must be tenant-isolated and must not store prompts, model responses, uploaded audio names, provider API keys, generated secrets, or raw TAuth identity payloads.
   - Persist usage through the existing GORM management store only; do not add raw SQL or a second persistence path.
   - Preserve existing proxy response behavior, token usage headers, management auth, CORS, and generated-secret routing.
-
   Deliverables:
   - Add a managed usage event store, recorder, authenticated usage-summary API, and black-box HTTP coverage.
   - Refactor the static management UI into dashboard, modal settings, and usage chart pieces while keeping user-facing strings in `site/assets/llm-proxy/js/constants.js`.
   - Add Settings as an avatar dropdown item before Sign Out and wire it to open the modal.
   - Add browser-visible coverage for dashboard charts and the avatar-menu Settings modal.
   - Update README/docs for the new dashboard/settings/usage contract.
-
   Validation:
   - Run focused Go management tests for usage recording, aggregation, and cross-user isolation.
   - Run static JS syntax checks for edited browser modules.
   - Run the browser test path covering Settings menu/modal behavior and dashboard graph rendering.
   - Run `timeout -k 350s -s SIGKILL 350s make ci` before marking the issue resolved.
-
   ### Resolution
   Added managed usage-event persistence through the existing GORM management store and exposed authenticated `GET /api/management/usage` summaries with 30-day totals, daily buckets, provider/model/status breakdowns, latency, and normalized token counts. Managed proxy text and dictation requests now record usage metadata for generated-secret tenants without storing prompts, responses, audio names, provider keys, generated secrets, or raw TAuth payloads; persistence failures are logged without changing proxy responses. Refactored the static management UI so the authenticated first screen is a usage dashboard with metric cards, SVG request/token graphs, and provider/model breakdowns. Moved tenant access, generated-secret controls, routing defaults, request examples, and provider key management into a large Settings modal opened by a `Settings` item inserted into the shared `<mpr-user>` avatar dropdown before `Sign out`. Added frontend usage presentation helpers, backend/management usage tests, internal usage edge coverage, a pinned Playwright browser harness, frontend syntax checking, CI Node/Playwright setup, and docs for the new usage/settings contract. Validation passed with `go test -count=1 ./internal/proxy -run 'TestManagement(UsageSummaryRecordsManagedProxyRequests|GeneratedSecretRoutesWithTenantProviderKey|GeneratedSecretSupportsDictationAndRejectsMultipartProviderKeys)'`, `make go-test` (Go total coverage 100.0%), `make frontend-lint`, `make frontend-test` (2 Playwright tests passed), `npm install` with 0 audit vulnerabilities after dependency pin updates, and `make ci` (Go/Python/frontend lint clean, Go total coverage 100.0%, Python 20 passed, Playwright 2 passed).
-
 - [x] [F008] (P2) Make the management dashboard and Settings modal more compact.
   Goal:
   Tighten the F007 dashboard/modal visual treatment to match the compact operator-facing style in sibling `../ISSUES.md`.
-
   Requirements:
   - Preserve the dashboard/settings information architecture and behavior.
   - Keep the MPR dark, compact, workbench-like style: narrower shell, smaller type, tighter spacing, thin borders, restrained shadows, and compact controls.
   - Use the sibling ISSUES.md app as inspiration without copying its issue-tracker layout or semantics.
   - Keep desktop and mobile layouts readable without overlapping text or controls.
-
   Validation:
   - Run frontend syntax checks.
   - Run the browser test path covering dashboard rendering and Settings modal behavior.
   - Run whitespace checks.
-
   ### Resolution
   Retuned the management UI stylesheet toward the compact `../ISSUES.md` operator style: 960px centered shell, 15px base type, charcoal MPR token palette, flatter panels, 6px borders, tighter grid gaps, shorter usage metric cards, lower chart height, smaller headings, denser forms/buttons, compact provider cards, and a tighter Settings modal. Preserved the F007 dashboard/modal behavior and information architecture. Validation passed with `make frontend-lint`, `make frontend-test` (2 Playwright tests passed), and `git diff --check`.
-
 - [x] [F009] (P1) Add administrator visibility for all managed users.
   Goal:
   Give configured administrators a management dashboard view across all managed users without exposing raw provider API keys or generated tenant secrets.
-
   Requirements:
   - Add administrators as normalized email addresses in `management.admin_emails`, populated from environment placeholders in public config.
   - Treat admin status as a management-session property derived from the authenticated TAuth email and validated config.
@@ -911,24 +911,21 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Admins can list managed users and see tenant facts plus 30-day usage summaries for each user.
   - Admin responses must not include provider API keys, masked provider key values, generated tenant secrets, secret digests, prompts, responses, audio names, or transcripts.
   - Non-admin authenticated users must receive `403` from admin-only APIs.
-
   Deliverables:
   - Extend management config parsing, validation, and docs for `management.admin_emails`.
   - Add an admin-only management API under `/api/management/admin/users`.
   - Add backend black-box coverage for admin access, non-admin rejection, and no key leakage.
   - Add a compact admin browser view reachable from the avatar menu only for admins.
   - Add browser-visible coverage for the Admin menu item and all-users dashboard.
-
   Validation:
   - Run focused Go management tests.
   - Run frontend syntax checks for edited browser modules.
   - Run the browser test path covering the admin menu/dashboard.
-
   ### Resolution
   Added `management.admin_emails` as the config-owned administrator list, validates configured email values at startup, derives `user.is_admin` from the validated TAuth session email, and keeps public config on environment placeholders for admin addresses. Added admin-only `GET /api/management/admin/users`, returning all managed users with tenant facts and 30-day usage summaries while excluding provider API keys, masked key strings, generated secrets, secret digests, prompts, responses, audio names, and transcripts. Non-admin authenticated sessions receive `403`. The static Pages UI now inserts an `Admin` avatar-menu item only for admin profiles and renders a compact all-users dashboard. README and provider-routing docs describe the admin contract.
-
   Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run 'TestManagement(AdminUsersDashboard|UsageSummaryRecordsManagedProxyRequests|ConfigurationValidationRequiresBackendAuthFields)'`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./cmd/cli -run 'TestRootCommand|TestRender'`, `timeout -k 240s -s SIGKILL 240s go test -count=1 ./internal/proxy`, `timeout -k 30s -s SIGKILL 30s npm run frontend:lint`, `timeout -k 180s -s SIGKILL 180s npm run frontend:test -- management-ui.spec.js`, and `git diff --check`.
 
 
 ## Planning
 *do not implement yet*
+
