@@ -581,11 +581,38 @@ settings-body {
   padding: 0.65rem;
 }
 
-settings-section {
+settings-section,
+.settings-section {
   border: 1px solid var(--llm-border);
   border-radius: 6px;
   background: var(--llm-panel);
   padding: 0.65rem;
+}
+
+.usage-examples-summary {
+  cursor: pointer;
+  list-style: none;
+  margin-bottom: 0;
+}
+
+.usage-examples-summary::-webkit-details-marker {
+  display: none;
+}
+
+.usage-examples-summary::after {
+  content: ">";
+  color: var(--llm-muted);
+  font-size: 0.82rem;
+  transform: rotate(0deg);
+  transition: transform 0.16s ease;
+}
+
+.usage-examples-section[open] .usage-examples-summary {
+  margin-bottom: 0.5rem;
+}
+
+.usage-examples-section[open] .usage-examples-summary::after {
+  transform: rotate(90deg);
 }
 
 .settings-grid-form {

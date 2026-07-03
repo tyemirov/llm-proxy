@@ -570,6 +570,26 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Resolution:
   Added required `management.provider_key_encryption_key` configuration with base64 32-byte validation, AES-GCM encrypted provider-key persistence, row-bound associated data, and startup migration that encrypts and clears legacy plaintext `api_key` rows. Updated config templates, Pages render env, README, and provider-routing docs to state the exact encrypted-at-rest guarantee and explicitly distinguish it from zero-knowledge/user-only decryption. Added focused Go coverage for config parsing, validation, encrypted storage, plaintext migration, decrypt failures, and generated-secret proxy routing. Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run 'TestManagedTenant(StoreInternalEdges|StoreStaticConfigMigrationEdges|GORMDatabaseEncryptsProviderKeysAtRest)|TestManagementConfigurationValidationRequiresBackendAuthFields|TestManagementGeneratedSecretRoutesWithTenantProviderKey|TestManagementGeneratedSecretSupportsDictationAndRejectsMultipartProviderKeys'`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./cmd/cli -run 'TestRootCommand(RunsConfiguredProxyFromConfigFile|LoadsPackagedConfigWithManagementEnvironment|RendersSiteFromConfigFile|RejectsUnsupportedManagementDatabaseDialect)'`, `timeout -k 350s -s SIGKILL 350s make go-test`, `timeout -k 30s -s SIGKILL 30s make check-format`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
 
+- [x] [I017] (P2) Let Settings request examples fold as one usage segment.
+  Goal:
+  Reduce Settings modal sprawl by letting users collapse the full Usage / Request examples segment while preserving copyable default and selected-provider commands.
+
+  Requirements:
+  - The Request examples segment starts folded when Settings opens.
+  - Expanding the segment reveals the existing default and selected-provider request examples without changing their commands.
+  - Copy actions and selected-provider updates keep working from the expanded segment.
+  - Browser coverage proves the folded and expanded states through the real Settings modal.
+
+  Deliverables:
+  - Static management UI markup and state for the foldable request examples segment.
+  - Focused Playwright coverage for the disclosure behavior.
+
+  Validation:
+  - Run focused frontend validation for the management Settings modal.
+
+  Resolution:
+  The Settings modal now renders the Usage / Request examples segment as a native disclosure that starts folded each time Settings opens. Expanding the segment reveals the existing default and selected-provider request examples without changing generated curl commands, copy actions, selected-provider updates, or generated-secret replacement. Playwright coverage now asserts the folded initial state and expands the segment before exercising command visibility, provider updates, clipboard copy, and generated-secret replacement. Validation passed with `timeout -k 180s -s SIGKILL 180s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s npm run frontend:test -- tests/e2e/management-ui.spec.js -g "dashboard shows usage|settings shows placeholder request examples|settings request examples use"`, `timeout -k 180s -s SIGKILL 180s make frontend-test`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
+
 
 ## Maintenance
 
