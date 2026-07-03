@@ -283,13 +283,17 @@
                     </form>
                   </settings-section>
 
-                  <settings-section>
-                    <header class="section-header compact">
+                  <details
+                    class="settings-section usage-examples-section"
+                    x-bind:open="usageExamplesOpen"
+                    x-on:toggle="usageExamplesOpen = $event.currentTarget.open"
+                  >
+                    <summary class="section-header compact usage-examples-summary">
                       <div>
                         <p class="eyebrow" x-text="copy.examplesEyebrow"></p>
                         <h2 x-text="copy.examplesTitle"></h2>
                       </div>
-                    </header>
+                    </summary>
                     <example-list>
                       <template x-for="example in requestExamples" x-bind:key="example.id">
                         <request-example x-bind:data-example-id="example.id">
@@ -307,7 +311,7 @@
                         </request-example>
                       </template>
                     </example-list>
-                  </settings-section>
+                  </details>
 
                   <settings-section>
                     <header class="section-header compact">
