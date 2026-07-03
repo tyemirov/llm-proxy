@@ -16,6 +16,9 @@
   --llm-good: #95c23d;
   --llm-danger: #cc4b4b;
   --llm-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  /* Above the sticky MPR header/footer and the built-in MPR modal layer. */
+  --llm-z-settings-overlay: 2200;
+  --llm-z-notice: 2300;
 }
 
 html,
@@ -540,7 +543,7 @@ provider-status p {
 settings-overlay {
   position: fixed;
   inset: 0;
-  z-index: 30;
+  z-index: var(--llm-z-settings-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -641,6 +644,7 @@ provider-settings-fields button[type="submit"] {
   position: fixed;
   right: 0.75rem;
   bottom: 0.75rem;
+  z-index: var(--llm-z-notice);
   max-width: min(420px, calc(100vw - 36px));
   border: 1px solid var(--llm-border);
   border-radius: 6px;
