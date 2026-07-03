@@ -324,7 +324,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Added router-level coverage for a blocked DeepSeek-compatible upstream request holding the only active worker while a second admitted request times out before acquiring that worker. The scenario covers the limiter `acquire` context-cancel path and `Do` admission-release path deterministically.
   Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 180s -s SIGKILL 180s env GOTOOLCHAIN=go1.24.13 go test -count=1 ./internal/proxy -run 'TestCoverageProviderRoutingEdges/admitted_provider_request_timeout_releases_queue_slot_before_acquiring_worker'`, `timeout -k 350s -s SIGKILL 350s env GOTOOLCHAIN=go1.24.13 make go-test` (Go total coverage 100.0%), and `timeout -k 350s -s SIGKILL 350s make ci` (Go lint/staticcheck/ineffassign clean, Python mypy clean, Go total coverage 100.0%, Python 20 passed, root import smoke passed).
-- [ ] [B020] (P0) Adjust settings modal layout relative to header and footer.
+- [x] [B020] (P0) Adjust settings modal layout relative to header and footer.
   Goal:
   Ensure the settings modal is visually positioned between the header and footer (or layered in front of them) rather than appearing underneath them, so users can always see and interact with the modal contents.
   
@@ -348,6 +348,8 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Resize the viewport across supported breakpoints and verify the modal remains correctly layered between or in front of header and footer.
   - Confirm that closing/opening the modal multiple times does not cause layout shifts or stacking anomalies.
   - Verify that other modals or overlays still appear correctly and are not negatively impacted by the changes.
+  ### Resolution
+  The Settings overlay now uses an explicit llm-proxy modal layer above the sticky MPR header/footer and the built-in MPR modal layer, with a CSS comment documenting that stacking contract. The notice layer stays below the Settings overlay so persistent notices remain visible outside modal flows without covering or intercepting Settings controls. Browser coverage now models the real MPR shell header/footer z-indexes, verifies the Settings modal and overlay win pointer hit-testing over header/footer and notices on desktop and mobile viewports, and proves repeated close/open remains stable. Screenshot evidence was captured at `output/playwright/B020-settings-desktop.png` and `output/playwright/B020-settings-mobile.png`. Validation passed with `timeout -k 180s -s SIGKILL 180s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s npm run frontend:test -- --grep "settings modal overlays MPR header and footer layers"`, `timeout -k 240s -s SIGKILL 240s make frontend-test`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
 
 
 ## Improvements
@@ -928,4 +930,3 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
 ## Planning
 *do not implement yet*
-

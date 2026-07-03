@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { createReadStream } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,7 @@ const siteRoot = path.join(repoRoot, "site");
 const configPath = "/config-ui.yaml";
 const faviconPath = "/assets/llm-proxy/img/favicon.svg";
 const appIconPath = "/assets/llm-proxy/img/llm-proxy-icon.svg";
+const b020ScreenshotDirectory = path.join(repoRoot, "output/playwright");
 const httpOK = 200;
 const httpInternalServerError = 500;
 const mimeTypes = Object.freeze({
@@ -19,6 +20,10 @@ const mimeTypes = Object.freeze({
   ".svg": "image/svg+xml",
   ".yaml": "application/yaml",
 });
+const settingsLayerViewports = Object.freeze([
+  { name: "desktop", width: 1280, height: 720 },
+  { name: "mobile", width: 390, height: 780 },
+]);
 
 let server;
 let baseURL = "";
@@ -224,6 +229,47 @@ test("settings modal remains usable on narrow screens", async ({ page }) => {
   await expect(page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: "Close" })).toBeVisible();
 });
 
+test("settings modal overlays MPR header and footer layers", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+
+  for (const viewport of settingsLayerViewports) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto(baseURL);
+    await page.getByTestId("avatar-menu").click();
+    await page.getByTestId("avatar-menu-item").nth(0).click();
+
+    const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+    await expect(settingsDialog).toBeVisible();
+    await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeVisible();
+
+    const layerFacts = await settingsLayerFacts(page);
+    expect(layerFacts.overlayZIndex).toBeGreaterThan(layerFacts.headerZIndex);
+    expect(layerFacts.overlayZIndex).toBeGreaterThan(layerFacts.footerZIndex);
+    expect(layerFacts.overlayZIndex).toBeGreaterThan(layerFacts.noticeZIndex);
+    expect(layerFacts.closeButtonHit.inSettingsModal).toBe(true);
+    expect(layerFacts.closeButtonHit.inMprHeader).toBe(false);
+    expect(layerFacts.modalBottomHit.inSettingsModal || layerFacts.modalBottomHit.inSettingsOverlay).toBe(true);
+    expect(layerFacts.modalBottomHit.inMprFooter).toBe(false);
+    expect(layerFacts.noticeHit.inSettingsModal || layerFacts.noticeHit.inSettingsOverlay).toBe(true);
+    expect(layerFacts.noticeHit.inNotice).toBe(false);
+    expect(layerFacts.headerHit.inSettingsModal || layerFacts.headerHit.inSettingsOverlay).toBe(true);
+    expect(layerFacts.headerHit.inMprHeader).toBe(false);
+    expect(layerFacts.footerHit.inSettingsModal || layerFacts.footerHit.inSettingsOverlay).toBe(true);
+    expect(layerFacts.footerHit.inMprFooter).toBe(false);
+
+    if (process.env.B020_SCREENSHOTS === "1") {
+      await mkdir(b020ScreenshotDirectory, { recursive: true });
+      await page.screenshot({ path: path.join(b020ScreenshotDirectory, `B020-settings-${viewport.name}.png`) });
+    }
+
+    await settingsDialog.getByRole("button", { name: "Close" }).click();
+    await expect(settingsDialog).toBeHidden();
+    await page.getByTestId("avatar-menu-item").nth(0).click();
+    await expect(settingsDialog).toBeVisible();
+  }
+});
+
 test("settings stays reachable when usage summary fails", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page, { usageStatus: httpInternalServerError });
@@ -288,7 +334,9 @@ async function installAssetRoutes(page) {
   await page.route("**/js-yaml@4.3.0/dist/js-yaml.min.js", async (route) =>
     fulfillFile(route, "node_modules/js-yaml/dist/js-yaml.min.js", "application/javascript"),
   );
-  await page.route("**/mpr-ui.css", async (route) => route.fulfill({ body: "", contentType: "text/css" }));
+  await page.route("**/mpr-ui.css", async (route) =>
+    route.fulfill({ body: mprShellLayerCSS(), contentType: "text/css" }),
+  );
   await page.route("**/mpr-ui-config.js", async (route) =>
     route.fulfill({
       body: "globalThis.MPRUI = { applyYamlConfig: async () => undefined };",
@@ -323,6 +371,67 @@ async function installClipboardMock(page) {
  */
 async function copiedText(page) {
   return page.evaluate(() => window.__llmProxyCopiedText || "");
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @returns {Promise<{
+ *   overlayZIndex: number,
+ *   headerZIndex: number,
+ *   footerZIndex: number,
+ *   noticeZIndex: number,
+ *   closeButtonHit: { inSettingsModal: boolean, inSettingsOverlay: boolean, inMprHeader: boolean, inMprFooter: boolean },
+ *   modalBottomHit: { inSettingsModal: boolean, inSettingsOverlay: boolean, inMprHeader: boolean, inMprFooter: boolean },
+ *   noticeHit: { inSettingsModal: boolean, inSettingsOverlay: boolean, inMprHeader: boolean, inMprFooter: boolean, inNotice: boolean },
+ *   headerHit: { inSettingsModal: boolean, inSettingsOverlay: boolean, inMprHeader: boolean, inMprFooter: boolean },
+ *   footerHit: { inSettingsModal: boolean, inSettingsOverlay: boolean, inMprHeader: boolean, inMprFooter: boolean },
+ * }>}
+ */
+async function settingsLayerFacts(page) {
+  return page.evaluate(() => {
+    const overlayElement = document.querySelector("settings-overlay");
+    const modalElement = document.querySelector("settings-modal");
+    const closeButton = modalElement?.querySelector(".settings-header button");
+    const headerElement = document.querySelector("mpr-header");
+    const footerElement = document.querySelector("mpr-footer");
+    const noticeElement = document.querySelector(".notice");
+    if (!overlayElement || !modalElement || !closeButton || !headerElement || !footerElement || !noticeElement) {
+      throw new Error("settings_layer_elements_missing");
+    }
+
+    const modalRect = modalElement.getBoundingClientRect();
+    const closeButtonRect = closeButton.getBoundingClientRect();
+    const headerRect = headerElement.getBoundingClientRect();
+    const footerRect = footerElement.getBoundingClientRect();
+    const noticeRect = noticeElement.getBoundingClientRect();
+    const viewportWidth = document.documentElement.clientWidth;
+    const hitAt = (xCoordinate, yCoordinate) => {
+      const element = document.elementFromPoint(xCoordinate, yCoordinate);
+      return {
+        inSettingsModal: Boolean(element?.closest("settings-modal")),
+        inSettingsOverlay: Boolean(element?.closest("settings-overlay")),
+        inMprHeader: Boolean(element?.closest("mpr-header")),
+        inMprFooter: Boolean(element?.closest("mpr-footer")),
+        inNotice: Boolean(element?.closest(".notice")),
+      };
+    };
+    const safeBandCenter = (rect) => rect.top + Math.min(Math.max(rect.height / 2, 2), Math.max(rect.height - 2, 2));
+
+    return {
+      overlayZIndex: Number.parseInt(getComputedStyle(overlayElement).zIndex, 10),
+      headerZIndex: Number.parseInt(getComputedStyle(headerElement).zIndex, 10),
+      footerZIndex: Number.parseInt(getComputedStyle(footerElement).zIndex, 10),
+      noticeZIndex: Number.parseInt(getComputedStyle(noticeElement).zIndex, 10),
+      closeButtonHit: hitAt(
+        closeButtonRect.left + closeButtonRect.width / 2,
+        closeButtonRect.top + closeButtonRect.height / 2,
+      ),
+      modalBottomHit: hitAt(modalRect.left + modalRect.width / 2, modalRect.bottom - 4),
+      noticeHit: hitAt(noticeRect.left + noticeRect.width / 2, noticeRect.top + noticeRect.height / 2),
+      headerHit: hitAt(viewportWidth / 2, safeBandCenter(headerRect)),
+      footerHit: hitAt(viewportWidth / 2, safeBandCenter(footerRect)),
+    };
+  });
 }
 
 /**
@@ -620,5 +729,36 @@ class MprUser extends HTMLElement {
 customElements.define("mpr-header", MprHeader);
 customElements.define("mpr-footer", MprFooter);
 customElements.define("mpr-user", MprUser);
+`;
+}
+
+/**
+ * @returns {string}
+ */
+function mprShellLayerCSS() {
+  return `
+mpr-header {
+  position: sticky;
+  top: 0;
+  z-index: 1200;
+  display: flex;
+  min-height: 56px;
+  align-items: center;
+  justify-content: flex-end;
+  box-sizing: border-box;
+  padding: 0 16px;
+  background: rgba(3, 23, 32, 0.95);
+}
+
+mpr-footer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1200;
+  display: block;
+  min-height: 64px;
+  background: rgba(3, 23, 32, 0.95);
+}
 `;
 }
