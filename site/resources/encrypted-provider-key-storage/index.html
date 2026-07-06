@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Encrypted provider key storage for managed tenants</title>
+    <meta name="description" content="Store tenant-owned provider API keys with AES-GCM encryption at rest and honest security wording.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/encrypted-provider-key-storage/">
+    <meta property="og:title" content="Encrypted provider key storage for managed tenants">
+    <meta property="og:description" content="Store tenant-owned provider API keys with AES-GCM encryption at rest and honest security wording.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/encrypted-provider-key-storage/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Encrypted provider key storage for managed tenants","description":"Store tenant-owned provider API keys with AES-GCM encryption at rest and honest security wording.","url":"https://llm-proxy.mprlab.com/resources/encrypted-provider-key-storage/","datePublished":"2026-07-06","dateModified":"2026-07-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/encrypted-provider-key-storage/","about":["LLM Proxy","Security","encrypted provider key storage"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Encrypted provider key storage for managed tenants","item":"https://llm-proxy.mprlab.com/resources/encrypted-provider-key-storage/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of encrypted provider key storage?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy requires a base64 32-byte provider-key encryption key in management mode and encrypts managed provider API keys at rest with AES-GCM and row-bound associated data."}},{"@type":"Question","name":"Who should read this security resource?","acceptedAnswer":{"@type":"Answer","text":"Teams evaluating how LLM Proxy stores BYO provider credentials in management mode."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Keep provider API keys server-side for LLM apps, which covers server-side provider API keys."}}]}</script>
+  </head>
+  <body class="resource-page">
+
+      <header class="resource-shell resource-topbar">
+        <a class="resource-brand" href="/">LLM Proxy</a>
+        <nav aria-label="Resource navigation">
+          <a href="/resources/">Resources</a>
+          <a href="/">Main page</a>
+        </nav>
+      </header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Encrypted provider key storage for managed tenants</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Security</p>
+            <h1>Encrypted provider key storage for managed tenants</h1>
+            <p class="resource-deck">Store tenant-owned provider API keys with AES-GCM encryption at rest and honest security wording.</p>
+            <p class="resource-audience">Teams evaluating how LLM Proxy stores BYO provider credentials in management mode.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Provider API keys are high-value secrets. A management database should not store raw upstream credentials as plaintext rows.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy requires a base64 32-byte provider-key encryption key in management mode and encrypts managed provider API keys at rest with AES-GCM and row-bound associated data.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Generate a base64 32-byte management.provider_key_encryption_key.</li>
+<li>Configure it as a backend deployment secret.</li>
+<li>Save provider API keys through authenticated management endpoints.</li>
+<li>Let startup migrate existing plaintext rows into encrypted records.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  
+                        <tr>
+                          <td>AES-GCM storage</td>
+                          <td>Provider keys are encrypted before database persistence.</td>
+                          <td>Database dumps and direct storage access do not expose raw values.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Startup migration</td>
+                          <td>Existing plaintext rows are encrypted and cleared on management startup.</td>
+                          <td>The bridge is bounded to current schema migration.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Honest guarantee</td>
+                          <td>Docs describe encrypted-at-rest storage, not zero-knowledge storage.</td>
+                          <td>The runtime decrypts keys when routing upstream.</td>
+                        </tr>
+                      
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+              
+                    <section class="resource-card">
+                      <h3>SQLite local profile</h3>
+                      <p>A local management database stores encrypted provider key rows.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Postgres hosted profile</h3>
+                      <p>Hosted management state uses the same encrypted key contract.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Storage exposure reduction</h3>
+                      <p>A database backup does not contain raw provider API keys.</p>
+                    </section>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>The backend must decrypt provider keys to call upstream APIs.</li>
+<li>Losing the encryption key can break access to stored provider keys.</li>
+<li>This does not remove the need for secure deployment secret handling.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+              
+                    <details>
+                      <summary>What is the main job of encrypted provider key storage?</summary>
+                      <p>LLM Proxy requires a base64 32-byte provider-key encryption key in management mode and encrypts managed provider API keys at rest with AES-GCM and row-bound associated data.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Who should read this security resource?</summary>
+                      <p>Teams evaluating how LLM Proxy stores BYO provider credentials in management mode.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Keep provider API keys server-side for LLM apps, which covers server-side provider API keys.</p>
+                    </details>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+              
+                    <a class="resource-related" href="/resources/server-side-provider-api-keys/">
+                      <span>Security</span>
+                      <strong>Keep provider API keys server-side for LLM apps</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/tenant-secret-ai-gateway/">
+                      <span>Security</span>
+                      <strong>Tenant-secret AI gateway for internal applications</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/reject-client-provider-key-leaks/">
+                      <span>Security</span>
+                      <strong>Reject client-supplied provider key leaks</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/generated-secret-rotation-and-revocation/">
+                      <span>Security</span>
+                      <strong>Generated secret rotation and revocation</strong>
+                    </a>
+                  
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
+            <a class="resource-button" href="/">Open the main page</a>
+          </section>
+        </article>
+      </main>
+      <footer class="resource-shell resource-footer">
+        <a href="/">LLM Proxy main page</a>
+        <a href="/resources/">Resource hub</a>
+        <a href="/sitemap.xml">Sitemap</a>
+      </footer>
+    
+  </body>
+</html>

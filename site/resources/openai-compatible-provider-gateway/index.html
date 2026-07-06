@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OpenAI-compatible provider gateway</title>
+    <meta name="description" content="Route DeepSeek, Qwen, Kimi, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/">
+    <meta property="og:title" content="OpenAI-compatible provider gateway">
+    <meta property="og:description" content="Route DeepSeek, Qwen, Kimi, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"OpenAI-compatible provider gateway","description":"Route DeepSeek, Qwen, Kimi, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.","url":"https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/","datePublished":"2026-07-06","dateModified":"2026-07-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/","about":["LLM Proxy","Provider routing","OpenAI-compatible provider gateway"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"OpenAI-compatible provider gateway","item":"https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of OpenAI-compatible provider gateway?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy uses a shared compatible chat adapter for configured providers while keeping provider URLs, keys, and model catalogs in config."}},{"@type":"Question","name":"Who should read this provider routing resource?","acceptedAnswer":{"@type":"Answer","text":"Teams adopting OpenAI-compatible chat providers without rewriting every caller."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Multi-provider LLM proxy for internal tools, which covers multi-provider LLM proxy."}}]}</script>
+  </head>
+  <body class="resource-page">
+
+      <header class="resource-shell resource-topbar">
+        <a class="resource-brand" href="/">LLM Proxy</a>
+        <nav aria-label="Resource navigation">
+          <a href="/resources/">Resources</a>
+          <a href="/">Main page</a>
+        </nav>
+      </header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>OpenAI-compatible provider gateway</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Provider routing</p>
+            <h1>OpenAI-compatible provider gateway</h1>
+            <p class="resource-deck">Route DeepSeek, Qwen, Kimi, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.</p>
+            <p class="resource-audience">Teams adopting OpenAI-compatible chat providers without rewriting every caller.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>OpenAI-compatible providers share a broad shape but still need different base URLs, keys, defaults, and availability rules.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy uses a shared compatible chat adapter for configured providers while keeping provider URLs, keys, and model catalogs in config.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Configure provider base_url, api_key, and text catalog.</li>
+<li>Use provider selectors such as deepseek, dashscope, moonshot, siliconflow, zhipu, or grok.</li>
+<li>Send GET, compatibility POST, or canonical /v2 requests.</li>
+<li>Let omitted model use the selected provider's configured default.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  
+                        <tr>
+                          <td>Shared adapter</td>
+                          <td>Compatible chat providers use one proxy integration pattern.</td>
+                          <td>Provider-specific logic stays centralized.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Provider aliases</td>
+                          <td>Some providers expose aliases such as qwen, kimi, glm, or xai.</td>
+                          <td>Callers can use documented selectors.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Disabled-provider behavior</td>
+                          <td>Blank non-default provider keys keep startup working and return 503 when selected.</td>
+                          <td>Operators can stage provider support before credentials exist.</td>
+                        </tr>
+                      
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+              
+                    <section class="resource-card">
+                      <h3>DeepSeek route</h3>
+                      <p>A caller sends provider=deepseek and model=deepseek-v4-flash.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Qwen alias</h3>
+                      <p>A caller uses provider=qwen for DashScope routing.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>xAI route</h3>
+                      <p>A Grok text request uses the OpenAI-compatible chat adapter behind provider=grok.</p>
+                    </section>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>Compatibility does not mean every provider feature is exposed.</li>
+<li>Each provider still needs a configured key before serving tenant traffic.</li>
+<li>Provider base URLs should stay explicit in config.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+              
+                    <details>
+                      <summary>What is the main job of OpenAI-compatible provider gateway?</summary>
+                      <p>LLM Proxy uses a shared compatible chat adapter for configured providers while keeping provider URLs, keys, and model catalogs in config.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Who should read this provider routing resource?</summary>
+                      <p>Teams adopting OpenAI-compatible chat providers without rewriting every caller.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Multi-provider LLM proxy for internal tools, which covers multi-provider LLM proxy.</p>
+                    </details>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+              
+                    <a class="resource-related" href="/resources/multi-provider-llm-proxy/">
+                      <span>Provider routing</span>
+                      <strong>Multi-provider LLM proxy for internal tools</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/openai-claude-gemini-one-endpoint/">
+                      <span>Provider routing</span>
+                      <strong>OpenAI, Claude, and Gemini through one endpoint</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/gemini-generatecontent-proxy/">
+                      <span>Provider routing</span>
+                      <strong>Gemini generateContent proxy for shared LLM calls</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/dictation-provider-routing/">
+                      <span>Dictation</span>
+                      <strong>Dictation provider routing for OpenAI, Zhipu, Grok, and SiliconFlow</strong>
+                    </a>
+                  
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
+            <a class="resource-button" href="/">Open the main page</a>
+          </section>
+        </article>
+      </main>
+      <footer class="resource-shell resource-footer">
+        <a href="/">LLM Proxy main page</a>
+        <a href="/resources/">Resource hub</a>
+        <a href="/sitemap.xml">Sitemap</a>
+      </footer>
+    
+  </body>
+</html>

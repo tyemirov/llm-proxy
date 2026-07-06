@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bring-your-own provider key portal for AI access</title>
+    <meta name="description" content="Use LLM Proxy Settings to let users save provider keys and keep public proxy calls key-free.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/">
+    <meta property="og:title" content="Bring-your-own provider key portal for AI access">
+    <meta property="og:description" content="Use LLM Proxy Settings to let users save provider keys and keep public proxy calls key-free.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Bring-your-own provider key portal for AI access","description":"Use LLM Proxy Settings to let users save provider keys and keep public proxy calls key-free.","url":"https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/","datePublished":"2026-07-06","dateModified":"2026-07-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/","about":["LLM Proxy","Management UI","bring your own provider key portal"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Bring-your-own provider key portal for AI access","item":"https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of bring your own provider key portal?","acceptedAnswer":{"@type":"Answer","text":"The management UI accepts provider API keys only through authenticated management endpoints and keeps public proxy requests on the tenant-secret contract."}},{"@type":"Question","name":"Who should read this management ui resource?","acceptedAnswer":{"@type":"Answer","text":"Organizations where users or teams own their upstream provider accounts."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Self-service LLM key management for teams, which covers self-service LLM key management."}}]}</script>
+  </head>
+  <body class="resource-page">
+
+      <header class="resource-shell resource-topbar">
+        <a class="resource-brand" href="/">LLM Proxy</a>
+        <nav aria-label="Resource navigation">
+          <a href="/resources/">Resources</a>
+          <a href="/">Main page</a>
+        </nav>
+      </header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Bring-your-own provider key portal for AI access</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Management UI</p>
+            <h1>Bring-your-own provider key portal for AI access</h1>
+            <p class="resource-deck">Use LLM Proxy Settings to let users save provider keys and keep public proxy calls key-free.</p>
+            <p class="resource-audience">Organizations where users or teams own their upstream provider accounts.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>BYO provider keys can become risky when users paste keys into product apps, scripts, or support messages instead of a controlled backend surface.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>The management UI accepts provider API keys only through authenticated management endpoints and keeps public proxy requests on the tenant-secret contract.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Sign in through the configured MPR/TAuth shell.</li>
+<li>Open Settings and select the provider to configure.</li>
+<li>Save the provider API key with the selected text model and provider system prompt.</li>
+<li>Use generated proxy examples that never include upstream provider credentials.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  
+                        <tr>
+                          <td>Provider selector in Settings</td>
+                          <td>Users edit one provider at a time with explicit fields.</td>
+                          <td>The UI avoids a wall of provider cards.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Masked key status</td>
+                          <td>Saved keys are represented by status, not raw values.</td>
+                          <td>Users can confirm a key exists without retrieving it.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Provider-specific examples</td>
+                          <td>Examples include provider selection when users need a provider route.</td>
+                          <td>The copy action stays separate for default and selected-provider examples.</td>
+                        </tr>
+                      
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+              
+                    <section class="resource-card">
+                      <h3>Team-owned OpenAI account</h3>
+                      <p>A team saves its own OpenAI key and uses the generated tenant secret in internal tools.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Specialized provider trial</h3>
+                      <p>A user adds a Gemini key for one workflow while leaving default examples available.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Key removal</h3>
+                      <p>The user removes a provider key and related settings from the selected-provider editor.</p>
+                    </section>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>Users need an authenticated management session before saving provider keys.</li>
+<li>A provider without a key cannot serve requests for that tenant.</li>
+<li>Provider-key encryption protects storage exposure, not runtime operators from all access.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+              
+                    <details>
+                      <summary>What is the main job of bring your own provider key portal?</summary>
+                      <p>The management UI accepts provider API keys only through authenticated management endpoints and keeps public proxy requests on the tenant-secret contract.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Who should read this management ui resource?</summary>
+                      <p>Organizations where users or teams own their upstream provider accounts.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Self-service LLM key management for teams, which covers self-service LLM key management.</p>
+                    </details>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+              
+                    <a class="resource-related" href="/resources/self-service-llm-key-management/">
+                      <span>Management UI</span>
+                      <strong>Self-service LLM key management for teams</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/tauth-protected-management-api/">
+                      <span>Management UI</span>
+                      <strong>TAuth-protected management API for LLM Proxy</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/canonical-v2-chat-messages-api/">
+                      <span>API contract</span>
+                      <strong>Canonical /v2 chat messages API for LLM calls</strong>
+                    </a>
+                  
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
+            <a class="resource-button" href="/">Open the main page</a>
+          </section>
+        </article>
+      </main>
+      <footer class="resource-shell resource-footer">
+        <a href="/">LLM Proxy main page</a>
+        <a href="/resources/">Resource hub</a>
+        <a href="/sitemap.xml">Sitemap</a>
+      </footer>
+    
+  </body>
+</html>

@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Upstream worker and queue limits for LLM traffic</title>
+    <meta name="description" content="Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/">
+    <meta property="og:title" content="Upstream worker and queue limits for LLM traffic">
+    <meta property="og:description" content="Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Upstream worker and queue limits for LLM traffic","description":"Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.","url":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/","datePublished":"2026-07-06","dateModified":"2026-07-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/","about":["LLM Proxy","Reliability","upstream worker queue limits"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Upstream worker and queue limits for LLM traffic","item":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of upstream worker queue limits?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy uses server.workers for concurrent upstream HTTP operations and server.queue_size for operations waiting on that shared limit."}},{"@type":"Question","name":"Who should read this reliability resource?","acceptedAnswer":{"@type":"Answer","text":"Operators who need predictable capacity limits for provider HTTP calls."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is OpenAI background response polling without client loops, which covers OpenAI background response polling."}}]}</script>
+  </head>
+  <body class="resource-page">
+
+      <header class="resource-shell resource-topbar">
+        <a class="resource-brand" href="/">LLM Proxy</a>
+        <nav aria-label="Resource navigation">
+          <a href="/resources/">Resources</a>
+          <a href="/">Main page</a>
+        </nav>
+      </header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Upstream worker and queue limits for LLM traffic</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Reliability</p>
+            <h1>Upstream worker and queue limits for LLM traffic</h1>
+            <p class="resource-deck">Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.</p>
+            <p class="resource-audience">Operators who need predictable capacity limits for provider HTTP calls.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Unlimited upstream calls can exhaust provider quotas or local resources, while long OpenAI polling sleeps should not occupy scarce worker capacity.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy uses server.workers for concurrent upstream HTTP operations and server.queue_size for operations waiting on that shared limit.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Set server.workers for active upstream HTTP concurrency.</li>
+<li>Set server.queue_size for pending upstream operations.</li>
+<li>Let OpenAI background poll sleeps release worker capacity between polls.</li>
+<li>Handle 503 request queue full and 504 timeout responses at the caller boundary.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  
+                        <tr>
+                          <td>Shared limiter</td>
+                          <td>Text providers and dictation use the same upstream HTTP operation limit.</td>
+                          <td>Capacity policy is centralized.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Queue pressure signal</td>
+                          <td>A full queue returns service-unavailable behavior.</td>
+                          <td>Callers can distinguish overload from provider failure.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Polling separation</td>
+                          <td>OpenAI poll sleeps do not occupy worker slots.</td>
+                          <td>Other requests can proceed while a background response waits.</td>
+                        </tr>
+                      
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+              
+                    <section class="resource-card">
+                      <h3>Low-capacity environment</h3>
+                      <p>A local deployment sets one worker and a small queue to keep provider traffic controlled.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Mixed text and audio</h3>
+                      <p>Dictation and text calls share the same upstream HTTP admission boundary.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Operational debugging</h3>
+                      <p>A queue-full status points to proxy-side capacity, not a malformed request.</p>
+                    </section>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>These controls limit upstream HTTP operations, not the number of connected client requests.</li>
+<li>They do not replace provider-side rate limits.</li>
+<li>I013 tracks future rate limiting by time window; current workers/queue are concurrency controls.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+              
+                    <details>
+                      <summary>What is the main job of upstream worker queue limits?</summary>
+                      <p>LLM Proxy uses server.workers for concurrent upstream HTTP operations and server.queue_size for operations waiting on that shared limit.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Who should read this reliability resource?</summary>
+                      <p>Operators who need predictable capacity limits for provider HTTP calls.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is OpenAI background response polling without client loops, which covers OpenAI background response polling.</p>
+                    </details>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+              
+                    <a class="resource-related" href="/resources/openai-background-response-polling/">
+                      <span>Reliability</span>
+                      <strong>OpenAI background response polling without client loops</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/llm-proxy-status-code-map/">
+                      <span>Reliability</span>
+                      <strong>LLM Proxy status code map for callers</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/model-catalog-configuration/">
+                      <span>Configuration</span>
+                      <strong>LLM model catalog configuration in config.yml</strong>
+                    </a>
+                  
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
+            <a class="resource-button" href="/">Open the main page</a>
+          </section>
+        </article>
+      </main>
+      <footer class="resource-shell resource-footer">
+        <a href="/">LLM Proxy main page</a>
+        <a href="/resources/">Resource hub</a>
+        <a href="/sitemap.xml">Sitemap</a>
+      </footer>
+    
+  </body>
+</html>

@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LLM Proxy status code map for callers</title>
+    <meta name="description" content="Handle missing keys, bad inputs, rate limits, disabled providers, timeouts, and upstream failures consistently.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/llm-proxy-status-code-map/">
+    <meta property="og:title" content="LLM Proxy status code map for callers">
+    <meta property="og:description" content="Handle missing keys, bad inputs, rate limits, disabled providers, timeouts, and upstream failures consistently.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/llm-proxy-status-code-map/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"LLM Proxy status code map for callers","description":"Handle missing keys, bad inputs, rate limits, disabled providers, timeouts, and upstream failures consistently.","url":"https://llm-proxy.mprlab.com/resources/llm-proxy-status-code-map/","datePublished":"2026-07-06","dateModified":"2026-07-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/llm-proxy-status-code-map/","about":["LLM Proxy","Reliability","LLM proxy status code map"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"LLM Proxy status code map for callers","item":"https://llm-proxy.mprlab.com/resources/llm-proxy-status-code-map/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of LLM proxy status code map?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy maps public errors to documented HTTP status codes across text and dictation routes."}},{"@type":"Question","name":"Who should read this reliability resource?","acceptedAnswer":{"@type":"Answer","text":"Developers who need predictable error handling around LLM and dictation calls."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is OpenAI background response polling without client loops, which covers OpenAI background response polling."}}]}</script>
+  </head>
+  <body class="resource-page">
+
+      <header class="resource-shell resource-topbar">
+        <a class="resource-brand" href="/">LLM Proxy</a>
+        <nav aria-label="Resource navigation">
+          <a href="/resources/">Resources</a>
+          <a href="/">Main page</a>
+        </nav>
+      </header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>LLM Proxy status code map for callers</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Reliability</p>
+            <h1>LLM Proxy status code map for callers</h1>
+            <p class="resource-deck">Handle missing keys, bad inputs, rate limits, disabled providers, timeouts, and upstream failures consistently.</p>
+            <p class="resource-audience">Developers who need predictable error handling around LLM and dictation calls.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Provider errors can be inconsistent. Callers need to know whether a request failed because of authentication, validation, capacity, provider rate limits, or upstream failure.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy maps public errors to documented HTTP status codes across text and dictation routes.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Treat 400 as invalid request parameters or unsupported provider/model/capability.</li>
+<li>Treat 403 as missing or invalid tenant secret.</li>
+<li>Treat 413 as prompt or audio payload too large.</li>
+<li>Handle 429, 503, 504, and 502 according to rate-limit, disabled-provider, timeout, and upstream-failure meanings.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  
+                        <tr>
+                          <td>Client validation errors</td>
+                          <td>Bad provider/model choices and ambiguous bodies return 400.</td>
+                          <td>Callers can fix request shape.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Authentication boundary</td>
+                          <td>Missing or invalid key returns 403.</td>
+                          <td>The proxy does not reveal tenant internals.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Provider/capacity signals</td>
+                          <td>429, 503, 504, and 502 communicate distinct runtime conditions.</td>
+                          <td>Retry behavior can be more precise.</td>
+                        </tr>
+                      
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+              
+                    <section class="resource-card">
+                      <h3>Disabled provider</h3>
+                      <p>A selected non-default provider without an API key returns 503 provider not configured.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Long provider work</h3>
+                      <p>A request exceeding server.request_timeout_seconds returns 504.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Provider outage</h3>
+                      <p>A non-rate-limit upstream provider failure maps to bad gateway behavior.</p>
+                    </section>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>The status map does not guarantee provider recovery.</li>
+<li>Callers should still log request context without secrets.</li>
+<li>Provider-specific error details may be normalized or wrapped by the proxy.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+              
+                    <details>
+                      <summary>What is the main job of LLM proxy status code map?</summary>
+                      <p>LLM Proxy maps public errors to documented HTTP status codes across text and dictation routes.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Who should read this reliability resource?</summary>
+                      <p>Developers who need predictable error handling around LLM and dictation calls.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is OpenAI background response polling without client loops, which covers OpenAI background response polling.</p>
+                    </details>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+              
+                    <a class="resource-related" href="/resources/openai-background-response-polling/">
+                      <span>Reliability</span>
+                      <strong>OpenAI background response polling without client loops</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/upstream-worker-queue-limits/">
+                      <span>Reliability</span>
+                      <strong>Upstream worker and queue limits for LLM traffic</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/dictation-provider-routing/">
+                      <span>Dictation</span>
+                      <strong>Dictation provider routing for OpenAI, Zhipu, Grok, and SiliconFlow</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/llm-response-formats-json-xml-csv-text/">
+                      <span>API contract</span>
+                      <strong>LLM response formats: JSON, XML, CSV, and text</strong>
+                    </a>
+                  
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
+            <a class="resource-button" href="/">Open the main page</a>
+          </section>
+        </article>
+      </main>
+      <footer class="resource-shell resource-footer">
+        <a href="/">LLM Proxy main page</a>
+        <a href="/resources/">Resource hub</a>
+        <a href="/sitemap.xml">Sitemap</a>
+      </footer>
+    
+  </body>
+</html>
