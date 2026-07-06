@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.27] - 2026-07-06
+
+### Changes
+- Merge pull request #187 from tyemirov/gix/add-45-repo-grounded-seo-resource-pages-hub-sitemap-and
+- docs: add SEO resource cluster report for LLM Proxy use-case planning
+- test(e2e): add SEO crawlability, sitemap, robots checks for resource pages
+- feat(site): add public resources hub with repo-grounded implementation guides
+- chore(scripts): add generate_seo_resources script for SEO resource generation
+- docs: track SEO resource cluster and social campaign deliverables in ISSUES.md
+
 ## [v0.2.26] - 2026-07-03
 
 ### Changes
