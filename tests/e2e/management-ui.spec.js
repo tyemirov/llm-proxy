@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { createReadStream } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,10 @@ const siteRoot = path.join(repoRoot, "site");
 const configPath = "/config-ui.yaml";
 const faviconPath = "/assets/llm-proxy/img/favicon.svg";
 const appIconPath = "/assets/llm-proxy/img/llm-proxy-icon.svg";
+const resourcesPath = "/resources/";
+const representativeResourcePath = "/resources/multi-provider-llm-proxy/";
+const sitemapPath = "/sitemap.xml";
+const robotsPath = "/robots.txt";
 const b020ScreenshotDirectory = path.join(repoRoot, "output/playwright");
 const httpOK = 200;
 const httpInternalServerError = 500;
@@ -18,8 +22,11 @@ const mimeTypes = Object.freeze({
   ".html": "text/html",
   ".js": "application/javascript",
   ".svg": "image/svg+xml",
+  ".txt": "text/plain",
+  ".xml": "application/xml",
   ".yaml": "application/yaml",
 });
+const generatedResourcePageCount = 45;
 const settingsLayerViewports = Object.freeze([
   { name: "desktop", width: 1280, height: 720 },
   { name: "mobile", width: 390, height: 780 },
@@ -56,6 +63,8 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   const htmlResponse = await request.get(baseURL);
   expect(htmlResponse.status()).toBe(httpOK);
   const html = await htmlResponse.text();
+  expect(html).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/">');
+  expect(html).toContain(`<a href="${resourcesPath}">Browse resources</a>`);
   expect(html).toContain('<meta name="theme-color" content="#0076c3">');
   expect(html).toContain(`<link rel="icon" type="image/svg+xml" href="${faviconPath}">`);
   expect(html).toContain(`<link rel="apple-touch-icon" href="${appIconPath}">`);
@@ -77,6 +86,52 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(appIconSVG).toContain("LLM Proxy icon");
   expect(appIconSVG).toContain("#ffd369");
   expect(appIconSVG).toContain("#4ad3d9");
+});
+
+test("SEO resource pages are crawlable from the public site", async ({ request }) => {
+  const hubResponse = await request.get(`${baseURL}${resourcesPath}`);
+  expect(hubResponse.status()).toBe(httpOK);
+  expect(hubResponse.headers()["content-type"]).toContain(mimeTypes[".html"]);
+  const hubHTML = await hubResponse.text();
+  expect(hubHTML).toContain("LLM Proxy resource hub");
+  expect(hubHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/">');
+  expect(hubHTML).toContain('"@type":"CollectionPage"');
+  expect(hubHTML).toContain(`href="${representativeResourcePath}"`);
+  const resourceLinks = hubHTML.match(/href="\/resources\/[^"]+\/"/g) || [];
+  expect(new Set(resourceLinks).size).toBe(generatedResourcePageCount);
+
+  const pageResponse = await request.get(`${baseURL}${representativeResourcePath}`);
+  expect(pageResponse.status()).toBe(httpOK);
+  expect(pageResponse.headers()["content-type"]).toContain(mimeTypes[".html"]);
+  const pageHTML = await pageResponse.text();
+  expect(pageHTML).toContain("<h1>Multi-provider LLM proxy for internal tools</h1>");
+  expect(pageHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/">');
+  expect(pageHTML).toContain('"@type":"FAQPage"');
+  expect(pageHTML).toContain('<a class="resource-button" href="/">Open LLM Proxy</a>');
+  expect(pageHTML).toContain('href="/resources/openai-claude-gemini-one-endpoint/"');
+});
+
+test("SEO sitemap and robots expose canonical resource URLs", async ({ request }) => {
+  const sitemapResponse = await request.get(`${baseURL}${sitemapPath}`);
+  expect(sitemapResponse.status()).toBe(httpOK);
+  expect(sitemapResponse.headers()["content-type"]).toContain(mimeTypes[".xml"]);
+  const sitemapXML = await sitemapResponse.text();
+  const sitemapLocations = sitemapXML.match(/<loc>/g) || [];
+  expect(sitemapLocations).toHaveLength(generatedResourcePageCount + 2);
+  expect(sitemapXML).toContain("<loc>https://llm-proxy.mprlab.com/</loc>");
+  expect(sitemapXML).toContain("<loc>https://llm-proxy.mprlab.com/resources/</loc>");
+  expect(sitemapXML).toContain(
+    "<loc>https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/</loc>",
+  );
+  expect(sitemapXML).not.toContain("config-ui.yaml");
+  expect(sitemapXML).not.toContain("llm-proxy-config.json");
+
+  const robotsResponse = await request.get(`${baseURL}${robotsPath}`);
+  expect(robotsResponse.status()).toBe(httpOK);
+  expect(robotsResponse.headers()["content-type"]).toContain(mimeTypes[".txt"]);
+  const robotsText = await robotsResponse.text();
+  expect(robotsText).toContain("User-agent: *");
+  expect(robotsText).toContain("Sitemap: https://llm-proxy.mprlab.com/sitemap.xml");
 });
 
 test("dashboard shows usage and settings opens from avatar menu before sign out", async ({ page }) => {
@@ -489,9 +544,18 @@ async function staticSiteHandler(request, response) {
     return;
   }
 
-  const routePath = requestURL.pathname === "/" ? "/index.html" : requestURL.pathname;
+  const routePath =
+    requestURL.pathname === "/" || requestURL.pathname.endsWith("/")
+      ? path.join(requestURL.pathname, "index.html")
+      : requestURL.pathname;
   const filePath = path.normalize(path.join(siteRoot, routePath));
   if (!filePath.startsWith(siteRoot)) {
+    response.writeHead(404);
+    response.end();
+    return;
+  }
+  const fileStats = await stat(filePath).catch(() => null);
+  if (!fileStats || fileStats.isDirectory()) {
     response.writeHead(404);
     response.end();
     return;

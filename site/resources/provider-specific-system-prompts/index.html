@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Provider-specific system prompts in LLM Proxy Settings</title>
+    <meta name="description" content="Store each provider's text model and system prompt with its managed provider configuration.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/">
+    <meta property="og:title" content="Provider-specific system prompts in LLM Proxy Settings">
+    <meta property="og:description" content="Store each provider's text model and system prompt with its managed provider configuration.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Provider-specific system prompts in LLM Proxy Settings","description":"Store each provider's text model and system prompt with its managed provider configuration.","url":"https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/","datePublished":"2026-07-06","dateModified":"2026-07-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/","about":["LLM Proxy","Management UI","provider-specific system prompts"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Provider-specific system prompts in LLM Proxy Settings","item":"https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of provider-specific system prompts?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy stores text model and provider-specific system prompt settings with each managed provider profile."}},{"@type":"Question","name":"Who should read this management ui resource?","acceptedAnswer":{"@type":"Answer","text":"Users who need different instructions for different upstream providers."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Self-service LLM key management for teams, which covers self-service LLM key management."}}]}</script>
+  </head>
+  <body class="resource-page">
+
+      <header class="resource-shell resource-topbar">
+        <a class="resource-brand" href="/">LLM Proxy</a>
+        <nav aria-label="Resource navigation">
+          <a href="/resources/">Resources</a>
+          <a href="/">Main page</a>
+        </nav>
+      </header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Provider-specific system prompts in LLM Proxy Settings</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Management UI</p>
+            <h1>Provider-specific system prompts in LLM Proxy Settings</h1>
+            <p class="resource-deck">Store each provider's text model and system prompt with its managed provider configuration.</p>
+            <p class="resource-audience">Users who need different instructions for different upstream providers.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>A single global system prompt can be too blunt when different providers are used for different jobs or when provider-selected requests need their own context.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy stores text model and provider-specific system prompt settings with each managed provider profile.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Open the selected-provider editor in Settings.</li>
+<li>Choose the provider to configure.</li>
+<li>Set the provider text model and provider system prompt.</li>
+<li>Save the provider settings with or without updating the API key as allowed by the current state.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  
+                        <tr>
+                          <td>Provider-owned settings</td>
+                          <td>Model and prompt live with the selected provider record.</td>
+                          <td>Provider-specific routing context is explicit.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Runtime injection</td>
+                          <td>Managed provider-selected requests can use the saved model and prompt when request fields are omitted.</td>
+                          <td>Callers can stay concise.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Clear removal</td>
+                          <td>Removing a provider key also removes provider settings.</td>
+                          <td>The destructive boundary is explicit.</td>
+                        </tr>
+                      
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+              
+                    <section class="resource-card">
+                      <h3>Concise OpenAI answers</h3>
+                      <p>A user stores an OpenAI system prompt that asks for concise responses.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>DeepSeek default model</h3>
+                      <p>A user saves a DeepSeek model for provider-selected requests.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Provider cleanup</h3>
+                      <p>A user removes a provider key and settings after a trial ends.</p>
+                    </section>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>Request-level system instructions take precedence over server-injected defaults.</li>
+<li>Provider settings are scoped to the authenticated managed tenant.</li>
+<li>Raw provider keys are not returned after save.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+              
+                    <details>
+                      <summary>What is the main job of provider-specific system prompts?</summary>
+                      <p>LLM Proxy stores text model and provider-specific system prompt settings with each managed provider profile.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Who should read this management ui resource?</summary>
+                      <p>Users who need different instructions for different upstream providers.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Self-service LLM key management for teams, which covers self-service LLM key management.</p>
+                    </details>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+              
+                    <a class="resource-related" href="/resources/self-service-llm-key-management/">
+                      <span>Management UI</span>
+                      <strong>Self-service LLM key management for teams</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/bring-your-own-provider-key-portal/">
+                      <span>Management UI</span>
+                      <strong>Bring-your-own provider key portal for AI access</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/local-and-hosted-llm-proxy-config-profiles/">
+                      <span>Deployment</span>
+                      <strong>Local and hosted LLM Proxy config profiles</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/copyable-llm-curl-examples/">
+                      <span>Management UI</span>
+                      <strong>Copyable LLM curl examples from live profile data</strong>
+                    </a>
+                  
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
+            <a class="resource-button" href="/">Open the main page</a>
+          </section>
+        </article>
+      </main>
+      <footer class="resource-shell resource-footer">
+        <a href="/">LLM Proxy main page</a>
+        <a href="/resources/">Resource hub</a>
+        <a href="/sitemap.xml">Sitemap</a>
+      </footer>
+    
+  </body>
+</html>

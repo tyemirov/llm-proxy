@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Local and hosted LLM Proxy config profiles</title>
+    <meta name="description" content="Use the same strict config contract locally and in hosted split-origin deployments.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/local-and-hosted-llm-proxy-config-profiles/">
+    <meta property="og:title" content="Local and hosted LLM Proxy config profiles">
+    <meta property="og:description" content="Use the same strict config contract locally and in hosted split-origin deployments.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/local-and-hosted-llm-proxy-config-profiles/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Local and hosted LLM Proxy config profiles","description":"Use the same strict config contract locally and in hosted split-origin deployments.","url":"https://llm-proxy.mprlab.com/resources/local-and-hosted-llm-proxy-config-profiles/","datePublished":"2026-07-06","dateModified":"2026-07-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/local-and-hosted-llm-proxy-config-profiles/","about":["LLM Proxy","Deployment","local and hosted LLM proxy config"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Local and hosted LLM Proxy config profiles","item":"https://llm-proxy.mprlab.com/resources/local-and-hosted-llm-proxy-config-profiles/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of local and hosted LLM proxy config?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy uses config.yml plus strict placeholder expansion for both local and hosted profiles, with ignored .env values supplying environment-specific secrets and database paths."}},{"@type":"Question","name":"Who should read this deployment resource?","acceptedAnswer":{"@type":"Answer","text":"Operators who need local development and production profiles to stay aligned."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is API-served runtime config for a static LLM UI, which covers API-served runtime config static UI."}}]}</script>
+  </head>
+  <body class="resource-page">
+
+      <header class="resource-shell resource-topbar">
+        <a class="resource-brand" href="/">LLM Proxy</a>
+        <nav aria-label="Resource navigation">
+          <a href="/resources/">Resources</a>
+          <a href="/">Main page</a>
+        </nav>
+      </header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Local and hosted LLM Proxy config profiles</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Deployment</p>
+            <h1>Local and hosted LLM Proxy config profiles</h1>
+            <p class="resource-deck">Use the same strict config contract locally and in hosted split-origin deployments.</p>
+            <p class="resource-audience">Operators who need local development and production profiles to stay aligned.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Local profiles often accumulate defaults, fallback values, or alternate config paths that do not match hosted runtime behavior.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy uses config.yml plus strict placeholder expansion for both local and hosted profiles, with ignored .env values supplying environment-specific secrets and database paths.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Keep config.yml as the canonical service configuration.</li>
+<li>Use configs/.env locally for ignored placeholder values.</li>
+<li>Use deployment secrets for hosted LLM_PROXY_MANAGEMENT_* values.</li>
+<li>Run repo Makefile targets to validate config and tests.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  
+                        <tr>
+                          <td>Same loader</td>
+                          <td>Local and hosted profiles pass through the same config loader.</td>
+                          <td>There is no separate Pages config expansion path.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Ignored local DB</td>
+                          <td>SQLite management files are ignored for local runs.</td>
+                          <td>State does not enter git.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Hosted split origins</td>
+                          <td>Production separates Pages frontend, API backend, and TAuth backend origins.</td>
+                          <td>CORS and runtime config stay explicit.</td>
+                        </tr>
+                      
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+              
+                    <section class="resource-card">
+                      <h3>Local UI preview</h3>
+                      <p>A developer serves site/ and mocks /config-ui.yaml for browser tests.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Hosted backend</h3>
+                      <p>Production provides real management database and encryption key through deployment secrets.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Provider smoke</h3>
+                      <p>Live provider smoke tests load available API keys from LIVE_ENV_FILE.</p>
+                    </section>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>Do not commit configs/.env, SQLite databases, or OAuth client secrets.</li>
+<li>Hosted deployment still requires gateway and DNS setup.</li>
+<li>Local validation does not replace live provider smoke tests when real provider behavior matters.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+              
+                    <details>
+                      <summary>What is the main job of local and hosted LLM proxy config?</summary>
+                      <p>LLM Proxy uses config.yml plus strict placeholder expansion for both local and hosted profiles, with ignored .env values supplying environment-specific secrets and database paths.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Who should read this deployment resource?</summary>
+                      <p>Operators who need local development and production profiles to stay aligned.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is API-served runtime config for a static LLM UI, which covers API-served runtime config static UI.</p>
+                    </details>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+              
+                    <a class="resource-related" href="/resources/api-served-runtime-config-for-static-ui/">
+                      <span>Deployment</span>
+                      <strong>API-served runtime config for a static LLM UI</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/github-pages-llm-management-ui/">
+                      <span>Deployment</span>
+                      <strong>GitHub Pages management UI for LLM Proxy</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/provider-specific-system-prompts/">
+                      <span>Management UI</span>
+                      <strong>Provider-specific system prompts in LLM Proxy Settings</strong>
+                    </a>
+                  
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
+            <a class="resource-button" href="/">Open the main page</a>
+          </section>
+        </article>
+      </main>
+      <footer class="resource-shell resource-footer">
+        <a href="/">LLM Proxy main page</a>
+        <a href="/resources/">Resource hub</a>
+        <a href="/sitemap.xml">Sitemap</a>
+      </footer>
+    
+  </body>
+</html>

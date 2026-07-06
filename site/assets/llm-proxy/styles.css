@@ -80,6 +80,51 @@ settings-section {
   padding: 0.75rem 0 2rem;
 }
 
+.public-resource-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-panel-strong);
+  padding: 0.75rem;
+}
+
+.public-resource-link h2 {
+  margin-bottom: 0.2rem;
+}
+
+.public-resource-link p:last-child {
+  max-width: 680px;
+  margin-bottom: 0;
+  color: var(--llm-muted);
+  font-size: 0.78rem;
+}
+
+.public-resource-link a,
+.resource-button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-panel);
+  color: var(--llm-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0 0.75rem;
+  text-decoration: none;
+}
+
+.public-resource-link a:hover,
+.resource-button:hover {
+  border-color: var(--llm-accent);
+  background: var(--llm-panel-strong);
+}
+
 .llm-panel {
   border: 1px solid var(--llm-border);
   border-radius: 6px;
@@ -681,7 +726,8 @@ provider-settings-fields button[type="submit"] {
   .section-header,
   .settings-header,
   dashboard-actions,
-  tenant-actions {
+  tenant-actions,
+  .public-resource-link {
     align-items: stretch;
     flex-direction: column;
   }

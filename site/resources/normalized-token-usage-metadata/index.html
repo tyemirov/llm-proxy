@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Normalized token usage metadata across providers</title>
+    <meta name="description" content="Expose request, response, and total token counts through common headers and JSON fields.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/normalized-token-usage-metadata/">
+    <meta property="og:title" content="Normalized token usage metadata across providers">
+    <meta property="og:description" content="Expose request, response, and total token counts through common headers and JSON fields.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/normalized-token-usage-metadata/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Normalized token usage metadata across providers","description":"Expose request, response, and total token counts through common headers and JSON fields.","url":"https://llm-proxy.mprlab.com/resources/normalized-token-usage-metadata/","datePublished":"2026-07-06","dateModified":"2026-07-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/normalized-token-usage-metadata/","about":["LLM Proxy","Usage","normalized token usage metadata"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Normalized token usage metadata across providers","item":"https://llm-proxy.mprlab.com/resources/normalized-token-usage-metadata/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of normalized token usage metadata?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy normalizes upstream token usage into common response headers and JSON usage fields when providers return token metadata."}},{"@type":"Question","name":"Who should read this usage resource?","acceptedAnswer":{"@type":"Answer","text":"Teams that need operational usage signals without parsing every provider's response shape."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Managed tenant usage dashboard for LLM requests, which covers managed tenant usage dashboard."}}]}</script>
+  </head>
+  <body class="resource-page">
+
+      <header class="resource-shell resource-topbar">
+        <a class="resource-brand" href="/">LLM Proxy</a>
+        <nav aria-label="Resource navigation">
+          <a href="/resources/">Resources</a>
+          <a href="/">Main page</a>
+        </nav>
+      </header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Normalized token usage metadata across providers</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Usage</p>
+            <h1>Normalized token usage metadata across providers</h1>
+            <p class="resource-deck">Expose request, response, and total token counts through common headers and JSON fields.</p>
+            <p class="resource-audience">Teams that need operational usage signals without parsing every provider's response shape.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Providers report usage differently, and response format choices can make token accounting disappear from caller code.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy normalizes upstream token usage into common response headers and JSON usage fields when providers return token metadata.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Call GET, POST, or /v2 with the desired response format.</li>
+<li>Read X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, and X-LLM-Proxy-Total-Tokens when present.</li>
+<li>Use JSON format when the caller wants usage inside the response body.</li>
+<li>Review management usage dashboards for managed tenant aggregates.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  
+                        <tr>
+                          <td>Common headers</td>
+                          <td>Token counts stay available for plain text, CSV, and XML bodies.</td>
+                          <td>The body format does not erase usage metadata.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>JSON usage object</td>
+                          <td>JSON responses include normalized request, response, and total counts.</td>
+                          <td>Callers can store one shape.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Managed usage aggregation</td>
+                          <td>Usage events record normalized token counts without storing prompts or responses.</td>
+                          <td>Dashboards can show 30-day token totals.</td>
+                        </tr>
+                      
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+              
+                    <section class="resource-card">
+                      <h3>Plain text caller</h3>
+                      <p>A CLI reads the text body and token headers separately.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Dashboard metric</h3>
+                      <p>The management UI shows request and token graphs for the signed-in tenant.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Provider comparison</h3>
+                      <p>A team compares usage by provider and model using the normalized metadata available in management mode.</p>
+                    </section>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>Usage metadata appears only when the upstream provider returns token information.</li>
+<li>Normalized counts are operational signals, not pricing calculations.</li>
+<li>Management usage stores metadata and excludes prompts, transcripts, responses, provider keys, and tenant secrets.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+              
+                    <details>
+                      <summary>What is the main job of normalized token usage metadata?</summary>
+                      <p>LLM Proxy normalizes upstream token usage into common response headers and JSON usage fields when providers return token metadata.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Who should read this usage resource?</summary>
+                      <p>Teams that need operational usage signals without parsing every provider's response shape.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Managed tenant usage dashboard for LLM requests, which covers managed tenant usage dashboard.</p>
+                    </details>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+              
+                    <a class="resource-related" href="/resources/managed-tenant-usage-dashboard/">
+                      <span>Usage</span>
+                      <strong>Managed tenant usage dashboard for LLM requests</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/admin-usage-visibility-without-secrets/">
+                      <span>Usage</span>
+                      <strong>Admin usage visibility without exposing secrets</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/openai-web-search-guardrails/">
+                      <span>API contract</span>
+                      <strong>OpenAI web search guardrails in an LLM proxy</strong>
+                    </a>
+                  
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
+            <a class="resource-button" href="/">Open the main page</a>
+          </section>
+        </article>
+      </main>
+      <footer class="resource-shell resource-footer">
+        <a href="/">LLM Proxy main page</a>
+        <a href="/resources/">Resource hub</a>
+        <a href="/sitemap.xml">Sitemap</a>
+      </footer>
+    
+  </body>
+</html>

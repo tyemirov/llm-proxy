@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Copyable LLM curl examples from live profile data</title>
+    <meta name="description" content="Show default and selected-provider request examples that use the current proxy origin and generated secret state.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/">
+    <meta property="og:title" content="Copyable LLM curl examples from live profile data">
+    <meta property="og:description" content="Show default and selected-provider request examples that use the current proxy origin and generated secret state.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Copyable LLM curl examples from live profile data","description":"Show default and selected-provider request examples that use the current proxy origin and generated secret state.","url":"https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/","datePublished":"2026-07-06","dateModified":"2026-07-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/","about":["LLM Proxy","Management UI","copyable LLM curl examples"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Copyable LLM curl examples from live profile data","item":"https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of copyable LLM curl examples?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy Settings renders copyable examples from profile data, including proxy origin, provider selectors, model choices, dictation support, and generated-secret status."}},{"@type":"Question","name":"Who should read this management ui resource?","acceptedAnswer":{"@type":"Answer","text":"Users onboarding themselves to LLM Proxy through the management UI."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Self-service LLM key management for teams, which covers self-service LLM key management."}}]}</script>
+  </head>
+  <body class="resource-page">
+
+      <header class="resource-shell resource-topbar">
+        <a class="resource-brand" href="/">LLM Proxy</a>
+        <nav aria-label="Resource navigation">
+          <a href="/resources/">Resources</a>
+          <a href="/">Main page</a>
+        </nav>
+      </header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Copyable LLM curl examples from live profile data</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Management UI</p>
+            <h1>Copyable LLM curl examples from live profile data</h1>
+            <p class="resource-deck">Show default and selected-provider request examples that use the current proxy origin and generated secret state.</p>
+            <p class="resource-audience">Users onboarding themselves to LLM Proxy through the management UI.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Docs and examples drift when they hardcode hosts, provider choices, or secret placeholders that do not match the signed-in user's state.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy Settings renders copyable examples from profile data, including proxy origin, provider selectors, model choices, dictation support, and generated-secret status.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Open Settings after signing in.</li>
+<li>Expand Usage / Request examples.</li>
+<li>Copy default text, default /v2, or default dictation examples.</li>
+<li>Select a provider to copy provider-specific text, /v2, and dictation examples when supported.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  
+                        <tr>
+                          <td>Generated-secret placeholder</td>
+                          <td>Examples are populated before a secret exists by using &lt;generated-secret&gt;.</td>
+                          <td>Users see the complete shape immediately.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Fresh secret replacement</td>
+                          <td>After key generation, examples update to the real generated secret.</td>
+                          <td>Copy actions use current data.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Provider-specific variants</td>
+                          <td>Selected-provider examples include provider and model context.</td>
+                          <td>Dictation examples appear only for dictation-capable providers.</td>
+                        </tr>
+                      
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+              
+                    <section class="resource-card">
+                      <h3>First run</h3>
+                      <p>A new user copies the default /v2 example with the placeholder before generating a secret.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>After creation</h3>
+                      <p>The same example updates to include the newly generated tenant secret.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Provider switch</h3>
+                      <p>Selecting DeepSeek updates provider-specific examples and hides dictation when unsupported.</p>
+                    </section>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>Examples are for proxy calls, not direct provider API calls.</li>
+<li>The generated secret is shown once; copy it when created.</li>
+<li>Examples depend on the API-served profile and config payloads.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+              
+                    <details>
+                      <summary>What is the main job of copyable LLM curl examples?</summary>
+                      <p>LLM Proxy Settings renders copyable examples from profile data, including proxy origin, provider selectors, model choices, dictation support, and generated-secret status.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Who should read this management ui resource?</summary>
+                      <p>Users onboarding themselves to LLM Proxy through the management UI.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Self-service LLM key management for teams, which covers self-service LLM key management.</p>
+                    </details>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+              
+                    <a class="resource-related" href="/resources/self-service-llm-key-management/">
+                      <span>Management UI</span>
+                      <strong>Self-service LLM key management for teams</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/bring-your-own-provider-key-portal/">
+                      <span>Management UI</span>
+                      <strong>Bring-your-own provider key portal for AI access</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/provider-specific-system-prompts/">
+                      <span>Management UI</span>
+                      <strong>Provider-specific system prompts in LLM Proxy Settings</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/usage-metadata-without-prompts/">
+                      <span>Usage</span>
+                      <strong>Usage metadata without storing prompts or responses</strong>
+                    </a>
+                  
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
+            <a class="resource-button" href="/">Open the main page</a>
+          </section>
+        </article>
+      </main>
+      <footer class="resource-shell resource-footer">
+        <a href="/">LLM Proxy main page</a>
+        <a href="/resources/">Resource hub</a>
+        <a href="/sitemap.xml">Sitemap</a>
+      </footer>
+    
+  </body>
+</html>
