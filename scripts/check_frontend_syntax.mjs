@@ -2,7 +2,7 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
-const files = ["playwright.config.js"];
+const files = ["playwright.config.js", "scripts/generate_seo_resources.mjs"];
 const roots = ["site/assets/llm-proxy/js", "tests/e2e"];
 const javascriptExtension = ".js";
 
