@@ -592,6 +592,25 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Resolution:
   The Settings modal now renders the Usage / Request examples segment as a native disclosure that starts folded each time Settings opens. Expanding the segment reveals the existing default and selected-provider request examples without changing generated curl commands, copy actions, selected-provider updates, or generated-secret replacement. Playwright coverage now asserts the folded initial state and expands the segment before exercising command visibility, provider updates, clipboard copy, and generated-secret replacement. Validation passed with `timeout -k 180s -s SIGKILL 180s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s npm run frontend:test -- tests/e2e/management-ui.spec.js -g "dashboard shows usage|settings shows placeholder request examples|settings request examples use"`, `timeout -k 180s -s SIGKILL 180s make frontend-test`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
 
+- [x] [I018] (P1) Add repo-grounded SEO resource pages.
+  Goal:
+  Publish 40-50 public resource pages for LLM Proxy and expose them from the main static site through crawlable links.
+  Requirements:
+  - Use repo evidence for every product claim and avoid unsupported customer, benchmark, compliance, pricing, ranking, and competitor claims.
+  - Generate a hub under `/resources/` and 40-50 distinct pages with page-specific metadata, canonical URLs, structured data, visible content, FAQ, and related links.
+  - Link the resource hub from the main page with a normal HTML anchor.
+  - Add sitemap and robots surfaces aligned to the canonical hosted URL form.
+  - Keep the Pages artifact free of static browser runtime config.
+  Deliverables:
+  - Added `scripts/generate_seo_resources.mjs` as the structured source for the 45-page resource cluster.
+  - Added `site/resources/`, `site/sitemap.xml`, `site/robots.txt`, and resource-page CSS.
+  - Added `docs/marketing/seo-resource-cluster-report.md` with repo analysis, opportunities, integration notes, and evaluation.
+  - Added frontend coverage for root discoverability, the resource hub, a representative resource page, sitemap, and robots.
+  Validation:
+  - Run focused and full frontend validation plus the site renderer check.
+  Resolution:
+  Generated 45 repo-grounded resource pages plus a `/resources/` hub, linked the hub from `site/index.html`, added canonical metadata/JSON-LD/FAQ/related links across resource pages, and added `sitemap.xml` plus `robots.txt` for the public URL set. The generator is covered by frontend syntax checks and writes the SEO cluster plus evaluation report deterministically. Validation passed with `timeout -k 120s -s SIGKILL 120s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s npm run frontend:test -- tests/e2e/management-ui.spec.js -g "SEO"`, `timeout -k 240s -s SIGKILL 240s make frontend-test`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./cmd/cli -run 'TestRootCommand(Render|Renders)'`, `timeout -k 30s -s SIGKILL 30s git diff --check`, and `timeout -k 500s -s SIGKILL 500s make ci`.
+
 
 ## Maintenance
 
@@ -737,6 +756,15 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   The repository had duplicate runbook and issue-tracker documents under `issues.md/`, `.mprl/`, and `.mprlab/`. Keep the active tracker and relevant recurring procedures under `.mprlab/`, then remove the old duplicate locations.
   ### Resolution
   Consolidated the current policy, planning, issue-format, and stack-guide documents under `.mprlab/`; kept `.mprlab/ISSUES.md` as the active tracker; carried forward recurring housekeeping runbooks from `issues.md/ISSUES.md`; updated stale runbook path references; and removed the duplicate `issues.md/` and `.mprl/` directories.
+- [x] [M010] (P2) Document 60-day social media advertising campaign.
+  Goal:
+  Prepare a twice-daily social media post schedule that advertises LLM Proxy through concrete problems it solves.
+  Requirements:
+  Include 120 posts for the 60-day period beginning 2026-07-06, keep each post under 300 characters, and ground claims in the documented product contract.
+  Deliverables:
+  Added `docs/marketing/social-media-60-day-campaign.md`.
+  Validation:
+  Verified the document contains 120 scheduled posts and every post is below the 300-character limit.
 
 
 ## Features
