@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Generated secret rotation and revocation</title>
+    <meta name="description" content="Create, show once, revoke, and regenerate llm-proxy tenant secrets for managed users.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/generated-secret-rotation-and-revocation/">
+    <meta property="og:title" content="Generated secret rotation and revocation">
+    <meta property="og:description" content="Create, show once, revoke, and regenerate llm-proxy tenant secrets for managed users.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/generated-secret-rotation-and-revocation/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Generated secret rotation and revocation","description":"Create, show once, revoke, and regenerate llm-proxy tenant secrets for managed users.","url":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation-and-revocation/","datePublished":"2026-07-06","dateModified":"2026-07-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation-and-revocation/","about":["LLM Proxy","Security","generated LLM proxy secret rotation"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Generated secret rotation and revocation","item":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation-and-revocation/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of generated LLM proxy secret rotation?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy generates tenant secrets, returns them once, stores only SHA-256 digests, and supports revocation through authenticated management APIs."}},{"@type":"Question","name":"Who should read this security resource?","acceptedAnswer":{"@type":"Answer","text":"Teams that want self-service client access without permanent retrievable secrets."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Keep provider API keys server-side for LLM apps, which covers server-side provider API keys."}}]}</script>
+  </head>
+  <body class="resource-page">
+
+      <header class="resource-shell resource-topbar">
+        <a class="resource-brand" href="/">LLM Proxy</a>
+        <nav aria-label="Resource navigation">
+          <a href="/resources/">Resources</a>
+          <a href="/">Main page</a>
+        </nav>
+      </header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Generated secret rotation and revocation</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Security</p>
+            <h1>Generated secret rotation and revocation</h1>
+            <p class="resource-deck">Create, show once, revoke, and regenerate llm-proxy tenant secrets for managed users.</p>
+            <p class="resource-audience">Teams that want self-service client access without permanent retrievable secrets.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Long-lived client secrets become harder to control when users can retrieve old raw values or when revocation requires operator edits.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy generates tenant secrets, returns them once, stores only SHA-256 digests, and supports revocation through authenticated management APIs.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Open Settings after signing in.</li>
+<li>Create a key and copy the one-time generated secret.</li>
+<li>Use the generated secret in public proxy request examples.</li>
+<li>Revoke or regenerate the secret when access should change.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  
+                        <tr>
+                          <td>One-time display</td>
+                          <td>Generated secrets are shown once after creation.</td>
+                          <td>The database stores only their digest.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Immediate revocation</td>
+                          <td>Revoked secrets stop authenticating future public proxy requests.</td>
+                          <td>Access can be cut without provider-key rotation.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Example refresh</td>
+                          <td>Request examples update from placeholder to generated secret after creation.</td>
+                          <td>Users copy current commands.</td>
+                        </tr>
+                      
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+              
+                    <section class="resource-card">
+                      <h3>New app secret</h3>
+                      <p>A developer creates a secret for a service and copies the /v2 example.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Compromised client</h3>
+                      <p>A user revokes the generated secret and creates a replacement.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Provider key unchanged</h3>
+                      <p>Rotating the tenant secret does not require changing the saved provider API key.</p>
+                    </section>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>If the one-time value is lost, the user must generate a new secret.</li>
+<li>Tenant secrets remain application credentials and need normal secret handling.</li>
+<li>Revocation affects proxy authentication; it does not revoke upstream provider keys.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+              
+                    <details>
+                      <summary>What is the main job of generated LLM proxy secret rotation?</summary>
+                      <p>LLM Proxy generates tenant secrets, returns them once, stores only SHA-256 digests, and supports revocation through authenticated management APIs.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Who should read this security resource?</summary>
+                      <p>Teams that want self-service client access without permanent retrievable secrets.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Keep provider API keys server-side for LLM apps, which covers server-side provider API keys.</p>
+                    </details>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+              
+                    <a class="resource-related" href="/resources/server-side-provider-api-keys/">
+                      <span>Security</span>
+                      <strong>Keep provider API keys server-side for LLM apps</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/tenant-secret-ai-gateway/">
+                      <span>Security</span>
+                      <strong>Tenant-secret AI gateway for internal applications</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/encrypted-provider-key-storage/">
+                      <span>Security</span>
+                      <strong>Encrypted provider key storage for managed tenants</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/tauth-protected-management-api/">
+                      <span>Management UI</span>
+                      <strong>TAuth-protected management API for LLM Proxy</strong>
+                    </a>
+                  
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
+            <a class="resource-button" href="/">Open the main page</a>
+          </section>
+        </article>
+      </main>
+      <footer class="resource-shell resource-footer">
+        <a href="/">LLM Proxy main page</a>
+        <a href="/resources/">Resource hub</a>
+        <a href="/sitemap.xml">Sitemap</a>
+      </footer>
+    
+  </body>
+</html>

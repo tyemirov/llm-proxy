@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Multi-provider LLM proxy for internal tools</title>
+    <meta name="description" content="Route OpenAI, Claude, Gemini, Grok, and compatible providers through one tenant-secret HTTP boundary.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/">
+    <meta property="og:title" content="Multi-provider LLM proxy for internal tools">
+    <meta property="og:description" content="Route OpenAI, Claude, Gemini, Grok, and compatible providers through one tenant-secret HTTP boundary.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Multi-provider LLM proxy for internal tools","description":"Route OpenAI, Claude, Gemini, Grok, and compatible providers through one tenant-secret HTTP boundary.","url":"https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/","datePublished":"2026-07-06","dateModified":"2026-07-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/","about":["LLM Proxy","Provider routing","multi-provider LLM proxy"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Multi-provider LLM proxy for internal tools","item":"https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of multi-provider LLM proxy?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy keeps the caller contract centered on GET, JSON POST, canonical POST /v2, and /dictate while routing to configured providers server-side."}},{"@type":"Question","name":"Who should read this provider routing resource?","acceptedAnswer":{"@type":"Answer","text":"Platform engineers consolidating several model providers behind one internal service."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is OpenAI, Claude, and Gemini through one endpoint, which covers OpenAI Claude Gemini one endpoint."}}]}</script>
+  </head>
+  <body class="resource-page">
+
+      <header class="resource-shell resource-topbar">
+        <a class="resource-brand" href="/">LLM Proxy</a>
+        <nav aria-label="Resource navigation">
+          <a href="/resources/">Resources</a>
+          <a href="/">Main page</a>
+        </nav>
+      </header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Multi-provider LLM proxy for internal tools</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Provider routing</p>
+            <h1>Multi-provider LLM proxy for internal tools</h1>
+            <p class="resource-deck">Route OpenAI, Claude, Gemini, Grok, and compatible providers through one tenant-secret HTTP boundary.</p>
+            <p class="resource-audience">Platform engineers consolidating several model providers behind one internal service.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Teams often add one SDK, key path, and retry surface per provider. That creates scattered credentials, inconsistent defaults, and provider behavior that leaks into every caller.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy keeps the caller contract centered on GET, JSON POST, canonical POST /v2, and /dictate while routing to configured providers server-side.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Configure supported providers and model catalogs in config.yml.</li>
+<li>Give each tenant a default provider and model, or let managed users choose defaults in Settings.</li>
+<li>Send provider and model only when a request needs to override the default route.</li>
+<li>Keep upstream API keys server-side and authenticate clients with the tenant secret.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  
+                        <tr>
+                          <td>Provider selector</td>
+                          <td>Callers can choose providers per request without switching client libraries.</td>
+                          <td>Use provider=gemini for one request and provider=anthropic for another.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Configured model catalogs</td>
+                          <td>Unknown or unsupported model choices fail before upstream calls.</td>
+                          <td>Gemini and Claude max-token ceilings are validated at the edge.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>One response contract</td>
+                          <td>Plain text, JSON, XML, and CSV formatting stay behind the proxy.</td>
+                          <td>Apps keep one integration while the backend owns provider differences.</td>
+                        </tr>
+                      
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+              
+                    <section class="resource-card">
+                      <h3>Model trial</h3>
+                      <p>A team tests Claude for writing tasks and Gemini for long summaries by changing provider selectors, not app code.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Internal gateway</h3>
+                      <p>A platform team gives product apps a tenant secret while keeping OpenAI, Anthropic, Gemini, and xAI credentials in backend config or management storage.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Provider fallback planning</h3>
+                      <p>Operators can keep non-default providers disabled until a key exists, then enable them without changing callers.</p>
+                    </section>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>A provider must be wired through the proxy before callers can use it.</li>
+<li>Provider API keys are still required server-side before a provider can serve traffic.</li>
+<li>The proxy does not make unsupported upstream capabilities available by naming a provider.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+              
+                    <details>
+                      <summary>What is the main job of multi-provider LLM proxy?</summary>
+                      <p>LLM Proxy keeps the caller contract centered on GET, JSON POST, canonical POST /v2, and /dictate while routing to configured providers server-side.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Who should read this provider routing resource?</summary>
+                      <p>Platform engineers consolidating several model providers behind one internal service.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is OpenAI, Claude, and Gemini through one endpoint, which covers OpenAI Claude Gemini one endpoint.</p>
+                    </details>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+              
+                    <a class="resource-related" href="/resources/openai-claude-gemini-one-endpoint/">
+                      <span>Provider routing</span>
+                      <strong>OpenAI, Claude, and Gemini through one endpoint</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/openai-compatible-provider-gateway/">
+                      <span>Provider routing</span>
+                      <strong>OpenAI-compatible provider gateway</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/server-side-provider-api-keys/">
+                      <span>Security</span>
+                      <strong>Keep provider API keys server-side for LLM apps</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/provider-overload-timeout-handling/">
+                      <span>Reliability</span>
+                      <strong>Provider overload and timeout handling for LLM calls</strong>
+                    </a>
+                  
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
+            <a class="resource-button" href="/">Open the main page</a>
+          </section>
+        </article>
+      </main>
+      <footer class="resource-shell resource-footer">
+        <a href="/">LLM Proxy main page</a>
+        <a href="/resources/">Resource hub</a>
+        <a href="/sitemap.xml">Sitemap</a>
+      </footer>
+    
+  </body>
+</html>

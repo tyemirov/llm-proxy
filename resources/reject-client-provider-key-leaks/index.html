@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Reject client-supplied provider key leaks</title>
+    <meta name="description" content="Fail public proxy requests that try to send upstream provider API keys in query, JSON, or multipart input.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/reject-client-provider-key-leaks/">
+    <meta property="og:title" content="Reject client-supplied provider key leaks">
+    <meta property="og:description" content="Fail public proxy requests that try to send upstream provider API keys in query, JSON, or multipart input.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/reject-client-provider-key-leaks/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Reject client-supplied provider key leaks","description":"Fail public proxy requests that try to send upstream provider API keys in query, JSON, or multipart input.","url":"https://llm-proxy.mprlab.com/resources/reject-client-provider-key-leaks/","datePublished":"2026-07-06","dateModified":"2026-07-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/reject-client-provider-key-leaks/","about":["LLM Proxy","Security","reject client provider key leaks"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Reject client-supplied provider key leaks","item":"https://llm-proxy.mprlab.com/resources/reject-client-provider-key-leaks/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of reject client provider key leaks?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy public endpoints reject provider-key-like fields so upstream credentials stay in server-side configuration or authenticated management storage."}},{"@type":"Question","name":"Who should read this security resource?","acceptedAnswer":{"@type":"Answer","text":"Security-conscious teams that want mistakes to fail before provider credentials spread."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Keep provider API keys server-side for LLM apps, which covers server-side provider API keys."}}]}</script>
+  </head>
+  <body class="resource-page">
+
+      <header class="resource-shell resource-topbar">
+        <a class="resource-brand" href="/">LLM Proxy</a>
+        <nav aria-label="Resource navigation">
+          <a href="/resources/">Resources</a>
+          <a href="/">Main page</a>
+        </nav>
+      </header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Reject client-supplied provider key leaks</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Security</p>
+            <h1>Reject client-supplied provider key leaks</h1>
+            <p class="resource-deck">Fail public proxy requests that try to send upstream provider API keys in query, JSON, or multipart input.</p>
+            <p class="resource-audience">Security-conscious teams that want mistakes to fail before provider credentials spread.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>A caller may accidentally include an OpenAI or provider api_key field in a proxy request body, query string, or multipart form.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy public endpoints reject provider-key-like fields so upstream credentials stay in server-side configuration or authenticated management storage.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Keep upstream provider credentials out of public proxy requests.</li>
+<li>Authenticate clients only with key=&lt;tenant secret&gt;.</li>
+<li>Use management APIs for provider key save/update/removal.</li>
+<li>Treat rejected provider-key fields as integration bugs to remove.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  
+                        <tr>
+                          <td>Query rejection</td>
+                          <td>Provider-key-like query fields fail at the public endpoint.</td>
+                          <td>A leaked api_key parameter is not forwarded.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>JSON rejection</td>
+                          <td>Text request bodies cannot carry upstream provider keys.</td>
+                          <td>Prompt payloads stay separate from provider credentials.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Multipart rejection</td>
+                          <td>Dictation forms reject provider-key-like fields too.</td>
+                          <td>Audio upload paths follow the same boundary.</td>
+                        </tr>
+                      
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+              
+                    <section class="resource-card">
+                      <h3>Frontend mistake</h3>
+                      <p>A form accidentally posts provider_api_key and receives a client error.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Notebook cleanup</h3>
+                      <p>A notebook migration removes OPENAI_API_KEY from request bodies and uses the tenant secret instead.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Dictation upload</h3>
+                      <p>A multipart /dictate request includes only audio and proxy authentication.</p>
+                    </section>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>This catches provider-key-like request fields; it does not inspect arbitrary prompt text for secrets.</li>
+<li>Tenant secrets must still be protected by client teams.</li>
+<li>Provider credentials belong in backend config or authenticated management storage.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+              
+                    <details>
+                      <summary>What is the main job of reject client provider key leaks?</summary>
+                      <p>LLM Proxy public endpoints reject provider-key-like fields so upstream credentials stay in server-side configuration or authenticated management storage.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Who should read this security resource?</summary>
+                      <p>Security-conscious teams that want mistakes to fail before provider credentials spread.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Keep provider API keys server-side for LLM apps, which covers server-side provider API keys.</p>
+                    </details>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+              
+                    <a class="resource-related" href="/resources/server-side-provider-api-keys/">
+                      <span>Security</span>
+                      <strong>Keep provider API keys server-side for LLM apps</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/tenant-secret-ai-gateway/">
+                      <span>Security</span>
+                      <strong>Tenant-secret AI gateway for internal applications</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/strict-yaml-config-placeholders/">
+                      <span>Configuration</span>
+                      <strong>Strict YAML config placeholders for LLM Proxy</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/encrypted-provider-key-storage/">
+                      <span>Security</span>
+                      <strong>Encrypted provider key storage for managed tenants</strong>
+                    </a>
+                  
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
+            <a class="resource-button" href="/">Open the main page</a>
+          </section>
+        </article>
+      </main>
+      <footer class="resource-shell resource-footer">
+        <a href="/">LLM Proxy main page</a>
+        <a href="/resources/">Resource hub</a>
+        <a href="/sitemap.xml">Sitemap</a>
+      </footer>
+    
+  </body>
+</html>

@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>API-served runtime config for a static LLM UI</title>
+    <meta name="description" content="Keep the Pages frontend static while the backend serves current runtime config at /config-ui.yaml.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/api-served-runtime-config-for-static-ui/">
+    <meta property="og:title" content="API-served runtime config for a static LLM UI">
+    <meta property="og:description" content="Keep the Pages frontend static while the backend serves current runtime config at /config-ui.yaml.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/api-served-runtime-config-for-static-ui/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"API-served runtime config for a static LLM UI","description":"Keep the Pages frontend static while the backend serves current runtime config at /config-ui.yaml.","url":"https://llm-proxy.mprlab.com/resources/api-served-runtime-config-for-static-ui/","datePublished":"2026-07-06","dateModified":"2026-07-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/api-served-runtime-config-for-static-ui/","about":["LLM Proxy","Deployment","API-served runtime config static UI"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"API-served runtime config for a static LLM UI","item":"https://llm-proxy.mprlab.com/resources/api-served-runtime-config-for-static-ui/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of API-served runtime config static UI?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy's Pages app fetches backend-owned /config-ui.yaml at runtime, and the Pages artifact contains no static config-ui.yaml or llm-proxy-config.json."}},{"@type":"Question","name":"Who should read this deployment resource?","acceptedAnswer":{"@type":"Answer","text":"Teams deploying a split-origin static management UI and backend API."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Local and hosted LLM Proxy config profiles, which covers local and hosted LLM proxy config."}}]}</script>
+  </head>
+  <body class="resource-page">
+
+      <header class="resource-shell resource-topbar">
+        <a class="resource-brand" href="/">LLM Proxy</a>
+        <nav aria-label="Resource navigation">
+          <a href="/resources/">Resources</a>
+          <a href="/">Main page</a>
+        </nav>
+      </header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>API-served runtime config for a static LLM UI</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Deployment</p>
+            <h1>API-served runtime config for a static LLM UI</h1>
+            <p class="resource-deck">Keep the Pages frontend static while the backend serves current runtime config at /config-ui.yaml.</p>
+            <p class="resource-audience">Teams deploying a split-origin static management UI and backend API.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Static frontends can accidentally ship stale API origins, OAuth values, or runtime config if those values are rendered into the artifact.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy's Pages app fetches backend-owned /config-ui.yaml at runtime, and the Pages artifact contains no static config-ui.yaml or llm-proxy-config.json.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Publish the static UI from site/ to GitHub Pages.</li>
+<li>Run the backend with management config loaded from config.yml.</li>
+<li>Serve /config-ui.yaml from the API origin with allowed frontend CORS.</li>
+<li>Let the browser use that YAML for management API origin, proxy origin, MPR UI, and TAuth bootstrap.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  
+                        <tr>
+                          <td>Single browser config surface</td>
+                          <td>The API backend projects runtime config into /config-ui.yaml.</td>
+                          <td>Pages does not own a duplicate JSON config.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Split-origin support</td>
+                          <td>managementApiOrigin and proxyOrigin are served to the browser.</td>
+                          <td>The UI can call llm-proxy-api while hosted on llm-proxy.</td>
+                        </tr>
+                      
+
+                        <tr>
+                          <td>Publish validation</td>
+                          <td>The Pages publisher rejects forbidden static config artifacts.</td>
+                          <td>Stale config files are removed from the rendered artifact.</td>
+                        </tr>
+                      
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+              
+                    <section class="resource-card">
+                      <h3>Production Pages host</h3>
+                      <p>llm-proxy.mprlab.com serves the static UI while llm-proxy-api.mprlab.com serves config and APIs.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Local preview</h3>
+                      <p>A test server can serve /config-ui.yaml for browser checks without editing the static HTML.</p>
+                    </section>
+                  
+
+                    <section class="resource-card">
+                      <h3>Config rotation</h3>
+                      <p>Updating backend runtime config changes browser config without rebuilding the Pages artifact.</p>
+                    </section>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>The static UI needs the backend config endpoint to load fully.</li>
+<li>CORS and TAuth origins must match the hosted profile.</li>
+<li>Do not publish static config files as a fallback.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+              
+                    <details>
+                      <summary>What is the main job of API-served runtime config static UI?</summary>
+                      <p>LLM Proxy's Pages app fetches backend-owned /config-ui.yaml at runtime, and the Pages artifact contains no static config-ui.yaml or llm-proxy-config.json.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Who should read this deployment resource?</summary>
+                      <p>Teams deploying a split-origin static management UI and backend API.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+                  
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Local and hosted LLM Proxy config profiles, which covers local and hosted LLM proxy config.</p>
+                    </details>
+                  
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+              
+                    <a class="resource-related" href="/resources/local-and-hosted-llm-proxy-config-profiles/">
+                      <span>Deployment</span>
+                      <strong>Local and hosted LLM Proxy config profiles</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/github-pages-llm-management-ui/">
+                      <span>Deployment</span>
+                      <strong>GitHub Pages management UI for LLM Proxy</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/tauth-protected-management-api/">
+                      <span>Management UI</span>
+                      <strong>TAuth-protected management API for LLM Proxy</strong>
+                    </a>
+                  
+
+                    <a class="resource-related" href="/resources/admin-usage-visibility-without-secrets/">
+                      <span>Usage</span>
+                      <strong>Admin usage visibility without exposing secrets</strong>
+                    </a>
+                  
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
+            <a class="resource-button" href="/">Open the main page</a>
+          </section>
+        </article>
+      </main>
+      <footer class="resource-shell resource-footer">
+        <a href="/">LLM Proxy main page</a>
+        <a href="/resources/">Resource hub</a>
+        <a href="/sitemap.xml">Sitemap</a>
+      </footer>
+    
+  </body>
+</html>
