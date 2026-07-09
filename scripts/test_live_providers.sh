@@ -21,6 +21,7 @@ Provider key variables:
   ZHIPU_API_KEY
   GEMINI_API_KEY
   ANTHROPIC_API_KEY
+  MODEL_API_KEY
   XAI_API_KEY
 
 Optional environment:
@@ -41,6 +42,7 @@ Per-provider model overrides:
   LLM_PROXY_LIVE_ZHIPU_MODEL
   LLM_PROXY_LIVE_GEMINI_MODEL
   LLM_PROXY_LIVE_ANTHROPIC_MODEL
+  LLM_PROXY_LIVE_META_MODEL
   LLM_PROXY_LIVE_GROK_MODEL
 USAGE
 }
@@ -69,6 +71,7 @@ provider_key_variable() {
     zhipu) printf "%s\n" "ZHIPU_API_KEY" ;;
     gemini) printf "%s\n" "GEMINI_API_KEY" ;;
     anthropic) printf "%s\n" "ANTHROPIC_API_KEY" ;;
+    meta) printf "%s\n" "MODEL_API_KEY" ;;
     grok) printf "%s\n" "XAI_API_KEY" ;;
     *) return 1 ;;
   esac
@@ -84,6 +87,7 @@ provider_model_override() {
     zhipu) env_or_default LLM_PROXY_LIVE_ZHIPU_MODEL "" ;;
     gemini) env_or_default LLM_PROXY_LIVE_GEMINI_MODEL "" ;;
     anthropic) env_or_default LLM_PROXY_LIVE_ANTHROPIC_MODEL "" ;;
+    meta) env_or_default LLM_PROXY_LIVE_META_MODEL "" ;;
     grok) env_or_default LLM_PROXY_LIVE_GROK_MODEL "" ;;
     *) return 1 ;;
   esac
@@ -136,6 +140,7 @@ export_unused_provider_placeholders() {
     ZHIPU_API_KEY \
     GEMINI_API_KEY \
     ANTHROPIC_API_KEY \
+    MODEL_API_KEY \
     XAI_API_KEY; do
     if [[ -z "${!key_variable:-}" ]]; then
       export "${key_variable}=unused-${key_variable}-for-live-smoke"
@@ -219,7 +224,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   exit 0
 fi
 
-SUPPORTED_PROVIDERS=(openai deepseek dashscope moonshot siliconflow zhipu gemini anthropic grok)
+SUPPORTED_PROVIDERS=(openai deepseek dashscope moonshot siliconflow zhipu gemini anthropic meta grok)
 LIVE_PROVIDERS=()
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
