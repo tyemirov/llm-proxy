@@ -6,6 +6,7 @@ server:
   request_timeout_seconds: 360
   max_prompt_bytes: 4194304
   max_input_audio_bytes: 26214400
+  upstream_rate_limits: []
 management:
   enabled: ${LLM_PROXY_MANAGEMENT_ENABLED}
   public_origin: "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
@@ -156,6 +157,13 @@ providers:
           output_token_limit: 32000
         - id: "claude-opus-4-1"
           output_token_limit: 32000
+  meta:
+    api_key: "${MODEL_API_KEY}"
+    base_url: "https://api.meta.ai/v1"
+    text:
+      default_model: "muse-spark-1.1"
+      models:
+        - id: "muse-spark-1.1"
   grok:
     api_key: "${XAI_API_KEY}"
     base_url: "https://api.x.ai/v1"
