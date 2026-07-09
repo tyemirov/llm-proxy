@@ -40,6 +40,8 @@ func TestRootCommandRunsConfiguredProxyFromConfigFile(t *testing.T) {
 	providerValues.GeminiBaseURL = "https://gemini.example"
 	providerValues.AnthropicAPIKey = "${P411_ANTHROPIC_KEY}"
 	providerValues.AnthropicBaseURL = "https://anthropic.example"
+	providerValues.MetaAPIKey = "${P411_MODEL_API_KEY}"
+	providerValues.MetaBaseURL = "https://meta.example/v1"
 	providerValues.GrokAPIKey = "${P411_GROK_KEY}"
 	providerValues.GrokBaseURL = "https://grok.example"
 	providerValues.GrokTranscriptionsURL = "https://grok.example/stt"
@@ -52,6 +54,10 @@ server:
   request_timeout_seconds: 7
   max_prompt_bytes: 1024
   max_input_audio_bytes: 2048
+  upstream_rate_limits:
+    - origin: "https://openai.example"
+      max_requests: 12
+      interval: "1m"
 management:
   enabled: true
   public_origin: "https://llm-proxy.example"
@@ -93,6 +99,7 @@ P411_SILICONFLOW_KEY=sk-siliconflow
 P411_ZHIPU_KEY=sk-zhipu
 P411_GEMINI_KEY=sk-gemini
 P411_ANTHROPIC_KEY=sk-ant
+P411_MODEL_API_KEY=sk-meta
 P411_GROK_KEY=sk-xai
 P411_TAUTH_JWT_SIGNING_KEY=tauth-signing-key
 P411_MANAGEMENT_DATABASE_DIALECT=sqlite
@@ -131,6 +138,9 @@ P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlh
 	}
 	if capturedConfiguration.Port != 18080 {
 		t.Fatalf("port=%d", capturedConfiguration.Port)
+	}
+	if len(capturedConfiguration.UpstreamRateLimits) != 1 || capturedConfiguration.UpstreamRateLimits[0].Origin != "https://openai.example" || capturedConfiguration.UpstreamRateLimits[0].MaxRequests != 12 || capturedConfiguration.UpstreamRateLimits[0].Interval != "1m" {
+		t.Fatalf("upstreamRateLimits=%+v", capturedConfiguration.UpstreamRateLimits)
 	}
 	if !capturedConfiguration.Management.Enabled {
 		t.Fatalf("management must be enabled")
@@ -185,6 +195,9 @@ P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlh
 	}
 	if capturedConfiguration.AnthropicBaseURL != "https://anthropic.example" {
 		t.Fatalf("anthropicBaseURL=%q", capturedConfiguration.AnthropicBaseURL)
+	}
+	if capturedConfiguration.MetaKey != "sk-meta" || capturedConfiguration.MetaBaseURL != "https://meta.example/v1" {
+		t.Fatalf("meta key/base URL=%q %q", capturedConfiguration.MetaKey, capturedConfiguration.MetaBaseURL)
 	}
 	if capturedConfiguration.ZhipuTranscriptionsURL != "https://zhipu.example/audio/transcriptions" {
 		t.Fatalf("zhipuTranscriptionsURL=%q", capturedConfiguration.ZhipuTranscriptionsURL)
@@ -380,6 +393,7 @@ func TestRootCommandLoadsPackagedConfigWithManagementEnvironment(t *testing.T) {
 	writeTestDotEnv(t, tempDir, `
 SERVICE_SECRET=packaged-secret
 OPENAI_API_KEY=sk-packaged-openai
+MODEL_API_KEY=sk-packaged-meta
 LLM_PROXY_MANAGEMENT_ENABLED=true
 LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN=https://llm-proxy.mprlab.com
 LLM_PROXY_MANAGEMENT_UI_DESCRIPTION=LLM Proxy
@@ -443,6 +457,13 @@ LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
 	}
 	if capturedConfiguration.Management.ManagementAPIOrigin != "https://llm-proxy-api.mprlab.com" || capturedConfiguration.Management.ProxyOrigin != "https://llm-proxy-api.mprlab.com" {
 		t.Fatalf("management api origins=%q %q", capturedConfiguration.Management.ManagementAPIOrigin, capturedConfiguration.Management.ProxyOrigin)
+	}
+	if capturedConfiguration.MetaKey != "sk-packaged-meta" || capturedConfiguration.MetaBaseURL != "https://api.meta.ai/v1" {
+		t.Fatalf("meta key/base URL=%q %q", capturedConfiguration.MetaKey, capturedConfiguration.MetaBaseURL)
+	}
+	metaCatalog := capturedConfiguration.ProviderModels[proxy.ProviderNameMeta]
+	if metaCatalog.Text.DefaultModel != proxy.ModelNameMuseSpark11 || len(metaCatalog.Text.Models) != 1 || metaCatalog.Text.Models[0].ID != proxy.ModelNameMuseSpark11 {
+		t.Fatalf("meta model catalog=%+v", metaCatalog)
 	}
 }
 
@@ -940,6 +961,15 @@ func TestRootCommandRejectsMissingDefaultTextProviderKeys(t *testing.T) {
 			expectedError: "provider_api_key_required: provider=anthropic field=providers.anthropic.api_key",
 		},
 		{
+			name:     "meta canonical",
+			provider: proxy.ProviderNameMeta,
+			model:    proxy.ModelNameMuseSpark11,
+			missingKey: func(values *providerYAMLValues) {
+				values.MetaAPIKey = "${P411_MISSING_META_KEY}"
+			},
+			expectedError: "provider_api_key_required: provider=meta field=providers.meta.api_key",
+		},
+		{
 			name:     "grok alias",
 			provider: providerAliasXAI,
 			model:    proxy.ModelNameGrok43,
@@ -1090,6 +1120,93 @@ providers:
 	}
 }
 
+func TestRootCommandRejectsInvalidUpstreamRateLimitConfiguration(t *testing.T) {
+	testCases := []struct {
+		name               string
+		rateLimitRulesYAML string
+		expectedField      string
+	}{
+		{
+			name: "origin contains path",
+			rateLimitRulesYAML: `
+    - origin: "https://api.openai.com/v1"
+      max_requests: 10
+      interval: "1m"`,
+			expectedField: "field=origin",
+		},
+		{
+			name: "origin contains user info",
+			rateLimitRulesYAML: `
+    - origin: "https://credential@api.openai.com"
+      max_requests: 10
+      interval: "1m"`,
+			expectedField: "field=origin",
+		},
+		{
+			name: "maximum is not positive",
+			rateLimitRulesYAML: `
+    - origin: "https://api.openai.com"
+      max_requests: 0
+      interval: "1m"`,
+			expectedField: "field=max_requests",
+		},
+		{
+			name: "interval is invalid",
+			rateLimitRulesYAML: `
+    - origin: "https://api.openai.com"
+      max_requests: 10
+      interval: "not-a-duration"`,
+			expectedField: "field=interval",
+		},
+		{
+			name: "interval is not positive",
+			rateLimitRulesYAML: `
+    - origin: "https://api.openai.com"
+      max_requests: 10
+      interval: "0s"`,
+			expectedField: "field=interval",
+		},
+		{
+			name: "normalized origin is duplicated",
+			rateLimitRulesYAML: `
+    - origin: "https://api.openai.com"
+      max_requests: 10
+      interval: "1m"
+    - origin: " HTTPS://API.OPENAI.COM "
+      max_requests: 20
+      interval: "1m"`,
+			expectedField: "field=origin duplicate=https://api.openai.com",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			tempDir := subTest.TempDir()
+			configPath := writeTestConfig(subTest, tempDir, `
+server:
+  upstream_rate_limits:`+testCase.rateLimitRulesYAML+`
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: openai
+      model: gpt-4.1
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
+`+completeLiteralProvidersYAML())
+			withServeProxy(subTest, failingServeProxy(subTest))
+
+			executeError := executeRootCommand(subTest, "--config", configPath)
+			if executeError == nil || !strings.Contains(executeError.Error(), "invalid_upstream_rate_limit_configuration") || !strings.Contains(executeError.Error(), testCase.expectedField) {
+				subTest.Fatalf("error=%v want invalid upstream rate limit field %s", executeError, testCase.expectedField)
+			}
+			if strings.Contains(executeError.Error(), "credential@") {
+				subTest.Fatalf("error leaked origin user info: %v", executeError)
+			}
+		})
+	}
+}
+
 func TestRootCommandRejectsUnknownTenantDefaultProviderAfterCredentialCheck(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir, `
@@ -1147,6 +1264,9 @@ providers:
   anthropic:
     api_key: "sk-anthropic"
     base_url: "https://api.anthropic.com"
+  meta:
+    api_key: "sk-meta"
+    base_url: "https://api.meta.ai/v1"
   grok:
     api_key: "sk-grok"
     base_url: "https://api.x.ai/v1"
@@ -1184,6 +1304,9 @@ providers:
   anthropic:
     api_key: "sk-anthropic"
     base_url: "https://api.anthropic.com"
+  meta:
+    api_key: "sk-meta"
+    base_url: "https://api.meta.ai/v1"
   grok:
     api_key: "sk-grok"
     base_url: ""
@@ -1222,6 +1345,9 @@ providers:
   anthropic:
     api_key: "sk-anthropic"
     base_url: "https://api.anthropic.com"
+  meta:
+    api_key: "sk-meta"
+    base_url: "https://api.meta.ai/v1"
   grok:
     api_key: "sk-grok"
     base_url: "https://api.x.ai/v1"
@@ -1260,6 +1386,9 @@ providers:
   anthropic:
     api_key: "sk-anthropic"
     base_url: "https://api.anthropic.com"
+  meta:
+    api_key: "sk-meta"
+    base_url: "https://api.meta.ai/v1"
   grok:
     api_key: "sk-grok"
     base_url: "https://api.x.ai/v1"
@@ -1298,6 +1427,9 @@ providers:
   anthropic:
     api_key: "sk-anthropic"
     base_url: "https://api.anthropic.com"
+  meta:
+    api_key: "sk-meta"
+    base_url: "https://api.meta.ai/v1"
   grok:
     api_key: "sk-grok"
     base_url: "https://api.x.ai/v1"
@@ -1336,6 +1468,9 @@ providers:
   anthropic:
     api_key: "sk-anthropic"
     base_url: "https://api.anthropic.com"
+  meta:
+    api_key: "sk-meta"
+    base_url: "https://api.meta.ai/v1"
   grok:
     api_key: "sk-grok"
     base_url: "https://api.x.ai/v1"
@@ -1347,6 +1482,11 @@ providers:
 			name:          "missing provider text models",
 			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "models:\n        - id: \"qwen-plus\"", "models: []", 1),
 			expectedError: "invalid_model_catalog: provider=dashscope endpoint=text field=providers.dashscope.text.models",
+		},
+		{
+			name:          "missing meta base url",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "base_url: \"https://api.meta.ai/v1\"", "base_url: \"\"", 1),
+			expectedError: "provider_base_url_required: provider=meta field=providers.meta.base_url",
 		},
 		{
 			name:          "blank provider text default model",
@@ -1561,6 +1701,8 @@ type providerYAMLValues struct {
 	GeminiBaseURL                string
 	AnthropicAPIKey              string
 	AnthropicBaseURL             string
+	MetaAPIKey                   string
+	MetaBaseURL                  string
 	GrokAPIKey                   string
 	GrokBaseURL                  string
 	GrokTranscriptionsURL        string
@@ -1587,6 +1729,8 @@ func defaultProviderYAMLValues() providerYAMLValues {
 		GeminiBaseURL:                "https://generativelanguage.googleapis.com/v1",
 		AnthropicAPIKey:              "sk-anthropic",
 		AnthropicBaseURL:             "https://api.anthropic.com",
+		MetaAPIKey:                   "sk-meta",
+		MetaBaseURL:                  "https://api.meta.ai/v1",
 		GrokAPIKey:                   "sk-grok",
 		GrokBaseURL:                  "https://api.x.ai/v1",
 		GrokTranscriptionsURL:        "https://api.x.ai/v1/stt",
@@ -1713,6 +1857,13 @@ providers:
           output_token_limit: 32000
         - id: "claude-opus-4-1"
           output_token_limit: 32000
+  meta:
+    api_key: "%s"
+    base_url: "%s"
+    text:
+      default_model: "muse-spark-1.1"
+      models:
+        - id: "muse-spark-1.1"
   grok:
     api_key: "%s"
     base_url: "%s"
@@ -1751,6 +1902,8 @@ providers:
 		values.GeminiBaseURL,
 		values.AnthropicAPIKey,
 		values.AnthropicBaseURL,
+		values.MetaAPIKey,
+		values.MetaBaseURL,
 		values.GrokAPIKey,
 		values.GrokBaseURL,
 		values.GrokTranscriptionsURL,
