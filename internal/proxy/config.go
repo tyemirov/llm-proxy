@@ -52,6 +52,7 @@ type Configuration struct {
 	ZhipuKey                     string
 	GeminiKey                    string
 	AnthropicKey                 string
+	MetaKey                      string
 	GrokKey                      string
 	OpenAIBaseURL                string
 	OpenAITranscriptionsURL      string
@@ -64,6 +65,7 @@ type Configuration struct {
 	ZhipuTranscriptionsURL       string
 	GeminiBaseURL                string
 	AnthropicBaseURL             string
+	MetaBaseURL                  string
 	GrokBaseURL                  string
 	GrokTranscriptionsURL        string
 	Port                         int
@@ -73,8 +75,10 @@ type Configuration struct {
 	RequestTimeoutSeconds        int
 	MaxPromptBytes               int64
 	MaxInputAudioBytes           int64
+	UpstreamRateLimits           []UpstreamRateLimitConfiguration
 	Endpoints                    *Endpoints
 	ProviderModels               ProviderModelCatalogs
+	upstreamRateLimits           upstreamRateLimits
 	tenants                      tenantRegistry
 	validated                    bool
 }
@@ -106,10 +110,15 @@ type ManagementConfiguration struct {
 // NewConfiguration returns a normalized runtime configuration after validating startup invariants.
 func NewConfiguration(configuration Configuration) (Configuration, error) {
 	configuration.ApplyTunables()
+	upstreamRateLimits, rateLimitError := newUpstreamRateLimits(configuration.UpstreamRateLimits)
+	if rateLimitError != nil {
+		return Configuration{}, rateLimitError
+	}
 	tenants, validationError := validateConfig(configuration)
 	if validationError != nil {
 		return Configuration{}, validationError
 	}
+	configuration.upstreamRateLimits = upstreamRateLimits
 	configuration.tenants = tenants
 	configuration.validated = true
 	return configuration, nil
@@ -185,6 +194,7 @@ func (configuration *Configuration) ApplyTunables() {
 	configuration.ZhipuKey = strings.TrimSpace(configuration.ZhipuKey)
 	configuration.GeminiKey = strings.TrimSpace(configuration.GeminiKey)
 	configuration.AnthropicKey = strings.TrimSpace(configuration.AnthropicKey)
+	configuration.MetaKey = strings.TrimSpace(configuration.MetaKey)
 	configuration.GrokKey = strings.TrimSpace(configuration.GrokKey)
 	if configuration.WorkerCount <= 0 {
 		configuration.WorkerCount = DefaultWorkers
@@ -244,6 +254,10 @@ func (configuration *Configuration) ApplyTunables() {
 	configuration.AnthropicBaseURL = strings.TrimSpace(configuration.AnthropicBaseURL)
 	if strings.TrimSpace(configuration.AnthropicBaseURL) == constants.EmptyString {
 		configuration.AnthropicBaseURL = defaultAnthropicBaseURL
+	}
+	configuration.MetaBaseURL = strings.TrimSpace(configuration.MetaBaseURL)
+	if strings.TrimSpace(configuration.MetaBaseURL) == constants.EmptyString {
+		configuration.MetaBaseURL = defaultMetaBaseURL
 	}
 	configuration.GrokBaseURL = strings.TrimSpace(configuration.GrokBaseURL)
 	if strings.TrimSpace(configuration.GrokBaseURL) == constants.EmptyString {

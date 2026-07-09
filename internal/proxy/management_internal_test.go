@@ -1265,6 +1265,7 @@ func internalProviderModelCatalogs() ProviderModelCatalogs {
 		ProviderNameZhipu:       {Text: textCatalog(ModelNameZhipuGLM), Dictation: textCatalog("glm-asr-2512")},
 		ProviderNameGemini:      {Text: textCatalog(ModelNameGemini25Flash)},
 		ProviderNameAnthropic:   {Text: anthropicTextCatalog},
+		ProviderNameMeta:        {Text: textCatalog(ModelNameMuseSpark11)},
 		ProviderNameGrok:        {Text: textCatalog(ModelNameGrok43), Dictation: textCatalog("xai-stt")},
 	}
 }

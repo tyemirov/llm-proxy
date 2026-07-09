@@ -29,6 +29,7 @@ const (
 	testManagementProviderKeyEncryptionKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 	testManagementOpenAIKey                = "sk-user-openai"
 	testManagementDeepSeekKey              = "sk-user-deepseek"
+	testManagementMetaKey                  = "sk-user-meta"
 )
 
 func managementProviderKeyRequestBody(t *testing.T, apiKey string, textModel string, systemPrompt string) string {
@@ -870,7 +871,7 @@ func TestManagementAdminUsersDashboard(t *testing.T) {
 	}
 }
 
-func TestManagementGeneratedSecretRoutesWithTenantProviderKey(t *testing.T) {
+func TestManagementMetaProviderRoutesWithEncryptedTenantKey(t *testing.T) {
 	var capturedAuthorization string
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/chat/completions" {
@@ -885,36 +886,41 @@ func TestManagementGeneratedSecretRoutesWithTenantProviderKey(t *testing.T) {
 		if unmarshalError := json.Unmarshal(bodyBytes, &upstreamPayload); unmarshalError != nil {
 			t.Fatalf("unmarshal upstream body: %v", unmarshalError)
 		}
-		if upstreamPayload["model"] != proxy.ModelNameDeepSeekV4Flash {
-			t.Fatalf("model=%v want=%s", upstreamPayload["model"], proxy.ModelNameDeepSeekV4Flash)
+		if upstreamPayload["model"] != proxy.ModelNameMuseSpark11 {
+			t.Fatalf("model=%v want=%s", upstreamPayload["model"], proxy.ModelNameMuseSpark11)
 		}
 		messages, messagesOK := upstreamPayload["messages"].([]any)
 		if !messagesOK || len(messages) != 2 {
 			t.Fatalf("messages=%+v", upstreamPayload["messages"])
 		}
 		systemMessage, systemMessageOK := messages[0].(map[string]any)
-		if !systemMessageOK || systemMessage["role"] != "system" || systemMessage["content"] != "deepseek managed system" {
+		if !systemMessageOK || systemMessage["role"] != "system" || systemMessage["content"] != "meta managed system" {
 			t.Fatalf("system message=%+v", messages[0])
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"managed deepseek ok"}}]}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"managed meta ok"}}]}`))
 	}))
 	defer upstreamServer.Close()
 
 	router := newManagementRouter(t, proxy.Configuration{
-		DeepSeekBaseURL: upstreamServer.URL,
+		MetaBaseURL: upstreamServer.URL,
 	})
 	userOneCookie := managementSessionCookie(t, "tauth-user-one")
 	userTwoCookie := managementSessionCookie(t, "tauth-user-two")
 
-	saveKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/deepseek", managementProviderKeyRequestBody(t, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, "deepseek managed system"), userOneCookie)
+	saveKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/meta", managementProviderKeyRequestBody(t, testManagementMetaKey, proxy.ModelNameMuseSpark11, "meta managed system"), userOneCookie)
 	saveKeyResponse := httptest.NewRecorder()
 	router.ServeHTTP(saveKeyResponse, saveKeyRequest)
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save key status=%d body=%s", saveKeyResponse.Code, saveKeyResponse.Body.String())
 	}
-	if strings.Contains(saveKeyResponse.Body.String(), testManagementDeepSeekKey) || !strings.Contains(saveKeyResponse.Body.String(), "sk-...seek") {
+	if strings.Contains(saveKeyResponse.Body.String(), testManagementMetaKey) || !strings.Contains(saveKeyResponse.Body.String(), "sk-...meta") {
 		t.Fatalf("provider key response leaked or failed to mask key: %s", saveKeyResponse.Body.String())
+	}
+	for _, expectedFragment := range []string{`"id":"meta"`, `"label":"Meta"`, `"text_model":"muse-spark-1.1"`, `"text_default_model":"muse-spark-1.1"`, `"supports_dictation":false`} {
+		if !strings.Contains(saveKeyResponse.Body.String(), expectedFragment) {
+			t.Fatalf("provider key response missing %q: %s", expectedFragment, saveKeyResponse.Body.String())
+		}
 	}
 
 	saveOpenAIKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/openai", managementProviderKeyRequestBody(t, testManagementOpenAIKey, proxy.ModelNameGPT41, ""), userOneCookie)
@@ -924,7 +930,7 @@ func TestManagementGeneratedSecretRoutesWithTenantProviderKey(t *testing.T) {
 		t.Fatalf("save openai key status=%d body=%s", saveOpenAIKeyResponse.Code, saveOpenAIKeyResponse.Body.String())
 	}
 
-	defaultsBody := `{"provider":"deepseek","model":"` + proxy.ModelNameDeepSeekV4Flash + `","dictation_provider":"openai","dictation_model":"` + proxy.DefaultDictationModel + `","system_prompt":""}`
+	defaultsBody := `{"provider":"meta","model":"` + proxy.ModelNameMuseSpark11 + `","dictation_provider":"openai","dictation_model":"` + proxy.DefaultDictationModel + `","system_prompt":""}`
 	defaultsRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/defaults", defaultsBody, userOneCookie)
 	defaultsResponse := httptest.NewRecorder()
 	router.ServeHTTP(defaultsResponse, defaultsRequest)
@@ -939,7 +945,7 @@ func TestManagementGeneratedSecretRoutesWithTenantProviderKey(t *testing.T) {
 	if userTwoProfileResponse.Code != http.StatusOK {
 		t.Fatalf("user2 profile status=%d body=%s", userTwoProfileResponse.Code, userTwoProfileResponse.Body.String())
 	}
-	if strings.Contains(userTwoProfileResponse.Body.String(), "sk-...seek") {
+	if strings.Contains(userTwoProfileResponse.Body.String(), "sk-...meta") {
 		t.Fatalf("user2 saw user1 provider key: %s", userTwoProfileResponse.Body.String())
 	}
 
@@ -962,15 +968,15 @@ func TestManagementGeneratedSecretRoutesWithTenantProviderKey(t *testing.T) {
 	proxyRequestValues := url.Values{}
 	proxyRequestValues.Set("key", secretResponse.Secret)
 	proxyRequestValues.Set("prompt", "hello")
-	proxyRequestValues.Set("provider", proxy.ProviderNameDeepSeek)
+	proxyRequestValues.Set("provider", proxy.ProviderNameMeta)
 	proxyRequest := httptest.NewRequest(http.MethodGet, "/?"+proxyRequestValues.Encode(), nil)
 	proxyResponse := httptest.NewRecorder()
 	router.ServeHTTP(proxyResponse, proxyRequest)
-	if proxyResponse.Code != http.StatusOK || strings.TrimSpace(proxyResponse.Body.String()) != "managed deepseek ok" {
+	if proxyResponse.Code != http.StatusOK || strings.TrimSpace(proxyResponse.Body.String()) != "managed meta ok" {
 		t.Fatalf("proxy status=%d body=%q", proxyResponse.Code, proxyResponse.Body.String())
 	}
-	if capturedAuthorization != "Bearer "+testManagementDeepSeekKey {
-		t.Fatalf("authorization=%q want=%q", capturedAuthorization, "Bearer "+testManagementDeepSeekKey)
+	if capturedAuthorization != "Bearer "+testManagementMetaKey {
+		t.Fatalf("authorization=%q want=%q", capturedAuthorization, "Bearer "+testManagementMetaKey)
 	}
 
 	revokeRequest := authenticatedJSONRequest(http.MethodDelete, "/api/management/secrets", `{}`, userOneCookie)

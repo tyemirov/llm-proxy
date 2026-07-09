@@ -91,7 +91,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}
 
 	requestTimeout := time.Duration(configuration.RequestTimeoutSeconds) * time.Second
-	upstreamHTTPClient := newLimitedHTTPDoer(HTTPClient, configuration.WorkerCount, configuration.QueueSize)
+	upstreamHTTPClient := newLimitedHTTPDoer(HTTPClient, configuration.WorkerCount, configuration.QueueSize, configuration.upstreamRateLimits, structuredLogger, systemUpstreamRateLimitClock{})
 	openAIClient := NewOpenAIClient(upstreamHTTPClient, configuration.Endpoints, requestTimeout)
 	chatClient := newOpenAICompatibleChatClient(upstreamHTTPClient, requestTimeout)
 	geminiClient := newGeminiGenerateContentClient(upstreamHTTPClient, requestTimeout)
