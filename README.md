@@ -70,6 +70,7 @@ server:
   request_timeout_seconds: 360
   max_prompt_bytes: 4194304
   max_input_audio_bytes: 26214400
+  upstream_rate_limits: []
 management:
   enabled: ${LLM_PROXY_MANAGEMENT_ENABLED}
   public_origin: "${LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN}"
@@ -134,6 +135,13 @@ providers:
       models:
         - id: "gpt-4o-mini-transcribe"
         - id: "gpt-4o-transcribe"
+  meta:
+    api_key: "${MODEL_API_KEY}"
+    base_url: "https://api.meta.ai/v1"
+    text:
+      default_model: "muse-spark-1.1"
+      models:
+        - id: "muse-spark-1.1"
   deepseek:
     api_key: "${DEEPSEEK_API_KEY}"
     base_url: "https://api.deepseek.com"
@@ -246,6 +254,30 @@ generation and dictation. `server.queue_size` is the number of additional
 upstream HTTP operations that may wait for that shared limit before the proxy
 returns `503 request queue full`.
 
+`server.upstream_rate_limits` applies strict rolling-window call limits in that
+same shared HTTP layer. Rules match an exact normalized upstream origin
+(`scheme://host[:port]`), so providers that use the same origin share one
+budget while different origins are independent. A delayed call remains in the
+bounded upstream queue but does not occupy a worker. Every upstream attempt,
+including transport retries and OpenAI response retries, consumes one call.
+An absent or empty list disables rate limiting; invalid and duplicate rules
+fail startup.
+
+```yaml
+server:
+  upstream_rate_limits:
+    - origin: "https://api.openai.com"
+      max_requests: 60
+      interval: "1m"
+```
+
+`origin` accepts only an exact `http` or `https` origin without user info,
+path, query, or fragment. `max_requests` must be positive, and `interval` must
+be a positive Go duration such as `500ms`, `1s`, or `1m`. When a call must wait,
+the shared client emits a structured info log with the origin, limit, interval,
+and wait duration; context cancellation during the wait emits a warning and
+keeps the existing request-timeout error mapping.
+
 ### Provider support matrix
 
 Provider selectors and aliases are accepted anywhere the public API accepts
@@ -259,6 +291,7 @@ adapters before they are available through `/dictate`.
 | Provider selector | Aliases | Text API | Configured default text model | Credential field | Default base URL | Dictation | Web search |
 |-------------------|---------|----------|-------------------------------|------------------|------------------|-----------|------------|
 | `openai` | none | OpenAI Responses | `gpt-4.1` | `providers.openai.api_key` | `https://api.openai.com/v1` | Yes: `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | Yes, on marked OpenAI models |
+| `meta` | none | Meta Model API OpenAI-compatible chat completions | `muse-spark-1.1` | `providers.meta.api_key` | `https://api.meta.ai/v1` | No | No |
 | `deepseek` | none | OpenAI-compatible chat completions | `deepseek-v4-flash` | `providers.deepseek.api_key` | `https://api.deepseek.com` | No | No |
 | `dashscope` | `qwen` | OpenAI-compatible chat completions | `qwen-plus` | `providers.dashscope.api_key` | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` | No | No |
 | `moonshot` | `kimi` | OpenAI-compatible chat completions | `kimi-k2-0905-preview` | `providers.moonshot.api_key` | `https://api.moonshot.ai/v1` | No | No |
@@ -269,7 +302,7 @@ adapters before they are available through `/dictate`.
 | `grok` | `xai` | xAI OpenAI-compatible chat completions | `grok-4.3` | `providers.grok.api_key` | `https://api.x.ai/v1` | Yes: `xai-stt` | No |
 
 All upstream provider credentials are server-side only. Client requests must
-never send OpenAI, Anthropic, xAI, Gemini, or other upstream API keys.
+never send OpenAI, Meta, Anthropic, xAI, Gemini, or other upstream API keys.
 
 ### Model catalog schema
 
@@ -339,6 +372,20 @@ Provider-specific details:
   dictation uses `providers.openai.transcriptions_url`.
 * OpenAI-compatible text providers send chat completion requests with
   `Authorization: Bearer <api_key>` and the selected provider base URL.
+* Meta Model API requests use that shared Chat Completions adapter with the
+  exact `meta` selector, `https://api.meta.ai/v1` base URL,
+  `${MODEL_API_KEY}` credential, and `muse-spark-1.1` model. llm-proxy exposes
+  the public `max_tokens` input upstream as Meta's current
+  `max_completion_tokens` field rather than Meta's deprecated `max_tokens` field.
+  The proxy exposes Muse Spark 1.1 only as text generation through `GET /`,
+  `POST /`, and `POST /v2`: there is no Meta dictation or `web_search`, no
+  proxy tool or multimodal input contract, and no fallback to Meta's Responses API. Meta
+  documents Muse Spark 1.1 as a public preview for U.S. developers with a
+  1,048,576-token context window. See Meta's
+  [Muse Spark guide](https://developer.meta.com/ai/resources/blog/build-with-muse-spark/),
+  [model reference](https://dev.meta.ai/docs/getting-started/models),
+  [Chat Completions reference](https://dev.meta.ai/docs/features/chat-completion),
+  and [pricing and rate-limit documentation](https://dev.meta.ai/docs/getting-started/pricing-rate-limits).
 * Only dictation-capable providers expose `transcriptions_url` fields:
   OpenAI uses `providers.openai.transcriptions_url`, SiliconFlow uses
   `providers.siliconflow.transcriptions_url`, Zhipu uses
@@ -384,8 +431,8 @@ Unknown YAML keys fail startup.
 
 Set `management.enabled: true` to enable TAuth-protected management APIs under
 `/api/management`. The browser UI is static and lives in `site/`, which is
-published to the `gh-pages` branch by `make publish-pages`, `make publish`, or
-`make deploy`. GitHub Actions is not used for Pages deployment. The backend does
+packaged by `make release`, uploaded as an immutable GitHub Release asset by
+`make publish`, and activated on `gh-pages` by `make deploy`. GitHub Actions is not used for Pages deployment. The backend does
 not serve management HTML or assets; `GET /` remains a proxy endpoint and
 returns `403` without a tenant `key`. The backend does serve public
 `/config-ui.yaml` from the loaded management config so the GitHub Pages frontend
@@ -518,11 +565,10 @@ Then configure GitHub Pages for this repository:
 
 1. Use branch publishing from `gh-pages` at `/`.
 2. Set the Pages custom domain to `llm-proxy.mprlab.com`.
-3. Publish Pages from this repository with `make publish-pages`, or as part of
-   `make publish` and `make deploy`. The publisher renders `site/`, verifies no
-   static browser config files or rendered config URL are present, pushes the
-   `gh-pages` branch, and configures the repository Pages source through the
-   GitHub API unless `--skip-configure` is passed.
+3. Run `make release` to render and validate the Pages archive, `make publish`
+   to upload that immutable archive, and `make deploy` to activate it on
+   `gh-pages`. Deployment configures the repository Pages source and verifies
+   `/.mprlab-release.json` at the public origin.
 4. Configure real backend deployment secrets outside the Pages artifact:
    `SERVICE_SECRET`, `LLM_PROXY_MANAGEMENT_ADMIN_EMAILS`,
    `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`,
@@ -620,6 +666,17 @@ tenants:
       model: grok-4.3
 ```
 
+Set Meta Muse Spark 1.1 as the default text provider:
+
+```yaml
+tenants:
+  - id: meta
+    secret: "${SERVICE_SECRET}"
+    defaults:
+      provider: meta
+      model: muse-spark-1.1
+```
+
 ## Local Automation
 
 This repository exposes the standard local targets used by MPR app repos:
@@ -630,10 +687,9 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, and Playwright browser tests. |
 | `make test-live-providers` | Generate a complete temporary config and run live text smoke tests for every provider whose API key is present; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
-| `make release` | Cut a `v*` release from `master`, update `CHANGELOG.md` when needed, and push the release tag. |
-| `make publish-pages` | Render `site/`, verify it has no static browser config, push the `gh-pages` branch, and configure branch-based GitHub Pages without Actions. |
-| `make publish` | Validate the release source, publish `ghcr.io/tyemirov/llm-proxy:<tag>` plus `:latest`, and publish the Pages branch. |
-| `make deploy` | Verify the published image, publish the Pages branch, and deploy the backend through the sibling `../mprlab-gateway` checkout. |
+| `make release` | Run CI and prepare the local tag, container archives, and validated Pages archive under `.git/mprlab-release` without remote writes. |
+| `make publish` | Publish the exact prepared Git refs, GitHub Release assets, and container archives without rebuilding or deploying. |
+| `make deploy` | Verify and deploy the published backend through the sibling gateway, then activate and verify the published Pages archive. |
 
 Live provider smoke tests are intentionally not part of `make ci`; they call
 paid upstream APIs and depend on local or CI secret availability. The dynamic
@@ -645,6 +701,7 @@ specific provider/model pair.
 | Provider | Key variable | Model override |
 |----------|--------------|----------------|
 | OpenAI | `OPENAI_API_KEY` | `LLM_PROXY_LIVE_OPENAI_MODEL` |
+| Meta Muse Spark | `MODEL_API_KEY` | `LLM_PROXY_LIVE_META_MODEL` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `LLM_PROXY_LIVE_DEEPSEEK_MODEL` |
 | DashScope/Qwen | `DASHSCOPE_API_KEY` | `LLM_PROXY_LIVE_DASHSCOPE_MODEL` |
 | Moonshot/Kimi | `MOONSHOT_API_KEY` | `LLM_PROXY_LIVE_MOONSHOT_MODEL` |
@@ -833,6 +890,18 @@ curl --get \
   "http://localhost:8080/"
 ```
 
+Meta Muse Spark 1.1 text generation:
+
+```shell
+curl --get \
+  --data-urlencode "prompt=Summarize this with Muse Spark" \
+  --data-urlencode "key=mysecret" \
+  --data-urlencode "provider=meta" \
+  --data-urlencode "model=muse-spark-1.1" \
+  --data-urlencode "max_tokens=512" \
+  "http://localhost:8080/"
+```
+
 ### Large text request
 
 Use `POST /` with a JSON body when the prompt is too large for a URL query
@@ -876,7 +945,7 @@ JSON body fields:
 | `model` | No | tenant or configured provider default | Model identifier from the selected provider's configured model list. Omitted model uses the tenant default when `provider` is omitted; otherwise it uses the selected provider's configured default. |
 | `web_search` | No | `false` | Enables OpenAI web search when the selected provider/model supports it. |
 | `system_prompt` | No | authenticated tenant default | Per-request system prompt override. With `messages`, it is prepended as a system message only when the body does not already contain a system message. |
-| `max_tokens` | No | provider default | Positive integer output-token cap for this request. The proxy maps it to OpenAI `max_output_tokens`, OpenAI-compatible `max_tokens`, Anthropic `max_tokens`, or Gemini `generationConfig.maxOutputTokens`. |
+| `max_tokens` | No | provider default | Positive integer output-token cap for this request. The proxy maps it to OpenAI `max_output_tokens`, Meta `max_completion_tokens`, other OpenAI-compatible providers' `max_tokens`, Anthropic `max_tokens`, or Gemini `generationConfig.maxOutputTokens`. |
 
 For `POST /`, `provider` remains a query parameter. Query `model` may override
 the JSON body only when the body omits `model` or provides the same value;
@@ -1099,6 +1168,7 @@ positive and lets the upstream provider enforce any provider-side model limit.
 | `gpt-5-mini` | OpenAI | No | - | No |
 | `gpt-5.5` | OpenAI | No | - | Yes |
 | `gpt-5.5-pro` | OpenAI | No | - | Yes |
+| `muse-spark-1.1` | Meta | Yes | - | No |
 | `deepseek-v4-flash` | DeepSeek | Yes | - | No |
 | `deepseek-v4-pro` | DeepSeek | No | - | No |
 | `deepseek-chat` | DeepSeek | No | - | No |
@@ -1169,19 +1239,15 @@ the selected integration profile or deployment docs, not in this README.
 
 ## Releasing
 
-Use `make release` from a clean, up-to-date `master` branch. It runs `make ci`,
-updates `CHANGELOG.md` if the selected version is missing, creates the release
-commit when needed, and pushes the `v*` tag. Tags that begin with `v` trigger
-the release workflow, which builds and publishes release artifacts and uses the
-matching changelog section as release notes.
+Use `make release` from a clean local `master` branch. It runs `make ci`, builds
+the multi-platform container archives and static Pages archive under
+`.git/mprlab-release`, updates `CHANGELOG.md`, and creates only a local release
+commit and tag. It performs no remote writes.
 
-Use `make publish` when you need to manually publish the release image and
-refresh the GitHub Pages branch from the same source revision. Use
-`make publish-pages` only for a Pages-only refresh. Use `make deploy` after the
-release image is published and `:latest` points at the same digest as the
-release tag; deploy republishes Pages before the gateway backend target. Pages
-deployment is intentionally owned by these Makefile commands, not by GitHub
-Actions.
+Use `make publish` to push the prepared Git refs, GitHub Release assets, and
+container archives without rebuilding. Use `make deploy` only after publish;
+it verifies the published image, deploys the backend through the gateway, then
+activates the exact `pages.tar.gz` asset on the live Pages branch.
 
 ## License
 
