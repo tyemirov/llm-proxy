@@ -28,7 +28,7 @@ Generated: 2026-07-06
 
 | Capability | Description | Evidence source | Confidence | Current / roadmap / unclear | Safe for page copy? |
 |---|---|---|---|---|---|
-| Multi-provider text routing | Routes OpenAI Responses, OpenAI-compatible providers, Anthropic Messages, Gemini generateContent, and Grok/xAI text. | README provider matrix, provider routing notes | High | Current | Yes |
+| Multi-provider text routing | Routes OpenAI Responses, Meta Muse Spark and other OpenAI-compatible providers, Anthropic Messages, Gemini generateContent, and Grok/xAI text. | README provider matrix, provider routing notes | High | Current | Yes |
 | Dictation endpoint | Routes multipart audio through /dictate for supported dictation providers. | README dictation section, dictation plan | High | Current | Yes |
 | Tenant-secret auth | Public proxy endpoints require key=<tenant secret>. | README REST and security sections | High | Current | Yes |
 | Server-side provider credentials | Public requests must not send upstream provider keys; credentials stay server-side. | README security, provider routing notes | High | Current | Yes |
@@ -45,6 +45,7 @@ Generated: 2026-07-06
 |---|---|---|---|
 | No zero-knowledge guarantee | Backend decrypts provider keys to call upstream providers. | README management UI | Say encrypted at rest for storage/backups/dumps, not user-only decryption. |
 | Not every upstream feature is exposed | Provider adapters define current capabilities. | README provider and dictation matrices | Do not claim universal provider feature parity. |
+| Meta support is text-only | Muse Spark 1.1 uses the shared Chat Completions adapter. | README provider-specific details | Do not imply Meta dictation, web search, tools, multimodal inputs, or Responses fallback. |
 | Web search limited to configured OpenAI models | Other providers are marked unsupported. | README provider-specific details | Do not imply search across all providers. |
 | Live provider tests can spend money | Live smoke tests are not part of CI. | README local automation | Do not present live tests as routine CI. |
 | Management requires TAuth/database config | Self-service UI needs several hosted values. | README management UI and split-origin setup | Do not imply zero-config hosted management. |
@@ -52,7 +53,7 @@ Generated: 2026-07-06
 ### Safe Claims
 
 - LLM Proxy exposes GET /, POST /, POST /v2, and POST /dictate behind tenant-secret authentication.
-- It routes text to OpenAI, OpenAI-compatible providers, Anthropic, Gemini, and Grok/xAI as documented in the provider matrix.
+- It routes text to OpenAI, Meta Muse Spark 1.1 and other OpenAI-compatible providers, Anthropic, Gemini, and Grok/xAI as documented in the provider matrix.
 - It routes dictation through /dictate for OpenAI, SiliconFlow, Zhipu, and Grok/xAI as documented.
 - It keeps upstream provider API keys server-side and rejects provider-key-like fields on public proxy requests.
 - It can run a TAuth-protected self-service management UI where users save provider keys, generate tenant secrets, set defaults, and inspect usage.
