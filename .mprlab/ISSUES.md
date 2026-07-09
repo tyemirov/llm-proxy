@@ -950,6 +950,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run 'TestManagement(AdminUsersDashboard|UsageSummaryRecordsManagedProxyRequests|ConfigurationValidationRequiresBackendAuthFields)'`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./cmd/cli -run 'TestRootCommand|TestRender'`, `timeout -k 240s -s SIGKILL 240s go test -count=1 ./internal/proxy`, `timeout -k 30s -s SIGKILL 30s npm run frontend:lint`, `timeout -k 180s -s SIGKILL 180s npm run frontend:test -- management-ui.spec.js`, and `git diff --check`.
 - [ ] [F010] (P1) Add Grok as a provider.
 - [ ] [F011] (P1) Add GLM 5.2 as a provider.
+- [ ] [F012] (P2) Add GPT 5.6 to the list of supported OpenAI models including the level of efforts.
 
 
 ## Planning
