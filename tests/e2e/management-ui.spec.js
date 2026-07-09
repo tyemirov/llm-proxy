@@ -206,6 +206,20 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
     "provider=deepseek",
   );
   await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
+
+  await providerSelector.selectOption("meta");
+  await expect(providerEditor.locator("provider-status")).toContainText("Meta");
+  await expect(providerEditor.locator("provider-status")).toContainText("sk-...meta");
+  await expect(providerEditor.getByRole("textbox", { name: "Meta API key" })).toBeVisible();
+  await expect(providerEditor.getByRole("combobox", { name: "Text model" })).toHaveValue("muse-spark-1.1");
+  await expect(settingsDialog.locator("request-example")).toHaveCount(5);
+  await expect(settingsDialog.locator('request-example[data-example-id="provider-text"] .usage-snippet')).toContainText(
+    "provider=meta",
+  );
+  await expect(settingsDialog.locator('request-example[data-example-id="provider-v2"] .usage-snippet')).toContainText(
+    "provider=meta",
+  );
+  await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
 });
 
 test("settings shows placeholder request examples before generated secret exists", async ({ page }) => {
@@ -621,6 +635,19 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         system_prompt: "",
         text_default_model: "deepseek-chat",
         text_models: ["deepseek-chat"],
+        supports_dictation: false,
+        dictation_models: [],
+      },
+      {
+        id: "meta",
+        label: "Meta",
+        aliases: [],
+        has_key: true,
+        masked_key: "sk-...meta",
+        text_model: "muse-spark-1.1",
+        system_prompt: "",
+        text_default_model: "muse-spark-1.1",
+        text_models: ["muse-spark-1.1"],
         supports_dictation: false,
         dictation_models: [],
       },
