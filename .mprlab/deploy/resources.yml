@@ -29,3 +29,8 @@ mprlab_resources:
       url: https://llm-proxy-api.mprlab.com/
       status_codes:
         - 403
+    - type: github_pages
+      name: llm-proxy
+      target: pages-deploy
+      url: https://llm-proxy.mprlab.com/
+      source_marker_path: /.mprlab-release.json
