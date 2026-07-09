@@ -63,7 +63,9 @@
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Publish site/ to the gh-pages branch with make publish-pages, make publish, or make deploy.</li>
+              <li>Run make release to render and package site/ as an immutable Pages release asset.</li>
+<li>Run make publish to upload that prepared asset without changing the live site.</li>
+<li>Run make deploy to activate the published asset on gh-pages.</li>
 <li>Configure GitHub Pages branch publishing and the custom domain.</li>
 <li>Point llm-proxy-api at the backend gateway route.</li>
 <li>Keep browser runtime config served only by the backend API origin.</li>
@@ -91,9 +93,9 @@
                       
 
                         <tr>
-                          <td>Makefile publisher</td>
-                          <td>Pages deployment is owned by Makefile scripts, not GitHub Actions.</td>
-                          <td>Publishing can run from the current source revision.</td>
+                          <td>Makefile lifecycle</td>
+                          <td>Release prepares, publish uploads, and deploy activates Pages.</td>
+                          <td>GitHub Actions does not own production deployment.</td>
                         </tr>
                       
 
@@ -113,20 +115,20 @@
             <div class="resource-card-grid">
               
                     <section class="resource-card">
-                      <h3>Pages refresh</h3>
-                      <p>An operator runs make publish-pages to update the static UI only.</p>
+                      <h3>Pages preparation</h3>
+                      <p>make release renders the validated Pages archive locally.</p>
                     </section>
                   
 
                     <section class="resource-card">
-                      <h3>Full publish</h3>
-                      <p>make publish publishes the release image and refreshes Pages.</p>
+                      <h3>Artifact publication</h3>
+                      <p>make publish uploads the exact prepared image and Pages artifacts.</p>
                     </section>
                   
 
                     <section class="resource-card">
                       <h3>Backend deploy</h3>
-                      <p>make deploy refreshes Pages and deploys the backend through the gateway target.</p>
+                      <p>make deploy rolls out the backend and then activates the published Pages archive.</p>
                     </section>
                   
             </div>
