@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Upstream worker and queue limits for LLM traffic","description":"Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.","url":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/","datePublished":"2026-07-06","dateModified":"2026-07-09","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/","about":["LLM Proxy","Reliability","upstream worker queue limits"]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Upstream worker and queue limits for LLM traffic","item":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of upstream worker queue limits?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy uses server.workers for concurrent upstream HTTP operations and server.queue_size for operations waiting on that shared limit."}},{"@type":"Question","name":"Who should read this reliability resource?","acceptedAnswer":{"@type":"Answer","text":"Operators who need predictable capacity limits for provider HTTP calls."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is OpenAI background response polling without client loops, which covers OpenAI background response polling."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of upstream worker queue limits?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy combines server.workers and server.queue_size concurrency bounds with server.upstream_rate_limits rolling-window rules applied at actual upstream admission."}},{"@type":"Question","name":"Who should read this reliability resource?","acceptedAnswer":{"@type":"Answer","text":"Operators who need predictable capacity limits for provider HTTP calls."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is OpenAI background response polling without client loops, which covers OpenAI background response polling."}}]}</script>
   </head>
   <body class="resource-page">
 
@@ -57,7 +57,7 @@
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy uses server.workers for concurrent upstream HTTP operations and server.queue_size for operations waiting on that shared limit.</p>
+            <p>LLM Proxy combines server.workers and server.queue_size concurrency bounds with server.upstream_rate_limits rolling-window rules applied at actual upstream admission.</p>
           </section>
 
           <section>
@@ -65,6 +65,7 @@
             <ol class="resource-steps">
               <li>Set server.workers for active upstream HTTP concurrency.</li>
 <li>Set server.queue_size for pending upstream operations.</li>
+<li>Set server.upstream_rate_limits rules for strict call budgets keyed by normalized upstream origin.</li>
 <li>Let OpenAI background poll sleeps release worker capacity between polls.</li>
 <li>Handle 503 request queue full and 504 timeout responses at the caller boundary.</li>
             </ol>
@@ -137,7 +138,7 @@
             <ul class="resource-list">
               <li>These controls limit upstream HTTP operations, not the number of connected client requests.</li>
 <li>They do not replace provider-side rate limits.</li>
-<li>I013 tracks future rate limiting by time window; current workers/queue are concurrency controls.</li>
+<li>Rate rules are keyed by exact normalized HTTP(S) origin, so providers sharing an origin share the configured budget.</li>
             </ul>
           </section>
 
@@ -147,7 +148,7 @@
               
                     <details>
                       <summary>What is the main job of upstream worker queue limits?</summary>
-                      <p>LLM Proxy uses server.workers for concurrent upstream HTTP operations and server.queue_size for operations waiting on that shared limit.</p>
+                      <p>LLM Proxy combines server.workers and server.queue_size concurrency bounds with server.upstream_rate_limits rolling-window rules applied at actual upstream admission.</p>
                     </details>
                   
 

@@ -65,6 +65,7 @@
             <ol class="resource-steps">
               <li>Use 503 request queue full or provider not configured as service-availability signals.</li>
 <li>Use 504 as the overall proxy request deadline expiring.</li>
+<li>Use server.upstream_rate_limits to pace calls at actual upstream admission for each configured origin.</li>
 <li>Use 429 for upstream provider rate limits.</li>
 <li>Use 502 for other upstream provider API failures.</li>
             </ol>
@@ -137,7 +138,7 @@
             <ul class="resource-list">
               <li>Status codes do not guarantee safe automatic retries for every prompt.</li>
 <li>Provider-side behavior may still vary by upstream service.</li>
-<li>I013 tracks future request rate limiting beyond current worker and queue concurrency controls.</li>
+<li>Waiting for a server.upstream_rate_limits slot remains bounded by the request deadline and can therefore end as 504.</li>
             </ul>
           </section>
 
