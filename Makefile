@@ -12,7 +12,7 @@ DEPLOY_PAGES_ARGS ?=
 RELEASE_ARGS ?=
 RELEASE_HELPER ?=
 RELEASE_ARTIFACT_TARGETS ?= container-artifacts pages-artifact
-RELEASE_TOOL_DIR ?= $(abspath $(CURDIR)/../agentSkills/gitrelease/scripts)
+RELEASE_TOOL_DIR ?= $(abspath $(CURDIR)/tools/gitrelease/scripts)
 DEPLOY_ARGS ?=
 PUBLISH_PLATFORMS ?= linux/amd64,linux/arm64
 DOCKER_IMAGE ?= ghcr.io/tyemirov/llm-proxy
@@ -27,7 +27,7 @@ GATEWAY_DEPLOY_TARGET ?= deploy-llm-proxy-backend
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-root-import-test frontend-test test-live-providers test-live-gemini build clean ci release container-artifacts pages-artifact publish-release publish pages-deploy deploy
+.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-root-import-test frontend-test release-test test-live-provider-harness test-live-providers test-live-gemini build clean ci release container-artifacts pages-artifact publish-release publish pages-deploy deploy
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -53,7 +53,7 @@ python-lint:
 frontend-lint:
 	$(NPM) run frontend:lint
 
-test: go-test python-test frontend-test
+test: go-test python-test frontend-test release-test test-live-provider-harness
 
 go-test:
 	@GO="$(GO)" ./scripts/check_coverage.sh
@@ -67,6 +67,12 @@ python-root-import-test:
 
 frontend-test:
 	$(NPM) run frontend:test
+
+release-test:
+	python3 -m unittest discover -s tools/gitrelease/tests -p 'test_*.py'
+
+test-live-provider-harness:
+	@GO="$(GO)" ./scripts/test_live_providers.sh --preflight
 
 test-live-providers:
 	@GO="$(GO)" ./scripts/test_live_providers.sh
@@ -87,7 +93,7 @@ release:
 	@RELEASE_HELPER="$(RELEASE_HELPER)" RELEASE_ARTIFACT_TARGETS="$(RELEASE_ARTIFACT_TARGETS)" ./scripts/release.sh $(RELEASE_ARGS)
 
 container-artifacts:
-	@"$(RELEASE_TOOL_DIR)/prepare_container_artifact.sh" --name llm-proxy --image "$(DOCKER_IMAGE)" --file Dockerfile --context . --platforms "$(PUBLISH_PLATFORMS)" --pull
+	@RELEASE_TOOL_DIR="$(RELEASE_TOOL_DIR)" DOCKER_IMAGE="$(DOCKER_IMAGE)" PUBLISH_PLATFORMS="$(PUBLISH_PLATFORMS)" ./scripts/build-container-artifact.sh
 
 pages-artifact:
 	@RELEASE_TOOL_DIR="$(RELEASE_TOOL_DIR)" PAGES_DOMAIN="$(PAGES_DOMAIN)" ./scripts/build-pages-artifact.sh
@@ -102,4 +108,4 @@ pages-deploy:
 	@"$(RELEASE_TOOL_DIR)/deploy_pages_artifact.sh" --remote "$(PUBLISH_REMOTE)" --branch "$(PAGES_BRANCH)" --url "$(PAGES_URL)" $(if $(PAGES_VERSION),--version "$(PAGES_VERSION)") $(DEPLOY_PAGES_ARGS)
 
 deploy:
-	@GATEWAY_DIR="$(GATEWAY_DIR)" DOCKER_IMAGE="$(DOCKER_IMAGE)" GATEWAY_DEPLOY_TARGET="$(GATEWAY_DEPLOY_TARGET)" PAGES_BRANCH="$(PAGES_BRANCH)" PAGES_DOMAIN="$(PAGES_DOMAIN)" ./scripts/deploy.sh $(DEPLOY_ARGS)
+	@GATEWAY_DIR="$(GATEWAY_DIR)" DOCKER_IMAGE="$(DOCKER_IMAGE)" GATEWAY_DEPLOY_TARGET="$(GATEWAY_DEPLOY_TARGET)" PAGES_BRANCH="$(PAGES_BRANCH)" PAGES_URL="$(PAGES_URL)" ./scripts/deploy.sh $(DEPLOY_ARGS)
