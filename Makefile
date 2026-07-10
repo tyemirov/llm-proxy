@@ -99,7 +99,7 @@ pages-artifact:
 	@RELEASE_TOOL_DIR="$(RELEASE_TOOL_DIR)" PAGES_DOMAIN="$(PAGES_DOMAIN)" ./scripts/build-pages-artifact.sh
 
 publish-release:
-	@RELEASE_HELPER="$(RELEASE_HELPER)" ./scripts/publish-release.sh $(PUBLISH_RELEASE_ARGS)
+	@RELEASE_HELPER="$(RELEASE_HELPER)" ./scripts/publish-release.sh --remote "$(PUBLISH_REMOTE)" $(PUBLISH_RELEASE_ARGS)
 
 publish: publish-release
 	@"$(RELEASE_TOOL_DIR)/publish_container_artifacts.sh"
