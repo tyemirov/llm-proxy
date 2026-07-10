@@ -27,6 +27,7 @@ const mimeTypes = Object.freeze({
   ".yaml": "application/yaml",
 });
 const generatedResourcePageCount = 45;
+const seoContentModifiedDate = "2026-07-09";
 const settingsLayerViewports = Object.freeze([
   { name: "desktop", width: 1280, height: 720 },
   { name: "mobile", width: 390, height: 780 },
@@ -109,6 +110,7 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
   expect(pageHTML).toContain('"@type":"FAQPage"');
   expect(pageHTML).toContain('<a class="resource-button" href="/">Open LLM Proxy</a>');
   expect(pageHTML).toContain('href="/resources/openai-claude-gemini-one-endpoint/"');
+  expect(pageHTML).toContain(`"dateModified":"${seoContentModifiedDate}"`);
 });
 
 test("SEO sitemap and robots expose canonical resource URLs", async ({ request }) => {
@@ -123,6 +125,9 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
   expect(sitemapXML).toContain(
     "<loc>https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/</loc>",
   );
+  const sitemapModificationDates = sitemapXML.match(/<lastmod>[^<]+<\/lastmod>/g) || [];
+  expect(sitemapModificationDates).toHaveLength(generatedResourcePageCount + 2);
+  expect(new Set(sitemapModificationDates)).toEqual(new Set([`<lastmod>${seoContentModifiedDate}</lastmod>`]));
   expect(sitemapXML).not.toContain("config-ui.yaml");
   expect(sitemapXML).not.toContain("llm-proxy-config.json");
 

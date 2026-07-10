@@ -162,6 +162,125 @@ func TestIntegrationSharedUpstreamRateLimitIsConcurrencySafe(testingInstance *te
 	}
 }
 
+func TestIntegrationUpstreamRateLimitReservesAtCallAdmissionAfterWorkerWait(testingInstance *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var callMutex sync.Mutex
+	callTimes := make([]time.Time, 0, rateLimitConcurrentRequestCount)
+	firstCallStarted := make(chan struct{})
+	releaseFirstCall := make(chan struct{})
+	var releaseOnce sync.Once
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		callMutex.Lock()
+		callTimes = append(callTimes, time.Now())
+		callIndex := len(callTimes)
+		callMutex.Unlock()
+		if callIndex == 1 {
+			close(firstCallStarted)
+			<-releaseFirstCall
+		}
+		writeRateLimitUpstreamResponse(responseWriter, httpRequest.URL.Path)
+	}))
+	testingInstance.Cleanup(upstreamServer.Close)
+	testingInstance.Cleanup(func() {
+		releaseOnce.Do(func() { close(releaseFirstCall) })
+	})
+
+	configuration := rateLimitIntegrationConfiguration(upstreamServer.URL)
+	configuration.WorkerCount = 1
+	configuration.QueueSize = rateLimitConcurrentRequestCount - 1
+	configuration.UpstreamRateLimits = []proxy.UpstreamRateLimitConfiguration{{
+		Origin:      upstreamServer.URL,
+		MaxRequests: rateLimitConcurrentWindowCapacity,
+		Interval:    rateLimitShortInterval.String(),
+	}}
+	router := buildRateLimitIntegrationRouter(testingInstance, configuration, newLogger(testingInstance))
+	applicationServer := httptest.NewServer(router)
+	testingInstance.Cleanup(applicationServer.Close)
+
+	results := make(chan rateLimitRequestResult, rateLimitConcurrentRequestCount)
+	go func() {
+		statusCode, requestError := performRateLimitTextRequest(applicationServer.Client(), applicationServer.URL, proxy.ProviderNameDeepSeek)
+		results <- rateLimitRequestResult{statusCode: statusCode, requestError: requestError}
+	}()
+	select {
+	case <-firstCallStarted:
+	case <-time.After(rateLimitAssertionTimeout):
+		testingInstance.Fatal("first rate-limited upstream request did not start")
+	}
+
+	for requestIndex := 1; requestIndex < rateLimitConcurrentRequestCount; requestIndex++ {
+		go func() {
+			statusCode, requestError := performRateLimitTextRequest(applicationServer.Client(), applicationServer.URL, proxy.ProviderNameDeepSeek)
+			results <- rateLimitRequestResult{statusCode: statusCode, requestError: requestError}
+		}()
+	}
+	time.Sleep(rateLimitShortInterval + rateLimitTimingTolerance)
+	releaseOnce.Do(func() { close(releaseFirstCall) })
+
+	for resultIndex := 0; resultIndex < rateLimitConcurrentRequestCount; resultIndex++ {
+		select {
+		case result := <-results:
+			if result.requestError != nil || result.statusCode != http.StatusOK {
+				testingInstance.Fatalf("worker-saturated status=%d error=%v", result.statusCode, result.requestError)
+			}
+		case <-time.After(rateLimitAssertionTimeout):
+			testingInstance.Fatal("worker-saturated request did not complete")
+		}
+	}
+
+	callMutex.Lock()
+	recordedTimes := append([]time.Time(nil), callTimes...)
+	callMutex.Unlock()
+	if len(recordedTimes) != rateLimitConcurrentRequestCount {
+		testingInstance.Fatalf("call count=%d want=%d", len(recordedTimes), rateLimitConcurrentRequestCount)
+	}
+	sort.Slice(recordedTimes, func(firstIndex int, secondIndex int) bool {
+		return recordedTimes[firstIndex].Before(recordedTimes[secondIndex])
+	})
+	minimumGap := rateLimitShortInterval - rateLimitTimingTolerance
+	if rollingWindowGap := recordedTimes[rateLimitConcurrentWindowCapacity+1].Sub(recordedTimes[1]); rollingWindowGap < minimumGap {
+		testingInstance.Fatalf("worker-saturated rolling window gap=%s want>=%s times=%v", rollingWindowGap, minimumGap, recordedTimes)
+	}
+}
+
+func TestIntegrationCanceledWorkerAcquisitionsDoNotReserveRateSlots(testingInstance *testing.T) {
+	gin.SetMode(gin.TestMode)
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		writeRateLimitUpstreamResponse(responseWriter, httpRequest.URL.Path)
+	}))
+	testingInstance.Cleanup(upstreamServer.Close)
+
+	configuration := rateLimitIntegrationConfiguration(upstreamServer.URL)
+	configuration.WorkerCount = 1
+	configuration.QueueSize = 1
+	configuration.UpstreamRateLimits = []proxy.UpstreamRateLimitConfiguration{{
+		Origin:      upstreamServer.URL,
+		MaxRequests: 32,
+		Interval:    "2s",
+	}}
+	router := buildRateLimitIntegrationRouter(testingInstance, configuration, zap.NewNop().Sugar())
+
+	requestPath := "/?prompt=" + url.QueryEscape(promptValue) + "&key=" + url.QueryEscape(serviceSecretValue) + "&provider=" + proxy.ProviderNameDeepSeek
+	for requestIndex := 0; requestIndex < 256; requestIndex++ {
+		requestContext, cancelRequest := context.WithCancel(context.Background())
+		cancelRequest()
+		httpRequest := httptest.NewRequest(http.MethodGet, requestPath, nil).WithContext(requestContext)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, httpRequest)
+		if responseRecorder.Code != http.StatusGatewayTimeout {
+			testingInstance.Fatalf("canceled request %d status=%d want=%d", requestIndex, responseRecorder.Code, http.StatusGatewayTimeout)
+		}
+	}
+
+	applicationServer := httptest.NewServer(router)
+	testingInstance.Cleanup(applicationServer.Close)
+	validClient := &http.Client{Timeout: 250 * time.Millisecond}
+	statusCode, requestError := performRateLimitTextRequest(validClient, applicationServer.URL, proxy.ProviderNameDeepSeek)
+	if requestError != nil || statusCode != http.StatusOK {
+		testingInstance.Fatalf("valid request after canceled worker acquisitions status=%d error=%v", statusCode, requestError)
+	}
+}
+
 func TestIntegrationUpstreamRateLimitsAreIndependentByOrigin(testingInstance *testing.T) {
 	gin.SetMode(gin.TestMode)
 	firstUpstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
