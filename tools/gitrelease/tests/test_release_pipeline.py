@@ -229,6 +229,148 @@ class ReleasePipelineTest(unittest.TestCase):
         )
         self.assertNotEqual(push_branch.returncode, 0, result.stdout + result.stderr)
 
+    def test_pages_deploy_rejects_push_instead_of_repositories_before_remote_mutation(self) -> None:
+        _, environment = self.pages_release_fixture()
+        with tempfile.TemporaryDirectory(prefix="llm-proxy-pages-push-", dir="/tmp") as push_directory:
+            parseable_push_remote = pathlib.Path(push_directory)
+            unscopable_push_remote = self.root / "unscopable-push-target.git"
+            scenarios = (
+                (
+                    "parseable",
+                    "example/pages-target",
+                    parseable_push_remote,
+                    f"file://localhost{parseable_push_remote}",
+                ),
+                (
+                    "unscopable",
+                    "example/pages-target-local",
+                    unscopable_push_remote,
+                    str(unscopable_push_remote),
+                ),
+            )
+            for scenario_name, github_repository, push_remote, push_url in scenarios:
+                with self.subTest(scenario=scenario_name):
+                    fetch_url = f"https://github.com/{github_repository}.git"
+                    self.command("git", "init", "--bare", str(push_remote), cwd=self.root)
+                    self.command("git", "config", f"url.{self.remote}.insteadOf", fetch_url, cwd=self.repo)
+                    self.command("git", "config", f"url.{push_url}.pushInsteadOf", fetch_url, cwd=self.repo)
+                    self.command("git", "remote", "set-url", "origin", fetch_url, cwd=self.repo)
+                    configured_push_url = self.command(
+                        "git",
+                        "config",
+                        "--get",
+                        "remote.origin.pushurl",
+                        cwd=self.repo,
+                        check=False,
+                    )
+                    self.assertNotEqual(configured_push_url.returncode, 0)
+                    self.assertEqual(
+                        self.command("git", "remote", "get-url", "--push", "origin", cwd=self.repo).stdout.strip(),
+                        push_url,
+                    )
+                    command_log = self.root / f"{scenario_name}-push-instead-of-pages-gh-commands.log"
+                    test_environment = environment | {
+                        "FAKE_GH_COMMAND_LOG": str(command_log),
+                        "GH_REPO": github_repository,
+                    }
+
+                    result = self.deploy_pages(test_environment)
+
+                    self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertIn(
+                        "selected Git remote fetch and push URLs identify different GitHub repositories",
+                        result.stderr,
+                    )
+                    self.assertFalse(command_log.exists(), result.stdout + result.stderr)
+                    self.assertFalse(self.remote_branch_exists("gh-pages"), result.stdout + result.stderr)
+                    push_branch = self.command(
+                        "git",
+                        "show-ref",
+                        "--verify",
+                        "refs/heads/gh-pages",
+                        cwd=push_remote,
+                        git_dir=True,
+                        check=False,
+                    )
+                    self.assertNotEqual(push_branch.returncode, 0, result.stdout + result.stderr)
+
+    def test_pages_deploy_pushes_to_once_resolved_push_instead_of_repository(self) -> None:
+        source_commit, environment = self.pages_release_fixture()
+        with (
+            tempfile.TemporaryDirectory(prefix="llm-proxy-pages-first-push-", dir="/tmp") as first_directory,
+            tempfile.TemporaryDirectory(prefix="llm-proxy-pages-second-push-", dir="/tmp") as second_directory,
+        ):
+            first_push_remote = pathlib.Path(first_directory)
+            second_push_remote = pathlib.Path(second_directory)
+            first_push_url = f"file://localhost{first_push_remote}"
+            second_push_url = f"file://localhost{second_push_remote}"
+            fetch_url = f"https://localhost{first_push_remote}"
+            self.command("git", "init", "--bare", str(first_push_remote), cwd=self.root)
+            self.command("git", "init", "--bare", str(second_push_remote), cwd=self.root)
+            self.command("git", "config", f"url.{self.remote}.insteadOf", fetch_url, cwd=self.repo)
+            self.command("git", "remote", "set-url", "origin", fetch_url, cwd=self.repo)
+            global_config = self.root / "chained-push-instead-of.config"
+            self.command(
+                "git",
+                "config",
+                "--file",
+                str(global_config),
+                f"url.{first_push_url}.pushInsteadOf",
+                fetch_url,
+                cwd=self.root,
+            )
+            self.command(
+                "git",
+                "config",
+                "--file",
+                str(global_config),
+                f"url.{second_push_url}.pushInsteadOf",
+                first_push_url,
+                cwd=self.root,
+            )
+            test_environment = environment | {
+                "GIT_CONFIG_GLOBAL": str(global_config),
+                "GIT_CONFIG_NOSYSTEM": "1",
+            }
+            self.assertEqual(
+                self.command(
+                    "git",
+                    "remote",
+                    "get-url",
+                    "--push",
+                    "origin",
+                    cwd=self.repo,
+                    env=test_environment,
+                ).stdout.strip(),
+                first_push_url,
+            )
+
+            result = self.deploy_pages(test_environment)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn(f"Verified https://pages.example.invalid/ at source {source_commit}.", result.stdout)
+            self.assertFalse(self.remote_branch_exists("gh-pages"), result.stdout + result.stderr)
+            first_push_branch = self.command(
+                "git",
+                "show-ref",
+                "--verify",
+                "refs/heads/gh-pages",
+                cwd=first_push_remote,
+                git_dir=True,
+                check=False,
+            )
+            self.assertEqual(first_push_branch.returncode, 0, result.stdout + result.stderr)
+            second_push_branch = self.command(
+                "git",
+                "show-ref",
+                "--verify",
+                "refs/heads/gh-pages",
+                cwd=second_push_remote,
+                git_dir=True,
+                check=False,
+            )
+            self.assertNotEqual(second_push_branch.returncode, 0, result.stdout + result.stderr)
+
     def test_pages_deploy_rejects_noncanonical_version_before_github_download(self) -> None:
         _, environment = self.pages_release_fixture()
         command_log = self.root / "invalid-pages-version-gh-commands.log"

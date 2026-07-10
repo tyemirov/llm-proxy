@@ -59,9 +59,8 @@ if ! remote_config_url="$(git config --get "remote.${remote}.url")"; then
   echo "error: selected Git remote does not exist: ${remote}" >&2
   exit 1
 fi
-if ! remote_push_config_url="$(git config --get "remote.${remote}.pushurl")"; then
-  remote_push_config_url="${remote_config_url}"
-fi
+remote_url="$(git remote get-url "${remote}")"
+remote_push_url="$(git remote get-url --push "${remote}")"
 
 github_identity_for_url() {
   local remote_url="$1"
@@ -78,37 +77,55 @@ github_identity_for_url() {
     hostname="${BASH_REMATCH[2]}"
     repository_path="${BASH_REMATCH[3]}"
   fi
-  if [[ -n "${hostname}" ]]; then
-    repository_path="${repository_path#/}"
-    repository_path="${repository_path%/}"
-    repository_path="${repository_path%.git}"
-    IFS='/' read -r owner name extra <<<"${repository_path}"
-    [[ -n "${owner}" && -n "${name}" && -z "${extra:-}" ]] || return 1
-    selector="${owner}/${name}"
-    if [[ "${hostname,,}" != "github.com" ]]; then selector="${hostname}/${selector}"; fi
-  else
-    selector="${GH_REPO:-}"
-    [[ "${selector}" =~ ^([A-Za-z0-9.-]+/)?[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || return 1
-    IFS='/' read -r owner name extra <<<"${selector}"
-    if [[ -n "${extra:-}" ]]; then hostname="${owner}"; owner="${name}"; name="${extra}"; fi
-  fi
+  [[ -n "${hostname}" ]] || return 1
+  repository_path="${repository_path#/}"
+  repository_path="${repository_path%/}"
+  repository_path="${repository_path%.git}"
+  IFS='/' read -r owner name extra <<<"${repository_path}"
+  [[ -n "${owner}" && -n "${name}" && -z "${extra:-}" ]] || return 1
+  selector="${owner}/${name}"
+  if [[ "${hostname,,}" != "github.com" ]]; then selector="${hostname}/${selector}"; fi
   printf '%s|%s/%s|%s\n' "${selector}" "${owner}" "${name}" "${hostname,,}"
 }
 
+github_identity_for_selector() {
+  local selector="$1"
+  local hostname=""
+  local owner=""
+  local name=""
+  local extra=""
+  [[ "${selector}" =~ ^([A-Za-z0-9.-]+/)?[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || return 1
+  IFS='/' read -r owner name extra <<<"${selector}"
+  if [[ -n "${extra:-}" ]]; then hostname="${owner}"; owner="${name}"; name="${extra}"; fi
+  printf '%s|%s/%s|%s\n' "${selector}" "${owner}" "${name}" "${hostname,,}"
+}
+
+require_matching_push_repository() {
+  local push_url="$1"
+  local equivalent_url="$2"
+  local expected_repository="$3"
+  local push_identity=""
+  local push_repository=""
+  if push_identity="$(github_identity_for_url "${push_url}")"; then
+    IFS='|' read -r push_repository _ _ <<<"${push_identity}"
+    [[ "${push_repository}" == "${expected_repository}" ]] || {
+      echo "error: selected Git remote fetch and push URLs identify different GitHub repositories" >&2
+      exit 1
+    }
+  elif [[ "${push_url}" != "${equivalent_url}" ]]; then
+    echo "error: selected Git remote fetch and push URLs identify different GitHub repositories" >&2
+    exit 1
+  fi
+}
+
 if ! github_identity="$(github_identity_for_url "${remote_config_url}")"; then
-  echo "error: selected Git remote cannot scope GitHub operations; set GH_REPO to [HOST/]OWNER/REPO" >&2
-  exit 1
+  if ! github_identity="$(github_identity_for_selector "${GH_REPO:-}")"; then
+    echo "error: selected Git remote cannot scope GitHub operations; set GH_REPO to [HOST/]OWNER/REPO" >&2
+    exit 1
+  fi
 fi
 IFS='|' read -r github_repository github_api_repository github_hostname <<<"${github_identity}"
-if ! push_github_identity="$(github_identity_for_url "${remote_push_config_url}")"; then
-  echo "error: selected Git push URL cannot scope GitHub operations: ${remote_push_config_url}" >&2
-  exit 1
-fi
-IFS='|' read -r push_github_repository _ _ <<<"${push_github_identity}"
-if [[ "${push_github_repository}" != "${github_repository}" ]]; then
-  echo "error: selected Git remote fetch and push URLs identify different GitHub repositories" >&2
-  exit 1
-fi
+require_matching_push_repository "${remote_push_url}" "${remote_url}" "${github_repository}"
 github_repository_args=()
 if [[ -n "${github_repository}" ]]; then github_repository_args=(--repo "${github_repository}"); fi
 if [[ -z "${version}" ]]; then
@@ -154,9 +171,10 @@ if [[ "${verify_only}" == "true" ]]; then
   exit 0
 fi
 
-remote_url="$(git remote get-url "${remote}")"
-remote_push_url="$(git remote get-url --push "${remote}")"
 git clone --no-checkout "${remote_url}" "${checkout_directory}" >/dev/null
+git -C "${checkout_directory}" remote set-url --push origin "${remote_push_url}"
+checkout_push_url="$(git -C "${checkout_directory}" remote get-url --push origin)"
+require_matching_push_repository "${checkout_push_url}" "${remote_push_url}" "${github_repository}"
 if git -C "${checkout_directory}" show-ref --verify --quiet "refs/remotes/origin/${branch}"; then
   git -C "${checkout_directory}" checkout -B "${branch}" "origin/${branch}" >/dev/null
 else
@@ -167,7 +185,7 @@ cp -R "${site_directory}"/. "${checkout_directory}/"
 git -C "${checkout_directory}" add -A
 if ! git -C "${checkout_directory}" diff --cached --quiet; then
   git -C "${checkout_directory}" -c user.name="MPR Lab Pages Deployer" -c user.email="pages-deployer@mprlab.invalid" commit -m "Deploy Pages for ${version}" >/dev/null
-  git -C "${checkout_directory}" push "${remote_push_url}" "HEAD:refs/heads/${branch}"
+  git -C "${checkout_directory}" push origin "HEAD:refs/heads/${branch}"
 else
   echo "Pages branch already contains ${version}."
 fi
