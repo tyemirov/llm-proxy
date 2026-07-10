@@ -369,6 +369,17 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
   Validation passed with focused red-to-green operational and release tests, `go test -race -count=10 ./tests/integration -run 'TestIntegrationCanceledWorkerAcquisitionsDoNotReserveRateSlots|TestIntegrationUpstreamRateLimitReservesAtCallAdmissionAfterWorkerWait'`, `make release-test` (15 tests), `make test-live-provider-harness`, deterministic `node scripts/generate_seo_resources.mjs`, and final merged `make ci` (Go aggregate coverage 100.0%, Python 20 passed, Playwright 11 passed, release integrations 15 passed, non-paid live preflight passed). The authenticated Meta-only smoke mapped the ignored `MUSE11_API_KEY` into the canonical `MODEL_API_KEY` process variable and returned `200 OK` with the expected `OK` response without printing or persisting the credential. Final independent audits and `git diff --check` reported no remaining findings.
 
+- [x] [B022] (P2) Validate the effective Pages push repository before deployment.
+  ### Summary
+  PR review found that Pages repository identity validation reads only `remote.<name>.pushurl`. When no explicit push URL exists, a configured `url.*.pushInsteadOf` rewrite is ignored by that check even though `git remote get-url --push` applies it to the later `gh-pages` push, allowing release and API operations to target the fetch repository while the branch is written elsewhere.
+  ### Acceptance Criteria
+  1. Pages deployment resolves the selected remote's effective push URL before release download or Pages mutation.
+  2. The effective push destination must identify the same GitHub repository as the configured fetch URL or deployment fails before remote mutation.
+  3. Black-box release coverage proves a mismatched `url.*.pushInsteadOf` destination is rejected when `remote.<name>.pushurl` is absent.
+  4. The final branch push cannot apply another `pushInsteadOf` rewrite after the destination has passed validation.
+  ### Resolution
+  Pages deployment now resolves `git remote get-url --push` before release download, compares that effective destination with the configured fetch repository identity, and restricts `GH_REPO` fallback to fetch scoping so a different unparseable push target cannot inherit the expected identity. The deployment clone receives the validated URL as an explicit `pushurl`, its checkout-effective destination is validated again, and the branch is pushed by remote name so Git cannot apply `pushInsteadOf` a second time. Black-box coverage proves parseable and unparseable mismatched rewrites fail before GitHub access or either branch mutation, and a chained `A -> B -> C` rewrite deploys only to the validated `B` repository. Validation passed with `timeout -k 350s -s SIGKILL 350s make release-test` (30 tests), `git diff --check`, and an independent review with no remaining findings.
+
 
 ## Improvements
 
