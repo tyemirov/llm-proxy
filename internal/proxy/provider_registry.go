@@ -33,6 +33,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 	zhipuProviderID := providerID(ProviderNameZhipu)
 	geminiProviderID := providerID(ProviderNameGemini)
 	anthropicProviderID := providerID(ProviderNameAnthropic)
+	metaProviderID := providerID(ProviderNameMeta)
 	grokProviderID := providerID(ProviderNameGrok)
 	openAIModels := configuration.ProviderModels[ProviderNameOpenAI]
 	deepSeekModels := configuration.ProviderModels[ProviderNameDeepSeek]
@@ -42,6 +43,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 	zhipuModels := configuration.ProviderModels[ProviderNameZhipu]
 	geminiModels := configuration.ProviderModels[ProviderNameGemini]
 	anthropicModels := configuration.ProviderModels[ProviderNameAnthropic]
+	metaModels := configuration.ProviderModels[ProviderNameMeta]
 	grokModels := configuration.ProviderModels[ProviderNameGrok]
 
 	definitions := map[providerID]providerDefinition{
@@ -59,33 +61,36 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			textTransport:             textTransportOpenAIResponses,
 		},
 		deepSeekProviderID: {
-			identifier:          deepSeekProviderID,
-			textAPIKey:          configuration.DeepSeekKey,
-			textBaseURL:         configuration.DeepSeekBaseURL,
-			defaultTextModel:    modelID(deepSeekModels.Text.DefaultModel),
-			textModels:          textModelSet(deepSeekModels.Text),
-			transcriptionModels: map[string]modelID{},
-			textTransport:       textTransportOpenAICompatibleChat,
+			identifier:              deepSeekProviderID,
+			textAPIKey:              configuration.DeepSeekKey,
+			textBaseURL:             configuration.DeepSeekBaseURL,
+			defaultTextModel:        modelID(deepSeekModels.Text.DefaultModel),
+			textModels:              textModelSet(deepSeekModels.Text),
+			transcriptionModels:     map[string]modelID{},
+			textTransport:           textTransportOpenAICompatibleChat,
+			chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
 		},
 		dashScopeProviderID: {
-			identifier:          dashScopeProviderID,
-			aliases:             []string{providerAliasQwen},
-			textAPIKey:          configuration.DashScopeKey,
-			textBaseURL:         configuration.DashScopeBaseURL,
-			defaultTextModel:    modelID(dashScopeModels.Text.DefaultModel),
-			textModels:          textModelSet(dashScopeModels.Text),
-			transcriptionModels: map[string]modelID{},
-			textTransport:       textTransportOpenAICompatibleChat,
+			identifier:              dashScopeProviderID,
+			aliases:                 []string{providerAliasQwen},
+			textAPIKey:              configuration.DashScopeKey,
+			textBaseURL:             configuration.DashScopeBaseURL,
+			defaultTextModel:        modelID(dashScopeModels.Text.DefaultModel),
+			textModels:              textModelSet(dashScopeModels.Text),
+			transcriptionModels:     map[string]modelID{},
+			textTransport:           textTransportOpenAICompatibleChat,
+			chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
 		},
 		moonshotProviderID: {
-			identifier:          moonshotProviderID,
-			aliases:             []string{providerAliasKimi},
-			textAPIKey:          configuration.MoonshotKey,
-			textBaseURL:         configuration.MoonshotBaseURL,
-			defaultTextModel:    modelID(moonshotModels.Text.DefaultModel),
-			textModels:          textModelSet(moonshotModels.Text),
-			transcriptionModels: map[string]modelID{},
-			textTransport:       textTransportOpenAICompatibleChat,
+			identifier:              moonshotProviderID,
+			aliases:                 []string{providerAliasKimi},
+			textAPIKey:              configuration.MoonshotKey,
+			textBaseURL:             configuration.MoonshotBaseURL,
+			defaultTextModel:        modelID(moonshotModels.Text.DefaultModel),
+			textModels:              textModelSet(moonshotModels.Text),
+			transcriptionModels:     map[string]modelID{},
+			textTransport:           textTransportOpenAICompatibleChat,
+			chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
 		},
 		siliconFlowProviderID: {
 			identifier:                siliconFlowProviderID,
@@ -100,6 +105,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			transcriptionModels:       dictationModelSet(siliconFlowModels.Dictation),
 			supportsDictation:         true,
 			textTransport:             textTransportOpenAICompatibleChat,
+			chatTokenLimitParameter:   chatCompletionTokenLimitMaxTokens,
 		},
 		zhipuProviderID: {
 			identifier:                zhipuProviderID,
@@ -115,6 +121,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			transcriptionModels:       dictationModelSet(zhipuModels.Dictation),
 			supportsDictation:         true,
 			textTransport:             textTransportOpenAICompatibleChat,
+			chatTokenLimitParameter:   chatCompletionTokenLimitMaxTokens,
 		},
 		geminiProviderID: {
 			identifier:          geminiProviderID,
@@ -135,6 +142,16 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			transcriptionModels: map[string]modelID{},
 			textTransport:       textTransportAnthropicMessages,
 		},
+		metaProviderID: {
+			identifier:              metaProviderID,
+			textAPIKey:              configuration.MetaKey,
+			textBaseURL:             configuration.MetaBaseURL,
+			defaultTextModel:        modelID(metaModels.Text.DefaultModel),
+			textModels:              textModelSet(metaModels.Text),
+			transcriptionModels:     map[string]modelID{},
+			textTransport:           textTransportOpenAICompatibleChat,
+			chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
+		},
 		grokProviderID: {
 			identifier:                grokProviderID,
 			aliases:                   []string{providerAliasXAI},
@@ -149,6 +166,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			transcriptionModels:       dictationModelSet(grokModels.Dictation),
 			supportsDictation:         true,
 			textTransport:             textTransportOpenAICompatibleChat,
+			chatTokenLimitParameter:   chatCompletionTokenLimitMaxTokens,
 		},
 	}
 
@@ -178,6 +196,7 @@ func configuredProviderAPIKeys(configuration Configuration) map[providerID]strin
 	configuredProviderAPIKey(configuration.ZhipuKey, ProviderNameZhipu, providerAPIKeys)
 	configuredProviderAPIKey(configuration.GeminiKey, ProviderNameGemini, providerAPIKeys)
 	configuredProviderAPIKey(configuration.AnthropicKey, ProviderNameAnthropic, providerAPIKeys)
+	configuredProviderAPIKey(configuration.MetaKey, ProviderNameMeta, providerAPIKeys)
 	configuredProviderAPIKey(configuration.GrokKey, ProviderNameGrok, providerAPIKeys)
 	return providerAPIKeys
 }
@@ -399,6 +418,8 @@ func providerLabel(identifier providerID) string {
 		return "Gemini"
 	case ProviderNameAnthropic:
 		return "Anthropic"
+	case ProviderNameMeta:
+		return "Meta"
 	case ProviderNameGrok:
 		return "Grok"
 	default:

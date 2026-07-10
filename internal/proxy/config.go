@@ -52,6 +52,7 @@ type Configuration struct {
 	ZhipuKey                     string
 	GeminiKey                    string
 	AnthropicKey                 string
+	MetaKey                      string
 	GrokKey                      string
 	OpenAIBaseURL                string
 	OpenAITranscriptionsURL      string
@@ -64,6 +65,7 @@ type Configuration struct {
 	ZhipuTranscriptionsURL       string
 	GeminiBaseURL                string
 	AnthropicBaseURL             string
+	MetaBaseURL                  string
 	GrokBaseURL                  string
 	GrokTranscriptionsURL        string
 	Port                         int
@@ -73,8 +75,10 @@ type Configuration struct {
 	RequestTimeoutSeconds        int
 	MaxPromptBytes               int64
 	MaxInputAudioBytes           int64
+	UpstreamRateLimits           []UpstreamRateLimitConfiguration
 	Endpoints                    *Endpoints
 	ProviderModels               ProviderModelCatalogs
+	upstreamRateLimits           upstreamRateLimits
 	tenants                      tenantRegistry
 	validated                    bool
 }
@@ -100,16 +104,28 @@ type ManagementConfiguration struct {
 	ProviderKeyEncryptionKey string
 	ManagementAPIOrigin      string
 	ProxyOrigin              string
+	LegacyTokenMigration     LegacyTokenMigrationConfiguration
 	DatabaseDialector        gorm.Dialector
+}
+
+// LegacyTokenMigrationConfiguration identifies the one legacy tenant and verified account email allowed to claim it.
+type LegacyTokenMigrationConfiguration struct {
+	TenantID   string
+	OwnerEmail string
 }
 
 // NewConfiguration returns a normalized runtime configuration after validating startup invariants.
 func NewConfiguration(configuration Configuration) (Configuration, error) {
 	configuration.ApplyTunables()
+	upstreamRateLimits, rateLimitError := newUpstreamRateLimits(configuration.UpstreamRateLimits)
+	if rateLimitError != nil {
+		return Configuration{}, rateLimitError
+	}
 	tenants, validationError := validateConfig(configuration)
 	if validationError != nil {
 		return Configuration{}, validationError
 	}
+	configuration.upstreamRateLimits = upstreamRateLimits
 	configuration.tenants = tenants
 	configuration.validated = true
 	return configuration, nil
@@ -123,12 +139,20 @@ func ensureValidatedConfiguration(configuration Configuration) (Configuration, e
 }
 
 func validateConfig(configuration Configuration) (tenantRegistry, error) {
+	if managementValidationError := validateManagementConfiguration(configuration.Management); managementValidationError != nil {
+		return tenantRegistry{}, managementValidationError
+	}
+	if configuration.Management.Enabled {
+		if len(configuration.Tenants) != 0 {
+			return tenantRegistry{}, fmt.Errorf("%w: field=tenants unsupported_in_management_mode", ErrInvalidManagementConfiguration)
+		}
+		if len(configuredProviderAPIKeys(configuration)) != 0 {
+			return tenantRegistry{}, fmt.Errorf("%w: field=providers.api_key unsupported_in_management_mode", ErrInvalidManagementConfiguration)
+		}
+	}
 	tenants, tenantError := newTenantRegistry(configuration.Tenants, configuration.Management.Enabled)
 	if tenantError != nil {
 		return tenantRegistry{}, tenantError
-	}
-	if managementValidationError := validateManagementConfiguration(configuration.Management); managementValidationError != nil {
-		return tenantRegistry{}, managementValidationError
 	}
 	if modelCatalogError := validateProviderModelCatalogs(configuration.ProviderModels); modelCatalogError != nil {
 		return tenantRegistry{}, modelCatalogError
@@ -136,12 +160,6 @@ func validateConfig(configuration Configuration) (tenantRegistry, error) {
 	providers := newProviderRegistry(configuration)
 	validator := newModelValidator(providers)
 	for _, currentTenant := range tenants.tenants {
-		if configuration.Management.Enabled {
-			if validationError := validateTenantDefaultCatalogs(validator, currentTenant); validationError != nil {
-				return tenantRegistry{}, validationError
-			}
-			continue
-		}
 		if validationError := validateTenantDefaultRuntime(validator, currentTenant); validationError != nil {
 			return tenantRegistry{}, validationError
 		}
@@ -155,16 +173,6 @@ func validateTenantDefaultRuntime(validator *modelValidator, currentTenant tenan
 	}
 	if _, _, verificationError := validator.ResolveDictation(constants.EmptyString, constants.EmptyString, currentTenant.defaults.dictationProvider, currentTenant.defaults.dictationModel); verificationError != nil {
 		return fmt.Errorf(tenantValidationErrorFormat, verificationError, currentTenant.identifier.string())
-	}
-	return nil
-}
-
-func validateTenantDefaultCatalogs(validator *modelValidator, currentTenant tenant) error {
-	if validationError := validator.validateTextDefault(currentTenant.defaults.provider, currentTenant.defaults.model); validationError != nil {
-		return fmt.Errorf(tenantValidationErrorFormat, validationError, currentTenant.identifier.string())
-	}
-	if validationError := validator.validateDictationDefault(currentTenant.defaults.dictationProvider, currentTenant.defaults.dictationModel); validationError != nil {
-		return fmt.Errorf(tenantValidationErrorFormat, validationError, currentTenant.identifier.string())
 	}
 	return nil
 }
@@ -185,6 +193,7 @@ func (configuration *Configuration) ApplyTunables() {
 	configuration.ZhipuKey = strings.TrimSpace(configuration.ZhipuKey)
 	configuration.GeminiKey = strings.TrimSpace(configuration.GeminiKey)
 	configuration.AnthropicKey = strings.TrimSpace(configuration.AnthropicKey)
+	configuration.MetaKey = strings.TrimSpace(configuration.MetaKey)
 	configuration.GrokKey = strings.TrimSpace(configuration.GrokKey)
 	if configuration.WorkerCount <= 0 {
 		configuration.WorkerCount = DefaultWorkers
@@ -245,6 +254,10 @@ func (configuration *Configuration) ApplyTunables() {
 	if strings.TrimSpace(configuration.AnthropicBaseURL) == constants.EmptyString {
 		configuration.AnthropicBaseURL = defaultAnthropicBaseURL
 	}
+	configuration.MetaBaseURL = strings.TrimSpace(configuration.MetaBaseURL)
+	if strings.TrimSpace(configuration.MetaBaseURL) == constants.EmptyString {
+		configuration.MetaBaseURL = defaultMetaBaseURL
+	}
 	configuration.GrokBaseURL = strings.TrimSpace(configuration.GrokBaseURL)
 	if strings.TrimSpace(configuration.GrokBaseURL) == constants.EmptyString {
 		configuration.GrokBaseURL = defaultGrokBaseURL
@@ -282,10 +295,16 @@ func (configuration *ManagementConfiguration) ApplyTunables() {
 	configuration.ProviderKeyEncryptionKey = strings.TrimSpace(configuration.ProviderKeyEncryptionKey)
 	configuration.ManagementAPIOrigin = strings.TrimSpace(configuration.ManagementAPIOrigin)
 	configuration.ProxyOrigin = strings.TrimSpace(configuration.ProxyOrigin)
+	configuration.LegacyTokenMigration.TenantID = strings.TrimSpace(configuration.LegacyTokenMigration.TenantID)
+	configuration.LegacyTokenMigration.OwnerEmail = strings.ToLower(strings.TrimSpace(configuration.LegacyTokenMigration.OwnerEmail))
 }
 
 func validateManagementConfiguration(configuration ManagementConfiguration) error {
+	migrationConfigured := configuration.LegacyTokenMigration.TenantID != constants.EmptyString || configuration.LegacyTokenMigration.OwnerEmail != constants.EmptyString
 	if !configuration.Enabled {
+		if migrationConfigured {
+			return fmt.Errorf("%w: field=management.legacy_token_migration requires_management", ErrInvalidManagementConfiguration)
+		}
 		return nil
 	}
 	requiredFields := []struct {
@@ -323,9 +342,12 @@ func validateManagementConfiguration(configuration ManagementConfiguration) erro
 		}
 	}
 	for _, emailValue := range configuration.AdminEmails {
-		if _, emailError := normalizeManagementAdminEmail(emailValue); emailError != nil {
+		if _, emailError := normalizeManagementEmail(emailValue); emailError != nil {
 			return fmt.Errorf("%w: field=management.admin_emails value=%s", ErrInvalidManagementConfiguration, emailValue)
 		}
+	}
+	if migrationError := validateLegacyTokenMigrationConfiguration(configuration.LegacyTokenMigration); migrationError != nil {
+		return migrationError
 	}
 	if !supportedManagementDatabaseDialect(configuration.DatabaseDialect) {
 		return fmt.Errorf("%w: field=management.database_dialect value=%s", ErrInvalidManagementConfiguration, configuration.DatabaseDialect)
@@ -349,7 +371,25 @@ func decodeManagedProviderKey(rawEncryptionKey string) ([managedProviderKeyBytes
 	return encryptionKey, nil
 }
 
-func normalizeManagementAdminEmail(rawEmail string) (string, error) {
+func validateLegacyTokenMigrationConfiguration(configuration LegacyTokenMigrationConfiguration) error {
+	tenantIdentifier := strings.TrimSpace(configuration.TenantID)
+	ownerEmail := strings.TrimSpace(configuration.OwnerEmail)
+	if tenantIdentifier == constants.EmptyString && ownerEmail == constants.EmptyString {
+		return nil
+	}
+	if tenantIdentifier == constants.EmptyString {
+		return fmt.Errorf("%w: field=management.legacy_token_migration.tenant_id", ErrInvalidManagementConfiguration)
+	}
+	if ownerEmail == constants.EmptyString {
+		return fmt.Errorf("%w: field=management.legacy_token_migration.owner_email", ErrInvalidManagementConfiguration)
+	}
+	if _, emailError := normalizeManagementEmail(ownerEmail); emailError != nil {
+		return fmt.Errorf("%w: field=management.legacy_token_migration.owner_email value=%s", ErrInvalidManagementConfiguration, ownerEmail)
+	}
+	return nil
+}
+
+func normalizeManagementEmail(rawEmail string) (string, error) {
 	email := strings.ToLower(strings.TrimSpace(rawEmail))
 	if email == constants.EmptyString {
 		return constants.EmptyString, ErrInvalidManagementConfiguration

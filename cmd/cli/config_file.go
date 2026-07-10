@@ -53,13 +53,20 @@ type fileConfiguration struct {
 }
 
 type serverConfiguration struct {
-	Port                  int    `mapstructure:"port"`
-	LogLevel              string `mapstructure:"log_level"`
-	Workers               int    `mapstructure:"workers"`
-	QueueSize             int    `mapstructure:"queue_size"`
-	RequestTimeoutSeconds int    `mapstructure:"request_timeout_seconds"`
-	MaxPromptBytes        int64  `mapstructure:"max_prompt_bytes"`
-	MaxInputAudioBytes    int64  `mapstructure:"max_input_audio_bytes"`
+	Port                  int                              `mapstructure:"port"`
+	LogLevel              string                           `mapstructure:"log_level"`
+	Workers               int                              `mapstructure:"workers"`
+	QueueSize             int                              `mapstructure:"queue_size"`
+	RequestTimeoutSeconds int                              `mapstructure:"request_timeout_seconds"`
+	MaxPromptBytes        int64                            `mapstructure:"max_prompt_bytes"`
+	MaxInputAudioBytes    int64                            `mapstructure:"max_input_audio_bytes"`
+	UpstreamRateLimits    []upstreamRateLimitConfiguration `mapstructure:"upstream_rate_limits"`
+}
+
+type upstreamRateLimitConfiguration struct {
+	Origin      string `mapstructure:"origin"`
+	MaxRequests int    `mapstructure:"max_requests"`
+	Interval    string `mapstructure:"interval"`
 }
 
 type tenantConfiguration struct {
@@ -69,25 +76,31 @@ type tenantConfiguration struct {
 }
 
 type managementConfiguration struct {
-	Enabled                  bool     `mapstructure:"enabled"`
-	PublicOrigin             string   `mapstructure:"public_origin"`
-	UIDescription            string   `mapstructure:"ui_description"`
-	UIOrigins                []string `mapstructure:"ui_origins"`
-	AdminEmails              []string `mapstructure:"admin_emails"`
-	TAuthURL                 string   `mapstructure:"tauth_url"`
-	TAuthTenantID            string   `mapstructure:"tauth_tenant_id"`
-	GoogleClientID           string   `mapstructure:"google_client_id"`
-	LoginPath                string   `mapstructure:"login_path"`
-	LogoutPath               string   `mapstructure:"logout_path"`
-	NoncePath                string   `mapstructure:"nonce_path"`
-	JWTSigningKey            string   `mapstructure:"jwt_signing_key"`
-	JWTIssuer                string   `mapstructure:"jwt_issuer"`
-	SessionCookieName        string   `mapstructure:"session_cookie_name"`
-	DatabaseDialect          string   `mapstructure:"database_dialect"`
-	DatabaseDSN              string   `mapstructure:"database_dsn"`
-	ProviderKeyEncryptionKey string   `mapstructure:"provider_key_encryption_key"`
-	ManagementAPIOrigin      string   `mapstructure:"management_api_origin"`
-	ProxyOrigin              string   `mapstructure:"proxy_origin"`
+	Enabled                  bool                              `mapstructure:"enabled"`
+	PublicOrigin             string                            `mapstructure:"public_origin"`
+	UIDescription            string                            `mapstructure:"ui_description"`
+	UIOrigins                []string                          `mapstructure:"ui_origins"`
+	AdminEmails              []string                          `mapstructure:"admin_emails"`
+	TAuthURL                 string                            `mapstructure:"tauth_url"`
+	TAuthTenantID            string                            `mapstructure:"tauth_tenant_id"`
+	GoogleClientID           string                            `mapstructure:"google_client_id"`
+	LoginPath                string                            `mapstructure:"login_path"`
+	LogoutPath               string                            `mapstructure:"logout_path"`
+	NoncePath                string                            `mapstructure:"nonce_path"`
+	JWTSigningKey            string                            `mapstructure:"jwt_signing_key"`
+	JWTIssuer                string                            `mapstructure:"jwt_issuer"`
+	SessionCookieName        string                            `mapstructure:"session_cookie_name"`
+	DatabaseDialect          string                            `mapstructure:"database_dialect"`
+	DatabaseDSN              string                            `mapstructure:"database_dsn"`
+	ProviderKeyEncryptionKey string                            `mapstructure:"provider_key_encryption_key"`
+	ManagementAPIOrigin      string                            `mapstructure:"management_api_origin"`
+	ProxyOrigin              string                            `mapstructure:"proxy_origin"`
+	LegacyTokenMigration     legacyTokenMigrationConfiguration `mapstructure:"legacy_token_migration"`
+}
+
+type legacyTokenMigrationConfiguration struct {
+	TenantID   string `mapstructure:"tenant_id"`
+	OwnerEmail string `mapstructure:"owner_email"`
 }
 
 type tenantDefaultsConfig struct {
@@ -107,6 +120,7 @@ type providersConfiguration struct {
 	Zhipu       transcribingProviderConfiguration `mapstructure:"zhipu"`
 	Gemini      providerConfiguration             `mapstructure:"gemini"`
 	Anthropic   providerConfiguration             `mapstructure:"anthropic"`
+	Meta        providerConfiguration             `mapstructure:"meta"`
 	Grok        transcribingProviderConfiguration `mapstructure:"grok"`
 }
 
@@ -259,6 +273,7 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		ZhipuKey:                     configuration.Providers.Zhipu.APIKey,
 		GeminiKey:                    configuration.Providers.Gemini.APIKey,
 		AnthropicKey:                 configuration.Providers.Anthropic.APIKey,
+		MetaKey:                      configuration.Providers.Meta.APIKey,
 		GrokKey:                      configuration.Providers.Grok.APIKey,
 		OpenAIBaseURL:                configuration.Providers.OpenAI.BaseURL,
 		OpenAITranscriptionsURL:      configuration.Providers.OpenAI.TranscriptionsURL,
@@ -271,6 +286,7 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		ZhipuTranscriptionsURL:       configuration.Providers.Zhipu.TranscriptionsURL,
 		GeminiBaseURL:                configuration.Providers.Gemini.BaseURL,
 		AnthropicBaseURL:             configuration.Providers.Anthropic.BaseURL,
+		MetaBaseURL:                  configuration.Providers.Meta.BaseURL,
 		GrokBaseURL:                  configuration.Providers.Grok.BaseURL,
 		GrokTranscriptionsURL:        configuration.Providers.Grok.TranscriptionsURL,
 		Port:                         configuration.Server.Port,
@@ -280,8 +296,21 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		RequestTimeoutSeconds:        configuration.Server.RequestTimeoutSeconds,
 		MaxPromptBytes:               configuration.Server.MaxPromptBytes,
 		MaxInputAudioBytes:           configuration.Server.MaxInputAudioBytes,
+		UpstreamRateLimits:           proxyUpstreamRateLimitConfigurations(configuration.Server.UpstreamRateLimits),
 		ProviderModels:               configuration.Providers.providerModelCatalogs(),
 	})
+}
+
+func proxyUpstreamRateLimitConfigurations(configurations []upstreamRateLimitConfiguration) []proxy.UpstreamRateLimitConfiguration {
+	proxyConfigurations := make([]proxy.UpstreamRateLimitConfiguration, 0, len(configurations))
+	for _, configuration := range configurations {
+		proxyConfigurations = append(proxyConfigurations, proxy.UpstreamRateLimitConfiguration{
+			Origin:      configuration.Origin,
+			MaxRequests: configuration.MaxRequests,
+			Interval:    configuration.Interval,
+		})
+	}
+	return proxyConfigurations
 }
 
 func managementProxyConfiguration(configuration managementConfiguration) proxy.ManagementConfiguration {
@@ -305,6 +334,10 @@ func managementProxyConfiguration(configuration managementConfiguration) proxy.M
 		ProviderKeyEncryptionKey: configuration.ProviderKeyEncryptionKey,
 		ManagementAPIOrigin:      configuration.ManagementAPIOrigin,
 		ProxyOrigin:              configuration.ProxyOrigin,
+		LegacyTokenMigration: proxy.LegacyTokenMigrationConfiguration{
+			TenantID:   configuration.LegacyTokenMigration.TenantID,
+			OwnerEmail: configuration.LegacyTokenMigration.OwnerEmail,
+		},
 	}
 }
 
@@ -336,6 +369,9 @@ func (configuration providersConfiguration) providerModelCatalogs() proxy.Provid
 		},
 		proxy.ProviderNameAnthropic: {
 			Text: configuration.Anthropic.Text.proxyCatalog(),
+		},
+		proxy.ProviderNameMeta: {
+			Text: configuration.Meta.Text.proxyCatalog(),
 		},
 		proxy.ProviderNameGrok: {
 			Text:      configuration.Grok.Text.proxyCatalog(),
@@ -384,6 +420,7 @@ func (configuration providersConfiguration) validateCompleteProviderConfiguratio
 		{providerName: proxy.ProviderNameZhipu, fieldName: "providers.zhipu.base_url", baseURL: configuration.Zhipu.BaseURL},
 		{providerName: proxy.ProviderNameGemini, fieldName: "providers.gemini.base_url", baseURL: configuration.Gemini.BaseURL},
 		{providerName: proxy.ProviderNameAnthropic, fieldName: "providers.anthropic.base_url", baseURL: configuration.Anthropic.BaseURL},
+		{providerName: proxy.ProviderNameMeta, fieldName: "providers.meta.base_url", baseURL: configuration.Meta.BaseURL},
 		{providerName: proxy.ProviderNameGrok, fieldName: "providers.grok.base_url", baseURL: configuration.Grok.BaseURL},
 	}
 	for _, requiredBaseURL := range requiredBaseURLs {
@@ -461,6 +498,8 @@ func (configuration providersConfiguration) apiKeyRequirement(normalizedProvider
 		return providerAPIKeyRequirement{providerName: proxy.ProviderNameGemini, fieldName: "providers.gemini.api_key", apiKey: configuration.Gemini.APIKey}, true
 	case proxy.ProviderNameAnthropic, providerAliasClaude:
 		return providerAPIKeyRequirement{providerName: proxy.ProviderNameAnthropic, fieldName: "providers.anthropic.api_key", apiKey: configuration.Anthropic.APIKey}, true
+	case proxy.ProviderNameMeta:
+		return providerAPIKeyRequirement{providerName: proxy.ProviderNameMeta, fieldName: "providers.meta.api_key", apiKey: configuration.Meta.APIKey}, true
 	case proxy.ProviderNameGrok, providerAliasXAI:
 		return providerAPIKeyRequirement{providerName: proxy.ProviderNameGrok, fieldName: "providers.grok.api_key", apiKey: configuration.Grok.APIKey}, true
 	default:

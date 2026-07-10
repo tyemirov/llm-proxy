@@ -26,9 +26,10 @@ type chatCompletionMessage struct {
 }
 
 type chatCompletionRequest struct {
-	Model     string                  `json:"model"`
-	Messages  []chatCompletionMessage `json:"messages"`
-	MaxTokens *int                    `json:"max_tokens,omitempty"`
+	Model               string                  `json:"model"`
+	Messages            []chatCompletionMessage `json:"messages"`
+	MaxTokens           *int                    `json:"max_tokens,omitempty"`
+	MaxCompletionTokens *int                    `json:"max_completion_tokens,omitempty"`
 }
 
 type chatCompletionResponse struct {
@@ -52,11 +53,18 @@ func newOpenAICompatibleChatClient(httpClient HTTPDoer, requestTimeout time.Dura
 	}
 }
 
-func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *openAICompatibleChatClient) generateText(parentContext context.Context, apiKey string, baseURL string, modelIdentifier textModelDefinition, messages chatMessages, maxTokens *int, tokenLimitParameter chatCompletionTokenLimitParameter, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	payload := chatCompletionRequest{
-		Model:     modelIdentifier.string(),
-		Messages:  messages.chatCompletionMessages(),
-		MaxTokens: maxTokens,
+		Model:    modelIdentifier.string(),
+		Messages: messages.chatCompletionMessages(),
+	}
+	if maxTokens != nil {
+		switch tokenLimitParameter {
+		case chatCompletionTokenLimitMaxTokens:
+			payload.MaxTokens = maxTokens
+		case chatCompletionTokenLimitMaxCompletionTokens:
+			payload.MaxCompletionTokens = maxTokens
+		}
 	}
 	payloadBytes, _ := json.Marshal(payload)
 

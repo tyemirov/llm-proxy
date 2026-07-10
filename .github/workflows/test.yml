@@ -19,6 +19,7 @@ on:
       - 'package-lock.json'
       - 'playwright.config.js'
       - 'scripts/**'
+      - 'tools/gitrelease/**'
       - 'site/**'
       - 'tests/e2e/**'
       - '.github/workflows/test.yml'

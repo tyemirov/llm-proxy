@@ -75,9 +75,16 @@ func (store *managedTenantStore) recordUsage(requestTenant tenant, event managed
 	}
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
+	ownerRecord, ownerError := store.database.tenantByTenantID(requestTenant.identifier.string())
+	if ownerError != nil {
+		return fmt.Errorf("%w: tenant_id=%s: %v", errManagedTenantStorePersist, requestTenant.identifier.string(), ownerError)
+	}
+	if strings.HasPrefix(ownerRecord.UserID, legacyStaticTenantUserIDPrefix) {
+		return fmt.Errorf("%w: tenant_id=%s", errManagedLegacyTokenUnowned, requestTenant.identifier.string())
+	}
 	timestamp := store.now()
 	usageRecord := managedUsageEventRecord{
-		UserID:              requestTenant.userID,
+		UserID:              ownerRecord.UserID,
 		TenantID:            requestTenant.identifier.string(),
 		Endpoint:            event.endpoint,
 		ProviderID:          event.providerIdentifier,
@@ -93,7 +100,7 @@ func (store *managedTenantStore) recordUsage(requestTenant tenant, event managed
 		usageRecord.TotalTokens = event.usage.TotalTokens
 	}
 	if persistError := store.database.createUsageEvent(usageRecord); persistError != nil {
-		return fmt.Errorf("%w: user_id=%s: %v", errManagedTenantStorePersist, requestTenant.userID, persistError)
+		return fmt.Errorf("%w: user_id=%s: %v", errManagedTenantStorePersist, ownerRecord.UserID, persistError)
 	}
 	return nil
 }

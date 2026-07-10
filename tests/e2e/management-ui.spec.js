@@ -27,6 +27,7 @@ const mimeTypes = Object.freeze({
   ".yaml": "application/yaml",
 });
 const generatedResourcePageCount = 45;
+const seoContentModifiedDate = "2026-07-09";
 const settingsLayerViewports = Object.freeze([
   { name: "desktop", width: 1280, height: 720 },
   { name: "mobile", width: 390, height: 780 },
@@ -109,6 +110,7 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
   expect(pageHTML).toContain('"@type":"FAQPage"');
   expect(pageHTML).toContain('<a class="resource-button" href="/">Open LLM Proxy</a>');
   expect(pageHTML).toContain('href="/resources/openai-claude-gemini-one-endpoint/"');
+  expect(pageHTML).toContain(`"dateModified":"${seoContentModifiedDate}"`);
 });
 
 test("SEO sitemap and robots expose canonical resource URLs", async ({ request }) => {
@@ -123,6 +125,9 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
   expect(sitemapXML).toContain(
     "<loc>https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/</loc>",
   );
+  const sitemapModificationDates = sitemapXML.match(/<lastmod>[^<]+<\/lastmod>/g) || [];
+  expect(sitemapModificationDates).toHaveLength(generatedResourcePageCount + 2);
+  expect(new Set(sitemapModificationDates)).toEqual(new Set([`<lastmod>${seoContentModifiedDate}</lastmod>`]));
   expect(sitemapXML).not.toContain("config-ui.yaml");
   expect(sitemapXML).not.toContain("llm-proxy-config.json");
 
@@ -204,6 +209,20 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   );
   await expect(settingsDialog.locator('request-example[data-example-id="provider-v2"] .usage-snippet')).toContainText(
     "provider=deepseek",
+  );
+  await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
+
+  await providerSelector.selectOption("meta");
+  await expect(providerEditor.locator("provider-status")).toContainText("Meta");
+  await expect(providerEditor.locator("provider-status")).toContainText("sk-...meta");
+  await expect(providerEditor.getByRole("textbox", { name: "Meta API key" })).toBeVisible();
+  await expect(providerEditor.getByRole("combobox", { name: "Text model" })).toHaveValue("muse-spark-1.1");
+  await expect(settingsDialog.locator("request-example")).toHaveCount(5);
+  await expect(settingsDialog.locator('request-example[data-example-id="provider-text"] .usage-snippet')).toContainText(
+    "provider=meta",
+  );
+  await expect(settingsDialog.locator('request-example[data-example-id="provider-v2"] .usage-snippet')).toContainText(
+    "provider=meta",
   );
   await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
 });
@@ -621,6 +640,19 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         system_prompt: "",
         text_default_model: "deepseek-chat",
         text_models: ["deepseek-chat"],
+        supports_dictation: false,
+        dictation_models: [],
+      },
+      {
+        id: "meta",
+        label: "Meta",
+        aliases: [],
+        has_key: true,
+        masked_key: "sk-...meta",
+        text_model: "muse-spark-1.1",
+        system_prompt: "",
+        text_default_model: "muse-spark-1.1",
+        text_models: ["muse-spark-1.1"],
         supports_dictation: false,
         dictation_models: [],
       },

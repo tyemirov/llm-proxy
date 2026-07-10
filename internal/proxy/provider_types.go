@@ -21,6 +21,8 @@ const (
 	ProviderNameGemini = "gemini"
 	// ProviderNameAnthropic identifies Anthropic Claude routing.
 	ProviderNameAnthropic = "anthropic"
+	// ProviderNameMeta identifies Meta Model API routing.
+	ProviderNameMeta = "meta"
 	// ProviderNameGrok identifies xAI Grok routing.
 	ProviderNameGrok = "grok"
 )
@@ -42,6 +44,7 @@ const (
 	defaultZhipuTranscriptionsURL = "https://api.z.ai/api/paas/v4/audio/transcriptions"
 	defaultGeminiBaseURL          = "https://generativelanguage.googleapis.com/v1"
 	defaultAnthropicBaseURL       = "https://api.anthropic.com"
+	defaultMetaBaseURL            = "https://api.meta.ai/v1"
 	defaultGrokBaseURL            = "https://api.x.ai/v1"
 	defaultGrokTranscriptionsURL  = "https://api.x.ai/v1/stt"
 )
@@ -89,6 +92,8 @@ const (
 	ModelNameClaudeOpus41 = "claude-opus-4-1-20250805"
 	// ModelNameClaudeOpus41Alias identifies the Claude Opus 4.1 convenience alias.
 	ModelNameClaudeOpus41Alias = "claude-opus-4-1"
+	// ModelNameMuseSpark11 identifies Meta Muse Spark 1.1.
+	ModelNameMuseSpark11 = "muse-spark-1.1"
 	// ModelNameGrok43 identifies the current Grok 4.3 model.
 	ModelNameGrok43 = "grok-4.3"
 	// ModelNameGrok43Latest identifies the Grok 4.3 latest alias.
@@ -119,6 +124,13 @@ const (
 	textTransportOpenAICompatibleChat providerTextTransport = "openai_compatible_chat"
 	textTransportGeminiGenerate       providerTextTransport = "gemini_generate"
 	textTransportAnthropicMessages    providerTextTransport = "anthropic_messages"
+)
+
+type chatCompletionTokenLimitParameter string
+
+const (
+	chatCompletionTokenLimitMaxTokens           chatCompletionTokenLimitParameter = "max_tokens"
+	chatCompletionTokenLimitMaxCompletionTokens chatCompletionTokenLimitParameter = "max_completion_tokens"
 )
 
 type providerID string
@@ -178,6 +190,7 @@ type providerDefinition struct {
 	transcriptionModels       map[string]modelID
 	supportsDictation         bool
 	textTransport             providerTextTransport
+	chatTokenLimitParameter   chatCompletionTokenLimitParameter
 }
 
 func (definition providerDefinition) credentialFor(endpoint endpointKind) string {

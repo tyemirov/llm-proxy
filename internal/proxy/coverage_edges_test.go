@@ -1715,6 +1715,11 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 			WorkerCount:           1,
 			QueueSize:             1,
 			RequestTimeoutSeconds: TestTimeout,
+			UpstreamRateLimits: []proxy.UpstreamRateLimitConfiguration{{
+				Origin:      "https://deepseek.invalid",
+				MaxRequests: 100,
+				Interval:    "1s",
+			}},
 		})
 
 		firstResult := make(chan int, 1)

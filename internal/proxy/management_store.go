@@ -25,13 +25,16 @@ const (
 	generatedTenantSecretBytes         = 32
 	generatedTenantSecretAttempts      = 16
 	generatedTenantSecretPrefix        = "llmp_"
-	staticConfigMigrationID            = "static-config-v1"
-	staticConfigTenantUserIDPrefix     = "static-config:"
+	legacyStaticTenantUserIDPrefix     = "static-config:"
 	managedTenantIdentifierPrefix      = "managed-"
 	managedTenantIdentifierHashBytes   = 12
 	managedTenantUserEmailColumn       = "user_email"
 	managedTenantUserIDColumn          = "user_id"
+	managedTenantUserDisplayNameColumn = "user_display_name"
+	managedTenantUserAvatarURLColumn   = "user_avatar_url"
+	managedRecordUpdatedAtColumn       = "updated_at"
 	managedUsageCreatedAtColumn        = "created_at"
+	obsoleteStaticMigrationTable       = "managed_static_config_migration_records"
 	managedProviderKeyCiphertextPrefix = "llmpk1:"
 	maskedSecretPrefixLength           = 3
 	maskedSecretSuffixLength           = 4
@@ -46,18 +49,23 @@ var (
 	errManagedProviderKeyDecryption = errors.New("managed_provider_key_decryption_failed")
 	errManagedSecretGeneration      = errors.New("managed_secret_generation_failed")
 	errManagedSecretCollision       = errors.New("managed_secret_collision")
+	errManagedLegacyTokenMigration  = errors.New("managed_legacy_token_migration_failed")
+	errManagedLegacyTokenConflict   = errors.New("managed_legacy_token_migration_conflict")
+	errManagedLegacyTokenUnowned    = errors.New("managed_legacy_token_unowned")
 )
 
 type managedTenantStore struct {
 	mutex             sync.RWMutex
 	database          managedTenantDatabase
 	providerKeyCipher managedProviderKeyCipher
+	legacyMigration   managedLegacyTokenMigration
 	randomReader      io.Reader
 	now               func() time.Time
 }
 
 type managedTenantDatabase interface {
 	tenantByUserID(userID string) (managedTenantRecord, error)
+	tenantByTenantID(tenantID string) (managedTenantRecord, error)
 	tenantBySecretDigest(secretDigest string) (managedTenantRecord, error)
 	tenants() ([]managedTenantRecord, error)
 	providerKeys() ([]managedProviderAPIKeyRecord, error)
@@ -68,8 +76,7 @@ type managedTenantDatabase interface {
 	createUsageEvent(record managedUsageEventRecord) error
 	usageEventsByUserIDSince(userID string, periodStart time.Time) ([]managedUsageEventRecord, error)
 	usageEventsSince(periodStart time.Time) ([]managedUsageEventRecord, error)
-	staticConfigMigrationByID(identifier string) (managedStaticConfigMigrationRecord, error)
-	createStaticConfigMigration(record managedStaticConfigMigrationRecord) error
+	claimLegacyTenant(claim managedLegacyTenantClaim) error
 }
 
 type gormManagedTenantDatabase struct {
@@ -120,12 +127,6 @@ type managedUsageEventRecord struct {
 	CreatedAt           time.Time `gorm:"index:idx_managed_usage_user_created;index:idx_managed_usage_created_at"`
 }
 
-type managedStaticConfigMigrationRecord struct {
-	ID        string `gorm:"primaryKey"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
 type managedTenantSnapshot struct {
 	userID           string
 	userEmail        string
@@ -156,6 +157,23 @@ type managedProviderKeyCipher struct {
 	aeadCipher cipher.AEAD
 }
 
+type managedLegacyTokenMigration struct {
+	tenantIdentifier tenantID
+	legacyUserID     string
+	ownerEmail       string
+}
+
+type managedLegacyTenantClaim struct {
+	sourceUserID         string
+	targetUserID         string
+	tenantID             string
+	targetEmail          string
+	targetDisplayName    string
+	targetAvatarURL      string
+	updatedAt            time.Time
+	reencryptProviderKey func(managedProviderAPIKeyRecord) (managedProviderAPIKeyRecord, error)
+}
+
 func newManagedTenantStore(configuration ManagementConfiguration) (*managedTenantStore, error) {
 	database, databaseError := newGORMManagedTenantDatabase(configuration)
 	if databaseError != nil {
@@ -165,11 +183,41 @@ func newManagedTenantStore(configuration ManagementConfiguration) (*managedTenan
 	if cipherError != nil {
 		return nil, fmt.Errorf("%w: field=management.provider_key_encryption_key: %v", errManagedTenantStoreOpen, cipherError)
 	}
+	legacyMigration, migrationError := newManagedLegacyTokenMigration(configuration.LegacyTokenMigration)
+	if migrationError != nil {
+		return nil, fmt.Errorf("%w: %v", errManagedTenantStoreOpen, migrationError)
+	}
 	store := newManagedTenantStoreWithDatabaseAndCipher(database, providerKeyCipher)
+	store.legacyMigration = legacyMigration
 	if migrationError := store.migratePlaintextProviderKeys(); migrationError != nil {
 		return nil, migrationError
 	}
+	if migrationStateError := store.validateLegacyTokenMigrationState(); migrationStateError != nil {
+		return nil, migrationStateError
+	}
 	return store, nil
+}
+
+func newManagedLegacyTokenMigration(configuration LegacyTokenMigrationConfiguration) (managedLegacyTokenMigration, error) {
+	tenantIdentifier := strings.TrimSpace(configuration.TenantID)
+	ownerEmail := strings.TrimSpace(configuration.OwnerEmail)
+	if tenantIdentifier == constants.EmptyString && ownerEmail == constants.EmptyString {
+		return managedLegacyTokenMigration{}, nil
+	}
+	if validationError := validateLegacyTokenMigrationConfiguration(configuration); validationError != nil {
+		return managedLegacyTokenMigration{}, validationError
+	}
+	validatedTenantIdentifier := tenantID(tenantIdentifier)
+	validatedOwnerEmail := strings.ToLower(ownerEmail)
+	return managedLegacyTokenMigration{
+		tenantIdentifier: validatedTenantIdentifier,
+		legacyUserID:     legacyStaticTenantUserID(validatedTenantIdentifier),
+		ownerEmail:       validatedOwnerEmail,
+	}, nil
+}
+
+func (migration managedLegacyTokenMigration) configured() bool {
+	return migration.legacyUserID != constants.EmptyString
 }
 
 func newManagedTenantStoreWithDatabase(database managedTenantDatabase) *managedTenantStore {
@@ -252,10 +300,21 @@ func newGORMManagedTenantDatabase(configuration ManagementConfiguration) (*gormM
 	if openError != nil {
 		return nil, fmt.Errorf("%w: %v", errManagedTenantStoreOpen, openError)
 	}
-	if migrateError := database.AutoMigrate(&managedTenantRecord{}, &managedProviderAPIKeyRecord{}, &managedUsageEventRecord{}, &managedStaticConfigMigrationRecord{}); migrateError != nil {
+	if migrateError := database.AutoMigrate(&managedTenantRecord{}, &managedProviderAPIKeyRecord{}, &managedUsageEventRecord{}); migrateError != nil {
 		return nil, fmt.Errorf("%w: migrate: %v", errManagedTenantStoreOpen, migrateError)
 	}
+	if cleanupError := removeObsoleteStaticMigrationTable(database); cleanupError != nil {
+		return nil, fmt.Errorf("%w: remove_obsolete_static_migration_table: %w", errManagedTenantStoreOpen, cleanupError)
+	}
 	return &gormManagedTenantDatabase{database: database}, nil
+}
+
+func removeObsoleteStaticMigrationTable(database *gorm.DB) error {
+	migrator := database.Migrator()
+	if !migrator.HasTable(obsoleteStaticMigrationTable) {
+		return nil
+	}
+	return migrator.DropTable(obsoleteStaticMigrationTable)
 }
 
 func managementDatabaseDialector(configuration ManagementConfiguration) (gorm.Dialector, error) {
@@ -279,6 +338,15 @@ func (database *gormManagedTenantDatabase) tenantByUserID(userID string) (manage
 	queryError := database.database.
 		Preload("ProviderAPIKeys").
 		Where(&managedTenantRecord{UserID: userID}).
+		First(&record).
+		Error
+	return record, queryError
+}
+
+func (database *gormManagedTenantDatabase) tenantByTenantID(tenantID string) (managedTenantRecord, error) {
+	var record managedTenantRecord
+	queryError := database.database.
+		Where(&managedTenantRecord{TenantID: tenantID}).
 		First(&record).
 		Error
 	return record, queryError
@@ -353,17 +421,175 @@ func (database *gormManagedTenantDatabase) usageEventsSince(periodStart time.Tim
 	return records, queryError
 }
 
-func (database *gormManagedTenantDatabase) staticConfigMigrationByID(identifier string) (managedStaticConfigMigrationRecord, error) {
-	var record managedStaticConfigMigrationRecord
-	queryError := database.database.
-		Where(&managedStaticConfigMigrationRecord{ID: identifier}).
-		First(&record).
-		Error
-	return record, queryError
+func (database *gormManagedTenantDatabase) claimLegacyTenant(claim managedLegacyTenantClaim) error {
+	return database.database.Transaction(func(transaction *gorm.DB) error {
+		var sourceRecord managedTenantRecord
+		sourceError := transaction.
+			Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
+			Where(&managedTenantRecord{UserID: claim.sourceUserID}).
+			First(&sourceRecord).
+			Error
+
+		var targetRecord managedTenantRecord
+		targetError := transaction.
+			Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
+			Where(&managedTenantRecord{UserID: claim.targetUserID}).
+			First(&targetRecord).
+			Error
+
+		if errors.Is(sourceError, gorm.ErrRecordNotFound) {
+			if targetError == nil && targetRecord.TenantID == claim.tenantID {
+				return nil
+			}
+			if targetError != nil && !errors.Is(targetError, gorm.ErrRecordNotFound) {
+				return targetError
+			}
+			return fmt.Errorf("%w: source_missing tenant=%s", errManagedLegacyTokenConflict, claim.tenantID)
+		}
+		if sourceError != nil {
+			return sourceError
+		}
+		if sourceRecord.TenantID != claim.tenantID {
+			return fmt.Errorf("%w: source_tenant=%s expected=%s", errManagedLegacyTokenConflict, sourceRecord.TenantID, claim.tenantID)
+		}
+		if targetError == nil {
+			return fmt.Errorf("%w: destination_exists user_id=%s", errManagedLegacyTokenConflict, claim.targetUserID)
+		}
+		if !errors.Is(targetError, gorm.ErrRecordNotFound) {
+			return targetError
+		}
+
+		var targetProviderCount int64
+		if countError := transaction.Model(&managedProviderAPIKeyRecord{}).
+			Where(&managedProviderAPIKeyRecord{UserID: claim.targetUserID}).
+			Count(&targetProviderCount).
+			Error; countError != nil {
+			return countError
+		}
+		var targetUsageCount int64
+		if countError := transaction.Model(&managedUsageEventRecord{}).
+			Where(&managedUsageEventRecord{UserID: claim.targetUserID}).
+			Count(&targetUsageCount).
+			Error; countError != nil {
+			return countError
+		}
+		if targetProviderCount != 0 || targetUsageCount != 0 {
+			return fmt.Errorf("%w: destination_children user_id=%s", errManagedLegacyTokenConflict, claim.targetUserID)
+		}
+
+		var sourceProviderRecords []managedProviderAPIKeyRecord
+		if providerQueryError := transaction.
+			Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
+			Where(&managedProviderAPIKeyRecord{UserID: claim.sourceUserID}).
+			Find(&sourceProviderRecords).
+			Error; providerQueryError != nil {
+			return providerQueryError
+		}
+		var sourceUsageRecords []managedUsageEventRecord
+		if usageQueryError := transaction.
+			Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
+			Where(&managedUsageEventRecord{UserID: claim.sourceUserID}).
+			Find(&sourceUsageRecords).
+			Error; usageQueryError != nil {
+			return usageQueryError
+		}
+		for _, usageRecord := range sourceUsageRecords {
+			if usageRecord.TenantID != claim.tenantID {
+				return fmt.Errorf("%w: usage_tenant=%s expected=%s", errManagedLegacyTokenConflict, usageRecord.TenantID, claim.tenantID)
+			}
+		}
+
+		targetProviderRecords := make([]managedProviderAPIKeyRecord, 0, len(sourceProviderRecords))
+		for _, sourceProviderRecord := range sourceProviderRecords {
+			targetProviderRecord, reencryptError := claim.reencryptProviderKey(sourceProviderRecord)
+			if reencryptError != nil {
+				return reencryptError
+			}
+			targetProviderRecords = append(targetProviderRecords, targetProviderRecord)
+		}
+
+		if len(sourceProviderRecords) != 0 {
+			deleteProviderKeysResult := transaction.
+				Where(&managedProviderAPIKeyRecord{UserID: claim.sourceUserID}).
+				Delete(&managedProviderAPIKeyRecord{})
+			if deleteProviderKeysResult.Error != nil {
+				return deleteProviderKeysResult.Error
+			}
+			if deleteProviderKeysResult.RowsAffected != int64(len(sourceProviderRecords)) {
+				return fmt.Errorf("%w: provider_delete_count=%d expected=%d", errManagedLegacyTokenMigration, deleteProviderKeysResult.RowsAffected, len(sourceProviderRecords))
+			}
+		}
+
+		updateTenantResult := transaction.
+			Model(&managedTenantRecord{}).
+			Where(&managedTenantRecord{UserID: claim.sourceUserID, TenantID: claim.tenantID}).
+			Updates(map[string]interface{}{
+				managedTenantUserIDColumn:          claim.targetUserID,
+				managedTenantUserEmailColumn:       claim.targetEmail,
+				managedTenantUserDisplayNameColumn: claim.targetDisplayName,
+				managedTenantUserAvatarURLColumn:   claim.targetAvatarURL,
+				managedRecordUpdatedAtColumn:       claim.updatedAt,
+			})
+		if updateTenantResult.Error != nil {
+			return updateTenantResult.Error
+		}
+		if updateTenantResult.RowsAffected != 1 {
+			return fmt.Errorf("%w: tenant_update_count=%d", errManagedLegacyTokenMigration, updateTenantResult.RowsAffected)
+		}
+
+		if len(targetProviderRecords) != 0 {
+			createProviderKeysResult := transaction.Create(&targetProviderRecords)
+			if createProviderKeysResult.Error != nil {
+				return createProviderKeysResult.Error
+			}
+			if createProviderKeysResult.RowsAffected != int64(len(targetProviderRecords)) {
+				return fmt.Errorf("%w: provider_create_count=%d expected=%d", errManagedLegacyTokenMigration, createProviderKeysResult.RowsAffected, len(targetProviderRecords))
+			}
+		}
+
+		if len(sourceUsageRecords) != 0 {
+			updateUsageResult := transaction.
+				Model(&managedUsageEventRecord{}).
+				Where(&managedUsageEventRecord{UserID: claim.sourceUserID}).
+				Update(managedTenantUserIDColumn, claim.targetUserID)
+			if updateUsageResult.Error != nil {
+				return updateUsageResult.Error
+			}
+			if updateUsageResult.RowsAffected != int64(len(sourceUsageRecords)) {
+				return fmt.Errorf("%w: usage_update_count=%d expected=%d", errManagedLegacyTokenMigration, updateUsageResult.RowsAffected, len(sourceUsageRecords))
+			}
+		}
+
+		return verifyLegacyTenantClaim(transaction, claim, len(targetProviderRecords), len(sourceUsageRecords))
+	})
 }
 
-func (database *gormManagedTenantDatabase) createStaticConfigMigration(record managedStaticConfigMigrationRecord) error {
-	return database.database.Create(&record).Error
+func verifyLegacyTenantClaim(transaction *gorm.DB, claim managedLegacyTenantClaim, expectedProviderCount int, expectedUsageCount int) error {
+	checks := []struct {
+		model         interface{}
+		userID        string
+		expectedCount int64
+	}{
+		{model: &managedTenantRecord{}, userID: claim.sourceUserID, expectedCount: 0},
+		{model: &managedProviderAPIKeyRecord{}, userID: claim.sourceUserID, expectedCount: 0},
+		{model: &managedUsageEventRecord{}, userID: claim.sourceUserID, expectedCount: 0},
+		{model: &managedTenantRecord{}, userID: claim.targetUserID, expectedCount: 1},
+		{model: &managedProviderAPIKeyRecord{}, userID: claim.targetUserID, expectedCount: int64(expectedProviderCount)},
+		{model: &managedUsageEventRecord{}, userID: claim.targetUserID, expectedCount: int64(expectedUsageCount)},
+	}
+	for _, check := range checks {
+		var recordCount int64
+		if countError := transaction.Model(check.model).
+			Where(map[string]interface{}{managedTenantUserIDColumn: check.userID}).
+			Count(&recordCount).
+			Error; countError != nil {
+			return countError
+		}
+		if recordCount != check.expectedCount {
+			return fmt.Errorf("%w: user_id=%s count=%d expected=%d", errManagedLegacyTokenMigration, check.userID, recordCount, check.expectedCount)
+		}
+	}
+	return nil
 }
 
 func (store *managedTenantStore) migratePlaintextProviderKeys() error {
@@ -421,50 +647,6 @@ func (store *managedTenantStore) migrateProviderTextSettings(providers *provider
 	return nil
 }
 
-func (store *managedTenantStore) migrateStaticConfiguration(configuration Configuration) error {
-	store.mutex.Lock()
-	defer store.mutex.Unlock()
-	if _, migrationError := store.database.staticConfigMigrationByID(staticConfigMigrationID); migrationError == nil {
-		return nil
-	} else if !errors.Is(migrationError, gorm.ErrRecordNotFound) {
-		return fmt.Errorf("%w: migration=%s: %v", errManagedTenantStorePersist, staticConfigMigrationID, migrationError)
-	}
-
-	timestamp := store.now()
-	providerAPIKeys := configuredProviderAPIKeys(configuration)
-	for _, legacyTenant := range configuration.tenants.tenants {
-		record := newMigratedStaticTenantRecord(legacyTenant, timestamp)
-		if persistError := store.database.saveTenant(record); persistError != nil {
-			return fmt.Errorf("%w: tenant=%s: %v", errManagedTenantStorePersist, record.TenantID, persistError)
-		}
-		for providerIdentifier, apiKey := range providerAPIKeys {
-			encryptedAPIKey, encryptionError := store.providerKeyCipher.encrypt(store.randomReader, record.UserID, providerIdentifier.string(), apiKey)
-			if encryptionError != nil {
-				return encryptionError
-			}
-			if persistError := store.database.saveProviderKey(managedProviderAPIKeyRecord{
-				UserID:          record.UserID,
-				ProviderID:      providerIdentifier.string(),
-				EncryptedAPIKey: encryptedAPIKey,
-				TextModel:       managedProviderTextModelForStaticTenant(providerIdentifier, legacyTenant, configuration),
-				SystemPrompt:    managedProviderSystemPromptForStaticTenant(providerIdentifier, legacyTenant),
-				CreatedAt:       timestamp,
-				UpdatedAt:       timestamp,
-			}); persistError != nil {
-				return fmt.Errorf("%w: tenant=%s provider=%s: %v", errManagedTenantStorePersist, record.TenantID, providerIdentifier.string(), persistError)
-			}
-		}
-	}
-	if persistError := store.database.createStaticConfigMigration(managedStaticConfigMigrationRecord{
-		ID:        staticConfigMigrationID,
-		CreatedAt: timestamp,
-		UpdatedAt: timestamp,
-	}); persistError != nil {
-		return fmt.Errorf("%w: migration=%s: %v", errManagedTenantStorePersist, staticConfigMigrationID, persistError)
-	}
-	return nil
-}
-
 func providerDefaultTextModels(providers *providerRegistry) map[providerID]string {
 	summaries := providers.providerSummaries()
 	defaultModels := make(map[providerID]string, len(summaries))
@@ -474,19 +656,73 @@ func providerDefaultTextModels(providers *providerRegistry) map[providerID]strin
 	return defaultModels
 }
 
-func managedProviderTextModelForStaticTenant(providerIdentifier providerID, staticTenant tenant, configuration Configuration) string {
-	if providerIdentifier == newProviderID(staticTenant.defaults.provider) && strings.TrimSpace(staticTenant.defaults.model) != constants.EmptyString {
-		return staticTenant.defaults.model
+func (store *managedTenantStore) validateLegacyTokenMigrationState() error {
+	store.mutex.RLock()
+	defer store.mutex.RUnlock()
+	tenantRecords, queryError := store.database.tenants()
+	if queryError != nil {
+		return fmt.Errorf("%w: legacy_tenants: %v", errManagedTenantStorePersist, queryError)
 	}
-	providerModels := configuration.ProviderModels[providerIdentifier.string()]
-	return strings.TrimSpace(providerModels.Text.DefaultModel)
+	legacyTenantRecords := make([]managedTenantRecord, 0, 1)
+	for _, tenantRecord := range tenantRecords {
+		if strings.HasPrefix(tenantRecord.UserID, legacyStaticTenantUserIDPrefix) {
+			legacyTenantRecords = append(legacyTenantRecords, tenantRecord)
+		}
+	}
+	if len(legacyTenantRecords) == 0 {
+		return nil
+	}
+	if !store.legacyMigration.configured() {
+		return fmt.Errorf("%w: legacy_owner_config_missing", errManagedLegacyTokenMigration)
+	}
+	if len(legacyTenantRecords) != 1 {
+		return fmt.Errorf("%w: legacy_tenant_count=%d", errManagedLegacyTokenMigration, len(legacyTenantRecords))
+	}
+	legacyTenantRecord := legacyTenantRecords[0]
+	if legacyTenantRecord.UserID != store.legacyMigration.legacyUserID || legacyTenantRecord.TenantID != store.legacyMigration.tenantIdentifier.string() {
+		return fmt.Errorf("%w: legacy_tenant=%s expected=%s", errManagedLegacyTokenMigration, legacyTenantRecord.TenantID, store.legacyMigration.tenantIdentifier.string())
+	}
+	return nil
 }
 
-func managedProviderSystemPromptForStaticTenant(providerIdentifier providerID, staticTenant tenant) string {
-	if providerIdentifier == newProviderID(staticTenant.defaults.provider) {
-		return staticTenant.defaults.systemPrompt
+func (store *managedTenantStore) claimLegacyToken(principal managementPrincipal) error {
+	if !store.legacyMigration.configured() || principal.userEmail != store.legacyMigration.ownerEmail {
+		return nil
 	}
-	return constants.EmptyString
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+	if strings.HasPrefix(principal.userID, legacyStaticTenantUserIDPrefix) {
+		return fmt.Errorf("%w: invalid_target_user_id", errManagedLegacyTokenConflict)
+	}
+	claim := managedLegacyTenantClaim{
+		sourceUserID:      store.legacyMigration.legacyUserID,
+		targetUserID:      principal.userID,
+		tenantID:          store.legacyMigration.tenantIdentifier.string(),
+		targetEmail:       principal.userEmail,
+		targetDisplayName: principal.userDisplayName,
+		targetAvatarURL:   principal.userAvatarURL,
+		updatedAt:         store.now(),
+	}
+	claim.reencryptProviderKey = func(sourceRecord managedProviderAPIKeyRecord) (managedProviderAPIKeyRecord, error) {
+		apiKey, decryptError := store.providerKeyCipher.decrypt(sourceRecord)
+		if decryptError != nil {
+			return managedProviderAPIKeyRecord{}, decryptError
+		}
+		encryptedAPIKey, encryptionError := store.providerKeyCipher.encrypt(store.randomReader, claim.targetUserID, sourceRecord.ProviderID, apiKey)
+		if encryptionError != nil {
+			return managedProviderAPIKeyRecord{}, encryptionError
+		}
+		targetRecord := sourceRecord
+		targetRecord.UserID = claim.targetUserID
+		targetRecord.APIKey = constants.EmptyString
+		targetRecord.EncryptedAPIKey = encryptedAPIKey
+		targetRecord.UpdatedAt = claim.updatedAt
+		return targetRecord, nil
+	}
+	if migrationError := store.database.claimLegacyTenant(claim); migrationError != nil {
+		return fmt.Errorf("%w: tenant=%s: %w", errManagedLegacyTokenMigration, claim.tenantID, migrationError)
+	}
+	return nil
 }
 
 func (store *managedTenantStore) profile(principal managementPrincipal) (managedTenantSnapshot, error) {
@@ -641,6 +877,9 @@ func (store *managedTenantStore) authenticate(rawSecret string) (tenant, bool) {
 	if recordError != nil {
 		return tenant{}, false
 	}
+	if strings.HasPrefix(record.UserID, legacyStaticTenantUserIDPrefix) {
+		return tenant{}, false
+	}
 	recordDigest, digestValid := managedRecordSecretDigest(record)
 	if !digestValid || !constantTimeDigestEquals(recordDigest, presentedDigest) {
 		return tenant{}, false
@@ -712,26 +951,8 @@ func newManagedTenantRecord(principal managementPrincipal, createdAt time.Time) 
 	return record
 }
 
-func newMigratedStaticTenantRecord(staticTenant tenant, createdAt time.Time) managedTenantRecord {
-	record := managedTenantRecord{
-		UserID:       staticConfigTenantUserID(staticTenant.identifier),
-		TenantID:     staticTenant.identifier.string(),
-		SecretDigest: hex.EncodeToString(staticTenant.secretDigest[:]),
-		CreatedAt:    createdAt,
-		UpdatedAt:    createdAt,
-	}
-	record.applyDefaults(TenantDefaults{
-		Provider:          staticTenant.defaults.provider,
-		Model:             staticTenant.defaults.model,
-		DictationProvider: staticTenant.defaults.dictationProvider,
-		DictationModel:    staticTenant.defaults.dictationModel,
-		SystemPrompt:      staticTenant.defaults.systemPrompt,
-	})
-	return record
-}
-
-func staticConfigTenantUserID(identifier tenantID) string {
-	return staticConfigTenantUserIDPrefix + identifier.string()
+func legacyStaticTenantUserID(identifier tenantID) string {
+	return legacyStaticTenantUserIDPrefix + identifier.string()
 }
 
 func (record *managedTenantRecord) applyDefaults(defaults TenantDefaults) {

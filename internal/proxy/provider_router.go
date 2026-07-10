@@ -63,6 +63,7 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 		request.model,
 		request.messages,
 		request.maxTokens,
+		request.provider.chatTokenLimitParameter,
 		structuredLogger,
 	)
 }

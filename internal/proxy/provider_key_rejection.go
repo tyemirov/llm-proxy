@@ -27,6 +27,8 @@ var forbiddenClientProviderCredentialParameters = map[string]struct{}{
 	"gemini_api_key":      {},
 	"anthropic_api_key":   {},
 	"claude_api_key":      {},
+	"model_api_key":       {},
+	"meta_api_key":        {},
 	"grok_api_key":        {},
 	"xai_api_key":         {},
 }

@@ -351,6 +351,24 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   The Settings overlay now uses an explicit llm-proxy modal layer above the sticky MPR header/footer and the built-in MPR modal layer, with a CSS comment documenting that stacking contract. The notice layer stays below the Settings overlay so persistent notices remain visible outside modal flows without covering or intercepting Settings controls. Browser coverage now models the real MPR shell header/footer z-indexes, verifies the Settings modal and overlay win pointer hit-testing over header/footer and notices on desktop and mobile viewports, and proves repeated close/open remains stable. Screenshot evidence was captured at `output/playwright/B020-settings-desktop.png` and `output/playwright/B020-settings-mobile.png`. Validation passed with `timeout -k 180s -s SIGKILL 180s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s npm run frontend:test -- --grep "settings modal overlays MPR header and footer layers"`, `timeout -k 240s -s SIGKILL 240s make frontend-test`, and `timeout -k 30s -s SIGKILL 30s git diff --check`.
 
+- [x] [B021] (P1) Resolve Meta, upstream-rate, and release review regressions.
+  ### Summary
+  Review of the Meta Muse Spark 1.1 and shared upstream-rate branch found seven concrete regressions: rate reservations can expire while requests wait for workers; release commands depend on unavailable sibling scripts; canonical container preparation exposes ignored local files to BuildKit; Pages verifies the wrong commit after activation; the gateway no-op verifier no longer matches deploy CLI behavior; Meta live smoke reuses management state; and generated Meta pages carry a pre-launch modification date.
+  ### Acceptance Criteria
+  1. Strict rolling-window limits are enforced at actual upstream call admission even when a worker is saturated, and canceled worker waits do not consume rate slots.
+  2. `make release`, `make publish`, and Pages deployment use a repository-owned, reproducible toolchain with black-box local release coverage.
+  3. Release container builds use a tracked source snapshot that cannot contain `.git`, ignored dotenv credentials, or local artifact state.
+  4. Pages activation verifies `.mprlab-release.json.source_commit` against the release manifest's `source_commit`, without mutating the branch and then failing against `release_commit`.
+  5. The canonical gateway workflow no-op succeeds without CI, image, gateway, or Pages effects, while real deploys retain an explicit CI gate.
+  6. The Meta live harness safely loads dotenv data, forces management off for its disposable static tenant, and never reuses the configured management database.
+  7. Generated JSON-LD `dateModified`, sitemap `lastmod`, and report generation dates reflect the Meta content update.
+  8. Release inputs and extracted Pages markers are validated before remote mutation, prerelease tags remain prereleases rather than `latest`, and release-tool-only changes trigger CI.
+  9. Focused black-box tests, authenticated Meta live smoke, deterministic generation, and the full `make ci` gate pass.
+  ### Resolution
+  Moved strict rolling-window reservation to actual upstream admission after worker acquisition, releases workers while waiting for a rate window, and rejects post-acquire cancellation before consuming a slot. Vendored the release implementation under `tools/gitrelease`, made container preparation use `git archive HEAD`, constrained versions to the single canonical SemVer contract, honored selected remotes, kept prereleases out of `latest`, and made release-tool-only changes trigger CI. Pages deployment now validates retry inputs, archive entry types, case-insensitive `.git` components, payload hashes, remote tags, and the extracted source/version marker before branch mutation, then verifies the public marker against the manifest source commit. Restored the deploy CI/no-op contract so `--skip-gateway` requires no gateway checkout and cannot activate Pages. Combined the forward-only management changes with a disposable static live harness that parses dotenv without shell execution, supports non-paid preflight and config inspection, and never opens hosted management state. Regenerated all 45 resource pages with `dateModified`, sitemap `lastmod`, and report generation date `2026-07-09` while preserving the July 6 publication date.
+
+  Validation passed with focused red-to-green operational and release tests, `go test -race -count=10 ./tests/integration -run 'TestIntegrationCanceledWorkerAcquisitionsDoNotReserveRateSlots|TestIntegrationUpstreamRateLimitReservesAtCallAdmissionAfterWorkerWait'`, `make release-test` (15 tests), `make test-live-provider-harness`, deterministic `node scripts/generate_seo_resources.mjs`, and final merged `make ci` (Go aggregate coverage 100.0%, Python 20 passed, Playwright 11 passed, release integrations 15 passed, non-paid live preflight passed). The authenticated Meta-only smoke mapped the ignored `MUSE11_API_KEY` into the canonical `MODEL_API_KEY` process variable and returned `200 OK` with the expected `OK` response without printing or persisting the credential. Final independent audits and `git diff --check` reported no remaining findings.
+
 
 ## Improvements
 
@@ -497,7 +515,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Removed the legacy Go `Request`/`NewRequest`/`Client.Post` API and the Python `ClientRequest`/`Client.post` API. The Go CLI now maps prompt inputs into v2 `messages[]`, sends through `Client.PostMessages`, preserves the clearer `missing prompt` boundary error, and still omits `model` when `--model` is not provided. README and provider-routing docs now state that bundled clients are v2-only while direct server callers may still use `GET /`, compatibility `POST /`, or canonical `POST /v2`.
   Validation passed with `timeout -k 30s -s SIGKILL 30s make fmt`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./pkg/llmproxyclient`, `timeout -k 120s -s SIGKILL 120s go test -count=1 ./llm-proxy-client`, `timeout -k 120s -s SIGKILL 120s bash -lc 'cd python && uv run --group dev pytest tests/test_client.py'` (Python 20 passed), `timeout -k 350s -s SIGKILL 350s make ci` (Go/Python lint clean, Go total coverage 100.0%, Python 20 passed, root import smoke passed), and `timeout -k 30s -s SIGKILL 30s git diff --check`.
-- [ ] [I013] (P0) Limit upstream HTTP call rate in shared HTTP client for text and dictation, without provider‑specific logic.
+- [x] [I013] (P0) Limit upstream HTTP call rate in shared HTTP client for text and dictation, without provider‑specific logic.
   Goal:
   Ensure the shared HTTP client layer enforces a consistent, configurable limit on upstream HTTP calls across both text and dictation flows, so that provider rate limits and system resource usage are controlled without duplicating provider-specific throttling logic in multiple places.
   
@@ -523,6 +541,8 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Verify through logs/metrics that limiting events are emitted as expected when thresholds are reached.
   - Validate that typical workloads for text and dictation still succeed without unexpected errors when limits are set to realistic production values.
   - Perform a targeted regression check to ensure existing integrations using the shared HTTP client behave as before when limits are configured to be non-restrictive (e.g., effectively off).
+  Resolution:
+  Added validated `server.upstream_rate_limits` rules keyed by exact normalized HTTP(S) origin, with strict rolling-window enforcement in the shared `limitedHTTPDoer` after bounded queue admission and before worker acquisition. Text, dictation, transport retries, and OpenAI response retries now consume the same origin budget without provider-specific throttling; distinct origins remain independent, and an empty rule list keeps limiting disabled. Delayed and context-canceled waits emit structured origin/limit/interval/wait logs, while cancellation preserves the existing gateway-timeout mapping. README and provider-routing documentation describe the canonical config and retry/queue interaction. Black-box CLI and router coverage proves config validation, concurrent enforcement, shared text/dictation limits, origin independence, retry accounting, cancellation logging, and unrestricted behavior when disabled. Validation passed with `timeout -k 180s -s SIGKILL 180s go test -race -count=1 ./tests/integration -run 'TestIntegration.*UpstreamRateLimit|TestIntegrationSharedUpstreamRateLimit'`, `timeout -k 350s -s SIGKILL 350s make go-test` (total coverage 100.0%), `timeout -k 350s -s SIGKILL 350s make lint`, `timeout -k 350s -s SIGKILL 350s make ci` (Go/Python/frontend gates; Go total coverage 100.0%, Python 20 passed, Playwright 11 passed), and a scoped `git diff --check` over I013-owned files.
 - [x] [I014] (P2) Align the management header avatar with the right edge.
   Goal:
   Move the MPR header avatar/login control to the far right of the header content measure so it balances the left-side LLM Proxy brand title instead of sitting immediately beside it.
@@ -952,6 +972,43 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 - [ ] [F011] (P1) Add GLM 5.2 as a provider.
 - [ ] [F012] (P2) Add GPT 5.6 to the list of supported OpenAI models including the level of efforts.
 
+- [x] [F010] (P1) Add Meta Model API and Muse Spark 1.1 as a supported text provider.
+  ### Summary
+  Meta launched Muse Spark 1.1 in public preview through Meta Model API on July 9, 2026. The official developer contract exposes the exact `muse-spark-1.1` model through an OpenAI-compatible Chat Completions API at `https://api.meta.ai/v1` with bearer-token authentication. llm-proxy should expose that verified text contract as one canonical provider without claiming unsupported proxy capabilities.
+  ### Acceptance Criteria
+  1. Add canonical provider selector `meta` with no aliases, base URL `https://api.meta.ai/v1`, credential placeholder `${MODEL_API_KEY}`, and configured default model `muse-spark-1.1`.
+  2. Route `GET /`, compatibility `POST /`, and canonical `POST /v2` text requests through the shared OpenAI-compatible Chat Completions adapter with bearer authentication and normalized response/usage handling.
+  3. Keep Meta dictation and llm-proxy web search unsupported; reject those capabilities at the existing HTTP edge without fallback transports or alternate model IDs.
+  4. Surface Meta in registry-driven management profiles, provider key/model/system-prompt settings, generated request examples, and encrypted-at-rest managed routing.
+  5. Add Meta to the dynamic live-provider smoke harness using `MODEL_API_KEY`, while keeping paid live calls outside `make ci` and conditional on credential availability.
+  6. Update packaged config, env sample, README/provider-routing documentation, and generator-owned public provider resources from their canonical sources.
+  7. Add black-box config, routing, management, and browser coverage for the Meta selector, default model, upstream path/auth/payload, normalized response usage, missing credential, and unsupported capability behavior.
+  8. Pass repository CI with the existing 100% aggregate Go coverage gate; run a live Meta smoke only when a local credential is available.
+  ### Resolution
+  Added the canonical `meta` provider with `${MODEL_API_KEY}`, `https://api.meta.ai/v1`, and the sole configured `muse-spark-1.1` model. Meta text requests use the shared OpenAI-compatible Chat Completions adapter across `GET /`, compatibility `POST /`, and canonical `POST /v2`, with bearer authentication, normalized usage, and the current `max_completion_tokens` upstream field; there are no provider aliases, alternate transports, or fallbacks. The registry rejects Meta dictation and proxy `web_search`, management profiles expose the exact text-only capability and support encrypted tenant keys/defaults/system prompts/generated examples, and public requests reject Meta credential fields. Packaged config, env sample, the conditional live-provider harness, README/provider-routing docs, generator sources, and generated public resources now carry the same contract. Black-box config, routing, managed-encryption, and browser tests cover the integration. Validation passed with `make go-test` (aggregate Go coverage 100.0%), `make ci` (Go/Python/frontend lint and tests; Python 20 passed; Playwright 11 passed), deterministic `node scripts/generate_seo_resources.mjs` (45 pages), `bash -n scripts/test_live_providers.sh`, no-credential live-harness skip and explicit-Meta rejection checks, an authenticated Meta-only live smoke against `muse-spark-1.1` (`200 OK` with the expected `OK` response), and a scoped `git diff --check`. The locally supplied `MUSE11_API_KEY` was mapped to the canonical `MODEL_API_KEY` only in the smoke process without printing or persisting the secret.
+
+- [x] [F011] (P1) Migrate the legacy global token to its authenticated user account.
+  Goal:
+  Preserve the existing llm-proxy client token while transferring its tenant, provider settings, and usage history from the unowned legacy static-config identity to the authenticated account configured by email.
+  Requirements:
+  - Configure exactly one bounded migration with a legacy tenant id and normalized owner email; keep the real personal email in deployment configuration rather than tracked source.
+  - On the matching account's first authenticated management request, atomically replace the `static-config:<tenant-id>` owner with the verified TAuth subject and current profile identity.
+  - Preserve the existing tenant id, secret digest, defaults, creation timestamp, provider settings, and usage events so the same raw token continues to work and historical usage appears on that account's dashboard.
+  - Re-encrypt every migrated provider API key because provider-key ciphertext is bound to the owning user id.
+  - Reject migration for non-matching emails and fail explicitly when a conflicting destination account already exists.
+  - Stop creating static-config tenant rows in management mode and reject any remaining unowned static-config tenant during proxy authentication.
+  - Keep static non-management deployments separate; this migration changes only the management-mode database ownership contract.
+  Deliverables:
+  - Add validated migration config and packaged environment-contract coverage.
+  - Add one transactional GORM ownership operation without raw SQL or a second persistence path.
+  - Add black-box HTTP coverage for first-login claim, unchanged-token routing, historical/new usage visibility, non-owner isolation, one-time behavior, and pre-claim legacy-token rejection.
+  - Update README, provider-routing documentation, and generator-owned resource content to state that management-mode tokens are user-owned and the old static-config import path is retired.
+  Validation:
+  - Run focused management and config-loader tests.
+  - Run `timeout -k 350s -s SIGKILL 350s make ci`.
+  - Run `timeout -k 30s -s SIGKILL 30s git diff --check`.
+  ### Resolution
+  Replaced the management-mode static-config importer with one explicit, bounded ownership claim configured by legacy tenant id and normalized deployment-owned email. Before claim, every remaining `static-config:*` token is rejected; the matching account's first verified TAuth management session performs one GORM transaction that rekeys the tenant to the TAuth subject, preserves the tenant id, secret digest, defaults, creation time, provider settings, and all usage events, re-encrypts provider keys for the new owner id, and fails conflicts without partial writes. Management mode now rejects config tenants and global provider API keys, resolves usage ownership by preserved tenant id to prevent stale in-process writes, and removes the obsolete importer marker table through GORM. Packaged config, local environment guidance, provider-routing docs, SEO generator sources, generated resource pages, and the live-provider smoke harness now reflect the forward-only user-owned model; the harness builds an explicit static-mode fixture and has a non-paid authenticated-routing preflight in CI. Black-box coverage proves pre-claim rejection, non-owner isolation, first-login claim, unchanged-token routing, historical/new usage visibility, provider-key continuity, idempotent reload, and destination conflict rollback. Validation passed with `make go-test` (aggregate Go coverage 100.0%), `make ci` (Go/Python/frontend lint and tests; Python 20 passed; Playwright 11 passed; live-harness preflight passed), deterministic `node scripts/generate_seo_resources.mjs` (45 pages), `bash -n scripts/test_live_providers.sh`, the no-credential live-smoke skip, and `git diff --check`. Production activation remains an ordered rollout: deploy the current image, drain every old instance before owner sign-in, verify the unchanged token and dashboard history, then remove the temporary migration mapping.
 
 ## Planning
 *do not implement yet*

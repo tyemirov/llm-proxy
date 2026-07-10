@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Static-to-managed tenant migration in management mode</title>
-    <meta name="description" content="Migrate legacy config tenants once, then make database state authoritative for managed runtime access.">
+    <title>Legacy token ownership migration in management mode</title>
+    <meta name="description" content="Claim one prior static-config token for a verified user account without changing the token or losing usage history.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/static-to-managed-tenant-migration/">
-    <meta property="og:title" content="Static-to-managed tenant migration in management mode">
-    <meta property="og:description" content="Migrate legacy config tenants once, then make database state authoritative for managed runtime access.">
+    <meta property="og:title" content="Legacy token ownership migration in management mode">
+    <meta property="og:description" content="Claim one prior static-config token for a verified user account without changing the token or losing usage history.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/static-to-managed-tenant-migration/">
     <meta name="twitter:card" content="summary">
@@ -17,9 +17,9 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Static-to-managed tenant migration in management mode","description":"Migrate legacy config tenants once, then make database state authoritative for managed runtime access.","url":"https://llm-proxy.mprlab.com/resources/static-to-managed-tenant-migration/","datePublished":"2026-07-06","dateModified":"2026-07-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/static-to-managed-tenant-migration/","about":["LLM Proxy","Configuration","static to managed tenant migration"]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Static-to-managed tenant migration in management mode","item":"https://llm-proxy.mprlab.com/resources/static-to-managed-tenant-migration/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of static to managed tenant migration?","acceptedAnswer":{"@type":"Answer","text":"On first management-mode startup, LLM Proxy migrates legacy config tenants and nonblank configured provider keys into the database, records a migration marker, and then treats DB state as authoritative for runtime authentication and routing."}},{"@type":"Question","name":"Who should read this configuration resource?","acceptedAnswer":{"@type":"Answer","text":"Operators moving from static tenant YAML to self-service management mode."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is LLM model catalog configuration in config.yml, which covers LLM model catalog configuration."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Legacy token ownership migration in management mode","description":"Claim one prior static-config token for a verified user account without changing the token or losing usage history.","url":"https://llm-proxy.mprlab.com/resources/static-to-managed-tenant-migration/","datePublished":"2026-07-06","dateModified":"2026-07-09","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/static-to-managed-tenant-migration/","about":["LLM Proxy","Configuration","static to managed tenant migration"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Legacy token ownership migration in management mode","item":"https://llm-proxy.mprlab.com/resources/static-to-managed-tenant-migration/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of static to managed tenant migration?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy rejects the unowned token, then atomically rekeys its tenant, encrypted provider settings, and usage events when the configured owner email signs in through TAuth."}},{"@type":"Question","name":"Who should read this configuration resource?","acceptedAnswer":{"@type":"Answer","text":"Operators retiring the final unowned management-mode token after moving to self-service accounts."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is LLM model catalog configuration in config.yml, which covers LLM model catalog configuration."}}]}</script>
   </head>
   <body class="resource-page">
 
@@ -36,14 +36,14 @@
           <span>/</span>
           <a href="/resources/">Resources</a>
           <span>/</span>
-          <span>Static-to-managed tenant migration in management mode</span>
+          <span>Legacy token ownership migration in management mode</span>
         </nav>
         <article>
           <header class="resource-hero">
             <p class="eyebrow">Configuration</p>
-            <h1>Static-to-managed tenant migration in management mode</h1>
-            <p class="resource-deck">Migrate legacy config tenants once, then make database state authoritative for managed runtime access.</p>
-            <p class="resource-audience">Operators moving from static tenant YAML to self-service management mode.</p>
+            <h1>Legacy token ownership migration in management mode</h1>
+            <p class="resource-deck">Claim one prior static-config token for a verified user account without changing the token or losing usage history.</p>
+            <p class="resource-audience">Operators retiring the final unowned management-mode token after moving to self-service accounts.</p>
             <div class="resource-actions">
               <a class="resource-button" href="/">Open LLM Proxy</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
@@ -52,21 +52,21 @@
 
           <section>
             <h2>The problem</h2>
-            <p>Static tenants and managed tenants can conflict if old YAML keeps influencing runtime after users start managing secrets and provider keys in the database.</p>
+            <p>A token imported by an older release can still belong to a synthetic static-config user, so its real owner cannot see that token's usage after signing in.</p>
           </section>
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>On first management-mode startup, LLM Proxy migrates legacy config tenants and nonblank configured provider keys into the database, records a migration marker, and then treats DB state as authoritative for runtime authentication and routing.</p>
+            <p>LLM Proxy rejects the unowned token, then atomically rekeys its tenant, encrypted provider settings, and usage events when the configured owner email signs in through TAuth.</p>
           </section>
 
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Enable management mode with database settings.</li>
-<li>Start the service so the one-time migration can run.</li>
-<li>Confirm managed tenant state exists in the database.</li>
-<li>Remove migrated tenants and provider api_key values from config after confirmation.</li>
+              <li>Configure the exact legacy tenant id and deployment-owned target email.</li>
+<li>Deploy the current binary and drain older service instances before the owner claim.</li>
+<li>Sign in with the configured email and verify the same token plus historical usage.</li>
+<li>Remove the temporary migration config after production verification.</li>
             </ol>
           </section>
 
@@ -84,23 +84,23 @@
                 <tbody>
                   
                         <tr>
-                          <td>One-time migration marker</td>
-                          <td>After migration, config-file tenants and provider keys are obsolete for runtime auth/routing.</td>
-                          <td>The current contract is database-owned.</td>
+                          <td>Verified owner claim</td>
+                          <td>Only a live TAuth session whose normalized email matches the configured owner can claim the tenant.</td>
+                          <td>The migration does not trust stored email alone.</td>
                         </tr>
                       
 
                         <tr>
-                          <td>Provider key carryover</td>
-                          <td>Nonblank configured provider keys can seed managed provider records.</td>
-                          <td>Existing setup can move into management mode.</td>
+                          <td>Token and usage continuity</td>
+                          <td>The token digest, tenant defaults, creation time, and every usage event are preserved.</td>
+                          <td>Existing clients keep their token while the dashboard gains its history.</td>
                         </tr>
                       
 
                         <tr>
-                          <td>Forward-only cleanup</td>
-                          <td>Docs tell operators to remove migrated config state.</td>
-                          <td>No dual-read compatibility layer remains.</td>
+                          <td>Provider key re-encryption</td>
+                          <td>Provider ciphertext is decrypted under the synthetic user id and re-encrypted for the TAuth subject inside one GORM transaction.</td>
+                          <td>Ownership changes without copying invalid ciphertext.</td>
                         </tr>
                       
                 </tbody>
@@ -113,20 +113,20 @@
             <div class="resource-card-grid">
               
                     <section class="resource-card">
-                      <h3>Initial management rollout</h3>
-                      <p>An existing static tenant becomes a managed database tenant on first startup.</p>
+                      <h3>Unowned token before claim</h3>
+                      <p>The legacy token returns 403 instead of continuing as a global system credential.</p>
                     </section>
                   
 
                     <section class="resource-card">
-                      <h3>Provider key migration</h3>
-                      <p>A configured OpenAI key moves into encrypted managed storage.</p>
+                      <h3>First matching sign-in</h3>
+                      <p>The configured owner opens the management site and receives the existing tenant and usage history.</p>
                     </section>
                   
 
                     <section class="resource-card">
                       <h3>Post-migration cleanup</h3>
-                      <p>Operators delete stale tenant secrets from config.yml after verifying DB state.</p>
+                      <p>Operators remove the temporary owner mapping after verifying the unchanged token in production.</p>
                     </section>
                   
             </div>
@@ -135,9 +135,9 @@
           <section>
             <h2>Objections and limitations</h2>
             <ul class="resource-list">
-              <li>Migration is intended as a bounded move into the current schema.</li>
-<li>The management database must be available and configured.</li>
-<li>Server settings, provider URLs, model catalogs, and browser config remain config-owned.</li>
+              <li>The source must be the one configured static-config tenant and the destination TAuth subject must not already exist.</li>
+<li>A conflict returns 409 without merging or overwriting account state.</li>
+<li>Old service instances must be drained before the owner signs in.</li>
             </ul>
           </section>
 
@@ -147,13 +147,13 @@
               
                     <details>
                       <summary>What is the main job of static to managed tenant migration?</summary>
-                      <p>On first management-mode startup, LLM Proxy migrates legacy config tenants and nonblank configured provider keys into the database, records a migration marker, and then treats DB state as authoritative for runtime authentication and routing.</p>
+                      <p>LLM Proxy rejects the unowned token, then atomically rekeys its tenant, encrypted provider settings, and usage events when the configured owner email signs in through TAuth.</p>
                     </details>
                   
 
                     <details>
                       <summary>Who should read this configuration resource?</summary>
-                      <p>Operators moving from static tenant YAML to self-service management mode.</p>
+                      <p>Operators retiring the final unowned management-mode token after moving to self-service accounts.</p>
                     </details>
                   
 

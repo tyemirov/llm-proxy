@@ -40,6 +40,7 @@ func validateProviderModelCatalogs(catalogs ProviderModelCatalogs) error {
 		ProviderNameZhipu,
 		ProviderNameGemini,
 		ProviderNameAnthropic,
+		ProviderNameMeta,
 		ProviderNameGrok,
 	} {
 		catalog, found := catalogs[providerName]

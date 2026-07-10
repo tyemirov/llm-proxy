@@ -6,7 +6,8 @@ import { join } from "node:path";
 const PUBLIC_ORIGIN = "https://llm-proxy.mprlab.com";
 const RESOURCE_ROOT = "site/resources";
 const REPORT_PATH = "docs/marketing/seo-resource-cluster-report.md";
-const TODAY = "2026-07-06";
+const RESOURCE_PUBLISHED_DATE = "2026-07-06";
+const RESOURCE_MODIFIED_DATE = "2026-07-09";
 const PRODUCT_NAME = "LLM Proxy";
 const MIN_PAGE_COUNT = 40;
 const MAX_PAGE_COUNT = 50;
@@ -24,7 +25,7 @@ const pages = Object.freeze([
     category: "Provider routing",
     primaryKeyword: "multi-provider LLM proxy",
     title: "Multi-provider LLM proxy for internal tools",
-    description: "Route OpenAI, Claude, Gemini, Grok, and compatible providers through one tenant-secret HTTP boundary.",
+    description: "Route OpenAI, Meta Muse, Claude, Gemini, Grok, and compatible providers through one tenant-secret HTTP boundary.",
     audience: "Platform engineers consolidating several model providers behind one internal service.",
     problem: "Teams often add one SDK, key path, and retry surface per provider. That creates scattered credentials, inconsistent defaults, and provider behavior that leaks into every caller.",
     solution: "LLM Proxy keeps the caller contract centered on GET, JSON POST, canonical POST /v2, and /dictate while routing to configured providers server-side.",
@@ -35,13 +36,13 @@ const pages = Object.freeze([
       "Keep upstream API keys server-side and authenticate clients with the tenant secret.",
     ],
     features: [
-      ["Provider selector", "Callers can choose providers per request without switching client libraries.", "Use provider=gemini for one request and provider=anthropic for another."],
+      ["Provider selector", "Callers can choose providers per request without switching client libraries.", "Use provider=meta for Muse Spark 1.1 and provider=anthropic for Claude."],
       ["Configured model catalogs", "Unknown or unsupported model choices fail before upstream calls.", "Gemini and Claude max-token ceilings are validated at the edge."],
       ["One response contract", "Plain text, JSON, XML, and CSV formatting stay behind the proxy.", "Apps keep one integration while the backend owns provider differences."],
     ],
     examples: [
-      ["Model trial", "A team tests Claude for writing tasks and Gemini for long summaries by changing provider selectors, not app code."],
-      ["Internal gateway", "A platform team gives product apps a tenant secret while keeping OpenAI, Anthropic, Gemini, and xAI credentials in backend config or management storage."],
+      ["Model trial", "A team tests Meta Muse Spark 1.1, Claude, and Gemini by changing provider selectors, not app code."],
+      ["Internal gateway", "A platform team gives product apps a tenant secret while keeping OpenAI, Meta, Anthropic, Gemini, and xAI credentials in backend config or management storage."],
       ["Provider fallback planning", "Operators can keep non-default providers disabled until a key exists, then enable them without changing callers."],
     ],
     limitations: [
@@ -736,31 +737,31 @@ const pages = Object.freeze([
     slug: "static-to-managed-tenant-migration",
     category: "Configuration",
     primaryKeyword: "static to managed tenant migration",
-    title: "Static-to-managed tenant migration in management mode",
-    description: "Migrate legacy config tenants once, then make database state authoritative for managed runtime access.",
-    audience: "Operators moving from static tenant YAML to self-service management mode.",
-    problem: "Static tenants and managed tenants can conflict if old YAML keeps influencing runtime after users start managing secrets and provider keys in the database.",
-    solution: "On first management-mode startup, LLM Proxy migrates legacy config tenants and nonblank configured provider keys into the database, records a migration marker, and then treats DB state as authoritative for runtime authentication and routing.",
+    title: "Legacy token ownership migration in management mode",
+    description: "Claim one prior static-config token for a verified user account without changing the token or losing usage history.",
+    audience: "Operators retiring the final unowned management-mode token after moving to self-service accounts.",
+    problem: "A token imported by an older release can still belong to a synthetic static-config user, so its real owner cannot see that token's usage after signing in.",
+    solution: "LLM Proxy rejects the unowned token, then atomically rekeys its tenant, encrypted provider settings, and usage events when the configured owner email signs in through TAuth.",
     steps: [
-      "Enable management mode with database settings.",
-      "Start the service so the one-time migration can run.",
-      "Confirm managed tenant state exists in the database.",
-      "Remove migrated tenants and provider api_key values from config after confirmation.",
+      "Configure the exact legacy tenant id and deployment-owned target email.",
+      "Deploy the current binary and drain older service instances before the owner claim.",
+      "Sign in with the configured email and verify the same token plus historical usage.",
+      "Remove the temporary migration config after production verification.",
     ],
     features: [
-      ["One-time migration marker", "After migration, config-file tenants and provider keys are obsolete for runtime auth/routing.", "The current contract is database-owned."],
-      ["Provider key carryover", "Nonblank configured provider keys can seed managed provider records.", "Existing setup can move into management mode."],
-      ["Forward-only cleanup", "Docs tell operators to remove migrated config state.", "No dual-read compatibility layer remains."],
+      ["Verified owner claim", "Only a live TAuth session whose normalized email matches the configured owner can claim the tenant.", "The migration does not trust stored email alone."],
+      ["Token and usage continuity", "The token digest, tenant defaults, creation time, and every usage event are preserved.", "Existing clients keep their token while the dashboard gains its history."],
+      ["Provider key re-encryption", "Provider ciphertext is decrypted under the synthetic user id and re-encrypted for the TAuth subject inside one GORM transaction.", "Ownership changes without copying invalid ciphertext."],
     ],
     examples: [
-      ["Initial management rollout", "An existing static tenant becomes a managed database tenant on first startup."],
-      ["Provider key migration", "A configured OpenAI key moves into encrypted managed storage."],
-      ["Post-migration cleanup", "Operators delete stale tenant secrets from config.yml after verifying DB state."],
+      ["Unowned token before claim", "The legacy token returns 403 instead of continuing as a global system credential."],
+      ["First matching sign-in", "The configured owner opens the management site and receives the existing tenant and usage history."],
+      ["Post-migration cleanup", "Operators remove the temporary owner mapping after verifying the unchanged token in production."],
     ],
     limitations: [
-      "Migration is intended as a bounded move into the current schema.",
-      "The management database must be available and configured.",
-      "Server settings, provider URLs, model catalogs, and browser config remain config-owned.",
+      "The source must be the one configured static-config tenant and the destination TAuth subject must not already exist.",
+      "A conflict returns 409 without merging or overwriting account state.",
+      "Old service instances must be drained before the owner signs in.",
     ],
   }),
   page({
@@ -985,13 +986,13 @@ const pages = Object.freeze([
     category: "Provider routing",
     primaryKeyword: "OpenAI-compatible provider gateway",
     title: "OpenAI-compatible provider gateway",
-    description: "Route DeepSeek, Qwen, Kimi, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.",
+    description: "Route Meta Muse Spark, DeepSeek, Qwen, Kimi, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.",
     audience: "Teams adopting OpenAI-compatible chat providers without rewriting every caller.",
     problem: "OpenAI-compatible providers share a broad shape but still need different base URLs, keys, defaults, and availability rules.",
     solution: "LLM Proxy uses a shared compatible chat adapter for configured providers while keeping provider URLs, keys, and model catalogs in config.",
     steps: [
       "Configure provider base_url, api_key, and text catalog.",
-      "Use provider selectors such as deepseek, dashscope, moonshot, siliconflow, zhipu, or grok.",
+      "Use provider selectors such as meta, deepseek, dashscope, moonshot, siliconflow, zhipu, or grok.",
       "Send GET, compatibility POST, or canonical /v2 requests.",
       "Let omitted model use the selected provider's configured default.",
     ],
@@ -1001,12 +1002,12 @@ const pages = Object.freeze([
       ["Disabled-provider behavior", "Blank non-default provider keys keep startup working and return 503 when selected.", "Operators can stage provider support before credentials exist."],
     ],
     examples: [
-      ["DeepSeek route", "A caller sends provider=deepseek and model=deepseek-v4-flash."],
+      ["Meta Muse route", "A caller sends provider=meta and model=muse-spark-1.1 through Chat Completions."],
       ["Qwen alias", "A caller uses provider=qwen for DashScope routing."],
       ["xAI route", "A Grok text request uses the OpenAI-compatible chat adapter behind provider=grok."],
     ],
     limitations: [
-      "Compatibility does not mean every provider feature is exposed.",
+      "Meta support is text-only; the proxy does not expose Meta dictation, web search, tools, multimodal inputs, or a Responses fallback.",
       "Each provider still needs a configured key before serving tenant traffic.",
       "Provider base URLs should stay explicit in config.",
     ],
@@ -1300,20 +1301,22 @@ const pages = Object.freeze([
     problem: "Serving the management frontend from the API backend couples static hosting, runtime config, and proxy endpoints in one deployment surface.",
     solution: "LLM Proxy keeps the frontend in site/ for GitHub Pages and keeps the Go backend responsible for /config-ui.yaml, /api/management/*, /, /v2, and /dictate.",
     steps: [
-      "Publish site/ to the gh-pages branch with make publish-pages, make publish, or make deploy.",
+      "Run make release to render and package site/ as an immutable Pages release asset.",
+      "Run make publish to upload that prepared asset without changing the live site.",
+      "Run make deploy to activate the published asset on gh-pages.",
       "Configure GitHub Pages branch publishing and the custom domain.",
       "Point llm-proxy-api at the backend gateway route.",
       "Keep browser runtime config served only by the backend API origin.",
     ],
     features: [
       ["Pages-owned static UI", "llm-proxy.mprlab.com belongs to GitHub Pages.", "The backend does not serve management HTML."],
-      ["Makefile publisher", "Pages deployment is owned by Makefile scripts, not GitHub Actions.", "Publishing can run from the current source revision."],
+      ["Makefile lifecycle", "Release prepares, publish uploads, and deploy activates Pages.", "GitHub Actions does not own production deployment."],
       ["Artifact checks", "The rendered Pages artifact is checked for forbidden static config files.", "The static shell stays config-free."],
     ],
     examples: [
-      ["Pages refresh", "An operator runs make publish-pages to update the static UI only."],
-      ["Full publish", "make publish publishes the release image and refreshes Pages."],
-      ["Backend deploy", "make deploy refreshes Pages and deploys the backend through the gateway target."],
+      ["Pages preparation", "make release renders the validated Pages archive locally."],
+      ["Artifact publication", "make publish uploads the exact prepared image and Pages artifacts."],
+      ["Backend deploy", "make deploy rolls out the backend and then activates the published Pages archive."],
     ],
     limitations: [
       "Production deploy still requires operator-controlled gateway work.",
@@ -1329,16 +1332,17 @@ const pages = Object.freeze([
     description: "Run paid-provider smoke checks separately from CI when real upstream behavior needs verification.",
     audience: "Operators validating provider credentials and hosted provider routes after config or deployment changes.",
     problem: "CI should be deterministic and avoid paid provider calls, but some changes still need live confirmation against real upstream providers.",
-    solution: "LLM Proxy keeps live provider smoke tests outside make ci and exposes Makefile targets that discover provider keys from a selected environment file.",
+    solution: "LLM Proxy keeps live provider smoke tests outside make ci, parses provider keys from a dotenv file without executing shell code, and forces the temporary proxy into management-disabled mode.",
     steps: [
       "Put provider API keys in an ignored env file.",
       "Run make test-live-providers LIVE_ENV_FILE=configs/.env.",
       "Limit the provider set with LLM_PROXY_LIVE_PROVIDERS when needed.",
+      "Use --write-config to inspect the isolated temporary contract without making a provider call.",
       "Use model overrides only when debugging a specific provider/model pair.",
     ],
     features: [
       ["Separate from CI", "Live provider smoke tests are not part of make ci.", "Routine validation stays deterministic."],
-      ["Provider discovery", "The dynamic target runs providers whose keys are available, unless a provider list is required.", "Missing optional keys do not block unrelated smoke checks."],
+      ["Provider discovery and isolation", "The dynamic target runs providers whose keys are available through a management-disabled temporary config.", "Missing optional keys and hosted management state do not affect unrelated smoke checks."],
       ["Default model path", "By default, smoke requests omit model so provider configured defaults are tested.", "The test exercises the default-selection contract."],
     ],
     examples: [
@@ -1478,8 +1482,8 @@ function renderResourcePage(resourcePage) {
     headline: resourcePage.title,
     description: resourcePage.description,
     url: resourcePage.canonical,
-    datePublished: TODAY,
-    dateModified: TODAY,
+    datePublished: RESOURCE_PUBLISHED_DATE,
+    dateModified: RESOURCE_MODIFIED_DATE,
     mainEntityOfPage: resourcePage.canonical,
     about: [PRODUCT_NAME, resourcePage.category, resourcePage.primaryKeyword],
   };
@@ -1848,9 +1852,9 @@ function faqFor(resourcePage, relatedPage) {
  */
 function renderSitemap() {
   const urls = [
-    { loc: `${PUBLIC_ORIGIN}/`, lastmod: TODAY },
-    { loc: `${PUBLIC_ORIGIN}/resources/`, lastmod: TODAY },
-    ...pages.map((resourcePage) => ({ loc: resourcePage.canonical, lastmod: TODAY })),
+    { loc: `${PUBLIC_ORIGIN}/`, lastmod: RESOURCE_MODIFIED_DATE },
+    { loc: `${PUBLIC_ORIGIN}/resources/`, lastmod: RESOURCE_MODIFIED_DATE },
+    ...pages.map((resourcePage) => ({ loc: resourcePage.canonical, lastmod: RESOURCE_MODIFIED_DATE })),
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -1893,7 +1897,7 @@ function renderReport() {
 
   return `# LLM Proxy SEO Resource Cluster Report
 
-Generated: ${TODAY}
+Generated: ${RESOURCE_MODIFIED_DATE}
 
 ## Repo Analysis Report
 
@@ -1921,7 +1925,7 @@ Generated: ${TODAY}
 
 | Capability | Description | Evidence source | Confidence | Current / roadmap / unclear | Safe for page copy? |
 |---|---|---|---|---|---|
-| Multi-provider text routing | Routes OpenAI Responses, OpenAI-compatible providers, Anthropic Messages, Gemini generateContent, and Grok/xAI text. | README provider matrix, provider routing notes | High | Current | Yes |
+| Multi-provider text routing | Routes OpenAI Responses, Meta Muse Spark and other OpenAI-compatible providers, Anthropic Messages, Gemini generateContent, and Grok/xAI text. | README provider matrix, provider routing notes | High | Current | Yes |
 | Dictation endpoint | Routes multipart audio through /dictate for supported dictation providers. | README dictation section, dictation plan | High | Current | Yes |
 | Tenant-secret auth | Public proxy endpoints require key=<tenant secret>. | README REST and security sections | High | Current | Yes |
 | Server-side provider credentials | Public requests must not send upstream provider keys; credentials stay server-side. | README security, provider routing notes | High | Current | Yes |
@@ -1938,6 +1942,7 @@ Generated: ${TODAY}
 |---|---|---|---|
 | No zero-knowledge guarantee | Backend decrypts provider keys to call upstream providers. | README management UI | Say encrypted at rest for storage/backups/dumps, not user-only decryption. |
 | Not every upstream feature is exposed | Provider adapters define current capabilities. | README provider and dictation matrices | Do not claim universal provider feature parity. |
+| Meta support is text-only | Muse Spark 1.1 uses the shared Chat Completions adapter. | README provider-specific details | Do not imply Meta dictation, web search, tools, multimodal inputs, or Responses fallback. |
 | Web search limited to configured OpenAI models | Other providers are marked unsupported. | README provider-specific details | Do not imply search across all providers. |
 | Live provider tests can spend money | Live smoke tests are not part of CI. | README local automation | Do not present live tests as routine CI. |
 | Management requires TAuth/database config | Self-service UI needs several hosted values. | README management UI and split-origin setup | Do not imply zero-config hosted management. |
@@ -1945,7 +1950,7 @@ Generated: ${TODAY}
 ### Safe Claims
 
 - LLM Proxy exposes GET /, POST /, POST /v2, and POST /dictate behind tenant-secret authentication.
-- It routes text to OpenAI, OpenAI-compatible providers, Anthropic, Gemini, and Grok/xAI as documented in the provider matrix.
+- It routes text to OpenAI, Meta Muse Spark 1.1 and other OpenAI-compatible providers, Anthropic, Gemini, and Grok/xAI as documented in the provider matrix.
 - It routes dictation through /dictate for OpenAI, SiliconFlow, Zhipu, and Grok/xAI as documented.
 - It keeps upstream provider API keys server-side and rejects provider-key-like fields on public proxy requests.
 - It can run a TAuth-protected self-service management UI where users save provider keys, generate tenant secrets, set defaults, and inspect usage.

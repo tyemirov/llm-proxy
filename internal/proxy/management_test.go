@@ -2,6 +2,12 @@ package proxy_test
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -29,6 +35,7 @@ const (
 	testManagementProviderKeyEncryptionKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 	testManagementOpenAIKey                = "sk-user-openai"
 	testManagementDeepSeekKey              = "sk-user-deepseek"
+	testManagementMetaKey                  = "sk-user-meta"
 )
 
 func managementProviderKeyRequestBody(t *testing.T, apiKey string, textModel string, systemPrompt string) string {
@@ -357,11 +364,13 @@ func TestManagementDatabasePersistenceAndOpenFailures(t *testing.T) {
 	}
 }
 
-func TestManagementMigratesLegacyConfigOnceThenUsesDatabase(t *testing.T) {
+func TestManagementClaimsLegacyTokenForConfiguredAccount(t *testing.T) {
 	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
 	legacySecret := "legacy-config-secret"
 	legacyDeepSeekKey := "sk-legacy-deepseek"
-	staleDeepSeekKey := "sk-stale-deepseek"
+	legacyTenantID := "legacy"
+	legacyOwnerUserID := "tauth-legacy-owner"
+	legacyOwnerEmail := "legacy-owner@example.com"
 	var capturedAuthorizations []string
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		capturedAuthorizations = append(capturedAuthorizations, request.Header.Get("Authorization"))
@@ -370,42 +379,91 @@ func TestManagementMigratesLegacyConfigOnceThenUsesDatabase(t *testing.T) {
 	}))
 	defer upstreamServer.Close()
 
-	legacyConfiguration := proxy.Configuration{
-		Tenants: proxy.SingleTenantConfigurationsWithDefaults("legacy", legacySecret, proxy.TenantDefaults{
-			Provider: proxy.ProviderNameDeepSeek,
-			Model:    proxy.ModelNameDeepSeekV4Flash,
-		}),
-		DeepSeekKey:     legacyDeepSeekKey,
-		DeepSeekBaseURL: upstreamServer.URL,
-	}
-	router := newManagementRouterWithDatabasePath(t, legacyConfiguration, databasePath)
-	legacyResponse := requestLegacyConfigSecret(t, router, legacySecret)
-	if legacyResponse.Code != http.StatusOK || strings.TrimSpace(legacyResponse.Body.String()) != "legacy migrated ok" {
-		t.Fatalf("legacy status=%d body=%s", legacyResponse.Code, legacyResponse.Body.String())
+	newManagementRouterWithDatabasePath(t, proxy.Configuration{}, databasePath)
+	seedLegacyManagedTenant(t, databasePath, legacyTenantID, legacySecret, legacyDeepSeekKey)
+	unconfigured := managementConfigurationWithDatabasePath(proxy.Configuration{DeepSeekBaseURL: upstreamServer.URL}, databasePath)
+	if _, unconfiguredError := buildRouterWithCatalogs(t, unconfigured, zap.NewNop().Sugar()); unconfiguredError == nil || !strings.Contains(unconfiguredError.Error(), "legacy_owner_config_missing") {
+		t.Fatalf("unconfigured migration error=%v", unconfiguredError)
 	}
 
-	reloadedConfiguration := proxy.Configuration{DeepSeekBaseURL: upstreamServer.URL}
-	reloadedRouter := newManagementRouterWithDatabasePath(t, reloadedConfiguration, databasePath)
+	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{DeepSeekBaseURL: upstreamServer.URL}, databasePath)
+	configuration.Management.LegacyTokenMigration = proxy.LegacyTokenMigrationConfiguration{
+		TenantID:   legacyTenantID,
+		OwnerEmail: legacyOwnerEmail,
+	}
+	router, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	preClaimResponse := requestLegacyConfigSecret(t, router, legacySecret)
+	if preClaimResponse.Code != http.StatusForbidden {
+		t.Fatalf("pre-claim status=%d body=%s", preClaimResponse.Code, preClaimResponse.Body.String())
+	}
+
+	otherUserCookie := managementSessionCookieWithEmail(t, "other-user", "other@example.com")
+	otherUsage := requestManagementUsage(t, router, otherUserCookie)
+	if otherUsage.Totals.Requests != 0 {
+		t.Fatalf("other user usage=%+v", otherUsage.Totals)
+	}
+	secondPreClaimResponse := requestLegacyConfigSecret(t, router, legacySecret)
+	if secondPreClaimResponse.Code != http.StatusForbidden {
+		t.Fatalf("non-owner claimed legacy token status=%d", secondPreClaimResponse.Code)
+	}
+
+	ownerCookie := managementSessionCookieWithEmail(t, legacyOwnerUserID, legacyOwnerEmail)
+	profileRequest := httptest.NewRequest(http.MethodGet, "/api/management/profile", nil)
+	profileRequest.AddCookie(ownerCookie)
+	profileResponse := httptest.NewRecorder()
+	router.ServeHTTP(profileResponse, profileRequest)
+	if profileResponse.Code != http.StatusOK {
+		t.Fatalf("owner profile status=%d body=%s", profileResponse.Code, profileResponse.Body.String())
+	}
+	var profilePayload struct {
+		Tenant struct {
+			ID        string `json:"id"`
+			HasSecret bool   `json:"has_secret"`
+		} `json:"tenant"`
+	}
+	if decodeError := json.Unmarshal(profileResponse.Body.Bytes(), &profilePayload); decodeError != nil {
+		t.Fatalf("decode owner profile: %v", decodeError)
+	}
+	if profilePayload.Tenant.ID != legacyTenantID || !profilePayload.Tenant.HasSecret {
+		t.Fatalf("owner profile tenant=%+v", profilePayload.Tenant)
+	}
+
+	historicalUsage := requestManagementUsage(t, router, ownerCookie)
+	if historicalUsage.Totals.Requests != 1 || historicalUsage.Totals.TotalTokens != 7 {
+		t.Fatalf("historical usage=%+v", historicalUsage.Totals)
+	}
+
+	legacyResponse := requestLegacyConfigSecret(t, router, legacySecret)
+	if legacyResponse.Code != http.StatusOK || strings.TrimSpace(legacyResponse.Body.String()) != "legacy migrated ok" {
+		t.Fatalf("claimed status=%d body=%s", legacyResponse.Code, legacyResponse.Body.String())
+	}
+	updatedUsage := requestManagementUsage(t, router, ownerCookie)
+	if updatedUsage.Totals.Requests != 2 || updatedUsage.Totals.TotalTokens != 7 {
+		t.Fatalf("updated usage=%+v", updatedUsage.Totals)
+	}
+
+	reloadedRouter, reloadError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if reloadError != nil {
+		t.Fatalf("reload router: %v", reloadError)
+	}
+	reloadedUsage := requestManagementUsage(t, reloadedRouter, ownerCookie)
+	if reloadedUsage.Totals.Requests != 2 {
+		t.Fatalf("reloaded usage=%+v", reloadedUsage.Totals)
+	}
 	reloadedResponse := requestLegacyConfigSecret(t, reloadedRouter, legacySecret)
 	if reloadedResponse.Code != http.StatusOK || strings.TrimSpace(reloadedResponse.Body.String()) != "legacy migrated ok" {
 		t.Fatalf("reloaded status=%d body=%s", reloadedResponse.Code, reloadedResponse.Body.String())
 	}
 
-	staleConfiguration := proxy.Configuration{
-		Tenants: proxy.SingleTenantConfigurationsWithDefaults("legacy", legacySecret, proxy.TenantDefaults{
-			Provider: proxy.ProviderNameDeepSeek,
-			Model:    proxy.ModelNameDeepSeekV4Flash,
-		}),
-		DeepSeekKey:     staleDeepSeekKey,
-		DeepSeekBaseURL: upstreamServer.URL,
+	legacyUserCount := countManagedTenantFixture(t, databasePath, "static-config:"+legacyTenantID)
+	if legacyUserCount != 0 {
+		t.Fatalf("legacy user count=%d", legacyUserCount)
 	}
-	staleRouter := newManagementRouterWithDatabasePath(t, staleConfiguration, databasePath)
-	staleResponse := requestLegacyConfigSecret(t, staleRouter, legacySecret)
-	if staleResponse.Code != http.StatusOK || strings.TrimSpace(staleResponse.Body.String()) != "legacy migrated ok" {
-		t.Fatalf("stale status=%d body=%s", staleResponse.Code, staleResponse.Body.String())
-	}
-
-	if len(capturedAuthorizations) != 3 {
+	if len(capturedAuthorizations) != 2 {
 		t.Fatalf("captured authorizations=%v", capturedAuthorizations)
 	}
 	for authorizationIndex, authorization := range capturedAuthorizations {
@@ -415,76 +473,64 @@ func TestManagementMigratesLegacyConfigOnceThenUsesDatabase(t *testing.T) {
 	}
 }
 
-func TestManagementAcceptsLegacyTenantDefaultsWithoutStaticCredentials(t *testing.T) {
-	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{
-		Tenants: proxy.SingleTenantConfigurationsWithDefaults("legacy", "legacy-secret", proxy.TenantDefaults{
-			Provider:          proxy.ProviderNameDeepSeek,
-			Model:             proxy.ModelNameDeepSeekV4Flash,
-			DictationProvider: proxy.ProviderNameOpenAI,
-			DictationModel:    proxy.DefaultDictationModel,
-		}),
-	}, filepath.Join(t.TempDir(), "managed-tenants.db"))
-	_, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+func TestManagementLegacyTokenClaimRejectsExistingDestination(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
+	legacyTenantID := "legacy-conflict"
+	ownerUserID := "existing-owner"
+	ownerEmail := "existing-owner@example.com"
+	ownerCookie := managementSessionCookieWithEmail(t, ownerUserID, ownerEmail)
+
+	initialRouter := newManagementRouterWithDatabasePath(t, proxy.Configuration{}, databasePath)
+	profileRequest := httptest.NewRequest(http.MethodGet, "/api/management/profile", nil)
+	profileRequest.AddCookie(ownerCookie)
+	profileResponse := httptest.NewRecorder()
+	initialRouter.ServeHTTP(profileResponse, profileRequest)
+	if profileResponse.Code != http.StatusOK {
+		t.Fatalf("initial profile status=%d body=%s", profileResponse.Code, profileResponse.Body.String())
+	}
+	seedLegacyManagedTenant(t, databasePath, legacyTenantID, "legacy-conflict-secret", "sk-conflict")
+
+	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
+	configuration.Management.LegacyTokenMigration = proxy.LegacyTokenMigrationConfiguration{TenantID: legacyTenantID, OwnerEmail: ownerEmail}
+	router, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
+	conflictRequest := httptest.NewRequest(http.MethodGet, "/api/management/profile", nil)
+	conflictRequest.AddCookie(ownerCookie)
+	conflictResponse := httptest.NewRecorder()
+	router.ServeHTTP(conflictResponse, conflictRequest)
+	if conflictResponse.Code != http.StatusConflict || !strings.Contains(conflictResponse.Body.String(), "managed_legacy_token_migration_conflict") {
+		t.Fatalf("conflict status=%d body=%s", conflictResponse.Code, conflictResponse.Body.String())
+	}
+	if countManagedTenantFixture(t, databasePath, "static-config:"+legacyTenantID) != 1 || countManagedTenantFixture(t, databasePath, ownerUserID) != 1 {
+		t.Fatalf("conflict changed source or destination")
+	}
 }
 
-func TestManagementRejectsInvalidLegacyTenantDefaults(t *testing.T) {
+func TestManagementRejectsStaticCredentialModel(t *testing.T) {
 	testCases := []struct {
 		name          string
-		defaults      proxy.TenantDefaults
-		expectedError string
+		configuration proxy.Configuration
+		expectedField string
 	}{
 		{
-			name: "unknown text provider",
-			defaults: proxy.TenantDefaults{
-				Provider:          "missing-provider",
-				Model:             proxy.DefaultModel,
-				DictationProvider: proxy.ProviderNameOpenAI,
-				DictationModel:    proxy.DefaultDictationModel,
-			},
-			expectedError: "unknown provider: missing-provider",
+			name:          "static tenant",
+			configuration: proxy.Configuration{Tenants: proxy.SingleTenantConfigurations("legacy", "legacy-secret")},
+			expectedField: "field=tenants",
 		},
 		{
-			name: "unknown text model",
-			defaults: proxy.TenantDefaults{
-				Provider:          proxy.ProviderNameDeepSeek,
-				Model:             "deepseek-typo",
-				DictationProvider: proxy.ProviderNameOpenAI,
-				DictationModel:    proxy.DefaultDictationModel,
-			},
-			expectedError: "unknown model: deepseek-typo",
-		},
-		{
-			name: "unsupported dictation provider",
-			defaults: proxy.TenantDefaults{
-				Provider:          proxy.ProviderNameDeepSeek,
-				Model:             proxy.ModelNameDeepSeekV4Flash,
-				DictationProvider: proxy.ProviderNameGemini,
-				DictationModel:    proxy.DefaultDictationModel,
-			},
-			expectedError: "unsupported provider endpoint: provider=gemini endpoint=dictation",
-		},
-		{
-			name: "unknown dictation model",
-			defaults: proxy.TenantDefaults{
-				Provider:          proxy.ProviderNameDeepSeek,
-				Model:             proxy.ModelNameDeepSeekV4Flash,
-				DictationProvider: proxy.ProviderNameOpenAI,
-				DictationModel:    "dictation-typo",
-			},
-			expectedError: "unknown model: dictation-typo",
+			name:          "static provider key",
+			configuration: proxy.Configuration{OpenAIKey: "sk-global"},
+			expectedField: "field=providers.api_key",
 		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
-			configuration := managementConfigurationWithDatabasePath(proxy.Configuration{
-				Tenants: proxy.SingleTenantConfigurationsWithDefaults("legacy", "legacy-secret", testCase.defaults),
-			}, filepath.Join(subTest.TempDir(), "managed-tenants.db"))
+			configuration := managementConfigurationWithDatabasePath(testCase.configuration, filepath.Join(subTest.TempDir(), "managed-tenants.db"))
 			_, buildError := buildRouterWithCatalogs(subTest, configuration, zap.NewNop().Sugar())
-			if buildError == nil || !strings.Contains(buildError.Error(), testCase.expectedError) {
-				subTest.Fatalf("error=%v want contains %q", buildError, testCase.expectedError)
+			if buildError == nil || !strings.Contains(buildError.Error(), testCase.expectedField) {
+				subTest.Fatalf("error=%v want contains %q", buildError, testCase.expectedField)
 			}
 		})
 	}
@@ -551,6 +597,38 @@ func TestManagementConfigurationValidationRequiresBackendAuthFields(t *testing.T
 	_, buildError = buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
 	if buildError == nil || !strings.Contains(buildError.Error(), "management.provider_key_encryption_key") {
 		t.Fatalf("BuildRouter error=%v want invalid management.provider_key_encryption_key", buildError)
+	}
+
+	configuration = managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "store.db"))
+	configuration.Management.LegacyTokenMigration = proxy.LegacyTokenMigrationConfiguration{TenantID: "legacy"}
+	_, buildError = buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if buildError == nil || !strings.Contains(buildError.Error(), "management.legacy_token_migration.owner_email") {
+		t.Fatalf("BuildRouter error=%v want missing legacy migration owner email", buildError)
+	}
+
+	configuration = managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "store.db"))
+	configuration.Management.LegacyTokenMigration = proxy.LegacyTokenMigrationConfiguration{OwnerEmail: "owner@example.com"}
+	_, buildError = buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if buildError == nil || !strings.Contains(buildError.Error(), "management.legacy_token_migration.tenant_id") {
+		t.Fatalf("BuildRouter error=%v want missing legacy migration tenant id", buildError)
+	}
+
+	configuration = managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "store.db"))
+	configuration.Management.LegacyTokenMigration = proxy.LegacyTokenMigrationConfiguration{TenantID: "legacy", OwnerEmail: "not an email"}
+	_, buildError = buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if buildError == nil || !strings.Contains(buildError.Error(), "management.legacy_token_migration.owner_email") {
+		t.Fatalf("BuildRouter error=%v want invalid legacy migration owner email", buildError)
+	}
+
+	disabledManagementConfiguration := proxy.Configuration{
+		Tenants: proxy.SingleTenantConfigurations("static", "secret"),
+		Management: proxy.ManagementConfiguration{
+			LegacyTokenMigration: proxy.LegacyTokenMigrationConfiguration{TenantID: "legacy", OwnerEmail: "owner@example.com"},
+		},
+	}
+	_, buildError = newConfigurationWithCatalogs(t, disabledManagementConfiguration)
+	if buildError == nil || !strings.Contains(buildError.Error(), "management.legacy_token_migration requires_management") {
+		t.Fatalf("NewConfiguration error=%v want disabled legacy migration rejection", buildError)
 	}
 }
 
@@ -870,7 +948,7 @@ func TestManagementAdminUsersDashboard(t *testing.T) {
 	}
 }
 
-func TestManagementGeneratedSecretRoutesWithTenantProviderKey(t *testing.T) {
+func TestManagementMetaProviderRoutesWithEncryptedTenantKey(t *testing.T) {
 	var capturedAuthorization string
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/chat/completions" {
@@ -885,36 +963,41 @@ func TestManagementGeneratedSecretRoutesWithTenantProviderKey(t *testing.T) {
 		if unmarshalError := json.Unmarshal(bodyBytes, &upstreamPayload); unmarshalError != nil {
 			t.Fatalf("unmarshal upstream body: %v", unmarshalError)
 		}
-		if upstreamPayload["model"] != proxy.ModelNameDeepSeekV4Flash {
-			t.Fatalf("model=%v want=%s", upstreamPayload["model"], proxy.ModelNameDeepSeekV4Flash)
+		if upstreamPayload["model"] != proxy.ModelNameMuseSpark11 {
+			t.Fatalf("model=%v want=%s", upstreamPayload["model"], proxy.ModelNameMuseSpark11)
 		}
 		messages, messagesOK := upstreamPayload["messages"].([]any)
 		if !messagesOK || len(messages) != 2 {
 			t.Fatalf("messages=%+v", upstreamPayload["messages"])
 		}
 		systemMessage, systemMessageOK := messages[0].(map[string]any)
-		if !systemMessageOK || systemMessage["role"] != "system" || systemMessage["content"] != "deepseek managed system" {
+		if !systemMessageOK || systemMessage["role"] != "system" || systemMessage["content"] != "meta managed system" {
 			t.Fatalf("system message=%+v", messages[0])
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"managed deepseek ok"}}]}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"managed meta ok"}}]}`))
 	}))
 	defer upstreamServer.Close()
 
 	router := newManagementRouter(t, proxy.Configuration{
-		DeepSeekBaseURL: upstreamServer.URL,
+		MetaBaseURL: upstreamServer.URL,
 	})
 	userOneCookie := managementSessionCookie(t, "tauth-user-one")
 	userTwoCookie := managementSessionCookie(t, "tauth-user-two")
 
-	saveKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/deepseek", managementProviderKeyRequestBody(t, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, "deepseek managed system"), userOneCookie)
+	saveKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/meta", managementProviderKeyRequestBody(t, testManagementMetaKey, proxy.ModelNameMuseSpark11, "meta managed system"), userOneCookie)
 	saveKeyResponse := httptest.NewRecorder()
 	router.ServeHTTP(saveKeyResponse, saveKeyRequest)
 	if saveKeyResponse.Code != http.StatusOK {
 		t.Fatalf("save key status=%d body=%s", saveKeyResponse.Code, saveKeyResponse.Body.String())
 	}
-	if strings.Contains(saveKeyResponse.Body.String(), testManagementDeepSeekKey) || !strings.Contains(saveKeyResponse.Body.String(), "sk-...seek") {
+	if strings.Contains(saveKeyResponse.Body.String(), testManagementMetaKey) || !strings.Contains(saveKeyResponse.Body.String(), "sk-...meta") {
 		t.Fatalf("provider key response leaked or failed to mask key: %s", saveKeyResponse.Body.String())
+	}
+	for _, expectedFragment := range []string{`"id":"meta"`, `"label":"Meta"`, `"text_model":"muse-spark-1.1"`, `"text_default_model":"muse-spark-1.1"`, `"supports_dictation":false`} {
+		if !strings.Contains(saveKeyResponse.Body.String(), expectedFragment) {
+			t.Fatalf("provider key response missing %q: %s", expectedFragment, saveKeyResponse.Body.String())
+		}
 	}
 
 	saveOpenAIKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/openai", managementProviderKeyRequestBody(t, testManagementOpenAIKey, proxy.ModelNameGPT41, ""), userOneCookie)
@@ -924,7 +1007,7 @@ func TestManagementGeneratedSecretRoutesWithTenantProviderKey(t *testing.T) {
 		t.Fatalf("save openai key status=%d body=%s", saveOpenAIKeyResponse.Code, saveOpenAIKeyResponse.Body.String())
 	}
 
-	defaultsBody := `{"provider":"deepseek","model":"` + proxy.ModelNameDeepSeekV4Flash + `","dictation_provider":"openai","dictation_model":"` + proxy.DefaultDictationModel + `","system_prompt":""}`
+	defaultsBody := `{"provider":"meta","model":"` + proxy.ModelNameMuseSpark11 + `","dictation_provider":"openai","dictation_model":"` + proxy.DefaultDictationModel + `","system_prompt":""}`
 	defaultsRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/defaults", defaultsBody, userOneCookie)
 	defaultsResponse := httptest.NewRecorder()
 	router.ServeHTTP(defaultsResponse, defaultsRequest)
@@ -939,7 +1022,7 @@ func TestManagementGeneratedSecretRoutesWithTenantProviderKey(t *testing.T) {
 	if userTwoProfileResponse.Code != http.StatusOK {
 		t.Fatalf("user2 profile status=%d body=%s", userTwoProfileResponse.Code, userTwoProfileResponse.Body.String())
 	}
-	if strings.Contains(userTwoProfileResponse.Body.String(), "sk-...seek") {
+	if strings.Contains(userTwoProfileResponse.Body.String(), "sk-...meta") {
 		t.Fatalf("user2 saw user1 provider key: %s", userTwoProfileResponse.Body.String())
 	}
 
@@ -962,15 +1045,15 @@ func TestManagementGeneratedSecretRoutesWithTenantProviderKey(t *testing.T) {
 	proxyRequestValues := url.Values{}
 	proxyRequestValues.Set("key", secretResponse.Secret)
 	proxyRequestValues.Set("prompt", "hello")
-	proxyRequestValues.Set("provider", proxy.ProviderNameDeepSeek)
+	proxyRequestValues.Set("provider", proxy.ProviderNameMeta)
 	proxyRequest := httptest.NewRequest(http.MethodGet, "/?"+proxyRequestValues.Encode(), nil)
 	proxyResponse := httptest.NewRecorder()
 	router.ServeHTTP(proxyResponse, proxyRequest)
-	if proxyResponse.Code != http.StatusOK || strings.TrimSpace(proxyResponse.Body.String()) != "managed deepseek ok" {
+	if proxyResponse.Code != http.StatusOK || strings.TrimSpace(proxyResponse.Body.String()) != "managed meta ok" {
 		t.Fatalf("proxy status=%d body=%q", proxyResponse.Code, proxyResponse.Body.String())
 	}
-	if capturedAuthorization != "Bearer "+testManagementDeepSeekKey {
-		t.Fatalf("authorization=%q want=%q", capturedAuthorization, "Bearer "+testManagementDeepSeekKey)
+	if capturedAuthorization != "Bearer "+testManagementMetaKey {
+		t.Fatalf("authorization=%q want=%q", capturedAuthorization, "Bearer "+testManagementMetaKey)
 	}
 
 	revokeRequest := authenticatedJSONRequest(http.MethodDelete, "/api/management/secrets", `{}`, userOneCookie)
@@ -1292,6 +1375,153 @@ func requestManagementUsage(t *testing.T, router http.Handler, sessionCookie *ht
 		t.Fatalf("decode usage: %v", decodeError)
 	}
 	return usage
+}
+
+type managedTenantFixture struct {
+	UserID                   string `gorm:"primaryKey"`
+	UserEmail                string
+	UserDisplayName          string
+	UserAvatarURL            string
+	TenantID                 string `gorm:"uniqueIndex"`
+	SecretDigest             string `gorm:"index"`
+	DefaultProvider          string
+	DefaultModel             string
+	DefaultDictationProvider string
+	DefaultDictationModel    string
+	DefaultSystemPrompt      string
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
+}
+
+func (managedTenantFixture) TableName() string {
+	return "managed_tenant_records"
+}
+
+type managedProviderKeyFixture struct {
+	UserID          string `gorm:"primaryKey"`
+	ProviderID      string `gorm:"primaryKey"`
+	APIKey          string `gorm:"column:api_key"`
+	EncryptedAPIKey string
+	TextModel       string
+	SystemPrompt    string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+func (managedProviderKeyFixture) TableName() string {
+	return "managed_provider_api_key_records"
+}
+
+type managedUsageFixture struct {
+	ID                  uint `gorm:"primaryKey"`
+	UserID              string
+	TenantID            string
+	Endpoint            string
+	ProviderID          string
+	ModelID             string
+	StatusCode          int
+	Success             bool
+	LatencyMilliseconds int64
+	RequestTokens       int
+	ResponseTokens      int
+	TotalTokens         int
+	CreatedAt           time.Time
+}
+
+func (managedUsageFixture) TableName() string {
+	return "managed_usage_event_records"
+}
+
+func seedLegacyManagedTenant(t *testing.T, databasePath string, tenantID string, rawSecret string, providerAPIKey string) {
+	t.Helper()
+	database, openError := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+	if openError != nil {
+		t.Fatalf("open legacy fixture database: %v", openError)
+	}
+	legacyUserID := "static-config:" + tenantID
+	timestamp := time.Now().UTC().Add(-time.Hour)
+	secretDigest := sha256.Sum256([]byte(rawSecret))
+	tenantRecord := managedTenantFixture{
+		UserID:                   legacyUserID,
+		TenantID:                 tenantID,
+		SecretDigest:             hex.EncodeToString(secretDigest[:]),
+		DefaultProvider:          proxy.ProviderNameDeepSeek,
+		DefaultModel:             proxy.ModelNameDeepSeekV4Flash,
+		DefaultDictationProvider: proxy.ProviderNameOpenAI,
+		DefaultDictationModel:    proxy.DefaultDictationModel,
+		CreatedAt:                timestamp,
+		UpdatedAt:                timestamp,
+	}
+	if createError := database.Create(&tenantRecord).Error; createError != nil {
+		t.Fatalf("create legacy tenant fixture: %v", createError)
+	}
+	providerRecord := managedProviderKeyFixture{
+		UserID:          legacyUserID,
+		ProviderID:      proxy.ProviderNameDeepSeek,
+		EncryptedAPIKey: encryptLegacyProviderKey(t, legacyUserID, proxy.ProviderNameDeepSeek, providerAPIKey),
+		TextModel:       proxy.ModelNameDeepSeekV4Flash,
+		CreatedAt:       timestamp,
+		UpdatedAt:       timestamp,
+	}
+	if createError := database.Create(&providerRecord).Error; createError != nil {
+		t.Fatalf("create legacy provider fixture: %v", createError)
+	}
+	usageRecord := managedUsageFixture{
+		UserID:              legacyUserID,
+		TenantID:            tenantID,
+		Endpoint:            "text",
+		ProviderID:          proxy.ProviderNameDeepSeek,
+		ModelID:             proxy.ModelNameDeepSeekV4Flash,
+		StatusCode:          http.StatusOK,
+		Success:             true,
+		LatencyMilliseconds: 25,
+		RequestTokens:       3,
+		ResponseTokens:      4,
+		TotalTokens:         7,
+		CreatedAt:           timestamp,
+	}
+	if createError := database.Create(&usageRecord).Error; createError != nil {
+		t.Fatalf("create legacy usage fixture: %v", createError)
+	}
+}
+
+func encryptLegacyProviderKey(t *testing.T, userID string, providerID string, apiKey string) string {
+	t.Helper()
+	encryptionKey, decodeError := base64.StdEncoding.DecodeString(testManagementProviderKeyEncryptionKey)
+	if decodeError != nil {
+		t.Fatalf("decode test provider encryption key: %v", decodeError)
+	}
+	blockCipher, cipherError := aes.NewCipher(encryptionKey)
+	if cipherError != nil {
+		t.Fatalf("create test provider block cipher: %v", cipherError)
+	}
+	aeadCipher, aeadError := cipher.NewGCM(blockCipher)
+	if aeadError != nil {
+		t.Fatalf("create test provider AEAD: %v", aeadError)
+	}
+	nonce := make([]byte, aeadCipher.NonceSize())
+	if _, readError := io.ReadFull(rand.Reader, nonce); readError != nil {
+		t.Fatalf("read test provider nonce: %v", readError)
+	}
+	associatedData := []byte(userID + "\x00" + providerID)
+	sealedAPIKey := aeadCipher.Seal(nil, nonce, []byte(apiKey), associatedData)
+	return "llmpk1:" + base64.StdEncoding.EncodeToString(append(nonce, sealedAPIKey...))
+}
+
+func countManagedTenantFixture(t *testing.T, databasePath string, userID string) int64 {
+	t.Helper()
+	database, openError := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+	if openError != nil {
+		t.Fatalf("open managed fixture database: %v", openError)
+	}
+	var recordCount int64
+	if countError := database.Model(&managedTenantFixture{}).
+		Where(&managedTenantFixture{UserID: userID}).
+		Count(&recordCount).
+		Error; countError != nil {
+		t.Fatalf("count managed tenant fixture: %v", countError)
+	}
+	return recordCount
 }
 
 func requestLegacyConfigSecret(t *testing.T, router http.Handler, secret string) *httptest.ResponseRecorder {

@@ -22,6 +22,7 @@ const (
 	testZhipuKey       = "sk-zhipu"
 	testGeminiKey      = "sk-gemini"
 	testAnthropicKey   = "sk-ant"
+	testMetaKey        = "sk-meta"
 	testGrokKey        = "sk-xai"
 )
 
@@ -150,6 +151,148 @@ func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
 	}
 	if _, exists := capturedPayload["max_tokens"]; exists {
 		t.Fatalf("max_tokens must be omitted by default: %v", capturedPayload)
+	}
+}
+
+func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testing.T) {
+	type capturedMetaRequest struct {
+		payload map[string]any
+	}
+
+	var capturedRequests []capturedMetaRequest
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			t.Fatalf("method=%s want=%s", request.Method, http.MethodPost)
+		}
+		if request.URL.Path != "/chat/completions" {
+			t.Fatalf("path=%s want=%s", request.URL.Path, "/chat/completions")
+		}
+		if authorizationHeader := request.Header.Get("Authorization"); authorizationHeader != "Bearer "+testMetaKey {
+			t.Fatalf("authorization=%q want=%q", authorizationHeader, "Bearer "+testMetaKey)
+		}
+		if contentType := request.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
+			t.Fatalf("content-type=%q want application/json", contentType)
+		}
+		bodyBytes, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			t.Fatalf("read body: %v", readError)
+		}
+		var payload map[string]any
+		if unmarshalError := json.Unmarshal(bodyBytes, &payload); unmarshalError != nil {
+			t.Fatalf("unmarshal body: %v", unmarshalError)
+		}
+		capturedRequests = append(capturedRequests, capturedMetaRequest{payload: payload})
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"meta ok"}}],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}}`))
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		MetaKey:               testMetaKey,
+		MetaBaseURL:           upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	testCases := []struct {
+		name           string
+		method         string
+		target         string
+		body           string
+		expectedPrompt string
+	}{
+		{
+			name:           "get",
+			method:         http.MethodGet,
+			target:         "/?key=" + TestSecret + "&prompt=meta+get&provider=" + proxy.ProviderNameMeta + "&max_tokens=321&format=application/json",
+			expectedPrompt: "meta get",
+		},
+		{
+			name:           "compatibility post",
+			method:         http.MethodPost,
+			target:         "/?key=" + TestSecret + "&provider=" + proxy.ProviderNameMeta + "&format=application/json",
+			body:           `{"prompt":"meta post","max_tokens":321}`,
+			expectedPrompt: "meta post",
+		},
+		{
+			name:           "v2 post",
+			method:         http.MethodPost,
+			target:         "/v2?key=" + TestSecret + "&provider=" + proxy.ProviderNameMeta + "&format=application/json",
+			body:           `{"messages":[{"role":"user","content":"meta v2"}],"max_tokens":321}`,
+			expectedPrompt: "meta v2",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			request := httptest.NewRequest(testCase.method, testCase.target, strings.NewReader(testCase.body))
+			if testCase.method == http.MethodPost {
+				request.Header.Set("Content-Type", "application/json")
+			}
+			responseRecorder := httptest.NewRecorder()
+
+			router.ServeHTTP(responseRecorder, request)
+
+			if responseRecorder.Code != http.StatusOK {
+				subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+			}
+			if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "11" {
+				subTest.Fatalf("request tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens))
+			}
+			if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "7" {
+				subTest.Fatalf("response tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens))
+			}
+			if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "18" {
+				subTest.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
+			}
+			var response struct {
+				Model    string `json:"model"`
+				Response string `json:"response"`
+				Usage    struct {
+					RequestTokens  int `json:"request_tokens"`
+					ResponseTokens int `json:"response_tokens"`
+					TotalTokens    int `json:"total_tokens"`
+				} `json:"usage"`
+			}
+			if decodeError := json.Unmarshal(responseRecorder.Body.Bytes(), &response); decodeError != nil {
+				subTest.Fatalf("decode response: %v", decodeError)
+			}
+			if response.Model != proxy.ModelNameMuseSpark11 || response.Response != "meta ok" {
+				subTest.Fatalf("response=%+v", response)
+			}
+			if response.Usage.RequestTokens != 11 || response.Usage.ResponseTokens != 7 || response.Usage.TotalTokens != 18 {
+				subTest.Fatalf("usage=%+v", response.Usage)
+			}
+		})
+	}
+
+	if len(capturedRequests) != len(testCases) {
+		t.Fatalf("captured requests=%d want=%d", len(capturedRequests), len(testCases))
+	}
+	for requestIndex, capturedRequest := range capturedRequests {
+		if capturedRequest.payload["model"] != proxy.ModelNameMuseSpark11 {
+			t.Fatalf("request %d model=%v want=%s", requestIndex, capturedRequest.payload["model"], proxy.ModelNameMuseSpark11)
+		}
+		if capturedRequest.payload["max_completion_tokens"] != float64(321) {
+			t.Fatalf("request %d max_completion_tokens=%v", requestIndex, capturedRequest.payload["max_completion_tokens"])
+		}
+		if _, deprecatedFieldPresent := capturedRequest.payload["max_tokens"]; deprecatedFieldPresent {
+			t.Fatalf("request %d must not use deprecated Meta max_tokens: %v", requestIndex, capturedRequest.payload)
+		}
+		messages, messagesOK := capturedRequest.payload["messages"].([]any)
+		if !messagesOK || len(messages) != 1 {
+			t.Fatalf("request %d messages=%v", requestIndex, capturedRequest.payload["messages"])
+		}
+		message, messageOK := messages[0].(map[string]any)
+		if !messageOK || message["role"] != "user" || message["content"] != testCases[requestIndex].expectedPrompt {
+			t.Fatalf("request %d message=%v", requestIndex, messages[0])
+		}
 	}
 }
 
@@ -1333,13 +1476,15 @@ func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T)
 	}
 }
 
-func TestProviderRoutingRejectsAnthropicAndGrokUnsupportedCapabilities(t *testing.T) {
+func TestProviderRoutingRejectsAnthropicMetaAndGrokUnsupportedCapabilities(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
 		OpenAIKey:             TestAPIKey,
 		AnthropicKey:          testAnthropicKey,
+		MetaKey:               testMetaKey,
 		GrokKey:               testGrokKey,
 		AnthropicBaseURL:      "https://anthropic.invalid",
+		MetaBaseURL:           "https://meta.invalid",
 		GrokBaseURL:           "https://grok.invalid",
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -1356,8 +1501,10 @@ func TestProviderRoutingRejectsAnthropicAndGrokUnsupportedCapabilities(t *testin
 		method string
 	}{
 		{name: "anthropic web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=anthropic&web_search=1"},
+		{name: "meta web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=meta&web_search=1"},
 		{name: "grok web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=grok&web_search=1"},
 		{name: "anthropic dictation", method: http.MethodPost, target: "/dictate?key=" + TestSecret + "&provider=anthropic"},
+		{name: "meta dictation", method: http.MethodPost, target: "/dictate?key=" + TestSecret + "&provider=meta"},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
@@ -1417,11 +1564,12 @@ func TestProviderRoutingRejectsGeminiMissingCredential(t *testing.T) {
 	}
 }
 
-func TestProviderRoutingRejectsAnthropicAndGrokMissingCredentials(t *testing.T) {
+func TestProviderRoutingRejectsAnthropicMetaAndGrokMissingCredentials(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
 		OpenAIKey:             TestAPIKey,
 		AnthropicBaseURL:      "https://anthropic.invalid",
+		MetaBaseURL:           "https://meta.invalid",
 		GrokBaseURL:           "https://grok.invalid",
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -1438,6 +1586,7 @@ func TestProviderRoutingRejectsAnthropicAndGrokMissingCredentials(t *testing.T) 
 		model    string
 	}{
 		{name: "anthropic", provider: proxy.ProviderNameAnthropic, model: proxy.ModelNameClaudeSonnet46},
+		{name: "meta", provider: proxy.ProviderNameMeta, model: proxy.ModelNameMuseSpark11},
 		{name: "grok", provider: proxy.ProviderNameGrok, model: proxy.ModelNameGrok43},
 	}
 	for _, testCase := range testCases {
@@ -1469,7 +1618,7 @@ func TestProviderRoutingRejectsMissingGeminiDefaultCredential(t *testing.T) {
 	}
 }
 
-func TestProviderRoutingRejectsMissingAnthropicAndGrokDefaultCredentials(t *testing.T) {
+func TestProviderRoutingRejectsMissingAnthropicMetaAndGrokDefaultCredentials(t *testing.T) {
 	testCases := []struct {
 		name          string
 		defaults      proxy.TenantDefaults
@@ -1479,6 +1628,11 @@ func TestProviderRoutingRejectsMissingAnthropicAndGrokDefaultCredentials(t *test
 			name:          "anthropic",
 			defaults:      proxy.TenantDefaults{Provider: proxy.ProviderNameAnthropic, Model: proxy.ModelNameClaudeSonnet46, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel},
 			expectedError: "provider not configured: provider=anthropic",
+		},
+		{
+			name:          "meta",
+			defaults:      proxy.TenantDefaults{Provider: proxy.ProviderNameMeta, Model: proxy.ModelNameMuseSpark11, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel},
+			expectedError: "provider not configured: provider=meta",
 		},
 		{
 			name:          "grok",
@@ -1828,6 +1982,19 @@ func TestProviderRoutingRejectsInvalidDefaultDictationProvider(t *testing.T) {
 			expectedError: "unsupported provider endpoint: provider=anthropic endpoint=dictation",
 		},
 		{
+			name: "unsupported_meta_dictation",
+			configuration: proxy.Configuration{
+				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameMeta}),
+				OpenAIKey:             TestAPIKey,
+				MetaKey:               testMetaKey,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
+			},
+			expectedError: "unsupported provider endpoint: provider=meta endpoint=dictation",
+		},
+		{
 			name: "missing_zhipu_credential",
 			configuration: proxy.Configuration{
 				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameZhipu}),
@@ -1860,6 +2027,18 @@ func TestProviderRoutingRejectsInvalidDefaultDictationProvider(t *testing.T) {
 				subTest.Fatalf("error=%v want contains %q", buildError, testCase.expectedError)
 			}
 		})
+	}
+}
+
+func TestProviderRoutingRejectsClientSuppliedMetaCredential(t *testing.T) {
+	router := NewTestRouter(t, "https://upstream.invalid")
+	request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&model_api_key=sk-client", nil)
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusBadRequest || strings.TrimSpace(responseRecorder.Body.String()) != "client provider API keys are not accepted" {
+		t.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
 	}
 }
 

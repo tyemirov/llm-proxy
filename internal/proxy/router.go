@@ -91,7 +91,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}
 
 	requestTimeout := time.Duration(configuration.RequestTimeoutSeconds) * time.Second
-	upstreamHTTPClient := newLimitedHTTPDoer(HTTPClient, configuration.WorkerCount, configuration.QueueSize)
+	upstreamHTTPClient := newLimitedHTTPDoer(HTTPClient, configuration.WorkerCount, configuration.QueueSize, configuration.upstreamRateLimits, structuredLogger, systemUpstreamRateLimitClock{})
 	openAIClient := NewOpenAIClient(upstreamHTTPClient, configuration.Endpoints, requestTimeout)
 	chatClient := newOpenAICompatibleChatClient(upstreamHTTPClient, requestTimeout)
 	geminiClient := newGeminiGenerateContentClient(upstreamHTTPClient, requestTimeout)
@@ -104,9 +104,6 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		managedTenants, storeError = openManagedTenantStore(configuration.Management)
 		if storeError != nil {
 			return nil, storeError
-		}
-		if migrationError := managedTenants.migrateStaticConfiguration(configuration); migrationError != nil {
-			return nil, migrationError
 		}
 		if migrationError := managedTenants.migrateProviderTextSettings(providers); migrationError != nil {
 			return nil, migrationError
