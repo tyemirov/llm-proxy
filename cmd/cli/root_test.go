@@ -21,28 +21,28 @@ const (
 func TestRootCommandRunsConfiguredProxyFromConfigFile(t *testing.T) {
 	tempDir := t.TempDir()
 	providerValues := defaultProviderYAMLValues()
-	providerValues.OpenAIAPIKey = "${P411_OPENAI_KEY}"
+	providerValues.OpenAIAPIKey = ""
 	providerValues.OpenAIBaseURL = "https://openai.example/v1"
 	providerValues.OpenAITranscriptionsURL = "https://openai.example/v1/audio/transcriptions"
-	providerValues.DeepSeekAPIKey = "${P411_DEEPSEEK_KEY}"
+	providerValues.DeepSeekAPIKey = ""
 	providerValues.DeepSeekBaseURL = "https://deepseek.example"
-	providerValues.DashScopeAPIKey = "${P411_DASHSCOPE_KEY}"
+	providerValues.DashScopeAPIKey = ""
 	providerValues.DashScopeBaseURL = "https://dashscope.example"
-	providerValues.MoonshotAPIKey = "${P411_MOONSHOT_KEY}"
+	providerValues.MoonshotAPIKey = ""
 	providerValues.MoonshotBaseURL = "https://moonshot.example"
-	providerValues.SiliconFlowAPIKey = "${P411_SILICONFLOW_KEY}"
+	providerValues.SiliconFlowAPIKey = ""
 	providerValues.SiliconFlowBaseURL = "https://siliconflow.example"
 	providerValues.SiliconFlowTranscriptionsURL = "https://siliconflow.example/audio/transcriptions"
-	providerValues.ZhipuAPIKey = "${P411_ZHIPU_KEY}"
+	providerValues.ZhipuAPIKey = ""
 	providerValues.ZhipuBaseURL = "https://zhipu.example"
 	providerValues.ZhipuTranscriptionsURL = "https://zhipu.example/audio/transcriptions"
-	providerValues.GeminiAPIKey = "${P411_GEMINI_KEY}"
+	providerValues.GeminiAPIKey = ""
 	providerValues.GeminiBaseURL = "https://gemini.example"
-	providerValues.AnthropicAPIKey = "${P411_ANTHROPIC_KEY}"
+	providerValues.AnthropicAPIKey = ""
 	providerValues.AnthropicBaseURL = "https://anthropic.example"
-	providerValues.MetaAPIKey = "${P411_MODEL_API_KEY}"
+	providerValues.MetaAPIKey = ""
 	providerValues.MetaBaseURL = "https://meta.example/v1"
-	providerValues.GrokAPIKey = "${P411_GROK_KEY}"
+	providerValues.GrokAPIKey = ""
 	providerValues.GrokBaseURL = "https://grok.example"
 	providerValues.GrokTranscriptionsURL = "https://grok.example/stt"
 	configPath := writeTestConfig(t, tempDir, `
@@ -79,34 +79,17 @@ management:
   provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   management_api_origin: "https://llm-proxy-api.example"
   proxy_origin: "https://llm-proxy-api.example"
-tenants:
-  - id: default
-    secret: "${P411_SERVICE_SECRET}"
-    defaults:
-      provider: deepseek
-      model: deepseek-v4-flash
-      dictation_provider: openai
-      dictation_model: gpt-4o-transcribe
-      system_prompt: "Be terse."
+  legacy_token_migration:
+    tenant_id: legacy
+    owner_email: "${P411_LEGACY_TOKEN_OWNER_EMAIL}"
 `+completeProvidersYAML(providerValues))
 	writeTestDotEnv(t, tempDir, `
-P411_SERVICE_SECRET=dotenv-secret
-P411_OPENAI_KEY=sk-openai
-P411_DEEPSEEK_KEY=sk-deepseek
-P411_DASHSCOPE_KEY=sk-dashscope
-P411_MOONSHOT_KEY=sk-moonshot
-P411_SILICONFLOW_KEY=sk-siliconflow
-P411_ZHIPU_KEY=sk-zhipu
-P411_GEMINI_KEY=sk-gemini
-P411_ANTHROPIC_KEY=sk-ant
-P411_MODEL_API_KEY=sk-meta
-P411_GROK_KEY=sk-xai
 P411_TAUTH_JWT_SIGNING_KEY=tauth-signing-key
 P411_MANAGEMENT_DATABASE_DIALECT=sqlite
 P411_MANAGEMENT_DATABASE_DSN=postgres://llm-proxy.example/management
 P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+P411_LEGACY_TOKEN_OWNER_EMAIL=Legacy.Owner@Example.com
 `)
-	t.Setenv("P411_SERVICE_SECRET", "process-secret")
 
 	var capturedConfiguration proxy.Configuration
 	withServeProxy(t, func(configuration proxy.Configuration, structuredLogger *zap.SugaredLogger) error {
@@ -118,10 +101,10 @@ P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlh
 	if executeError != nil {
 		t.Fatalf("ExecuteC error: %v", executeError)
 	}
-	if capturedConfiguration.Tenants[0].Secret != "process-secret" {
-		t.Fatalf("tenantSecret=%q", capturedConfiguration.Tenants[0].Secret)
+	if len(capturedConfiguration.Tenants) != 0 {
+		t.Fatalf("management tenants=%+v", capturedConfiguration.Tenants)
 	}
-	if capturedConfiguration.OpenAIKey != "sk-openai" {
+	if capturedConfiguration.OpenAIKey != "" {
 		t.Fatalf("openAIKey=%q", capturedConfiguration.OpenAIKey)
 	}
 	if capturedConfiguration.OpenAIBaseURL != "https://openai.example/v1" {
@@ -129,9 +112,6 @@ P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlh
 	}
 	if capturedConfiguration.OpenAITranscriptionsURL != "https://openai.example/v1/audio/transcriptions" {
 		t.Fatalf("openAITranscriptionsURL=%q", capturedConfiguration.OpenAITranscriptionsURL)
-	}
-	if capturedConfiguration.Tenants[0].Defaults.Provider != proxy.ProviderNameDeepSeek {
-		t.Fatalf("tenantDefaultProvider=%q", capturedConfiguration.Tenants[0].Defaults.Provider)
 	}
 	if capturedConfiguration.DeepSeekBaseURL != "https://deepseek.example" {
 		t.Fatalf("deepSeekBaseURL=%q", capturedConfiguration.DeepSeekBaseURL)
@@ -184,25 +164,28 @@ P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlh
 	if capturedConfiguration.Management.ManagementAPIOrigin != "https://llm-proxy-api.example" || capturedConfiguration.Management.ProxyOrigin != "https://llm-proxy-api.example" {
 		t.Fatalf("management api origins=%q %q", capturedConfiguration.Management.ManagementAPIOrigin, capturedConfiguration.Management.ProxyOrigin)
 	}
-	if capturedConfiguration.GeminiKey != "sk-gemini" {
+	if capturedConfiguration.Management.LegacyTokenMigration.TenantID != "legacy" || capturedConfiguration.Management.LegacyTokenMigration.OwnerEmail != "legacy.owner@example.com" {
+		t.Fatalf("legacy migration=%+v", capturedConfiguration.Management.LegacyTokenMigration)
+	}
+	if capturedConfiguration.GeminiKey != "" {
 		t.Fatalf("geminiKey=%q", capturedConfiguration.GeminiKey)
 	}
 	if capturedConfiguration.GeminiBaseURL != "https://gemini.example" {
 		t.Fatalf("geminiBaseURL=%q", capturedConfiguration.GeminiBaseURL)
 	}
-	if capturedConfiguration.AnthropicKey != "sk-ant" {
+	if capturedConfiguration.AnthropicKey != "" {
 		t.Fatalf("anthropicKey=%q", capturedConfiguration.AnthropicKey)
 	}
 	if capturedConfiguration.AnthropicBaseURL != "https://anthropic.example" {
 		t.Fatalf("anthropicBaseURL=%q", capturedConfiguration.AnthropicBaseURL)
 	}
-	if capturedConfiguration.MetaKey != "sk-meta" || capturedConfiguration.MetaBaseURL != "https://meta.example/v1" {
+	if capturedConfiguration.MetaKey != "" || capturedConfiguration.MetaBaseURL != "https://meta.example/v1" {
 		t.Fatalf("meta key/base URL=%q %q", capturedConfiguration.MetaKey, capturedConfiguration.MetaBaseURL)
 	}
 	if capturedConfiguration.ZhipuTranscriptionsURL != "https://zhipu.example/audio/transcriptions" {
 		t.Fatalf("zhipuTranscriptionsURL=%q", capturedConfiguration.ZhipuTranscriptionsURL)
 	}
-	if capturedConfiguration.GrokKey != "sk-xai" {
+	if capturedConfiguration.GrokKey != "" {
 		t.Fatalf("grokKey=%q", capturedConfiguration.GrokKey)
 	}
 	if capturedConfiguration.GrokBaseURL != "https://grok.example" {
@@ -391,9 +374,6 @@ func TestRootCommandLoadsPackagedConfigWithManagementEnvironment(t *testing.T) {
 		t.Fatalf("write packaged config copy: %v", writeError)
 	}
 	writeTestDotEnv(t, tempDir, `
-SERVICE_SECRET=packaged-secret
-OPENAI_API_KEY=sk-packaged-openai
-MODEL_API_KEY=sk-packaged-meta
 LLM_PROXY_MANAGEMENT_ENABLED=true
 LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN=https://llm-proxy.mprlab.com
 LLM_PROXY_MANAGEMENT_UI_DESCRIPTION=LLM Proxy
@@ -414,6 +394,7 @@ LLM_PROXY_MANAGEMENT_DATABASE_DSN=llm-proxy-management.sqlite
 LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 LLM_PROXY_MANAGEMENT_API_ORIGIN=https://llm-proxy-api.mprlab.com
 LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
+LLM_PROXY_MANAGEMENT_LEGACY_TOKEN_OWNER_EMAIL=owner@example.invalid
 `)
 
 	var capturedConfiguration proxy.Configuration
@@ -458,7 +439,13 @@ LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
 	if capturedConfiguration.Management.ManagementAPIOrigin != "https://llm-proxy-api.mprlab.com" || capturedConfiguration.Management.ProxyOrigin != "https://llm-proxy-api.mprlab.com" {
 		t.Fatalf("management api origins=%q %q", capturedConfiguration.Management.ManagementAPIOrigin, capturedConfiguration.Management.ProxyOrigin)
 	}
-	if capturedConfiguration.MetaKey != "sk-packaged-meta" || capturedConfiguration.MetaBaseURL != "https://api.meta.ai/v1" {
+	if capturedConfiguration.Management.LegacyTokenMigration.TenantID != "default" || capturedConfiguration.Management.LegacyTokenMigration.OwnerEmail != "owner@example.invalid" {
+		t.Fatalf("legacy migration=%+v", capturedConfiguration.Management.LegacyTokenMigration)
+	}
+	if len(capturedConfiguration.Tenants) != 0 || capturedConfiguration.OpenAIKey != "" || capturedConfiguration.MetaKey != "" {
+		t.Fatalf("packaged management static credentials tenants=%d openai=%q meta=%q", len(capturedConfiguration.Tenants), capturedConfiguration.OpenAIKey, capturedConfiguration.MetaKey)
+	}
+	if capturedConfiguration.MetaBaseURL != "https://api.meta.ai/v1" {
 		t.Fatalf("meta key/base URL=%q %q", capturedConfiguration.MetaKey, capturedConfiguration.MetaBaseURL)
 	}
 	metaCatalog := capturedConfiguration.ProviderModels[proxy.ProviderNameMeta]
