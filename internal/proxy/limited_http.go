@@ -123,30 +123,26 @@ func (doer *limitedHTTPDoer) acquireUpstreamWorker(httpRequest *http.Request) er
 
 func (doer *limitedHTTPDoer) acquireRateLimitedWorker(httpRequest *http.Request, rateLimiter *upstreamRateLimiter) (upstreamRateLimitWait, error) {
 	wait := upstreamRateLimitWait{}
-	waitStartedAt := doer.clock.Now()
 	for {
 		if acquireError := doer.acquire(httpRequest); acquireError != nil {
-			wait.total = doer.clock.Now().Sub(waitStartedAt)
 			return wait, acquireError
 		}
 		if contextError := httpRequest.Context().Err(); contextError != nil {
 			doer.releaseActive()
-			wait.total = doer.clock.Now().Sub(waitStartedAt)
 			return wait, contextError
 		}
 		waitDuration := rateLimiter.nextWaitDuration(doer.clock.Now())
 		if waitDuration <= 0 {
-			if wait.initial > 0 {
-				wait.total = doer.clock.Now().Sub(waitStartedAt)
-			}
 			return wait, nil
 		}
 		doer.releaseActive()
 		if wait.initial == 0 {
 			wait.initial = waitDuration
 		}
-		if waitError := doer.clock.Wait(httpRequest.Context(), waitDuration); waitError != nil {
-			wait.total = doer.clock.Now().Sub(waitStartedAt)
+		rateWaitStartedAt := doer.clock.Now()
+		waitError := doer.clock.Wait(httpRequest.Context(), waitDuration)
+		wait.total += doer.clock.Now().Sub(rateWaitStartedAt)
+		if waitError != nil {
 			return wait, waitError
 		}
 	}

@@ -338,10 +338,11 @@ const pages = Object.freeze([
     description: "Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.",
     audience: "Operators who need predictable capacity limits for provider HTTP calls.",
     problem: "Unlimited upstream calls can exhaust provider quotas or local resources, while long OpenAI polling sleeps should not occupy scarce worker capacity.",
-    solution: "LLM Proxy uses server.workers for concurrent upstream HTTP operations and server.queue_size for operations waiting on that shared limit.",
+    solution: "LLM Proxy combines server.workers and server.queue_size concurrency bounds with server.upstream_rate_limits rolling-window rules applied at actual upstream admission.",
     steps: [
       "Set server.workers for active upstream HTTP concurrency.",
       "Set server.queue_size for pending upstream operations.",
+      "Set server.upstream_rate_limits rules for strict call budgets keyed by normalized upstream origin.",
       "Let OpenAI background poll sleeps release worker capacity between polls.",
       "Handle 503 request queue full and 504 timeout responses at the caller boundary.",
     ],
@@ -358,7 +359,7 @@ const pages = Object.freeze([
     limitations: [
       "These controls limit upstream HTTP operations, not the number of connected client requests.",
       "They do not replace provider-side rate limits.",
-      "I013 tracks future rate limiting by time window; current workers/queue are concurrency controls.",
+      "Rate rules are keyed by exact normalized HTTP(S) origin, so providers sharing an origin share the configured budget.",
     ],
   }),
   page({
@@ -1399,6 +1400,7 @@ const pages = Object.freeze([
     steps: [
       "Use 503 request queue full or provider not configured as service-availability signals.",
       "Use 504 as the overall proxy request deadline expiring.",
+      "Use server.upstream_rate_limits to pace calls at actual upstream admission for each configured origin.",
       "Use 429 for upstream provider rate limits.",
       "Use 502 for other upstream provider API failures.",
     ],
@@ -1415,7 +1417,7 @@ const pages = Object.freeze([
     limitations: [
       "Status codes do not guarantee safe automatic retries for every prompt.",
       "Provider-side behavior may still vary by upstream service.",
-      "I013 tracks future request rate limiting beyond current worker and queue concurrency controls.",
+      "Waiting for a server.upstream_rate_limits slot remains bounded by the request deadline and can therefore end as 504.",
     ],
   }),
 ]);

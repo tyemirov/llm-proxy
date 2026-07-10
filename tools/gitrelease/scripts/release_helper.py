@@ -11,27 +11,28 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
 
 
-SEMVER_TAG_RE = re.compile(
-    r"^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)"
-    r"(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$"
+SEMVER_CORE_PATTERN = r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)"
+SEMVER_PRERELEASE_IDENTIFIER_PATTERN = r"(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)"
+SEMVER_PRERELEASE_PATTERN = (
+    rf"{SEMVER_PRERELEASE_IDENTIFIER_PATTERN}(?:\.{SEMVER_PRERELEASE_IDENTIFIER_PATTERN})*"
 )
-SEMVER_PRERELEASE_TAG_RE = re.compile(
-    r"^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*$"
-)
+SEMVER_VERSION_PATTERN = rf"v{SEMVER_CORE_PATTERN}(?:-{SEMVER_PRERELEASE_PATTERN})?"
+SEMVER_TAG_RE = re.compile(rf"^{SEMVER_VERSION_PATTERN}$")
+SEMVER_PRERELEASE_TAG_RE = re.compile(rf"^v{SEMVER_CORE_PATTERN}-{SEMVER_PRERELEASE_PATTERN}$")
 RELEASE_HEADING_RE = re.compile(
-    r"^##\s+\[?(?:v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)"
-    r"(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?)"
-    r"\]?(?:[^\n]*)?$",
+    rf"^##\s+\[?(?:{SEMVER_VERSION_PATTERN})\]?(?:[^\n]*)?$",
     re.MULTILINE,
 )
 
@@ -84,26 +85,94 @@ def require_tools(names: list[str]) -> list[str]:
     return [name for name in names if shutil.which(name) is None]
 
 
+def validate_release_version(value: str) -> str:
+    if re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", value) is None:
+        raise HelperError("release version must satisfy Git and container tag constraints", {"version": value})
+    if SEMVER_TAG_RE.fullmatch(value) is None:
+        raise HelperError("release version must use canonical vMAJOR.MINOR.PATCH SemVer", {"version": value})
+    return value
+
+
 def repo_root() -> Path:
     return Path(run(["git", "rev-parse", "--show-toplevel"]).stdout.strip())
+
+
+def github_repository_for_remote(cwd: Path, remote: str) -> str | None:
+    remote_url_proc = run(["git", "config", "--get", f"remote.{remote}.url"], cwd=cwd, check=False)
+    if remote_url_proc.returncode != 0:
+        raise HelperError("selected Git remote does not exist", {"remote": remote})
+    remote_url = remote_url_proc.stdout.strip()
+    host = ""
+    path = ""
+    if "://" in remote_url:
+        parsed = urllib.parse.urlparse(remote_url)
+        host = parsed.hostname or ""
+        path = parsed.path
+    else:
+        scp_match = re.fullmatch(r"(?:[^@/]+@)?([^:/]+):(.+)", remote_url)
+        if scp_match:
+            host, path = scp_match.groups()
+    repository_parts = path.strip("/").removesuffix(".git").split("/") if host else []
+    if not host:
+        explicit_repository = os.environ.get("GH_REPO", "").strip()
+        if not explicit_repository:
+            raise HelperError(
+                "selected Git remote cannot scope GitHub operations; set GH_REPO to [HOST/]OWNER/REPO",
+                {"remote": remote, "remote_url": remote_url},
+            )
+        if re.fullmatch(r"(?:[A-Za-z0-9.-]+/)?[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", explicit_repository) is None:
+            raise HelperError("GH_REPO must use [HOST/]OWNER/REPO", {"GH_REPO": explicit_repository})
+        return explicit_repository
+    if len(repository_parts) != 2 or not all(repository_parts):
+        raise HelperError(
+            "selected Git remote URL does not identify a GitHub repository",
+            {"remote": remote, "remote_url": remote_url},
+        )
+    name_with_owner = "/".join(repository_parts)
+    return name_with_owner if host.casefold() == "github.com" else f"{host}/{name_with_owner}"
+
+
+def github_repository_cli_args(repository: str | None) -> list[str]:
+    return ["--repo", repository] if repository else []
+
+
+def github_api_command(repository: str | None, endpoint_suffix: str, *extra: str) -> list[str]:
+    command = ["gh", "api"]
+    repository_path = "{owner}/{repo}"
+    if repository:
+        parts = repository.split("/")
+        repository_path = "/".join(parts[-2:])
+        if len(parts) > 2:
+            command.extend(["--hostname", parts[0]])
+    command.extend([f"repos/{repository_path}/{endpoint_suffix}", *extra])
+    return command
 
 
 def gh_json(command: list[str], cwd: Path) -> Any:
     return json.loads(run(command, cwd=cwd).stdout or "null")
 
 
-def resolve_default_branch(cwd: Path, override: str | None = None) -> str:
+def resolve_default_branch(cwd: Path, override: str | None = None, remote: str = "origin") -> str:
     if override:
         return override
 
-    gh_proc = run(["gh", "repo", "view", "--json", "defaultBranchRef"], cwd=cwd, check=False)
+    repository = github_repository_for_remote(cwd, remote)
+    repo_view_command = ["gh", "repo", "view"]
+    if repository:
+        repo_view_command.append(repository)
+    repo_view_command.extend(["--json", "defaultBranchRef"])
+    gh_proc = run(
+        repo_view_command,
+        cwd=cwd,
+        check=False,
+    )
     if gh_proc.returncode == 0:
         data = json.loads(gh_proc.stdout)
         name = (data.get("defaultBranchRef") or {}).get("name")
         if name:
             return name
 
-    remote_proc = run(["git", "remote", "show", "origin"], cwd=cwd)
+    remote_proc = run(["git", "remote", "show", remote], cwd=cwd)
     for line in remote_proc.stdout.splitlines():
         if "HEAD branch:" in line:
             return line.rsplit(":", 1)[1].strip()
@@ -206,7 +275,7 @@ def detect_validation_candidates(cwd: Path) -> list[str]:
 
 
 def command_preflight(args: argparse.Namespace) -> int:
-    missing = require_tools(["git"] if args.local else ["git", "gh", "gix"])
+    missing = require_tools(["git"] if args.local else ["git", "gh"])
     if missing:
         fail("required tools are missing", {"missing_tools": missing})
 
@@ -214,7 +283,7 @@ def command_preflight(args: argparse.Namespace) -> int:
     default_branch = (
         resolve_default_branch_local(cwd, args.default_branch)
         if args.local
-        else resolve_default_branch(cwd, args.default_branch)
+        else resolve_default_branch(cwd, args.default_branch, args.remote)
     )
     versions = version_info(cwd, parse_release_timestamp(args.release_timestamp, args.release_date))
     status_lines = run(["git", "status", "--short"], cwd=cwd).stdout.splitlines()
@@ -222,7 +291,18 @@ def command_preflight(args: argparse.Namespace) -> int:
     open_prs = []
     if not args.local:
         open_prs = gh_json(
-            ["gh", "pr", "list", "--base", default_branch, "--state", "open", "--json", "number,title,headRefName,url"],
+            [
+                "gh",
+                "pr",
+                "list",
+                "--base",
+                default_branch,
+                "--state",
+                "open",
+                "--json",
+                "number,title,headRefName,url",
+                *github_repository_cli_args(github_repository_for_remote(cwd, args.remote)),
+            ],
             cwd,
         )
     payload = {
@@ -242,6 +322,7 @@ def command_preflight(args: argparse.Namespace) -> int:
 
 
 def command_generate_notes(args: argparse.Namespace) -> int:
+    validate_release_version(args.version)
     cwd = repo_root()
     release_date = parse_release_date(args.release_date).isoformat()
     revision = "HEAD"
@@ -263,6 +344,38 @@ def command_generate_notes(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_select_release(args: argparse.Namespace) -> int:
+    data = json.loads(Path(args.preflight_file).read_text(encoding="utf-8"))
+    info = data.get("version_info") or {}
+    latest = str(info.get("latest_semver_tag") or "")
+    if args.version:
+        selected = args.version
+    elif not latest:
+        selected = "v1.0.0"
+    else:
+        match = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)(?:-.*)?", latest)
+        if not match:
+            raise HelperError("latest SemVer tag is invalid", {"latest_semver_tag": latest})
+        major, minor, patch = (int(value) for value in match.groups())
+        if args.bump == "major":
+            major, minor, patch = major + 1, 0, 0
+        elif args.bump == "minor":
+            minor, patch = minor + 1, 0
+        else:
+            patch += 1
+        selected = f"v{major}.{minor}.{patch}"
+    validate_release_version(selected)
+    print(selected)
+    print(latest)
+    print("semver")
+    return 0
+
+
+def command_validate_version(args: argparse.Namespace) -> int:
+    emit({"ok": True, "version": validate_release_version(args.version)})
+    return 0
+
+
 def release_artifact_dir(cwd: Path, override: str | None = None) -> Path:
     if override:
         return Path(override).expanduser().resolve()
@@ -281,6 +394,7 @@ def resolve_commit(cwd: Path, revision: str, label: str) -> str:
 
 
 def command_initialize_release_artifact(args: argparse.Namespace) -> int:
+    validate_release_version(args.version)
     cwd = repo_root()
     artifact_path = release_artifact_dir(cwd, args.artifact_dir)
     if artifact_path.exists():
@@ -366,6 +480,7 @@ def verify_payloads(artifact_path: Path, payloads: Any) -> list[dict[str, Any]]:
 
 
 def command_write_release_artifact(args: argparse.Namespace) -> int:
+    validate_release_version(args.version)
     cwd = repo_root()
     release_commit = resolve_commit(cwd, args.release_commit, "release_commit")
     source_commit = resolve_commit(cwd, args.source_commit, "source_commit")
@@ -443,6 +558,7 @@ def load_release_artifact(cwd: Path, override: str | None = None) -> tuple[Path,
             {"artifact_dir": str(artifact_path)},
         )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    validate_release_version(str(manifest.get("version") or ""))
     if manifest.get("schema_version") != 2 or manifest.get("artifact_kind") != "mprlab.release":
         raise HelperError("prepared release manifest has an invalid contract", {"manifest": str(manifest_path)})
     actual_notes_sha256 = sha256_file(notes_path)
@@ -475,11 +591,15 @@ def release_asset_paths(artifact_path: Path, manifest: dict[str, Any]) -> list[P
     return assets
 
 
-def publish_release_assets(cwd: Path, version: str, assets: list[Path]) -> list[dict[str, Any]]:
+def publish_release_assets(cwd: Path, version: str, assets: list[Path], remote: str = "origin") -> list[dict[str, Any]]:
     if not assets:
         return []
 
-    run(["gh", "release", "upload", version, *[str(path) for path in assets], "--clobber"], cwd=cwd)
+    repository_args = github_repository_cli_args(github_repository_for_remote(cwd, remote))
+    run(
+        ["gh", "release", "upload", version, *[str(path) for path in assets], "--clobber", *repository_args],
+        cwd=cwd,
+    )
     published: list[dict[str, Any]] = []
     with tempfile.TemporaryDirectory(prefix="mprlab-release-assets-") as temporary_directory:
         download_root = Path(temporary_directory)
@@ -487,7 +607,17 @@ def publish_release_assets(cwd: Path, version: str, assets: list[Path]) -> list[
             asset_dir = download_root / asset.name
             asset_dir.mkdir()
             run(
-                ["gh", "release", "download", version, "--pattern", asset.name, "--dir", str(asset_dir)],
+                [
+                    "gh",
+                    "release",
+                    "download",
+                    version,
+                    "--pattern",
+                    asset.name,
+                    "--dir",
+                    str(asset_dir),
+                    *repository_args,
+                ],
                 cwd=cwd,
             )
             downloaded = asset_dir / asset.name
@@ -518,6 +648,7 @@ def command_publish_prepared_release(args: argparse.Namespace) -> int:
         fail("required tools are missing", {"missing_tools": missing})
 
     cwd = repo_root()
+    repository_args = github_repository_cli_args(github_repository_for_remote(cwd, args.remote))
     artifact_path, manifest, notes_path = load_release_artifact(cwd, args.artifact_dir)
     version = str(manifest.get("version") or "")
     default_branch = str(manifest.get("default_branch") or "")
@@ -566,7 +697,18 @@ def command_publish_prepared_release(args: argparse.Namespace) -> int:
         )
 
     open_prs = gh_json(
-        ["gh", "pr", "list", "--base", default_branch, "--state", "open", "--json", "number,title,headRefName,url"],
+        [
+            "gh",
+            "pr",
+            "list",
+            "--base",
+            default_branch,
+            "--state",
+            "open",
+            "--json",
+            "number,title,headRefName,url",
+            *repository_args,
+        ],
         cwd,
     )
     if open_prs:
@@ -604,15 +746,16 @@ def command_publish_prepared_release(args: argparse.Namespace) -> int:
     if plan["push_tag"]:
         run(["git", "push", args.remote, f"refs/tags/{version}:refs/tags/{version}"], cwd=cwd)
 
-    publish_args = argparse.Namespace(version=version, notes_file=str(notes_path), title=None)
+    publish_args = argparse.Namespace(version=version, notes_file=str(notes_path), title=None, remote=args.remote)
     if command_publish_release(publish_args) != 0:
         return 1
-    published_assets = publish_release_assets(cwd, version, release_assets)
+    published_assets = publish_release_assets(cwd, version, release_assets, args.remote)
     verify_args = argparse.Namespace(
         version=version,
         release_commit=release_commit,
         notes_file=str(notes_path),
         default_branch=default_branch,
+        remote=args.remote,
         watch_run=[],
         skip_pages=True,
         expect_pages_text=[],
@@ -671,7 +814,9 @@ def command_publish_release(args: argparse.Namespace) -> int:
     if missing:
         fail("required tools are missing", {"missing_tools": missing})
 
+    validate_release_version(args.version)
     cwd = repo_root()
+    repository_args = github_repository_cli_args(github_repository_for_remote(cwd, args.remote))
     notes_path = Path(args.notes_file)
     expected_notes = normalize_markdown(notes_path.read_text(encoding="utf-8"))
     if not expected_notes:
@@ -686,6 +831,7 @@ def command_publish_release(args: argparse.Namespace) -> int:
         args.version,
         "--json",
         "tagName,name,body,publishedAt,isDraft,isPrerelease,targetCommitish,url",
+        *repository_args,
     ]
     existing_proc = run(view_command, cwd=cwd, check=False)
     action = "none"
@@ -733,6 +879,7 @@ def command_publish_release(args: argparse.Namespace) -> int:
             ]
 
     if command:
+        command.extend(repository_args)
         run(command, cwd=cwd)
 
     refreshed = gh_json(view_command, cwd)
@@ -781,9 +928,13 @@ def optional_gh_json(command: list[str], cwd: Path) -> dict[str, Any]:
     return {"ok": False, "returncode": proc.returncode, "stderr": proc.stderr.strip(), "stdout": proc.stdout.strip()}
 
 
-def collect_pages(cwd: Path, expected_texts: list[str]) -> tuple[dict[str, Any], list[str]]:
+def collect_pages(
+    cwd: Path,
+    expected_texts: list[str],
+    repository: str | None,
+) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
-    pages = optional_gh_json(["gh", "api", "repos/{owner}/{repo}/pages"], cwd)
+    pages = optional_gh_json(github_api_command(repository, "pages"), cwd)
     if not pages["ok"]:
         stderr = pages.get("stderr", "")
         if "404" in stderr or "Not Found" in stderr:
@@ -797,17 +948,21 @@ def collect_pages(cwd: Path, expected_texts: list[str]) -> tuple[dict[str, Any],
         "configured": True,
         "config": data,
         "latest_build": optional_gh_json(
-            ["gh", "api", "repos/{owner}/{repo}/pages/builds/latest", "--jq", "{status,error,commit,created_at,updated_at,url}"],
+            github_api_command(
+                repository,
+                "pages/builds/latest",
+                "--jq",
+                "{status,error,commit,created_at,updated_at,url}",
+            ),
             cwd,
         ),
         "latest_deployment": optional_gh_json(
-            [
-                "gh",
-                "api",
-                "repos/{owner}/{repo}/deployments?environment=github-pages",
+            github_api_command(
+                repository,
+                "deployments?environment=github-pages",
                 "--jq",
                 ".[0] | {id,sha,ref,created_at,statuses_url}",
-            ],
+            ),
             cwd,
         ),
     }
@@ -833,7 +988,13 @@ def collect_pages(cwd: Path, expected_texts: list[str]) -> tuple[dict[str, Any],
     return result, errors
 
 
-def collect_runs(cwd: Path, default_branch: str, release_commit: str) -> dict[str, Any]:
+def collect_runs(
+    cwd: Path,
+    default_branch: str,
+    release_commit: str,
+    repository: str | None,
+) -> dict[str, Any]:
+    repository_args = github_repository_cli_args(repository)
     return {
         "for_release_commit": optional_gh_json(
             [
@@ -846,6 +1007,7 @@ def collect_runs(cwd: Path, default_branch: str, release_commit: str) -> dict[st
                 "databaseId,name,event,status,conclusion,headSha,url",
                 "--limit",
                 "20",
+                *repository_args,
             ],
             cwd,
         ),
@@ -860,6 +1022,7 @@ def collect_runs(cwd: Path, default_branch: str, release_commit: str) -> dict[st
                 "databaseId,name,event,status,conclusion,headSha,url",
                 "--limit",
                 "20",
+                *repository_args,
             ],
             cwd,
         ),
@@ -876,6 +1039,7 @@ def collect_runs(cwd: Path, default_branch: str, release_commit: str) -> dict[st
                 "databaseId,name,event,status,conclusion,headSha,url",
                 "--limit",
                 "20",
+                *repository_args,
             ],
             cwd,
         ),
@@ -883,18 +1047,21 @@ def collect_runs(cwd: Path, default_branch: str, release_commit: str) -> dict[st
 
 
 def command_verify_release(args: argparse.Namespace) -> int:
+    validate_release_version(args.version)
     missing = require_tools(["git", "gh"])
     if missing:
         fail("required tools are missing", {"missing_tools": missing})
 
     cwd = repo_root()
-    default_branch = resolve_default_branch(cwd, args.default_branch)
+    default_branch = resolve_default_branch(cwd, args.default_branch, args.remote)
+    repository = github_repository_for_remote(cwd, args.remote)
+    repository_args = github_repository_cli_args(repository)
     release_commit = run(["git", "rev-parse", args.release_commit], cwd=cwd).stdout.strip()
     errors: list[str] = []
 
     local_tag_proc = run(["git", "rev-list", "-n", "1", args.version], cwd=cwd, check=False)
     local_tag_commit = local_tag_proc.stdout.strip() if local_tag_proc.returncode == 0 else ""
-    remote_tag_commit = ls_remote_tag_commit(cwd, "origin", args.version)
+    remote_tag_commit = ls_remote_tag_commit(cwd, args.remote, args.version)
     if local_tag_commit != release_commit:
         errors.append("local tag does not point at release commit")
     if remote_tag_commit != release_commit:
@@ -908,6 +1075,7 @@ def command_verify_release(args: argparse.Namespace) -> int:
             args.version,
             "--json",
             "tagName,name,body,publishedAt,isDraft,isPrerelease,targetCommitish,url",
+            *repository_args,
         ],
         cwd=cwd,
         check=False,
@@ -931,7 +1099,11 @@ def command_verify_release(args: argparse.Namespace) -> int:
 
     watched_runs: list[dict[str, Any]] = []
     for run_id in args.watch_run:
-        proc = run(["gh", "run", "watch", str(run_id), "--exit-status"], cwd=cwd, check=False)
+        proc = run(
+            ["gh", "run", "watch", str(run_id), "--exit-status", *repository_args],
+            cwd=cwd,
+            check=False,
+        )
         watched_runs.append(
             {
                 "run_id": run_id,
@@ -945,7 +1117,7 @@ def command_verify_release(args: argparse.Namespace) -> int:
 
     pages, page_errors = ({"skipped": True}, [])
     if not args.skip_pages:
-        pages, page_errors = collect_pages(cwd, args.expect_pages_text)
+        pages, page_errors = collect_pages(cwd, args.expect_pages_text, repository)
         errors.extend(page_errors)
 
     payload = {
@@ -957,7 +1129,7 @@ def command_verify_release(args: argparse.Namespace) -> int:
         "local_tag_commit": local_tag_commit,
         "remote_tag_commit": remote_tag_commit,
         "release": release,
-        "runs": collect_runs(cwd, default_branch, release_commit),
+        "runs": collect_runs(cwd, default_branch, release_commit, repository),
         "watched_runs": watched_runs,
         "pages": pages,
         "final_status": run(["git", "status", "--short"], cwd=cwd).stdout.splitlines(),
@@ -973,6 +1145,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     preflight = subparsers.add_parser("preflight", help="Check deterministic release preconditions.")
     preflight.add_argument("--default-branch")
+    preflight.add_argument("--remote", default="origin")
     preflight.add_argument("--release-date", help="Release date in YYYY-MM-DD format. Used as midnight if no timestamp is provided.")
     preflight.add_argument(
         "--release-timestamp",
@@ -991,6 +1164,16 @@ def build_parser() -> argparse.ArgumentParser:
     notes.add_argument("--since-tag")
     notes.set_defaults(func=command_generate_notes)
 
+    select_release = subparsers.add_parser("select-release", help="Select and validate the canonical release version.")
+    select_release.add_argument("--preflight-file", required=True)
+    select_release.add_argument("--version", default="")
+    select_release.add_argument("--bump", choices=("patch", "minor", "major"), default="patch")
+    select_release.set_defaults(func=command_select_release)
+
+    validate_version = subparsers.add_parser("validate-version", help="Validate one canonical release version.")
+    validate_version.add_argument("--version", required=True)
+    validate_version.set_defaults(func=command_validate_version)
+
     changelog = subparsers.add_parser("insert-changelog", help="Insert generated release notes into CHANGELOG.md.")
     changelog.add_argument("--notes-file", required=True)
     changelog.add_argument("--changelog", default="CHANGELOG.md")
@@ -1000,6 +1183,7 @@ def build_parser() -> argparse.ArgumentParser:
     publish.add_argument("--version", required=True)
     publish.add_argument("--notes-file", required=True)
     publish.add_argument("--title")
+    publish.add_argument("--remote", default="origin")
     publish.set_defaults(func=command_publish_release)
 
     initialize_artifact = subparsers.add_parser(
@@ -1046,6 +1230,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--release-commit", required=True)
     verify.add_argument("--notes-file")
     verify.add_argument("--default-branch")
+    verify.add_argument("--remote", default="origin")
     verify.add_argument("--watch-run", action="append", default=[])
     verify.add_argument("--skip-pages", action="store_true")
     verify.add_argument("--expect-pages-text", action="append", default=[])

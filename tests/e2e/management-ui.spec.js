@@ -113,6 +113,16 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
   expect(pageHTML).toContain(`"dateModified":"${seoContentModifiedDate}"`);
 });
 
+test("SEO reliability pages describe configured upstream rate limits", async ({ request }) => {
+  for (const slug of ["upstream-worker-queue-limits", "provider-overload-timeout-handling"]) {
+    const response = await request.get(`${baseURL}/resources/${slug}/`);
+    expect(response.status()).toBe(httpOK);
+    const pageHTML = await response.text();
+    expect(pageHTML).toContain("server.upstream_rate_limits");
+    expect(pageHTML).not.toContain("I013 tracks future");
+  }
+});
+
 test("SEO sitemap and robots expose canonical resource URLs", async ({ request }) => {
   const sitemapResponse = await request.get(`${baseURL}${sitemapPath}`);
   expect(sitemapResponse.status()).toBe(httpOK);
