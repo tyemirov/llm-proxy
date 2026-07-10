@@ -101,6 +101,84 @@ func TestIntegrationSharedUpstreamRateLimitAppliesToTextAndDictationAndLogsDelay
 	}
 }
 
+func TestIntegrationRateLimitLogExcludesWorkerAcquisitionWait(testingInstance *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const (
+		rateWindow = 300 * time.Millisecond
+		workerHold = 200 * time.Millisecond
+	)
+	firstUpstreamStarted := make(chan struct{})
+	releaseFirstUpstream := make(chan struct{})
+	var callMutex sync.Mutex
+	callCount := 0
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		callMutex.Lock()
+		callCount++
+		currentCall := callCount
+		callMutex.Unlock()
+		if currentCall == 1 {
+			close(firstUpstreamStarted)
+			<-releaseFirstUpstream
+		}
+		writeRateLimitUpstreamResponse(responseWriter, httpRequest.URL.Path)
+	}))
+	testingInstance.Cleanup(upstreamServer.Close)
+
+	observedCore, observedLogs := observer.New(zapcore.DebugLevel)
+	loggerInstance := zap.New(observedCore)
+	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
+	configuration := rateLimitIntegrationConfiguration(upstreamServer.URL)
+	configuration.WorkerCount = 1
+	configuration.QueueSize = 2
+	configuration.UpstreamRateLimits = []proxy.UpstreamRateLimitConfiguration{{
+		Origin:      upstreamServer.URL,
+		MaxRequests: 1,
+		Interval:    rateWindow.String(),
+	}}
+	router := buildRateLimitIntegrationRouter(testingInstance, configuration, loggerInstance.Sugar())
+	applicationServer := httptest.NewServer(router)
+	testingInstance.Cleanup(applicationServer.Close)
+
+	results := make(chan rateLimitRequestResult, 2)
+	go func() {
+		statusCode, requestError := performRateLimitTextRequest(applicationServer.Client(), applicationServer.URL, proxy.ProviderNameDeepSeek)
+		results <- rateLimitRequestResult{statusCode: statusCode, requestError: requestError}
+	}()
+	select {
+	case <-firstUpstreamStarted:
+	case <-time.After(rateLimitAssertionTimeout):
+		testingInstance.Fatal("first upstream request did not acquire the worker")
+	}
+	go func() {
+		statusCode, requestError := performRateLimitTextRequest(applicationServer.Client(), applicationServer.URL, proxy.ProviderNameDeepSeek)
+		results <- rateLimitRequestResult{statusCode: statusCode, requestError: requestError}
+	}()
+	time.Sleep(workerHold)
+	close(releaseFirstUpstream)
+	for resultIndex := 0; resultIndex < 2; resultIndex++ {
+		select {
+		case result := <-results:
+			if result.requestError != nil || result.statusCode != http.StatusOK {
+				testingInstance.Fatalf("request status=%d error=%v", result.statusCode, result.requestError)
+			}
+		case <-time.After(rateLimitAssertionTimeout):
+			testingInstance.Fatal("rate-limited request did not finish")
+		}
+	}
+
+	delayLogs := observedLogs.FilterMessage(constants.LogEventUpstreamRateLimitDelayed).All()
+	if len(delayLogs) != 1 {
+		testingInstance.Fatalf("delay log count=%d want=1", len(delayLogs))
+	}
+	totalWaitMilliseconds, typeOK := delayLogs[0].ContextMap()[constants.LogFieldRateLimitTotalWaitMilliseconds].(int64)
+	if !typeOK {
+		testingInstance.Fatalf("rate-limit total wait field has unexpected type: %v", delayLogs[0].ContextMap())
+	}
+	if totalWaitMilliseconds >= workerHold.Milliseconds() {
+		testingInstance.Fatalf("rate-limit total wait=%dms includes worker hold=%dms", totalWaitMilliseconds, workerHold.Milliseconds())
+	}
+}
+
 func TestIntegrationSharedUpstreamRateLimitIsConcurrencySafe(testingInstance *testing.T) {
 	gin.SetMode(gin.TestMode)
 	var callMutex sync.Mutex
