@@ -144,6 +144,8 @@ require_positive_integer "DEPLOY_CI_TIMEOUT_SECONDS" "${CI_TIMEOUT_SECONDS}"
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "${repo_root}"
+release_helper="${RELEASE_HELPER:-${repo_root}/tools/gitrelease/scripts/release_helper.py}"
+[[ -f "${release_helper}" ]] || { echo "error: release helper is missing: ${release_helper}" >&2; exit 1; }
 
 resolve_gateway_dir() {
   if [[ -n "${GATEWAY_DIR}" ]]; then
@@ -189,6 +191,14 @@ else
   release_tag="$(resolve_release_tag)"
 fi
 
+if [[ -n "${release_tag}" ]]; then
+  command -v python3 >/dev/null 2>&1 || { echo "error: python3 is required" >&2; exit 1; }
+  if ! version_validation="$(python3 "${release_helper}" validate-version --version "${release_tag}" 2>&1)"; then
+    printf '%s\n' "${version_validation}" >&2
+    exit 1
+  fi
+fi
+
 if [[ "${SKIP_CI}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then
   echo "==> [deploy] Running make ci before deployment (timeout ${CI_TIMEOUT_SECONDS}s)"
   timeout -k "${CI_TIMEOUT_SECONDS}s" -s SIGKILL "${CI_TIMEOUT_SECONDS}s" make ci
@@ -208,6 +218,12 @@ if [[ "${SKIP_IMAGE_VERIFY}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then
   fi
 fi
 
+if [[ "${SKIP_PAGES}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then
+  [[ -n "${release_tag}" ]] || { echo "error: no release tag selected; run make publish first" >&2; exit 1; }
+  echo "==> [deploy] Validating the published Pages artifact for ${release_tag}"
+  PUBLISH_REMOTE="${DEPLOY_REMOTE}" PAGES_BRANCH="${PAGES_BRANCH}" PAGES_URL="${PAGES_URL}" PAGES_VERSION="${release_tag}" DEPLOY_PAGES_ARGS="--verify-only" make --no-print-directory pages-deploy
+fi
+
 if [[ "${SKIP_GATEWAY}" != "true" ]]; then
   echo "==> [deploy] Deploying llm-proxy through mprlab-gateway target ${GATEWAY_TARGET}"
   timeout --foreground -k 1200s -s SIGKILL 1200s make -C "${GATEWAY_DIR}" "${GATEWAY_TARGET}"
@@ -216,7 +232,7 @@ fi
 if [[ "${SKIP_PAGES}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then
   [[ -n "${release_tag}" ]] || { echo "error: no release tag selected; run make publish first" >&2; exit 1; }
   echo "==> [deploy] Activating the published Pages artifact for ${release_tag}"
-  PAGES_BRANCH="${PAGES_BRANCH}" PAGES_URL="${PAGES_URL}" PAGES_VERSION="${release_tag}" make --no-print-directory pages-deploy
+  PUBLISH_REMOTE="${DEPLOY_REMOTE}" PAGES_BRANCH="${PAGES_BRANCH}" PAGES_URL="${PAGES_URL}" PAGES_VERSION="${release_tag}" make --no-print-directory pages-deploy
 fi
 
 echo "llm-proxy deploy complete"
