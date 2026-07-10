@@ -94,18 +94,11 @@ management:
   provider_key_encryption_key: "${LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY}"
   management_api_origin: "${LLM_PROXY_MANAGEMENT_API_ORIGIN}"
   proxy_origin: "${LLM_PROXY_MANAGEMENT_PROXY_ORIGIN}"
-tenants:
-  - id: default
-    secret: "${SERVICE_SECRET}"
-    defaults:
-      provider: openai
-      model: gpt-4.1
-      dictation_provider: openai
-      dictation_model: gpt-4o-mini-transcribe
-      system_prompt: ""
+  legacy_token_migration:
+    tenant_id: default
+    owner_email: "${LLM_PROXY_MANAGEMENT_LEGACY_TOKEN_OWNER_EMAIL}"
 providers:
   openai:
-    api_key: "${OPENAI_API_KEY}"
     base_url: "https://api.openai.com/v1"
     transcriptions_url: "https://api.openai.com/v1/audio/transcriptions"
     text:
@@ -136,14 +129,12 @@ providers:
         - id: "gpt-4o-mini-transcribe"
         - id: "gpt-4o-transcribe"
   meta:
-    api_key: "${MODEL_API_KEY}"
     base_url: "https://api.meta.ai/v1"
     text:
       default_model: "muse-spark-1.1"
       models:
         - id: "muse-spark-1.1"
   deepseek:
-    api_key: "${DEEPSEEK_API_KEY}"
     base_url: "https://api.deepseek.com"
     text:
       default_model: "deepseek-v4-flash"
@@ -153,21 +144,18 @@ providers:
         - id: "deepseek-chat"
         - id: "deepseek-reasoner"
   dashscope:
-    api_key: "${DASHSCOPE_API_KEY}"
     base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
     text:
       default_model: "qwen-plus"
       models:
         - id: "qwen-plus"
   moonshot:
-    api_key: "${MOONSHOT_API_KEY}"
     base_url: "https://api.moonshot.ai/v1"
     text:
       default_model: "kimi-k2-0905-preview"
       models:
         - id: "kimi-k2-0905-preview"
   siliconflow:
-    api_key: "${SILICONFLOW_API_KEY}"
     base_url: "https://api.siliconflow.com/v1"
     transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
     text:
@@ -179,7 +167,6 @@ providers:
       models:
         - id: "FunAudioLLM/SenseVoiceSmall"
   zhipu:
-    api_key: "${ZHIPU_API_KEY}"
     base_url: "https://open.bigmodel.cn/api/paas/v4"
     transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
     text:
@@ -191,7 +178,6 @@ providers:
       models:
         - id: "glm-asr-2512"
   gemini:
-    api_key: "${GEMINI_API_KEY}"
     base_url: "https://generativelanguage.googleapis.com/v1"
     text:
       default_model: "gemini-2.5-flash"
@@ -207,7 +193,6 @@ providers:
         - id: "gemini-2.5-pro"
           output_token_limit: 65536
   anthropic:
-    api_key: "${ANTHROPIC_API_KEY}"
     base_url: "https://api.anthropic.com"
     text:
       default_model: "claude-sonnet-4-6"
@@ -229,7 +214,6 @@ providers:
         - id: "claude-opus-4-1"
           output_token_limit: 32000
   grok:
-    api_key: "${XAI_API_KEY}"
     base_url: "https://api.x.ai/v1"
     transcriptions_url: "https://api.x.ai/v1/stt"
     text:
@@ -260,6 +244,8 @@ same shared HTTP layer. Rules match an exact normalized upstream origin
 budget while different origins are independent. A delayed call remains in the
 bounded upstream queue but does not occupy a worker. Every upstream attempt,
 including transport retries and OpenAI response retries, consumes one call.
+The shared client reserves the slot only after worker capacity is available;
+if the rolling window is still full, it releases that worker before waiting.
 An absent or empty list disables rate limiting; invalid and duplicate rules
 fail startup.
 
@@ -407,13 +393,14 @@ Provider-specific details:
   `providers.grok.transcriptions_url`; the upstream STT endpoint does not
   receive a `model` multipart field.
 
-Provider API keys are optional until a tenant uses that provider as a default.
-If a non-default provider key is blank or its whole `api_key` value is a missing
-`${...}` placeholder, startup continues and explicit requests for that provider
-return `503 provider not configured`. Missing placeholders in other fields, or
-embedded inside a longer `api_key` value, fail startup. If a tenant's default
-text or dictation provider lacks its API key, startup fails before the server
-listens. Provider `base_url` values are explicit config values; leave them at
+When management is disabled, provider API keys are optional until a configured
+static tenant uses that provider as a default. If a non-default provider key is
+blank or its whole `api_key` value is a missing `${...}` placeholder, startup
+continues and explicit requests for that provider return `503 provider not
+configured`. Missing placeholders in other fields, or embedded inside a longer
+`api_key` value, fail startup. If a static tenant's default text or dictation
+provider lacks its API key, startup fails before the server listens. Provider
+`base_url` values are explicit config values; leave them at
 the documented URLs unless routing through a test server, proxy, or compatible
 gateway. Dictation-capable provider
 `transcriptions_url` values are also explicit config values and are required for
@@ -421,10 +408,9 @@ OpenAI, SiliconFlow, Zhipu, and Grok/xAI. Text model catalogs are required for
 every supported provider, and dictation model catalogs are required for OpenAI,
 SiliconFlow, Zhipu, and Grok/xAI. When `management.enabled` is false, startup
 validates that `tenants` includes at least one unique `id` and unique `secret`.
-When management is enabled, static tenants are optional migration seed data
-because signed-in users can create managed tenants through the UI, and
-DB-authoritative runtime authentication does not validate static tenant
-provider credentials.
+When management is enabled, `tenants` and nonblank provider `api_key` fields are
+invalid: all client tokens and provider credentials are user-owned database
+state.
 Unknown YAML keys fail startup.
 
 ### Self-service management UI
@@ -471,6 +457,8 @@ Required hosted values are profile-specific:
 | `management.provider_key_encryption_key` | Required base64-encoded 32-byte key used for AES-GCM encryption of tenant-owned provider API keys at rest. Generate with `openssl rand -base64 32` and store it with backend deployment secrets. |
 | `management.management_api_origin` | Browser-facing management API origin served from `/config-ui.yaml` under `llmProxy.managementApiOrigin`. |
 | `management.proxy_origin` | Browser-facing public proxy origin served from `/config-ui.yaml` under `llmProxy.proxyOrigin` for generated examples. |
+| `management.legacy_token_migration.tenant_id` | Optional one-off source tenant id; must be provided together with `owner_email`. |
+| `management.legacy_token_migration.owner_email` | Optional normalized email that alone may claim the configured legacy tenant through a verified TAuth session. Keep the real value in deployment secrets. |
 
 Signed-in users save provider API keys for any supported provider, choose each
 provider's text model and provider-specific system prompt, choose routing
@@ -532,17 +520,24 @@ endpoint, provider, model, status code, success flag, latency, and normalized
 request/response/total token counts. Prompts, audio, transcripts, responses,
 tenant secrets, and provider API keys are not stored in usage events.
 
-On the first management-mode startup, llm-proxy runs a one-time migration from
-legacy config tenants and nonblank configured provider API keys into the
-database, then records a migration marker. After that marker exists, config-file
-tenants and provider API key fields are ignored by runtime authentication and
-routing, even if stale values remain in YAML. Remove migrated `tenants` and
-provider `api_key` values from config after confirming the DB migration.
-Server/runtime settings, backend auth validation settings, provider base URLs,
-transcription URLs, model catalogs, and browser-facing MPR UI/TAuth bootstrap
-settings remain config-file-owned. The GitHub Pages artifact is only the static
-shell; API-served browser config endpoints are projections of backend
-`config.yml`, not independent configuration sources.
+Management mode no longer imports config tenants or global provider keys, and
+startup removes the obsolete static-import marker table. A deployment that
+still contains one prior `static-config:<tenant-id>` database row must configure
+the exact `legacy_token_migration` tenant id and target
+email. The unowned token returns `403` until that email signs in. Drain every
+old service instance before the matching account signs in. On that account's
+first authenticated management request, llm-proxy atomically rekeys the tenant
+to the verified TAuth subject, preserves the tenant id,
+existing token digest, defaults, creation time, and all usage events, and
+re-encrypts provider keys for the new owner id. A different email cannot claim
+the row, and an existing destination account returns `409 Conflict` without
+partial changes. Once production claim verification succeeds, remove the
+temporary migration block and owner-email environment value. Server/runtime
+settings, backend auth validation settings, provider base URLs, transcription
+URLs, model catalogs, and browser-facing MPR
+UI/TAuth bootstrap settings remain config-file-owned. The GitHub Pages artifact
+is only the static shell; API-served browser config endpoints are projections of
+backend `config.yml`, not independent configuration sources.
 
 ### Hosted split-origin setup
 
@@ -570,10 +565,10 @@ Then configure GitHub Pages for this repository:
    `gh-pages`. Deployment configures the repository Pages source and verifies
    `/.mprlab-release.json` at the public origin.
 4. Configure real backend deployment secrets outside the Pages artifact:
-   `SERVICE_SECRET`, `LLM_PROXY_MANAGEMENT_ADMIN_EMAILS`,
-   `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`,
+   `LLM_PROXY_MANAGEMENT_ADMIN_EMAILS`, `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`,
    `LLM_PROXY_MANAGEMENT_DATABASE_DSN`,
-   `LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY`.
+   `LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY`, and, only for the bounded
+   ownership migration, `LLM_PROXY_MANAGEMENT_LEGACY_TOKEN_OWNER_EMAIL`.
 5. Do not store browser runtime config in the Pages branch. Production browser
    config is served only by `https://llm-proxy-api.mprlab.com/config-ui.yaml`
    from the running backend's loaded management config.
@@ -619,10 +614,10 @@ Run the service with OpenAI defaults:
 ./llm-proxy --config config.yml
 ```
 
-In static config mode, set a tenant's default text provider/model to route
-omitted-provider requests to DeepSeek. In management mode these tenant blocks
-are one-time migration seed data only; after the migration marker exists, manage
-tenant defaults in the UI/DB instead:
+With `management.enabled: false`, set a static tenant's default text
+provider/model to route omitted-provider requests to DeepSeek. Static tenant
+blocks are invalid in management mode, where every token is owned by an
+authenticated user:
 
 ```yaml
 tenants:
@@ -684,8 +679,9 @@ This repository exposes the standard local targets used by MPR app repos:
 | Command | Purpose |
 |---------|---------|
 | `npm ci` | Install pinned frontend validation dependencies before running local frontend checks. |
-| `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, and Playwright browser tests. |
-| `make test-live-providers` | Generate a complete temporary config and run live text smoke tests for every provider whose API key is present; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
+| `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, repository-owned release integration tests, and the non-paid live-harness preflight. |
+| `make test-live-provider-harness` | Generate the temporary static-mode live-test config and verify authenticated routing without an upstream call. |
+| `make test-live-providers` | Generate a complete temporary static-mode config and run live text smoke tests for every provider whose API key is present; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
 | `make release` | Run CI and prepare the local tag, container archives, and validated Pages archive under `.git/mprlab-release` without remote writes. |
 | `make publish` | Publish the exact prepared Git refs, GitHub Release assets, and container archives without rebuilding or deploying. |
@@ -725,19 +721,27 @@ LLM_PROXY_LIVE_PROVIDERS=openai,gemini \
   make test-live-providers LIVE_ENV_FILE=configs/.env
 ```
 
-The release lifecycle commands wrap their local `make ci` gate with the
-standard 350-second timeout by default. For exceptional local diagnostics,
-override all three with `LLM_PROXY_CI_TIMEOUT_SECONDS=<seconds>`, or use the
-command-specific `RELEASE_CI_TIMEOUT_SECONDS`, `PUBLISH_CI_TIMEOUT_SECONDS`,
-and `DEPLOY_CI_TIMEOUT_SECONDS` variables.
+The live harness parses `LIVE_ENV_FILE` as dotenv data without executing it as
+shell code. It always writes a disposable static-mode config with management
+disabled, a temporary tenant, and placeholder values for unused provider keys,
+so live checks never open the configured management database or reuse its
+migration state. Inspect that generated contract without building or calling a
+paid provider with `./scripts/test_live_providers.sh --write-config
+/tmp/llm-proxy-live.yml`.
+
+`make release` and `make deploy` run the local `make ci` gate with the standard
+350-second timeout. Override both with
+`LLM_PROXY_CI_TIMEOUT_SECONDS=<seconds>`, or use the command-specific
+`RELEASE_CI_TIMEOUT_SECONDS` and `DEPLOY_CI_TIMEOUT_SECONDS` variables.
+`make publish` verifies and uploads only the already-prepared immutable
+artifacts; it does not rebuild or rerun CI.
 
 `llm-proxy` is a gateway-local service in `mprlab-gateway`, so `make deploy`
 defaults to the gateway `deploy-llm-proxy-backend` target. Override the
 checkout or target with `GATEWAY_DIR=/path/to/mprlab-gateway` or
-`GATEWAY_DEPLOY_TARGET=<target>`. Override Pages publishing with
-`PAGES_BRANCH=<branch>`, `PAGES_DOMAIN=<domain>`, or
-`PUBLISH_PAGES_ARGS="--skip-configure"` when an operator must separate the
-GitHub API source configuration from the branch push.
+`GATEWAY_DEPLOY_TARGET=<target>`. Override Pages preparation and activation
+with `PAGES_DOMAIN=<domain>`, `PAGES_BRANCH=<branch>`, `PAGES_URL=<url>`, or
+`DEPLOY_PAGES_ARGS="--skip-configure"`.
 
 ## Usage
 
@@ -1242,7 +1246,10 @@ the selected integration profile or deployment docs, not in this README.
 Use `make release` from a clean local `master` branch. It runs `make ci`, builds
 the multi-platform container archives and static Pages archive under
 `.git/mprlab-release`, updates `CHANGELOG.md`, and creates only a local release
-commit and tag. It performs no remote writes.
+commit and tag. The release implementation is repository-owned under
+`tools/gitrelease`, uses the single canonical `vMAJOR.MINOR.PATCH` SemVer
+contract, and builds containers from `git archive HEAD` so ignored credentials,
+`.git`, and local artifacts never enter BuildKit. It performs no remote writes.
 
 Use `make publish` to push the prepared Git refs, GitHub Release assets, and
 container archives without rebuilding. Use `make deploy` only after publish;
