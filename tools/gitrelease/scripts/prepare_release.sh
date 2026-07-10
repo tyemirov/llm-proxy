@@ -96,68 +96,11 @@ fi
 [[ -x "${helper}" ]] || { echo "error: release helper is not executable: ${helper}" >&2; exit 1; }
 
 json_value() {
-  python3 - "$1" "$2" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1], "r", encoding="utf-8") as handle:
-    value = json.load(handle)
-for part in sys.argv[2].split("."):
-    value = value.get(part) if isinstance(value, dict) else None
-print("" if value is None else value)
-PY
+  python3 -c 'import functools, json, sys; data = json.load(open(sys.argv[1], encoding="utf-8")); value = functools.reduce(lambda current, part: current.get(part) if isinstance(current, dict) else None, sys.argv[2].split("."), data); print("" if value is None else value)' "$1" "$2"
 }
 
 select_release() {
-  python3 - "$1" "${version}" "${bump}" <<'PY'
-import json
-import re
-import sys
-
-with open(sys.argv[1], "r", encoding="utf-8") as handle:
-    data = json.load(handle)
-explicit_version, bump = sys.argv[2], sys.argv[3]
-info = data.get("version_info") or {}
-
-semver_pattern = re.compile(
-    r"^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)"
-    r"(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$"
-)
-def validate_selected_version(value):
-    if re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", value) is None:
-        raise SystemExit("release version must satisfy Git and container tag constraints")
-    if semver_pattern.fullmatch(value) is None:
-        raise SystemExit("release version must use canonical vMAJOR.MINOR.PATCH SemVer")
-
-def semver_bump(latest):
-    if not latest:
-        return "v1.0.0"
-    match = re.match(r"^(v?)(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$", latest)
-    if not match:
-        raise SystemExit(f"latest SemVer tag is invalid: {latest}")
-    prefix, major, minor, patch = match.groups()
-    major, minor, patch = int(major), int(minor), int(patch)
-    if bump == "major":
-        major, minor, patch = major + 1, 0, 0
-    elif bump == "minor":
-        minor, patch = minor + 1, 0
-    else:
-        patch += 1
-    return f"{prefix or 'v'}{major}.{minor}.{patch}"
-
-if explicit_version:
-    selected = explicit_version
-else:
-    selected = semver_bump(info.get("latest_semver_tag") or "")
-boundary = info.get("latest_semver_tag") or ""
-
-if not selected:
-    raise SystemExit("release version selection returned an empty version")
-validate_selected_version(selected)
-print(selected)
-print(boundary)
-print("semver")
-PY
+  "${helper}" select-release --preflight-file "$1" --version "${version}" --bump "${bump}"
 }
 
 preflight_json="$(mktemp)"
@@ -179,6 +122,13 @@ run_local_preflight() {
   cat "${preflight_json}"
 }
 
+ensure_release_tag_absent() {
+  if git show-ref --verify --quiet "refs/tags/${next_version}"; then
+    echo "error: release tag already exists: ${next_version}" >&2
+    exit 1
+  fi
+}
+
 echo "==> [release] Checking local release state"
 run_local_preflight
 default_branch="$(json_value "${preflight_json}" "default_branch")"
@@ -187,6 +137,7 @@ selection="$(select_release "${preflight_json}")"
 next_version="$(sed -n '1p' <<<"${selection}")"
 boundary_tag="$(sed -n '2p' <<<"${selection}")"
 effective_scheme="$(sed -n '3p' <<<"${selection}")"
+ensure_release_tag_absent
 
 if [[ "${dry_run}" == "true" ]]; then
   echo "release_dry_run=true"
@@ -208,6 +159,7 @@ selection="$(select_release "${preflight_json}")"
 next_version="$(sed -n '1p' <<<"${selection}")"
 boundary_tag="$(sed -n '2p' <<<"${selection}")"
 effective_scheme="$(sed -n '3p' <<<"${selection}")"
+ensure_release_tag_absent
 
 "${helper}" initialize-release-artifact \
   --version "${next_version}" \
