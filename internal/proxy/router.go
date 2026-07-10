@@ -105,9 +105,6 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		if storeError != nil {
 			return nil, storeError
 		}
-		if migrationError := managedTenants.migrateStaticConfiguration(configuration); migrationError != nil {
-			return nil, migrationError
-		}
 		if migrationError := managedTenants.migrateProviderTextSettings(providers); migrationError != nil {
 			return nil, migrationError
 		}

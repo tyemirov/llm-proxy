@@ -215,6 +215,15 @@ func (service *managementService) sessionMiddleware() gin.HandlerFunc {
 			ginContext.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
+		if migrationError := service.store.claimLegacyToken(principal); migrationError != nil {
+			statusCode := http.StatusInternalServerError
+			if errors.Is(migrationError, errManagedLegacyTokenConflict) {
+				statusCode = http.StatusConflict
+			}
+			ginContext.String(statusCode, migrationError.Error())
+			ginContext.Abort()
+			return
+		}
 		ginContext.Set(contextKeyManagementPrincipal, principal)
 		ginContext.Next()
 	}

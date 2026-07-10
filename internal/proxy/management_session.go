@@ -108,7 +108,7 @@ func (validator *managementSessionValidator) newManagementPrincipal(claims *mana
 func managementAdminEmailSet(adminEmails []string) map[string]struct{} {
 	adminEmailSet := make(map[string]struct{}, len(adminEmails))
 	for _, emailValue := range adminEmails {
-		normalizedEmail, emailError := normalizeManagementAdminEmail(emailValue)
+		normalizedEmail, emailError := normalizeManagementEmail(emailValue)
 		if emailError == nil {
 			adminEmailSet[normalizedEmail] = struct{}{}
 		}

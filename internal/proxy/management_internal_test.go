@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -377,6 +378,9 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 	}
 
 	createErrorDatabase := newFakeManagedTenantDatabase()
+	createErrorRecord := internalManagedTenantRecord(principal.userID, "", fixedTime)
+	createErrorRecord.TenantID = managedTenant.identifier.string()
+	createErrorDatabase.records[principal.userID] = createErrorRecord
 	createErrorDatabase.createUsageEventError = errInternalTestDatabase
 	createErrorStore := newManagedTenantStoreWithDatabase(createErrorDatabase)
 	createErrorStore.now = func() time.Time { return fixedTime }
@@ -390,6 +394,22 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 	})
 	if !errors.Is(recordError, errManagedTenantStorePersist) {
 		t.Fatalf("record usage error=%v want %v", recordError, errManagedTenantStorePersist)
+	}
+
+	ownerQueryErrorDatabase := newFakeManagedTenantDatabase()
+	ownerQueryErrorDatabase.userQueryErrors = []error{errInternalTestDatabase}
+	ownerQueryErrorStore := newManagedTenantStoreWithDatabase(ownerQueryErrorDatabase)
+	if recordError := ownerQueryErrorStore.recordUsage(managedTenant, managedUsageEvent{statusCode: http.StatusOK}); !errors.Is(recordError, errManagedTenantStorePersist) {
+		t.Fatalf("owner query usage error=%v want %v", recordError, errManagedTenantStorePersist)
+	}
+
+	unownedDatabase := newFakeManagedTenantDatabase()
+	unownedRecord := internalManagedTenantRecord(legacyStaticTenantUserID(tenantID("legacy")), "", fixedTime)
+	unownedRecord.TenantID = managedTenant.identifier.string()
+	unownedDatabase.records[unownedRecord.UserID] = unownedRecord
+	unownedStore := newManagedTenantStoreWithDatabase(unownedDatabase)
+	if recordError := unownedStore.recordUsage(managedTenant, managedUsageEvent{statusCode: http.StatusOK}); !errors.Is(recordError, errManagedLegacyTokenUnowned) {
+		t.Fatalf("unowned usage error=%v want %v", recordError, errManagedLegacyTokenUnowned)
 	}
 
 	queryRecordErrorDatabase := newFakeManagedTenantDatabase()
@@ -513,89 +533,6 @@ func TestManagedUsageSummaryBucketsAndOrdering(t *testing.T) {
 	}
 }
 
-func TestManagedTenantStoreStaticConfigMigrationEdges(t *testing.T) {
-	fixedTime := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
-	legacyTenantSecretDigest := sha256.Sum256([]byte("legacy-secret"))
-	legacyTenant := tenant{
-		identifier:   tenantID("legacy"),
-		secretDigest: legacyTenantSecretDigest,
-		defaults:     newTenantDefaults(TenantDefaults{Provider: ProviderNameDeepSeek, Model: ModelNameDeepSeekV4Flash, DictationProvider: ProviderNameOpenAI, DictationModel: DefaultDictationModel}),
-	}
-	configuration := Configuration{
-		OpenAIKey:   "sk-openai",
-		DeepSeekKey: "sk-deepseek",
-		tenants: tenantRegistry{
-			tenants: []tenant{legacyTenant},
-		},
-	}
-
-	database := newFakeManagedTenantDatabase()
-	store := newManagedTenantStoreWithDatabase(database)
-	store.now = func() time.Time { return fixedTime }
-	if migrationError := store.migrateStaticConfiguration(configuration); migrationError != nil {
-		t.Fatalf("migrate static configuration: %v", migrationError)
-	}
-	if _, exists := database.migrations[staticConfigMigrationID]; !exists {
-		t.Fatalf("migration marker was not saved")
-	}
-	record, exists := database.records[staticConfigTenantUserID(legacyTenant.identifier)]
-	if !exists {
-		t.Fatalf("legacy tenant was not imported")
-	}
-	if record.TenantID != "legacy" || record.SecretDigest != hex.EncodeToString(legacyTenantSecretDigest[:]) {
-		t.Fatalf("legacy record=%+v", record)
-	}
-	providerAPIKeys, providerKeyError := store.providerAPIKeyMap(record.ProviderAPIKeys)
-	if providerKeyError != nil {
-		t.Fatalf("provider key map error=%v", providerKeyError)
-	}
-	if providerAPIKeys[newProviderID(ProviderNameOpenAI)] != "sk-openai" || providerAPIKeys[newProviderID(ProviderNameDeepSeek)] != "sk-deepseek" {
-		t.Fatalf("provider keys=%v", providerAPIKeys)
-	}
-
-	database.records[staticConfigTenantUserID(legacyTenant.identifier)] = internalManagedTenantRecord(staticConfigTenantUserID(legacyTenant.identifier), "", fixedTime)
-	if migrationError := store.migrateStaticConfiguration(Configuration{OpenAIKey: "sk-stale"}); migrationError != nil {
-		t.Fatalf("repeat migration: %v", migrationError)
-	}
-	if repeatRecord := database.records[staticConfigTenantUserID(legacyTenant.identifier)]; len(repeatRecord.ProviderAPIKeys) != 0 {
-		t.Fatalf("migration reran after marker: %+v", repeatRecord.ProviderAPIKeys)
-	}
-
-	migrationQueryErrorDatabase := newFakeManagedTenantDatabase()
-	migrationQueryErrorDatabase.migrationQueryErrors = []error{errInternalTestDatabase}
-	migrationQueryErrorStore := newManagedTenantStoreWithDatabase(migrationQueryErrorDatabase)
-	if migrationError := migrationQueryErrorStore.migrateStaticConfiguration(configuration); !errors.Is(migrationError, errManagedTenantStorePersist) {
-		t.Fatalf("migration query error=%v want %v", migrationError, errManagedTenantStorePersist)
-	}
-
-	migrationTenantSaveErrorDatabase := newFakeManagedTenantDatabase()
-	migrationTenantSaveErrorDatabase.saveTenantError = errInternalTestDatabase
-	migrationTenantSaveErrorStore := newManagedTenantStoreWithDatabase(migrationTenantSaveErrorDatabase)
-	if migrationError := migrationTenantSaveErrorStore.migrateStaticConfiguration(configuration); !errors.Is(migrationError, errManagedTenantStorePersist) {
-		t.Fatalf("migration tenant save error=%v want %v", migrationError, errManagedTenantStorePersist)
-	}
-
-	migrationProviderKeyErrorDatabase := newFakeManagedTenantDatabase()
-	migrationProviderKeyErrorDatabase.saveProviderKeyError = errInternalTestDatabase
-	migrationProviderKeyErrorStore := newManagedTenantStoreWithDatabase(migrationProviderKeyErrorDatabase)
-	if migrationError := migrationProviderKeyErrorStore.migrateStaticConfiguration(configuration); !errors.Is(migrationError, errManagedTenantStorePersist) {
-		t.Fatalf("migration provider key error=%v want %v", migrationError, errManagedTenantStorePersist)
-	}
-
-	migrationEncryptionErrorStore := newManagedTenantStoreWithDatabase(newFakeManagedTenantDatabase())
-	migrationEncryptionErrorStore.randomReader = strings.NewReader("")
-	if migrationError := migrationEncryptionErrorStore.migrateStaticConfiguration(configuration); !errors.Is(migrationError, errManagedProviderKeyEncryption) {
-		t.Fatalf("migration provider key encryption error=%v want %v", migrationError, errManagedProviderKeyEncryption)
-	}
-
-	migrationMarkerErrorDatabase := newFakeManagedTenantDatabase()
-	migrationMarkerErrorDatabase.createMigrationError = errInternalTestDatabase
-	migrationMarkerErrorStore := newManagedTenantStoreWithDatabase(migrationMarkerErrorDatabase)
-	if migrationError := migrationMarkerErrorStore.migrateStaticConfiguration(configuration); !errors.Is(migrationError, errManagedTenantStorePersist) {
-		t.Fatalf("migration marker error=%v want %v", migrationError, errManagedTenantStorePersist)
-	}
-}
-
 func TestManagedTenantGORMDatabaseOpenError(t *testing.T) {
 	_, storeError := newGORMManagedTenantDatabase(ManagementConfiguration{DatabaseDialect: ManagementDatabaseDialectPostgres, DatabaseDSN: "postgres://%"})
 	if !errors.Is(storeError, errManagedTenantStoreOpen) {
@@ -631,6 +568,17 @@ func TestManagedTenantGORMDatabaseOpenError(t *testing.T) {
 		t.Fatalf("gorm migration error=%v want %v", migrationError, errManagedTenantStoreOpen)
 	}
 
+	_, obsoleteCleanupError := newGORMManagedTenantDatabase(ManagementConfiguration{
+		DatabaseDialect: ManagementDatabaseDialectSQLite,
+		DatabaseDSN:     "sqlite-test-obsolete-cleanup",
+		DatabaseDialector: failingObsoleteStaticMigrationCleanupDialector{
+			Dialector: sqlite.Open(":memory:"),
+		},
+	})
+	if !errors.Is(obsoleteCleanupError, errManagedTenantStoreOpen) || !errors.Is(obsoleteCleanupError, errInternalTestDatabase) {
+		t.Fatalf("obsolete cleanup error=%v", obsoleteCleanupError)
+	}
+
 	_, invalidKeyStoreError := newManagedTenantStore(ManagementConfiguration{
 		DatabaseDialect:          ManagementDatabaseDialectSQLite,
 		DatabaseDSN:              filepath.Join(t.TempDir(), "invalid-key.db"),
@@ -638,6 +586,16 @@ func TestManagedTenantGORMDatabaseOpenError(t *testing.T) {
 	})
 	if !errors.Is(invalidKeyStoreError, errManagedTenantStoreOpen) {
 		t.Fatalf("invalid key store error=%v want %v", invalidKeyStoreError, errManagedTenantStoreOpen)
+	}
+
+	_, invalidMigrationStoreError := newManagedTenantStore(ManagementConfiguration{
+		DatabaseDialect:          ManagementDatabaseDialectSQLite,
+		DatabaseDSN:              filepath.Join(t.TempDir(), "invalid-migration.db"),
+		ProviderKeyEncryptionKey: testManagedProviderKeyEncryptionKey,
+		LegacyTokenMigration:     LegacyTokenMigrationConfiguration{TenantID: "legacy"},
+	})
+	if !errors.Is(invalidMigrationStoreError, errManagedTenantStoreOpen) || !strings.Contains(invalidMigrationStoreError.Error(), ErrInvalidManagementConfiguration.Error()) {
+		t.Fatalf("invalid migration store error=%v", invalidMigrationStoreError)
 	}
 
 	readonlyDatabasePath := filepath.Join(t.TempDir(), "readonly-migration.db")
@@ -667,6 +625,364 @@ func TestManagedTenantGORMDatabaseOpenError(t *testing.T) {
 	if !errors.Is(readonlyStoreError, errManagedTenantStorePersist) {
 		t.Fatalf("readonly migration store error=%v want %v", readonlyStoreError, errManagedTenantStorePersist)
 	}
+}
+
+func TestManagedTenantGORMDatabaseRemovesObsoleteStaticMigrationTable(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "obsolete-static-migration.db")
+	seedDatabase, openError := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+	if openError != nil {
+		t.Fatalf("open obsolete migration database: %v", openError)
+	}
+	obsoleteRecord := struct {
+		ID string `gorm:"primaryKey"`
+	}{}
+	if createError := seedDatabase.Table(obsoleteStaticMigrationTable).AutoMigrate(&obsoleteRecord); createError != nil {
+		t.Fatalf("create obsolete migration table: %v", createError)
+	}
+	if !seedDatabase.Migrator().HasTable(obsoleteStaticMigrationTable) {
+		t.Fatalf("obsolete migration table was not created")
+	}
+	if _, databaseError := newGORMManagedTenantDatabase(ManagementConfiguration{
+		DatabaseDialect: ManagementDatabaseDialectSQLite,
+		DatabaseDSN:     databasePath,
+	}); databaseError != nil {
+		t.Fatalf("open managed database: %v", databaseError)
+	}
+	if seedDatabase.Migrator().HasTable(obsoleteStaticMigrationTable) {
+		t.Fatalf("obsolete migration table still exists")
+	}
+}
+
+func TestManagedLegacyTokenMigrationStateAndClaimEdges(t *testing.T) {
+	fixedTime := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
+	migration, migrationError := newManagedLegacyTokenMigration(LegacyTokenMigrationConfiguration{TenantID: "legacy", OwnerEmail: "Owner@Example.com"})
+	if migrationError != nil || migration.ownerEmail != "owner@example.com" {
+		t.Fatalf("migration=%+v error=%v", migration, migrationError)
+	}
+	if _, migrationError := newManagedLegacyTokenMigration(LegacyTokenMigrationConfiguration{TenantID: "legacy"}); !errors.Is(migrationError, ErrInvalidManagementConfiguration) {
+		t.Fatalf("partial migration error=%v", migrationError)
+	}
+
+	queryErrorDatabase := newFakeManagedTenantDatabase()
+	queryErrorDatabase.userQueryErrors = []error{errInternalTestDatabase}
+	queryErrorStore := newManagedTenantStoreWithDatabase(queryErrorDatabase)
+	if stateError := queryErrorStore.validateLegacyTokenMigrationState(); !errors.Is(stateError, errManagedTenantStorePersist) {
+		t.Fatalf("state query error=%v", stateError)
+	}
+
+	multipleDatabase := newFakeManagedTenantDatabase()
+	firstLegacyUserID := legacyStaticTenantUserID(tenantID("legacy"))
+	secondLegacyUserID := legacyStaticTenantUserID(tenantID("other"))
+	firstLegacyRecord := internalManagedTenantRecord(firstLegacyUserID, "", fixedTime)
+	firstLegacyRecord.TenantID = "legacy"
+	secondLegacyRecord := internalManagedTenantRecord(secondLegacyUserID, "", fixedTime)
+	secondLegacyRecord.TenantID = "other"
+	multipleDatabase.records[firstLegacyUserID] = firstLegacyRecord
+	multipleDatabase.records[secondLegacyUserID] = secondLegacyRecord
+	multipleStore := newManagedTenantStoreWithDatabase(multipleDatabase)
+	multipleStore.legacyMigration = migration
+	if stateError := multipleStore.validateLegacyTokenMigrationState(); !errors.Is(stateError, errManagedLegacyTokenMigration) {
+		t.Fatalf("multiple legacy state error=%v", stateError)
+	}
+
+	mismatchDatabase := newFakeManagedTenantDatabase()
+	mismatchDatabase.records[secondLegacyUserID] = secondLegacyRecord
+	mismatchStore := newManagedTenantStoreWithDatabase(mismatchDatabase)
+	mismatchStore.legacyMigration = migration
+	if stateError := mismatchStore.validateLegacyTokenMigrationState(); !errors.Is(stateError, errManagedLegacyTokenMigration) {
+		t.Fatalf("mismatched legacy state error=%v", stateError)
+	}
+
+	invalidTargetStore := newManagedTenantStoreWithDatabase(newFakeManagedTenantDatabase())
+	invalidTargetStore.legacyMigration = migration
+	if claimError := invalidTargetStore.claimLegacyToken(managementPrincipal{userID: firstLegacyUserID, userEmail: migration.ownerEmail}); !errors.Is(claimError, errManagedLegacyTokenConflict) {
+		t.Fatalf("invalid target claim error=%v", claimError)
+	}
+
+	claimErrorDatabase := newFakeManagedTenantDatabase()
+	claimErrorDatabase.claimLegacyTenantError = errInternalTestDatabase
+	claimErrorStore := newManagedTenantStoreWithDatabase(claimErrorDatabase)
+	claimErrorStore.legacyMigration = migration
+	if claimError := claimErrorStore.claimLegacyToken(managementPrincipal{userID: "target", userEmail: migration.ownerEmail}); !errors.Is(claimError, errManagedLegacyTokenMigration) || !errors.Is(claimError, errInternalTestDatabase) {
+		t.Fatalf("database claim error=%v", claimError)
+	}
+
+	decryptErrorDatabase := newFakeManagedTenantDatabase()
+	decryptErrorRecord := firstLegacyRecord
+	decryptErrorRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{{UserID: firstLegacyUserID, ProviderID: ProviderNameOpenAI, EncryptedAPIKey: "invalid"}}
+	decryptErrorDatabase.records[firstLegacyUserID] = decryptErrorRecord
+	decryptErrorStore := newManagedTenantStoreWithDatabase(decryptErrorDatabase)
+	decryptErrorStore.legacyMigration = migration
+	if claimError := decryptErrorStore.claimLegacyToken(managementPrincipal{userID: "target", userEmail: migration.ownerEmail}); !errors.Is(claimError, errManagedProviderKeyDecryption) {
+		t.Fatalf("decrypt claim error=%v", claimError)
+	}
+
+	encryptionErrorDatabase := newFakeManagedTenantDatabase()
+	validProviderRecord := internalManagedProviderKeyRecord(t, firstLegacyUserID, ProviderNameOpenAI, "sk-legacy", fixedTime)
+	encryptionErrorRecord := firstLegacyRecord
+	encryptionErrorRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{validProviderRecord}
+	encryptionErrorDatabase.records[firstLegacyUserID] = encryptionErrorRecord
+	encryptionErrorStore := newManagedTenantStoreWithDatabase(encryptionErrorDatabase)
+	encryptionErrorStore.legacyMigration = migration
+	encryptionErrorStore.randomReader = strings.NewReader("")
+	if claimError := encryptionErrorStore.claimLegacyToken(managementPrincipal{userID: "target", userEmail: migration.ownerEmail}); !errors.Is(claimError, errManagedProviderKeyEncryption) {
+		t.Fatalf("encrypt claim error=%v", claimError)
+	}
+}
+
+func TestGORMManagedLegacyTenantClaimStateAndFailures(t *testing.T) {
+	t.Run("missing source", func(subTest *testing.T) {
+		database, claim := newGORMManagedLegacyClaimFixture(subTest, false, false)
+		if deleteError := database.database.Where(&managedTenantRecord{UserID: claim.sourceUserID}).Delete(&managedTenantRecord{}).Error; deleteError != nil {
+			subTest.Fatalf("delete source: %v", deleteError)
+		}
+		if claimError := database.claimLegacyTenant(claim); !errors.Is(claimError, errManagedLegacyTokenConflict) {
+			subTest.Fatalf("missing source error=%v", claimError)
+		}
+	})
+
+	t.Run("missing source target query error", func(subTest *testing.T) {
+		database, claim := newGORMManagedLegacyClaimFixture(subTest, false, false)
+		if deleteError := database.database.Where(&managedTenantRecord{UserID: claim.sourceUserID}).Delete(&managedTenantRecord{}).Error; deleteError != nil {
+			subTest.Fatalf("delete source: %v", deleteError)
+		}
+		queryCount := 0
+		if callbackError := database.database.Callback().Query().Before("gorm:query").Register("legacy_claim_missing_source_target_query_error", func(callbackDatabase *gorm.DB) {
+			queryCount++
+			if queryCount == 2 {
+				callbackDatabase.AddError(errInternalTestDatabase)
+			}
+		}); callbackError != nil {
+			subTest.Fatalf("register query callback: %v", callbackError)
+		}
+		if claimError := database.claimLegacyTenant(claim); !errors.Is(claimError, errInternalTestDatabase) {
+			subTest.Fatalf("missing source target query error=%v", claimError)
+		}
+	})
+
+	t.Run("source tenant mismatch", func(subTest *testing.T) {
+		database, claim := newGORMManagedLegacyClaimFixture(subTest, false, false)
+		if updateError := database.database.Model(&managedTenantRecord{}).
+			Where(&managedTenantRecord{UserID: claim.sourceUserID}).
+			Update("tenant_id", "other").
+			Error; updateError != nil {
+			subTest.Fatalf("update source tenant: %v", updateError)
+		}
+		if claimError := database.claimLegacyTenant(claim); !errors.Is(claimError, errManagedLegacyTokenConflict) {
+			subTest.Fatalf("source mismatch error=%v", claimError)
+		}
+	})
+
+	for _, orphanType := range []string{"provider", "usage"} {
+		t.Run("orphan target "+orphanType, func(subTest *testing.T) {
+			database, claim := newGORMManagedLegacyClaimFixture(subTest, false, false)
+			if orphanType == "provider" {
+				orphanProvider := managedProviderAPIKeyRecord{UserID: claim.targetUserID, ProviderID: ProviderNameOpenAI, EncryptedAPIKey: "orphan"}
+				if createError := database.database.Create(&orphanProvider).Error; createError != nil {
+					subTest.Fatalf("create orphan provider: %v", createError)
+				}
+			} else {
+				orphanUsage := managedUsageEventRecord{UserID: claim.targetUserID, TenantID: claim.tenantID, CreatedAt: time.Now().UTC()}
+				if createError := database.createUsageEvent(orphanUsage); createError != nil {
+					subTest.Fatalf("create orphan usage: %v", createError)
+				}
+			}
+			if claimError := database.claimLegacyTenant(claim); !errors.Is(claimError, errManagedLegacyTokenConflict) {
+				subTest.Fatalf("orphan target error=%v", claimError)
+			}
+		})
+	}
+
+	t.Run("source usage tenant mismatch", func(subTest *testing.T) {
+		database, claim := newGORMManagedLegacyClaimFixture(subTest, false, true)
+		if updateError := database.database.Model(&managedUsageEventRecord{}).
+			Where(&managedUsageEventRecord{UserID: claim.sourceUserID}).
+			Update("tenant_id", "other").
+			Error; updateError != nil {
+			subTest.Fatalf("update usage tenant: %v", updateError)
+		}
+		if claimError := database.claimLegacyTenant(claim); !errors.Is(claimError, errManagedLegacyTokenConflict) {
+			subTest.Fatalf("usage mismatch error=%v", claimError)
+		}
+	})
+
+	t.Run("provider re-encryption", func(subTest *testing.T) {
+		database, claim := newGORMManagedLegacyClaimFixture(subTest, true, false)
+		claim.reencryptProviderKey = func(managedProviderAPIKeyRecord) (managedProviderAPIKeyRecord, error) {
+			return managedProviderAPIKeyRecord{}, errInternalTestRead
+		}
+		if claimError := database.claimLegacyTenant(claim); !errors.Is(claimError, errInternalTestRead) {
+			subTest.Fatalf("re-encryption error=%v", claimError)
+		}
+	})
+
+	for failedQuery := 1; failedQuery <= 7; failedQuery++ {
+		t.Run(fmt.Sprintf("query %d", failedQuery), func(subTest *testing.T) {
+			database, claim := newGORMManagedLegacyClaimFixture(subTest, false, false)
+			queryCount := 0
+			callbackName := fmt.Sprintf("legacy_claim_query_%d", failedQuery)
+			if callbackError := database.database.Callback().Query().Before("gorm:query").Register(callbackName, func(callbackDatabase *gorm.DB) {
+				queryCount++
+				if queryCount == failedQuery {
+					callbackDatabase.AddError(errInternalTestDatabase)
+				}
+			}); callbackError != nil {
+				subTest.Fatalf("register query callback: %v", callbackError)
+			}
+			if claimError := database.claimLegacyTenant(claim); !errors.Is(claimError, errInternalTestDatabase) {
+				subTest.Fatalf("query %d error=%v", failedQuery, claimError)
+			}
+		})
+	}
+
+	operationTests := []struct {
+		name         string
+		withProvider bool
+		withUsage    bool
+		register     func(*testing.T, *gorm.DB)
+	}{
+		{
+			name:         "delete error",
+			withProvider: true,
+			register: func(subTest *testing.T, database *gorm.DB) {
+				subTest.Helper()
+				if callbackError := database.Callback().Delete().Before("gorm:delete").Register("legacy_claim_delete_error", func(callbackDatabase *gorm.DB) {
+					callbackDatabase.AddError(errInternalTestDatabase)
+				}); callbackError != nil {
+					subTest.Fatalf("register delete callback: %v", callbackError)
+				}
+			},
+		},
+		{
+			name: "tenant update error",
+			register: func(subTest *testing.T, database *gorm.DB) {
+				subTest.Helper()
+				if callbackError := database.Callback().Update().Before("gorm:update").Register("legacy_claim_tenant_update_error", func(callbackDatabase *gorm.DB) {
+					callbackDatabase.AddError(errInternalTestDatabase)
+				}); callbackError != nil {
+					subTest.Fatalf("register update callback: %v", callbackError)
+				}
+			},
+		},
+		{
+			name:         "provider create error",
+			withProvider: true,
+			register: func(subTest *testing.T, database *gorm.DB) {
+				subTest.Helper()
+				if callbackError := database.Callback().Create().Before("gorm:create").Register("legacy_claim_provider_create_error", func(callbackDatabase *gorm.DB) {
+					callbackDatabase.AddError(errInternalTestDatabase)
+				}); callbackError != nil {
+					subTest.Fatalf("register create callback: %v", callbackError)
+				}
+			},
+		},
+		{
+			name:      "usage update error",
+			withUsage: true,
+			register: func(subTest *testing.T, database *gorm.DB) {
+				subTest.Helper()
+				updateCount := 0
+				if callbackError := database.Callback().Update().Before("gorm:update").Register("legacy_claim_usage_update_error", func(callbackDatabase *gorm.DB) {
+					updateCount++
+					if updateCount == 2 {
+						callbackDatabase.AddError(errInternalTestDatabase)
+					}
+				}); callbackError != nil {
+					subTest.Fatalf("register usage update callback: %v", callbackError)
+				}
+			},
+		},
+	}
+	for _, testCase := range operationTests {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			database, claim := newGORMManagedLegacyClaimFixture(subTest, testCase.withProvider, testCase.withUsage)
+			testCase.register(subTest, database.database)
+			if claimError := database.claimLegacyTenant(claim); !errors.Is(claimError, errInternalTestDatabase) {
+				subTest.Fatalf("operation error=%v", claimError)
+			}
+			if _, sourceError := database.tenantByUserID(claim.sourceUserID); sourceError != nil {
+				subTest.Fatalf("transaction did not roll back source: %v", sourceError)
+			}
+		})
+	}
+
+	rowCountTests := []struct {
+		name         string
+		withProvider bool
+		withUsage    bool
+		register     func(*testing.T, *gorm.DB)
+	}{
+		{
+			name:         "provider delete count mismatch",
+			withProvider: true,
+			register: func(subTest *testing.T, database *gorm.DB) {
+				subTest.Helper()
+				if callbackError := database.Callback().Delete().After("gorm:delete").Register("legacy_claim_provider_delete_count_mismatch", func(callbackDatabase *gorm.DB) {
+					callbackDatabase.RowsAffected = 0
+				}); callbackError != nil {
+					subTest.Fatalf("register delete callback: %v", callbackError)
+				}
+			},
+		},
+		{
+			name: "tenant update count mismatch",
+			register: func(subTest *testing.T, database *gorm.DB) {
+				subTest.Helper()
+				if callbackError := database.Callback().Update().After("gorm:update").Register("legacy_claim_tenant_update_count_mismatch", func(callbackDatabase *gorm.DB) {
+					callbackDatabase.RowsAffected = 0
+				}); callbackError != nil {
+					subTest.Fatalf("register update callback: %v", callbackError)
+				}
+			},
+		},
+		{
+			name:         "provider create count mismatch",
+			withProvider: true,
+			register: func(subTest *testing.T, database *gorm.DB) {
+				subTest.Helper()
+				if callbackError := database.Callback().Create().After("gorm:create").Register("legacy_claim_provider_create_count_mismatch", func(callbackDatabase *gorm.DB) {
+					callbackDatabase.RowsAffected = 0
+				}); callbackError != nil {
+					subTest.Fatalf("register create callback: %v", callbackError)
+				}
+			},
+		},
+		{
+			name:      "usage update count mismatch",
+			withUsage: true,
+			register: func(subTest *testing.T, database *gorm.DB) {
+				subTest.Helper()
+				updateCount := 0
+				if callbackError := database.Callback().Update().After("gorm:update").Register("legacy_claim_usage_update_count_mismatch", func(callbackDatabase *gorm.DB) {
+					updateCount++
+					if updateCount == 2 {
+						callbackDatabase.RowsAffected = 0
+					}
+				}); callbackError != nil {
+					subTest.Fatalf("register update callback: %v", callbackError)
+				}
+			},
+		},
+	}
+	for _, testCase := range rowCountTests {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			database, claim := newGORMManagedLegacyClaimFixture(subTest, testCase.withProvider, testCase.withUsage)
+			testCase.register(subTest, database.database)
+			if claimError := database.claimLegacyTenant(claim); !errors.Is(claimError, errManagedLegacyTokenMigration) {
+				subTest.Fatalf("row count error=%v", claimError)
+			}
+			if _, sourceError := database.tenantByUserID(claim.sourceUserID); sourceError != nil {
+				subTest.Fatalf("transaction did not roll back source: %v", sourceError)
+			}
+		})
+	}
+
+	t.Run("verification mismatch", func(subTest *testing.T) {
+		database, claim := newGORMManagedLegacyClaimFixture(subTest, false, false)
+		if verificationError := verifyLegacyTenantClaim(database.database, claim, 0, 0); !errors.Is(verificationError, errManagedLegacyTokenMigration) {
+			subTest.Fatalf("verification error=%v", verificationError)
+		}
+	})
 }
 
 func TestManagedTenantGORMDatabaseEncryptsProviderKeysAtRest(t *testing.T) {
@@ -781,17 +1097,6 @@ func TestManagementHandlerStoreErrorEdges(t *testing.T) {
 	}
 }
 
-func TestBuildRouterReturnsStaticConfigMigrationError(t *testing.T) {
-	failingDatabase := newFakeManagedTenantDatabase()
-	failingDatabase.migrationQueryErrors = []error{errInternalTestDatabase}
-	_, buildError := buildRouter(internalManagementRouterConfiguration(), zap.NewNop().Sugar(), func(ManagementConfiguration) (*managedTenantStore, error) {
-		return newManagedTenantStoreWithDatabase(failingDatabase), nil
-	})
-	if !errors.Is(buildError, errManagedTenantStorePersist) {
-		t.Fatalf("BuildRouter error=%v want %v", buildError, errManagedTenantStorePersist)
-	}
-}
-
 func TestBuildRouterReturnsProviderTextSettingsMigrationError(t *testing.T) {
 	failingDatabase := newFakeManagedTenantDatabase()
 	failingDatabase.userQueryErrors = []error{errInternalTestDatabase}
@@ -897,7 +1202,7 @@ func TestManagementConfigurationInternalEdges(t *testing.T) {
 		t.Fatalf("short key decode error=%v want invalid_length", decodeError)
 	}
 	for _, rawEmail := range []string{" ", "Admin <admin@example.com>"} {
-		if _, emailError := normalizeManagementAdminEmail(rawEmail); !errors.Is(emailError, ErrInvalidManagementConfiguration) {
+		if _, emailError := normalizeManagementEmail(rawEmail); !errors.Is(emailError, ErrInvalidManagementConfiguration) {
 			t.Fatalf("admin email error=%v want %v", emailError, ErrInvalidManagementConfiguration)
 		}
 	}
@@ -928,18 +1233,72 @@ func TestTenantRegistryContainsSecretDigestEdges(t *testing.T) {
 
 func newFakeManagedTenantDatabase() *fakeManagedTenantDatabase {
 	return &fakeManagedTenantDatabase{
-		records:    map[string]managedTenantRecord{},
-		migrations: map[string]managedStaticConfigMigrationRecord{},
+		records: map[string]managedTenantRecord{},
 	}
+}
+
+func newGORMManagedLegacyClaimFixture(t *testing.T, withProvider bool, withUsage bool) (*gormManagedTenantDatabase, managedLegacyTenantClaim) {
+	t.Helper()
+	database, databaseError := newGORMManagedTenantDatabase(ManagementConfiguration{
+		DatabaseDialect:   ManagementDatabaseDialectSQLite,
+		DatabaseDSN:       filepath.Join(t.TempDir(), "legacy-claim.db"),
+		DatabaseDialector: sqlite.Open(filepath.Join(t.TempDir(), "legacy-claim-dialector.db")),
+	})
+	if databaseError != nil {
+		t.Fatalf("open legacy claim database: %v", databaseError)
+	}
+	fixedTime := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
+	sourceUserID := legacyStaticTenantUserID(tenantID("legacy"))
+	sourceRecord := internalManagedTenantRecord(sourceUserID, hex.EncodeToString(sha256.New().Sum(nil)), fixedTime)
+	sourceRecord.TenantID = "legacy"
+	if createError := database.createTenant(sourceRecord); createError != nil {
+		t.Fatalf("create source tenant: %v", createError)
+	}
+	providerKeyCipher := internalManagedProviderKeyCipher()
+	if withProvider {
+		providerRecord := internalManagedProviderKeyRecord(t, sourceUserID, ProviderNameOpenAI, "sk-legacy", fixedTime)
+		if createError := database.saveProviderKey(providerRecord); createError != nil {
+			t.Fatalf("create source provider: %v", createError)
+		}
+	}
+	if withUsage {
+		usageRecord := managedUsageEventRecord{UserID: sourceUserID, TenantID: "legacy", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: fixedTime}
+		if createError := database.createUsageEvent(usageRecord); createError != nil {
+			t.Fatalf("create source usage: %v", createError)
+		}
+	}
+	claim := managedLegacyTenantClaim{
+		sourceUserID:      sourceUserID,
+		targetUserID:      "tauth-legacy-owner",
+		tenantID:          "legacy",
+		targetEmail:       "owner@example.com",
+		targetDisplayName: "Owner",
+		targetAvatarURL:   "https://example.com/avatar.png",
+		updatedAt:         fixedTime.Add(time.Hour),
+	}
+	claim.reencryptProviderKey = func(sourceProviderRecord managedProviderAPIKeyRecord) (managedProviderAPIKeyRecord, error) {
+		apiKey, decryptError := providerKeyCipher.decrypt(sourceProviderRecord)
+		if decryptError != nil {
+			return managedProviderAPIKeyRecord{}, decryptError
+		}
+		encryptedAPIKey, encryptionError := providerKeyCipher.encrypt(bytes.NewReader(make([]byte, providerKeyCipher.aeadCipher.NonceSize())), claim.targetUserID, sourceProviderRecord.ProviderID, apiKey)
+		if encryptionError != nil {
+			return managedProviderAPIKeyRecord{}, encryptionError
+		}
+		targetProviderRecord := sourceProviderRecord
+		targetProviderRecord.UserID = claim.targetUserID
+		targetProviderRecord.EncryptedAPIKey = encryptedAPIKey
+		targetProviderRecord.UpdatedAt = claim.updatedAt
+		return targetProviderRecord, nil
+	}
+	return database, claim
 }
 
 type fakeManagedTenantDatabase struct {
 	records                     map[string]managedTenantRecord
 	usageEvents                 []managedUsageEventRecord
-	migrations                  map[string]managedStaticConfigMigrationRecord
 	userQueryErrors             []error
 	secretQueryErrors           []error
-	migrationQueryErrors        []error
 	secretQueryRecord           *managedTenantRecord
 	createError                 error
 	saveTenantError             error
@@ -949,7 +1308,7 @@ type fakeManagedTenantDatabase struct {
 	createUsageEventError       error
 	usageEventsQueryError       error
 	usageEventsQueryPeriodStart time.Time
-	createMigrationError        error
+	claimLegacyTenantError      error
 }
 
 func (database *fakeManagedTenantDatabase) tenantByUserID(userID string) (managedTenantRecord, error) {
@@ -961,6 +1320,18 @@ func (database *fakeManagedTenantDatabase) tenantByUserID(userID string) (manage
 		return managedTenantRecord{}, gorm.ErrRecordNotFound
 	}
 	return cloneManagedTenantRecord(record), nil
+}
+
+func (database *fakeManagedTenantDatabase) tenantByTenantID(tenantID string) (managedTenantRecord, error) {
+	if queryError, hasQueryError := database.popUserQueryError(); hasQueryError {
+		return managedTenantRecord{}, queryError
+	}
+	for _, record := range database.records {
+		if record.TenantID == tenantID {
+			return cloneManagedTenantRecord(record), nil
+		}
+	}
+	return managedTenantRecord{}, gorm.ErrRecordNotFound
 }
 
 func (database *fakeManagedTenantDatabase) tenantBySecretDigest(secretDigest string) (managedTenantRecord, error) {
@@ -1099,22 +1470,42 @@ func (database *fakeManagedTenantDatabase) usageEventsSince(periodStart time.Tim
 	return records, nil
 }
 
-func (database *fakeManagedTenantDatabase) staticConfigMigrationByID(identifier string) (managedStaticConfigMigrationRecord, error) {
-	if queryError, hasQueryError := database.popMigrationQueryError(); hasQueryError {
-		return managedStaticConfigMigrationRecord{}, queryError
+func (database *fakeManagedTenantDatabase) claimLegacyTenant(claim managedLegacyTenantClaim) error {
+	if database.claimLegacyTenantError != nil {
+		return database.claimLegacyTenantError
 	}
-	record, foundRecord := database.migrations[identifier]
-	if !foundRecord {
-		return managedStaticConfigMigrationRecord{}, gorm.ErrRecordNotFound
+	sourceRecord, sourceExists := database.records[claim.sourceUserID]
+	targetRecord, targetExists := database.records[claim.targetUserID]
+	if !sourceExists {
+		if targetExists && targetRecord.TenantID == claim.tenantID {
+			return nil
+		}
+		return errManagedLegacyTokenConflict
 	}
-	return record, nil
-}
-
-func (database *fakeManagedTenantDatabase) createStaticConfigMigration(record managedStaticConfigMigrationRecord) error {
-	if database.createMigrationError != nil {
-		return database.createMigrationError
+	if targetExists || sourceRecord.TenantID != claim.tenantID {
+		return errManagedLegacyTokenConflict
 	}
-	database.migrations[record.ID] = record
+	targetProviderRecords := make([]managedProviderAPIKeyRecord, 0, len(sourceRecord.ProviderAPIKeys))
+	for _, sourceProviderRecord := range sourceRecord.ProviderAPIKeys {
+		targetProviderRecord, reencryptError := claim.reencryptProviderKey(sourceProviderRecord)
+		if reencryptError != nil {
+			return reencryptError
+		}
+		targetProviderRecords = append(targetProviderRecords, targetProviderRecord)
+	}
+	delete(database.records, claim.sourceUserID)
+	sourceRecord.UserID = claim.targetUserID
+	sourceRecord.UserEmail = claim.targetEmail
+	sourceRecord.UserDisplayName = claim.targetDisplayName
+	sourceRecord.UserAvatarURL = claim.targetAvatarURL
+	sourceRecord.ProviderAPIKeys = targetProviderRecords
+	sourceRecord.UpdatedAt = claim.updatedAt
+	database.records[claim.targetUserID] = cloneManagedTenantRecord(sourceRecord)
+	for usageIndex := range database.usageEvents {
+		if database.usageEvents[usageIndex].UserID == claim.sourceUserID {
+			database.usageEvents[usageIndex].UserID = claim.targetUserID
+		}
+	}
 	return nil
 }
 
@@ -1133,15 +1524,6 @@ func (database *fakeManagedTenantDatabase) popSecretQueryError() (error, bool) {
 	}
 	queryError := database.secretQueryErrors[0]
 	database.secretQueryErrors = database.secretQueryErrors[1:]
-	return queryError, true
-}
-
-func (database *fakeManagedTenantDatabase) popMigrationQueryError() (error, bool) {
-	if len(database.migrationQueryErrors) == 0 {
-		return nil, false
-	}
-	queryError := database.migrationQueryErrors[0]
-	database.migrationQueryErrors = database.migrationQueryErrors[1:]
 	return queryError, true
 }
 
@@ -1341,6 +1723,30 @@ type failingAutoMigrateMigrator struct {
 }
 
 func (migrator failingAutoMigrateMigrator) AutoMigrate(...interface{}) error {
+	return errInternalTestDatabase
+}
+
+type failingObsoleteStaticMigrationCleanupDialector struct {
+	gorm.Dialector
+}
+
+func (dialector failingObsoleteStaticMigrationCleanupDialector) Migrator(database *gorm.DB) gorm.Migrator {
+	return failingObsoleteStaticMigrationCleanupMigrator{Migrator: dialector.Dialector.Migrator(database)}
+}
+
+type failingObsoleteStaticMigrationCleanupMigrator struct {
+	gorm.Migrator
+}
+
+func (migrator failingObsoleteStaticMigrationCleanupMigrator) HasTable(value interface{}) bool {
+	tableName, isTableName := value.(string)
+	if isTableName && tableName == obsoleteStaticMigrationTable {
+		return true
+	}
+	return migrator.Migrator.HasTable(value)
+}
+
+func (migrator failingObsoleteStaticMigrationCleanupMigrator) DropTable(...interface{}) error {
 	return errInternalTestDatabase
 }
 

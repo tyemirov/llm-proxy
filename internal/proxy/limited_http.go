@@ -67,11 +67,7 @@ func (doer *limitedHTTPDoer) Do(httpRequest *http.Request) (*http.Response, erro
 	if admissionError := doer.admit(); admissionError != nil {
 		return nil, admissionError
 	}
-	if rateLimitError := doer.waitForRateLimit(httpRequest); rateLimitError != nil {
-		doer.releaseAdmission()
-		return nil, rateLimitError
-	}
-	if acquireError := doer.acquire(httpRequest); acquireError != nil {
+	if acquireError := doer.acquireUpstreamWorker(httpRequest); acquireError != nil {
 		doer.releaseAdmission()
 		return nil, acquireError
 	}
@@ -92,13 +88,13 @@ func (doer *limitedHTTPDoer) Do(httpRequest *http.Request) (*http.Response, erro
 	return httpResponse, nil
 }
 
-func (doer *limitedHTTPDoer) waitForRateLimit(httpRequest *http.Request) error {
+func (doer *limitedHTTPDoer) acquireUpstreamWorker(httpRequest *http.Request) error {
 	origin := upstreamRequestOrigin(httpRequest.URL)
 	rateLimiter, rateLimited := doer.rateLimiters[origin]
 	if !rateLimited {
-		return nil
+		return doer.acquire(httpRequest)
 	}
-	wait, waitError := rateLimiter.wait(httpRequest.Context(), doer.clock)
+	wait, waitError := doer.acquireRateLimitedWorker(httpRequest, rateLimiter)
 	if wait.initial > 0 {
 		doer.logger.Infow(
 			constants.LogEventUpstreamRateLimitDelayed,
@@ -110,35 +106,47 @@ func (doer *limitedHTTPDoer) waitForRateLimit(httpRequest *http.Request) error {
 		)
 	}
 	if waitError != nil {
-		doer.logger.Warnw(
-			constants.LogEventUpstreamRateLimitCanceled,
-			constants.LogFieldUpstreamOrigin, origin,
-			constants.LogFieldRateLimitMaxRequests, rateLimiter.rule.maxRequests,
-			constants.LogFieldRateLimitInterval, rateLimiter.rule.interval.String(),
-			constants.LogFieldRateLimitTotalWaitMilliseconds, wait.total.Milliseconds(),
-			constants.LogFieldError, waitError,
-		)
+		if wait.initial > 0 {
+			doer.logger.Warnw(
+				constants.LogEventUpstreamRateLimitCanceled,
+				constants.LogFieldUpstreamOrigin, origin,
+				constants.LogFieldRateLimitMaxRequests, rateLimiter.rule.maxRequests,
+				constants.LogFieldRateLimitInterval, rateLimiter.rule.interval.String(),
+				constants.LogFieldRateLimitTotalWaitMilliseconds, wait.total.Milliseconds(),
+				constants.LogFieldError, waitError,
+			)
+		}
 		return waitError
 	}
 	return nil
 }
 
-func (rateLimiter *upstreamRateLimiter) wait(requestContext context.Context, clock upstreamRateLimitClock) (upstreamRateLimitWait, error) {
+func (doer *limitedHTTPDoer) acquireRateLimitedWorker(httpRequest *http.Request, rateLimiter *upstreamRateLimiter) (upstreamRateLimitWait, error) {
 	wait := upstreamRateLimitWait{}
-	waitStartedAt := clock.Now()
+	waitStartedAt := doer.clock.Now()
 	for {
-		waitDuration := rateLimiter.nextWaitDuration(clock.Now())
+		if acquireError := doer.acquire(httpRequest); acquireError != nil {
+			wait.total = doer.clock.Now().Sub(waitStartedAt)
+			return wait, acquireError
+		}
+		if contextError := httpRequest.Context().Err(); contextError != nil {
+			doer.releaseActive()
+			wait.total = doer.clock.Now().Sub(waitStartedAt)
+			return wait, contextError
+		}
+		waitDuration := rateLimiter.nextWaitDuration(doer.clock.Now())
 		if waitDuration <= 0 {
 			if wait.initial > 0 {
-				wait.total = clock.Now().Sub(waitStartedAt)
+				wait.total = doer.clock.Now().Sub(waitStartedAt)
 			}
 			return wait, nil
 		}
+		doer.releaseActive()
 		if wait.initial == 0 {
 			wait.initial = waitDuration
 		}
-		if waitError := clock.Wait(requestContext, waitDuration); waitError != nil {
-			wait.total = clock.Now().Sub(waitStartedAt)
+		if waitError := doer.clock.Wait(httpRequest.Context(), waitDuration); waitError != nil {
+			wait.total = doer.clock.Now().Sub(waitStartedAt)
 			return wait, waitError
 		}
 	}
