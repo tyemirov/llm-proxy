@@ -95,8 +95,8 @@ Constraint: every post in the `Post` column is under 300 characters.
 | 43 | 2026-08-17 | AM | A self-service AI portal should be useful after login, not just a key form. LLM Proxy opens to a usage dashboard and keeps settings one click away. |
 | 43 | 2026-08-17 | PM | Client access docs should reflect the current provider and generated secret. LLM Proxy renders examples from live profile data. |
 | 44 | 2026-08-18 | AM | Teams need local and hosted profiles to behave the same way. LLM Proxy's management config uses explicit placeholders and fails startup when required values are missing. |
-| 44 | 2026-08-18 | PM | Static tenants and managed tenants can get tangled. LLM Proxy migrates legacy config tenants once, then makes database state authoritative in management mode. |
-| 45 | 2026-08-19 | AM | Legacy config should not keep influencing runtime after migration. LLM Proxy records a migration marker and ignores obsolete config-file tenant credentials afterward. |
+| 44 | 2026-08-18 | PM | One old token can outlive its static config owner. LLM Proxy can rekey that tenant to a verified TAuth account without changing the token or losing usage. |
+| 45 | 2026-08-19 | AM | Unowned management tokens should not stay global. LLM Proxy rejects static-config owners until the configured email completes the one-time account claim. |
 | 45 | 2026-08-19 | PM | New user signups should survive restarts. LLM Proxy persists managed tenants, provider settings, secret digests, and usage through GORM. |
 | 46 | 2026-08-20 | AM | You should not need raw SQL for normal tenant management. LLM Proxy keeps management persistence behind GORM model APIs. |
 | 46 | 2026-08-20 | PM | SQLite is useful for local management mode, Postgres for hosted mode. LLM Proxy supports both configured GORM dialects. |

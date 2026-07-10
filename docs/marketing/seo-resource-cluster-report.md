@@ -1,6 +1,6 @@
 # LLM Proxy SEO Resource Cluster Report
 
-Generated: 2026-07-06
+Generated: 2026-07-09
 
 ## Repo Analysis Report
 
@@ -91,7 +91,7 @@ Generated: 2026-07-06
 | 21 | Encrypted provider key storage for managed tenants | Teams evaluating how LLM Proxy stores BYO provider credentials in management mode. | Provider API keys are high-value secrets. A management database should not store raw upstream credentials as plaintext rows. | encrypted provider key storage | Security | /resources/encrypted-provider-key-storage/ | Low | Generate |
 | 22 | Reject client-supplied provider key leaks | Security-conscious teams that want mistakes to fail before provider credentials spread. | A caller may accidentally include an OpenAI or provider api_key field in a proxy request body, query string, or multipart form. | reject client provider key leaks | Security | /resources/reject-client-provider-key-leaks/ | Low | Generate |
 | 23 | Strict YAML config placeholders for LLM Proxy | Operators who want predictable startup behavior and no hidden runtime defaults. | Services that merge flags, env, defaults, and files can start with surprising configuration. Missing secrets may appear only when traffic arrives. | strict YAML config placeholders | Configuration | /resources/strict-yaml-config-placeholders/ | Low | Generate |
-| 24 | Static-to-managed tenant migration in management mode | Operators moving from static tenant YAML to self-service management mode. | Static tenants and managed tenants can conflict if old YAML keeps influencing runtime after users start managing secrets and provider keys in the database. | static to managed tenant migration | Configuration | /resources/static-to-managed-tenant-migration/ | Low | Generate |
+| 24 | Legacy token ownership migration in management mode | Operators retiring the final unowned management-mode token after moving to self-service accounts. | A token imported by an older release can still belong to a synthetic static-config user, so its real owner cannot see that token's usage after signing in. | static to managed tenant migration | Configuration | /resources/static-to-managed-tenant-migration/ | Low | Generate |
 | 25 | GORM-managed tenant persistence for LLM Proxy | Backend operators deciding how management-mode state is stored. | Self-service management needs persistent tenant state without mutating runtime config files or adding raw SQL paths. | GORM managed tenant persistence | Configuration | /resources/gorm-managed-tenant-persistence/ | Low | Generate |
 | 26 | Go LLM Proxy client with a v2-only transport | Go developers integrating application backends with LLM Proxy. | Reusable clients can expose too many legacy request shapes and force callers to choose between prompt JSON and chat messages. | Go LLM proxy client v2 | Clients | /resources/go-client-v2-only-llm-proxy/ | Low | Generate |
 | 27 | Python LLM Proxy client with v2 messages | Python workflow authors and service developers standardizing on the /v2 messages contract. | Python callers often start with raw requests and then duplicate provider-specific payload details in scripts. | Python LLM proxy client v2 | Clients | /resources/python-client-v2-only-llm-proxy/ | Low | Generate |
