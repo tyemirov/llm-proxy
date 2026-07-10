@@ -15,6 +15,7 @@ Options:
   --gateway-target <target> Gateway make target. Default: $GATEWAY_DEPLOY_TARGET or deploy-llm-proxy-backend
   --image <value>       Image repository. Default: $DOCKER_IMAGE or ghcr.io/tyemirov/llm-proxy
   --tag <value>         Release tag. Default: v* tag pointing at HEAD
+  --skip-ci             Skip the local make ci deployment gate
   --skip-image-verify   Skip release/latest image digest verification
   --skip-pages          Skip GitHub Pages activation
   --pages-branch <value> Pages branch to publish. Default: $PAGES_BRANCH or gh-pages
@@ -22,7 +23,18 @@ Options:
   --skip-gateway        Skip gateway deployment
   --help                Show this help text
 
+Environment:
+  DEPLOY_CI_TIMEOUT_SECONDS  make ci timeout in seconds. Default: $LLM_PROXY_CI_TIMEOUT_SECONDS or 350
 USAGE
+}
+
+require_positive_integer() {
+  local name="$1"
+  local value="$2"
+  if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "error: ${name} must be a positive integer number of seconds (got: ${value})" >&2
+    exit 1
+  fi
 }
 
 env_or_default() {
@@ -43,6 +55,7 @@ GATEWAY_DIR="$(env_or_default GATEWAY_DIR "")"
 GATEWAY_TARGET="$(env_or_default GATEWAY_DEPLOY_TARGET deploy-llm-proxy-backend)"
 IMAGE_REPOSITORY="$(env_or_default DOCKER_IMAGE ghcr.io/tyemirov/llm-proxy)"
 TAG="$(env_or_default DEPLOY_TAG "")"
+SKIP_CI="false"
 SKIP_IMAGE_VERIFY="false"
 SKIP_GATEWAY="false"
 SKIP_PAGES="$(env_or_default DEPLOY_SKIP_PAGES false)"
@@ -50,6 +63,8 @@ PAGES_BRANCH="$(env_or_default PAGES_BRANCH gh-pages)"
 PAGES_URL="$(env_or_default PAGES_URL https://llm-proxy.mprlab.com/)"
 DEPLOY_BRANCH="$(env_or_default DEPLOY_BRANCH master)"
 DEPLOY_REMOTE="$(env_or_default DEPLOY_REMOTE origin)"
+LLM_PROXY_CI_TIMEOUT_SECONDS_EFFECTIVE="$(env_or_default LLM_PROXY_CI_TIMEOUT_SECONDS 350)"
+CI_TIMEOUT_SECONDS="$(env_or_default DEPLOY_CI_TIMEOUT_SECONDS "${LLM_PROXY_CI_TIMEOUT_SECONDS_EFFECTIVE}")"
 
 resolve_release_tag() {
   if [[ -n "${TAG}" ]]; then
@@ -86,6 +101,10 @@ while [[ $# -gt 0 ]]; do
       TAG="$2"
       shift 2
       ;;
+    --skip-ci)
+      SKIP_CI="true"
+      shift
+      ;;
     --skip-image-verify)
       SKIP_IMAGE_VERIFY="true"
       shift
@@ -121,6 +140,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 command -v git >/dev/null 2>&1 || { echo "error: git is required" >&2; exit 1; }
+require_positive_integer "DEPLOY_CI_TIMEOUT_SECONDS" "${CI_TIMEOUT_SECONDS}"
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "${repo_root}"
@@ -133,11 +153,11 @@ resolve_gateway_dir() {
   printf "%s\n" "${repo_root}/../mprlab-gateway"
 }
 
-GATEWAY_DIR="$(resolve_gateway_dir)"
-[[ -n "${GATEWAY_DIR}" ]] || { echo "error: gateway checkout not found; set GATEWAY_DIR=/path/to/mprlab-gateway or pass --gateway-dir" >&2; exit 1; }
-[[ -d "${GATEWAY_DIR}" ]] || { echo "error: gateway checkout not found: ${GATEWAY_DIR}" >&2; exit 1; }
-
 if [[ "${SKIP_GATEWAY}" != "true" ]]; then
+  GATEWAY_DIR="$(resolve_gateway_dir)"
+  [[ -n "${GATEWAY_DIR}" ]] || { echo "error: gateway checkout not found; set GATEWAY_DIR=/path/to/mprlab-gateway or pass --gateway-dir" >&2; exit 1; }
+  [[ -d "${GATEWAY_DIR}" ]] || { echo "error: gateway checkout not found: ${GATEWAY_DIR}" >&2; exit 1; }
+
   timeout -k 30s -s SIGKILL 30s git fetch "${DEPLOY_REMOTE}" "${DEPLOY_BRANCH}" --tags --prune
 
   current_branch="$(git rev-parse --abbrev-ref HEAD)"
@@ -169,6 +189,11 @@ else
   release_tag="$(resolve_release_tag)"
 fi
 
+if [[ "${SKIP_CI}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then
+  echo "==> [deploy] Running make ci before deployment (timeout ${CI_TIMEOUT_SECONDS}s)"
+  timeout -k "${CI_TIMEOUT_SECONDS}s" -s SIGKILL "${CI_TIMEOUT_SECONDS}s" make ci
+fi
+
 if [[ "${SKIP_IMAGE_VERIFY}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then
   command -v docker >/dev/null 2>&1 || { echo "error: docker is required for image verification" >&2; exit 1; }
   docker buildx version >/dev/null 2>&1 || { echo "error: docker buildx is required for image verification" >&2; exit 1; }
@@ -188,7 +213,7 @@ if [[ "${SKIP_GATEWAY}" != "true" ]]; then
   timeout --foreground -k 1200s -s SIGKILL 1200s make -C "${GATEWAY_DIR}" "${GATEWAY_TARGET}"
 fi
 
-if [[ "${SKIP_PAGES}" != "true" ]]; then
+if [[ "${SKIP_PAGES}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then
   [[ -n "${release_tag}" ]] || { echo "error: no release tag selected; run make publish first" >&2; exit 1; }
   echo "==> [deploy] Activating the published Pages artifact for ${release_tag}"
   PAGES_BRANCH="${PAGES_BRANCH}" PAGES_URL="${PAGES_URL}" PAGES_VERSION="${release_tag}" make --no-print-directory pages-deploy

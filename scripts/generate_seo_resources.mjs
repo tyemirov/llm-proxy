@@ -6,7 +6,8 @@ import { join } from "node:path";
 const PUBLIC_ORIGIN = "https://llm-proxy.mprlab.com";
 const RESOURCE_ROOT = "site/resources";
 const REPORT_PATH = "docs/marketing/seo-resource-cluster-report.md";
-const TODAY = "2026-07-06";
+const RESOURCE_PUBLISHED_DATE = "2026-07-06";
+const RESOURCE_MODIFIED_DATE = "2026-07-09";
 const PRODUCT_NAME = "LLM Proxy";
 const MIN_PAGE_COUNT = 40;
 const MAX_PAGE_COUNT = 50;
@@ -736,31 +737,31 @@ const pages = Object.freeze([
     slug: "static-to-managed-tenant-migration",
     category: "Configuration",
     primaryKeyword: "static to managed tenant migration",
-    title: "Static-to-managed tenant migration in management mode",
-    description: "Migrate legacy config tenants once, then make database state authoritative for managed runtime access.",
-    audience: "Operators moving from static tenant YAML to self-service management mode.",
-    problem: "Static tenants and managed tenants can conflict if old YAML keeps influencing runtime after users start managing secrets and provider keys in the database.",
-    solution: "On first management-mode startup, LLM Proxy migrates legacy config tenants and nonblank configured provider keys into the database, records a migration marker, and then treats DB state as authoritative for runtime authentication and routing.",
+    title: "Legacy token ownership migration in management mode",
+    description: "Claim one prior static-config token for a verified user account without changing the token or losing usage history.",
+    audience: "Operators retiring the final unowned management-mode token after moving to self-service accounts.",
+    problem: "A token imported by an older release can still belong to a synthetic static-config user, so its real owner cannot see that token's usage after signing in.",
+    solution: "LLM Proxy rejects the unowned token, then atomically rekeys its tenant, encrypted provider settings, and usage events when the configured owner email signs in through TAuth.",
     steps: [
-      "Enable management mode with database settings.",
-      "Start the service so the one-time migration can run.",
-      "Confirm managed tenant state exists in the database.",
-      "Remove migrated tenants and provider api_key values from config after confirmation.",
+      "Configure the exact legacy tenant id and deployment-owned target email.",
+      "Deploy the current binary and drain older service instances before the owner claim.",
+      "Sign in with the configured email and verify the same token plus historical usage.",
+      "Remove the temporary migration config after production verification.",
     ],
     features: [
-      ["One-time migration marker", "After migration, config-file tenants and provider keys are obsolete for runtime auth/routing.", "The current contract is database-owned."],
-      ["Provider key carryover", "Nonblank configured provider keys can seed managed provider records.", "Existing setup can move into management mode."],
-      ["Forward-only cleanup", "Docs tell operators to remove migrated config state.", "No dual-read compatibility layer remains."],
+      ["Verified owner claim", "Only a live TAuth session whose normalized email matches the configured owner can claim the tenant.", "The migration does not trust stored email alone."],
+      ["Token and usage continuity", "The token digest, tenant defaults, creation time, and every usage event are preserved.", "Existing clients keep their token while the dashboard gains its history."],
+      ["Provider key re-encryption", "Provider ciphertext is decrypted under the synthetic user id and re-encrypted for the TAuth subject inside one GORM transaction.", "Ownership changes without copying invalid ciphertext."],
     ],
     examples: [
-      ["Initial management rollout", "An existing static tenant becomes a managed database tenant on first startup."],
-      ["Provider key migration", "A configured OpenAI key moves into encrypted managed storage."],
-      ["Post-migration cleanup", "Operators delete stale tenant secrets from config.yml after verifying DB state."],
+      ["Unowned token before claim", "The legacy token returns 403 instead of continuing as a global system credential."],
+      ["First matching sign-in", "The configured owner opens the management site and receives the existing tenant and usage history."],
+      ["Post-migration cleanup", "Operators remove the temporary owner mapping after verifying the unchanged token in production."],
     ],
     limitations: [
-      "Migration is intended as a bounded move into the current schema.",
-      "The management database must be available and configured.",
-      "Server settings, provider URLs, model catalogs, and browser config remain config-owned.",
+      "The source must be the one configured static-config tenant and the destination TAuth subject must not already exist.",
+      "A conflict returns 409 without merging or overwriting account state.",
+      "Old service instances must be drained before the owner signs in.",
     ],
   }),
   page({
@@ -1331,16 +1332,17 @@ const pages = Object.freeze([
     description: "Run paid-provider smoke checks separately from CI when real upstream behavior needs verification.",
     audience: "Operators validating provider credentials and hosted provider routes after config or deployment changes.",
     problem: "CI should be deterministic and avoid paid provider calls, but some changes still need live confirmation against real upstream providers.",
-    solution: "LLM Proxy keeps live provider smoke tests outside make ci and exposes Makefile targets that discover provider keys from a selected environment file.",
+    solution: "LLM Proxy keeps live provider smoke tests outside make ci, parses provider keys from a dotenv file without executing shell code, and forces the temporary proxy into management-disabled mode.",
     steps: [
       "Put provider API keys in an ignored env file.",
       "Run make test-live-providers LIVE_ENV_FILE=configs/.env.",
       "Limit the provider set with LLM_PROXY_LIVE_PROVIDERS when needed.",
+      "Use --write-config to inspect the isolated temporary contract without making a provider call.",
       "Use model overrides only when debugging a specific provider/model pair.",
     ],
     features: [
       ["Separate from CI", "Live provider smoke tests are not part of make ci.", "Routine validation stays deterministic."],
-      ["Provider discovery", "The dynamic target runs providers whose keys are available, unless a provider list is required.", "Missing optional keys do not block unrelated smoke checks."],
+      ["Provider discovery and isolation", "The dynamic target runs providers whose keys are available through a management-disabled temporary config.", "Missing optional keys and hosted management state do not affect unrelated smoke checks."],
       ["Default model path", "By default, smoke requests omit model so provider configured defaults are tested.", "The test exercises the default-selection contract."],
     ],
     examples: [
@@ -1480,8 +1482,8 @@ function renderResourcePage(resourcePage) {
     headline: resourcePage.title,
     description: resourcePage.description,
     url: resourcePage.canonical,
-    datePublished: TODAY,
-    dateModified: TODAY,
+    datePublished: RESOURCE_PUBLISHED_DATE,
+    dateModified: RESOURCE_MODIFIED_DATE,
     mainEntityOfPage: resourcePage.canonical,
     about: [PRODUCT_NAME, resourcePage.category, resourcePage.primaryKeyword],
   };
@@ -1850,9 +1852,9 @@ function faqFor(resourcePage, relatedPage) {
  */
 function renderSitemap() {
   const urls = [
-    { loc: `${PUBLIC_ORIGIN}/`, lastmod: TODAY },
-    { loc: `${PUBLIC_ORIGIN}/resources/`, lastmod: TODAY },
-    ...pages.map((resourcePage) => ({ loc: resourcePage.canonical, lastmod: TODAY })),
+    { loc: `${PUBLIC_ORIGIN}/`, lastmod: RESOURCE_MODIFIED_DATE },
+    { loc: `${PUBLIC_ORIGIN}/resources/`, lastmod: RESOURCE_MODIFIED_DATE },
+    ...pages.map((resourcePage) => ({ loc: resourcePage.canonical, lastmod: RESOURCE_MODIFIED_DATE })),
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -1895,7 +1897,7 @@ function renderReport() {
 
   return `# LLM Proxy SEO Resource Cluster Report
 
-Generated: ${TODAY}
+Generated: ${RESOURCE_MODIFIED_DATE}
 
 ## Repo Analysis Report
 

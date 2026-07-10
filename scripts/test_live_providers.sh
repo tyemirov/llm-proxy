@@ -4,10 +4,12 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/test_live_providers.sh
+  scripts/test_live_providers.sh [--preflight | --write-config <path>]
 
 Builds the current llm-proxy binary and runs live text smoke tests for providers
-whose API keys are present.
+whose API keys are present. The preflight mode builds the same temporary static
+configuration and verifies authenticated routing without making an upstream
+provider call.
 
 Required environment:
   At least one provider API key, unless no-op skip behavior is desired.
@@ -25,13 +27,19 @@ Provider key variables:
   XAI_API_KEY
 
 Optional environment:
-  LIVE_ENV_FILE              Path to an env file to source before discovery.
+  LIVE_ENV_FILE              Path to a dotenv file to parse before discovery.
   LLM_PROXY_LIVE_PROVIDERS   Comma or space separated provider list. If set,
                              every listed provider must have its key.
   LLM_PROXY_LIVE_PORT        Local port for the temporary proxy. Default: 18080.
   LLM_PROXY_LIVE_TIMEOUT     Per-request curl timeout in seconds. Default: 45.
   SERVICE_SECRET             Tenant secret. Generated when omitted.
   GO                         Go binary. Default: go.
+
+Options:
+  --preflight                Verify the disposable static config without an
+                             upstream provider call.
+  --write-config <path>      Write the disposable static config and exit
+                             without building the proxy or calling providers.
 
 Per-provider model overrides:
   LLM_PROXY_LIVE_OPENAI_MODEL
@@ -59,6 +67,50 @@ env_or_default() {
   else
     printf "%s\n" "${fallback}"
   fi
+}
+
+load_env_file() {
+  local env_path="$1"
+  local parsed_path="${TMP_DIR}/dotenv-values"
+  command -v python3 >/dev/null 2>&1 || { echo "error: python3 is required to load LIVE_ENV_FILE" >&2; exit 1; }
+  python3 - "${env_path}" >"${parsed_path}" <<'PY'
+import ast
+import pathlib
+import re
+import sys
+
+path = pathlib.Path(sys.argv[1])
+for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    line = raw_line.strip()
+    if not line or line.startswith("#"):
+        continue
+    if line.startswith("export "):
+        line = line.removeprefix("export ").lstrip()
+    if "=" not in line:
+        raise SystemExit(f"invalid dotenv entry: {path}:{line_number}")
+    name, raw_value = line.split("=", 1)
+    name = name.strip()
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) is None:
+        raise SystemExit(f"invalid dotenv name: {path}:{line_number}")
+    value = raw_value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        parsed_value = ast.literal_eval(value)
+        if not isinstance(parsed_value, str):
+            raise SystemExit(f"invalid dotenv value: {path}:{line_number}")
+        value = parsed_value
+    sys.stdout.buffer.write(name.encode("utf-8") + b"\0" + value.encode("utf-8") + b"\0")
+PY
+
+  local variable_name
+  local variable_value
+  while IFS= read -r -d '' variable_name; do
+    IFS= read -r -d '' variable_value || { echo "error: invalid parsed dotenv output" >&2; exit 1; }
+    if [[ -v "${variable_name}" ]]; then
+      continue
+    fi
+    printf -v "${variable_name}" '%s' "${variable_value}"
+    export "${variable_name}"
+  done <"${parsed_path}"
 }
 
 provider_key_variable() {
@@ -154,12 +206,54 @@ redact_log() {
 
 write_live_config() {
   awk -v port="${PORT}" '
+    BEGIN {
+      provider_keys["openai"] = "OPENAI_API_KEY"
+      provider_keys["deepseek"] = "DEEPSEEK_API_KEY"
+      provider_keys["dashscope"] = "DASHSCOPE_API_KEY"
+      provider_keys["moonshot"] = "MOONSHOT_API_KEY"
+      provider_keys["siliconflow"] = "SILICONFLOW_API_KEY"
+      provider_keys["zhipu"] = "ZHIPU_API_KEY"
+      provider_keys["gemini"] = "GEMINI_API_KEY"
+      provider_keys["anthropic"] = "ANTHROPIC_API_KEY"
+      provider_keys["meta"] = "MODEL_API_KEY"
+      provider_keys["grok"] = "XAI_API_KEY"
+    }
     /^  port: / && replaced == 0 {
       print "  port: " port
       replaced = 1
       next
     }
-    { print }
+    /^management:$/ {
+      print "management:"
+      print "  enabled: false"
+      print "tenants:"
+      print "  - id: live-smoke"
+      print "    secret: \"${SERVICE_SECRET}\""
+      print "    defaults:"
+      print "      provider: openai"
+      print "      model: gpt-4.1"
+      print "      dictation_provider: openai"
+      print "      dictation_model: gpt-4o-mini-transcribe"
+      print "      system_prompt: \"\""
+      in_management = 1
+      next
+    }
+    /^providers:$/ {
+      in_management = 0
+      print
+      next
+    }
+    in_management == 1 { next }
+    {
+      print
+      if ($0 ~ /^  [[:alnum:]_]+:$/) {
+        provider = $1
+        sub(/:$/, "", provider)
+        if (provider in provider_keys) {
+          print "    api_key: \"${" provider_keys[provider] "}\""
+        }
+      }
+    }
   ' "${ROOT_DIR}/configs/config.yml" > "${CONFIG_PATH}"
 }
 
@@ -219,9 +313,50 @@ run_text_smoke() {
   echo "live provider smoke passed: provider=${provider} model=${request_model_label} status=${http_status}"
 }
 
-if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  usage
-  exit 0
+run_static_config_preflight() {
+  local response_path="${TMP_DIR}/preflight-response.txt"
+  local http_status
+  http_status="$(
+    curl -sS --max-time 5 \
+      -o "${response_path}" \
+      -w "%{http_code}" \
+      "http://127.0.0.1:${PORT}/?provider=unsupported-live-preflight&prompt=ready&key=${SERVICE_SECRET}"
+  )"
+  if [[ "${http_status}" != "400" ]]; then
+    echo "error: live provider harness preflight failed: status=${http_status}" >&2
+    redact_log
+    exit 1
+  fi
+  echo "live provider harness preflight passed: static tenant authenticated and routing rejected the unknown provider"
+}
+
+PREFLIGHT_ONLY=false
+WRITE_CONFIG_PATH=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --preflight)
+      PREFLIGHT_ONLY=true
+      shift
+      ;;
+    --write-config)
+      [[ $# -ge 2 ]] || { echo "error: --write-config requires a path" >&2; exit 1; }
+      WRITE_CONFIG_PATH="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "error: unknown argument: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+if [[ "${PREFLIGHT_ONLY}" == "true" && -n "${WRITE_CONFIG_PATH}" ]]; then
+  echo "error: --preflight and --write-config are mutually exclusive" >&2
+  exit 1
 fi
 
 SUPPORTED_PROVIDERS=(openai deepseek dashscope moonshot siliconflow zhipu gemini anthropic meta grok)
@@ -241,27 +376,38 @@ trap cleanup EXIT
 
 if [[ -n "${LIVE_ENV_FILE:-}" ]]; then
   [[ -f "${LIVE_ENV_FILE}" ]] || { echo "error: LIVE_ENV_FILE not found: ${LIVE_ENV_FILE}" >&2; exit 1; }
-  set -a
-  # shellcheck source=/dev/null
-  . "${LIVE_ENV_FILE}"
-  set +a
+  load_env_file "${LIVE_ENV_FILE}"
 fi
 
-discover_live_providers
-if [[ "${#LIVE_PROVIDERS[@]}" -eq 0 ]]; then
-  echo "live provider smoke skipped: no provider API keys found"
-  exit 0
+if [[ "${PREFLIGHT_ONLY}" != "true" && -z "${WRITE_CONFIG_PATH}" ]]; then
+  discover_live_providers
+  if [[ "${#LIVE_PROVIDERS[@]}" -eq 0 ]]; then
+    echo "live provider smoke skipped: no provider API keys found"
+    exit 0
+  fi
 fi
 
-GO_BIN="$(env_or_default GO go)"
 PORT="$(env_or_default LLM_PROXY_LIVE_PORT 18080)"
 LIVE_TIMEOUT="$(env_or_default LLM_PROXY_LIVE_TIMEOUT 45)"
-BINARY_PATH="${TMP_DIR}/llm-proxy-live"
-CONFIG_PATH="${TMP_DIR}/config.yml"
+if [[ -n "${WRITE_CONFIG_PATH}" ]]; then
+  mkdir -p "$(dirname "${WRITE_CONFIG_PATH}")"
+  CONFIG_PATH="$(cd "$(dirname "${WRITE_CONFIG_PATH}")" && pwd)/$(basename "${WRITE_CONFIG_PATH}")"
+else
+  CONFIG_PATH="${TMP_DIR}/config.yml"
+fi
 LOG_PATH="${TMP_DIR}/llm-proxy.log"
 export SERVICE_SECRET="${SERVICE_SECRET:-live-service-secret}"
 export LLM_PROXY_LIVE_PORT="${PORT}"
 export_unused_provider_placeholders
+write_live_config
+
+if [[ -n "${WRITE_CONFIG_PATH}" ]]; then
+  echo "isolated live provider config written: ${CONFIG_PATH}"
+  exit 0
+fi
+
+GO_BIN="$(env_or_default GO go)"
+BINARY_PATH="${TMP_DIR}/llm-proxy-live"
 
 if command -v lsof >/dev/null 2>&1 && lsof -tiTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "error: port ${PORT} is already in use; set LLM_PROXY_LIVE_PORT to a free port" >&2
@@ -270,11 +416,15 @@ fi
 
 cd "${ROOT_DIR}"
 GOEXPERIMENT= CGO_ENABLED=0 "${GO_BIN}" build -o "${BINARY_PATH}" ./cmd/cli
-write_live_config
 
 GOEXPERIMENT= "${BINARY_PATH}" --config "${CONFIG_PATH}" >"${LOG_PATH}" 2>&1 &
 PROXY_PID="$!"
 wait_for_proxy
+
+if [[ "${PREFLIGHT_ONLY}" == "true" ]]; then
+  run_static_config_preflight
+  exit 0
+fi
 
 for live_provider in "${LIVE_PROVIDERS[@]}"; do
   run_text_smoke "${live_provider}"
