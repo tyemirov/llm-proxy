@@ -380,6 +380,19 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Pages deployment now resolves `git remote get-url --push` before release download, compares that effective destination with the configured fetch repository identity, and restricts `GH_REPO` fallback to fetch scoping so a different unparseable push target cannot inherit the expected identity. The deployment clone receives the validated URL as an explicit `pushurl`, its checkout-effective destination is validated again, and the branch is pushed by remote name so Git cannot apply `pushInsteadOf` a second time. Black-box coverage proves parseable and unparseable mismatched rewrites fail before GitHub access or either branch mutation, and a chained `A -> B -> C` rewrite deploys only to the validated `B` repository. Validation passed with `timeout -k 350s -s SIGKILL 350s make release-test` (30 tests), `git diff --check`, and an independent review with no remaining findings.
 
+- [ ] [B023] (P1) Preserve Pages release markers under branch publishing.
+  ### Summary
+  Repository-owned Pages artifacts can omit `.nojekyll`, allowing legacy branch publishing to filter the hidden `.mprlab-release.json` marker even when the deployed branch contains it. The artifact and public-marker contract also needs explicit black-box proof for schema, release version, source provenance, and the distinct release-tag commit.
+  ### Acceptance Criteria
+  1. Every prepared Pages archive contains an empty `.nojekyll` file alongside `.mprlab-release.json`.
+  2. Deployment rejects a published Pages archive without `.nojekyll` before branch mutation.
+  3. Extracted and public release markers validate schema version, release version, and source commit.
+  4. Black-box coverage proves the remote tag matches `release_commit` while artifact and public marker provenance match the distinct `source_commit`.
+  ### Implementation
+  The Pages builder now creates an empty `.nojekyll` after copying the source tree, archive validation rejects payloads without it, and public verification checks the complete marker identity rather than source commit alone. Release-pipeline coverage now inspects the builder's tarball and marker, exercises missing `.nojekyll` and invalid marker fields, and proves a release succeeds with intentionally different release and source commits.
+  ### Validation
+  Pending: `make release-test` and `make ci` were not authorized for this implementation pass, so B023 remains unresolved.
+
 
 ## Improvements
 
@@ -635,6 +648,16 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Run focused and full frontend validation plus the site renderer check.
   Resolution:
   Generated 45 repo-grounded resource pages plus a `/resources/` hub, linked the hub from `site/index.html`, added canonical metadata/JSON-LD/FAQ/related links across resource pages, and added `sitemap.xml` plus `robots.txt` for the public URL set. The generator is covered by frontend syntax checks and writes the SEO cluster plus evaluation report deterministically. Validation passed with `timeout -k 120s -s SIGKILL 120s make frontend-lint`, `timeout -k 180s -s SIGKILL 180s npm run frontend:test -- tests/e2e/management-ui.spec.js -g "SEO"`, `timeout -k 240s -s SIGKILL 240s make frontend-test`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./cmd/cli -run 'TestRootCommand(Render|Renders)'`, `timeout -k 30s -s SIGKILL 30s git diff --check`, and `timeout -k 500s -s SIGKILL 500s make ci`.
+- [x] [I019] (P1) Add LoopAware traffic pixel to all pages of LLM-proxy.
+  ### Summary
+  The user wants to add a traffic pixel from LoopAware to all of the pages of LLM-proxy.
+  ### Acceptance Criteria
+  1. Add the LoopAware script tag `https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f` to the head of `site/index.html`.
+  2. Add the same LoopAware script tag to all generated resource pages in `site/resources/` via the template helper in `scripts/generate_seo_resources.mjs`.
+  3. Update `RESOURCE_MODIFIED_DATE` in `scripts/generate_seo_resources.mjs` and `seoContentModifiedDate` in `tests/e2e/management-ui.spec.js`.
+  4. Intercept/mock loopaware requests in e2e tests to prevent actual network calls.
+  ### Resolution
+  Added LoopAware traffic pixel script to site/index.html and generate_seo_resources.mjs htmlDocument, updated the modified date to 2026-07-11 in generator and tests, and mocked loopaware network requests in Playwright. All tests passed.
 
 
 ## Maintenance

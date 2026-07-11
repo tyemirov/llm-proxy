@@ -48,6 +48,7 @@ def command_manifest_values(args: argparse.Namespace) -> int:
 
 
 def command_validate_archive(args: argparse.Namespace) -> int:
+    has_nojekyll = False
     with tarfile.open(args.archive, "r:gz") as archive:
         for member in archive.getmembers():
             path = pathlib.PurePosixPath(member.name)
@@ -55,6 +56,10 @@ def command_validate_archive(args: argparse.Namespace) -> int:
                 raise SystemExit(f"unsafe Pages archive member: {member.name}")
             if not (member.isfile() or member.isdir()):
                 raise SystemExit(f"unsafe Pages archive member: {member.name}")
+            if member.isfile() and path == pathlib.PurePosixPath(".nojekyll"):
+                has_nojekyll = True
+    if not has_nojekyll:
+        raise SystemExit("published Pages asset has no .nojekyll marker")
     return 0
 
 
@@ -74,6 +79,10 @@ def command_validate_marker(args: argparse.Namespace) -> int:
 
 def command_validate_public_marker(args: argparse.Namespace) -> int:
     marker = read_json(args.marker)
+    if marker.get("schema_version") != 1:
+        return 1
+    if marker.get("release_version") != args.version:
+        return 1
     return 0 if marker.get("source_commit") == args.source_commit else 1
 
 
@@ -99,6 +108,7 @@ def build_parser() -> argparse.ArgumentParser:
     public_marker = subparsers.add_parser("validate-public-marker")
     public_marker.add_argument("--marker", required=True)
     public_marker.add_argument("--source-commit", required=True)
+    public_marker.add_argument("--version", required=True)
     public_marker.set_defaults(func=command_validate_public_marker)
     return parser
 

@@ -50,6 +50,7 @@ fi
 if [[ -n "${domain}" ]]; then
   printf '%s\n' "${domain}" >"${site_directory}/CNAME"
 fi
+: >"${site_directory}/.nojekyll"
 python3 - "${staging_manifest}" "${site_directory}/.mprlab-release.json" <<'PY'
 import json
 import pathlib
