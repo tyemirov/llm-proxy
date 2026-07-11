@@ -7,7 +7,7 @@ const PUBLIC_ORIGIN = "https://llm-proxy.mprlab.com";
 const RESOURCE_ROOT = "site/resources";
 const REPORT_PATH = "docs/marketing/seo-resource-cluster-report.md";
 const RESOURCE_PUBLISHED_DATE = "2026-07-06";
-const RESOURCE_MODIFIED_DATE = "2026-07-09";
+const RESOURCE_MODIFIED_DATE = "2026-07-11";
 const PRODUCT_NAME = "LLM Proxy";
 const MIN_PAGE_COUNT = 40;
 const MAX_PAGE_COUNT = 50;
@@ -1782,6 +1782,7 @@ function htmlDocument(input) {
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     ${input.jsonLd.map((schema) => `<script type="application/ld+json">${JSON.stringify(schema)}</script>`).join("\n    ")}
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="${input.bodyClass}">
 ${input.body}
