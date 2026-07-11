@@ -15,6 +15,7 @@ SKILL_ROOT = pathlib.Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = SKILL_ROOT.parents[1]
 HELPER = SKILL_ROOT / "scripts" / "release_helper.py"
 PREPARE = SKILL_ROOT / "scripts" / "prepare_release.sh"
+PREPARE_PAGES = SKILL_ROOT / "scripts" / "prepare_pages_artifact.sh"
 DEPLOY_PAGES = SKILL_ROOT / "scripts" / "deploy_pages_artifact.sh"
 
 
@@ -141,8 +142,67 @@ class ReleasePipelineTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("payload does not match", result.stdout)
 
+    def test_prepare_pages_artifact_writes_nojekyll_and_canonical_marker(self) -> None:
+        source_commit = self.command("git", "rev-parse", "HEAD", cwd=self.repo).stdout.strip()
+        release_timestamp = "2026-07-10T12:00:00-07:00"
+        self.command(
+            str(HELPER),
+            "initialize-release-artifact",
+            "--version",
+            "v1.0.0",
+            "--source-commit",
+            source_commit,
+            "--release-timestamp",
+            release_timestamp,
+            cwd=self.repo,
+        )
+        artifact_dir = pathlib.Path(
+            self.command("git", "rev-parse", "--git-path", "mprlab-release", cwd=self.repo).stdout.strip()
+        )
+        if not artifact_dir.is_absolute():
+            artifact_dir = self.repo / artifact_dir
+        site_directory = self.root / "pages-source"
+        site_directory.mkdir()
+        (site_directory / "index.html").write_text("release\n", encoding="utf-8")
+        environment = os.environ.copy()
+        environment["RELEASE_VERSION"] = "v1.0.0"
+        environment["RELEASE_ARTIFACT_DIR"] = str(artifact_dir)
+
+        result = self.command(
+            str(PREPARE_PAGES),
+            "--source",
+            str(site_directory),
+            cwd=self.repo,
+            env=environment,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        with tarfile.open(artifact_dir / "payloads" / "release-assets" / "pages.tar.gz", "r:gz") as archive:
+            members = {pathlib.PurePosixPath(member.name): member for member in archive.getmembers()}
+            nojekyll_member = members[pathlib.PurePosixPath(".nojekyll")]
+            nojekyll_file = archive.extractfile(nojekyll_member)
+            self.assertIsNotNone(nojekyll_file)
+            self.assertEqual(nojekyll_file.read(), b"")
+            marker_member = members[pathlib.PurePosixPath(".mprlab-release.json")]
+            marker_file = archive.extractfile(marker_member)
+            self.assertIsNotNone(marker_file)
+            self.assertEqual(
+                json.load(marker_file),
+                {
+                    "release_timestamp": release_timestamp,
+                    "release_version": "v1.0.0",
+                    "schema_version": 1,
+                    "source_commit": source_commit,
+                },
+            )
+
     def test_pages_deploy_verifies_prepared_source_commit(self) -> None:
         source_commit, environment = self.pages_release_fixture()
+        release_commit = self.command("git", "rev-parse", "v1.0.0^{}", cwd=self.repo).stdout.strip()
+        public_marker = json.loads(pathlib.Path(environment["FAKE_MARKER_PATH"]).read_text(encoding="utf-8"))
+        self.assertNotEqual(source_commit, release_commit)
+        self.assertEqual(public_marker["source_commit"], source_commit)
+        self.assertNotEqual(public_marker["source_commit"], release_commit)
         result = self.deploy_pages(environment)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(f"Verified https://pages.example.invalid/ at source {source_commit}.", result.stdout)
@@ -402,6 +462,51 @@ class ReleasePipelineTest(unittest.TestCase):
         result = self.deploy_pages(environment)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(self.remote_branch_exists("gh-pages"), result.stdout + result.stderr)
+
+    def test_pages_deploy_rejects_invalid_marker_schema_before_remote_mutation(self) -> None:
+        _, environment = self.pages_release_fixture(marker_schema_version=2)
+        result = self.deploy_pages(environment)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("release marker has an invalid contract", result.stderr)
+        self.assertFalse(self.remote_branch_exists("gh-pages"), result.stdout + result.stderr)
+
+    def test_pages_deploy_rejects_invalid_marker_version_before_remote_mutation(self) -> None:
+        _, environment = self.pages_release_fixture(marker_release_version="v1.0.1")
+        result = self.deploy_pages(environment)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("release marker has the wrong release version", result.stderr)
+        self.assertFalse(self.remote_branch_exists("gh-pages"), result.stdout + result.stderr)
+
+    def test_pages_deploy_rejects_archive_without_nojekyll_before_remote_mutation(self) -> None:
+        _, environment = self.pages_release_fixture(include_nojekyll=False)
+        result = self.deploy_pages(environment)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Pages asset has no .nojekyll marker", result.stderr)
+        self.assertFalse(self.remote_branch_exists("gh-pages"), result.stdout + result.stderr)
+
+    def test_pages_deploy_rejects_invalid_public_marker_contract(self) -> None:
+        source_commit, environment = self.pages_release_fixture()
+        environment["PAGES_VERIFY_ATTEMPTS"] = "1"
+        environment["PAGES_VERIFY_DELAY_SECONDS"] = "1"
+        marker_path = pathlib.Path(environment["FAKE_MARKER_PATH"])
+        scenarios = (
+            ("schema", {"schema_version": 2}),
+            ("version", {"release_version": "v1.0.1"}),
+            ("source", {"source_commit": "0" * 40}),
+        )
+        for scenario_name, replacement in scenarios:
+            with self.subTest(scenario=scenario_name):
+                marker = {
+                    "schema_version": 1,
+                    "release_version": "v1.0.0",
+                    "source_commit": source_commit,
+                    "release_timestamp": "2026-07-09T12:00:00-07:00",
+                }
+                marker.update(replacement)
+                marker_path.write_text(json.dumps(marker), encoding="utf-8")
+                result = self.deploy_pages(environment)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Pages marker did not reach source", result.stderr)
 
     def test_pages_deploy_validates_retry_settings_before_remote_mutation(self) -> None:
         _, environment = self.pages_release_fixture()
@@ -724,6 +829,9 @@ raise SystemExit(f"unexpected gh command: {arguments}")
     def pages_release_fixture(
         self,
         marker_source_commit: str | None = None,
+        marker_schema_version: int = 1,
+        marker_release_version: str = "v1.0.0",
+        include_nojekyll: bool = True,
         git_hook_directory: str | None = None,
     ) -> tuple[str, dict[str, str]]:
         source_commit = self.command("git", "rev-parse", "HEAD", cwd=self.repo).stdout.strip()
@@ -739,17 +847,21 @@ raise SystemExit(f"unexpected gh command: {arguments}")
         release_directory.mkdir()
         site_directory.mkdir()
         marker = {
-            "schema_version": 1,
-            "release_version": "v1.0.0",
+            "schema_version": marker_schema_version,
+            "release_version": marker_release_version,
             "source_commit": marker_source_commit or source_commit,
             "release_timestamp": "2026-07-09T12:00:00-07:00",
         }
         marker_path = site_directory / ".mprlab-release.json"
         marker_path.write_text(json.dumps(marker), encoding="utf-8")
+        nojekyll_path = site_directory / ".nojekyll"
+        nojekyll_path.write_text("", encoding="utf-8")
         (site_directory / "index.html").write_text("release\n", encoding="utf-8")
         archive_path = release_directory / "pages.tar.gz"
         with tarfile.open(archive_path, "w:gz") as archive:
             archive.add(marker_path, arcname=".mprlab-release.json")
+            if include_nojekyll:
+                archive.add(nojekyll_path, arcname=".nojekyll")
             archive.add(site_directory / "index.html", arcname="index.html")
             if git_hook_directory is not None:
                 hook_path = site_directory / git_hook_directory / "hooks" / "pre-commit"

@@ -210,7 +210,8 @@ if [[ "${verify}" == "true" ]]; then
     printf '%s' "${marker}" >"${public_marker_path}"
     if python3 "${pages_helper}" validate-public-marker \
       --marker "${public_marker_path}" \
-      --source-commit "${source_commit}" >/dev/null 2>&1
+      --source-commit "${source_commit}" \
+      --version "${version}" >/dev/null 2>&1
     then
       echo "Verified ${url} at source ${source_commit}."
       exit 0
