@@ -27,7 +27,7 @@ const mimeTypes = Object.freeze({
   ".yaml": "application/yaml",
 });
 const generatedResourcePageCount = 45;
-const seoContentModifiedDate = "2026-07-09";
+const seoContentModifiedDate = "2026-07-11";
 const settingsLayerViewports = Object.freeze([
   { name: "desktop", width: 1280, height: 720 },
   { name: "mobile", width: 390, height: 780 },
@@ -174,10 +174,10 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(settingsDialog.getByRole("heading", { name: "Routing defaults" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Request examples" })).toBeVisible();
   const requestExamplesSection = settingsDialog.locator(".usage-examples-section");
-  await expect(requestExamplesSection).not.toHaveAttribute("open", "");
+  await expect(requestExamplesSection).not.toHaveAttribute("open");
   await expect(settingsDialog.locator('request-example[data-example-id="default-text"]')).toBeHidden();
   await requestExamplesSection.locator("summary").click();
-  await expect(requestExamplesSection).toHaveAttribute("open", "");
+  await expect(requestExamplesSection).toHaveAttribute("open");
   await expect(settingsDialog.locator("request-example")).toHaveCount(6);
   await expect(settingsDialog.locator('request-example[data-example-id="default-text"]')).toBeVisible();
   await expect(settingsDialog.locator('request-example[data-example-id="default-text"]')).toContainText("Default text");
@@ -411,6 +411,9 @@ test("admin menu opens all users dashboard", async ({ page }) => {
  * @returns {Promise<void>}
  */
 async function installAssetRoutes(page) {
+  await page.route("https://loopaware.mprlab.com/**", async (route) =>
+    route.fulfill({ body: "", contentType: "application/javascript" }),
+  );
   await page.route("https://accounts.google.com/**", async (route) => route.abort());
   await page.route("**/alpinejs@3.13.5/dist/module.esm.js", async (route) =>
     fulfillFile(route, "node_modules/alpinejs/dist/module.esm.js", "application/javascript"),
