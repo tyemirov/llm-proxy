@@ -405,6 +405,17 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   6. The focused operational test, Go coverage suite, release integration suite, and full `make ci` gate pass without increasing the CI timeout.
   ### Resolution
   Replaced external-command heredocs across CI, release, publish, deployment, artifact, Pages, and live-provider scripts with Bash builtin output or direct Python command bodies, removing the pre-reader pipe staging that deadlocked with `ulimit -p 1`. Container build context extraction now writes `git archive HEAD` to a temporary tar before extraction so a completed reader cannot turn padding writes into a false `SIGPIPE` failure. Black-box operational coverage bounds every help command under the constrained-pipe contract, rejects shell heredocs in the governed script trees, validates the canonical container descriptor, and retains the existing dotenv, Pages marker, and publication coverage. Validation passed with focused operational tests, `bash -n`, `make go-test` (aggregate coverage 100.0%), `make release-test` (35 tests), `git diff --check`, and the unchanged 350-second `make ci` gate in 77.66 seconds.
+- [x] [B025] (P1) Restore release pipeline tests after prepare release exits 2.
+  ### Summary
+  `python3 -m unittest discover -s tools/gitrelease/tests -p 'test_*.py'` fails three release-pipeline tests because `tools/gitrelease/scripts/prepare_release.sh --version v1.0.0` exits with status 2 in prepared-release paths.
+  ### Acceptance Criteria
+  1. `prepare_release.sh --version v1.0.0` succeeds in the black-box prepared-release fixture without weakening the canonical SemVer, artifact hashing, Pages marker, or selected-remote tag contracts.
+  2. The prepared publish tests continue to validate the selected remote tag before and after publication.
+  3. The full release integration suite and required final `make ci` pass after the fix.
+  ### Resolution
+  `prepare_release.sh` now runs its nested `make ci` with release-only artifact environment variables removed, while preserving those variables for the real artifact-preparation phase after CI. The release-pipeline test harness now isolates ambient release variables from parent shells, and new black-box coverage proves nested CI does not see release artifact variables while the artifact target still receives the current release version, timestamp, and artifact directory.
+
+  Validation passed with baseline `timeout -k 350s -s SIGKILL 350s make ci`, reproduced failure via `timeout -k 120s -s SIGKILL 120s env RELEASE_ARTIFACT_TARGETS="container-artifacts pages-artifact" python3 -m unittest ...` before the patch, focused post-fix `timeout -k 180s -s SIGKILL 180s env RELEASE_ARTIFACT_TARGETS="container-artifacts pages-artifact" python3 -m unittest discover -s tools/gitrelease/tests -p 'test_*.py'` (36 tests), `timeout -k 120s -s SIGKILL 120s python3 -m unittest tools.gitrelease.tests.test_release_pipeline.ReleasePipelineTest.test_prepare_runs_ci_without_release_artifact_environment`, `timeout -k 30s -s SIGKILL 30s bash -n tools/gitrelease/scripts/prepare_release.sh`, and final `timeout -k 350s -s SIGKILL 350s make ci` (Go aggregate coverage 100.0%, Python 20 passed, Playwright 12 passed, release integrations 36 passed, live-provider preflight passed).
 
 
 ## Improvements
@@ -826,6 +837,41 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Added `docs/marketing/social-media-60-day-campaign.md`.
   Validation:
   Verified the document contains 120 scheduled posts and every post is below the 300-character limit.
+- [x] [M011] (P1) Require CI before and after every code-changing task.
+  Goal:
+  Make repository CI failures visible before code is edited and require the final implementation state to pass the canonical CI gate.
+  Requirements:
+  - Require agents to run `make ci` before the first code edit and after the final code edit for every code-changing task.
+  - Keep both CI runs agent-owned even when the execution chain performs later completion checks.
+  - Treat any later code edit as invalidating the final CI run.
+  - Preserve concrete baseline failure evidence without blocking work whose purpose is to repair that failure.
+  Deliverables:
+  - Update the root `AGENTS.md` workflow so the requirement is binding and does not conflict with execution-chain ownership or routine-validation limits.
+  Validation:
+  - Inspect the final governance diff and run documentation whitespace checks.
+  Resolution:
+  Root `AGENTS.md` now requires an agent-owned `make ci` baseline immediately before the first code edit and a passing `make ci` run immediately after the final code edit for every code-changing task. Later code edits invalidate the final run, partial targets cannot replace either run, baseline failures must be reported with concrete output, and execution-chain completion checks do not replace the pair. The workflow, completion gate, testing guidance, and pre-finish checklist now carry the same canonical requirement without contradictory command restrictions. No code changed, so the new CI pair did not apply to this governance-only edit. `git diff --check` passed. The MPR Lab normalizer check still reports broad governance drift that was already present in the pre-edit dry run; follow-up is tracked in M012.
+- [ ] [M012] (P2) Reconcile repository governance with the MPR Lab normalizer.
+  Goal:
+  Make the governance normalizer check pass without deleting repository-owned binding contracts.
+  Requirements:
+  - Inspect the normalizer differences reported for root `AGENTS.md` and every managed `.mprlab/` guide.
+  - Preserve the M011 pre-change and post-change CI requirement and all other current repository-owned rules.
+  - Update the appropriate managed templates, boundaries, or repository documents as one canonical forward-only contract rather than applying a destructive bulk rewrite.
+  Deliverables:
+  - A reviewed governance normalization change with no unrelated product or runtime edits.
+  Validation:
+  - Run the MPR Lab governor in `--dry-run` and `--check` modes and require no pending managed-file changes.
+- [ ] [M013] (P2) Resolve missing product-context document references.
+  Goal:
+  Keep the root governance entrypoint limited to product-context documents that exist and represent the current contract.
+  Requirements:
+  - Decide whether current `PRD.md` and `ARCHITECTURE.md` documents are required or whether their references are stale.
+  - Add current canonical documents or remove the obsolete references; do not add placeholders or compatibility documents.
+  Deliverables:
+  - Root governance references that resolve to current product-context files.
+  Validation:
+  - Verify every product-context path named by root `AGENTS.md` exists and contains current repository guidance.
 
 
 ## Features

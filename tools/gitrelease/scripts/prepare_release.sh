@@ -148,7 +148,13 @@ if [[ "${dry_run}" == "true" ]]; then
 fi
 
 echo "==> [release] Running make ci"
-timeout -k "${ci_timeout}s" -s SIGKILL "${ci_timeout}s" make ci
+env \
+  -u RELEASE_ARTIFACT_TARGETS \
+  -u RELEASE_VERSION \
+  -u RELEASE_TIMESTAMP \
+  -u MOBILE_RELEASE_TIMESTAMP \
+  -u RELEASE_ARTIFACT_DIR \
+  timeout -k "${ci_timeout}s" -s SIGKILL "${ci_timeout}s" make ci
 
 echo "==> [release] Rechecking local state after CI"
 run_local_preflight

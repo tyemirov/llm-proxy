@@ -17,12 +17,25 @@ HELPER = SKILL_ROOT / "scripts" / "release_helper.py"
 PREPARE = SKILL_ROOT / "scripts" / "prepare_release.sh"
 PREPARE_PAGES = SKILL_ROOT / "scripts" / "prepare_pages_artifact.sh"
 DEPLOY_PAGES = SKILL_ROOT / "scripts" / "deploy_pages_artifact.sh"
+RELEASE_ENVIRONMENT_KEYS = (
+    "RELEASE_ARTIFACT_TARGETS",
+    "RELEASE_VERSION",
+    "RELEASE_TIMESTAMP",
+    "MOBILE_RELEASE_TIMESTAMP",
+    "RELEASE_ARTIFACT_DIR",
+    "RELEASE_BUMP",
+    "RELEASE_HELPER",
+    "RELEASE_PIPELINE",
+)
 
 
 class ReleasePipelineTest(unittest.TestCase):
     def setUp(self) -> None:
         self.original_gh_repo = os.environ.get("GH_REPO")
         os.environ["GH_REPO"] = "example/release-fixture"
+        self.original_release_environment = {key: os.environ.get(key) for key in RELEASE_ENVIRONMENT_KEYS}
+        for key in RELEASE_ENVIRONMENT_KEYS:
+            os.environ.pop(key, None)
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.root = pathlib.Path(self.temporary_directory.name)
         self.remote = self.root / "origin.git"
@@ -46,6 +59,11 @@ class ReleasePipelineTest(unittest.TestCase):
             os.environ.pop("GH_REPO", None)
         else:
             os.environ["GH_REPO"] = self.original_gh_repo
+        for key, value in self.original_release_environment.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
     def command(
         self,
@@ -91,6 +109,40 @@ class ReleasePipelineTest(unittest.TestCase):
         self.assertEqual(manifest["schema_version"], 2)
         self.assertEqual(manifest["payloads"], [])
         self.command(str(HELPER), "verify-release-artifact", cwd=self.repo)
+
+    def test_prepare_runs_ci_without_release_artifact_environment(self) -> None:
+        (self.repo / "Makefile").write_text(
+            "\n".join(
+                [
+                    "ci:",
+                    "\t@test -z \"$$RELEASE_ARTIFACT_TARGETS\"",
+                    "\t@test -z \"$$RELEASE_VERSION\"",
+                    "\t@test -z \"$$RELEASE_TIMESTAMP\"",
+                    "\t@test -z \"$$MOBILE_RELEASE_TIMESTAMP\"",
+                    "\t@test -z \"$$RELEASE_ARTIFACT_DIR\"",
+                    "fixture-artifact:",
+                    "\t@test \"$$RELEASE_ARTIFACT_TARGETS\" = \"fixture-artifact\"",
+                    "\t@test \"$$RELEASE_VERSION\" = \"v1.0.0\"",
+                    "\t@test -n \"$$RELEASE_TIMESTAMP\"",
+                    "\t@test -n \"$$MOBILE_RELEASE_TIMESTAMP\"",
+                    "\t@test -n \"$$RELEASE_ARTIFACT_DIR\"",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        self.command("git", "add", "Makefile", cwd=self.repo)
+        self.command("git", "commit", "-m", "Assert release CI environment", cwd=self.repo)
+        self.command("git", "push", "origin", "master", cwd=self.repo)
+
+        env = os.environ.copy()
+        env["RELEASE_HELPER"] = str(HELPER)
+        env["RELEASE_ARTIFACT_TARGETS"] = "fixture-artifact"
+        env["RELEASE_VERSION"] = "v9.9.9"
+        env["RELEASE_TIMESTAMP"] = "1999-01-01T00:00:00-07:00"
+        env["MOBILE_RELEASE_TIMESTAMP"] = "1999-01-01T00:00:00-07:00"
+        env["RELEASE_ARTIFACT_DIR"] = str(self.root / "ambient-artifact-dir")
+        self.command(str(PREPARE), "--version", "v1.0.0", cwd=self.repo, env=env)
 
     def test_payload_tampering_is_rejected(self) -> None:
         source_commit = self.command("git", "rev-parse", "HEAD", cwd=self.repo).stdout.strip()

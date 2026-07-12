@@ -40,11 +40,14 @@ All rules for validation, error handling, invariants, and “confident programmi
 - `make test` runs the canonical test suite for the active stack.
 - `make lint` enforces linting rules before code review.
 - `make ci` mirrors the GitHub Actions workflow and should pass locally before opening a PR.
+- For every code-changing task, run `make ci` immediately before the first code edit to establish the baseline and immediately after the final code edit to validate the result. Any later code edit invalidates the final run and requires another `make ci` before completion. Focused or partial targets do not replace either required run.
+- Report any baseline or final failure with concrete output. A failing baseline may be repaired by the task; the post-change run must pass before completion.
 
 ### Tooling Workflow (Tests, Lint, Format)
 
 - In ISSUES Managing Director execution runs, branch prep, completion checks, push, and PR creation are handled by the execution chain.
 - Agents should not duplicate those chain-owned steps unless the active issue explicitly asks for manual investigation output.
+- The required pre-change and post-change `make ci` runs are agent-owned and are not execution-chain completion checks.
 
 ## Workflow
 
@@ -67,7 +70,7 @@ Operational playbook for working in this repository. Use it to coordinate planni
 3. For the active issue, read `.mprlab/PLANNING.md` and create `PLAN.md` (ignored by git) with bullet steps. Keep it updated and delete/rewrite it for the next issue.
 4. Implement the requested change, keeping to stack-specific standards. Limit edits to necessary files plus issue-document updates when required.
 5. Do not manually create/switch branches, run completion-gate command chains, commit/push, or open PRs as part of routine execution; the execution chain does this automatically.
-6. Run local commands only when the issue explicitly asks for investigation/debugging evidence.
+6. Run local commands only when this contract requires them or when the issue explicitly asks for investigation/debugging evidence.
 7. Report what changed and any blockers; the execution chain finalizes git/check/PR steps.
 
 ### Completion Gate (Non-negotiable)
@@ -76,11 +79,13 @@ For agent executions launched by ISSUES Managing Director, completion is control
 1) Requested file/documentation changes are implemented.
 2) Any required issue status/notes updates are made.
 3) Blockers are reported clearly when present.
+4) For code-changing tasks, the required post-change `make ci` run passes after the final code edit.
 
 ### Testing & Tooling
 
 - Use `Makefile` targets (`make test`, `make lint`, `make ci`) when local diagnostics are explicitly needed.
-- Do not run full completion-gate suites as routine finish steps; the execution chain runs completion checks automatically.
+- For code-changing tasks, always run the required baseline/final `make ci` pair even when the execution chain will run later completion checks.
+- Outside that required `make ci` pair, do not run additional full completion-gate suites as routine finish steps; the execution chain runs completion checks automatically.
 - Run stack-specific formatters only when the issue requires local validation output or explicit formatting changes.
 
 ### Git & Release Flow
@@ -103,8 +108,9 @@ For agent executions launched by ISSUES Managing Director, completion is control
 1. `PLAN.md` reflects the final state for the active issue.
 2. `.mprlab/ISSUES.md` entry is marked `[x]` with the resolution note.
 3. Requested implementation and documentation updates are complete.
-4. Any blockers are documented with concrete failure context.
-5. Provide a short summary plus next steps in the CLI output before moving to the next issue.
+4. For code-changing tasks, the required post-change `make ci` run passes after the final code edit.
+5. Any blockers are documented with concrete failure context.
+6. Provide a short summary plus next steps in the CLI output before moving to the next issue.
 
 If any checklist item is incomplete, do not claim completion. Complete the missing step(s) first.
 
