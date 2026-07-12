@@ -22,7 +22,7 @@ import {
   USAGE_CHART,
   USAGE_METRICS,
 } from "./usagePresentation.js";
-import { applyUserMenuItems } from "../core/mprShell.js";
+import { applyUserMenuItems, waitForMprUIAutoOrchestrationReady } from "../core/mprShell.js";
 
 const EMPTY_SECRET_PLACEHOLDER = "<generated-secret>";
 const EMPTY_STRING = "";
@@ -63,6 +63,9 @@ export function createKeyManagement() {
     usage: emptyUsageSummary(),
     /** @type {import("../types.d.js").ManagementAdminUser[]} */
     adminUsers: [],
+    /** @type {Promise<void> | null} */
+    profileLoadPromise: null,
+    authenticatedShellProfileRequested: false,
     generatedSecret: EMPTY_STRING,
     settingsOpen: false,
     usageExamplesOpen: false,
@@ -73,7 +76,7 @@ export function createKeyManagement() {
 
     init() {
       document.addEventListener(EVENTS.AUTHENTICATED, () => {
-        void this.loadProfile();
+        this.loadProfileForAuthenticatedShell();
       });
       document.addEventListener(EVENTS.UNAUTHENTICATED, () => {
         this.clearAuthenticatedState();
@@ -299,6 +302,23 @@ export function createKeyManagement() {
     },
 
     async loadProfile() {
+      if (this.profileLoadPromise) {
+        return this.profileLoadPromise;
+      }
+      this.profileLoadPromise = this.loadProfileOnce();
+      try {
+        await this.profileLoadPromise;
+      } finally {
+        const retryRequested = this.authState === AUTH_STATES.UNAUTHENTICATED && this.authenticatedShellProfileRequested;
+        this.profileLoadPromise = null;
+        this.authenticatedShellProfileRequested = false;
+        if (retryRequested) {
+          await this.loadProfile();
+        }
+      }
+    },
+
+    async loadProfileOnce() {
       this.busy = true;
       try {
         const loadedProfile = await fetchProfile();
@@ -318,6 +338,14 @@ export function createKeyManagement() {
         this.busy = false;
         dispatchManagementReady();
       }
+    },
+
+    loadProfileForAuthenticatedShell() {
+      if (this.profileLoadPromise) {
+        this.authenticatedShellProfileRequested = true;
+        return;
+      }
+      void this.loadProfile();
     },
 
     async loadUsageForAuthenticatedProfile() {
@@ -611,7 +639,8 @@ function emptyDefaults() {
   };
 }
 
-function dispatchManagementReady() {
+async function dispatchManagementReady() {
+  await waitForMprUIAutoOrchestrationReady();
   document.dispatchEvent(new CustomEvent(EVENTS.MANAGEMENT_READY));
 }
 

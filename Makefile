@@ -20,6 +20,7 @@ PUBLISH_REMOTE ?= origin
 PUBLISH_BRANCH ?= master
 PAGES_BRANCH ?= gh-pages
 PAGES_DOMAIN ?= llm-proxy.mprlab.com
+PAGES_CONFIG_URL ?= https://llm-proxy-api.mprlab.com/config-ui.yaml
 PAGES_URL ?= https://llm-proxy.mprlab.com/
 PAGES_VERSION ?=
 GATEWAY_DIR ?=
@@ -96,7 +97,7 @@ container-artifacts:
 	@RELEASE_TOOL_DIR="$(RELEASE_TOOL_DIR)" DOCKER_IMAGE="$(DOCKER_IMAGE)" PUBLISH_PLATFORMS="$(PUBLISH_PLATFORMS)" ./scripts/build-container-artifact.sh
 
 pages-artifact:
-	@RELEASE_TOOL_DIR="$(RELEASE_TOOL_DIR)" PAGES_DOMAIN="$(PAGES_DOMAIN)" ./scripts/build-pages-artifact.sh
+	@RELEASE_TOOL_DIR="$(RELEASE_TOOL_DIR)" PAGES_CONFIG_URL="$(PAGES_CONFIG_URL)" PAGES_DOMAIN="$(PAGES_DOMAIN)" ./scripts/build-pages-artifact.sh
 
 publish-release:
 	@RELEASE_HELPER="$(RELEASE_HELPER)" ./scripts/publish-release.sh --remote "$(PUBLISH_REMOTE)" $(PUBLISH_RELEASE_ARGS)

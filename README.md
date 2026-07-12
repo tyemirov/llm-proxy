@@ -426,14 +426,16 @@ can consume the current llm-proxy runtime, MPR UI, and TAuth bootstrap values
 from `llm-proxy-api`.
 
 The static UI uses the shared MPR shell through API-served `config-ui.yaml`,
-pinned `mpr-ui` assets, `<mpr-header>`, `<mpr-user>`, and `<mpr-footer>`. It
-does not load `tauth.js` directly. The Pages artifact contains no static
-`config-ui.yaml`, no `llm-proxy-config.json`, and no rendered config URL in
-`index.html`; the frontend fetches the backend `/config-ui.yaml` endpoint at
-runtime. That single API-served YAML points browser management API calls,
-generated usage examples, and MPR UI/TAuth at the configured origins.
-Browser-facing values are projected from the already-loaded backend
-`config.yml`; there is no second environment expansion path for Pages.
+pinned `mpr-ui` assets, `mpr-ui-config.js`,
+`<mpr-header data-config-url="...">`, the pinned bundle marker, `<mpr-user>`,
+and `<mpr-footer>`. It does not load `tauth.js` directly or apply MPR UI config
+from application JavaScript. The Pages artifact contains no static
+`config-ui.yaml` or `llm-proxy-config.json`; release rendering writes the
+profile-owned `PAGES_CONFIG_URL` into the declarative header attribute. That
+single API-served YAML points browser management API calls, generated usage
+examples, and MPR UI/TAuth at the configured origins. Browser-facing values are
+projected from the already-loaded backend `config.yml`; there is no second
+environment expansion path for Pages.
 
 Required hosted values are profile-specific:
 
@@ -571,7 +573,9 @@ Then configure GitHub Pages for this repository:
    ownership migration, `LLM_PROXY_MANAGEMENT_LEGACY_TOKEN_OWNER_EMAIL`.
 5. Do not store browser runtime config in the Pages branch. Production browser
    config is served only by `https://llm-proxy-api.mprlab.com/config-ui.yaml`
-   from the running backend's loaded management config.
+   from the running backend's loaded management config. `make release` writes
+   that URL into `mpr-header[data-config-url]` through `PAGES_CONFIG_URL` and
+   validates the declarative mpr-ui bundle marker.
 
 Configure TAuth for tenant `llm-proxy` with:
 
@@ -740,7 +744,8 @@ artifacts; it does not rebuild or rerun CI.
 defaults to the gateway `deploy-llm-proxy-backend` target. Override the
 checkout or target with `GATEWAY_DIR=/path/to/mprlab-gateway` or
 `GATEWAY_DEPLOY_TARGET=<target>`. Override Pages preparation and activation
-with `PAGES_DOMAIN=<domain>`, `PAGES_BRANCH=<branch>`, `PAGES_URL=<url>`, or
+with `PAGES_DOMAIN=<domain>`, `PAGES_CONFIG_URL=<https-config-url>`,
+`PAGES_BRANCH=<branch>`, `PAGES_URL=<url>`, or
 `DEPLOY_PAGES_ARGS="--skip-configure"`.
 
 ## Usage

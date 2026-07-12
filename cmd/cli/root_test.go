@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -460,7 +461,7 @@ func TestRootCommandRendersStaticSiteWithoutBackendConfig(t *testing.T) {
 	outputDirectory := filepath.Join(tempDir, "rendered-site")
 	withServeProxy(t, failingServeProxy(t))
 
-	executeError := executeRootCommand(t, "--config", configPath, "--site-source", filepath.Join("..", "..", "site"), "--render-site-output", outputDirectory)
+	executeError := executeRootCommand(t, "--config", configPath, "--site-source", filepath.Join("..", "..", "site"), "--site-config-url", "https://llm-proxy-api.example/config-ui.yaml", "--render-site-output", outputDirectory)
 	if executeError != nil {
 		t.Fatalf("ExecuteC error: %v", executeError)
 	}
@@ -483,9 +484,8 @@ func TestRootCommandRendersStaticSiteWithoutBackendConfig(t *testing.T) {
 		t.Fatalf("rendered index.html: %v", readIndexError)
 	}
 	indexHTML := string(indexBytes)
-	if strings.Contains(indexHTML, siteConfigURLAttribute) ||
-		strings.Contains(indexHTML, siteConfigURLPlaceholder) ||
-		strings.Contains(indexHTML, proxy.ManagementConfigUIFileName) {
+	if !strings.Contains(indexHTML, `data-config-url="https://llm-proxy-api.example/config-ui.yaml"`) ||
+		!strings.Contains(indexHTML, "data-mpr-ui-bundle-src=") {
 		t.Fatalf("rendered index.html=%s", indexHTML)
 	}
 	if _, statError := os.Stat(filepath.Join(outputDirectory, "assets", "llm-proxy", "js", "app.js")); statError != nil {
@@ -739,6 +739,15 @@ func TestRootCommandRejectsSiteRenderInjectedFilesystemFailures(t *testing.T) {
 			expectedError: "read failed",
 		},
 		{
+			name: "index write failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				siteWriteFile = func(rawPath string, content []byte, fileMode os.FileMode) error {
+					return errors.New("write failed")
+				}
+			},
+			expectedError: "write failed",
+		},
+		{
 			name: "stale config removal failure",
 			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
 				siteRemove = func(rawPath string) error {
@@ -780,21 +789,26 @@ func TestRootCommandRejectsSiteRenderInjectedFilesystemFailures(t *testing.T) {
 	}
 }
 
-func TestRootCommandRejectsSiteRenderIndexWithStaticConfigURL(t *testing.T) {
+func TestRootCommandRejectsSiteRenderIndexWithoutCanonicalConfigURL(t *testing.T) {
 	testCases := []struct {
 		name          string
 		indexHTML     string
 		expectedError string
 	}{
 		{
-			name:          "retired placeholder",
-			indexHTML:     `<!doctype html><mpr-header data-config-url="` + siteConfigURLPlaceholder + `"></mpr-header>`,
-			expectedError: siteConfigURLPlaceholder,
+			name:          "missing config url",
+			indexHTML:     `<!doctype html><mpr-header></mpr-header>`,
+			expectedError: siteConfigURLSourceAttribute,
 		},
 		{
-			name:          "static config url",
+			name:          "noncanonical source config url",
 			indexHTML:     `<!doctype html><mpr-header data-config-url="https://llm-proxy-api.example/config-ui.yaml"></mpr-header>`,
-			expectedError: siteConfigURLAttribute,
+			expectedError: siteConfigURLSourceAttribute,
+		},
+		{
+			name:          "duplicate config url",
+			indexHTML:     `<!doctype html><mpr-header data-config-url="/config-ui.yaml"></mpr-header><mpr-header data-config-url="/config-ui.yaml"></mpr-header>`,
+			expectedError: "exactly one",
 		},
 	}
 	for _, testCase := range testCases {
@@ -814,6 +828,42 @@ func TestRootCommandRejectsSiteRenderIndexWithStaticConfigURL(t *testing.T) {
 				subTest.Fatalf("error=%v want contains %q", executeError, testCase.expectedError)
 			}
 		})
+	}
+}
+
+func TestRootCommandRejectsInvalidSiteConfigURL(t *testing.T) {
+	testCases := []string{
+		"",
+		"/other.yaml",
+		"config-ui.yaml",
+		"//llm-proxy-api.example/config-ui.yaml",
+		"http://llm-proxy-api.example/config-ui.yaml",
+		"https://llm-proxy-api.example/config-ui.yaml?environment=production",
+	}
+	for _, rawConfigURL := range testCases {
+		t.Run(rawConfigURL, func(subTest *testing.T) {
+			tempDir := subTest.TempDir()
+			outputDirectory := filepath.Join(tempDir, "rendered-site")
+			withServeProxy(subTest, failingServeProxy(subTest))
+
+			executeError := executeRootCommand(subTest, "--site-source", filepath.Join("..", "..", "site"), "--site-config-url", rawConfigURL, "--render-site-output", outputDirectory)
+			if executeError == nil || !strings.Contains(executeError.Error(), "site config URL") {
+				subTest.Fatalf("error=%v want invalid site config URL", executeError)
+			}
+		})
+	}
+}
+
+func TestRootCommandReportsSiteConfigURLParseFailure(t *testing.T) {
+	withSiteRendererDependencies(t)
+	siteURLParse = func(rawURL string) (*url.URL, error) {
+		return nil, errors.New("config URL parse failed")
+	}
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--site-config-url", defaultSiteConfigURL, "--render-site-output", t.TempDir())
+	if executeError == nil || !strings.Contains(executeError.Error(), "config URL parse failed") {
+		t.Fatalf("error=%v want config URL parse failure", executeError)
 	}
 }
 
@@ -1579,6 +1629,7 @@ func resetConfigFlag(t *testing.T) {
 	t.Helper()
 	resetStringFlag(t, flagConfig, defaultConfigPath)
 	resetStringFlag(t, flagRenderSiteOutput, "")
+	resetStringFlag(t, flagSiteConfigURL, defaultSiteConfigURL)
 	resetStringFlag(t, flagSiteSource, defaultSiteSourceDirectory)
 }
 
@@ -1619,6 +1670,8 @@ func withSiteRendererDependencies(t *testing.T) {
 	originalSiteReadFile := siteReadFile
 	originalSiteRemove := siteRemove
 	originalSiteStat := siteStat
+	originalSiteURLParse := siteURLParse
+	originalSiteWriteFile := siteWriteFile
 	t.Cleanup(func() {
 		siteCopyFS = originalSiteCopyFS
 		sitePathAbs = originalSitePathAbs
@@ -1626,6 +1679,8 @@ func withSiteRendererDependencies(t *testing.T) {
 		siteReadFile = originalSiteReadFile
 		siteRemove = originalSiteRemove
 		siteStat = originalSiteStat
+		siteURLParse = originalSiteURLParse
+		siteWriteFile = originalSiteWriteFile
 	})
 }
 
@@ -1652,7 +1707,7 @@ func writeTestSiteSource(t *testing.T, sourceDirectory string) {
 		t.Fatalf("create test site source: %v", mkdirError)
 	}
 	if writeError := os.WriteFile(filepath.Join(sourceDirectory, "index.html"), []byte(`<!doctype html>
-<mpr-header></mpr-header>
+	<mpr-header data-config-url="/config-ui.yaml"></mpr-header>
 `), 0600); writeError != nil {
 		t.Fatalf("write index.html: %v", writeError)
 	}

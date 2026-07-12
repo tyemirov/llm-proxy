@@ -70,8 +70,9 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 	indexHTML := string(indexBytes)
 	requiredFragments := []string{
 		"mpr-ui-config.js",
+		`data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.js"`,
 		`src="/assets/llm-proxy/js/app.js"`,
-		`<mpr-header`,
+		`data-config-url="/config-ui.yaml"`,
 		`<mpr-user`,
 		`<mpr-footer`,
 	}
@@ -80,7 +81,7 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 			t.Fatalf("static index missing %q", requiredFragment)
 		}
 	}
-	forbiddenFragments := []string{"tauth.js", "data-config-url=\"/config-ui.yaml\"", "data-mpr-ui-bundle-src", "tauth-login-path", "tauth-logout-path", "tauth-nonce-path", "{{MPR_UI_VERSION}}"}
+	forbiddenFragments := []string{"tauth.js", "tauth-login-path", "tauth-logout-path", "tauth-nonce-path", "{{MPR_UI_VERSION}}"}
 	for _, forbiddenFragment := range forbiddenFragments {
 		if strings.Contains(indexHTML, forbiddenFragment) {
 			t.Fatalf("static index must not include %q", forbiddenFragment)

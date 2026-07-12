@@ -1,27 +1,12 @@
 // @ts-check
 
 import { ADMIN_USER_MENU_ITEMS, MPR_UI, USER_MENU_ITEMS } from "../constants.js";
-import { loadFrontendRuntimeConfig } from "./backendClient.js";
 
 /**
- * @returns {Promise<void>}
+ * @returns {void}
  */
-export async function initializeMprShell() {
-  const runtimeConfig = await loadFrontendRuntimeConfig();
-  applyHeaderConfigURL(runtimeConfig.configUrl);
+export function initializeMprShell() {
   applyUserMenuItems(false);
-  await applyMprUIConfig(runtimeConfig.configUrl);
-  await loadMprUIBundle();
-}
-
-/**
- * @param {string} configUrl
- */
-function applyHeaderConfigURL(configUrl) {
-  const header = document.getElementById(MPR_UI.HEADER_ID);
-  if (header) {
-    header.setAttribute(MPR_UI.CONFIG_URL_ATTRIBUTE, configUrl);
-  }
 }
 
 /**
@@ -35,32 +20,26 @@ export function applyUserMenuItems(isAdmin) {
 }
 
 /**
- * @param {string} configUrl
- * @returns {Promise<unknown>}
+ * @returns {Promise<void>}
  */
-function applyMprUIConfig(configUrl) {
+export async function waitForMprUIAutoOrchestrationReady() {
+  await waitForDocumentReady();
   const runtimeGlobal =
-    /** @type {typeof globalThis & { MPRUI?: { applyYamlConfig?: (options: { configUrl: string }) => Promise<unknown> } }} */ (globalThis);
-  if (!runtimeGlobal.MPRUI || typeof runtimeGlobal.MPRUI.applyYamlConfig !== "function") {
-    throw new Error(MPR_UI.CONFIG_LOADER_MISSING);
+    /** @type {typeof globalThis & { MPRUI?: { whenAutoOrchestrationReady?: () => Promise<unknown> } }} */ (globalThis);
+  if (!runtimeGlobal.MPRUI || typeof runtimeGlobal.MPRUI.whenAutoOrchestrationReady !== "function") {
+    throw new Error(MPR_UI.ORCHESTRATION_LOADER_MISSING);
   }
-  return runtimeGlobal.MPRUI.applyYamlConfig({ configUrl });
+  await runtimeGlobal.MPRUI.whenAutoOrchestrationReady();
 }
 
 /**
  * @returns {Promise<void>}
  */
-function loadMprUIBundle() {
-  const existingScript = document.getElementById(MPR_UI.SCRIPT_ID);
-  if (existingScript) {
+function waitForDocumentReady() {
+  if (document.readyState !== "loading") {
     return Promise.resolve();
   }
-  return new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.id = MPR_UI.SCRIPT_ID;
-    script.src = MPR_UI.BUNDLE_URL;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`script_load_failed: ${MPR_UI.BUNDLE_URL}`));
-    document.head.appendChild(script);
+  return new Promise((resolve) => {
+    document.addEventListener("DOMContentLoaded", () => resolve(), { once: true });
   });
 }

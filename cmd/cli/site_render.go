@@ -3,34 +3,64 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
+	"github.com/tyemirov/llm-proxy/internal/proxy"
 )
 
 const (
-	siteCNAMEFileName          = "CNAME"
-	siteIndexFileName          = "index.html"
-	siteConfigURLPlaceholder   = "__LLM_PROXY_CONFIG_URL__"
-	siteConfigURLAttribute     = "data-config-url"
-	siteLegacyRuntimeConfig    = "llm-proxy-config.json"
-	defaultSiteSourceDirectory = "site"
+	siteCNAMEFileName            = "CNAME"
+	siteIndexFileName            = "index.html"
+	siteConfigURLAttribute       = "data-config-url"
+	siteConfigURLSourceAttribute = siteConfigURLAttribute + `="` + proxy.ManagementConfigUIPath + `"`
+	siteLegacyRuntimeConfig      = "llm-proxy-config.json"
+	renderedSiteFilePerm         = 0o644
+	defaultSiteSourceDirectory   = "site"
+	defaultSiteConfigURL         = proxy.ManagementConfigUIPath
+	secureSiteConfigURLScheme    = "https"
 )
 
 var errSiteRenderFailed = errors.New("site_render_failed")
 
+type siteConfigURL string
+
 var (
-	siteCopyFS   = os.CopyFS
-	sitePathAbs  = filepath.Abs
-	sitePathRel  = filepath.Rel
-	siteReadFile = os.ReadFile
-	siteRemove   = os.Remove
-	siteStat     = os.Stat
+	siteCopyFS    = os.CopyFS
+	sitePathAbs   = filepath.Abs
+	sitePathRel   = filepath.Rel
+	siteReadFile  = os.ReadFile
+	siteRemove    = os.Remove
+	siteStat      = os.Stat
+	siteURLParse  = url.Parse
+	siteWriteFile = os.WriteFile
 )
 
-func renderSiteArtifact(sourceDirectory string, outputDirectory string) error {
+func newSiteConfigURL(rawValue string) (siteConfigURL, error) {
+	normalizedValue := strings.TrimSpace(rawValue)
+	parsedURL, parseError := siteURLParse(normalizedValue)
+	if parseError != nil {
+		return "", fmt.Errorf("%w: site config URL=%q: %v", errSiteRenderFailed, normalizedValue, parseError)
+	}
+	if parsedURL.RawQuery != constants.EmptyString || parsedURL.Fragment != constants.EmptyString || parsedURL.Path != proxy.ManagementConfigUIPath {
+		return "", fmt.Errorf("%w: site config URL=%q must target %s without query or fragment", errSiteRenderFailed, normalizedValue, proxy.ManagementConfigUIPath)
+	}
+	if parsedURL.IsAbs() {
+		if parsedURL.Scheme != secureSiteConfigURLScheme || parsedURL.Host == constants.EmptyString {
+			return "", fmt.Errorf("%w: site config URL=%q must use https", errSiteRenderFailed, normalizedValue)
+		}
+		return siteConfigURL(normalizedValue), nil
+	}
+	if normalizedValue != proxy.ManagementConfigUIPath {
+		return "", fmt.Errorf("%w: site config URL=%q must be %s or an absolute https URL", errSiteRenderFailed, normalizedValue, proxy.ManagementConfigUIPath)
+	}
+	return siteConfigURL(normalizedValue), nil
+}
+
+func renderSiteArtifact(sourceDirectory string, outputDirectory string, configURL siteConfigURL) error {
 	siteSourceDirectory := strings.TrimSpace(sourceDirectory)
 	if siteSourceDirectory == constants.EmptyString {
 		siteSourceDirectory = defaultSiteSourceDirectory
@@ -59,7 +89,7 @@ func renderSiteArtifact(sourceDirectory string, outputDirectory string) error {
 	if copyError := copyStaticSiteSource(siteSourceDirectory, siteOutputDirectory); copyError != nil {
 		return copyError
 	}
-	if writeError := writeRenderedSiteShell(siteOutputDirectory); writeError != nil {
+	if writeError := writeRenderedSiteShell(siteOutputDirectory, configURL); writeError != nil {
 		return writeError
 	}
 	return nil
@@ -91,13 +121,13 @@ func copyStaticSiteSource(sourceDirectory string, outputDirectory string) error 
 	return nil
 }
 
-func writeRenderedSiteShell(outputDirectory string) error {
-	for _, staticConfigFile := range []string{"config-ui.yaml", siteLegacyRuntimeConfig} {
+func writeRenderedSiteShell(outputDirectory string, configURL siteConfigURL) error {
+	for _, staticConfigFile := range []string{proxy.ManagementConfigUIFileName, siteLegacyRuntimeConfig} {
 		if removeError := removeCopiedStaticConfig(outputDirectory, staticConfigFile); removeError != nil {
 			return removeError
 		}
 	}
-	if indexError := validateRenderedSiteIndex(outputDirectory); indexError != nil {
+	if indexError := writeRenderedSiteIndex(outputDirectory, configURL); indexError != nil {
 		return indexError
 	}
 	if _, statError := siteStat(filepath.Join(outputDirectory, siteCNAMEFileName)); statError != nil {
@@ -114,18 +144,20 @@ func removeCopiedStaticConfig(outputDirectory string, fileName string) error {
 	return nil
 }
 
-func validateRenderedSiteIndex(outputDirectory string) error {
+func writeRenderedSiteIndex(outputDirectory string, configURL siteConfigURL) error {
 	outputPath := filepath.Join(outputDirectory, siteIndexFileName)
 	indexBytes, readError := siteReadFile(outputPath)
 	if readError != nil {
 		return fmt.Errorf("%w: output=%s: %v", errSiteRenderFailed, outputPath, readError)
 	}
 	indexHTML := string(indexBytes)
-	if strings.Contains(indexHTML, siteConfigURLPlaceholder) {
-		return fmt.Errorf("%w: output=%s contains retired %s", errSiteRenderFailed, outputPath, siteConfigURLPlaceholder)
+	if strings.Count(indexHTML, siteConfigURLSourceAttribute) != 1 {
+		return fmt.Errorf("%w: output=%s must contain exactly one %s", errSiteRenderFailed, outputPath, siteConfigURLSourceAttribute)
 	}
-	if strings.Contains(indexHTML, siteConfigURLAttribute) {
-		return fmt.Errorf("%w: output=%s contains static %s", errSiteRenderFailed, outputPath, siteConfigURLAttribute)
+	renderedAttribute := siteConfigURLAttribute + `="` + string(configURL) + `"`
+	renderedHTML := strings.Replace(indexHTML, siteConfigURLSourceAttribute, renderedAttribute, 1)
+	if writeError := siteWriteFile(outputPath, []byte(renderedHTML), renderedSiteFilePerm); writeError != nil {
+		return fmt.Errorf("%w: output=%s: %v", errSiteRenderFailed, outputPath, writeError)
 	}
 	return nil
 }
