@@ -380,7 +380,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Pages deployment now resolves `git remote get-url --push` before release download, compares that effective destination with the configured fetch repository identity, and restricts `GH_REPO` fallback to fetch scoping so a different unparseable push target cannot inherit the expected identity. The deployment clone receives the validated URL as an explicit `pushurl`, its checkout-effective destination is validated again, and the branch is pushed by remote name so Git cannot apply `pushInsteadOf` a second time. Black-box coverage proves parseable and unparseable mismatched rewrites fail before GitHub access or either branch mutation, and a chained `A -> B -> C` rewrite deploys only to the validated `B` repository. Validation passed with `timeout -k 350s -s SIGKILL 350s make release-test` (30 tests), `git diff --check`, and an independent review with no remaining findings.
 
-- [ ] [B023] (P1) Preserve Pages release markers under branch publishing.
+- [x] [B023] (P1) Preserve Pages release markers under branch publishing.
   ### Summary
   Repository-owned Pages artifacts can omit `.nojekyll`, allowing legacy branch publishing to filter the hidden `.mprlab-release.json` marker even when the deployed branch contains it. The artifact and public-marker contract also needs explicit black-box proof for schema, release version, source provenance, and the distinct release-tag commit.
   ### Acceptance Criteria
@@ -390,8 +390,21 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   4. Black-box coverage proves the remote tag matches `release_commit` while artifact and public marker provenance match the distinct `source_commit`.
   ### Implementation
   The Pages builder now creates an empty `.nojekyll` after copying the source tree, archive validation rejects payloads without it, and public verification checks the complete marker identity rather than source commit alone. Release-pipeline coverage now inspects the builder's tarball and marker, exercises missing `.nojekyll` and invalid marker fields, and proves a release succeeds with intentionally different release and source commits.
-  ### Validation
-  Pending: `make release-test` and `make ci` were not authorized for this implementation pass, so B023 remains unresolved.
+  ### Resolution
+  The Pages builder now creates an empty `.nojekyll` after copying the source tree, archive validation rejects payloads without it before branch mutation, and public verification checks the complete marker identity rather than source commit alone. Release-pipeline coverage inspects the builder's tarball and marker, exercises missing `.nojekyll` and invalid marker fields, and proves a release succeeds with intentionally different release and source commits. Validation passed with `make release-test` (35 tests) and `make ci` (Go aggregate coverage 100.0%, Python 20 passed, Playwright 12 passed, release integrations 35 passed, and the live-provider preflight passed).
+
+- [x] [B024] (P1) Prevent shell help deadlocks under constrained pipe limits.
+  ### Summary
+  The first release after the repository-owned toolchain changes stalls in `TestOperationalReleaseWrapperUsesRepositoryOwnedTools` until the outer 350-second CI guard sends `SIGKILL`. On shells with `ulimit -p 1`, Bash can block while staging a heredoc larger than the 512-byte pipe capacity before the external reader starts; the same pattern exists across release, deployment, artifact, coverage, publication, and live-provider scripts, including later Python transforms on the default release path.
+  ### Acceptance Criteria
+  1. CI, release, publish, deployment, artifact, Pages, and live-provider shell scripts do not feed external commands through heredocs.
+  2. Release, deployment, artifact, Pages, container publication, and live-provider help commands terminate under the constrained-pipe shell contract.
+  3. Dotenv parsing, coverage fixture generation, Pages marker generation, and container metadata transforms retain their exact current contracts without pipe-capacity dependence.
+  4. Tracked container build context extraction preserves the complete `git archive HEAD` snapshot without a producer/consumer pipe that can surface a false `SIGPIPE` failure.
+  5. Black-box operational coverage bounds help execution and rejects reintroduction of an external usage writer.
+  6. The focused operational test, Go coverage suite, release integration suite, and full `make ci` gate pass without increasing the CI timeout.
+  ### Resolution
+  Replaced external-command heredocs across CI, release, publish, deployment, artifact, Pages, and live-provider scripts with Bash builtin output or direct Python command bodies, removing the pre-reader pipe staging that deadlocked with `ulimit -p 1`. Container build context extraction now writes `git archive HEAD` to a temporary tar before extraction so a completed reader cannot turn padding writes into a false `SIGPIPE` failure. Black-box operational coverage bounds every help command under the constrained-pipe contract, rejects shell heredocs in the governed script trees, validates the canonical container descriptor, and retains the existing dotenv, Pages marker, and publication coverage. Validation passed with focused operational tests, `bash -n`, `make go-test` (aggregate coverage 100.0%), `make release-test` (35 tests), `git diff --check`, and the unchanged 350-second `make ci` gate in 77.66 seconds.
 
 
 ## Improvements
