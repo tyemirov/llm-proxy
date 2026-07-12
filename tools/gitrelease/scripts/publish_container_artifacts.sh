@@ -2,13 +2,11 @@
 set -euo pipefail
 
 usage() {
-  cat <<'USAGE'
-Usage:
+  builtin printf '%s\n' 'Usage:
   publish_container_artifacts.sh
 
 Loads container archives prepared by make release, pushes platform images, and
-creates the version and latest manifests. It never builds an image.
-USAGE
+creates the version and latest manifests. It never builds an image.'
 }
 
 if [[ $# -gt 0 ]]; then
@@ -25,23 +23,22 @@ artifact_dir="$(git rev-parse --git-path mprlab-release)"
 [[ "${artifact_dir}" == /* ]] || artifact_dir="${repo_root}/${artifact_dir}"
 helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/release_helper.py"
 "${helper}" verify-release-artifact >/dev/null
-release_version="$(python3 - "${artifact_dir}/manifest.json" <<'PY'
+release_version="$(python3 -c '
 import json
 import sys
 print(json.load(open(sys.argv[1], encoding="utf-8"))["version"])
-PY
-)"
+' "${artifact_dir}/manifest.json")"
 publish_timeout="${PUBLISH_CONTAINER_TIMEOUT_SECONDS:-1200}"
 [[ "${publish_timeout}" =~ ^[1-9][0-9]*$ ]] || { echo "error: PUBLISH_CONTAINER_TIMEOUT_SECONDS must be a positive integer" >&2; exit 1; }
 
 mapfile -t descriptors < <(find "${artifact_dir}/payloads/containers" -mindepth 2 -maxdepth 2 -name container.json -type f | LC_ALL=C sort)
 [[ "${#descriptors[@]}" -gt 0 ]] || { echo "error: no prepared container artifacts found; run make release" >&2; exit 1; }
 
-if python3 - "${descriptors[@]}" <<'PY'
+if python3 -c '
 import json
 import sys
 raise SystemExit(0 if any(json.load(open(path, encoding="utf-8"))["image"].startswith("ghcr.io/") for path in sys.argv[1:]) else 1)
-PY
+' "${descriptors[@]}"
 then
   registry_username="$(gh api user --jq .login)"
   registry_token="$(gh auth token)"
@@ -50,7 +47,7 @@ then
 fi
 
 for descriptor in "${descriptors[@]}"; do
-  metadata="$(python3 - "${descriptor}" <<'PY'
+  metadata="$(python3 -c '
 import json
 import sys
 
@@ -62,8 +59,7 @@ print(data["image"])
 print(data["version"])
 for platform in data["platforms"]:
     print("\t".join([platform["platform"], platform["token"], platform["local_ref"], platform["image_id"], platform["archive"], platform["sha256"]]))
-PY
-)"
+' "${descriptor}")"
   name="$(sed -n '1p' <<<"${metadata}")"
   image="$(sed -n '2p' <<<"${metadata}")"
   version="$(sed -n '3p' <<<"${metadata}")"

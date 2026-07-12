@@ -2,8 +2,7 @@
 set -euo pipefail
 
 usage() {
-  cat <<'USAGE'
-Usage:
+  builtin printf '%s\n' 'Usage:
   prepare_pages_artifact.sh --source <directory> [options]
 
 Packages a static site as pages.tar.gz in the active local release artifact.
@@ -12,8 +11,7 @@ The archive includes .mprlab-release.json for deploy-time verification.
 Options:
   --domain <domain>      Write a CNAME file with this domain
   --exclude <pattern>    Repeatable rsync exclusion pattern
-  --help                 Show this help text
-USAGE
+  --help                 Show this help text'
 }
 
 source_directory=""
@@ -51,7 +49,7 @@ if [[ -n "${domain}" ]]; then
   printf '%s\n' "${domain}" >"${site_directory}/CNAME"
 fi
 : >"${site_directory}/.nojekyll"
-python3 - "${staging_manifest}" "${site_directory}/.mprlab-release.json" <<'PY'
+python3 -c '
 import json
 import pathlib
 import sys
@@ -64,7 +62,7 @@ marker = {
     "release_timestamp": staging["release_timestamp"],
 }
 pathlib.Path(sys.argv[2]).write_text(json.dumps(marker, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-PY
+' "${staging_manifest}" "${site_directory}/.mprlab-release.json"
 
 asset_directory="${RELEASE_ARTIFACT_DIR}/payloads/release-assets"
 mkdir -p "${asset_directory}"

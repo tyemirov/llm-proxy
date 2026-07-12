@@ -2,8 +2,7 @@
 set -euo pipefail
 
 usage() {
-  cat <<'USAGE'
-Usage:
+  builtin printf '%s\n' 'Usage:
   scripts/test_live_providers.sh [--preflight | --write-config <path>]
 
 Builds the current llm-proxy binary and runs live text smoke tests for providers
@@ -51,8 +50,7 @@ Per-provider model overrides:
   LLM_PROXY_LIVE_GEMINI_MODEL
   LLM_PROXY_LIVE_ANTHROPIC_MODEL
   LLM_PROXY_LIVE_META_MODEL
-  LLM_PROXY_LIVE_GROK_MODEL
-USAGE
+  LLM_PROXY_LIVE_GROK_MODEL'
 }
 
 env_or_default() {
@@ -73,7 +71,7 @@ load_env_file() {
   local env_path="$1"
   local parsed_path="${TMP_DIR}/dotenv-values"
   command -v python3 >/dev/null 2>&1 || { echo "error: python3 is required to load LIVE_ENV_FILE" >&2; exit 1; }
-  python3 - "${env_path}" >"${parsed_path}" <<'PY'
+  python3 -c '
 import ast
 import pathlib
 import re
@@ -93,13 +91,13 @@ for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlin
     if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) is None:
         raise SystemExit(f"invalid dotenv name: {path}:{line_number}")
     value = raw_value.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {chr(39), chr(34)}:
         parsed_value = ast.literal_eval(value)
         if not isinstance(parsed_value, str):
             raise SystemExit(f"invalid dotenv value: {path}:{line_number}")
         value = parsed_value
     sys.stdout.buffer.write(name.encode("utf-8") + b"\0" + value.encode("utf-8") + b"\0")
-PY
+' "${env_path}" >"${parsed_path}"
 
   local variable_name
   local variable_value
