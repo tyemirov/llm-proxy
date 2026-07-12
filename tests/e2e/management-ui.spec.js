@@ -69,8 +69,17 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain('<meta name="theme-color" content="#0076c3">');
   expect(html).toContain(`<link rel="icon" type="image/svg+xml" href="${faviconPath}">`);
   expect(html).toContain(`<link rel="apple-touch-icon" href="${appIconPath}">`);
-  expect(html).not.toContain("data-config-url");
-  expect(html).not.toContain(configPath);
+  expect(html).toContain(`data-config-url="${configPath}"`);
+  expect(html).toContain("data-mpr-ui-bundle-src=");
+  expect(html).not.toContain("tauth.js");
+
+  const mprShellResponse = await request.get(`${baseURL}/assets/llm-proxy/js/core/mprShell.js`);
+  expect(mprShellResponse.status()).toBe(httpOK);
+  const mprShellJavaScript = await mprShellResponse.text();
+  expect(mprShellJavaScript).toContain("whenAutoOrchestrationReady");
+  expect(mprShellJavaScript).not.toContain("data-mpr-user-status");
+  expect(mprShellJavaScript).not.toContain("MutationObserver");
+  expect(mprShellJavaScript).not.toContain("applyYamlConfig");
 
   const faviconResponse = await request.get(`${baseURL}${faviconPath}`);
   expect(faviconResponse.status()).toBe(httpOK);
@@ -235,6 +244,19 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
     "provider=meta",
   );
   await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
+});
+
+test("dashboard loads after MPR user refreshes authentication", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { profileStatuses: [401] });
+
+  await page.goto(baseURL);
+
+  await expect(page.getByRole("heading", { name: "Sign in to manage llm-proxy keys" })).toBeVisible();
+  await page.evaluate(() => window.__llmProxyMprAuthenticate());
+
+  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("37");
 });
 
 test("settings shows placeholder request examples before generated secret exists", async ({ page }) => {
@@ -426,7 +448,7 @@ async function installAssetRoutes(page) {
   );
   await page.route("**/mpr-ui-config.js", async (route) =>
     route.fulfill({
-      body: "globalThis.MPRUI = { applyYamlConfig: async () => undefined };",
+      body: mprUIConfigMock(),
       contentType: "application/javascript",
     }),
   );
@@ -523,11 +545,17 @@ async function settingsLayerFacts(page) {
 
 /**
  * @param {import("@playwright/test").Page} page
- * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string }} options
+ * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatuses?: number[] }} options
  * @returns {Promise<void>}
  */
 async function installManagementRoutes(page, options = {}) {
+  const profileStatuses = [...(options.profileStatuses || [])];
   await page.route(`${baseURL}/api/management/profile`, async (route) => {
+    const profileStatus = profileStatuses.shift();
+    if (profileStatus && profileStatus !== httpOK) {
+      await route.fulfill({ status: profileStatus, json: { error: "authentication_required" } });
+      return;
+    }
     await route.fulfill({ json: managementProfile(options.admin || false, options.hasSecret !== false) });
   });
   await page.route(`${baseURL}/api/management/usage`, async (route) => {
@@ -838,6 +866,61 @@ class MprUser extends HTMLElement {
 customElements.define("mpr-header", MprHeader);
 customElements.define("mpr-footer", MprFooter);
 customElements.define("mpr-user", MprUser);
+window.__llmProxyMprAuthenticate = () => {
+  const header = document.querySelector("mpr-header");
+  if (!header) {
+    throw new Error("mpr_header_missing");
+  }
+  header.dispatchEvent(new CustomEvent("mpr-ui:auth:authenticated", {
+    bubbles: true,
+    detail: { profile: { user_id: "user-1", user_email: "user@example.com" } }
+  }));
+};
+`;
+}
+
+/**
+ * @returns {string}
+ */
+function mprUIConfigMock() {
+  return `
+(() => {
+  let orchestrationPromise = null;
+
+  function autoOrchestrate() {
+    const header = document.querySelector("mpr-header[data-config-url]");
+    const bundleMarker = document.querySelector("script[data-mpr-ui-bundle-src]");
+    if (!header || !bundleMarker) {
+      throw new Error("mpr_ui_declarative_contract_missing");
+    }
+    const configUrl = header.getAttribute("data-config-url");
+    const bundleUrl = bundleMarker.getAttribute("data-mpr-ui-bundle-src");
+    orchestrationPromise = fetch(configUrl, { cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("mpr_ui_config_request_failed");
+        }
+        return response.text();
+      })
+      .then(() => new Promise((resolve, reject) => {
+        const bundleScript = document.createElement("script");
+        bundleScript.src = bundleUrl;
+        bundleScript.onload = resolve;
+        bundleScript.onerror = () => reject(new Error("mpr_ui_bundle_request_failed"));
+        document.head.appendChild(bundleScript);
+      }));
+    return orchestrationPromise;
+  }
+
+  window.MPRUI = {
+    whenAutoOrchestrationReady: () => orchestrationPromise || Promise.resolve()
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", autoOrchestrate, { once: true });
+  } else {
+    autoOrchestrate();
+  }
+})();
 `;
 }
 
