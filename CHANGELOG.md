@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.29] - 2026-07-12
+
+- Merge pull request #195 from tyemirov/gix/retry-management-profile-after-mpr-ui-authenticated
+- test(management-ui): verify MPR dashboard loads after authentication refresh
+- refactor(ui): migrate mpr-ui shell integration to auto orchestration
+- chore: update build-pages-artifact.sh for stricter artifact validation
+- test(management): update required and forbidden fragments for index.html
+- docs: clarify static management UI config contract and app orchestration
+- feat(cli): validate and inject --site-config-url in static site renders
+- docs: clarify static UI config injection and PAGES_CONFIG_URL handling in README
+- build: add PAGES_CONFIG_URL to Makefile and pass to pages-artifact target
+- docs(issues): record fix for management profile retry on delayed auth event
+
 ## [v0.2.28] - 2026-07-12
 
 - chore: update release script, tests, and documentation
