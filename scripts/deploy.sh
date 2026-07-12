@@ -2,8 +2,7 @@
 set -euo pipefail
 
 usage() {
-  cat <<'USAGE'
-Usage:
+  builtin printf '%s\n' 'Usage:
   scripts/deploy.sh [options]
 
 Deploys llm-proxy after verifying the release image and Pages archive were
@@ -24,8 +23,7 @@ Options:
   --help                Show this help text
 
 Environment:
-  DEPLOY_CI_TIMEOUT_SECONDS  make ci timeout in seconds. Default: $LLM_PROXY_CI_TIMEOUT_SECONDS or 350
-USAGE
+  DEPLOY_CI_TIMEOUT_SECONDS  make ci timeout in seconds. Default: $LLM_PROXY_CI_TIMEOUT_SECONDS or 350'
 }
 
 require_positive_integer() {

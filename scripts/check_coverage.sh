@@ -31,13 +31,11 @@ run_coverage_probe() {
 "$GO_BIN" build -cover -covermode=count -coverpkg="$RUNTIME_COVERPKG" -o "$TMP_DIR/llm-proxy.cover" ./cmd/cli
 "$GO_BIN" build -cover -covermode=count -coverpkg="$CLIENT_COVERPKG" -o "$TMP_DIR/llm-proxy-client.cover" ./llm-proxy-client
 
-cat > "$TMP_DIR/missing-openai.yml" <<'CONFIG'
-tenants:
+builtin printf '%s\n' 'tenants:
   - id: coverage
     secret: "service-secret"
 providers:
-  openai: {}
-CONFIG
+  openai: {}' >"$TMP_DIR/missing-openai.yml"
 
 mkdir -p "$TMP_DIR/cov-help" "$TMP_DIR/cov-missing-config" "$TMP_DIR/cov-missing-openai" "$TMP_DIR/cov-client-missing-config"
 run_coverage_probe "$TMP_DIR/cov-help" "$TMP_DIR/llm-proxy.cover" --help

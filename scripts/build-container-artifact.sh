@@ -8,9 +8,15 @@ done
 
 repo_root="$(git rev-parse --show-toplevel)"
 source_directory="$(mktemp -d)"
-trap 'rm -rf "${source_directory}"' EXIT
+source_archive="$(mktemp)"
+cleanup() {
+  rm -rf "${source_directory}"
+  rm -f "${source_archive}"
+}
+trap cleanup EXIT
 
-git -C "${repo_root}" archive --format=tar HEAD | tar -xf - -C "${source_directory}"
+git -C "${repo_root}" archive --format=tar --output="${source_archive}" HEAD
+tar -xf "${source_archive}" -C "${source_directory}"
 "${RELEASE_TOOL_DIR}/prepare_container_artifact.sh" \
   --name llm-proxy \
   --image "${DOCKER_IMAGE:-ghcr.io/tyemirov/llm-proxy}" \
