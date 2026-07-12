@@ -2,8 +2,7 @@
 set -euo pipefail
 
 usage() {
-  cat <<'USAGE'
-Usage:
+  builtin printf '%s\n' 'Usage:
   deploy_pages_artifact.sh --url <public-url> [options]
 
 Downloads manifest.json and pages.tar.gz from a published GitHub Release,
@@ -17,8 +16,7 @@ Options:
   --skip-configure      Do not create/update the Pages branch source setting
   --skip-verify         Do not verify the public release marker
   --verify-only         Validate the published artifact without mutating Pages
-  --help                Show this help text
-USAGE
+  --help                Show this help text'
 }
 
 remote="origin"

@@ -2,8 +2,7 @@
 set -euo pipefail
 
 usage() {
-  cat <<'USAGE'
-Usage:
+  builtin printf '%s\n' 'Usage:
   prepare_release.sh [options]
 
 Prepares a release entirely from local repository state. The command validates
@@ -17,8 +16,7 @@ Options:
   --bump <patch|minor|major>  SemVer bump when no exact version is supplied. Default: patch
   --version <value>           Exact local release tag/version to prepare
   --dry-run                   Validate and report the selected version without changing files
-  --help                      Show this help text
-USAGE
+  --help                      Show this help text'
 }
 
 if [[ -v RELEASE_HELPER ]]; then

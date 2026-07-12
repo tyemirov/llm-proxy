@@ -2,8 +2,7 @@
 set -euo pipefail
 
 usage() {
-  cat <<'USAGE'
-Usage:
+  builtin printf '%s\n' 'Usage:
   prepare_container_artifact.sh --name <name> --image <registry/repository> [options]
 
 Builds one or more platform-specific container images into local Docker archives
@@ -19,8 +18,7 @@ Options:
   --label <value>        Repeatable image label
   --target <name>        Dockerfile target stage
   --pull                 Refresh referenced base images while building
-  --help                 Show this help text
-USAGE
+  --help                 Show this help text'
 }
 
 name=""
@@ -99,7 +97,7 @@ for platform in "${platform_list[@]}"; do
   printf '%s\t%s\t%s\t%s\t%s\n' "${platform}" "${platform_token}" "${local_ref}" "${image_id}" "${archive_sha256}" >>"${metadata_rows}"
 done
 
-python3 - "${artifact_root}/container.json" "${name}" "${image}" "${RELEASE_VERSION}" "${RELEASE_ARTIFACT_DIR}" "${metadata_rows}" <<'PY'
+python3 -c '
 import json
 import pathlib
 import sys
@@ -129,6 +127,6 @@ document = {
     "platforms": platforms,
 }
 pathlib.Path(output).write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-PY
+' "${artifact_root}/container.json" "${name}" "${image}" "${RELEASE_VERSION}" "${RELEASE_ARTIFACT_DIR}" "${metadata_rows}"
 
 echo "Prepared container artifact ${name} for ${platforms}."
