@@ -2,6 +2,63 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.28] - 2026-07-12
+
+- chore: update release script, tests, and documentation
+- Merge pull request #194 from tyemirov/gix/enforce-help-output-contract-and-heredoc-prohibition-for
+- refactor(gitrelease): simplify usage/help output and prefer python3 -c in scripts
+- test: broaden operational contract coverage for shell script and container
+- refactor(scripts): simplify heredoc usage to builtin printf for consistency
+- docs: resolve B023 and B024 in issues log with implemented validation details
+- Merge pull request #193 from tyemirov/gix/add-loopaware-traffic-pixel-to-all-site-and-resource
+- test: validate .nojekyll and marker contract for Pages artifact deploys
+- test(e2e): update management-ui tests for open attribute and asset route mocking
+- feat(site): add analytics pixel to all index/resource pages
+- feat(seo): inject Loopaware analytics pixel into generated resources
+- docs: update SEO resource cluster report date to 2026-07-11
+- docs(issues): document Pages marker preservation and LoopAware pixel addition
+- Merge pull request #192 from tyemirov/gix/accurately-track-upstream-rate-limit-wait-durations-and
+- test: validate Pages deploy logic for pushInsteadOf and remote mutation
+- docs(issues): document Pages deployment push URL validation and enforcement
+- refactor(gitrelease): extract and improve Pages artifact validation logic
+- test: add operational and integration coverage for release tag and preflight logic
+- docs: clarify role of upstream_rate_limits in reliability resources
+- chore(scripts): validate release tag and require python3 in deploy.sh
+- fix(proxy): improve rate limit wait time accounting in limited_http.doer
+- chore(makefile): add --remote flag to publish-release target
+- docs(issues): clarify upstream rate limit enforcement after worker acquisition
+- Merge pull request #188 from tyemirov/gix/add-meta-model-api-support-and-upstream-http-rate
+- Merge remote-tracking branch 'origin/master' into gix/add-meta-model-api-support-and-upstream-http-rate
+- feat(release): add immutable release toolchain and black-box tests
+- test: add operational contract and rate limit integration test coverage
+- docs: update resource metadata dates and sitemap for July 9, 2026
+- chore: improve release, deployment, and live provider test automation
+- feat: add support for legacy tenant migration in management mode
+- docs: document static-tenant validation, release implementation, migration flow
+- refactor(config): remove old tenant and provider api_key config, enable legacy token migration
+- test: add legacy_token_migration config to managementConfiguration struct
+- docs: update README for stateless management migration and live test harness
+- build(makefile): update targets and variables for new release tooling
+- docs(issues): record Meta, upstream-rate, release regression fixes and token migration
+- ci: trigger tests on changes in tools/gitrelease directory
+- Merge pull request #191 from tyemirov/issues-md-1783632219288
+- Update ISSUES.md
+- Merge pull request #190 from tyemirov/issues-md-1783632144494
+- Update ISSUES.md
+- Merge pull request #189 from tyemirov/issues-md-1783632087239
+- Update ISSUES.md
+- test: add e2e and integration tests for Meta provider and upstream rate limits
+- docs(resources): add Meta Muse Spark reference to provider lists and usage samples
+- refactor(scripts): unify Pages release pipeline and update for Meta Muse
+- feat(proxy): add support for Meta provider and configurable upstream rate limits
+- docs: document Meta support and upstream rate limit configuration
+- feat(config): add Meta provider and MODEL_API_KEY support in config files
+- feat(cli): support and test Meta provider and upstream rate limit config
+- docs: add Meta Muse Spark support and upstream rate limit docs
+- chore(makefile): refactor release and publish targets for new artifact workflow
+- docs(issues): document upstream HTTP rate limiting and Meta provider support
+- ci: remove GitHub Actions release workflow
+
 ## [v0.2.27] - 2026-07-06
 
 ### Changes
