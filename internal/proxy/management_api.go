@@ -212,6 +212,7 @@ func (service *managementService) sessionMiddleware() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		principal, validationError := service.sessionValidator.validateRequest(ginContext.Request)
 		if validationError != nil {
+			service.structuredLogger.Warnw("management session rejected", "reason", managementSessionRejectionReason(validationError))
 			ginContext.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}

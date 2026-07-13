@@ -23,6 +23,7 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/tauth/pkg/sessionvalidator"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -226,6 +227,7 @@ func TestManagementRejectsInvalidSessionsAndRequests(t *testing.T) {
 	invalidCookies := []*http.Cookie{
 		{Name: testManagementCookieName, Value: "not-a-jwt"},
 		managementSessionCookieWithoutExpiration(t),
+		managementSessionCookieWithClaims(t, jwt.MapClaims{"iss": "tauth", "tenant_id": testManagementTenantID, "user_id": "expired-user", "exp": time.Now().UTC().Add(-time.Hour).Unix()}),
 		managementSessionCookieWithClaims(t, jwt.MapClaims{"iss": "wrong", "tenant_id": testManagementTenantID, "user_id": "user"}),
 		managementSessionCookieWithClaims(t, jwt.MapClaims{"iss": "tauth", "tenant_id": "wrong-tenant", "user_id": "user"}),
 		managementSessionCookieWithClaims(t, jwt.MapClaims{"iss": "tauth", "tenant_id": testManagementTenantID, "user_id": "user", "iat": time.Now().UTC().Add(time.Hour).Unix()}),
@@ -1270,14 +1272,16 @@ func managementSessionCookie(t *testing.T, userID string) *http.Cookie {
 func managementSessionCookieWithEmail(t *testing.T, userID string, userEmail string) *http.Cookie {
 	t.Helper()
 	now := time.Now().UTC()
-	return managementSessionCookieWithClaims(t, jwt.MapClaims{
-		"iss":               "tauth",
-		"tenant_id":         testManagementTenantID,
-		"user_id":           userID,
-		"user_email":        userEmail,
-		"user_display_name": userID,
-		"iat":               now.Add(-time.Minute).Unix(),
-		"exp":               now.Add(time.Hour).Unix(),
+	return signedManagementSessionCookie(t, &sessionvalidator.Claims{
+		TenantID:        testManagementTenantID,
+		UserID:          userID,
+		UserEmail:       userEmail,
+		UserDisplayName: userID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    proxy.DefaultManagementJWTIssuer,
+			IssuedAt:  jwt.NewNumericDate(now.Add(-time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
+		},
 	})
 }
 
@@ -1298,7 +1302,7 @@ func managementSessionCookieWithoutExpiration(t *testing.T) *http.Cookie {
 	})
 }
 
-func signedManagementSessionCookie(t *testing.T, claims jwt.MapClaims) *http.Cookie {
+func signedManagementSessionCookie(t *testing.T, claims jwt.Claims) *http.Cookie {
 	t.Helper()
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signedToken, signingError := token.SignedString([]byte(testManagementSigningKey))

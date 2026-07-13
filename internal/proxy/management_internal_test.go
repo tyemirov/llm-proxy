@@ -18,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/tyemirov/tauth/pkg/sessionvalidator"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -28,6 +29,17 @@ var errInternalTestDatabase = errors.New("database failed")
 var errInternalTestRead = errors.New("read failed")
 
 const testManagedProviderKeyEncryptionKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+
+func TestManagementSessionValidatorRejectsInvalidConstructorConfig(t *testing.T) {
+	defer func() {
+		panicValue := recover()
+		if panicValue == nil || !errors.Is(panicValue.(error), sessionvalidator.ErrMissingSigningKey) {
+			t.Fatalf("panic=%v want missing TAuth signing key", panicValue)
+		}
+	}()
+
+	newManagementSessionValidator(ManagementConfiguration{})
+}
 
 func TestManagedTenantStoreInternalEdges(t *testing.T) {
 	fixedTime := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
