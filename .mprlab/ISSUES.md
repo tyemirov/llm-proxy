@@ -471,6 +471,22 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Resolution:
   Pinned MPR UI v3.11.1 and its exact release commit so the shared shell restores sessions through TAuth `/auth/session`. LLM Proxy now treats the documented final `mpr-ui:auth:status-change` as the anonymous boundary: an early management-profile `401` stays in the loading state while TAuth rotates a valid refresh cookie, and the authenticated event retries the profile without rendering the signed-out panel. The real local-stack Playwright scenario obtains TAuth access and refresh cookies, proves an ordinary reload remains authenticated, removes only the access cookie and proves silent refresh recovery, then clicks the visible **Sign out** action and proves `/auth/logout` clears both cookies, `/auth/session` returns `204`, and `/api/management/profile` returns `401`. Updated the local refresh profile to 720 hours, regenerated all 45 stage-owned resource pages with the current MPR UI CSS pin, and documented that normal reload and access-cookie expiration never invoke logout. Focused `timeout -k 120s -s SIGKILL 120s make frontend-test` passed all 14 browser scenarios, focused `timeout -k 120s -s SIGKILL 120s make test-management-auth-blackbox` passed the real service/browser scenario, and the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed. Final CI included 100% aggregate Go coverage, 20 Python tests, 14 fast Playwright tests, the real-stack session-persistence test, 38 release-contract tests, and the live-provider preflight.
 
+- [x] [B031] (P2) Drive real-stack sign-in through the browser lifecycle.
+  Goal:
+  Make the real-stack sign-in-to-reload scenario fail when browser login CORS, the mounted header's authenticated event, or MPR UI restore-hint persistence regresses.
+  Requirements:
+  - Submit TAuth password login from the loaded management page as a credentialed cross-origin browser request.
+  - Drive the mounted header through the documented `MPRUI.testing.authenticate` adapter so the normal `mpr-ui:auth:*` lifecycle owns the dashboard transition and restore hint.
+  - Do not seed MPR UI private local-storage keys or use `APIRequestContext` as the sign-in path.
+  - Keep ordinary reload, refresh-cookie recovery, and explicit sign-out assertions on the real local stack.
+  Deliverables:
+  - Correct the real-stack Playwright scenario and its boundary documentation.
+  Validation:
+  - Run focused `timeout -k 120s -s SIGKILL 120s make test-management-auth-blackbox`.
+  - Run the required final `timeout -k 350s -s SIGKILL 350s make ci` after the final code edit.
+  Resolution:
+  The real-stack Playwright scenario now loads the anonymous management page, submits TAuth password login with a credentialed cross-origin browser `fetch`, and asserts the credentialed CORS response before accepting the issued HttpOnly cookies. It passes the returned profile through the documented `MPRUI.testing.authenticate` adapter, observes the resulting browser management-profile request and authenticated dashboard transition, and relies on the adapter-owned restore hint for ordinary reload and refresh-cookie recovery; the test no longer writes `tauth.restore.v1` or posts login through `APIRequestContext`. Focused `timeout -k 120s -s SIGKILL 120s make test-management-auth-blackbox` passed, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` runs passed. Final CI included 100% aggregate Go coverage, 20 Python tests, 14 frontend Playwright scenarios, the corrected real-stack auth scenario, 38 release-contract tests, and the live-provider preflight.
+
 ## Improvements
 
 - [x] [I001] (P1) Make missing placeholder handling field-aware.
