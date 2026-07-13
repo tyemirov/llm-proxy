@@ -2,8 +2,13 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
-const files = ["playwright.config.js", "scripts/generate_seo_resources.mjs"];
-const roots = ["site/assets/llm-proxy/js", "tests/e2e"];
+const files = [
+  "playwright.config.js",
+  "playwright.blackbox.config.js",
+  "scripts/generate_seo_resources.mjs",
+  "tests/blackbox/localManagementStack.mjs",
+];
+const roots = ["site/assets/llm-proxy/js", "tests/e2e", "tests/blackbox"];
 const javascriptExtension = ".js";
 
 for (const file of files) {
