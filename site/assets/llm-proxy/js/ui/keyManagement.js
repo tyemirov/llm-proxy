@@ -66,6 +66,7 @@ export function createKeyManagement() {
     /** @type {Promise<void> | null} */
     profileLoadPromise: null,
     authenticatedShellProfileRequested: false,
+    shellAuthenticationSettled: false,
     generatedSecret: EMPTY_STRING,
     settingsOpen: false,
     usageExamplesOpen: false,
@@ -78,7 +79,17 @@ export function createKeyManagement() {
       document.addEventListener(EVENTS.AUTHENTICATED, () => {
         this.loadProfileForAuthenticatedShell();
       });
-      document.addEventListener(EVENTS.UNAUTHENTICATED, () => {
+      document.addEventListener(EVENTS.AUTH_STATUS_CHANGE, (event) => {
+        const customEvent = /** @type {CustomEvent<{ status?: string }>} */ (event);
+        const status = customEvent.detail ? customEvent.detail.status : EMPTY_STRING;
+        if (status === AUTH_STATES.AUTHENTICATED) {
+          this.shellAuthenticationSettled = true;
+          return;
+        }
+        if (status !== AUTH_STATES.UNAUTHENTICATED) {
+          return;
+        }
+        this.shellAuthenticationSettled = true;
         this.clearAuthenticatedState();
         this.authState = AUTH_STATES.UNAUTHENTICATED;
         dispatchManagementReady();
@@ -292,6 +303,7 @@ export function createKeyManagement() {
     async start() {
       try {
         this.runtimeConfig = await loadFrontendRuntimeConfig();
+        await waitForMprUIAutoOrchestrationReady();
         await this.loadProfile();
       } catch (requestError) {
         this.clearAuthenticatedState();
@@ -309,7 +321,7 @@ export function createKeyManagement() {
       try {
         await this.profileLoadPromise;
       } finally {
-        const retryRequested = this.authState === AUTH_STATES.UNAUTHENTICATED && this.authenticatedShellProfileRequested;
+        const retryRequested = this.authenticatedShellProfileRequested;
         this.profileLoadPromise = null;
         this.authenticatedShellProfileRequested = false;
         if (retryRequested) {
@@ -328,6 +340,9 @@ export function createKeyManagement() {
         await this.loadUsageForAuthenticatedProfile();
       } catch (requestError) {
         if (requestError instanceof BackendClientError && requestError.status === 401) {
+          if (!this.shellAuthenticationSettled) {
+            return;
+          }
           this.clearAuthenticatedState();
           this.authState = AUTH_STATES.UNAUTHENTICATED;
           this.setNotice(NOTICE_KINDS.INFO, COPY.authenticationRequired);
