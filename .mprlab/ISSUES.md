@@ -1114,5 +1114,18 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Restored the canonical declarative MPR UI integration: source HTML owns `mpr-header[data-config-url="/config-ui.yaml"]` and the pinned bundle marker, while Pages rendering replaces that URL with the profile-owned production `PAGES_CONFIG_URL`. Removed application-owned MPR config application, bundle injection, production-host inference, and `<mpr-user>` internal status observation. The management app now queues one profile reload only from the documented `mpr-ui:auth:authenticated` event and waits for `MPRUI.whenAutoOrchestrationReady()` before releasing the shared auth transition. Static, renderer, and Playwright coverage reject direct `tauth.js`, missing declarative markers, internal MPR UI probing, invalid Pages config URLs, and the original profile-`401` followed by authenticated-event race. Validation passed with the required baseline and final `make ci` runs, including 100% Go block coverage, 20 Python tests, 13 Playwright tests, 36 release-contract tests, and the live-provider preflight; `git diff --check` also passed.
 
+- [x] [B027] (P1) Make TAuth session validation and deployment one canonical contract.
+  ### Summary
+  Production can show an authenticated MPR user while `/api/management/profile` returns `401`. The prior race fix left a hand-written llm-proxy JWT parser in place and the gateway `llm-proxy` deployment target restarted llm-proxy without restarting TAuth or staging TAuth's runtime inputs, allowing validator and issuer runtime state to diverge.
+  ### Acceptance Criteria
+  1. The backend consumes TAuth's published `pkg/sessionvalidator`; no llm-proxy-owned JWT parser or duplicate claims schema remains.
+  2. llm-proxy retains only product-owned tenant, required-expiry, and principal invariants after TAuth validation.
+  3. Management-session rejection logs expose only stable categories and never cookies, tokens, or identity claims.
+  4. Valid management API coverage signs the session with TAuth's published claims type, while invalid-cookie coverage preserves expiry, issuer, tenant, issued-at, principal, and missing-cookie rejection behavior.
+  5. The gateway `llm-proxy` target stages TAuth env/config, restarts `tauth-api` and llm-proxy together, and verifies both public health checks before Pages activation.
+  6. Repository documentation names the shared validator and coupled deployment contract.
+  ### Resolution
+  Replaced llm-proxy's duplicate JWT parser and claims schema with TAuth `v1.1.8` `pkg/sessionvalidator`, retaining only the product-owned tenant, required-expiry, and principal checks. Management middleware now logs stable rejection categories without cookies, tokens, or identity claims, and black-box management API fixtures use TAuth's published claims type while preserving invalid-session coverage. Aligned the module, CI, and container builder with TAuth's Go 1.25.4 requirement. Updated the gateway `llm-proxy` target so it stages TAuth env/config and Caddy inputs, restarts `tauth-api` with llm-proxy, and requires both health checks; structured config-audit coverage rejects removal of any part of that contract. Documentation now records the shared validator and coupled rollout invariant. The required baseline and final llm-proxy `make ci` runs passed, including 100% aggregate Go coverage, 20 Python tests, 13 Playwright tests, 36 release-contract tests, and the live-provider preflight. Focused gateway config-audit tests passed. Gateway full CI and a local container build reached Docker but could not complete because Docker Desktop returned `input/output error` from its containerd metadata database; no production deployment was executed.
+
 ## Planning
 *do not implement yet*
