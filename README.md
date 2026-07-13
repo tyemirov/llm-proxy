@@ -755,9 +755,11 @@ paid provider with `./scripts/test_live_providers.sh --write-config
 artifacts; it does not rebuild or rerun CI.
 
 `llm-proxy` is a gateway-local service in `mprlab-gateway`, so `make deploy`
-defaults to the gateway `deploy-llm-proxy-backend` target. Override the
-checkout or target with `GATEWAY_DIR=/path/to/mprlab-gateway` or
-`GATEWAY_DEPLOY_TARGET=<target>`. Override Pages preparation and activation
+uses the sole gateway `deploy-llm-proxy-backend` target after the gateway-owned
+`verify-llm-proxy-deployment-contract` preflight proves the coupled TAuth
+service, runtime assets, and health checks. Override only the checkout with
+`GATEWAY_DIR=/path/to/mprlab-gateway`; the selected gateway checkout must be a
+clean, synchronized `origin/master`. Override Pages preparation and activation
 with `PAGES_DOMAIN=<domain>`, `PAGES_CONFIG_URL=<https-config-url>`,
 `PAGES_BRANCH=<branch>`, `PAGES_URL=<url>`, or
 `DEPLOY_PAGES_ARGS="--skip-configure"`.
