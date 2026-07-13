@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.31] - 2026-07-13
+
+- Merge pull request #197 from tyemirov/gix/exercise-real-tauth-session-boundary-with-local-stack
+- test: refactor management-auth blackbox spec for Playwright browser integration
+- docs: clarify management auth blackbox test flow in README
+- docs(issues): add real-stack browser sign-in scenario and resolution
+- test: add Playwright config for blackbox tests
+- test(blackbox): add local stack harness and frontend auth E2E test
+- feat(ui): support new mpr-ui auth-change events and orchestrator readiness
+- chore: add new test files to syntax check and update mpr-ui stylesheet version
+- chore: add mpr-ui dependency and frontend:test:blackbox script to package.json
+- chore: add mpr-ui dev dependency to package-lock.json
+- test: update management page test for mpr-ui v3.11.1 bundle reference
+- docs: clarify management UI session restoration and sign-out behavior
+- docs: document session boundary and blackbox management auth test instructions
+- chore(makefile): add management auth blackbox test target to test suite
+- docs(issues): add session, sign-in, and auth black-box test resolutions
+- ci: trigger test workflow on any change in tests directory
+
 ## [v0.2.30] - 2026-07-13
 
 - Merge pull request #196 from tyemirov/gix/use-canonical-tauth-sessionvalidator-align-deployment-go
