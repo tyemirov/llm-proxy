@@ -609,9 +609,13 @@ make test-management-auth-blackbox
 
 The target builds the TAuth version pinned in `go.mod` and the current
 llm-proxy binary, starts both on disposable local ports, and opens the real
-static management app in Playwright. The browser signs in through TAuth's
-seeded password-login endpoint, receives the configured HttpOnly access and
-refresh cookies, proves the anonymous/authorized behavior of
+static management app in Playwright. The page signs in through TAuth's seeded
+password-login endpoint with a credentialed cross-origin browser request, so
+the test enforces TAuth login CORS and receives the configured HttpOnly access
+and refresh cookies. It then drives the mounted header through the documented
+`MPRUI.testing.authenticate` adapter, which emits the normal authenticated
+lifecycle event and persists MPR UI's session-restore hint. The test proves the
+anonymous/authorized behavior of
 `/api/management/profile`, and waits for the pinned `mpr-ui` shell plus the
 dashboard to report the authenticated state. It then proves an ordinary reload
 stays authenticated, removes only the access cookie and proves `/auth/session`
