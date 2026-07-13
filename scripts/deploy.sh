@@ -11,7 +11,6 @@ published Pages archive replaces the live branch.
 
 Options:
   --gateway-dir <path>  Gateway checkout. Default: $GATEWAY_DIR or sibling ../mprlab-gateway
-  --gateway-target <target> Gateway make target. Default: $GATEWAY_DEPLOY_TARGET or deploy-llm-proxy-backend
   --image <value>       Image repository. Default: $DOCKER_IMAGE or ghcr.io/tyemirov/llm-proxy
   --tag <value>         Release tag. Default: v* tag pointing at HEAD
   --skip-ci             Skip the local make ci deployment gate
@@ -50,7 +49,10 @@ env_or_default() {
 }
 
 GATEWAY_DIR="$(env_or_default GATEWAY_DIR "")"
-GATEWAY_TARGET="$(env_or_default GATEWAY_DEPLOY_TARGET deploy-llm-proxy-backend)"
+GATEWAY_TARGET="deploy-llm-proxy-backend"
+GATEWAY_CONTRACT_TARGET="verify-llm-proxy-deployment-contract"
+GATEWAY_DEPLOY_REMOTE="origin"
+GATEWAY_DEPLOY_BRANCH="master"
 IMAGE_REPOSITORY="$(env_or_default DOCKER_IMAGE ghcr.io/tyemirov/llm-proxy)"
 TAG="$(env_or_default DEPLOY_TAG "")"
 SKIP_CI="false"
@@ -82,11 +84,6 @@ while [[ $# -gt 0 ]]; do
     --gateway-dir)
       [[ $# -ge 2 ]] || { echo "error: --gateway-dir requires a value" >&2; exit 1; }
       GATEWAY_DIR="$2"
-      shift 2
-      ;;
-    --gateway-target)
-      [[ $# -ge 2 ]] || { echo "error: --gateway-target requires a value" >&2; exit 1; }
-      GATEWAY_TARGET="$2"
       shift 2
       ;;
     --image)
@@ -157,6 +154,31 @@ if [[ "${SKIP_GATEWAY}" != "true" ]]; then
   GATEWAY_DIR="$(resolve_gateway_dir)"
   [[ -n "${GATEWAY_DIR}" ]] || { echo "error: gateway checkout not found; set GATEWAY_DIR=/path/to/mprlab-gateway or pass --gateway-dir" >&2; exit 1; }
   [[ -d "${GATEWAY_DIR}" ]] || { echo "error: gateway checkout not found: ${GATEWAY_DIR}" >&2; exit 1; }
+
+  git -C "${GATEWAY_DIR}" rev-parse --show-toplevel >/dev/null 2>&1 || { echo "error: gateway checkout is not a git worktree: ${GATEWAY_DIR}" >&2; exit 1; }
+  gateway_branch="$(git -C "${GATEWAY_DIR}" rev-parse --abbrev-ref HEAD)"
+  if [[ "${gateway_branch}" != "${GATEWAY_DEPLOY_BRANCH}" ]]; then
+    echo "error: gateway deployment is allowed only from branch '${GATEWAY_DEPLOY_BRANCH}' (current: '${gateway_branch}')" >&2
+    exit 1
+  fi
+  if [[ -n "$(git -C "${GATEWAY_DIR}" status --porcelain)" ]]; then
+    echo "error: gateway working tree is dirty; commit or stash changes before deploying" >&2
+    exit 1
+  fi
+
+  echo "==> [deploy] Verifying coupled llm-proxy/TAuth gateway contract"
+  if ! timeout -k 180s -s SIGKILL 180s make -C "${GATEWAY_DIR}" "${GATEWAY_CONTRACT_TARGET}"; then
+    echo "error: gateway checkout does not satisfy the coupled llm-proxy/TAuth deployment contract" >&2
+    exit 1
+  fi
+
+  timeout -k 30s -s SIGKILL 30s git -C "${GATEWAY_DIR}" fetch "${GATEWAY_DEPLOY_REMOTE}" "${GATEWAY_DEPLOY_BRANCH}" --tags --prune
+  gateway_head_sha="$(git -C "${GATEWAY_DIR}" rev-parse HEAD)"
+  gateway_remote_branch_sha="$(git -C "${GATEWAY_DIR}" rev-parse "${GATEWAY_DEPLOY_REMOTE}/${GATEWAY_DEPLOY_BRANCH}")"
+  if [[ "${gateway_head_sha}" != "${gateway_remote_branch_sha}" ]]; then
+    echo "error: gateway ${GATEWAY_DEPLOY_BRANCH} is not at ${GATEWAY_DEPLOY_REMOTE}/${GATEWAY_DEPLOY_BRANCH}; push or pull first" >&2
+    exit 1
+  fi
 
   timeout -k 30s -s SIGKILL 30s git fetch "${DEPLOY_REMOTE}" "${DEPLOY_BRANCH}" --tags --prune
 
