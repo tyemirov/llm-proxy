@@ -178,10 +178,10 @@ type managementDefaultsRequest struct {
 	SystemPrompt      string `json:"system_prompt"`
 }
 
-func newManagementService(configuration ManagementConfiguration, store *managedTenantStore, providers *providerRegistry, authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger) *managementService {
+func newManagementService(configuration ManagementConfiguration, sessionValidator *managementSessionValidator, store *managedTenantStore, providers *providerRegistry, authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger) *managementService {
 	return &managementService{
 		configuration:    configuration,
-		sessionValidator: newManagementSessionValidator(configuration),
+		sessionValidator: sessionValidator,
 		store:            store,
 		providers:        providers,
 		authenticator:    authenticator,
@@ -212,6 +212,7 @@ func (service *managementService) sessionMiddleware() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		principal, validationError := service.sessionValidator.validateRequest(ginContext.Request)
 		if validationError != nil {
+			service.structuredLogger.Warnw("management session rejected", "reason", managementSessionRejectionReason(validationError))
 			ginContext.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}

@@ -5,34 +5,19 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/tyemirov/tauth/pkg/sessionvalidator"
 )
 
 var (
-	errManagementSessionMissingCookie = errors.New("management_session_missing_cookie")
-	errManagementSessionInvalid       = errors.New("management_session_invalid")
-	errManagementSessionWrongTenant   = errors.New("management_session_wrong_tenant")
+	errManagementSessionInvalidPrincipal = errors.New("management_session_invalid_principal")
+	errManagementSessionWrongTenant      = errors.New("management_session_wrong_tenant")
 )
 
 type managementSessionValidator struct {
-	signingKey  []byte
-	issuer      string
-	cookieName  string
+	tauth       *sessionvalidator.Validator
 	tenantID    string
 	adminEmails map[string]struct{}
-	now         func() time.Time
-}
-
-type managementSessionClaims struct {
-	TenantID        string   `json:"tenant_id"`
-	UserID          string   `json:"user_id"`
-	UserEmail       string   `json:"user_email"`
-	UserDisplayName string   `json:"user_display_name"`
-	UserAvatarURL   string   `json:"user_avatar_url"`
-	UserRoles       []string `json:"user_roles"`
-	jwt.RegisteredClaims
 }
 
 type managementPrincipal struct {
@@ -44,54 +29,43 @@ type managementPrincipal struct {
 	isAdmin         bool
 }
 
-func newManagementSessionValidator(configuration ManagementConfiguration) *managementSessionValidator {
+func newManagementSessionValidator(configuration ManagementConfiguration) (*managementSessionValidator, error) {
+	if strings.TrimSpace(configuration.SessionCookieName) == "" {
+		return nil, fmt.Errorf("%w: field=management.session_cookie_name", ErrInvalidManagementConfiguration)
+	}
+	tauthValidator, validatorError := sessionvalidator.New(sessionvalidator.Config{
+		SigningKey: []byte(configuration.JWTSigningKey),
+		Issuer:     configuration.JWTIssuer,
+		CookieName: configuration.SessionCookieName,
+	})
+	if validatorError != nil {
+		return nil, fmt.Errorf("management_session.new: %w", validatorError)
+	}
 	return &managementSessionValidator{
-		signingKey:  []byte(configuration.JWTSigningKey),
-		issuer:      configuration.JWTIssuer,
-		cookieName:  configuration.SessionCookieName,
+		tauth:       tauthValidator,
 		tenantID:    configuration.TAuthTenantID,
 		adminEmails: managementAdminEmailSet(configuration.AdminEmails),
-		now:         time.Now,
-	}
+	}, nil
 }
 
 func (validator *managementSessionValidator) validateRequest(request *http.Request) (managementPrincipal, error) {
-	sessionCookie, cookieError := request.Cookie(validator.cookieName)
-	if cookieError != nil || sessionCookie == nil || strings.TrimSpace(sessionCookie.Value) == "" {
-		return managementPrincipal{}, fmt.Errorf("management_session.validate_request: %w", errManagementSessionMissingCookie)
+	claims, validationError := validator.tauth.ValidateRequest(request)
+	if validationError != nil {
+		return managementPrincipal{}, fmt.Errorf("management_session.validate_request: %w", validationError)
 	}
-	return validator.validateToken(sessionCookie.Value)
-}
-
-func (validator *managementSessionValidator) validateToken(rawToken string) (managementPrincipal, error) {
-	parsedToken, parseError := jwt.ParseWithClaims(rawToken, &managementSessionClaims{}, func(parsedToken *jwt.Token) (interface{}, error) {
-		return validator.signingKey, nil
-	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithTimeFunc(func() time.Time {
-		return validator.now().UTC()
-	}))
-	if parseError != nil || parsedToken == nil || !parsedToken.Valid {
-		return managementPrincipal{}, fmt.Errorf("management_session.validate_token: %w", errManagementSessionInvalid)
-	}
-	claims := parsedToken.Claims.(*managementSessionClaims)
 	if claims.ExpiresAt == nil {
-		return managementPrincipal{}, fmt.Errorf("management_session.validate_token: %w", errManagementSessionInvalid)
-	}
-	if claims.Issuer != validator.issuer {
-		return managementPrincipal{}, fmt.Errorf("management_session.validate_token: %w", errManagementSessionInvalid)
-	}
-	if claims.IssuedAt != nil && validator.now().UTC().Before(claims.IssuedAt.Time) {
-		return managementPrincipal{}, fmt.Errorf("management_session.validate_token: %w", errManagementSessionInvalid)
+		return managementPrincipal{}, fmt.Errorf("management_session.validate_request: %w", errManagementSessionInvalidPrincipal)
 	}
 	if strings.TrimSpace(claims.TenantID) != validator.tenantID {
-		return managementPrincipal{}, fmt.Errorf("management_session.validate_token: %w", errManagementSessionWrongTenant)
+		return managementPrincipal{}, fmt.Errorf("management_session.validate_request: %w", errManagementSessionWrongTenant)
 	}
 	return validator.newManagementPrincipal(claims)
 }
 
-func (validator *managementSessionValidator) newManagementPrincipal(claims *managementSessionClaims) (managementPrincipal, error) {
+func (validator *managementSessionValidator) newManagementPrincipal(claims *sessionvalidator.Claims) (managementPrincipal, error) {
 	userID := strings.TrimSpace(claims.UserID)
 	if userID == "" {
-		return managementPrincipal{}, fmt.Errorf("management_session.principal: %w", errManagementSessionInvalid)
+		return managementPrincipal{}, fmt.Errorf("management_session.principal: %w", errManagementSessionInvalidPrincipal)
 	}
 	userEmail := strings.ToLower(strings.TrimSpace(claims.UserEmail))
 	_, userIsAdmin := validator.adminEmails[userEmail]
@@ -103,6 +77,21 @@ func (validator *managementSessionValidator) newManagementPrincipal(claims *mana
 		tenantID:        strings.TrimSpace(claims.TenantID),
 		isAdmin:         userIsAdmin,
 	}, nil
+}
+
+func managementSessionRejectionReason(validationError error) string {
+	switch {
+	case errors.Is(validationError, sessionvalidator.ErrMissingCookie):
+		return "missing_cookie"
+	case errors.Is(validationError, sessionvalidator.ErrTokenExpired):
+		return "expired"
+	case errors.Is(validationError, sessionvalidator.ErrInvalidIssuer):
+		return "invalid_issuer"
+	case errors.Is(validationError, errManagementSessionWrongTenant):
+		return "wrong_tenant"
+	default:
+		return "invalid"
+	}
 }
 
 func managementAdminEmailSet(adminEmails []string) map[string]struct{} {

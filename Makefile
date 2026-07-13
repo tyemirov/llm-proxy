@@ -24,7 +24,6 @@ PAGES_CONFIG_URL ?= https://llm-proxy-api.mprlab.com/config-ui.yaml
 PAGES_URL ?= https://llm-proxy.mprlab.com/
 PAGES_VERSION ?=
 GATEWAY_DIR ?=
-GATEWAY_DEPLOY_TARGET ?= deploy-llm-proxy-backend
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
@@ -109,4 +108,4 @@ pages-deploy:
 	@"$(RELEASE_TOOL_DIR)/deploy_pages_artifact.sh" --remote "$(PUBLISH_REMOTE)" --branch "$(PAGES_BRANCH)" --url "$(PAGES_URL)" $(if $(PAGES_VERSION),--version "$(PAGES_VERSION)") $(DEPLOY_PAGES_ARGS)
 
 deploy:
-	@GATEWAY_DIR="$(GATEWAY_DIR)" DOCKER_IMAGE="$(DOCKER_IMAGE)" GATEWAY_DEPLOY_TARGET="$(GATEWAY_DEPLOY_TARGET)" PAGES_BRANCH="$(PAGES_BRANCH)" PAGES_URL="$(PAGES_URL)" ./scripts/deploy.sh $(DEPLOY_ARGS)
+	@GATEWAY_DIR="$(GATEWAY_DIR)" DOCKER_IMAGE="$(DOCKER_IMAGE)" PAGES_BRANCH="$(PAGES_BRANCH)" PAGES_URL="$(PAGES_URL)" ./scripts/deploy.sh $(DEPLOY_ARGS)

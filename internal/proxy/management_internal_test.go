@@ -449,7 +449,7 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 		t.Fatalf("usage record logs=%+v", observedLogs.All())
 	}
 
-	service := newInternalManagementService(queryUsageErrorDatabase)
+	service := newInternalManagementService(t, queryUsageErrorDatabase)
 	status := executeInternalManagementHandler(service.usageHandler(), http.MethodGet, "/api/management/usage", "", nil, principal)
 	if status != http.StatusInternalServerError {
 		t.Fatalf("usage handler status=%d want=%d", status, http.StatusInternalServerError)
@@ -1039,7 +1039,7 @@ func TestManagementHandlerStoreErrorEdges(t *testing.T) {
 
 	profileErrorDatabase := newFakeManagedTenantDatabase()
 	profileErrorDatabase.userQueryErrors = []error{errInternalTestDatabase}
-	profileErrorService := newInternalManagementService(profileErrorDatabase)
+	profileErrorService := newInternalManagementService(t, profileErrorDatabase)
 	if responseCode := executeInternalManagementHandler(profileErrorService.profileHandler(), http.MethodGet, "/api/management/profile", "", nil, principal); responseCode != http.StatusInternalServerError {
 		t.Fatalf("profile error status=%d want=%d", responseCode, http.StatusInternalServerError)
 	}
@@ -1050,14 +1050,14 @@ func TestManagementHandlerStoreErrorEdges(t *testing.T) {
 	removeErrorDatabase.records[principal.userID] = removeRecord
 	removeErrorDatabase.saveTenantErrors = []error{nil}
 	removeErrorDatabase.deleteProviderKeyError = errInternalTestDatabase
-	removeErrorService := newInternalManagementService(removeErrorDatabase)
+	removeErrorService := newInternalManagementService(t, removeErrorDatabase)
 	if responseCode := executeInternalManagementHandler(removeErrorService.removeProviderKeyHandler(), http.MethodDelete, "/api/management/provider-keys/openai", "", gin.Params{{Key: "provider", Value: "openai"}}, principal); responseCode != http.StatusInternalServerError {
 		t.Fatalf("remove error status=%d want=%d", responseCode, http.StatusInternalServerError)
 	}
 
 	adminErrorDatabase := newFakeManagedTenantDatabase()
 	adminErrorDatabase.userQueryErrors = []error{errInternalTestDatabase}
-	adminErrorService := newInternalManagementService(adminErrorDatabase)
+	adminErrorService := newInternalManagementService(t, adminErrorDatabase)
 	adminPrincipal := managementPrincipal{userID: "tauth-admin-error-user", isAdmin: true}
 	if responseCode := executeInternalManagementHandler(adminErrorService.adminUsersHandler(), http.MethodGet, "/api/management/admin/users", "", nil, adminPrincipal); responseCode != http.StatusInternalServerError {
 		t.Fatalf("admin error status=%d want=%d", responseCode, http.StatusInternalServerError)
@@ -1065,7 +1065,7 @@ func TestManagementHandlerStoreErrorEdges(t *testing.T) {
 
 	defaultsProfileErrorDatabase := newFakeManagedTenantDatabase()
 	defaultsProfileErrorDatabase.userQueryErrors = []error{errInternalTestDatabase}
-	defaultsProfileErrorService := newInternalManagementService(defaultsProfileErrorDatabase)
+	defaultsProfileErrorService := newInternalManagementService(t, defaultsProfileErrorDatabase)
 	defaultsBody := `{"provider":"openai","model":"` + ModelNameGPT41 + `","dictation_provider":"openai","dictation_model":"` + DefaultDictationModel + `","system_prompt":""}`
 	if responseCode := executeInternalManagementHandler(defaultsProfileErrorService.updateDefaultsHandler(), http.MethodPut, "/api/management/defaults", defaultsBody, nil, principal); responseCode != http.StatusInternalServerError {
 		t.Fatalf("defaults profile error status=%d want=%d", responseCode, http.StatusInternalServerError)
@@ -1076,13 +1076,13 @@ func TestManagementHandlerStoreErrorEdges(t *testing.T) {
 	defaultsRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{internalManagedProviderKeyRecord(t, principal.userID, "openai", "sk-openai", fixedTime)}
 	defaultsStoreErrorDatabase.records[principal.userID] = defaultsRecord
 	defaultsStoreErrorDatabase.saveTenantErrors = []error{nil, nil, errInternalTestDatabase}
-	defaultsStoreErrorService := newInternalManagementService(defaultsStoreErrorDatabase)
+	defaultsStoreErrorService := newInternalManagementService(t, defaultsStoreErrorDatabase)
 	if responseCode := executeInternalManagementHandler(defaultsStoreErrorService.updateDefaultsHandler(), http.MethodPut, "/api/management/defaults", defaultsBody, nil, principal); responseCode != http.StatusInternalServerError {
 		t.Fatalf("defaults store error status=%d want=%d", responseCode, http.StatusInternalServerError)
 	}
 
 	generateErrorDatabase := newFakeManagedTenantDatabase()
-	generateErrorService := newInternalManagementService(generateErrorDatabase)
+	generateErrorService := newInternalManagementService(t, generateErrorDatabase)
 	generateErrorService.store.randomReader = strings.NewReader("")
 	if responseCode := executeInternalManagementHandler(generateErrorService.generateSecretHandler(), http.MethodPost, "/api/management/secrets", `{}`, nil, principal); responseCode != http.StatusInternalServerError {
 		t.Fatalf("generate error status=%d want=%d", responseCode, http.StatusInternalServerError)
@@ -1091,7 +1091,7 @@ func TestManagementHandlerStoreErrorEdges(t *testing.T) {
 	revokeErrorDatabase := newFakeManagedTenantDatabase()
 	revokeErrorDatabase.records[principal.userID] = internalManagedTenantRecord(principal.userID, "", fixedTime)
 	revokeErrorDatabase.saveTenantErrors = []error{nil, errInternalTestDatabase}
-	revokeErrorService := newInternalManagementService(revokeErrorDatabase)
+	revokeErrorService := newInternalManagementService(t, revokeErrorDatabase)
 	if responseCode := executeInternalManagementHandler(revokeErrorService.revokeSecretHandler(), http.MethodDelete, "/api/management/secrets", "", nil, principal); responseCode != http.StatusInternalServerError {
 		t.Fatalf("revoke error status=%d want=%d", responseCode, http.StatusInternalServerError)
 	}
@@ -1541,26 +1541,33 @@ func cloneManagedTenantRecord(record managedTenantRecord) managedTenantRecord {
 	return record
 }
 
-func newInternalManagementService(database *fakeManagedTenantDatabase) *managementService {
+func newInternalManagementService(t *testing.T, database *fakeManagedTenantDatabase) *managementService {
+	t.Helper()
 	store := newManagedTenantStoreWithDatabase(database)
+	configuration := ManagementConfiguration{
+		PublicOrigin:             "http://localhost:8080",
+		UIDescription:            "LLM Proxy",
+		UIOrigins:                []string{"http://localhost:8080"},
+		TAuthURL:                 "http://localhost:8443",
+		TAuthTenantID:            "llm-proxy-test",
+		GoogleClientID:           "google-client-id",
+		LoginPath:                "/auth/google",
+		LogoutPath:               "/auth/logout",
+		NoncePath:                "/auth/nonce",
+		JWTSigningKey:            "management-signing-key",
+		JWTIssuer:                DefaultManagementJWTIssuer,
+		SessionCookieName:        "llm_proxy_test_session",
+		ProviderKeyEncryptionKey: testManagedProviderKeyEncryptionKey,
+		ManagementAPIOrigin:      "http://localhost:8080",
+		ProxyOrigin:              "http://localhost:8080",
+	}
+	sessionValidator, validationError := newManagementSessionValidator(configuration)
+	if validationError != nil {
+		t.Fatalf("new management session validator: %v", validationError)
+	}
 	return newManagementService(
-		ManagementConfiguration{
-			PublicOrigin:             "http://localhost:8080",
-			UIDescription:            "LLM Proxy",
-			UIOrigins:                []string{"http://localhost:8080"},
-			TAuthURL:                 "http://localhost:8443",
-			TAuthTenantID:            "llm-proxy-test",
-			GoogleClientID:           "google-client-id",
-			LoginPath:                "/auth/google",
-			LogoutPath:               "/auth/logout",
-			NoncePath:                "/auth/nonce",
-			JWTSigningKey:            "management-signing-key",
-			JWTIssuer:                DefaultManagementJWTIssuer,
-			SessionCookieName:        "llm_proxy_test_session",
-			ProviderKeyEncryptionKey: testManagedProviderKeyEncryptionKey,
-			ManagementAPIOrigin:      "http://localhost:8080",
-			ProxyOrigin:              "http://localhost:8080",
-		},
+		configuration,
+		sessionValidator,
 		store,
 		internalManagementProviderRegistry(),
 		newTenantAuthenticator(tenantRegistry{}, store),

@@ -437,6 +437,14 @@ examples, and MPR UI/TAuth at the configured origins. Browser-facing values are
 projected from the already-loaded backend `config.yml`; there is no second
 environment expansion path for Pages.
 
+The Go backend consumes TAuth's published `pkg/sessionvalidator` for the
+configured session cookie. It does not maintain a second JWT parser or claims
+schema; llm-proxy adds only its product-owned tenant, required-expiry, and
+principal checks after TAuth validation. Authentication rejections are logged
+only as stable categories such as `missing_cookie`, `expired`,
+`invalid_issuer`, or `wrong_tenant`; session values and identity claims are
+never logged.
+
 Required hosted values are profile-specific:
 
 | Field | Purpose |
@@ -585,6 +593,12 @@ Configure TAuth for tenant `llm-proxy` with:
 - cookie domain `.mprlab.com`
 - HTTPS-only cookies
 - JWT signing key matching `management.jwt_signing_key`
+
+The gateway `llm-proxy` deployment profile treats this as one runtime contract:
+it stages the TAuth and llm-proxy env/config inputs, restarts both `tauth-api`
+and `llm-proxy`, and verifies both public health checks before Pages activation.
+This prevents a newly deployed backend from validating sessions against stale
+TAuth cookie or signing configuration.
 
 Configure the gateway/backend route for `llm-proxy-api.mprlab.com` to the
 llm-proxy service, and remove any backend route that still claims
@@ -741,9 +755,11 @@ paid provider with `./scripts/test_live_providers.sh --write-config
 artifacts; it does not rebuild or rerun CI.
 
 `llm-proxy` is a gateway-local service in `mprlab-gateway`, so `make deploy`
-defaults to the gateway `deploy-llm-proxy-backend` target. Override the
-checkout or target with `GATEWAY_DIR=/path/to/mprlab-gateway` or
-`GATEWAY_DEPLOY_TARGET=<target>`. Override Pages preparation and activation
+uses the sole gateway `deploy-llm-proxy-backend` target after the gateway-owned
+`verify-llm-proxy-deployment-contract` preflight proves the coupled TAuth
+service, runtime assets, and health checks. Override only the checkout with
+`GATEWAY_DIR=/path/to/mprlab-gateway`; the selected gateway checkout must be a
+clean, synchronized `origin/master`. Override Pages preparation and activation
 with `PAGES_DOMAIN=<domain>`, `PAGES_CONFIG_URL=<https-config-url>`,
 `PAGES_BRANCH=<branch>`, `PAGES_URL=<url>`, or
 `DEPLOY_PAGES_ARGS="--skip-configure"`.
