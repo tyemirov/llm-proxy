@@ -14,7 +14,7 @@ export const NOTICE_KINDS = Object.freeze({
 
 export const EVENTS = Object.freeze({
   AUTHENTICATED: "mpr-ui:auth:authenticated",
-  UNAUTHENTICATED: "mpr-ui:auth:unauthenticated",
+  AUTH_STATUS_CHANGE: "mpr-ui:auth:status-change",
   USER_MENU_ITEM: "mpr-user:menu-item",
   MANAGEMENT_READY: "llm-proxy:management-ready",
 });
@@ -57,7 +57,7 @@ export const COPY = Object.freeze({
   loadingEyebrow: "Session",
   loadingTitle: "Loading key workspace",
   signedOutEyebrow: "Authentication",
-  signedOutTitle: "Sign in to manage llm-proxy keys",
+  signedOutTitle: "Sign in to manage LLM Proxy keys",
   dashboardEyebrow: "Dashboard",
   dashboardTitle: "Usage overview",
   adminDashboardEyebrow: "Admin",

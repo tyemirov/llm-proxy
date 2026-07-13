@@ -71,7 +71,7 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 	indexHTML := string(indexBytes)
 	requiredFragments := []string{
 		"mpr-ui-config.js",
-		`data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.9.0/mpr-ui.js"`,
+		`data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.js"`,
 		`src="/assets/llm-proxy/js/app.js"`,
 		`data-config-url="/config-ui.yaml"`,
 		`<mpr-user`,

@@ -4,11 +4,13 @@
   "type": "module",
   "scripts": {
     "frontend:lint": "node scripts/check_frontend_syntax.mjs",
-    "frontend:test": "playwright test"
+    "frontend:test": "playwright test",
+    "frontend:test:blackbox": "playwright test --config=playwright.blackbox.config.js"
   },
   "devDependencies": {
     "@playwright/test": "1.61.1",
     "alpinejs": "3.13.5",
-    "js-yaml": "4.3.0"
+    "js-yaml": "4.3.0",
+    "mpr-ui": "https://github.com/MarcoPoloResearchLab/mpr-ui/archive/b64fd7c6daaac42ecc5289e2181b8567689bf378.tar.gz"
   }
 }

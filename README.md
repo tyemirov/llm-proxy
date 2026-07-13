@@ -557,7 +557,7 @@ Production is split-origin:
 |----------|-------|---------|
 | `llm-proxy.mprlab.com` | GitHub Pages | Static self-service frontend from `site/`. |
 | `llm-proxy-api.mprlab.com` | MPR gateway/backend | llm-proxy API, management API, `/`, `/v2`, and `/dictate`. |
-| `tauth-api.mprlab.com` | TAuth backend | Google login, nonce, logout, `/me`, and session-cookie issuance. |
+| `tauth-api.mprlab.com` | TAuth backend | Google login, nonce, logout, `/auth/session`, and session-cookie issuance. |
 
 Add these DNS records:
 
@@ -599,6 +599,37 @@ it stages the TAuth and llm-proxy env/config inputs, restarts both `tauth-api`
 and `llm-proxy`, and verifies both public health checks before Pages activation.
 This prevents a newly deployed backend from validating sessions against stale
 TAuth cookie or signing configuration.
+
+The same boundary is executable locally without Google OAuth or deployed
+services:
+
+```bash
+make test-management-auth-blackbox
+```
+
+The target builds the TAuth version pinned in `go.mod` and the current
+llm-proxy binary, starts both on disposable local ports, and opens the real
+static management app in Playwright. The page signs in through TAuth's seeded
+password-login endpoint with a credentialed cross-origin browser request, so
+the test enforces TAuth login CORS and receives the configured HttpOnly access
+and refresh cookies. It then drives the mounted header through the documented
+`MPRUI.testing.authenticate` adapter, which emits the normal authenticated
+lifecycle event and persists MPR UI's session-restore hint. The test proves the
+anonymous/authorized behavior of
+`/api/management/profile`, and waits for the pinned `mpr-ui` shell plus the
+dashboard to report the authenticated state. It then proves an ordinary reload
+stays authenticated, removes only the access cookie and proves `/auth/session`
+recovers it from the refresh cookie without rendering the signed-out panel, and
+uses the visible **Sign out** action to prove `/auth/logout` clears both cookies
+and returns TAuth plus the management API to anonymous responses. CDN
+application assets are served from pinned local npm dependencies during this
+test; TAuth and management API routes are never mocked.
+
+Normal navigation, page refreshes, and access-cookie expiration do not sign the
+user out. The pinned MPR UI shell silently restores the TAuth session while its
+rotating refresh cookie remains valid. Only the explicit **Sign out** action
+calls TAuth logout and clears the browser session; LLM Proxy does not own a
+second session store or an automatic logout path.
 
 Configure the gateway/backend route for `llm-proxy-api.mprlab.com` to the
 llm-proxy service, and remove any backend route that still claims

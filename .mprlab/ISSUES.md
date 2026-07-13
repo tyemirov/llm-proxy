@@ -417,6 +417,75 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
   Validation passed with baseline `timeout -k 350s -s SIGKILL 350s make ci`, reproduced failure via `timeout -k 120s -s SIGKILL 120s env RELEASE_ARTIFACT_TARGETS="container-artifacts pages-artifact" python3 -m unittest ...` before the patch, focused post-fix `timeout -k 180s -s SIGKILL 180s env RELEASE_ARTIFACT_TARGETS="container-artifacts pages-artifact" python3 -m unittest discover -s tools/gitrelease/tests -p 'test_*.py'` (36 tests), `timeout -k 120s -s SIGKILL 120s python3 -m unittest tools.gitrelease.tests.test_release_pipeline.ReleasePipelineTest.test_prepare_runs_ci_without_release_artifact_environment`, `timeout -k 30s -s SIGKILL 30s bash -n tools/gitrelease/scripts/prepare_release.sh`, and final `timeout -k 350s -s SIGKILL 350s make ci` (Go aggregate coverage 100.0%, Python 20 passed, Playwright 12 passed, release integrations 36 passed, live-provider preflight passed).
 
+- [x] [B028] (P1) Present a direct LLM Proxy sign-in experience.
+  Goal:
+  Make signing in an action that completes authentication and opens the management dashboard without explaining authentication mechanics to the user.
+  Requirements:
+  - Keep TAuth's session cookie and the documented `mpr-ui:auth:*` lifecycle as the only authentication source of truth.
+  - Present one direct signed-out prompt with no special explanation of Google, avatars, cookies, or session state.
+  - Use the existing canonical header sign-in action; successful authentication must transition directly to the dashboard without another auth controller or compatibility path.
+  Deliverables:
+  - Update the signed-out management panel copy.
+  - Add Playwright coverage for the direct signed-out state at the compact viewport shown in the report and the authenticated dashboard transition.
+  Validation:
+  - Run focused Playwright browser coverage.
+  - Run the required post-change `timeout -k 350s -s SIGKILL 350s make ci`.
+  Resolution:
+  The signed-out panel now presents only "Sign in to manage LLM Proxy keys" with no explanation of Google, avatars, cookies, or session mechanics. The existing mpr-ui header action remains the sole sign-in controller, and its authenticated lifecycle event replaces the signed-out state directly with the usage dashboard. Playwright coverage asserts the compact panel has no explanatory paragraph and that authentication opens the dashboard; the real local TAuth and LLM Proxy black-box scenario proves a TAuth-issued HttpOnly session unlocks the same dashboard. Focused `timeout -k 120s -s SIGKILL 120s make frontend-test` passed all 14 browser scenarios, focused `timeout -k 120s -s SIGKILL 120s make test-management-auth-blackbox` passed, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` runs passed. Final CI included 100% aggregate Go coverage, 20 Python tests, 14 fast Playwright tests, the real-stack Playwright test, 38 release-contract tests, and the live-provider preflight.
+
+- [x] [B029] (P1) Exercise the real local TAuth and LLM Proxy session boundary in browser tests.
+  Goal:
+  Replace the missing cross-service authentication proof with a local black-box test that starts both services and drives the real public contracts.
+  Requirements:
+  - Start the TAuth version pinned by `go.mod` and the LLM Proxy binary built from the current checkout.
+  - Use one explicit local profile for frontend origin, TAuth origin, management API origin, tenant, issuer, signing key, and session cookie name.
+  - Obtain the session through TAuth's real password-login endpoint; do not mint a test-only JWT or mock TAuth and `/api/management/*`.
+  - Prove the protected management API rejects the anonymous browser, accepts the TAuth-issued cookie, and the real static app plus pinned mpr-ui release renders the authenticated dashboard.
+  - Keep third-party static assets local and deterministic during the browser run.
+  Deliverables:
+  - Add a repository-owned local-stack harness and Playwright black-box spec.
+  - Add a dedicated Makefile target and include it in the canonical test/CI path.
+  - Document the local black-box command and covered service boundary.
+  Validation:
+  - Run the focused local black-box target.
+  - Run the required post-change `timeout -k 350s -s SIGKILL 350s make ci` after the final edit.
+  Resolution:
+  Added a disposable local-stack harness that derives TAuth's exact pinned version from `go.mod`, builds that TAuth server plus the current llm-proxy CLI, writes aligned localhost tenant/session configs, starts both services on disposable ports, and serves the real static management app. The Playwright spec obtains HttpOnly access and refresh cookies through TAuth's seeded `/auth/password/login`, proves anonymous `/api/management/profile` returns `401`, proves both TAuth `/auth/session` and the real LLM Proxy profile accept the issued session, then verifies the pinned `mpr-ui` user control and LLM Proxy dashboard render authenticated. Alpine, js-yaml, and the exact mpr-ui v3.11.1 release commit are pinned local test assets; TAuth and management API requests are not mocked. Added `make test-management-auth-blackbox`, included it in `make test` / `make ci`, expanded frontend syntax checks and CI path filters, and documented the command. Focused `make test-management-auth-blackbox` passed, and the required baseline/final `make ci` runs passed; final CI included 100% aggregate Go coverage, 20 Python tests, 14 fast Playwright tests, the new real-stack Playwright test, 38 release-contract tests, and the live-provider preflight.
+
+- [x] [B030] (P1) Keep the authenticated session until explicit sign-out.
+  Goal:
+  Make authentication seamless: a successful sign-in opens the dashboard, page refresh restores the user without showing a signed-out detour, and only the explicit Sign out action clears the TAuth session.
+  Requirements:
+  - Keep TAuth's profile-specific HttpOnly access and refresh cookies as the only persisted session contract.
+  - Restore a valid access session on ordinary reload and recover an expired access cookie from the still-valid refresh cookie through TAuth's browser session endpoint.
+  - Do not clear cookies or present the signed-out state during successful startup recovery.
+  - Explicit Sign out must call TAuth logout, clear both cookies, and return the management API and UI to the anonymous state.
+  - Keep one forward-only `/config-ui.yaml` plus mpr-ui auth path without an application-owned session store or compatibility controller.
+  Deliverables:
+  - Pin a validated mpr-ui release with the current TAuth session-restore contract.
+  - Add real local-stack Playwright coverage for sign-in, reload, refresh-cookie recovery, and explicit sign-out.
+  - Document the session persistence behavior.
+  Validation:
+  - Run focused frontend and real-stack browser tests.
+  - Run the required post-change `timeout -k 350s -s SIGKILL 350s make ci`.
+  Resolution:
+  Pinned MPR UI v3.11.1 and its exact release commit so the shared shell restores sessions through TAuth `/auth/session`. LLM Proxy now treats the documented final `mpr-ui:auth:status-change` as the anonymous boundary: an early management-profile `401` stays in the loading state while TAuth rotates a valid refresh cookie, and the authenticated event retries the profile without rendering the signed-out panel. The real local-stack Playwright scenario obtains TAuth access and refresh cookies, proves an ordinary reload remains authenticated, removes only the access cookie and proves silent refresh recovery, then clicks the visible **Sign out** action and proves `/auth/logout` clears both cookies, `/auth/session` returns `204`, and `/api/management/profile` returns `401`. Updated the local refresh profile to 720 hours, regenerated all 45 stage-owned resource pages with the current MPR UI CSS pin, and documented that normal reload and access-cookie expiration never invoke logout. Focused `timeout -k 120s -s SIGKILL 120s make frontend-test` passed all 14 browser scenarios, focused `timeout -k 120s -s SIGKILL 120s make test-management-auth-blackbox` passed the real service/browser scenario, and the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed. Final CI included 100% aggregate Go coverage, 20 Python tests, 14 fast Playwright tests, the real-stack session-persistence test, 38 release-contract tests, and the live-provider preflight.
+
+- [x] [B031] (P2) Drive real-stack sign-in through the browser lifecycle.
+  Goal:
+  Make the real-stack sign-in-to-reload scenario fail when browser login CORS, the mounted header's authenticated event, or MPR UI restore-hint persistence regresses.
+  Requirements:
+  - Submit TAuth password login from the loaded management page as a credentialed cross-origin browser request.
+  - Drive the mounted header through the documented `MPRUI.testing.authenticate` adapter so the normal `mpr-ui:auth:*` lifecycle owns the dashboard transition and restore hint.
+  - Do not seed MPR UI private local-storage keys or use `APIRequestContext` as the sign-in path.
+  - Keep ordinary reload, refresh-cookie recovery, and explicit sign-out assertions on the real local stack.
+  Deliverables:
+  - Correct the real-stack Playwright scenario and its boundary documentation.
+  Validation:
+  - Run focused `timeout -k 120s -s SIGKILL 120s make test-management-auth-blackbox`.
+  - Run the required final `timeout -k 350s -s SIGKILL 350s make ci` after the final code edit.
+  Resolution:
+  The real-stack Playwright scenario now loads the anonymous management page, submits TAuth password login with a credentialed cross-origin browser `fetch`, and asserts the credentialed CORS response before accepting the issued HttpOnly cookies. It passes the returned profile through the documented `MPRUI.testing.authenticate` adapter, observes the resulting browser management-profile request and authenticated dashboard transition, and relies on the adapter-owned restore hint for ordinary reload and refresh-cookie recovery; the test no longer writes `tauth.restore.v1` or posts login through `APIRequestContext`. Focused `timeout -k 120s -s SIGKILL 120s make test-management-auth-blackbox` passed, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` runs passed. Final CI included 100% aggregate Go coverage, 20 Python tests, 14 frontend Playwright scenarios, the corrected real-stack auth scenario, 38 release-contract tests, and the live-provider preflight.
 
 ## Improvements
 
