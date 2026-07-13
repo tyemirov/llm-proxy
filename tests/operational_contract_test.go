@@ -278,13 +278,11 @@ func TestOperationalDeployPreflightsPagesBeforeGatewayMutation(testingInstance *
 	writeOperationalFile(
 		testingInstance,
 		filepath.Join(toolDirectory, "make"),
-		"#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\t%s\\n' \"$*\" \"${DEPLOY_PAGES_ARGS:-}\" >>\"${MAKE_CAPTURE}\"\nif [[ \"$*\" == *pages-deploy* && \"${DEPLOY_PAGES_ARGS:-}\" == *--verify-only* ]]; then exit 42; fi\nif [[ \"${1:-}\" == \"-C\" ]]; then : >\"${GATEWAY_SENTINEL}\"; fi\n",
+		"#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\t%s\\n' \"$*\" \"${DEPLOY_PAGES_ARGS:-}\" >>\"${MAKE_CAPTURE}\"\nif [[ \"$*\" == *pages-deploy* && \"${DEPLOY_PAGES_ARGS:-}\" == *--verify-only* ]]; then exit 42; fi\nif [[ \"${1:-}\" == \"-C\" && \"$*\" == *deploy-llm-proxy-backend* ]]; then : >\"${GATEWAY_SENTINEL}\"; fi\n",
 		0o755,
 	)
 	gatewayDirectory := filepath.Join(testingInstance.TempDir(), "gateway")
-	if directoryError := os.MkdirAll(gatewayDirectory, 0o755); directoryError != nil {
-		testingInstance.Fatalf("create gateway fixture: %v", directoryError)
-	}
+	initializeOperationalGatewayCheckout(testingInstance, gatewayDirectory, "origin")
 	environment := append(
 		os.Environ(),
 		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
@@ -346,9 +344,7 @@ func TestOperationalDeployForwardsSelectedRemoteToPages(testingInstance *testing
 		0o755,
 	)
 	gatewayDirectory := filepath.Join(testingInstance.TempDir(), "gateway")
-	if directoryError := os.MkdirAll(gatewayDirectory, 0o755); directoryError != nil {
-		testingInstance.Fatalf("create gateway fixture: %v", directoryError)
-	}
+	initializeOperationalGatewayCheckout(testingInstance, gatewayDirectory, "origin")
 	environment := append(
 		os.Environ(),
 		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
@@ -444,6 +440,21 @@ func operationalRepositoryRoot(testingInstance *testing.T) string {
 		testingInstance.Fatalf("resolve repository root: %v", absoluteError)
 	}
 	return repositoryRoot
+}
+
+func initializeOperationalGatewayCheckout(testingInstance *testing.T, gatewayDirectory string, remoteName string) {
+	testingInstance.Helper()
+	writeOperationalFile(testingInstance, filepath.Join(gatewayDirectory, "deployment-contract.txt"), "coupled llm-proxy and TAuth\n", 0o644)
+	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "init")
+	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "config", "user.name", "Operational Test")
+	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "config", "user.email", "operational-test@example.invalid")
+	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "add", "deployment-contract.txt")
+	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "commit", "-m", "Gateway fixture")
+	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "branch", "-M", "master")
+	remoteDirectory := filepath.Join(testingInstance.TempDir(), remoteName+"-gateway.git")
+	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "init", "--bare", remoteDirectory)
+	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "remote", "add", remoteName, remoteDirectory)
+	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "push", "-u", remoteName, "master")
 }
 
 func copyOperationalDirectory(testingInstance *testing.T, sourceDirectory string, targetDirectory string) {
