@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.30] - 2026-07-13
+
+- Merge pull request #196 from tyemirov/gix/use-canonical-tauth-sessionvalidator-align-deployment-go
+- test: add deployment contract tests for gateway integration scenarios
+- test: extract gateway repo fixture setup into reusable helper
+- feat(deploy): enforce gateway contract and branch state before deployment
+- fix(proxy): improve management session validator error handling and test coverage
+- docs: update deploy section to clarify gateway and preflight contract steps
+- chore(makefile): remove unused GATEWAY_DEPLOY_TARGET variable from deploy target
+- docs(ISSUES): document contract coupling and gateway deployment checks
+- refactor(proxy): delegate session validation to tauth/sessionvalidator
+- chore(deps): update Go module dependencies in go.sum
+- chore(deps): update Go to 1.25.4 and upgrade dependencies in go.mod
+- docs: document backend use of tauth sessionvalidator and rollout coordination
+- docs: clarify TAuth session validation and deployment contract in README
+- build: update Dockerfile to use golang:1.25-bookworm as builder image
+- docs(issues): document session validation and deployment contract unification
+- ci: update Go version to 1.25.4 in test workflow
+
 ## [v0.2.29] - 2026-07-12
 
 - Merge pull request #195 from tyemirov/gix/retry-management-profile-after-mpr-ui-authenticated
