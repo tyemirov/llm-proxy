@@ -252,11 +252,25 @@ test("dashboard loads after MPR user refreshes authentication", async ({ page })
 
   await page.goto(baseURL);
 
-  await expect(page.getByRole("heading", { name: "Sign in to manage llm-proxy keys" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
   await page.evaluate(() => window.__llmProxyMprAuthenticate());
 
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("37");
+});
+
+test("signed-out panel presents a direct sign-in prompt without auth instructions", async ({ page }) => {
+  await page.setViewportSize({ width: 1121, height: 253 });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { profileStatuses: [401] });
+
+  await page.goto(baseURL);
+
+  const signedOutPanel = page.locator("section.llm-panel").filter({
+    has: page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" }),
+  });
+  await expect(signedOutPanel).toBeVisible();
+  await expect(signedOutPanel.locator("p:not(.eyebrow)")).toHaveCount(0);
 });
 
 test("settings shows placeholder request examples before generated secret exists", async ({ page }) => {
@@ -824,7 +838,16 @@ function usageAggregate(overrides = {}) {
  */
 function mprUIBundleMock() {
   return `
-class MprHeader extends HTMLElement {}
+class MprHeader extends HTMLElement {
+  connectedCallback() {
+    queueMicrotask(() => {
+      this.dispatchEvent(new CustomEvent("mpr-ui:auth:status-change", {
+        bubbles: true,
+        detail: { status: "unauthenticated" }
+      }));
+    });
+  }
+}
 class MprFooter extends HTMLElement {}
 class MprUser extends HTMLElement {
   static get observedAttributes() {
