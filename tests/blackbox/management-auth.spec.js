@@ -1,3 +1,5 @@
+// @ts-check
+
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -40,22 +42,48 @@ test("TAuth session survives reload and only explicit sign out clears it", async
   });
   expect(anonymousProfileResponse.status()).toBe(httpUnauthorized);
 
-  const loginResponse = await context.request.post(`${stack.tAuthOrigin}/auth/password/login`, {
-    headers: {
-      Origin: stack.frontendOrigin,
-      "Content-Type": "application/json",
-      "X-Requested-With": "XMLHttpRequest",
-      "X-TAuth-Tenant": localManagementProfile.tenantID,
-    },
-    data: {
-      email: localManagementProfile.operatorEmail,
-      password: localManagementProfile.operatorPassword,
-    },
+  const anonymousBrowserProfileResponsePromise = waitForManagementProfile(page);
+  await page.goto(stack.frontendOrigin);
+  expect((await anonymousBrowserProfileResponsePromise).status()).toBe(httpUnauthorized);
+  await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
+  await expect(page.locator("llm-proxy-key-management")).toHaveAttribute("data-auth-state", "unauthenticated");
+  await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "unauthenticated");
+
+  const loginResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url() === `${stack.tAuthOrigin}/auth/password/login` && response.request().method() === "POST",
+  );
+  const loginResult = await page.evaluate(async ({ tAuthOrigin, tenantID, email, password }) => {
+    const response = await fetch(`${tAuthOrigin}/auth/password/login`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+        "X-TAuth-Tenant": tenantID,
+      },
+      body: JSON.stringify({ email, password }),
+    });
+    return {
+      status: response.status,
+      profile: await response.json(),
+    };
+  }, {
+    tAuthOrigin: stack.tAuthOrigin,
+    tenantID: localManagementProfile.tenantID,
+    email: localManagementProfile.operatorEmail,
+    password: localManagementProfile.operatorPassword,
   });
+  const loginResponse = await loginResponsePromise;
   expect(loginResponse.status()).toBe(httpOK);
-  expect(await loginResponse.json()).toMatchObject({
-    user_email: localManagementProfile.operatorEmail,
-    display: "Local Operator",
+  expect(loginResponse.headers()["access-control-allow-origin"]).toBe(stack.frontendOrigin);
+  expect(loginResponse.headers()["access-control-allow-credentials"]).toBe("true");
+  expect(loginResult).toMatchObject({
+    status: httpOK,
+    profile: {
+      user_email: localManagementProfile.operatorEmail,
+      display: "Local Operator",
+    },
   });
 
   const sessionCookies = await context.cookies();
@@ -78,21 +106,11 @@ test("TAuth session survives reload and only explicit sign out clears it", async
     ]),
   );
 
-  const tAuthProfileResponse = await context.request.get(`${stack.tAuthOrigin}/auth/session`, {
-    headers: {
-      Origin: stack.frontendOrigin,
-      "X-Requested-With": "XMLHttpRequest",
-      "X-TAuth-Tenant": localManagementProfile.tenantID,
-    },
-  });
-  expect(tAuthProfileResponse.status()).toBe(httpOK);
-  expect(await tAuthProfileResponse.json()).toMatchObject({
-    user_email: localManagementProfile.operatorEmail,
-  });
-
-  const authenticatedProfileResponse = await context.request.get(`${stack.llmProxyOrigin}/api/management/profile`, {
-    headers: { Origin: stack.frontendOrigin },
-  });
+  const authenticatedProfileResponsePromise = waitForManagementProfile(page);
+  await page.evaluate((profile) => {
+    window.MPRUI.testing.authenticate(document.querySelector("mpr-header"), profile);
+  }, loginResult.profile);
+  const authenticatedProfileResponse = await authenticatedProfileResponsePromise;
   expect(authenticatedProfileResponse.status()).toBe(httpOK);
   expect(await authenticatedProfileResponse.json()).toMatchObject({
     user: {
@@ -101,13 +119,8 @@ test("TAuth session survives reload and only explicit sign out clears it", async
     },
   });
 
-  await installAuthenticatedSessionHint(page);
-  const initialSessionRestoreResponsePromise = waitForSessionRestore(page);
-  await page.goto(stack.frontendOrigin);
-  expect((await initialSessionRestoreResponsePromise).status()).toBe(httpOK);
-
   await expectAuthenticatedDashboard(page);
-  await expectNoSignedOutState(page);
+  await expectNoSignedOutStateAfterAuthentication(page);
 
   const ordinaryReloadSessionResponsePromise = waitForSessionRestore(page);
   await page.reload();
@@ -179,6 +192,13 @@ async function expectNoSignedOutState(page) {
   expect(authStateHistory).not.toContain("unauthenticated");
 }
 
+async function expectNoSignedOutStateAfterAuthentication(page) {
+  const authStateHistory = await page.evaluate(() => Reflect.get(window, "__llmProxyAuthStateHistory"));
+  const authenticatedStateIndex = authStateHistory.indexOf("authenticated");
+  expect(authenticatedStateIndex).toBeGreaterThanOrEqual(0);
+  expect(authStateHistory.slice(authenticatedStateIndex)).not.toContain("unauthenticated");
+}
+
 async function expectCookies(context, expected) {
   const cookies = await context.cookies();
   expect(cookies.some((cookie) => cookie.name === localManagementProfile.sessionCookieName)).toBe(expected.session);
@@ -191,16 +211,10 @@ function waitForSessionRestore(page) {
   );
 }
 
-async function installAuthenticatedSessionHint(page) {
-  await page.addInitScript(
-    ({ tAuthOrigin, tenantID }) => {
-      const restoreKey = `tauth.restore.v1:${encodeURIComponent(tAuthOrigin)}:${encodeURIComponent(tenantID)}`;
-      localStorage.setItem(restoreKey, "1");
-    },
-    {
-      tAuthOrigin: stack.tAuthOrigin,
-      tenantID: localManagementProfile.tenantID,
-    },
+function waitForManagementProfile(page) {
+  return page.waitForResponse(
+    (response) =>
+      response.url() === `${stack.llmProxyOrigin}/api/management/profile` && response.request().method() === "GET",
   );
 }
 
