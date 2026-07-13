@@ -29,20 +29,23 @@ type managementPrincipal struct {
 	isAdmin         bool
 }
 
-func newManagementSessionValidator(configuration ManagementConfiguration) *managementSessionValidator {
+func newManagementSessionValidator(configuration ManagementConfiguration) (*managementSessionValidator, error) {
+	if strings.TrimSpace(configuration.SessionCookieName) == "" {
+		return nil, fmt.Errorf("%w: field=management.session_cookie_name", ErrInvalidManagementConfiguration)
+	}
 	tauthValidator, validatorError := sessionvalidator.New(sessionvalidator.Config{
 		SigningKey: []byte(configuration.JWTSigningKey),
 		Issuer:     configuration.JWTIssuer,
 		CookieName: configuration.SessionCookieName,
 	})
 	if validatorError != nil {
-		panic(fmt.Errorf("management_session.new: %w", validatorError))
+		return nil, fmt.Errorf("management_session.new: %w", validatorError)
 	}
 	return &managementSessionValidator{
 		tauth:       tauthValidator,
 		tenantID:    configuration.TAuthTenantID,
 		adminEmails: managementAdminEmailSet(configuration.AdminEmails),
-	}
+	}, nil
 }
 
 func (validator *managementSessionValidator) validateRequest(request *http.Request) (managementPrincipal, error) {

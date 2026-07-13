@@ -80,6 +80,7 @@ type Configuration struct {
 	ProviderModels               ProviderModelCatalogs
 	upstreamRateLimits           upstreamRateLimits
 	tenants                      tenantRegistry
+	managementSessionValidator   *managementSessionValidator
 	validated                    bool
 }
 
@@ -125,8 +126,17 @@ func NewConfiguration(configuration Configuration) (Configuration, error) {
 	if validationError != nil {
 		return Configuration{}, validationError
 	}
+	var sessionValidator *managementSessionValidator
+	if configuration.Management.Enabled {
+		var sessionValidationError error
+		sessionValidator, sessionValidationError = newManagementSessionValidator(configuration.Management)
+		if sessionValidationError != nil {
+			return Configuration{}, sessionValidationError
+		}
+	}
 	configuration.upstreamRateLimits = upstreamRateLimits
 	configuration.tenants = tenants
+	configuration.managementSessionValidator = sessionValidator
 	configuration.validated = true
 	return configuration, nil
 }
@@ -319,9 +329,6 @@ func validateManagementConfiguration(configuration ManagementConfiguration) erro
 		{fieldName: "management.login_path", fieldValue: configuration.LoginPath},
 		{fieldName: "management.logout_path", fieldValue: configuration.LogoutPath},
 		{fieldName: "management.nonce_path", fieldValue: configuration.NoncePath},
-		{fieldName: "management.jwt_signing_key", fieldValue: configuration.JWTSigningKey},
-		{fieldName: "management.jwt_issuer", fieldValue: configuration.JWTIssuer},
-		{fieldName: "management.session_cookie_name", fieldValue: configuration.SessionCookieName},
 		{fieldName: "management.database_dialect", fieldValue: configuration.DatabaseDialect},
 		{fieldName: "management.database_dsn", fieldValue: configuration.DatabaseDSN},
 		{fieldName: "management.provider_key_encryption_key", fieldValue: configuration.ProviderKeyEncryptionKey},

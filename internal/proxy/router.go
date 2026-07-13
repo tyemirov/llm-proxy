@@ -115,7 +115,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	router.Use(gin.Recovery())
 	rootProxyHandler := tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, chatHandler(upstreamProviders, providers, requestTimeout, managedTenants, structuredLogger))
 	if configuration.Management.Enabled {
-		managementService := newManagementService(configuration.Management, managedTenants, providers, tenantAuthenticator, structuredLogger)
+		managementService := newManagementService(configuration.Management, configuration.managementSessionValidator, managedTenants, providers, tenantAuthenticator, structuredLogger)
 		managementService.registerRoutes(router)
 	}
 	router.GET(rootPath, rootProxyHandler)

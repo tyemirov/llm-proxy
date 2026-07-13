@@ -540,6 +540,37 @@ func TestManagementRejectsStaticCredentialModel(t *testing.T) {
 }
 
 func TestManagementConfigurationValidationRequiresBackendAuthFields(t *testing.T) {
+	authFieldTestCases := []struct {
+		name          string
+		clearField    func(*proxy.ManagementConfiguration)
+		expectedError string
+	}{
+		{
+			name: "signing key",
+			clearField: func(configuration *proxy.ManagementConfiguration) {
+				configuration.JWTSigningKey = " "
+			},
+			expectedError: "session.validator.missing_signing_key",
+		},
+		{
+			name: "session cookie name",
+			clearField: func(configuration *proxy.ManagementConfiguration) {
+				configuration.SessionCookieName = " "
+			},
+			expectedError: "management.session_cookie_name",
+		},
+	}
+	for _, testCase := range authFieldTestCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(subTest.TempDir(), "store.db"))
+			testCase.clearField(&configuration.Management)
+			_, buildError := buildRouterWithCatalogs(subTest, configuration, zap.NewNop().Sugar())
+			if buildError == nil || !strings.Contains(buildError.Error(), testCase.expectedError) {
+				subTest.Fatalf("BuildRouter error=%v want contains %q", buildError, testCase.expectedError)
+			}
+		})
+	}
+
 	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "store.db"))
 	configuration.Management.TAuthTenantID = " "
 	_, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
