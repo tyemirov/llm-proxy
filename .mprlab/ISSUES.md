@@ -487,6 +487,65 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Resolution:
   The real-stack Playwright scenario now loads the anonymous management page, submits TAuth password login with a credentialed cross-origin browser `fetch`, and asserts the credentialed CORS response before accepting the issued HttpOnly cookies. It passes the returned profile through the documented `MPRUI.testing.authenticate` adapter, observes the resulting browser management-profile request and authenticated dashboard transition, and relies on the adapter-owned restore hint for ordinary reload and refresh-cookie recovery; the test no longer writes `tauth.restore.v1` or posts login through `APIRequestContext`. Focused `timeout -k 120s -s SIGKILL 120s make test-management-auth-blackbox` passed, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` runs passed. Final CI included 100% aggregate Go coverage, 20 Python tests, 14 frontend Playwright scenarios, the corrected real-stack auth scenario, 38 release-contract tests, and the live-provider preflight.
 
+- [x] [B032] (P1) Preserve sign-in button contrast on hover.
+  Goal:
+  Keep the shared MPR header sign-in action clearly legible while hovered.
+  Requirements:
+  - Keep the pinned MPR UI component responsible for its own sign-in control appearance.
+  - Scope LLM Proxy form-control styles to application-owned controls so they cannot override shared shell hover states.
+  - Preserve the existing LLM Proxy management button appearance and behavior.
+  Deliverables:
+  - Correct the static-site CSS ownership boundary for application buttons.
+  - Add real-stack Playwright coverage for accessible sign-in text contrast in the hovered state.
+  Validation:
+  - Run the focused real-stack browser target.
+  - Run the required final `timeout -k 350s -s SIGKILL 350s make ci` after the final code edit.
+  Resolution:
+  Scoped LLM Proxy font, field, label, and button rules to the application-owned `<llm-proxy-key-management>` surface, preventing the local button hover selector from overriding the pinned MPR header's primary sign-in hover palette while preserving management controls. The real local TAuth and LLM Proxy Playwright scenario now hovers the rendered shared sign-in action and requires at least 4.5:1 foreground/background contrast before completing the existing sign-in, reload, refresh-cookie recovery, and explicit sign-out flow. Focused `timeout -k 120s -s SIGKILL 120s make test-management-auth-blackbox` passed, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` runs passed. Final CI included 100% aggregate Go coverage, 20 Python tests, 14 frontend Playwright scenarios, the real-stack browser scenario, 38 release-contract tests, and the live-provider preflight.
+
+- [x] [B033] (P0) Let the verified legacy-token owner reach the dashboard after earlier sign-in created an empty account.
+  Goal:
+  Make a successful TAuth login open the LLM Proxy dashboard instead of leaving the body signed out or permanently loading when the bounded legacy-token migration finds an account created by an earlier sign-in.
+  Requirements:
+  - Keep the configured owner email and verified TAuth subject as the sole authority for the one-off claim.
+  - Atomically remove only an empty destination account with no generated secret, provider settings, or usage before rekeying the legacy tenant to that same verified subject.
+  - Preserve the legacy tenant id, token digest, defaults, provider settings, creation timestamp, and usage history.
+  - Continue returning a hard conflict for any destination account that owns a generated secret, provider settings, or usage; do not merge competing account state.
+  - Present authenticated profile failures explicitly instead of disguising them as an unauthenticated prompt or an endless loading state.
+  Deliverables:
+  - Add black-box management HTTP coverage for the empty-destination recovery and non-empty-destination conflict.
+  - Add browser coverage for authenticated profile failure state and successful dashboard transition.
+  - Update the current migration documentation and stage-owned generated resources.
+  Validation:
+  - Run focused management and frontend browser targets.
+  - Run the required final `timeout -k 350s -s SIGKILL 350s make ci` after the final code edit.
+  Resolution:
+  The one-off legacy claim now removes only a verified owner's empty destination row inside the same GORM transaction before rekeying the legacy tenant; generated secrets, provider records, and usage remain hard conflicts with no merge. Management profile failures now enter an explicit workspace-error state on both authentication retry and full-page reload instead of preserving the signed-out or loading panel. Added black-box management HTTP recovery/conflict scenarios, transaction rollback/count coverage, and browser assertions for dashboard success plus persistent profile failure. Regenerated the stage-owned migration resource and updated the current README and implementation contract. Focused `make go-test`, `make frontend-test`, and `make test-management-auth-blackbox` passed. The required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed; final CI included 100.0% aggregate Go coverage, 20 Python tests, 15 frontend Playwright scenarios, the real local TAuth/LLM Proxy browser scenario, 38 release-contract tests, and the live-provider preflight.
+
+- [x] [B034] (P0) Hydrate the dashboard only from the canonical MPR UI authentication lifecycle.
+  Goal:
+  Make every successful MPR UI/TAuth login open the LLM Proxy dashboard without an application-owned authentication race, retry protocol, or auth-state inference from the management API.
+  Evidence:
+  - Production release `v0.2.31` mounts the authenticated MPR user avatar while LLM Proxy independently probes `/api/management/profile` during startup and can leave the body signed out or loading.
+  - The application currently starts its protected profile request before the pinned MPR UI v3.11.1 shell has declared `authenticated`, then uses bespoke flags to retry after a potentially missed event.
+  - MPR UI v3.11.1 already owns TAuth session restoration and exposes its current lifecycle through the documented `data-mpr-auth-status` attribute plus `mpr-ui:auth:*` events.
+  Requirements:
+  - Treat MPR UI as the sole browser authentication authority; do not read TAuth cookies, storage, tokens, claims, or authentication endpoints from application code.
+  - Do not request protected LLM Proxy workspace data until MPR UI reports `authenticated` through its documented lifecycle.
+  - Register lifecycle listeners before application startup and reconcile an authenticated event that occurred before Alpine initialized by reading the documented `data-mpr-auth-status` value from the mounted header.
+  - Treat `mpr-ui:auth:unauthenticated` and the initial final unauthenticated status as the only signed-out boundaries.
+  - After MPR UI reports authenticated, load the workspace exactly once; any management API failure is an explicit workspace error and must not downgrade MPR UI authentication.
+  - Delete application-owned authentication settlement and retry flags; introduce no alternate authentication path, fallback, compatibility shim, or private MPR UI inspection.
+  Deliverables:
+  - Replace startup profile probing and authenticated retry logic with canonical lifecycle-driven workspace hydration.
+  - Add browser coverage proving zero protected management requests before MPR UI authentication, immediate hydration after same-page login, and recovery when authentication completes before Alpine initializes.
+  - Keep real local TAuth cookies, documented MPR UI lifecycle adapters, reload restoration, access-cookie refresh, and explicit sign-out in the black-box scenario.
+  Validation:
+  - Run focused frontend and real-stack browser targets.
+  - Run the required final `timeout -k 350s -s SIGKILL 350s make ci` after the final code edit.
+  Resolution:
+  MPR UI v3.11.1 is now the sole browser authentication authority. LLM Proxy registers the documented authenticated and unauthenticated lifecycle events before startup, waits for MPR UI orchestration, reconciles an already-settled lifecycle through the documented header `data-mpr-auth-status`, and makes no protected management request until that state is `authenticated`. Removed the application-owned authentication-settlement and queued-retry flags. Once MPR UI authenticates the user, the workspace loads exactly once; every management profile failure, including `401` and the legacy-claim `409`, renders an explicit workspace error without changing the MPR UI session to signed out. The fast browser suite proves zero pre-auth profile calls, one post-auth hydration call, already-settled authenticated startup, dashboard rendering, and explicit failure rendering. The real local-stack scenario proves the same request boundary with actual TAuth access/refresh cookies and the documented `MPRUI.testing.authenticate` lifecycle, then proves reload restoration, access-cookie refresh, and explicit sign-out. Updated README and implementation documentation to state the sole-authority boundary. Focused `make frontend-test` passed 16 scenarios and `make test-management-auth-blackbox` passed the real service/browser scenario. The required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed; final CI included 100.0% aggregate Go coverage, 20 Python tests, 16 frontend Playwright scenarios, the real local TAuth/LLM Proxy browser scenario, 38 release-contract tests, and the live-provider preflight.
+
 ## Improvements
 
 - [x] [I001] (P1) Make missing placeholder handling field-aware.
