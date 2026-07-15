@@ -2,7 +2,6 @@
 
 import { AUTH_STATES, COPY, DASHBOARD_VIEWS, EVENTS, MENU_ACTIONS, NOTICE_KINDS } from "../constants.js";
 import {
-  BackendClientError,
   fetchAdminUsers,
   fetchProfile,
   fetchUsageSummary,
@@ -22,7 +21,7 @@ import {
   USAGE_CHART,
   USAGE_METRICS,
 } from "./usagePresentation.js";
-import { applyUserMenuItems, waitForMprUIAutoOrchestrationReady } from "../core/mprShell.js";
+import { applyUserMenuItems, readMprUIAuthStatus, waitForMprUIAutoOrchestrationReady } from "../core/mprShell.js";
 
 const EMPTY_SECRET_PLACEHOLDER = "<generated-secret>";
 const EMPTY_STRING = "";
@@ -42,6 +41,7 @@ export function createKeyManagement() {
       loading: AUTH_STATES.LOADING,
       authenticated: AUTH_STATES.AUTHENTICATED,
       unauthenticated: AUTH_STATES.UNAUTHENTICATED,
+      error: AUTH_STATES.ERROR,
     },
     dashboardViews: DASHBOARD_VIEWS,
     copy: COPY,
@@ -65,8 +65,6 @@ export function createKeyManagement() {
     adminUsers: [],
     /** @type {Promise<void> | null} */
     profileLoadPromise: null,
-    authenticatedShellProfileRequested: false,
-    shellAuthenticationSettled: false,
     generatedSecret: EMPTY_STRING,
     settingsOpen: false,
     usageExamplesOpen: false,
@@ -77,22 +75,17 @@ export function createKeyManagement() {
 
     init() {
       document.addEventListener(EVENTS.AUTHENTICATED, () => {
-        this.loadProfileForAuthenticatedShell();
+        void this.loadAuthenticatedWorkspace();
+      });
+      document.addEventListener(EVENTS.UNAUTHENTICATED, () => {
+        this.setUnauthenticated();
       });
       document.addEventListener(EVENTS.AUTH_STATUS_CHANGE, (event) => {
         const customEvent = /** @type {CustomEvent<{ status?: string }>} */ (event);
         const status = customEvent.detail ? customEvent.detail.status : EMPTY_STRING;
-        if (status === AUTH_STATES.AUTHENTICATED) {
-          this.shellAuthenticationSettled = true;
-          return;
+        if (status === AUTH_STATES.UNAUTHENTICATED) {
+          this.setUnauthenticated();
         }
-        if (status !== AUTH_STATES.UNAUTHENTICATED) {
-          return;
-        }
-        this.shellAuthenticationSettled = true;
-        this.clearAuthenticatedState();
-        this.authState = AUTH_STATES.UNAUTHENTICATED;
-        dispatchManagementReady();
       });
       document.addEventListener(EVENTS.USER_MENU_ITEM, (event) => {
         this.handleUserMenuItem(event);
@@ -304,10 +297,15 @@ export function createKeyManagement() {
       try {
         this.runtimeConfig = await loadFrontendRuntimeConfig();
         await waitForMprUIAutoOrchestrationReady();
-        await this.loadProfile();
+        const authStatus = readMprUIAuthStatus();
+        if (authStatus === AUTH_STATES.AUTHENTICATED) {
+          await this.loadAuthenticatedWorkspace();
+        } else if (authStatus === AUTH_STATES.UNAUTHENTICATED) {
+          this.setUnauthenticated();
+        }
       } catch (requestError) {
         this.clearAuthenticatedState();
-        this.authState = AUTH_STATES.UNAUTHENTICATED;
+        this.authState = AUTH_STATES.ERROR;
         this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
         dispatchManagementReady();
       }
@@ -321,32 +319,33 @@ export function createKeyManagement() {
       try {
         await this.profileLoadPromise;
       } finally {
-        const retryRequested = this.authenticatedShellProfileRequested;
         this.profileLoadPromise = null;
-        this.authenticatedShellProfileRequested = false;
-        if (retryRequested) {
-          await this.loadProfile();
-        }
       }
+    },
+
+    async loadAuthenticatedWorkspace() {
+      if (this.authState === AUTH_STATES.AUTHENTICATED || this.authState === AUTH_STATES.ERROR) {
+        return;
+      }
+      this.authState = AUTH_STATES.LOADING;
+      await this.loadProfile();
     },
 
     async loadProfileOnce() {
       this.busy = true;
       try {
         const loadedProfile = await fetchProfile();
+        if (readMprUIAuthStatus() !== AUTH_STATES.AUTHENTICATED) {
+          return;
+        }
         this.applyProfile(loadedProfile);
         this.authState = AUTH_STATES.AUTHENTICATED;
         this.setNotice(NOTICE_KINDS.SUCCESS, COPY.profileLoaded);
         await this.loadUsageForAuthenticatedProfile();
       } catch (requestError) {
-        if (requestError instanceof BackendClientError && requestError.status === 401) {
-          if (!this.shellAuthenticationSettled) {
-            return;
-          }
+        if (readMprUIAuthStatus() === AUTH_STATES.AUTHENTICATED) {
           this.clearAuthenticatedState();
-          this.authState = AUTH_STATES.UNAUTHENTICATED;
-          this.setNotice(NOTICE_KINDS.INFO, COPY.authenticationRequired);
-        } else {
+          this.authState = AUTH_STATES.ERROR;
           this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
         }
       } finally {
@@ -355,12 +354,14 @@ export function createKeyManagement() {
       }
     },
 
-    loadProfileForAuthenticatedShell() {
-      if (this.profileLoadPromise) {
-        this.authenticatedShellProfileRequested = true;
+    setUnauthenticated() {
+      if (this.authState === AUTH_STATES.UNAUTHENTICATED) {
         return;
       }
-      void this.loadProfile();
+      this.clearAuthenticatedState();
+      this.authState = AUTH_STATES.UNAUTHENTICATED;
+      this.setNotice(NOTICE_KINDS.INFO, COPY.authenticationRequired);
+      dispatchManagementReady();
     },
 
     async loadUsageForAuthenticatedProfile() {

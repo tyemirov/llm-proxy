@@ -452,10 +452,7 @@ func (database *gormManagedTenantDatabase) claimLegacyTenant(claim managedLegacy
 		if sourceRecord.TenantID != claim.tenantID {
 			return fmt.Errorf("%w: source_tenant=%s expected=%s", errManagedLegacyTokenConflict, sourceRecord.TenantID, claim.tenantID)
 		}
-		if targetError == nil {
-			return fmt.Errorf("%w: destination_exists user_id=%s", errManagedLegacyTokenConflict, claim.targetUserID)
-		}
-		if !errors.Is(targetError, gorm.ErrRecordNotFound) {
+		if targetError != nil && !errors.Is(targetError, gorm.ErrRecordNotFound) {
 			return targetError
 		}
 
@@ -475,6 +472,20 @@ func (database *gormManagedTenantDatabase) claimLegacyTenant(claim managedLegacy
 		}
 		if targetProviderCount != 0 || targetUsageCount != 0 {
 			return fmt.Errorf("%w: destination_children user_id=%s", errManagedLegacyTokenConflict, claim.targetUserID)
+		}
+		if targetError == nil {
+			if targetRecord.SecretDigest != constants.EmptyString {
+				return fmt.Errorf("%w: destination_secret user_id=%s", errManagedLegacyTokenConflict, claim.targetUserID)
+			}
+			deleteTargetResult := transaction.
+				Where(&managedTenantRecord{UserID: claim.targetUserID, TenantID: targetRecord.TenantID}).
+				Delete(&managedTenantRecord{})
+			if deleteTargetResult.Error != nil {
+				return deleteTargetResult.Error
+			}
+			if deleteTargetResult.RowsAffected != 1 {
+				return fmt.Errorf("%w: destination_delete_count=%d", errManagedLegacyTokenMigration, deleteTargetResult.RowsAffected)
+			}
 		}
 
 		var sourceProviderRecords []managedProviderAPIKeyRecord

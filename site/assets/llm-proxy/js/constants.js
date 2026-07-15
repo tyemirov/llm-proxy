@@ -4,6 +4,7 @@ export const AUTH_STATES = Object.freeze({
   LOADING: "loading",
   AUTHENTICATED: "authenticated",
   UNAUTHENTICATED: "unauthenticated",
+  ERROR: "error",
 });
 
 export const NOTICE_KINDS = Object.freeze({
@@ -15,6 +16,7 @@ export const NOTICE_KINDS = Object.freeze({
 export const EVENTS = Object.freeze({
   AUTHENTICATED: "mpr-ui:auth:authenticated",
   AUTH_STATUS_CHANGE: "mpr-ui:auth:status-change",
+  UNAUTHENTICATED: "mpr-ui:auth:unauthenticated",
   USER_MENU_ITEM: "mpr-user:menu-item",
   MANAGEMENT_READY: "llm-proxy:management-ready",
 });
@@ -45,8 +47,11 @@ export const ADMIN_USER_MENU_ITEMS = Object.freeze([
 ]);
 
 export const MPR_UI = Object.freeze({
+  AUTH_STATUS_ATTRIBUTE: "data-mpr-auth-status",
   CONFIG_URL_ATTRIBUTE: "data-config-url",
   HEADER_ID: "llm-proxy-header",
+  HEADER_MISSING: "llm_proxy_mpr_ui_header_missing",
+  HEADER_STATUS_MISSING: "llm_proxy_mpr_ui_header_status_missing",
   ORCHESTRATION_LOADER_MISSING: "llm_proxy_mpr_ui_orchestration_loader_missing",
   USER_SELECTOR: "mpr-user",
   USER_MENU_ITEMS_ATTRIBUTE: "menu-items",
@@ -58,6 +63,8 @@ export const COPY = Object.freeze({
   loadingTitle: "Loading key workspace",
   signedOutEyebrow: "Authentication",
   signedOutTitle: "Sign in to manage LLM Proxy keys",
+  profileErrorEyebrow: "Workspace",
+  profileErrorTitle: "Unable to load key workspace",
   dashboardEyebrow: "Dashboard",
   dashboardTitle: "Usage overview",
   adminDashboardEyebrow: "Admin",

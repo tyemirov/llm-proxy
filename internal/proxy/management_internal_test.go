@@ -18,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/tyemirov/llm-proxy/internal/constants"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -793,6 +794,50 @@ func TestGORMManagedLegacyTenantClaimStateAndFailures(t *testing.T) {
 		})
 	}
 
+	destinationDeleteTests := []struct {
+		name          string
+		register      func(*testing.T, *gorm.DB)
+		expectedError error
+	}{
+		{
+			name: "empty destination delete error",
+			register: func(subTest *testing.T, database *gorm.DB) {
+				subTest.Helper()
+				if callbackError := database.Callback().Delete().Before("gorm:delete").Register("legacy_claim_destination_delete_error", func(callbackDatabase *gorm.DB) {
+					callbackDatabase.AddError(errInternalTestDatabase)
+				}); callbackError != nil {
+					subTest.Fatalf("register destination delete callback: %v", callbackError)
+				}
+			},
+			expectedError: errInternalTestDatabase,
+		},
+		{
+			name: "empty destination delete count mismatch",
+			register: func(subTest *testing.T, database *gorm.DB) {
+				subTest.Helper()
+				if callbackError := database.Callback().Delete().After("gorm:delete").Register("legacy_claim_destination_delete_count_mismatch", func(callbackDatabase *gorm.DB) {
+					callbackDatabase.RowsAffected = 0
+				}); callbackError != nil {
+					subTest.Fatalf("register destination delete callback: %v", callbackError)
+				}
+			},
+			expectedError: errManagedLegacyTokenMigration,
+		},
+	}
+	for _, testCase := range destinationDeleteTests {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			database, claim := newGORMManagedLegacyClaimFixture(subTest, false, false)
+			targetRecord := internalManagedTenantRecord(claim.targetUserID, constants.EmptyString, claim.updatedAt)
+			if createError := database.createTenant(targetRecord); createError != nil {
+				subTest.Fatalf("create empty destination: %v", createError)
+			}
+			testCase.register(subTest, database.database)
+			if claimError := database.claimLegacyTenant(claim); !errors.Is(claimError, testCase.expectedError) {
+				subTest.Fatalf("destination delete error=%v", claimError)
+			}
+		})
+	}
+
 	t.Run("source usage tenant mismatch", func(subTest *testing.T) {
 		database, claim := newGORMManagedLegacyClaimFixture(subTest, false, true)
 		if updateError := database.database.Model(&managedUsageEventRecord{}).
@@ -1482,9 +1527,19 @@ func (database *fakeManagedTenantDatabase) claimLegacyTenant(claim managedLegacy
 		}
 		return errManagedLegacyTokenConflict
 	}
-	if targetExists || sourceRecord.TenantID != claim.tenantID {
+	if sourceRecord.TenantID != claim.tenantID {
 		return errManagedLegacyTokenConflict
 	}
+	targetUsageCount := 0
+	for _, usageRecord := range database.usageEvents {
+		if usageRecord.UserID == claim.targetUserID {
+			targetUsageCount++
+		}
+	}
+	if targetUsageCount != 0 || (targetExists && (targetRecord.SecretDigest != constants.EmptyString || len(targetRecord.ProviderAPIKeys) != 0)) {
+		return errManagedLegacyTokenConflict
+	}
+	delete(database.records, claim.targetUserID)
 	targetProviderRecords := make([]managedProviderAPIKeyRecord, 0, len(sourceRecord.ProviderAPIKeys))
 	for _, sourceProviderRecord := range sourceRecord.ProviderAPIKeys {
 		targetProviderRecord, reencryptError := claim.reencryptProviderKey(sourceProviderRecord)

@@ -33,10 +33,10 @@ body {
   letter-spacing: 0;
 }
 
-button,
-input,
-select,
-textarea {
+llm-proxy-key-management button,
+llm-proxy-key-management input,
+llm-proxy-key-management select,
+llm-proxy-key-management textarea {
   font: inherit;
 }
 
@@ -437,7 +437,7 @@ tenant-actions,
   gap: 0.5rem;
 }
 
-label {
+llm-proxy-key-management label {
   display: grid;
   gap: 0.25rem;
   color: var(--llm-muted);
@@ -445,9 +445,9 @@ label {
   font-weight: 600;
 }
 
-input,
-select,
-textarea {
+llm-proxy-key-management input,
+llm-proxy-key-management select,
+llm-proxy-key-management textarea {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid var(--llm-border);
@@ -458,11 +458,11 @@ textarea {
   font-size: 0.78rem;
 }
 
-textarea {
+llm-proxy-key-management textarea {
   resize: vertical;
 }
 
-button {
+llm-proxy-key-management button {
   min-height: 30px;
   border: 1px solid var(--llm-border);
   border-radius: 6px;
@@ -479,16 +479,16 @@ button {
     transform 0.12s ease;
 }
 
-button:hover:not(:disabled) {
+llm-proxy-key-management button:hover:not(:disabled) {
   border-color: var(--llm-accent);
   background: var(--llm-panel-strong);
 }
 
-button:active:not(:disabled) {
+llm-proxy-key-management button:active:not(:disabled) {
   transform: scale(0.97);
 }
 
-button:disabled {
+llm-proxy-key-management button:disabled {
   cursor: not-allowed;
   opacity: 0.52;
 }

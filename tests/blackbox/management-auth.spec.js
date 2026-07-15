@@ -13,6 +13,18 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const httpOK = 200;
 const httpNoContent = 204;
 const httpUnauthorized = 401;
+const minimumReadableTextContrastRatio = 4.5;
+const cssRGBChannelCount = 3;
+const cssRGBChannelMaximum = 255;
+const cssRGBLinearThreshold = 0.04045;
+const cssRGBLinearDivisor = 12.92;
+const cssRGBOffset = 0.055;
+const cssRGBScale = 1.055;
+const cssRGBExponent = 2.4;
+const contrastLuminanceOffset = 0.05;
+const redLuminanceWeight = 0.2126;
+const greenLuminanceWeight = 0.7152;
+const blueLuminanceWeight = 0.0722;
 
 let stack;
 
@@ -26,7 +38,13 @@ test.afterAll(async () => {
   }
 });
 
-test("TAuth session survives reload and only explicit sign out clears it", async ({ context, page }) => {
+test("TAuth sign-in stays legible and the session survives until explicit sign out", async ({ context, page }) => {
+  let browserProfileRequestCount = 0;
+  page.on("request", (request) => {
+    if (request.url() === `${stack.llmProxyOrigin}/api/management/profile`) {
+      browserProfileRequestCount += 1;
+    }
+  });
   await installLocalAssetRoutes(page);
   await installAuthStateHistory(page);
 
@@ -42,12 +60,24 @@ test("TAuth session survives reload and only explicit sign out clears it", async
   });
   expect(anonymousProfileResponse.status()).toBe(httpUnauthorized);
 
-  const anonymousBrowserProfileResponsePromise = waitForManagementProfile(page);
   await page.goto(stack.frontendOrigin);
-  expect((await anonymousBrowserProfileResponsePromise).status()).toBe(httpUnauthorized);
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
   await expect(page.locator("llm-proxy-key-management")).toHaveAttribute("data-auth-state", "unauthenticated");
   await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "unauthenticated");
+  expect(browserProfileRequestCount).toBe(0);
+  const signInButton = page.locator('[data-mpr-header="google-signin-button"]');
+  await expect(signInButton).toBeVisible();
+  await signInButton.hover();
+  const signInHoverColors = await signInButton.evaluate((buttonElement) => {
+    const buttonStyle = window.getComputedStyle(buttonElement);
+    return {
+      backgroundColor: buttonStyle.backgroundColor,
+      color: buttonStyle.color,
+    };
+  });
+  expect(cssColorContrastRatio(signInHoverColors.color, signInHoverColors.backgroundColor)).toBeGreaterThanOrEqual(
+    minimumReadableTextContrastRatio,
+  );
 
   const loginResponsePromise = page.waitForResponse(
     (response) =>
@@ -118,6 +148,7 @@ test("TAuth session survives reload and only explicit sign out clears it", async
       display_name: "Local Operator",
     },
   });
+  expect(browserProfileRequestCount).toBe(1);
 
   await expectAuthenticatedDashboard(page);
   await expectNoSignedOutStateAfterAuthentication(page);
@@ -203,6 +234,43 @@ async function expectCookies(context, expected) {
   const cookies = await context.cookies();
   expect(cookies.some((cookie) => cookie.name === localManagementProfile.sessionCookieName)).toBe(expected.session);
   expect(cookies.some((cookie) => cookie.name === localManagementProfile.refreshCookieName)).toBe(expected.refresh);
+}
+
+/**
+ * @param {string} foregroundColor
+ * @param {string} backgroundColor
+ * @returns {number}
+ */
+function cssColorContrastRatio(foregroundColor, backgroundColor) {
+  const foregroundLuminance = cssColorRelativeLuminance(foregroundColor);
+  const backgroundLuminance = cssColorRelativeLuminance(backgroundColor);
+  const lighterLuminance = Math.max(foregroundLuminance, backgroundLuminance);
+  const darkerLuminance = Math.min(foregroundLuminance, backgroundLuminance);
+  return (lighterLuminance + contrastLuminanceOffset) / (darkerLuminance + contrastLuminanceOffset);
+}
+
+/**
+ * @param {string} cssColor
+ * @returns {number}
+ */
+function cssColorRelativeLuminance(cssColor) {
+  const colorChannels = cssColor.match(/[\d.]+/g)?.slice(0, cssRGBChannelCount).map(Number);
+  if (!colorChannels || colorChannels.length !== cssRGBChannelCount) {
+    throw new Error(`css_color_invalid: ${cssColor}`);
+  }
+  const linearChannels = colorChannels.map((colorChannel) => {
+    const normalizedChannel = colorChannel / cssRGBChannelMaximum;
+    if (normalizedChannel <= cssRGBLinearThreshold) {
+      return normalizedChannel / cssRGBLinearDivisor;
+    }
+    return ((normalizedChannel + cssRGBOffset) / cssRGBScale) ** cssRGBExponent;
+  });
+  const [redLuminance, greenLuminance, blueLuminance] = linearChannels;
+  return (
+    redLuminance * redLuminanceWeight +
+    greenLuminance * greenLuminanceWeight +
+    blueLuminance * blueLuminanceWeight
+  );
 }
 
 function waitForSessionRestore(page) {

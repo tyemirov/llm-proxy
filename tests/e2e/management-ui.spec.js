@@ -81,6 +81,16 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(mprShellJavaScript).not.toContain("MutationObserver");
   expect(mprShellJavaScript).not.toContain("applyYamlConfig");
 
+  const keyManagementResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/keyManagement.js`);
+  expect(keyManagementResponse.status()).toBe(httpOK);
+  const keyManagementJavaScript = await keyManagementResponse.text();
+  expect(keyManagementJavaScript).toContain("readMprUIAuthStatus");
+  expect(keyManagementJavaScript).not.toContain("authenticatedShellProfileRequested");
+  expect(keyManagementJavaScript).not.toContain("shellAuthenticationSettled");
+  expect(keyManagementJavaScript).not.toContain("document.cookie");
+  expect(keyManagementJavaScript).not.toContain("localStorage");
+  expect(keyManagementJavaScript).not.toContain("/auth/session");
+
   const faviconResponse = await request.get(`${baseURL}${faviconPath}`);
   expect(faviconResponse.status()).toBe(httpOK);
   expect(faviconResponse.headers()["content-type"]).toContain(mimeTypes[".svg"]);
@@ -246,23 +256,63 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
 });
 
-test("dashboard loads after MPR user refreshes authentication", async ({ page }) => {
-  await installAssetRoutes(page);
-  await installManagementRoutes(page, { profileStatuses: [401] });
+test("dashboard loads only after MPR UI authenticates the user", async ({ page }) => {
+  const profileRequests = [];
+  page.on("request", (request) => {
+    if (request.url() === `${baseURL}/api/management/profile`) {
+      profileRequests.push(request);
+    }
+  });
+  await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
+  await installManagementRoutes(page);
 
   await page.goto(baseURL);
 
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
+  expect(profileRequests).toHaveLength(0);
   await page.evaluate(() => window.__llmProxyMprAuthenticate());
 
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("37");
+  expect(profileRequests).toHaveLength(1);
+});
+
+test("startup reconciles MPR UI authentication after the lifecycle event has passed", async ({ page }) => {
+  const profileRequests = [];
+  page.on("request", (request) => {
+    if (request.url() === `${baseURL}/api/management/profile`) {
+      profileRequests.push(request);
+    }
+  });
+  await installAssetRoutes(page, { emitInitialAuthEvent: false });
+  await installManagementRoutes(page);
+
+  await page.goto(baseURL);
+
+  await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "authenticated");
+  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  expect(profileRequests).toHaveLength(1);
+});
+
+test("authenticated profile failures replace loading and signed-out states", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { profileStatus: 409 });
+
+  await page.goto(baseURL);
+
+  await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Loading key workspace" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeHidden();
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Loading key workspace" })).toBeHidden();
 });
 
 test("signed-out panel presents a direct sign-in prompt without auth instructions", async ({ page }) => {
   await page.setViewportSize({ width: 1121, height: 253 });
-  await installAssetRoutes(page);
-  await installManagementRoutes(page, { profileStatuses: [401] });
+  await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
+  await installManagementRoutes(page);
 
   await page.goto(baseURL);
 
@@ -444,9 +494,10 @@ test("admin menu opens all users dashboard", async ({ page }) => {
 
 /**
  * @param {import("@playwright/test").Page} page
+ * @param {{ initialAuthStatus?: "authenticated" | "unauthenticated", emitInitialAuthEvent?: boolean }} options
  * @returns {Promise<void>}
  */
-async function installAssetRoutes(page) {
+async function installAssetRoutes(page, options = {}) {
   await page.route("https://loopaware.mprlab.com/**", async (route) =>
     route.fulfill({ body: "", contentType: "application/javascript" }),
   );
@@ -467,7 +518,10 @@ async function installAssetRoutes(page) {
     }),
   );
   await page.route("**/mpr-ui.js", async (route) =>
-    route.fulfill({ body: mprUIBundleMock(), contentType: "application/javascript" }),
+    route.fulfill({
+      body: mprUIBundleMock(options.initialAuthStatus || "authenticated", options.emitInitialAuthEvent !== false),
+      contentType: "application/javascript",
+    }),
   );
 }
 
@@ -559,13 +613,13 @@ async function settingsLayerFacts(page) {
 
 /**
  * @param {import("@playwright/test").Page} page
- * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatuses?: number[] }} options
+ * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatus?: number, profileStatuses?: number[] }} options
  * @returns {Promise<void>}
  */
 async function installManagementRoutes(page, options = {}) {
   const profileStatuses = [...(options.profileStatuses || [])];
   await page.route(`${baseURL}/api/management/profile`, async (route) => {
-    const profileStatus = profileStatuses.shift();
+    const profileStatus = profileStatuses.length > 0 ? profileStatuses.shift() : options.profileStatus;
     if (profileStatus && profileStatus !== httpOK) {
       await route.fulfill({ status: profileStatus, json: { error: "authentication_required" } });
       return;
@@ -834,17 +888,26 @@ function usageAggregate(overrides = {}) {
 }
 
 /**
+ * @param {"authenticated" | "unauthenticated"} initialAuthStatus
+ * @param {boolean} emitInitialAuthEvent
  * @returns {string}
  */
-function mprUIBundleMock() {
+function mprUIBundleMock(initialAuthStatus, emitInitialAuthEvent) {
   return `
 class MprHeader extends HTMLElement {
   connectedCallback() {
+    this.setAttribute("data-mpr-auth-status", ${JSON.stringify(initialAuthStatus)});
     queueMicrotask(() => {
       this.dispatchEvent(new CustomEvent("mpr-ui:auth:status-change", {
         bubbles: true,
-        detail: { status: "unauthenticated" }
+        detail: { status: ${JSON.stringify(initialAuthStatus)} }
       }));
+      if (${JSON.stringify(initialAuthStatus)} === "authenticated" && ${JSON.stringify(emitInitialAuthEvent)}) {
+        this.dispatchEvent(new CustomEvent("mpr-ui:auth:authenticated", {
+          bubbles: true,
+          detail: { profile: { user_id: "user-1", user_email: "user@example.com" } }
+        }));
+      }
     });
   }
 }
@@ -894,6 +957,11 @@ window.__llmProxyMprAuthenticate = () => {
   if (!header) {
     throw new Error("mpr_header_missing");
   }
+  header.setAttribute("data-mpr-auth-status", "authenticated");
+  header.dispatchEvent(new CustomEvent("mpr-ui:auth:status-change", {
+    bubbles: true,
+    detail: { status: "authenticated" }
+  }));
   header.dispatchEvent(new CustomEvent("mpr-ui:auth:authenticated", {
     bubbles: true,
     detail: { profile: { user_id: "user-1", user_email: "user@example.com" } }

@@ -50,6 +50,11 @@
           <h1 x-text="copy.signedOutTitle"></h1>
         </section>
 
+        <section class="llm-panel" x-cloak x-show="authState === states.error">
+          <p class="eyebrow" x-text="copy.profileErrorEyebrow"></p>
+          <h1 x-text="copy.profileErrorTitle"></h1>
+        </section>
+
         <template x-if="authState === states.authenticated">
           <workspace-surface>
             <section class="dashboard-hero">
