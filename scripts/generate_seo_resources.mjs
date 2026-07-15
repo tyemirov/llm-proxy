@@ -742,7 +742,7 @@ const pages = Object.freeze([
     description: "Claim one prior static-config token for a verified user account without changing the token or losing usage history.",
     audience: "Operators retiring the final unowned management-mode token after moving to self-service accounts.",
     problem: "A token imported by an older release can still belong to a synthetic static-config user, so its real owner cannot see that token's usage after signing in.",
-    solution: "LLM Proxy rejects the unowned token, then atomically rekeys its tenant, encrypted provider settings, and usage events when the configured owner email signs in through TAuth.",
+    solution: "LLM Proxy rejects the unowned token, then atomically replaces any empty account created by an earlier sign-in and rekeys the legacy tenant, encrypted provider settings, and usage events when the configured owner email signs in through TAuth.",
     steps: [
       "Configure the exact legacy tenant id and deployment-owned target email.",
       "Deploy the current binary and drain older service instances before the owner claim.",
@@ -760,8 +760,8 @@ const pages = Object.freeze([
       ["Post-migration cleanup", "Operators remove the temporary owner mapping after verifying the unchanged token in production."],
     ],
     limitations: [
-      "The source must be the one configured static-config tenant and the destination TAuth subject must not already exist.",
-      "A conflict returns 409 without merging or overwriting account state.",
+      "The source must be the one configured static-config tenant; an existing destination is replaceable only when it has no generated secret, provider settings, or usage.",
+      "A populated destination conflict returns 409 without merging or overwriting account state.",
       "Old service instances must be drained before the owner signs in.",
     ],
   }),
