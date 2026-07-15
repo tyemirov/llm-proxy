@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.32] - 2026-07-15
+
+- Merge pull request #198 from tyemirov/gix/hydrate-dashboard-from-canonical-mpr-ui-auth-lifecycle
+- test: cover MPR UI auth event, contrast ratio, and error fallback flows
+- fix(ui): improve error handling for profile loading and unauthenticated state
+- docs(seo): clarify legacy tenant claim and replacement conditions
+- fix(management): allow legacy tenant claim to replace empty destination accounts
+- docs: clarify MPR UI browser authentication boundaries and session flow
+- docs: clarify browser auth flow, management claim migration, and tests in README
+- docs(issues): record completed MPR UI auth, legacy migration, and contrast fixes
+
 ## [v0.2.31] - 2026-07-13
 
 - Merge pull request #197 from tyemirov/gix/exercise-real-tauth-session-boundary-with-local-stack
