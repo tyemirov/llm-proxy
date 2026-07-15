@@ -20,6 +20,21 @@ export function applyUserMenuItems(isAdmin) {
 }
 
 /**
+ * @returns {string}
+ */
+export function readMprUIAuthStatus() {
+  const header = document.getElementById(MPR_UI.HEADER_ID);
+  if (!header) {
+    throw new Error(MPR_UI.HEADER_MISSING);
+  }
+  const status = String(header.getAttribute(MPR_UI.AUTH_STATUS_ATTRIBUTE) || "").trim();
+  if (!status) {
+    throw new Error(MPR_UI.HEADER_STATUS_MISSING);
+  }
+  return status;
+}
+
+/**
  * @returns {Promise<void>}
  */
 export async function waitForMprUIAutoOrchestrationReady() {
