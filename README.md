@@ -437,6 +437,16 @@ examples, and MPR UI/TAuth at the configured origins. Browser-facing values are
 projected from the already-loaded backend `config.yml`; there is no second
 environment expansion path for Pages.
 
+MPR UI is the sole browser authentication authority. LLM Proxy registers the
+documented `mpr-ui:auth:authenticated` and `mpr-ui:auth:unauthenticated`
+lifecycle listeners, uses the header's documented `data-mpr-auth-status` only
+to reconcile the current state after startup, and does not request
+`/api/management/profile` until MPR UI reports `authenticated`. LLM Proxy does
+not inspect TAuth cookies, storage, tokens, or claims and does not call TAuth
+authentication endpoints. After MPR UI reports authentication, a management
+API failure renders an explicit workspace error; it does not reinterpret the
+MPR UI session as signed out.
+
 The Go backend consumes TAuth's published `pkg/sessionvalidator` for the
 configured session cookie. It does not maintain a second JWT parser or claims
 schema; llm-proxy adds only its product-owned tenant, required-expiry, and
@@ -540,8 +550,10 @@ first authenticated management request, llm-proxy atomically rekeys the tenant
 to the verified TAuth subject, preserves the tenant id,
 existing token digest, defaults, creation time, and all usage events, and
 re-encrypts provider keys for the new owner id. A different email cannot claim
-the row, and an existing destination account returns `409 Conflict` without
-partial changes. Once production claim verification succeeds, remove the
+the row. If an earlier sign-in created a destination account with no secret,
+provider settings, or usage, the same transaction removes that empty account
+before rekeying the legacy tenant. A populated destination account returns
+`409 Conflict` without partial changes. Once production claim verification succeeds, remove the
 temporary migration block and owner-email environment value. Server/runtime
 settings, backend auth validation settings, provider base URLs, transcription
 URLs, model catalogs, and browser-facing MPR
@@ -615,9 +627,10 @@ the test enforces TAuth login CORS and receives the configured HttpOnly access
 and refresh cookies. It then drives the mounted header through the documented
 `MPRUI.testing.authenticate` adapter, which emits the normal authenticated
 lifecycle event and persists MPR UI's session-restore hint. The test proves the
-anonymous/authorized behavior of
-`/api/management/profile`, and waits for the pinned `mpr-ui` shell plus the
-dashboard to report the authenticated state. It then proves an ordinary reload
+anonymous/authorized behavior of `/api/management/profile`, proves the browser
+makes no protected profile request before MPR UI authentication and exactly one
+to hydrate the workspace afterward, and waits for the pinned `mpr-ui` shell
+plus the dashboard to report the authenticated state. It then proves an ordinary reload
 stays authenticated, removes only the access cookie and proves `/auth/session`
 recovers it from the refresh cookie without rendering the signed-out panel, and
 uses the visible **Sign out** action to prove `/auth/logout` clears both cookies
