@@ -476,9 +476,9 @@ func TestManagementClaimsLegacyTokenForConfiguredAccount(t *testing.T) {
 	}
 }
 
-func TestManagementLegacyTokenClaimRejectsExistingDestination(t *testing.T) {
+func TestManagementLegacyTokenClaimReplacesEmptyDestination(t *testing.T) {
 	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
-	legacyTenantID := "legacy-conflict"
+	legacyTenantID := "legacy-empty-destination"
 	ownerUserID := "existing-owner"
 	ownerEmail := "existing-owner@example.com"
 	ownerCookie := managementSessionCookieWithEmail(t, ownerUserID, ownerEmail)
@@ -491,7 +491,53 @@ func TestManagementLegacyTokenClaimRejectsExistingDestination(t *testing.T) {
 	if profileResponse.Code != http.StatusOK {
 		t.Fatalf("initial profile status=%d body=%s", profileResponse.Code, profileResponse.Body.String())
 	}
-	seedLegacyManagedTenant(t, databasePath, legacyTenantID, "legacy-conflict-secret", "sk-conflict")
+	seedLegacyManagedTenant(t, databasePath, legacyTenantID, "legacy-empty-destination-secret", "sk-empty-destination")
+
+	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
+	configuration.Management.LegacyTokenMigration = proxy.LegacyTokenMigrationConfiguration{TenantID: legacyTenantID, OwnerEmail: ownerEmail}
+	router, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+	profileRequest = httptest.NewRequest(http.MethodGet, "/api/management/profile", nil)
+	profileRequest.AddCookie(ownerCookie)
+	profileResponse = httptest.NewRecorder()
+	router.ServeHTTP(profileResponse, profileRequest)
+	if profileResponse.Code != http.StatusOK {
+		t.Fatalf("migrated profile status=%d body=%s", profileResponse.Code, profileResponse.Body.String())
+	}
+	var profilePayload struct {
+		Tenant struct {
+			ID        string `json:"id"`
+			HasSecret bool   `json:"has_secret"`
+		} `json:"tenant"`
+	}
+	if decodeError := json.Unmarshal(profileResponse.Body.Bytes(), &profilePayload); decodeError != nil {
+		t.Fatalf("decode migrated profile: %v", decodeError)
+	}
+	if profilePayload.Tenant.ID != legacyTenantID || !profilePayload.Tenant.HasSecret {
+		t.Fatalf("migrated profile tenant=%+v", profilePayload.Tenant)
+	}
+	if countManagedTenantFixture(t, databasePath, "static-config:"+legacyTenantID) != 0 || countManagedTenantFixture(t, databasePath, ownerUserID) != 1 {
+		t.Fatalf("migration did not replace empty destination")
+	}
+}
+
+func TestManagementLegacyTokenClaimRejectsPopulatedDestination(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
+	legacyTenantID := "legacy-populated-destination"
+	ownerUserID := "populated-owner"
+	ownerEmail := "populated-owner@example.com"
+	ownerCookie := managementSessionCookieWithEmail(t, ownerUserID, ownerEmail)
+
+	initialRouter := newManagementRouterWithDatabasePath(t, proxy.Configuration{}, databasePath)
+	secretRequest := authenticatedJSONRequest(http.MethodPost, "/api/management/secrets", `{}`, ownerCookie)
+	secretResponse := httptest.NewRecorder()
+	initialRouter.ServeHTTP(secretResponse, secretRequest)
+	if secretResponse.Code != http.StatusOK {
+		t.Fatalf("create destination secret status=%d body=%s", secretResponse.Code, secretResponse.Body.String())
+	}
+	seedLegacyManagedTenant(t, databasePath, legacyTenantID, "legacy-populated-destination-secret", "sk-populated-destination")
 
 	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
 	configuration.Management.LegacyTokenMigration = proxy.LegacyTokenMigrationConfiguration{TenantID: legacyTenantID, OwnerEmail: ownerEmail}
@@ -507,7 +553,7 @@ func TestManagementLegacyTokenClaimRejectsExistingDestination(t *testing.T) {
 		t.Fatalf("conflict status=%d body=%s", conflictResponse.Code, conflictResponse.Body.String())
 	}
 	if countManagedTenantFixture(t, databasePath, "static-config:"+legacyTenantID) != 1 || countManagedTenantFixture(t, databasePath, ownerUserID) != 1 {
-		t.Fatalf("conflict changed source or destination")
+		t.Fatalf("conflict changed source or populated destination")
 	}
 }
 
