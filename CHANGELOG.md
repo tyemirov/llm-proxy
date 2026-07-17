@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- Declare the llm-proxy TAuth tenant requirements in the app-owned deployment manifest for gateway assembly.
+
 ## [v0.2.32] - 2026-07-15
 
 - Merge pull request #198 from tyemirov/gix/hydrate-dashboard-from-canonical-mpr-ui-auth-lifecycle
@@ -574,4 +578,3 @@ All notable changes to this project will be documented in this file.
 
 ### Limitations
 - Supports only OpenAI models; no other providers currently.
-

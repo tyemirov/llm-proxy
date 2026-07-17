@@ -12,6 +12,22 @@ mprlab_resources:
         release: release
         publish: publish
         deploy: deploy
+    - type: tauth_tenant
+      name: llm-proxy-authentication
+      tenant:
+        id: llm-proxy
+        display_name: LLM Proxy
+        tenant_origins:
+          - https://llm-proxy.mprlab.com
+        google_web_client_id: "${TAUTH_GOOGLE_WEB_CLIENT_ID_LLM_PROXY}"
+        jwt_signing_key: "${TAUTH_JWT_SIGNING_KEY_LLM_PROXY}"
+        cookie_domain: .mprlab.com
+        session_cookie_name: app_session_llm_proxy
+        refresh_cookie_name: app_refresh_llm_proxy
+        session_ttl: "${TAUTH_SESSION_TTL}"
+        refresh_ttl: "${TAUTH_REFRESH_TTL}"
+        nonce_ttl: "${TAUTH_NONCE_TTL}"
+        allow_insecure_http: "${TAUTH_ALLOW_INSECURE_HTTP}"
     - type: container_service
       name: llm-proxy
       host_group: gateway

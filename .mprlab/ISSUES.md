@@ -548,6 +548,14 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
 ## Improvements
 
+- [x] [I020] (P1) Declare LLM Proxy's TAuth tenant requirements in the app-owned deployment manifest.
+  ### Summary
+  Move stable tenant identity, production origin, cookie names, and provider references into .mprlab/deploy/resources.yml while keeping credential values, shared TTLs, and server policy gateway-owned.
+  ### Acceptance Criteria
+  1. The gateway discovers the declaration without reading a TAuth-owned deployment registry.
+  2. The assembled fleet configuration passes generic TAuth doctor validation.
+  ### Resolution
+  Added the canonical app-owned `tauth_tenant` declaration. The gateway assembled the 13-tenant fleet, the generic TAuth doctor accepted it with zero errors, and `make ci` passed.
 - [x] [I001] (P1) Make missing placeholder handling field-aware.
   ### Summary
   Review found that allowing missing `${...}` placeholders globally can silently mutate non-key configuration values. Keep the new disabled-provider behavior for missing provider API-key placeholders, but fail startup for missing placeholders everywhere else and for partial API-key placeholders.
