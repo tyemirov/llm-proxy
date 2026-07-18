@@ -1256,5 +1256,19 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Replaced llm-proxy's duplicate JWT parser and claims schema with TAuth `v1.1.8` `pkg/sessionvalidator`, retaining only the product-owned tenant, required-expiry, and principal checks. The validated runtime configuration now owns the constructed validator and returns constructor failures through startup instead of panicking; public startup coverage replaces the former direct panic test. Management middleware logs stable rejection categories without cookies, tokens, or identity claims, and black-box management API fixtures use TAuth's published claims type while preserving invalid-session coverage. Aligned the module, CI, and container builder with TAuth's Go 1.25.4 requirement. The companion gateway change makes the `llm-proxy` target stage TAuth env/config and Caddy inputs, restart `tauth-api` with llm-proxy, require both health checks, and expose `verify-llm-proxy-deployment-contract`. The app deploy path has one fixed gateway target and rejects non-git, dirty, non-`master`, unsynchronized, or contract-incomplete gateway checkouts before release or remote operations, so the companion gateway commit must land before deployment can proceed. Documentation records the shared validator and coupled rollout invariant. Validation passed with 100% aggregate Go coverage, 38 release-contract tests, the focused gateway-owned contract target, and the repository's remaining CI gates; no production deployment was executed.
 
+- [x] [B037] (P1) Declare the app-owned orchestration manifest completely.
+  Goal:
+  Make llm-proxy's repository the canonical owner of the declarative inputs that the gateway aggregates, while keeping concrete TAuth and service runtime values in the ignored local deployment environment.
+  Requirements:
+  - Declare the `llm-proxy` TAuth tenant in `.mprlab/deploy/resources.yml` with environment placeholders only; do not add tenant configuration to the independent vanilla TAuth repository or commit concrete credentials.
+  - Describe the container through the current resource schema: explicit port records, compose file and project identity, and the exact private environment and application-config assets staged by the gateway.
+  - Keep `.mprlab/deploy/.env` ignored and pair it with the tracked `configs/.env.sample`; keep `configs/config.yml` as the tracked application-owned runtime template.
+  - Pass the repository CI gate and the gateway aggregate verifier from a clean committed owner state.
+  Validation:
+  - Run `timeout -k 350s -s SIGKILL 350s make ci` after the final manifest edit.
+  - Run the gateway `make verify-app-workflows` aggregate after committing the owner contract.
+  Resolution:
+  Declared the `llm-proxy` TAuth tenant in the application-owned manifest using deployment-environment placeholders only, and described the container with the canonical port list, compose file/project identity, ignored private environment asset, tracked environment example, and tracked runtime configuration. The independent TAuth repository remains vanilla and no concrete credential values were added. The post-change `make ci` gate passed with 100.0% aggregate Go coverage, 20 Python tests, 16 Playwright management scenarios, the real local TAuth browser scenario, 38 release-contract tests, and the live-provider harness preflight. The gateway aggregate verifier is run from the gateway after this owner contract is committed.
+
 ## Planning
 *do not implement yet*
