@@ -32,8 +32,17 @@ mprlab_resources:
       name: llm-proxy
       host_group: gateway
       image: ghcr.io/tyemirov/llm-proxy:latest
-      container_port: 8080
-      compose_project: mprlab-gateway
+      ports:
+        - container_port: 8080
+      compose_file: docker-compose.yml
+      compose_project: mprlab-nginx-gateway
+      runtime_assets:
+        - path: .mprlab/deploy/.env
+          example_path: configs/.env.sample
+          destination: configs/.env.llm-proxy
+          mode: "0600"
+        - path: configs/config.yml
+          destination: configs/config.llm-proxy.yml
     - type: caddy_route
       name: llm-proxy-api
       host: llm-proxy-api.mprlab.com
