@@ -899,7 +899,6 @@ Use it with explicit flags:
 llm-proxy-client \
   --base-url "http://localhost:8080/?provider=gemini" \
   --secret "$SERVICE_SECRET" \
-  --model gemini-2.5-flash \
   --prompt "Summarize this"
 ```
 
@@ -908,7 +907,7 @@ Or read configuration and prompt text from environment/stdin:
 ```shell
 export LLM_PROXY_BASE_URL="http://localhost:8080/"
 export LLM_PROXY_SECRET="$SERVICE_SECRET"
-printf 'large prompt...\n' | llm-proxy-client --model gpt-5.5 --max-tokens 4096
+printf 'large prompt...\n' | llm-proxy-client --max-tokens 4096
 ```
 
 The client always uses canonical `POST /v2?key=...` with a JSON body. It keeps
@@ -922,6 +921,84 @@ configured default model.
 The reusable Go package under `pkg/llmproxyclient` is v2-only: construct a
 `MessagesRequest` with `NewMessagesRequest` and send it with
 `Client.PostMessages`.
+
+#### Model selection without application redeployment
+
+Every bundled client deliberately leaves `model` out of a request when the
+caller does not set it. This is the correct integration when LLM Proxy owns
+model selection: a managed-tenant owner can change that tenant's routing
+default in the LLM Proxy Settings UI, and the next model-omitting request uses
+the saved default without an application code or deployment change. An explicit
+`--model` or request `model` pins that one request and does not follow a tenant
+default.
+
+Changing `providers.<provider>.text.default_model` in the service config affects
+only requests that resolve through that provider catalog default. It does not
+rewrite a managed tenant's saved routing default or a saved provider text model.
+
+#### Application-user model profiles
+
+For application-owned, per-user selection, configure one client instance with
+that user's JSON model-profile path. The document contains exactly these two
+nonblank string fields and never contains credentials or TAuth material:
+
+```json
+{
+  "provider": "gemini",
+  "model": "gemini-2.5-flash"
+}
+```
+
+The client reads this file for every outbound v2 request. An application can
+write a replacement in the same filesystem and atomically rename it onto the
+user's profile path; the next request from the existing client instance then
+uses the new provider/model pair. The application continues to own the user
+identity, authorization, storage, and atomic publication of that file.
+
+Use the profile directly from the installable CLI:
+
+```shell
+llm-proxy-client \
+  --base-url "http://localhost:8080/" \
+  --secret "$SERVICE_SECRET" \
+  --model-profile "/var/lib/my-app/users/42/model.json" \
+  --prompt "Summarize this"
+```
+
+For the Go package, inject the application's file reader when creating the
+validated config once:
+
+```go
+config, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
+    BaseURL:            "http://localhost:8080/",
+    Secret:             serviceSecret,
+    ModelProfilePath:   userModelProfilePath,
+    ModelProfileReader: os.ReadFile,
+    Timeout:            390 * time.Second,
+})
+if err != nil {
+    return err
+}
+client, err := llmproxyclient.NewClient(config, http.DefaultClient)
+if err != nil {
+    return err
+}
+```
+
+`Config.MessagesPostURL` also resolves the current profile and therefore returns
+`(string, error)` in profile-capable client versions.
+
+The profile is the sole provider/model source in this mode. Do not combine it
+with `--model`, a request `model`, `--provider`, `ConfigInput.Provider`, or a
+`provider` or `model` query parameter on the base URL. The clients reject those
+competing inputs; they never choose a winner or retain a previous parsed
+profile. A missing, unreadable, malformed, incomplete, or unsupported profile
+also fails that request before HTTP with `ErrInvalidModelProfile` (Go) or
+`LLMProxyModelProfileError` (Python). The proxy remains responsible for
+validating whether the resulting provider/model pair is supported.
+
+Without a profile path, the model-omitting tenant/provider-default path above
+remains the separate normal contract.
 
 ### Python client package
 
@@ -944,7 +1021,6 @@ client = Client(
 text = client.post_messages(
     ClientMessagesRequest(
         messages=(ClientMessage(role="user", content="Summarize this"),),
-        model="gemini-2.5-flash",
         max_tokens=512,
     )
 )
@@ -964,6 +1040,34 @@ chat_text = client.post_messages(
     )
 )
 ```
+
+Pass `model` only when an application intentionally pins one request instead
+of using the tenant or selected-provider default.
+
+To give one application user a reloadable model choice, configure that user's
+profile path and reader once. The client does not cache its parsed contents:
+
+```python
+from pathlib import Path
+
+
+def read_model_profile(path: str) -> str:
+    return Path(path).read_text(encoding="utf-8")
+
+
+user_client = Client(
+    ClientConfig(
+        base_url="http://localhost:8080/",
+        secret="mysecret",
+        model_profile_path="/var/lib/my-app/users/42/model.json",
+        model_profile_reader=read_model_profile,
+    )
+)
+```
+
+Publish a complete replacement JSON document atomically at that path after the
+user selects a new provider/model pair. Do not set `provider` on the config or
+base URL, or `model` on the request, when this profile is configured.
 
 The optional `order` field is for callers that do not want to rely on array
 position. When any message includes `order`, every submitted message must
