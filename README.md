@@ -123,6 +123,18 @@ providers:
         - id: "gpt-5.5-pro"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
+        - id: "gpt-5.6"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
+        - id: "gpt-5.6-sol"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
+        - id: "gpt-5.6-terra"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
+        - id: "gpt-5.6-luna"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
     dictation:
       default_model: "gpt-4o-mini-transcribe"
       models:
@@ -149,12 +161,15 @@ providers:
       default_model: "qwen-plus"
       models:
         - id: "qwen-plus"
+        - id: "qwen3.7-max"
+        - id: "qwen3.7-plus"
   moonshot:
     base_url: "https://api.moonshot.ai/v1"
     text:
       default_model: "kimi-k2-0905-preview"
       models:
         - id: "kimi-k2-0905-preview"
+        - id: "kimi-k2.6"
   siliconflow:
     base_url: "https://api.siliconflow.com/v1"
     transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
@@ -184,6 +199,10 @@ providers:
       models:
         - id: "gemini-3.5-flash"
           output_token_limit: 65536
+        - id: "gemini-3.1-pro-preview"
+          output_token_limit: 65536
+        - id: "gemini-3-flash-preview"
+          output_token_limit: 65536
         - id: "gemini-3.1-flash-lite"
           output_token_limit: 65536
         - id: "gemini-2.5-flash"
@@ -197,6 +216,10 @@ providers:
     text:
       default_model: "claude-sonnet-4-6"
       models:
+        - id: "claude-fable-5"
+          output_token_limit: 128000
+        - id: "claude-sonnet-5"
+          output_token_limit: 128000
         - id: "claude-opus-4-8"
           output_token_limit: 128000
         - id: "claude-sonnet-4-6"
@@ -221,6 +244,9 @@ providers:
       models:
         - id: "grok-4.3"
         - id: "grok-4.3-latest"
+        - id: "grok-4.5"
+        - id: "grok-4.20-0309-reasoning"
+        - id: "grok-4.20-0309-non-reasoning"
         - id: "grok-latest"
         - id: "grok-build-0.1"
         - id: "grok-code-fast"
@@ -295,6 +321,11 @@ never send OpenAI, Meta, Anthropic, xAI, Gemini, or other upstream API keys.
 Model ids and per-model metadata are runtime config data. To add, remove, or
 replace provider models, update the selected `config.yml` and restart the
 service; provider transports stay code-owned.
+
+The model-capability table below mirrors the checked-in catalog. Refresh that
+table and `config.yml` together; provider transports remain code-owned.
+Moonshot's current Kimi route receives Chat Completions
+`max_completion_tokens` when callers set the proxy `max_tokens` value.
 
 Each provider must declare a text catalog. A provider with an `api_key`
 configured must have a valid text `default_model`; that default is used when a
@@ -1237,21 +1268,32 @@ positive and lets the upstream provider enforce any provider-side model limit.
 | `gpt-5-mini` | OpenAI | No | - | No |
 | `gpt-5.5` | OpenAI | No | - | Yes |
 | `gpt-5.5-pro` | OpenAI | No | - | Yes |
+| `gpt-5.6` | OpenAI | No | - | Yes |
+| `gpt-5.6-sol` | OpenAI | No | - | Yes |
+| `gpt-5.6-terra` | OpenAI | No | - | Yes |
+| `gpt-5.6-luna` | OpenAI | No | - | Yes |
 | `muse-spark-1.1` | Meta | Yes | - | No |
 | `deepseek-v4-flash` | DeepSeek | Yes | - | No |
 | `deepseek-v4-pro` | DeepSeek | No | - | No |
 | `deepseek-chat` | DeepSeek | No | - | No |
 | `deepseek-reasoner` | DeepSeek | No | - | No |
 | `qwen-plus` | DashScope/Qwen | Yes | - | No |
+| `qwen3.7-max` | DashScope/Qwen | No | - | No |
+| `qwen3.7-plus` | DashScope/Qwen | No | - | No |
 | `kimi-k2-0905-preview` | Moonshot/Kimi | Yes | - | No |
+| `kimi-k2.6` | Moonshot/Kimi | No | - | No |
 | `deepseek-ai/DeepSeek-R1` | SiliconFlow | Yes | - | No |
 | `glm-5.1` | Zhipu/GLM | Yes | - | No |
 | `gemini-3.5-flash` | Gemini | No | `65536` | No |
+| `gemini-3.1-pro-preview` | Gemini | No | `65536` | No |
+| `gemini-3-flash-preview` | Gemini | No | `65536` | No |
 | `gemini-3.1-flash-lite` | Gemini | No | `65536` | No |
 | `gemini-2.5-flash` | Gemini | Yes | `65536` | No |
 | `gemini-2.5-flash-lite` | Gemini | No | `65536` | No |
 | `gemini-2.5-pro` | Gemini | No | `65536` | No |
 | `claude-opus-4-8` | Anthropic/Claude | No | `128000` | No |
+| `claude-fable-5` | Anthropic/Claude | No | `128000` | No |
+| `claude-sonnet-5` | Anthropic/Claude | No | `128000` | No |
 | `claude-sonnet-4-6` | Anthropic/Claude | Yes | `64000` | No |
 | `claude-haiku-4-5-20251001` | Anthropic/Claude | No | `64000` | No |
 | `claude-haiku-4-5` | Anthropic/Claude | No | `64000` | No |
@@ -1261,6 +1303,9 @@ positive and lets the upstream provider enforce any provider-side model limit.
 | `claude-opus-4-1` | Anthropic/Claude | No | `32000` | No |
 | `grok-4.3` | Grok/xAI | Yes | - | No |
 | `grok-4.3-latest` | Grok/xAI | No | - | No |
+| `grok-4.5` | Grok/xAI | No | - | No |
+| `grok-4.20-0309-reasoning` | Grok/xAI | No | - | No |
+| `grok-4.20-0309-non-reasoning` | Grok/xAI | No | - | No |
 | `grok-latest` | Grok/xAI | No | - | No |
 | `grok-build-0.1` | Grok/xAI | No | - | No |
 | `grok-code-fast` | Grok/xAI | No | - | No |
