@@ -1514,5 +1514,283 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Resolution:
   Declared the `llm-proxy` TAuth tenant in the application-owned manifest using deployment-environment placeholders only, and described the container with the canonical port list, compose file/project identity, ignored private environment asset, tracked environment example, and tracked runtime configuration. The independent TAuth repository remains vanilla and no concrete credential values were added. The post-change `make ci` gate passed with 100.0% aggregate Go coverage, 20 Python tests, 16 Playwright management scenarios, the real local TAuth browser scenario, 38 release-contract tests, and the live-provider harness preflight. The gateway aggregate verifier is run from the gateway after this owner contract is committed.
 
+- [x] [F015] (P1) Let application users change the model through reloadable client profiles.
+  Goal:
+  Let an application integrate an LLM Proxy client once, then let each of its
+  users change the provider/model pair from the application without a source
+  change, rebuild, restart, or deployment for each selection. This is distinct
+  from a managed LLM Proxy tenant owner changing that tenant's routing default.
+
+  Requirements:
+  - Define one canonical, application-owned JSON model-profile document shared
+    by the Go library, the installable Go CLI, and the Python package. The
+    document contains exactly a `provider` and `model` pair; it never contains a
+    tenant secret, upstream provider credential, or TAuth material.
+  - Add an explicit profile path to the Go `ConfigInput`/`Config`, Go CLI, and
+    Python `ClientConfig`. Each outbound v2 request reads the current profile so
+    a completed application setting update affects the next request without
+    recreating the client process.
+  - Treat the profile as the sole provider/model source when configured. Reject
+    a request-level model, a configured provider override, or a base-URL
+    provider/model query that competes with it; do not silently prefer one
+    source or retain a stale parsed profile.
+  - Validate profile JSON and require nonblank provider and model identifiers at
+    the client edge. The proxy remains the authority that validates the exact
+    configured provider/model pair and returns its existing stable public error.
+  - Require applications to publish profile updates atomically. If the client
+    cannot read or validate the current profile, fail that request with explicit
+    context; do not fall back to the previous profile, a request literal, a
+    tenant default, or a provider default.
+  - Preserve the current model-omitting path when no profile path is configured:
+    it continues to delegate to the authenticated tenant default or selected
+    provider default. Document this as a separate, mutually exclusive contract.
+  - Support per-application-user selection by allowing each client instance to
+    use that user's profile path. Application identity, authorization, storage,
+    UI, and atomic profile publication remain application-owned.
+
+  Deliverables:
+  - Add the shared profile schema, Go/Python profile loaders, Go CLI
+    `--model-profile` surface, edge validation, error types, and public API
+    documentation.
+  - Update Go and Python examples to show model omission for tenant-owned
+    defaults and a separate app-user profile integration.
+  - Do not add a second config format, an implicit environment alias, profile
+    caching, a compatibility parser, or a best-effort resolution path.
+
+  Validation:
+  - Add black-box Go library, Go CLI, and Python client scenarios that send with
+    profile A, atomically replace it with profile B, and prove the next request
+    carries exactly B without client recreation.
+  - Prove malformed, incomplete, unreadable, and competing profile/request
+    inputs fail before an HTTP call and never reuse an earlier model.
+  - Prove an unknown or unsupported profile pair reaches the proxy's existing
+    public validation boundary, while a valid pair routes to the configured
+    provider/model.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
+  Resolution:
+  Added the single strict JSON `provider`/`model` profile contract to the Go
+  library, installable Go CLI (`--model-profile`), and Python package. Each
+  profile-backed v2 request rereads its application-owned path; valid atomic A
+  to B replacements change the next request without retaining a stale profile.
+  Competing request/config/base-URL sources and unreadable, malformed,
+  incomplete, or unsupported profile documents fail explicitly without an HTTP
+  fallback, while unknown pairs reach the proxy validation boundary. README and
+  implementation documentation now distinguish tenant-owned model omission
+  from application-user profile selection. The required baseline and final
+  `timeout -k 350s -s SIGKILL 350s make ci` runs passed; the final gate included
+  100.0% Go coverage, 29 Python tests, 16 Playwright UI tests, the management
+  auth black-box test, 38 release tests, and the live-provider preflight.
+
 ## Planning
 *do not implement yet*
+
+- [ ] [P001] (P1) {F014} Design a tenant-scoped provider, model, and key-acquisition onboarding flow.
+  Goal:
+  Let a signed-in managed user complete one clear text-routing setup: select a
+  supported provider, select one of that provider's supported text models, and
+  either paste an existing provider API key or open that provider's official
+  key-acquisition page in a new window before returning to paste it. A completed
+  setup must make the chosen provider/model the active tenant's usable text
+  route without asking the user to reconcile separate provider, default, and
+  client-secret forms.
+
+  Requirements:
+  - Build the flow on the canonical F014 active-tenant context. It must read and
+    write only the selected tenant; another tenant or user must never inherit a
+    provider key, model choice, in-progress form value, or completion state.
+  - Serve provider labels, text-model choices, capabilities, and the verified
+    official credential-acquisition URL from one validated provider catalog.
+    Do not hard-code provider/model lists or provider registration URLs in the
+    browser. The public/management catalog build must reject a self-service
+    provider without a canonical HTTPS credential URL rather than render a
+    guessed link.
+  - Make provider selection the first step and expose only that provider's text
+    models in the next step. Explain whether the provider already has a saved
+    key, but never show the raw key or make a model from another provider
+    selectable.
+  - When the user has no key, render a descriptive provider-specific anchor
+    that opens the official acquisition page with `target="_blank"` and
+    `rel="noopener noreferrer"`. Do not send tenant IDs, TAuth data, proxy
+    secrets, provider keys, or tracking query values to the external site, and
+    do not attempt to detect registration completion.
+  - Keep selection local while the external page is open. On return, require a
+    manually pasted key and make one atomic authenticated operation that saves
+    the encrypted provider key, the selected provider text model, and the
+    tenant's text defaults. A failure leaves no partial routing state and shows
+    an explicit error; it must not reuse a prior model or key as a fallback.
+  - Preserve existing security boundaries: public proxy requests still reject
+    upstream provider keys; management responses and generated examples never
+    return them; saved keys remain encrypted at rest and masked after save.
+  - Keep the generated client-secret step visibly separate but adjacent to
+    completion, including one-time secret display and copyable route examples.
+    Do not create a second client-authentication or provider-key storage path.
+
+  Deliverables:
+  - Add a validated, sanitized provider catalog projection containing the
+    provider identity, label, text models, capability metadata, and official
+    credential-acquisition URL; use it for the management API and browser UI.
+  - Replace the disconnected Settings controls with a tenant-scoped onboarding
+    surface and one canonical management mutation for completed provider/model/
+    key setup.
+  - Update typed frontend contracts, management API documentation, examples,
+    and accessibility copy to describe the exact sequence and no-key path.
+  - Do not add provider aliases, hidden default selection, a browser-maintained
+    catalog, a compatibility endpoint, a key-import shortcut, or a best-effort
+    retry/fallback path.
+
+  Validation:
+  - Add black-box configuration and management API coverage for invalid/missing
+    credential URLs, provider/model mismatches, atomic rollback, tenant/user
+    isolation, masked responses, and the absence of provider keys in profile,
+    example, and public-proxy payloads.
+  - Add Playwright coverage for a first-time user choosing a provider, seeing
+    only its models, opening the correctly protected official link in a new
+    page, returning to save a key, receiving the selected default route, and
+    generating/copying a client secret. Cover keyboard, screen-reader labels,
+    narrow layouts, saved-key updates, and explicit failure states.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
+
+- [ ] [P002] (P1) Create a canonical public landing page and generated capability catalog.
+  Goal:
+  Make the Pages root an indexable, useful LLM Proxy landing page that accurately
+  explains what the service does, who it is for, how it is used, and every
+  currently supported provider/model capability. Move the existing authenticated
+  management workspace to the one canonical `/manage/` route so public product
+  discovery and key-management workspaces are not competing root pages.
+
+  Requirements:
+  - Serve a public, useful `https://llm-proxy.mprlab.com/` landing page without
+    requiring a management session. Keep the separate API origin's `GET /`,
+    `POST /`, `/v2`, and `/dictate` contracts unchanged; only the Pages
+    information architecture changes.
+  - Move the current MPR UI/TAuth management shell, its rendered
+    `data-config-url`, header navigation, logout destination, browser tests,
+    and release renderer to `/manage/`. `/manage/` is a private workspace
+    entry, uses `noindex`, and is absent from the public sitemap; do not leave
+    a duplicate root workspace, JavaScript/meta-refresh redirect, or legacy
+    management route.
+  - Generate a sanitized public capability catalog from the same validated
+    provider registry used for request validation and management profiles. The
+    landing matrix must enumerate every supported text and dictation provider
+    and model, defaults, dictation availability, web-search availability, and
+    known proxy output limits without exposing provider keys, tenant state,
+    configured base URLs, or non-public deployment data.
+  - Do not maintain a second hand-written provider/model table. A catalog change
+    must update the landing matrix deterministically or fail the site build,
+    including missing/duplicate providers or models and capabilities that cannot
+    be represented publicly.
+  - Describe the full current capability set with evidence-backed language:
+    tenant-secret authenticated text and canonical `/v2` messages, native and
+    compatible provider routing, dictation, constrained OpenAI web search,
+    response formats and normalized usage metadata, request limits/clear error
+    behavior, self-service encrypted provider-key management, generated-secret
+    rotation, usage visibility, and Go/Python/CLI integration options. State
+    model/provider limitations rather than implying universal feature parity.
+  - Provide clear crawlable calls to action for `/manage/`, the resource hub,
+    and current integration documentation. Use semantic HTML, visible focus,
+    accessible tables/filters, concise unique metadata, canonical root URLs,
+    and structured data that describes only visible landing-page content.
+
+  Deliverables:
+  - Add the canonical catalog projection/build contract and a static public
+    landing page with capability sections, provider/model matrix, limitations,
+    and conversion paths.
+  - Relocate and render the management application at `/manage/`, update all
+    root/resource/header/footer links, and document the new public-vs-private
+    Pages route contract in README and deployment/site-render guidance.
+  - Update the resource hub and shared site shell so public navigation points to
+    the landing page while management calls to action point only to `/manage/`.
+  - Do not duplicate catalogs in HTML/JavaScript/docs, make availability claims
+    based on whether a particular user has a key, expose secrets, or preserve a
+    second root management implementation.
+
+  Validation:
+  - Add black-box build/render coverage proving the public matrix exactly
+    reflects the validated catalog, has no secret-bearing fields, and rejects
+    catalog/render drift.
+  - Add Playwright coverage for an anonymous public landing, its accessible
+    provider/model matrix and CTAs, navigation to `/manage/`, and the full
+    existing authenticated management lifecycle at that new route.
+  - Verify root canonical, Open Graph, JSON-LD, sitemap, and resource links use
+    the final public URL form, while `/manage/` is noindex and excluded from
+    sitemap output.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
+
+- [ ] [P003] (P1) {P002} Re-audit and expand the SEO/use-case resource system from verified product contracts.
+  Goal:
+  Refresh LLM Proxy's search and resource strategy from the current repository
+  contract so prospective users can discover concrete, supported ways to use
+  the service without creating duplicate doorway pages or claiming roadmap work
+  as shipped functionality.
+
+  Requirements:
+  - Produce a new repo-grounded SEO report before changing public copy. It must
+    inventory current capabilities, limits, public routes, existing resource
+    pages, claim evidence, unsupported claims, the final landing/`/manage/`
+    separation, and every current provider/model capability from P002's
+    generated catalog.
+  - Audit and cover distinct user jobs including: self-service bring-your-own
+    provider-key onboarding; multi-provider and model routing; provider/default
+    model selection; `/v2` messages and direct REST integration; Go, Python,
+    and CLI clients; text response formats and usage headers; dictation;
+    supported OpenAI web search; generated-secret lifecycle; tenant/admin usage
+    visibility without prompt or key exposure; native/compatible provider
+    adapters; runtime configuration; and queue, rate-limit, timeout, and error
+    handling. Merge or reject a page unless it has at least three independent
+    distinctions such as audience, job, workflow, feature set, example,
+    objection, FAQ, CTA, or internal-link path.
+  - For every approved page, record audience, problem, search intent, primary
+    and secondary keyword candidates, product evidence, allowed and forbidden
+    claims, differentiating examples, internal-link path, and doorway-page
+    risk. Do not claim search volume, rankings, pricing, benchmarks,
+    testimonials, compliance, provider performance, or support for F014/F015
+    roadmap behavior before it is implemented.
+  - Replace the generator's arbitrary page-count quota and fixed modified-date
+    snapshot with an evidence-backed content manifest. Compute `lastmod` only
+    from maintainable source/build data or omit it; never publish stale dates.
+    Keep every model/provider assertion tied to the generated public catalog.
+  - Enforce the complete indexing contract: canonical, sitemap, Open Graph,
+    JSON-LD, and crawlable internal links use one final trailing-slash URL;
+    root and the resource hub link to all public content; `/manage/`, private
+    API pages, token pages, redirects, and noindex pages stay out of the
+    sitemap. Schema must match visible content, and article-like pages need
+    visible maintainer attribution and a verifiable publication/modification
+    policy.
+  - Preserve or improve useful existing resources rather than regenerating
+    generic copy. Each indexable page must have a concrete repository-derived
+    command/configuration example, problem-specific FAQ, limitation section,
+    meaningful CTA, and accessible/lazy-loaded presentation where applicable.
+
+  Deliverables:
+  - Update `docs/marketing/seo-resource-cluster-report.md` with the fresh repo
+    analysis, use-case opportunity list, recommended generation order,
+    rejected/merged ideas, claim audit, indexing audit, and explicit evaluation
+    scores.
+  - Replace the static SEO source/generator with a deterministic evidence-backed
+    manifest, refreshed resource hub/pages, contextual related links, sitemap,
+    robots, and landing-page discovery paths.
+  - Add a release-verification checklist covering final URL responses,
+    canonical/sitemap alignment, JSON-LD validity, internal-link crawlability,
+    Google Search Console URL Inspection, and Rich Results Test where the
+    visible schema qualifies.
+  - Do not manufacture pages merely to reach a count, rely on sitemap-only
+    discoverability, repeat a generic FAQ across a cluster, or retain stale
+    provider/model and roadmap claims as marketing copy.
+
+  Validation:
+  - Make generation fail on missing evidence, duplicate or orphaned pages,
+    unsupported claims, stale date metadata, incompatible canonical URLs,
+    sitemap entries that are not public `200` pages, invalid JSON-LD, or a page
+    that does not meet the documented specificity/doorway thresholds.
+  - Add black-box static-site/browser coverage for the public root, hub,
+    representative pages from every use-case family, `/manage/` exclusion, and
+    crawlable navigation from landing page to hub to resource page.
+  - Require an evaluation result of at least 4/5 for repo grounding, use-case
+    specificity, doorway safety, metadata, conversion clarity, duplicate-risk,
+    site integration, and indexing readiness, and exactly 5/5 for factual
+    integrity before publication.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
