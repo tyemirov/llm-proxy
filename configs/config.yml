@@ -91,8 +91,6 @@ providers:
       default_model: "qwen-plus"
       models:
         - id: "qwen-plus"
-        - id: "qwen3.7-max"
-        - id: "qwen3.7-plus"
   moonshot:
     base_url: "https://api.moonshot.ai/v1"
     text:
