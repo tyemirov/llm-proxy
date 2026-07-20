@@ -99,6 +99,9 @@ providers:
       default_model: "kimi-k2-0905-preview"
       models:
         - id: "kimi-k2-0905-preview"
+        - id: "kimi-k3"
+        - id: "kimi-k2.7-code"
+        - id: "kimi-k2.7-code-highspeed"
         - id: "kimi-k2.6"
   siliconflow:
     base_url: "https://api.siliconflow.com/v1"
@@ -118,6 +121,8 @@ providers:
       default_model: "glm-5.1"
       models:
         - id: "glm-5.1"
+        - id: "glm-5.2"
+          output_token_limit: 131072
     dictation:
       default_model: "glm-asr-2512"
       models:
