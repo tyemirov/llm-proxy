@@ -107,8 +107,10 @@ func TestIntegrationModelCatalogRejectsUnsupportedWebSearch(testingInstance *tes
 	}
 }
 
-// TestIntegrationGPT5TemperatureSuppression verifies that temperature is omitted and tools retained for GPT-5.
-func TestIntegrationGPT5TemperatureSuppression(testingInstance *testing.T) {
+// TestIntegrationGPT56TemperatureSuppression verifies that temperature is omitted and tools retained for GPT-5.6.
+func TestIntegrationGPT56TemperatureSuppression(testingInstance *testing.T) {
+	const currentOpenAIModel = "gpt-5.6"
+
 	gin.SetMode(gin.TestMode)
 	endpoints := proxy.NewEndpoints()
 	client, captured := makeHTTPClient(testingInstance, true, endpoints)
@@ -131,7 +133,7 @@ func TestIntegrationGPT5TemperatureSuppression(testingInstance *testing.T) {
 	queryValues.Set(promptQueryParameter, promptValue)
 	queryValues.Set(keyQueryParameter, serviceSecretValue)
 	queryValues.Set(webSearchQueryParameter, "1")
-	queryValues.Set(adaptiveModelQueryParameter, proxy.ModelNameGPT5)
+	queryValues.Set(adaptiveModelQueryParameter, currentOpenAIModel)
 	requestURL.RawQuery = queryValues.Encode()
 	httpResponse, requestError := http.Get(requestURL.String())
 	if requestError != nil {
@@ -141,7 +143,7 @@ func TestIntegrationGPT5TemperatureSuppression(testingInstance *testing.T) {
 	_, _ = io.ReadAll(httpResponse.Body)
 	payload := *captured
 	if _, ok := payload["temperature"]; ok {
-		testingInstance.Fatalf(temperatureOmittedFormat, proxy.ModelNameGPT5, payload["temperature"])
+		testingInstance.Fatalf(temperatureOmittedFormat, currentOpenAIModel, payload["temperature"])
 	}
 	if _, ok := payload["tools"]; !ok {
 		testingInstance.Fatal(toolsMissingMessage)
