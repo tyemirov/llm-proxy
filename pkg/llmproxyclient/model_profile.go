@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf8"
 )
 
 const modelProfileSubject = "model_profile"
@@ -33,6 +34,9 @@ func (config Config) currentModelProfile() (modelProfile, error) {
 }
 
 func decodeModelProfile(profilePath string, profileBytes []byte) (modelProfile, error) {
+	if !utf8.Valid(profileBytes) {
+		return modelProfile{}, modelProfileSchemaError(profilePath, "document must use valid UTF-8")
+	}
 	decoder := json.NewDecoder(bytes.NewReader(profileBytes))
 	openingToken, openingError := decoder.Token()
 	if openingError != nil {

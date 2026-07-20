@@ -371,6 +371,15 @@ func TestClientRejectsInvalidOrCompetingModelProfilesBeforeHTTP(testingInstance 
 			errorMessage: "decode model_profile",
 		},
 		{
+			name: "invalid UTF-8 document",
+			prepare: func(subTest *testing.T, path string) {
+				invalidProfile := []byte(`{"provider":"gemini","model":"gemini-2.5-flash"}`)
+				invalidProfile[len(invalidProfile)-3] = 0xff
+				replaceModelProfileBytes(subTest, path, invalidProfile)
+			},
+			errorMessage: "valid UTF-8",
+		},
+		{
 			name: "array document",
 			prepare: func(subTest *testing.T, path string) {
 				replaceModelProfile(subTest, path, "[]")
@@ -667,8 +676,13 @@ func TestMessagesRequestRejectsInvalidInputs(testingInstance *testing.T) {
 
 func replaceModelProfile(testingInstance *testing.T, profilePath string, profileDocument string) {
 	testingInstance.Helper()
+	replaceModelProfileBytes(testingInstance, profilePath, []byte(profileDocument))
+}
+
+func replaceModelProfileBytes(testingInstance *testing.T, profilePath string, profileBytes []byte) {
+	testingInstance.Helper()
 	replacementPath := filepath.Join(filepath.Dir(profilePath), "next-model.json")
-	if writeError := os.WriteFile(replacementPath, []byte(profileDocument), 0600); writeError != nil {
+	if writeError := os.WriteFile(replacementPath, profileBytes, 0600); writeError != nil {
 		testingInstance.Fatalf("write replacement model profile: %v", writeError)
 	}
 	if renameError := os.Rename(replacementPath, profilePath); renameError != nil {
