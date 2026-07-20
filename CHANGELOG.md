@@ -6,6 +6,40 @@ All notable changes to this project will be documented in this file.
 
 - Declare the llm-proxy TAuth tenant requirements in the app-owned deployment manifest for gateway assembly.
 
+## [v0.2.33] - 2026-07-20
+
+- Merge pull request #202 from tyemirov/gix/add-qwen-cloud-and-minimax-as-selectable-text-providers
+- test: add coverage for qwencloud and minimax env keys in live config
+- docs(resources): add Qwen Cloud and MiniMax routes, update provider list
+- feat: add Qwen Cloud and MiniMax live provider support in scripts
+- feat: add Qwen Cloud and MiniMax provider support
+- docs: document Qwen Cloud Token Plan and MiniMax provider support
+- feat(config): add QwenCloud and MiniMax providers to config.yml
+- feat(cli/config): add QwenCloud and MiniMax provider config parsing and tests
+- docs: document Qwen Cloud Token Plan and MiniMax provider support
+- docs(issues): track addition of Qwen Cloud and MiniMax text providers
+- Merge pull request #201 from tyemirov/gix/refresh-provider-catalogs-with-current-model-releases
+- test: update DashScope model references to Qwen Plus and exclude old models
+- chore(config): remove qwen3.7-max and qwen3.7-plus from qwen models list
+- docs(readme): remove qwen3.7-max and qwen3.7-plus references
+- docs(issues): add resolution for DashScope catalog and endpoint validity
+- test: add coverage for Moonshot K3, K2.7, Zhipu GLM-5.2, and model limits
+- docs: clarify Kimi K3 and GLM-5.2 routing and control behavior
+- chore(config): add kimi-k3, kimi-k2.7-code, and glm-5.2 model configs
+- docs: document addition of Kimi K3, Kimi code models, and GLM-5.2 with limits
+- docs(issues): document addition of GLM-5.2 and Kimi K3 models to catalogs
+- test: update test to use gpt-5.6 for temperature suppression scenario
+- test: verify support for current model catalog across providers
+- docs: clarify model catalog sync and token limits in provider routing plan
+- feat(config): add latest model variants for OpenAI, Qwen, Gemini, Claude, and Grok
+- docs: refresh model catalog and capability matrix in README
+- docs(issues): document model catalog refresh for all supported providers
+- docs(issues): add user-revealable provider keys, notification placement, usage intervals
+- Merge pull request #200 from tyemirov/bugfix/B037-app-owned-orchestration-manifest
+- Merge pull request #199 from tyemirov/improvement/I020-declare-tauth-tenant
+- Fix B037 app-owned orchestration manifest
+- improvement(I020): declare app-owned TAuth tenant
+
 ## [v0.2.32] - 2026-07-15
 
 - Merge pull request #198 from tyemirov/gix/hydrate-dashboard-from-canonical-mpr-ui-auth-lifecycle
