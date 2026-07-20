@@ -589,6 +589,26 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
 ## Improvements
 
+- [x] [I021] (P1) Refresh documented model catalogs for existing providers.
+  Goal:
+  Make recently released, text-generation models selectable through the existing provider adapters without introducing a new provider or transport contract.
+
+  Requirements:
+  - Add only model identifiers verified in the current first-party provider documentation and compatible with the provider's existing request profile.
+  - Preserve provider defaults for this additive catalog refresh; provider/model persistence migration remains the separately tracked B036 work.
+  - Keep `configs/config.yml`, the README catalog, and provider-routing documentation synchronized.
+  - Do not add request controls or capability fallbacks that are not already owned by the existing provider transport.
+
+  Deliverables:
+  - Current model options for the supported OpenAI, Anthropic, Gemini, xAI, DashScope, Moonshot, SiliconFlow, and Zhipu provider paths where current upstream releases exist.
+  - Public HTTP integration coverage for representative new catalog selections across the affected provider protocols.
+
+  Validation:
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the last code edit.
+
+  ### Resolution
+  Added current OpenAI GPT-5.6 aliases and variants; Anthropic Claude Fable and Sonnet 5; Gemini 3.1 Pro and 3 Flash previews; DashScope Qwen 3.7 Max and Plus; Moonshot Kimi K2.6; and xAI Grok 4.5 and Grok 4.20 reasoning/non-reasoning selections. The Moonshot chat transport now maps the proxy `max_tokens` setting to Kimi's current `max_completion_tokens` request field. The README and provider-routing plan mirror the catalog contract. Authenticated management-profile and public HTTP routing coverage verify the new entries are visible and route through their intended provider protocols. Validation passed with `timeout -k 350s -s SIGKILL 350s make ci`.
+
 - [x] [I020] (P1) Declare LLM Proxy's TAuth tenant requirements in the app-owned deployment manifest.
   ### Summary
   Move stable tenant identity, production origin, cookie names, and provider references into .mprlab/deploy/resources.yml while keeping credential values, shared TTLs, and server policy gateway-owned.
