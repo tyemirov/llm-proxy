@@ -546,6 +546,47 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Resolution:
   MPR UI v3.11.1 is now the sole browser authentication authority. LLM Proxy registers the documented authenticated and unauthenticated lifecycle events before startup, waits for MPR UI orchestration, reconciles an already-settled lifecycle through the documented header `data-mpr-auth-status`, and makes no protected management request until that state is `authenticated`. Removed the application-owned authentication-settlement and queued-retry flags. Once MPR UI authenticates the user, the workspace loads exactly once; every management profile failure, including `401` and the legacy-claim `409`, renders an explicit workspace error without changing the MPR UI session to signed out. The fast browser suite proves zero pre-auth profile calls, one post-auth hydration call, already-settled authenticated startup, dashboard rendering, and explicit failure rendering. The real local-stack scenario proves the same request boundary with actual TAuth access/refresh cookies and the documented `MPRUI.testing.authenticate` lifecycle, then proves reload restoration, access-cookie refresh, and explicit sign-out. Updated README and implementation documentation to state the sole-authority boundary. Focused `make frontend-test` passed 16 scenarios and `make test-management-auth-blackbox` passed the real service/browser scenario. The required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed; final CI included 100.0% aggregate Go coverage, 20 Python tests, 16 frontend Playwright scenarios, the real local TAuth/LLM Proxy browser scenario, 38 release-contract tests, and the live-provider preflight.
 
+- [ ] [B035] (P2) Move workspace notifications above the footer.
+  Goal:
+  Render `Workspace loaded` and every other management notice in a dedicated top-right notification region directly below the shared MPR header. The current fixed bottom-right notice appears inside or over the footer and makes application feedback look like footer content.
+  Requirements:
+  - Remove the bottom-anchored notice placement; notifications must never render inside, overlap, or visually attach to `<mpr-footer>`.
+  - Use one application-owned notification region aligned to the top-right below `<mpr-header>`, with spacing derived from the shared shell geometry or current design-system tokens rather than a viewport-specific magic offset.
+  - Keep success, error, and informational notices in the same canonical region and preserve their existing visual kind distinctions and message behavior.
+  - Keep notifications fully visible within the viewport and clear of the header at desktop and mobile widths. On narrow viewports, constrain or expand the notice within the available content width without horizontal clipping.
+  - Preserve the B020 stacking contract: the Settings overlay remains above notifications, while notifications remain visible above the normal dashboard surface when Settings is closed.
+  - The notification region must not intercept pointer input outside the visible notice or block the header's avatar/sign-in controls and primary dashboard actions.
+  - Expose notice changes through an appropriate live-region/status semantic so placement changes do not reduce screen-reader feedback.
+  Deliverables:
+  - Update the management notice markup and static-site styles to own one top-right region below the shared header.
+  - Update the existing Settings/header/footer layer coverage for the new notice geometry and stacking boundary.
+  Validation:
+  - Add Playwright coverage that triggers the `Workspace loaded` notice and representative success and error notices, then proves their bounding boxes remain below the header, above and separate from the footer, right-aligned, unclipped, and non-obstructive at desktop and mobile viewports.
+  - Keep browser coverage proving the Settings modal overlays the notice and that repeated dashboard/settings actions do not move the notice into the footer region.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
+
+- [ ] [B036] (P1) Keep routing default provider/model pairs valid.
+  Goal:
+  Ensure Settings never displays, saves, or executes a routing default whose model does not belong to its selected provider. The current workspace can render impossible combinations such as text provider `Anthropic` with model `gpt-4.1`, and dictation provider `Grok` with `No dictation model`.
+  Requirements:
+  - Treat each text provider/model pair and dictation provider/model pair as one invariant at the management persistence, profile API, update API, and runtime-routing boundaries.
+  - Validate persisted defaults against the canonical configured provider catalogs before serving a workspace. A future invalid persisted pair must fail startup with tenant, endpoint, provider, and model context; do not silently select another provider or model.
+  - Add a bounded, versioned one-off data migration for rows created under the broken contract: when a persisted provider remains valid but its model is blank or belongs to another provider, replace the model with that provider's configured default model. Reject an unknown or unsupported persisted provider instead of guessing. Remove the migration bridge after the stored data is upgraded; introduce no permanent fallback, dual-read, or compatibility path.
+  - Keep management default updates atomic and reject a provider/model mismatch with a specific client error before writing either field.
+  - On provider selection, immediately select that provider's configured default model and submit the resulting pair together so a stale model cannot survive the change.
+  - Remove the `No dictation model` choice while a concrete dictation provider is required, preserving the resolved B011 contract that blank dictation defaults are not a supported persisted state.
+  - Treat an invalid management-profile response as an explicit workspace integrity error at the browser boundary; do not render an impossible selection or repair server data in the UI.
+  Deliverables:
+  - Enforce the pair invariant in management storage/profile hydration, default updates, and runtime configuration.
+  - Update the Settings controls so their selected model always comes from the selected provider's catalog.
+  - Add the one-off persisted-data migration and document the canonical routing-default invariant in the management API and configuration documentation.
+  Validation:
+  - Add black-box management API coverage proving valid pairs round-trip, mismatched or blank models are rejected without partial writes, and profile responses contain only catalog-valid pairs.
+  - Add migration/startup coverage proving repair of the known valid-provider mismatch shape and contextual rejection of unknown or unsupported providers after the migration boundary.
+  - Add runtime coverage proving an omitted request model routes through the exact persisted provider/model pair.
+  - Add Playwright coverage for initial Settings hydration, changing text and dictation providers, saving and reloading the resulting pairs, absence of the blank dictation-model option, and explicit failure for a malformed profile response.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
+
 ## Improvements
 
 - [x] [I020] (P1) Declare LLM Proxy's TAuth tenant requirements in the app-owned deployment manifest.
@@ -818,6 +859,30 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   4. Intercept/mock loopaware requests in e2e tests to prevent actual network calls.
   ### Resolution
   Added LoopAware traffic pixel script to site/index.html and generate_seo_resources.mjs htmlDocument, updated the modified date to 2026-07-11 in generator and tests, and mocked loopaware network requests in Playwright. All tests passed.
+
+- [ ] [I020] (P1) Let users reveal and edit their saved provider API keys.
+  Goal:
+  Let an authenticated user select any provider whose API key they previously saved, explicitly reveal the complete decrypted key, edit it in the existing provider-key field, and save the updated value. The current profile exposes only masked status and leaves the edit field blank, so users cannot inspect or correct a saved key without replacing it from another source.
+  Requirements:
+  - Add one explicit owner-only reveal contract for the selected provider, `POST /api/management/provider-keys/:provider/reveal`, returning only `{ "api_key": "..." }` for the authenticated user's saved provider record.
+  - Validate the canonical provider identifier at the HTTP edge, return `404 Not Found` when that user has no saved key for the provider, and never read or reveal another user's provider record.
+  - Treat reveal as a sensitive credentialed management action: require the configured management origin and JSON content type, use the existing TAuth session-cookie boundary, and return `Cache-Control: no-store` so browsers and intermediaries do not retain the response.
+  - Keep profile and administrator responses masked and free of raw provider keys. Do not include revealed values in notices, error bodies, logs, analytics, URLs, DOM attributes, local storage, session storage, or generated request examples.
+  - Preserve AES-GCM encryption at rest and the current runtime-only decryption path for proxy routing; the new reveal endpoint is the sole additional path that may return decrypted provider-key material to its owning user.
+  - In the selected-provider editor, show a `Show key` action only when the selected provider has a saved key. The action must fetch the key on demand and populate the existing API-key input as an editable value; it must not preload every provider key when Settings or the profile loads.
+  - Let the user switch the populated input between visible and password-masked presentation without changing the value being edited. Saving must update the selected provider with the edited key through the current provider-key mutation contract.
+  - Clear decrypted key material from application state and the input when the selected provider changes, Settings closes, the key is saved or removed, the user signs out, or the page reloads. A successful save must return the editor to masked-key status and require another explicit reveal to show the stored value.
+  - Disable reveal/save/remove/provider-selection controls while the relevant request is in flight, and ensure a late reveal response cannot populate the field after the user changes provider or closes Settings.
+  - Update the security documentation from the obsolete absolute claim that provider keys are never returned raw after save to the exact current contract: raw keys are returned only through an explicit authenticated owner reveal, while normal profile/admin responses remain masked and storage remains encrypted at rest.
+  Deliverables:
+  - Add the authenticated provider-key reveal handler, owner-scoped store operation, response type, no-store headers, and stable error behavior.
+  - Add selected-provider reveal/hide/edit state and controls to the static Settings UI without adding a second provider editor or credential persistence path.
+  - Update frontend types, user-facing copy, README, and provider-routing documentation for the reveal and edit security boundary.
+  Validation:
+  - Add black-box management HTTP coverage proving an authenticated owner can reveal the exact decrypted key, an anonymous or wrong-origin request is rejected, a different user cannot reveal the owner's key, missing/unknown providers fail explicitly, responses are non-cacheable, and profile/admin payloads still contain no raw keys.
+  - Add persistence coverage proving reveal decrypts the encrypted record without writing plaintext to the database and an edited key is re-encrypted before save while generated-secret proxy routing uses the new value.
+  - Add Playwright coverage for explicit reveal, visible/hidden presentation, editing and saving, masked post-save state, provider switching, Settings close/reopen, sign-out cleanup, request-order races, and absence of raw keys from browser storage and unrelated UI surfaces.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
 
 
 ## Maintenance
@@ -1200,6 +1265,81 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 - [ ] [F010] (P1) Add Grok as a provider.
 - [ ] [F011] (P1) Add GLM 5.2 as a provider.
 - [ ] [F012] (P2) Add GPT 5.6 to the list of supported OpenAI models including the level of efforts.
+- [ ] [F013] (P2) Add selectable usage-dashboard time intervals.
+  Goal:
+  Let signed-in users filter the complete usage dashboard through one compact interval control offering `ALL`, `30 days`, `7 days`, and `1 day`.
+  Requirements:
+  - Present the options in the exact order `ALL`, `30 days`, `7 days`, and `1 day`, with `30 days` selected when the authenticated dashboard first loads.
+  - Add one canonical management API query contract: `GET /api/management/usage?interval=all|30d|7d|1d`. The browser must always send the selected interval, and the HTTP edge must reject a missing or unknown interval with `400 Bad Request`; do not preserve a second fixed-30-day request path.
+  - Define `all` as every retained usage event owned by the authenticated managed tenant. Define `1d`, `7d`, and `30d` as trailing 24-hour, 7-day, and 30-day windows ending at one server-captured request timestamp.
+  - Replace the fixed `period_days` and `daily` response assumptions with one interval-aware summary contract that identifies the selected interval, declares its bucket unit, and returns ordered chart buckets. Use hourly buckets for `1d`, daily buckets for `7d` and `30d`, and daily buckets from the earliest retained event through the current day for `all`; return an empty bucket series when no usage exists. Do not encode `all` as zero days or retain parallel legacy response fields.
+  - Apply one selected-interval snapshot consistently to request and token totals, success rate, provider count, request and token charts, provider usage, and model usage.
+  - Refresh must preserve and reload the currently selected interval. Interval controls and Refresh must prevent concurrent selections from applying responses out of order or leaving the active control inconsistent with the displayed data.
+  - A failed interval load must clear the selected interval's dashboard data and show the existing explicit usage error state rather than leaving stale metrics from another interval visible.
+  - Keep finite-range filtering at the database boundary and keep all queries tenant-isolated. Preserve the current usage-event privacy contract: prompts, request bodies, responses, audio names, transcripts, tenant secrets, provider API keys, and raw TAuth identity payloads are never returned or added to usage records.
+  - Render the interval chooser as an accessible, keyboard-operable control with an explicit active state, disabled loading state, and compact desktop/mobile layout consistent with the existing MPR dashboard.
+  - Keep the administrator all-users dashboard on its existing 30-day contract; adding administrator interval selection is outside this feature.
+  Deliverables:
+  - Add a validated usage-interval domain type and interval-aware management API, database query, aggregation, and generic chart-bucket response contract.
+  - Add the dashboard interval control, selected-interval state, interval-aware backend client request, responsive styling, and generic chart presentation.
+  - Update frontend types, user-facing copy, README, and provider-routing documentation to describe the selectable usage ranges and their exact semantics.
+  Validation:
+  - Add black-box management HTTP coverage for `all`, `30d`, `7d`, and `1d`, exact boundary inclusion/exclusion, tenant isolation, the default UI request, and missing or invalid interval rejection.
+  - Add database-boundary coverage proving finite intervals do not load older rows and `all` reads the authenticated tenant's complete retained history.
+  - Add Playwright coverage proving each option requests the canonical interval, becomes visibly active, updates every dashboard surface from one response, keeps its selection on Refresh, clears stale data on failure, prevents response-order races, and remains usable at desktop and mobile widths.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
+
+- [ ] [F014] (P1) {B036,I020,F013} Support multiple isolated tenants per managed user.
+  Goal:
+  Let one authenticated TAuth user create, select, rename, and delete multiple independently configured LLM Proxy tenants. Each tenant owns its own generated client secret, provider credentials and settings, routing defaults, request examples, and usage history. This feature is one-user-to-many-tenants; shared tenants, invitations, memberships, and team roles are outside scope.
+  Current contract:
+  - `managedTenantRecord.UserID` is currently the primary key, `managedTenantID` is derived only from that user id, and profile hydration finds or creates exactly one tenant by user id.
+  - Provider-key records and AES-GCM associated data are keyed by user id plus provider id, while usage summaries are queried by user id even though usage rows also carry a tenant id.
+  - `/api/management/profile`, defaults, secrets, provider-key operations, usage, administrator responses, frontend state, and the Settings `Client access` section all assume one singular tenant.
+  Requirements:
+  - Separate authenticated account identity from tenant state. Persist one managed user keyed by the validated TAuth subject and any number of managed tenants keyed by stable opaque tenant ids with an owner-user foreign key.
+  - Give every tenant a required editable display name. Normalize and validate names once at the HTTP/database edge, allow 1-80 visible characters after trimming, and enforce case-insensitive uniqueness within one owner's tenants. Different users may use the same name.
+  - Generate unpredictable immutable ids for new tenants with bounded collision handling; do not derive a new tenant id solely from the owner id. Preserve every existing tenant id during migration so deployed client secrets and operational references keep their identity.
+  - Maintain the invariant that every managed user has at least one tenant. Create one tenant named `Default` on first authenticated access for a new user, and reject deletion of an owner's final tenant with `409 Conflict`.
+  - Make tenant id, rather than user id, the ownership key for secret digests, provider-key rows, provider-specific models/system prompts, routing defaults, and usage events. Bind provider-key AES-GCM associated data to tenant id plus provider id so ciphertext cannot be moved between two tenants owned by the same user.
+  - Keep non-empty generated-secret digests globally unique and mapped to exactly one tenant. Public proxy requests continue to authenticate only with `key=<generated secret>` and require no tenant parameter; resolving the secret selects that tenant's credentials, defaults, and usage owner.
+  - Preserve strict tenant isolation at the database query boundary. Every tenant-scoped management query and mutation must constrain both authenticated owner user id and tenant id. Return the same `404 Not Found` for a missing tenant and another user's tenant so identifiers cannot be enumerated.
+  - Keep administrators read-only with respect to tenant ownership. Replace the singular admin tenant shape with an ordered `tenants` collection and tenant count per user; show each tenant's facts and existing 30-day usage summary without exposing provider keys, masked key material, secret digests, generated secrets, prompts, responses, audio names, or transcripts.
+  Migration:
+  - Add one bounded, versioned, all-or-nothing GORM migration for both supported SQLite and PostgreSQL management databases. Do not add raw-SQL persistence, dual reads/writes, a runtime fallback to the old schema, or a compatibility response shape.
+  - Preflight the complete current dataset before mutation: require unique nonblank user and tenant ids, valid B036 provider/model pairs, matching tenant ids on usage rows, no orphan provider or usage rows, and successful decryption of every provider key. Reject any remaining `static-config:<tenant-id>` owner with a contextual instruction to complete the F011 ownership claim first.
+  - Create one managed-user row for every current authenticated owner and one owned tenant row for that user's existing record. Name each migrated tenant `Default`; preserve tenant id, secret digest, defaults, provider settings, creation/update timestamps, and all usage fields and timestamps exactly.
+  - Move provider records from the user foreign key to the preserved tenant id and decrypt/re-encrypt each key from the old user/provider associated data to the new tenant/provider associated data inside the migration boundary. Move usage ownership to its existing tenant id and remove user id as an independent usage-partition key.
+  - Verify source/destination row counts, ownership, referential integrity, secret digests, defaults, decrypted provider values, and per-tenant usage totals before committing. Any failure must roll back the whole migration with operation, table, user, tenant, and provider context as applicable.
+  - After the migration is verified, drop the obsolete one-to-one columns/tables and delete the old user-keyed store operations and temporary migration bridge. The running application must understand only the new schema and tenant-scoped contract.
+  Management API:
+  - Replace singular bootstrap with `GET /api/management/account`, returning the authenticated user plus a stable creation-ordered list of tenant summaries. Delete `/api/management/profile`; do not retain it as an alias.
+  - Add canonical owner-only tenant lifecycle endpoints: `POST /api/management/tenants`, `GET /api/management/tenants/:tenant_id`, `PUT /api/management/tenants/:tenant_id`, and `DELETE /api/management/tenants/:tenant_id` for create, hydrate, rename, and delete.
+  - Move every tenant operation under that resource: usage, defaults, secret creation/revocation, provider-key save/remove, and I020 provider-key reveal must use `/api/management/tenants/:tenant_id/...`. Delete the former unscoped endpoints instead of keeping compatibility routes.
+  - Treat tenant creation, rename, deletion, provider mutation, default mutation, and secret mutation as transactional operations with validated tenant-id/name domain types and explicit stable errors. Tenant deletion must cascade its digest, provider settings, and usage only after explicit confirmation at the UI boundary.
+  - Keep F013's exact interval query and bucket semantics on the tenant-scoped usage endpoint. A user aggregate is not a substitute for the selected tenant dashboard, and concurrent tabs selecting different tenants must not share server-side active-tenant state.
+  UI and interaction:
+  - Add one compact, keyboard-operable tenant switcher directly below the shared MPR header and above the authenticated dashboard so the active tenant is always visible outside Settings. Show the display name as the primary label and the immutable tenant id as secondary context.
+  - Store the active tenant in the page URL as `tenant=<tenant-id>` so reload, browser history, bookmarks, and independent tabs preserve explicit context. When the parameter is absent, select the oldest tenant returned by the account bootstrap and write it with `history.replaceState`; when a supplied id is invalid or unauthorized, show an explicit workspace error rather than silently choosing another tenant.
+  - Add an accessible create-tenant dialog with focused name input and inline validation. Select the new tenant after creation and update the URL without reloading the MPR authentication shell.
+  - Put tenant rename and deletion controls in the Settings `Client access` section. Require a destructive confirmation containing the tenant display name, explain why the last tenant cannot be deleted, and after deleting the active tenant select the oldest remaining tenant and replace the URL.
+  - Switching tenants must atomically replace dashboard usage, secret status, defaults, request examples, and provider settings. Clear any one-time generated secret and any I020 revealed provider key immediately; if Settings contains unsaved edits, require an explicit discard decision before switching.
+  - Use request identity/cancellation so a late account, tenant, usage, reveal, save, create, rename, or delete response cannot overwrite the newly selected tenant. A failed hydration must clear prior tenant data and render the existing explicit workspace error state rather than displaying stale cross-tenant values.
+  - Preserve the compact MPR visual language, shared header/footer/modal stacking contracts, visible focus, screen-reader labels/status announcements, and unclipped switcher/dialog layouts at desktop and mobile widths.
+  Deliverables:
+  - Add the account, tenant, tenant-name/id domain types, tenant-scoped repository interfaces, relational GORM models/indexes, secret lookup, provider encryption binding, usage partitioning, and administrator projection.
+  - Add and document the bounded migration plus a disposable-database verification and rollback runbook. Production backup, migration apply, and deployment remain operator-owned and must not be performed by the implementation agent.
+  - Replace the singular management routes and frontend client/types/state with the account bootstrap and tenant-scoped APIs; remove obsolete one-to-one code and response types.
+  - Add the tenant switcher, create dialog, Settings rename/delete controls, URL selection, race handling, responsive styles, and centralized user-facing copy.
+  - Update README and implementation documentation with the account-to-many-tenants model, exact API paths, migration ordering, encryption associated-data change, isolation rules, deletion semantics, and explicit exclusion of shared/team tenancy.
+  Validation:
+  - Add black-box management HTTP scenarios where one authenticated user creates two tenants with different keys for the same provider, defaults, secrets, and usage; prove each tenant round-trips independently and another authenticated user receives indistinguishable `404` responses for both reads and mutations.
+  - Prove through public proxy endpoints that each tenant's generated secret selects only that tenant's provider key/defaults, records usage only for that tenant, and that revoking or deleting one tenant never changes another tenant's authentication or history.
+  - Exercise I020 reveal and F013 intervals through the tenant-scoped endpoints, including cross-tenant denial, response non-caching, concurrent requests, and the absence of raw secrets/keys from account, tenant-summary, usage, and admin payloads.
+  - Add disposable pre-migration database fixtures for SQLite and PostgreSQL containing multiple current users, encrypted provider keys, generated-secret digests, defaults, and usage. Run the real migration entrypoint and prove exact preservation, ciphertext re-binding, old-schema removal, idempotent version rejection, rollback on corrupted/orphaned rows, and unchanged client-secret routing.
+  - Add Playwright coverage for first-user bootstrap, create, switch, URL reload/history, independent tabs, rename, guarded final-tenant deletion, confirmed deletion, unsaved-edit handling, one-time secret/key cleanup, response-order races, explicit invalid-URL errors, admin tenant lists, keyboard use, and desktop/mobile geometry.
+  - Extend the real local TAuth black-box path to create and use two tenants for one verified session and prove a second verified user cannot access either tenant.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
 
 - [x] [F010] (P1) Add Meta Model API and Muse Spark 1.1 as a supported text provider.
   ### Summary
