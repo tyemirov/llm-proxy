@@ -196,8 +196,28 @@ Bundled clients intentionally expose only the canonical `POST /v2` text
 contract. The installable Go CLI maps prompt flags or stdin into v2 `system` and
 `user` messages, while the reusable Go and Python packages expose only
 messages-request constructors and `PostMessages`/`post_messages` send methods.
+When a bundled-client request omits `model`, it deliberately sends no model
+field and delegates selection to the authenticated tenant or selected provider.
 The server keeps `GET /` and compatibility JSON `POST /` available for direct
 REST callers.
+
+This permits a managed-tenant owner to change the tenant's routing default in
+the LLM Proxy Settings UI and have subsequent model-omitting client requests
+use that saved value without an application deployment. Application end-user
+model selection is a separate, client-owned contract: the Go library, Go CLI,
+and Python client all accept one application-owned JSON model-profile path per
+client instance. Its complete document is exactly nonblank `provider` and
+`model` string fields, contains no secret or TAuth material, and is reread for
+every outbound v2 request. An application atomically replaces a user's profile
+after their selection changes, so the next request from the existing client
+uses the new pair without a rebuild, restart, or deployment.
+
+Profile mode is mutually exclusive with a request model, configured provider,
+or base-URL `provider`/`model` query value. An unreadable, malformed,
+incomplete, or competing profile fails before HTTP and never reuses a previous
+profile or tenant/provider default. The proxy remains the authority for whether
+the resulting provider/model pair is valid. Without a profile path, model
+omission keeps the existing tenant/provider-default behavior.
 
 `server.workers` limits concurrent upstream provider HTTP operations, not whole
 client request lifecycles. `server.queue_size` limits the number of additional
