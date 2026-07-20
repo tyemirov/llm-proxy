@@ -90,7 +90,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			textModels:              textModelSet(moonshotModels.Text),
 			transcriptionModels:     map[string]modelID{},
 			textTransport:           textTransportOpenAICompatibleChat,
-			chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
+			chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
 		},
 		siliconFlowProviderID: {
 			identifier:                siliconFlowProviderID,

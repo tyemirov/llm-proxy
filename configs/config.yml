@@ -59,6 +59,18 @@ providers:
         - id: "gpt-5.5-pro"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
+        - id: "gpt-5.6"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
+        - id: "gpt-5.6-sol"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
+        - id: "gpt-5.6-terra"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
+        - id: "gpt-5.6-luna"
+          request_profile: "openai_responses_reasoning_tools"
+          web_search: true
     dictation:
       default_model: "gpt-4o-mini-transcribe"
       models:
@@ -85,6 +97,10 @@ providers:
       default_model: "kimi-k2-0905-preview"
       models:
         - id: "kimi-k2-0905-preview"
+        - id: "kimi-k3"
+        - id: "kimi-k2.7-code"
+        - id: "kimi-k2.7-code-highspeed"
+        - id: "kimi-k2.6"
   siliconflow:
     base_url: "https://api.siliconflow.com/v1"
     transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
@@ -103,6 +119,8 @@ providers:
       default_model: "glm-5.1"
       models:
         - id: "glm-5.1"
+        - id: "glm-5.2"
+          output_token_limit: 131072
     dictation:
       default_model: "glm-asr-2512"
       models:
@@ -113,6 +131,10 @@ providers:
       default_model: "gemini-2.5-flash"
       models:
         - id: "gemini-3.5-flash"
+          output_token_limit: 65536
+        - id: "gemini-3.1-pro-preview"
+          output_token_limit: 65536
+        - id: "gemini-3-flash-preview"
           output_token_limit: 65536
         - id: "gemini-3.1-flash-lite"
           output_token_limit: 65536
@@ -127,6 +149,10 @@ providers:
     text:
       default_model: "claude-sonnet-4-6"
       models:
+        - id: "claude-fable-5"
+          output_token_limit: 128000
+        - id: "claude-sonnet-5"
+          output_token_limit: 128000
         - id: "claude-opus-4-8"
           output_token_limit: 128000
         - id: "claude-sonnet-4-6"
@@ -157,6 +183,9 @@ providers:
       models:
         - id: "grok-4.3"
         - id: "grok-4.3-latest"
+        - id: "grok-4.5"
+        - id: "grok-4.20-0309-reasoning"
+        - id: "grok-4.20-0309-non-reasoning"
         - id: "grok-latest"
         - id: "grok-build-0.1"
         - id: "grok-code-fast"

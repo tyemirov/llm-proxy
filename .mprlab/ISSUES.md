@@ -587,7 +587,80 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Add Playwright coverage for initial Settings hydration, changing text and dictation providers, saving and reloading the resulting pairs, absence of the blank dictation-model option, and explicit failure for a malformed profile response.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
 
+- [x] [B038] (P1) Keep the DashScope catalog valid for the default endpoint.
+  ### Summary
+  The checked-in DashScope base URL is `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`, but the refreshed catalog advertises `qwen3.7-max` and `qwen3.7-plus`. Those selections require a regional or workspace-specific DashScope route and credentials, so default deployments list models that reject requests.
+  ### Acceptance Criteria
+  1. The default DashScope catalog exposes only models supported by its checked-in International endpoint.
+  2. The authenticated management profile does not expose either Qwen 3.7 model.
+  3. The README catalog mirrors the packaged configuration.
+  4. No regional endpoint, credential fallback, alias, or transport change is introduced.
+  5. The required final `timeout -k 350s -s SIGKILL 350s make ci` passes after the last code edit.
+  ### Resolution
+  Removed `qwen3.7-max` and `qwen3.7-plus` from the default DashScope catalog while retaining `qwen-plus` at the checked-in International endpoint. The authenticated management-profile contract now asserts both unsupported Qwen 3.7 IDs remain absent, and the existing public routing scenario continues to exercise Qwen Plus. README configuration and model-capability tables mirror the packaged catalog. Validation passed with `timeout -k 350s -s SIGKILL 350s make ci`.
+
 ## Improvements
+
+- [x] [I023] (P1) Add GLM-5.2 to the existing BigModel/Zhipu catalog.
+  Goal:
+  Make the documented GLM-5.2 text model selectable through the existing Zhipu OpenAI-compatible Chat Completions transport.
+
+  Requirements:
+  - Add the exact `glm-5.2` model identifier and its documented 128K output limit to the Zhipu text catalog.
+  - Retain the existing `https://open.bigmodel.cn/api/paas/v4` base URL because the current BigModel documentation uses that endpoint for GLM-5.2.
+  - Do not add optional GLM-specific `thinking` or `reasoning_effort` request controls that the existing public proxy contract does not own.
+  - Keep `configs/config.yml`, the README catalog, and provider-routing documentation synchronized.
+  - Leave default/persisted-selection migration behavior in the separately tracked B036 scope.
+
+  Deliverables:
+  - `glm-5.2` appears in the authenticated management profile.
+  - Public HTTP routing coverage proves the selected model reaches the Zhipu-compatible Chat Completions payload with `max_tokens` and rejects values above its configured output limit.
+
+  Validation:
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the last code edit.
+
+  ### Resolution
+  Added `glm-5.2` with its documented 131072-token output limit to the existing BigModel/Zhipu catalog without changing its `open.bigmodel.cn` Chat Completions endpoint. The proxy keeps optional `thinking` and `reasoning_effort` controls outside its public request contract. Authenticated management-profile coverage exposes the model, and public HTTP routing coverage verifies the payload and local rejection above the configured output limit. Validation passed with `timeout -k 350s -s SIGKILL 350s make ci`.
+
+- [x] [I022] (P1) Correct the Moonshot catalog for the Kimi K3 launch.
+  Goal:
+  Expose Kimi's currently documented K3 and K2.7 Code model IDs through the existing Moonshot Chat Completions transport.
+
+  Requirements:
+  - Add `kimi-k3`, `kimi-k2.7-code`, and `kimi-k2.7-code-highspeed` exactly as documented by Kimi.
+  - Keep the existing Moonshot OpenAI-compatible Chat Completions transport and its current `max_completion_tokens` mapping; do not invent support for K3-only request controls such as `reasoning_effort`.
+  - Keep `configs/config.yml`, the README catalog, and provider-routing documentation synchronized.
+  - Leave default/persisted-selection migration behavior in the separately tracked B036 scope.
+
+  Deliverables:
+  - Kimi K3 and both current K2.7 Code selections appear in the authenticated management profile.
+  - Public HTTP routing coverage demonstrates the K3 request reaches the Moonshot-compatible Chat Completions payload with the current token-limit field.
+
+  Validation:
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the last code edit.
+
+  ### Resolution
+  Added `kimi-k3`, `kimi-k2.7-code`, and `kimi-k2.7-code-highspeed` to the Moonshot catalog and its README/documented routing contract. The existing Chat Completions transport sends Kimi's current `max_completion_tokens` field and omits K3's fixed sampling controls. Authenticated management-profile coverage exposes all three selections, and public HTTP routing coverage verifies the K3 payload. Validation passed with `timeout -k 350s -s SIGKILL 350s make ci`.
+
+- [x] [I021] (P1) Refresh documented model catalogs for existing providers.
+  Goal:
+  Make recently released, text-generation models selectable through the existing provider adapters without introducing a new provider or transport contract.
+
+  Requirements:
+  - Add only model identifiers verified in the current first-party provider documentation and compatible with the provider's existing request profile.
+  - Preserve provider defaults for this additive catalog refresh; provider/model persistence migration remains the separately tracked B036 work.
+  - Keep `configs/config.yml`, the README catalog, and provider-routing documentation synchronized.
+  - Do not add request controls or capability fallbacks that are not already owned by the existing provider transport.
+
+  Deliverables:
+  - Current model options for the supported OpenAI, Anthropic, Gemini, xAI, DashScope, Moonshot, SiliconFlow, and Zhipu provider paths where current upstream releases exist.
+  - Public HTTP integration coverage for representative new catalog selections across the affected provider protocols.
+
+  Validation:
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the last code edit.
+
+  ### Resolution
+  Added current OpenAI GPT-5.6 aliases and variants; Anthropic Claude Fable and Sonnet 5; Gemini 3.1 Pro and 3 Flash previews; DashScope Qwen 3.7 Max and Plus; Moonshot Kimi K2.6; and xAI Grok 4.5 and Grok 4.20 reasoning/non-reasoning selections. The Moonshot chat transport now maps the proxy `max_tokens` setting to Kimi's current `max_completion_tokens` request field. The README and provider-routing plan mirror the catalog contract. Authenticated management-profile and public HTTP routing coverage verify the new entries are visible and route through their intended provider protocols. Validation passed with `timeout -k 350s -s SIGKILL 350s make ci`.
 
 - [x] [I020] (P1) Declare LLM Proxy's TAuth tenant requirements in the app-owned deployment manifest.
   ### Summary

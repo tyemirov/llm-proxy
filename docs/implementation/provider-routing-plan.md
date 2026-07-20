@@ -146,6 +146,16 @@ implementations. `config.yml` owns provider model ids, provider default models,
 dictation model ids, model-specific web-search enablement, and known
 provider-side output-token limits.
 
+The README model-capability table mirrors `config.yml`; refresh those two
+catalog representations together and do not hardcode model ids in provider
+transports. Moonshot's current Kimi Chat Completions route receives
+`max_completion_tokens` when a caller supplies the proxy `max_tokens` value.
+It deliberately omits sampling controls because Kimi K3 fixes those values
+upstream.
+GLM-5.2 remains on the existing BigModel/Zhipu Chat Completions endpoint. Its
+128K output maximum is catalog metadata; optional `thinking` and
+`reasoning_effort` controls are not part of the proxy request contract.
+
 OpenAI `request_profile` values select stable payload shapes:
 
 - `openai_responses_base`

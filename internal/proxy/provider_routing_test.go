@@ -154,6 +154,130 @@ func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
 	}
 }
 
+func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.T) {
+	testCases := []struct {
+		name                string
+		provider            string
+		model               string
+		tokenParameterField string
+		forbiddenFields     []string
+	}{
+		{name: "DashScope Qwen Plus", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwenPlus, tokenParameterField: "max_tokens"},
+		{name: "Moonshot Kimi K2.6", provider: proxy.ProviderNameMoonshot, model: "kimi-k2.6", tokenParameterField: "max_completion_tokens"},
+		{name: "Moonshot Kimi K3", provider: proxy.ProviderNameMoonshot, model: "kimi-k3", tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
+		{name: "Moonshot Kimi K2.7 Code", provider: proxy.ProviderNameMoonshot, model: "kimi-k2.7-code", tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
+		{name: "Zhipu GLM 5.2", provider: proxy.ProviderNameZhipu, model: "glm-5.2", tokenParameterField: "max_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
+		{name: "Grok 4.5", provider: proxy.ProviderNameGrok, model: "grok-4.5", tokenParameterField: "max_tokens"},
+		{name: "Grok 4.20 reasoning", provider: proxy.ProviderNameGrok, model: "grok-4.20-0309-reasoning", tokenParameterField: "max_tokens"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			var capturedPayload map[string]any
+			upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+				if request.Method != http.MethodPost {
+					subTest.Fatalf("method=%s want=%s", request.Method, http.MethodPost)
+				}
+				if request.URL.Path != "/chat/completions" {
+					subTest.Fatalf("path=%s want=%s", request.URL.Path, "/chat/completions")
+				}
+				bodyBytes, readError := io.ReadAll(request.Body)
+				if readError != nil {
+					subTest.Fatalf("read body: %v", readError)
+				}
+				if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+					subTest.Fatalf("unmarshal body: %v", unmarshalError)
+				}
+				responseWriter.Header().Set("Content-Type", "application/json")
+				_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"current compatible model ok"}}]}`))
+			}))
+			subTest.Cleanup(upstreamServer.Close)
+
+			router, buildError := buildRouterWithCatalogs(subTest, proxy.Configuration{
+				Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+				OpenAIKey:             TestAPIKey,
+				DashScopeKey:          "sk-dashscope",
+				DashScopeBaseURL:      upstreamServer.URL,
+				MoonshotKey:           "sk-moonshot",
+				MoonshotBaseURL:       upstreamServer.URL,
+				ZhipuKey:              testZhipuKey,
+				ZhipuBaseURL:          upstreamServer.URL,
+				GrokKey:               testGrokKey,
+				GrokBaseURL:           upstreamServer.URL,
+				LogLevel:              proxy.LogLevelInfo,
+				WorkerCount:           1,
+				QueueSize:             1,
+				RequestTimeoutSeconds: TestTimeout,
+			}, zap.NewNop().Sugar())
+			if buildError != nil {
+				subTest.Fatalf(messageBuildRouterError, buildError)
+			}
+
+			queryParameters := url.Values{}
+			queryParameters.Set("key", TestSecret)
+			queryParameters.Set("prompt", TestPrompt)
+			queryParameters.Set("provider", testCase.provider)
+			queryParameters.Set("model", testCase.model)
+			queryParameters.Set("max_tokens", "321")
+			request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+			responseRecorder := httptest.NewRecorder()
+			router.ServeHTTP(responseRecorder, request)
+
+			if responseRecorder.Code != http.StatusOK {
+				subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+			}
+			if capturedPayload["model"] != testCase.model {
+				subTest.Fatalf("model=%v want=%s", capturedPayload["model"], testCase.model)
+			}
+			if capturedPayload[testCase.tokenParameterField] != float64(321) {
+				subTest.Fatalf("%s=%v payload=%v", testCase.tokenParameterField, capturedPayload[testCase.tokenParameterField], capturedPayload)
+			}
+			for _, forbiddenField := range testCase.forbiddenFields {
+				if _, present := capturedPayload[forbiddenField]; present {
+					subTest.Fatalf("payload unexpectedly contained %s: %v", forbiddenField, capturedPayload)
+				}
+			}
+		})
+	}
+}
+
+func TestProviderRoutingRejectsGLM52MaxTokensAboveModelLimit(t *testing.T) {
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		t.Fatal("upstream must not be called for max_tokens above the GLM-5.2 limit")
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		ZhipuKey:              testZhipuKey,
+		ZhipuBaseURL:          upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	queryParameters := url.Values{}
+	queryParameters.Set("key", TestSecret)
+	queryParameters.Set("prompt", TestPrompt)
+	queryParameters.Set("provider", proxy.ProviderNameZhipu)
+	queryParameters.Set("model", "glm-5.2")
+	queryParameters.Set("max_tokens", "131073")
+	request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
+	}
+	if !strings.Contains(responseRecorder.Body.String(), "invalid max_tokens parameter") {
+		t.Fatalf("body=%q want invalid max_tokens parameter", responseRecorder.Body.String())
+	}
+}
+
 func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testing.T) {
 	type capturedMetaRequest struct {
 		payload map[string]any
@@ -588,13 +712,15 @@ func TestProviderRoutingSurfacesChatCompletionTokenUsage(t *testing.T) {
 }
 
 func TestProviderRoutingSupportsGeminiGenerateContent(t *testing.T) {
+	const currentGeminiModel = "gemini-3.1-pro-preview"
+
 	var capturedPayload map[string]any
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			t.Fatalf("method=%s want=%s", request.Method, http.MethodPost)
 		}
-		if request.URL.Path != "/models/"+proxy.ModelNameGemini25Flash+":generateContent" {
-			t.Fatalf("path=%s want=%s", request.URL.Path, "/models/"+proxy.ModelNameGemini25Flash+":generateContent")
+		if request.URL.Path != "/models/"+currentGeminiModel+":generateContent" {
+			t.Fatalf("path=%s want=%s", request.URL.Path, "/models/"+currentGeminiModel+":generateContent")
 		}
 		if apiKeyHeader := request.Header.Get("x-goog-api-key"); apiKeyHeader != testGeminiKey {
 			t.Fatalf("x-goog-api-key=%q want=%q", apiKeyHeader, testGeminiKey)
@@ -630,6 +756,7 @@ func TestProviderRoutingSupportsGeminiGenerateContent(t *testing.T) {
 	queryParameters.Set("key", TestSecret)
 	queryParameters.Set("prompt", TestPrompt)
 	queryParameters.Set("provider", proxy.ProviderNameGemini)
+	queryParameters.Set("model", currentGeminiModel)
 	queryParameters.Set("system_prompt", "system text")
 	queryParameters.Set("format", "application/json")
 	request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
@@ -1118,6 +1245,8 @@ func TestProviderRoutingAnthropicDefaultMaxTokensByModel(t *testing.T) {
 		modelIdentifier   string
 		expectedMaxTokens float64
 	}{
+		{name: "Fable 5", modelIdentifier: "claude-fable-5", expectedMaxTokens: 128000},
+		{name: "Sonnet 5", modelIdentifier: "claude-sonnet-5", expectedMaxTokens: 128000},
 		{name: "opus 4.8", modelIdentifier: proxy.ModelNameClaudeOpus48, expectedMaxTokens: 128000},
 		{name: "opus 4.1", modelIdentifier: proxy.ModelNameClaudeOpus41Alias, expectedMaxTokens: 32000},
 	}
