@@ -601,6 +601,29 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
 ## Improvements
 
+- [x] [I024] (P1) Add Qwen 3.8 Token Plan and MiniMax M2.7 providers.
+  Goal:
+  Expose `qwen3.8-max-preview` through Qwen Cloud Token Plan and `MiniMax-M2.7` through MiniMax as distinct, selectable text providers.
+
+  Requirements:
+  - Add canonical `qwencloud` and `minimax` provider selectors. Do not alias Qwen Cloud to `qwen`, which remains the DashScope selector alias and uses a different credential and endpoint contract.
+  - Configure Qwen Cloud with its Token Plan OpenAI-compatible endpoint and dedicated `${QWEN_CLOUD_TOKEN_PLAN_API_KEY}`; configure MiniMax with `https://api.minimax.io/v1` and `${MINIMAX_API_KEY}`.
+  - Route Qwen Cloud through the existing compatible Chat Completions payload with `max_tokens`. Route MiniMax M2.7 through that same adapter with `max_completion_tokens` and enforce its documented 2048-token completion maximum at the request edge.
+  - Expose text generation only. Do not add provider-specific thinking, tool, streaming, multimodal, or dictation controls outside the existing public proxy contract.
+  - Keep `configs/config.yml`, README, provider-routing documentation, live-provider harness, and management/profile contracts synchronized.
+  - Preserve existing tenant defaults and leave default/persisted-selection migration behavior in separately tracked B036.
+
+  Deliverables:
+  - Both models appear in the authenticated management provider catalog under their canonical selectors.
+  - Public HTTP routing coverage proves the endpoint, credential boundary, model ID, and token-field mapping; MiniMax requests above 2048 tokens fail before an upstream call.
+  - The live-provider harness recognizes the two explicit credential variables and provider selectors without making an upstream call during repository CI.
+
+  Validation:
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the last code edit.
+
+  Resolution:
+  - Added canonical `qwencloud` and `minimax` text providers, synchronized their catalogs and harness contracts, and verified their routing, credential isolation, and MiniMax output limit through the required passing CI pair.
+
 - [x] [I023] (P1) Add GLM-5.2 to the existing BigModel/Zhipu catalog.
   Goal:
   Make the documented GLM-5.2 text model selectable through the existing Zhipu OpenAI-compatible Chat Completions transport.
