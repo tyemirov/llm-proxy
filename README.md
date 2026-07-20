@@ -169,6 +169,9 @@ providers:
       default_model: "kimi-k2-0905-preview"
       models:
         - id: "kimi-k2-0905-preview"
+        - id: "kimi-k3"
+        - id: "kimi-k2.7-code"
+        - id: "kimi-k2.7-code-highspeed"
         - id: "kimi-k2.6"
   siliconflow:
     base_url: "https://api.siliconflow.com/v1"
@@ -188,6 +191,8 @@ providers:
       default_model: "glm-5.1"
       models:
         - id: "glm-5.1"
+        - id: "glm-5.2"
+          output_token_limit: 131072
     dictation:
       default_model: "glm-asr-2512"
       models:
@@ -326,6 +331,11 @@ The model-capability table below mirrors the checked-in catalog. Refresh that
 table and `config.yml` together; provider transports remain code-owned.
 Moonshot's current Kimi route receives Chat Completions
 `max_completion_tokens` when callers set the proxy `max_tokens` value.
+The transport deliberately omits sampling controls because Kimi K3 fixes those
+values upstream.
+GLM-5.2 uses the existing BigModel/Zhipu Chat Completions endpoint with a
+configured 131072-token output cap; optional `thinking` and `reasoning_effort`
+controls remain outside the proxy contract.
 
 Each provider must declare a text catalog. A provider with an `api_key`
 configured must have a valid text `default_model`; that default is used when a
@@ -1281,9 +1291,13 @@ positive and lets the upstream provider enforce any provider-side model limit.
 | `qwen3.7-max` | DashScope/Qwen | No | - | No |
 | `qwen3.7-plus` | DashScope/Qwen | No | - | No |
 | `kimi-k2-0905-preview` | Moonshot/Kimi | Yes | - | No |
+| `kimi-k3` | Moonshot/Kimi | No | - | No |
+| `kimi-k2.7-code` | Moonshot/Kimi | No | - | No |
+| `kimi-k2.7-code-highspeed` | Moonshot/Kimi | No | - | No |
 | `kimi-k2.6` | Moonshot/Kimi | No | - | No |
 | `deepseek-ai/DeepSeek-R1` | SiliconFlow | Yes | - | No |
 | `glm-5.1` | Zhipu/GLM | Yes | - | No |
+| `glm-5.2` | Zhipu/GLM | No | `131072` | No |
 | `gemini-3.5-flash` | Gemini | No | `65536` | No |
 | `gemini-3.1-pro-preview` | Gemini | No | `65536` | No |
 | `gemini-3-flash-preview` | Gemini | No | `65536` | No |
