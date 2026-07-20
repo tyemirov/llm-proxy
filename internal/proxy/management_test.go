@@ -731,6 +731,56 @@ func TestManagementSQLiteDialectOpensConfiguredDatabase(t *testing.T) {
 	}
 }
 
+func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
+	router := newManagementRouter(t, proxy.Configuration{})
+	profileRequest := authenticatedJSONRequest(http.MethodGet, "/api/management/profile", "", managementSessionCookie(t, "tauth-current-catalog-user"))
+	profileResponse := httptest.NewRecorder()
+	router.ServeHTTP(profileResponse, profileRequest)
+	if profileResponse.Code != http.StatusOK {
+		t.Fatalf("profile status=%d body=%s", profileResponse.Code, profileResponse.Body.String())
+	}
+
+	var profilePayload struct {
+		Providers []struct {
+			ID         string   `json:"id"`
+			TextModels []string `json:"text_models"`
+		} `json:"providers"`
+	}
+	if decodeError := json.Unmarshal(profileResponse.Body.Bytes(), &profilePayload); decodeError != nil {
+		t.Fatalf("decode profile: %v", decodeError)
+	}
+	modelsByProvider := map[string][]string{}
+	for _, provider := range profilePayload.Providers {
+		modelsByProvider[provider.ID] = provider.TextModels
+	}
+	expectedModels := map[string][]string{
+		proxy.ProviderNameOpenAI:    {"gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
+		proxy.ProviderNameDashScope: {"qwen3.7-max", "qwen3.7-plus"},
+		proxy.ProviderNameMoonshot:  {"kimi-k2.6"},
+		proxy.ProviderNameGemini:    {"gemini-3.1-pro-preview", "gemini-3-flash-preview"},
+		proxy.ProviderNameAnthropic: {"claude-fable-5", "claude-sonnet-5"},
+		proxy.ProviderNameGrok:      {"grok-4.5", "grok-4.20-0309-reasoning", "grok-4.20-0309-non-reasoning"},
+	}
+	for providerIdentifier, expectedProviderModels := range expectedModels {
+		configuredModels, configured := modelsByProvider[providerIdentifier]
+		if !configured {
+			t.Fatalf("profile missing provider=%s", providerIdentifier)
+		}
+		for _, expectedModel := range expectedProviderModels {
+			found := false
+			for _, configuredModel := range configuredModels {
+				if configuredModel == expectedModel {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("profile provider=%s models=%v missing=%s", providerIdentifier, configuredModels, expectedModel)
+			}
+		}
+	}
+}
+
 func TestManagementGeneratedSecretSupportsDictationAndRejectsMultipartProviderKeys(t *testing.T) {
 	var capturedAuthorization string
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
