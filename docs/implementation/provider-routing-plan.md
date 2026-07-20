@@ -146,6 +146,11 @@ implementations. `config.yml` owns provider model ids, provider default models,
 dictation model ids, model-specific web-search enablement, and known
 provider-side output-token limits.
 
+The README model-capability table mirrors `config.yml`; refresh those two
+catalog representations together and do not hardcode model ids in provider
+transports. Moonshot's current Kimi Chat Completions route receives
+`max_completion_tokens` when a caller supplies the proxy `max_tokens` value.
+
 OpenAI `request_profile` values select stable payload shapes:
 
 - `openai_responses_base`
