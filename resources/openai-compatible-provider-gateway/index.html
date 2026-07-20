@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>OpenAI-compatible provider gateway</title>
-    <meta name="description" content="Route Meta Muse Spark, DeepSeek, Qwen, Kimi, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.">
+    <meta name="description" content="Route Meta Muse Spark, DeepSeek, DashScope Qwen, Qwen Cloud, Kimi, MiniMax, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/">
     <meta property="og:title" content="OpenAI-compatible provider gateway">
-    <meta property="og:description" content="Route Meta Muse Spark, DeepSeek, Qwen, Kimi, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.">
+    <meta property="og:description" content="Route Meta Muse Spark, DeepSeek, DashScope Qwen, Qwen Cloud, Kimi, MiniMax, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/">
     <meta name="twitter:card" content="summary">
@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"OpenAI-compatible provider gateway","description":"Route Meta Muse Spark, DeepSeek, Qwen, Kimi, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.","url":"https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/","about":["LLM Proxy","Provider routing","OpenAI-compatible provider gateway"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"OpenAI-compatible provider gateway","description":"Route Meta Muse Spark, DeepSeek, DashScope Qwen, Qwen Cloud, Kimi, MiniMax, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.","url":"https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/","about":["LLM Proxy","Provider routing","OpenAI-compatible provider gateway"]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"OpenAI-compatible provider gateway","item":"https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of OpenAI-compatible provider gateway?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy uses a shared compatible chat adapter for configured providers while keeping provider URLs, keys, and model catalogs in config."}},{"@type":"Question","name":"Who should read this provider routing resource?","acceptedAnswer":{"@type":"Answer","text":"Teams adopting OpenAI-compatible chat providers without rewriting every caller."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Multi-provider LLM proxy for internal tools, which covers multi-provider LLM proxy."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
@@ -43,7 +43,7 @@
           <header class="resource-hero">
             <p class="eyebrow">Provider routing</p>
             <h1>OpenAI-compatible provider gateway</h1>
-            <p class="resource-deck">Route Meta Muse Spark, DeepSeek, Qwen, Kimi, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.</p>
+            <p class="resource-deck">Route Meta Muse Spark, DeepSeek, DashScope Qwen, Qwen Cloud, Kimi, MiniMax, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.</p>
             <p class="resource-audience">Teams adopting OpenAI-compatible chat providers without rewriting every caller.</p>
             <div class="resource-actions">
               <a class="resource-button" href="/">Open LLM Proxy</a>
@@ -65,7 +65,7 @@
             <h2>How it works</h2>
             <ol class="resource-steps">
               <li>Configure provider base_url, api_key, and text catalog.</li>
-<li>Use provider selectors such as meta, deepseek, dashscope, moonshot, siliconflow, zhipu, or grok.</li>
+<li>Use provider selectors such as meta, deepseek, dashscope, qwencloud, moonshot, minimax, siliconflow, zhipu, or grok.</li>
 <li>Send GET, compatibility POST, or canonical /v2 requests.</li>
 <li>Let omitted model use the selected provider's configured default.</li>
             </ol>
@@ -124,6 +124,18 @@
                       <p>A caller uses provider=qwen for DashScope routing.</p>
                     </section>
                   
+
+                    <section class="resource-card">
+                      <h3>Qwen Cloud route</h3>
+                      <p>A caller uses provider=qwencloud with a Qwen Cloud Token Plan key; it is not the DashScope qwen alias.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>MiniMax route</h3>
+                      <p>A caller uses provider=minimax and model=MiniMax-M2.7 through the shared Chat Completions adapter.</p>
+                    </section>
+
 
                     <section class="resource-card">
                       <h3>xAI route</h3>
