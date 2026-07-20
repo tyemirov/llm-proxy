@@ -290,6 +290,33 @@ def test_client_rejects_invalid_or_competing_model_profiles_before_http(
     assert len(CapturingHandler.captured_requests) == 1
 
 
+def test_client_normalizes_model_profile_reader_failures_before_http(running_server: RunningServer) -> None:
+    """Application reader failures are typed and never reach the proxy."""
+
+    model_profile_path = "/profiles/current-model.json"
+
+    def failing_model_profile_reader(profile_path: str) -> str:
+        """Simulate an application profile-storage failure."""
+
+        raise ValueError(f"application storage rejected {profile_path!r}")
+
+    client = Client(
+        ClientConfig(
+            base_url=running_server.url,
+            secret="test-secret",
+            model_profile_path=model_profile_path,
+            model_profile_reader=failing_model_profile_reader,
+        )
+    )
+
+    with pytest.raises(LLMProxyModelProfileError, match="read model_profile") as error_info:
+        client.post_messages(ClientMessagesRequest(messages=(ClientMessage(role="user", content="Keep it typed"),)))
+
+    assert f"path={model_profile_path!r}" in str(error_info.value)
+    assert "application storage rejected" in str(error_info.value)
+    assert CapturingHandler.captured_requests == []
+
+
 def test_client_sends_unknown_model_profile_pair_to_proxy(running_server: RunningServer, tmp_path: Path) -> None:
     """The client leaves exact provider/model validation to the proxy boundary."""
 

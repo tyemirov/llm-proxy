@@ -149,7 +149,7 @@ class ClientConfig:
         model_profile_reader = cast(ModelProfileReader, self.model_profile_reader)
         try:
             model_profile_document = model_profile_reader(model_profile_path)
-        except (OSError, UnicodeError) as error:
+        except Exception as error:
             raise LLMProxyModelProfileError(
                 f"llm_proxy_client_invalid_model_profile: read {MODEL_PROFILE_SUBJECT} "
                 f"path={model_profile_path!r}: {error}"
