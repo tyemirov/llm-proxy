@@ -755,7 +755,7 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 	}
 	expectedModels := map[string][]string{
 		proxy.ProviderNameOpenAI:    {"gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
-		proxy.ProviderNameDashScope: {"qwen3.7-max", "qwen3.7-plus"},
+		proxy.ProviderNameDashScope: {proxy.ModelNameDashScopeQwenPlus},
 		proxy.ProviderNameMoonshot:  {"kimi-k3", "kimi-k2.7-code", "kimi-k2.7-code-highspeed", "kimi-k2.6"},
 		proxy.ProviderNameZhipu:     {"glm-5.2"},
 		proxy.ProviderNameGemini:    {"gemini-3.1-pro-preview", "gemini-3-flash-preview"},
@@ -777,6 +777,18 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 			}
 			if !found {
 				t.Fatalf("profile provider=%s models=%v missing=%s", providerIdentifier, configuredModels, expectedModel)
+			}
+		}
+	}
+	unsupportedDashScopeModels := []string{"qwen3.7-max", "qwen3.7-plus"}
+	configuredDashScopeModels, configured := modelsByProvider[proxy.ProviderNameDashScope]
+	if !configured {
+		t.Fatalf("profile missing provider=%s", proxy.ProviderNameDashScope)
+	}
+	for _, unsupportedModel := range unsupportedDashScopeModels {
+		for _, configuredModel := range configuredDashScopeModels {
+			if configuredModel == unsupportedModel {
+				t.Fatalf("profile provider=%s must not expose model=%s", proxy.ProviderNameDashScope, unsupportedModel)
 			}
 		}
 	}

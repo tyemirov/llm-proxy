@@ -162,7 +162,7 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 		tokenParameterField string
 		forbiddenFields     []string
 	}{
-		{name: "DashScope Qwen 3.7 Plus", provider: proxy.ProviderNameDashScope, model: "qwen3.7-plus", tokenParameterField: "max_tokens"},
+		{name: "DashScope Qwen Plus", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwenPlus, tokenParameterField: "max_tokens"},
 		{name: "Moonshot Kimi K2.6", provider: proxy.ProviderNameMoonshot, model: "kimi-k2.6", tokenParameterField: "max_completion_tokens"},
 		{name: "Moonshot Kimi K3", provider: proxy.ProviderNameMoonshot, model: "kimi-k3", tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
 		{name: "Moonshot Kimi K2.7 Code", provider: proxy.ProviderNameMoonshot, model: "kimi-k2.7-code", tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
