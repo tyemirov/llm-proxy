@@ -1581,6 +1581,12 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   `timeout -k 350s -s SIGKILL 350s make ci` runs passed; the final gate included
   100.0% Go coverage, 29 Python tests, 16 Playwright UI tests, the management
   auth black-box test, 38 release tests, and the live-provider preflight.
+  Follow-up review fixes reject invalid UTF-8 Go profile bytes before JSON
+  decoding or HTTP and convert every ordinary Python profile-reader failure to
+  `LLMProxyModelProfileError` with profile-path context; the final same gate
+  passed with 100.0% Go coverage, 30 Python tests, 16 Playwright UI tests, the
+  management auth black-box test, 38 release tests, and the live-provider
+  preflight.
 
 ## Planning
 *do not implement yet*
