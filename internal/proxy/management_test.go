@@ -756,7 +756,8 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 	expectedModels := map[string][]string{
 		proxy.ProviderNameOpenAI:    {"gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
 		proxy.ProviderNameDashScope: {"qwen3.7-max", "qwen3.7-plus"},
-		proxy.ProviderNameMoonshot:  {"kimi-k2.6"},
+		proxy.ProviderNameMoonshot:  {"kimi-k3", "kimi-k2.7-code", "kimi-k2.7-code-highspeed", "kimi-k2.6"},
+		proxy.ProviderNameZhipu:     {"glm-5.2"},
 		proxy.ProviderNameGemini:    {"gemini-3.1-pro-preview", "gemini-3-flash-preview"},
 		proxy.ProviderNameAnthropic: {"claude-fable-5", "claude-sonnet-5"},
 		proxy.ProviderNameGrok:      {"grok-4.5", "grok-4.20-0309-reasoning", "grok-4.20-0309-non-reasoning"},

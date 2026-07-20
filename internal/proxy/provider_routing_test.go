@@ -160,9 +160,13 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 		provider            string
 		model               string
 		tokenParameterField string
+		forbiddenFields     []string
 	}{
 		{name: "DashScope Qwen 3.7 Plus", provider: proxy.ProviderNameDashScope, model: "qwen3.7-plus", tokenParameterField: "max_tokens"},
 		{name: "Moonshot Kimi K2.6", provider: proxy.ProviderNameMoonshot, model: "kimi-k2.6", tokenParameterField: "max_completion_tokens"},
+		{name: "Moonshot Kimi K3", provider: proxy.ProviderNameMoonshot, model: "kimi-k3", tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
+		{name: "Moonshot Kimi K2.7 Code", provider: proxy.ProviderNameMoonshot, model: "kimi-k2.7-code", tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
+		{name: "Zhipu GLM 5.2", provider: proxy.ProviderNameZhipu, model: "glm-5.2", tokenParameterField: "max_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
 		{name: "Grok 4.5", provider: proxy.ProviderNameGrok, model: "grok-4.5", tokenParameterField: "max_tokens"},
 		{name: "Grok 4.20 reasoning", provider: proxy.ProviderNameGrok, model: "grok-4.20-0309-reasoning", tokenParameterField: "max_tokens"},
 	}
@@ -195,6 +199,8 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 				DashScopeBaseURL:      upstreamServer.URL,
 				MoonshotKey:           "sk-moonshot",
 				MoonshotBaseURL:       upstreamServer.URL,
+				ZhipuKey:              testZhipuKey,
+				ZhipuBaseURL:          upstreamServer.URL,
 				GrokKey:               testGrokKey,
 				GrokBaseURL:           upstreamServer.URL,
 				LogLevel:              proxy.LogLevelInfo,
@@ -225,7 +231,50 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 			if capturedPayload[testCase.tokenParameterField] != float64(321) {
 				subTest.Fatalf("%s=%v payload=%v", testCase.tokenParameterField, capturedPayload[testCase.tokenParameterField], capturedPayload)
 			}
+			for _, forbiddenField := range testCase.forbiddenFields {
+				if _, present := capturedPayload[forbiddenField]; present {
+					subTest.Fatalf("payload unexpectedly contained %s: %v", forbiddenField, capturedPayload)
+				}
+			}
 		})
+	}
+}
+
+func TestProviderRoutingRejectsGLM52MaxTokensAboveModelLimit(t *testing.T) {
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		t.Fatal("upstream must not be called for max_tokens above the GLM-5.2 limit")
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		ZhipuKey:              testZhipuKey,
+		ZhipuBaseURL:          upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	queryParameters := url.Values{}
+	queryParameters.Set("key", TestSecret)
+	queryParameters.Set("prompt", TestPrompt)
+	queryParameters.Set("provider", proxy.ProviderNameZhipu)
+	queryParameters.Set("model", "glm-5.2")
+	queryParameters.Set("max_tokens", "131073")
+	request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
+	}
+	if !strings.Contains(responseRecorder.Body.String(), "invalid max_tokens parameter") {
+		t.Fatalf("body=%q want invalid max_tokens parameter", responseRecorder.Body.String())
 	}
 }
 
