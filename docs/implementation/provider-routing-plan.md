@@ -18,9 +18,9 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - `messages[].order` is optional. When any submitted message includes `order`, every submitted message must include a unique non-negative integer `order`; the proxy sorts submitted messages by ascending `order` before adding a request or tenant system prompt and before routing upstream.
 - With `messages[]` on `POST /`, body `system_prompt` is prepended as a system message only when the transcript does not already contain a `system` message. A body containing both `system_prompt` and a system message is invalid. With `POST /v2`, callers send system instructions as `system` role messages.
 - `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies.
-- Provided `max_tokens` maps to OpenAI Responses `max_output_tokens`, Meta Chat Completions `max_completion_tokens`, other OpenAI-compatible chat completions `max_tokens`, Anthropic Messages `max_tokens`, and Gemini `generationConfig.maxOutputTokens`.
+- Provided `max_tokens` maps to OpenAI Responses `max_output_tokens`, Meta, Moonshot, and MiniMax Chat Completions `max_completion_tokens`, other OpenAI-compatible chat completions `max_tokens`, Anthropic Messages `max_tokens`, and Gemini `generationConfig.maxOutputTokens`.
 - Omitted `max_tokens` means the proxy omits provider max-token fields and lets the selected provider/model default apply, except Anthropic Messages where the upstream API requires `max_tokens` and the proxy sends the selected model's configured synchronous output limit.
-- Known provider-specific output-token ceilings are validated before upstream calls; Gemini text models reject `max_tokens` above `65536` with `400 Bad Request`, and Claude models reject values above their configured synchronous Messages output limit.
+- Known provider-specific output-token ceilings are validated before upstream calls; MiniMax M2.7 rejects `max_tokens` above `2048`, Gemini text models reject values above `65536`, and Claude models reject values above their configured synchronous Messages output limits with `400 Bad Request`.
 - For JSON `POST /`, query `model` may override the body only when the body omits `model` or provides the same value.
 - Conflicting query/body `model` values return `400 Bad Request`.
 - JSON `POST /` bodies that provide both `prompt` and `messages`, neither field, empty messages, unsupported roles, empty content, a missing user message, partially specified `order`, duplicate `order`, or negative `order` return `400 Bad Request`.
@@ -35,7 +35,9 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 | `meta` | none | Meta Model API OpenAI-compatible chat completions | Not supported | Not supported |
 | `deepseek` | none | OpenAI-compatible chat completions | Not supported | Not supported |
 | `dashscope` | `qwen` | OpenAI-compatible chat completions | Not supported | Not supported |
+| `qwencloud` | none | Qwen Cloud Token Plan OpenAI-compatible chat completions | Not supported | Not supported |
 | `moonshot` | `kimi` | OpenAI-compatible chat completions | Not supported | Not supported |
+| `minimax` | none | MiniMax OpenAI-compatible chat completions | Not supported | Not supported |
 | `siliconflow` | none | OpenAI-compatible chat completions | OpenAI-compatible audio transcription | Not supported |
 | `zhipu` | `glm` | OpenAI-compatible chat completions | Z.AI GLM-ASR transcription | Not supported |
 | `gemini` | none | Native Gemini generateContent | Not supported | Not supported |
@@ -59,6 +61,22 @@ in Meta's [Muse Spark guide](https://developer.meta.com/ai/resources/blog/build-
 [model reference](https://dev.meta.ai/docs/getting-started/models),
 [Chat Completions reference](https://dev.meta.ai/docs/features/chat-completion),
 and [pricing and rate-limit documentation](https://dev.meta.ai/docs/getting-started/pricing-rate-limits).
+
+Qwen Cloud Token Plan is a distinct text-only provider: use canonical selector
+`qwencloud`, model `qwen3.8-max-preview`, its Token Plan endpoint
+`https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`, and
+the dedicated `${QWEN_CLOUD_TOKEN_PLAN_API_KEY}` credential. It has no alias;
+the existing `qwen` alias remains DashScope-only because the two services do
+not share API keys or base URLs. Qwen Cloud requests retain the shared
+compatible `max_tokens` field and do not add Qwen-specific thinking, tools, or
+multimodal controls.
+
+MiniMax is a distinct text-only provider with canonical selector `minimax`,
+model `MiniMax-M2.7`, endpoint `https://api.minimax.io/v1`, and
+`${MINIMAX_API_KEY}`. The shared adapter maps public `max_tokens` to MiniMax
+`max_completion_tokens`; its configured `2048` output limit is rejected at the
+proxy edge before an upstream call. The proxy does not add MiniMax-specific
+reasoning, tools, streaming, or multimodal controls.
 
 ## Configuration
 
@@ -117,7 +135,9 @@ Provider credentials and base URLs:
 - `providers.meta.api_key`, `providers.meta.base_url`
 - `providers.deepseek.api_key`, `providers.deepseek.base_url`
 - `providers.dashscope.api_key`, `providers.dashscope.base_url`
+- `providers.qwencloud.api_key`, `providers.qwencloud.base_url`
 - `providers.moonshot.api_key`, `providers.moonshot.base_url`
+- `providers.minimax.api_key`, `providers.minimax.base_url`
 - `providers.siliconflow.api_key`, `providers.siliconflow.base_url`, `providers.siliconflow.transcriptions_url`
 - `providers.zhipu.api_key`, `providers.zhipu.base_url`, `providers.zhipu.transcriptions_url`
 - `providers.gemini.api_key`, `providers.gemini.base_url`
@@ -152,6 +172,9 @@ transports. Moonshot's current Kimi Chat Completions route receives
 `max_completion_tokens` when a caller supplies the proxy `max_tokens` value.
 It deliberately omits sampling controls because Kimi K3 fixes those values
 upstream.
+Qwen Cloud Token Plan is separate from DashScope at both the selector and
+credential boundary. MiniMax M2.7 maps public `max_tokens` to
+`max_completion_tokens` and carries a configured 2048-token output ceiling.
 GLM-5.2 remains on the existing BigModel/Zhipu Chat Completions endpoint. Its
 128K output maximum is catalog metadata; optional `thinking` and
 `reasoning_effort` controls are not part of the proxy request contract.
