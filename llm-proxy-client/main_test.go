@@ -255,6 +255,149 @@ func TestCommandReadsPromptFileAndOptionalBodyFields(t *testing.T) {
 	}
 }
 
+func TestCommandReadsCurrentModelProfile(t *testing.T) {
+	profilePath := filepath.Join(t.TempDir(), "current-model.json")
+	replaceCommandModelProfile(t, profilePath, `{"provider":"gemini","model":"gemini-2.5-flash"}`)
+	capturedRequests := []capturedProxyRequest{}
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		bodyBytes, readError := io.ReadAll(httpRequest.Body)
+		if readError != nil {
+			t.Fatalf("read body: %v", readError)
+		}
+		capturedRequests = append(capturedRequests, capturedProxyRequest{
+			path: httpRequest.URL.RequestURI(),
+			body: string(bodyBytes),
+		})
+		_, _ = responseWriter.Write([]byte("profile-ok"))
+	}))
+	t.Cleanup(server.Close)
+
+	arguments := []string{
+		"--base-url", server.URL,
+		"--secret", "test-secret",
+		"--model-profile", profilePath,
+		"--prompt", "Use the selected model",
+	}
+	for _, expected := range []struct {
+		provider string
+		model    string
+	}{
+		{provider: "gemini", model: "gemini-2.5-flash"},
+		{provider: "openai", model: "gpt-5-mini"},
+	} {
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		exitCode := run(arguments, strings.NewReader(""), &stdout, &stderr, defaultHTTPClientFactory)
+		if exitCode != 0 {
+			t.Fatalf("exit=%d stderr=%s", exitCode, stderr.String())
+		}
+		if stdout.String() != "profile-ok" {
+			t.Fatalf("stdout=%q", stdout.String())
+		}
+		if expected.provider == "gemini" {
+			replaceCommandModelProfile(t, profilePath, `{"provider":"openai","model":"gpt-5-mini"}`)
+		}
+	}
+
+	if len(capturedRequests) != 2 {
+		t.Fatalf("requests=%v", capturedRequests)
+	}
+	for requestIndex, expected := range []struct {
+		provider string
+		model    string
+	}{
+		{provider: "gemini", model: "gemini-2.5-flash"},
+		{provider: "openai", model: "gpt-5-mini"},
+	} {
+		parsedURL, parseError := url.Parse(capturedRequests[requestIndex].path)
+		if parseError != nil {
+			t.Fatalf("parse request %d: %v", requestIndex, parseError)
+		}
+		if parsedURL.Query().Get("provider") != expected.provider {
+			t.Fatalf("request %d provider=%q", requestIndex, parsedURL.Query().Get("provider"))
+		}
+		if !strings.Contains(capturedRequests[requestIndex].body, `"model":"`+expected.model+`"`) {
+			t.Fatalf("request %d body=%s", requestIndex, capturedRequests[requestIndex].body)
+		}
+	}
+}
+
+func TestCommandRejectsCompetingModelProfileSourcesBeforeHTTP(t *testing.T) {
+	profilePath := filepath.Join(t.TempDir(), "current-model.json")
+	replaceCommandModelProfile(t, profilePath, `{"provider":"gemini","model":"gemini-2.5-flash"}`)
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		requestCount++
+		_, _ = responseWriter.Write([]byte("unexpected"))
+	}))
+	t.Cleanup(server.Close)
+
+	testCases := []struct {
+		name        string
+		arguments   []string
+		errorString string
+	}{
+		{
+			name: "request model",
+			arguments: []string{
+				"--base-url", server.URL,
+				"--secret", "test-secret",
+				"--model-profile", profilePath,
+				"--model", "gpt-5-mini",
+				"--prompt", "Do not compete",
+			},
+			errorString: "request model conflicts with model_profile",
+		},
+		{
+			name: "configured provider",
+			arguments: []string{
+				"--base-url", server.URL,
+				"--secret", "test-secret",
+				"--model-profile", profilePath,
+				"--provider", "openai",
+				"--prompt", "Do not compete",
+			},
+			errorString: "model_profile_path conflicts with provider",
+		},
+		{
+			name: "base URL provider",
+			arguments: []string{
+				"--base-url", server.URL + "?provider=openai",
+				"--secret", "test-secret",
+				"--model-profile", profilePath,
+				"--prompt", "Do not compete",
+			},
+			errorString: "base_url provider query",
+		},
+		{
+			name: "base URL model",
+			arguments: []string{
+				"--base-url", server.URL + "?model=gpt-5-mini",
+				"--secret", "test-secret",
+				"--model-profile", profilePath,
+				"--prompt", "Do not compete",
+			},
+			errorString: "base_url model query",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			exitCode := run(testCase.arguments, strings.NewReader(""), &stdout, &stderr, defaultHTTPClientFactory)
+			if exitCode != 1 {
+				t.Fatalf("exit=%d stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
+			}
+			if !strings.Contains(stderr.String(), testCase.errorString) {
+				t.Fatalf("stderr=%q missing %q", stderr.String(), testCase.errorString)
+			}
+			if requestCount != 0 {
+				t.Fatalf("competing input reached HTTP; request count=%d", requestCount)
+			}
+		})
+	}
+}
+
 func TestCommandRejectsInvalidInputs(t *testing.T) {
 	t.Setenv(envNameBaseURL, "")
 	t.Setenv(envNameSecret, "")
@@ -450,4 +593,15 @@ func TestCommandReportsProxyAndIOErrors(t *testing.T) {
 			t.Fatalf("stderr=%q", stderr.String())
 		}
 	})
+}
+
+func replaceCommandModelProfile(t *testing.T, profilePath string, profileDocument string) {
+	t.Helper()
+	replacementPath := filepath.Join(filepath.Dir(profilePath), "next-model.json")
+	if writeError := os.WriteFile(replacementPath, []byte(profileDocument), 0600); writeError != nil {
+		t.Fatalf("write replacement model profile: %v", writeError)
+	}
+	if renameError := os.Rename(replacementPath, profilePath); renameError != nil {
+		t.Fatalf("replace model profile: %v", renameError)
+	}
 }

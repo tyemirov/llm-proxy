@@ -7,6 +7,7 @@ from .client import (
     ClientMessage,
     LLMProxyClientError,
     LLMProxyHTTPError,
+    LLMProxyModelProfileError,
     LLMProxyTransportError,
 )
 
@@ -17,5 +18,6 @@ __all__ = [
     "ClientMessage",
     "LLMProxyClientError",
     "LLMProxyHTTPError",
+    "LLMProxyModelProfileError",
     "LLMProxyTransportError",
 ]

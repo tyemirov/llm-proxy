@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 import urllib.error
@@ -10,6 +11,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -21,6 +23,7 @@ from llm_proxy_client import (
     ClientMessage,
     LLMProxyClientError,
     LLMProxyHTTPError,
+    LLMProxyModelProfileError,
     LLMProxyTransportError,
 )
 
@@ -40,6 +43,7 @@ class CapturingHandler(BaseHTTPRequestHandler):
     """HTTP handler that captures the request and returns a configured body."""
 
     captured_request = CapturedRequest()
+    captured_requests: list[CapturedRequest] = []
     response_status = 200
     response_body = "reviewed"
     response_delay_seconds = 0.0
@@ -49,13 +53,15 @@ class CapturingHandler(BaseHTTPRequestHandler):
 
         body_length = int(self.headers.get("Content-Length", "0"))
         raw_body = self.rfile.read(body_length).decode("utf-8")
-        type(self).captured_request = CapturedRequest(
+        captured_request = CapturedRequest(
             method=self.command,
             path=self.path,
             accept=self.headers.get("Accept", ""),
             content_type=self.headers.get("Content-Type", ""),
             body=json.loads(raw_body),
         )
+        type(self).captured_request = captured_request
+        type(self).captured_requests.append(captured_request)
         if type(self).response_delay_seconds > 0:
             time.sleep(type(self).response_delay_seconds)
         self.send_response(type(self).response_status)
@@ -96,6 +102,7 @@ def running_server() -> RunningServer:
     """Start a local HTTP server for client contract tests."""
 
     CapturingHandler.captured_request = CapturedRequest()
+    CapturingHandler.captured_requests = []
     CapturingHandler.response_status = 200
     CapturingHandler.response_body = "reviewed"
     CapturingHandler.response_delay_seconds = 0.0
@@ -107,6 +114,20 @@ def running_server() -> RunningServer:
         yield running
     finally:
         running.close()
+
+
+def read_model_profile(profile_path: str) -> str:
+    """Read one application-owned model profile as UTF-8 text."""
+
+    return Path(profile_path).read_text(encoding="utf-8")
+
+
+def replace_model_profile(profile_path: Path, profile_document: str) -> None:
+    """Atomically replace one application-owned profile document."""
+
+    replacement_path = profile_path.with_name("next-model.json")
+    replacement_path.write_text(profile_document, encoding="utf-8")
+    os.replace(replacement_path, profile_path)
 
 
 def test_client_posts_v2_body_and_preserves_non_body_query(running_server: RunningServer) -> None:
@@ -175,6 +196,151 @@ def test_client_omits_model_when_request_uses_provider_default(running_server: R
         "messages": [{"role": "user", "content": "Use provider default"}],
         "web_search": False,
     }
+
+
+def test_client_reloads_atomically_replaced_model_profile(running_server: RunningServer, tmp_path: Path) -> None:
+    """One client reads the profile that exists at each outbound request."""
+
+    profile_path = tmp_path / "current-model.json"
+    replace_model_profile(profile_path, '{"provider":"gemini","model":"gemini-2.5-flash"}')
+    client = Client(
+        ClientConfig(
+            base_url=running_server.url,
+            secret="test-secret",
+            model_profile_path=str(profile_path),
+            model_profile_reader=read_model_profile,
+        )
+    )
+    request = ClientMessagesRequest(messages=(ClientMessage(role="user", content="Use my selected model"),))
+
+    assert client.post_messages(request) == "reviewed"
+    replace_model_profile(profile_path, '{"provider":"openai","model":"gpt-5-mini"}')
+    assert client.post_messages(request) == "reviewed"
+
+    assert [
+        (
+            urllib.parse.parse_qs(urllib.parse.urlparse(captured_request.path).query)["provider"],
+            captured_request.body,
+        )
+        for captured_request in CapturingHandler.captured_requests
+    ] == [
+        (
+            ["gemini"],
+            {
+                "messages": [{"role": "user", "content": "Use my selected model"}],
+                "web_search": False,
+                "model": "gemini-2.5-flash",
+            },
+        ),
+        (
+            ["openai"],
+            {
+                "messages": [{"role": "user", "content": "Use my selected model"}],
+                "web_search": False,
+                "model": "gpt-5-mini",
+            },
+        ),
+    ]
+
+
+def test_client_rejects_invalid_or_competing_model_profiles_before_http(
+    running_server: RunningServer, tmp_path: Path
+) -> None:
+    """Invalid profiles and a pinned request never reuse a prior profile or call the proxy."""
+
+    profile_path = tmp_path / "current-model.json"
+    valid_profile = '{"provider":"gemini","model":"gemini-2.5-flash"}'
+    replace_model_profile(profile_path, valid_profile)
+    client = Client(
+        ClientConfig(
+            base_url=running_server.url,
+            secret="test-secret",
+            model_profile_path=str(profile_path),
+            model_profile_reader=read_model_profile,
+        )
+    )
+    request = ClientMessagesRequest(messages=(ClientMessage(role="user", content="Keep the profile current"),))
+
+    assert client.post_messages(request) == "reviewed"
+    assert len(CapturingHandler.captured_requests) == 1
+    invalid_profiles = [
+        ('{"provider":"gemini"', "decode model_profile"),
+        ('{"provider":"gemini"}', "missing model"),
+        ('{"provider":"gemini","model":"gemini-2.5-flash","secret":"forbidden"}', "unsupported field"),
+        ('{"provider":"gemini","provider":"openai","model":"gpt-5-mini"}', "duplicate field"),
+    ]
+    for invalid_profile, expected_error in invalid_profiles:
+        replace_model_profile(profile_path, invalid_profile)
+        with pytest.raises(LLMProxyModelProfileError, match=expected_error):
+            client.post_messages(request)
+        assert len(CapturingHandler.captured_requests) == 1
+        replace_model_profile(profile_path, valid_profile)
+
+    profile_path.unlink()
+    with pytest.raises(LLMProxyModelProfileError, match="read model_profile"):
+        client.post_messages(request)
+    assert len(CapturingHandler.captured_requests) == 1
+    replace_model_profile(profile_path, valid_profile)
+
+    pinned_request = ClientMessagesRequest(
+        messages=(ClientMessage(role="user", content="Do not compete"),), model="gpt-5-mini"
+    )
+    with pytest.raises(LLMProxyModelProfileError, match="request model conflicts"):
+        client.post_messages(pinned_request)
+    assert len(CapturingHandler.captured_requests) == 1
+
+
+def test_client_normalizes_model_profile_reader_failures_before_http(running_server: RunningServer) -> None:
+    """Application reader failures are typed and never reach the proxy."""
+
+    model_profile_path = "/profiles/current-model.json"
+
+    def failing_model_profile_reader(profile_path: str) -> str:
+        """Simulate an application profile-storage failure."""
+
+        raise ValueError(f"application storage rejected {profile_path!r}")
+
+    client = Client(
+        ClientConfig(
+            base_url=running_server.url,
+            secret="test-secret",
+            model_profile_path=model_profile_path,
+            model_profile_reader=failing_model_profile_reader,
+        )
+    )
+
+    with pytest.raises(LLMProxyModelProfileError, match="read model_profile") as error_info:
+        client.post_messages(ClientMessagesRequest(messages=(ClientMessage(role="user", content="Keep it typed"),)))
+
+    assert f"path={model_profile_path!r}" in str(error_info.value)
+    assert "application storage rejected" in str(error_info.value)
+    assert CapturingHandler.captured_requests == []
+
+
+def test_client_sends_unknown_model_profile_pair_to_proxy(running_server: RunningServer, tmp_path: Path) -> None:
+    """The client leaves exact provider/model validation to the proxy boundary."""
+
+    profile_path = tmp_path / "current-model.json"
+    replace_model_profile(profile_path, '{"provider":"unknown","model":"unknown-model"}')
+    CapturingHandler.response_status = 400
+    CapturingHandler.response_body = "unknown provider/model pair"
+    client = Client(
+        ClientConfig(
+            base_url=running_server.url,
+            secret="test-secret",
+            model_profile_path=str(profile_path),
+            model_profile_reader=read_model_profile,
+        )
+    )
+
+    with pytest.raises(LLMProxyHTTPError) as error_info:
+        client.post_messages(ClientMessagesRequest(messages=(ClientMessage(role="user", content="Route this pair"),)))
+
+    parsed_path = urllib.parse.urlparse(CapturingHandler.captured_request.path)
+    assert error_info.value.status_code == 400
+    assert urllib.parse.parse_qs(parsed_path.query)["provider"] == ["unknown"]
+    assert CapturingHandler.captured_request.body is not None
+    assert CapturingHandler.captured_request.body["model"] == "unknown-model"
 
 
 def test_client_overrides_provider_and_sends_optional_v2_body_fields(running_server: RunningServer) -> None:
@@ -256,6 +422,55 @@ def test_client_posts_v2_messages_body(running_server: RunningServer) -> None:
         ({"base_url": "http://", "secret": "sekret"}, "base_url must include host"),
         ({"base_url": "http://example.test", "secret": ""}, "missing secret"),
         ({"base_url": "http://example.test", "secret": "sekret", "timeout_seconds": 0}, "timeout_seconds must be positive"),
+        (
+            {"base_url": "http://example.test", "secret": "sekret", "model_profile_path": "/profiles/user.json"},
+            "model_profile_path requires model_profile_reader",
+        ),
+        (
+            {
+                "base_url": "http://example.test",
+                "secret": "sekret",
+                "model_profile_reader": read_model_profile,
+            },
+            "model_profile_reader requires model_profile_path",
+        ),
+        (
+            {
+                "base_url": "http://example.test",
+                "secret": "sekret",
+                "model_profile_path": "/profiles/user.json",
+                "model_profile_reader": "not-a-reader",
+            },
+            "model_profile_reader must be callable",
+        ),
+        (
+            {
+                "base_url": "http://example.test",
+                "secret": "sekret",
+                "provider": "gemini",
+                "model_profile_path": "/profiles/user.json",
+                "model_profile_reader": read_model_profile,
+            },
+            "model_profile_path conflicts with provider",
+        ),
+        (
+            {
+                "base_url": "http://example.test?provider=gemini",
+                "secret": "sekret",
+                "model_profile_path": "/profiles/user.json",
+                "model_profile_reader": read_model_profile,
+            },
+            "base_url provider query",
+        ),
+        (
+            {
+                "base_url": "http://example.test?model=gpt-5-mini",
+                "secret": "sekret",
+                "model_profile_path": "/profiles/user.json",
+                "model_profile_reader": read_model_profile,
+            },
+            "base_url model query",
+        ),
     ],
 )
 def test_config_validation_errors(config_kwargs: dict[str, object], expected_error: str) -> None:

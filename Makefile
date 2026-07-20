@@ -63,7 +63,7 @@ python-test:
 	$(MAKE) python-root-import-test
 
 python-root-import-test:
-	$(UV) run --no-project --with-editable . python -c 'from llm_proxy_client import Client, ClientConfig, ClientMessage, ClientMessagesRequest; assert Client and ClientConfig and ClientMessage and ClientMessagesRequest'
+	$(UV) run --no-project --with-editable . python -c 'from llm_proxy_client import Client, ClientConfig, ClientMessage, ClientMessagesRequest, LLMProxyModelProfileError; assert Client and ClientConfig and ClientMessage and ClientMessagesRequest and LLMProxyModelProfileError'
 
 frontend-test:
 	$(NPM) run frontend:test

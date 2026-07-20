@@ -16,10 +16,13 @@ FORMAT_QUERY_VALUE_TEXT_PLAIN = "text/plain"
 JSON_CONTENT_TYPE = "application/json; charset=utf-8"
 KEY_QUERY_KEY = "key"
 PROVIDER_QUERY_KEY = "provider"
+MODEL_PROFILE_MODEL_KEY = "model"
+MODEL_PROFILE_SUBJECT = "model_profile"
+MODEL_PROFILE_FIELDS = frozenset({PROVIDER_QUERY_KEY, MODEL_PROFILE_MODEL_KEY})
 POST_BODY_QUERY_KEYS = frozenset(
     {
         "messages",
-        "model",
+        MODEL_PROFILE_MODEL_KEY,
         "max_output_tokens",
         "max_tokens",
         "prompt",
@@ -32,6 +35,10 @@ MESSAGE_ROLES = frozenset({"system", "user", "assistant"})
 
 class LLMProxyClientError(ValueError):
     """Raised when llm-proxy client config or request input is invalid."""
+
+
+class LLMProxyModelProfileError(LLMProxyClientError):
+    """Raised when a configured JSON model-profile document is invalid."""
 
 
 class LLMProxyHTTPError(RuntimeError):
@@ -59,6 +66,24 @@ class ResponseOpener(Protocol):
         """Return decoded response text for the prepared request."""
 
 
+class ModelProfileReader(Protocol):
+    """Callable that reads a current JSON model-profile document."""
+
+    def __call__(self, path: str) -> str:
+        """Return the model-profile document at the configured path."""
+
+
+@dataclass(frozen=True)
+class _JSONModelProfileObject:
+    pairs: tuple[tuple[str, Any], ...]
+
+
+@dataclass(frozen=True)
+class _ModelProfile:
+    provider: str
+    model: str
+
+
 @dataclass(frozen=True)
 class ClientConfig:
     """Validated llm-proxy client configuration."""
@@ -67,6 +92,8 @@ class ClientConfig:
     secret: str
     provider: str = ""
     timeout_seconds: float = 390.0
+    model_profile_path: str = ""
+    model_profile_reader: ModelProfileReader | None = None
 
     def __post_init__(self) -> None:
         if not self.base_url.strip():
@@ -81,8 +108,56 @@ class ClientConfig:
         if self.timeout_seconds <= 0:
             raise LLMProxyClientError("llm_proxy_client_invalid_config: timeout_seconds must be positive")
 
+        model_profile_path = self.model_profile_path.strip()
+        if not model_profile_path and self.model_profile_reader is not None:
+            raise LLMProxyClientError(
+                "llm_proxy_client_invalid_config: model_profile_reader requires model_profile_path"
+            )
+        if model_profile_path:
+            if self.model_profile_reader is None:
+                raise LLMProxyClientError(
+                    "llm_proxy_client_invalid_config: model_profile_path requires model_profile_reader"
+                )
+            if not callable(self.model_profile_reader):
+                raise LLMProxyClientError(
+                    "llm_proxy_client_invalid_config: model_profile_reader must be callable"
+                )
+            if self.provider.strip():
+                raise LLMProxyClientError("llm_proxy_client_invalid_config: model_profile_path conflicts with provider")
+            query_keys = {query_key for query_key, _ in urllib.parse.parse_qsl(parsed_url.query, keep_blank_values=True)}
+            if PROVIDER_QUERY_KEY in query_keys:
+                raise LLMProxyClientError(
+                    "llm_proxy_client_invalid_config: model_profile_path conflicts with base_url provider query"
+                )
+            if MODEL_PROFILE_MODEL_KEY in query_keys:
+                raise LLMProxyClientError(
+                    "llm_proxy_client_invalid_config: model_profile_path conflicts with base_url model query"
+                )
+
     def messages_post_url(self) -> str:
         """Return the authenticated v2 JSON POST URL for this config."""
+
+        provider = self.provider.strip()
+        if self.model_profile_path.strip():
+            provider = self._current_model_profile().provider
+        return self._messages_post_url_for_provider(provider)
+
+    def _current_model_profile(self) -> _ModelProfile:
+        """Read and validate the current model-profile document."""
+
+        model_profile_path = self.model_profile_path.strip()
+        model_profile_reader = cast(ModelProfileReader, self.model_profile_reader)
+        try:
+            model_profile_document = model_profile_reader(model_profile_path)
+        except Exception as error:
+            raise LLMProxyModelProfileError(
+                f"llm_proxy_client_invalid_model_profile: read {MODEL_PROFILE_SUBJECT} "
+                f"path={model_profile_path!r}: {error}"
+            ) from error
+        return _decode_model_profile(model_profile_path, model_profile_document)
+
+    def _messages_post_url_for_provider(self, provider: str) -> str:
+        """Return the authenticated v2 JSON POST URL for one validated provider override."""
 
         parsed_url = urllib.parse.urlparse(self.base_url.strip())
         request_path = parsed_url.path or "/"
@@ -90,7 +165,7 @@ class ClientConfig:
         query_items = urllib.parse.parse_qsl(parsed_url.query, keep_blank_values=True)
         stripped_query_keys = set(POST_BODY_QUERY_KEYS)
         stripped_query_keys.update({KEY_QUERY_KEY, FORMAT_QUERY_KEY})
-        if self.provider.strip():
+        if provider.strip():
             stripped_query_keys.add(PROVIDER_QUERY_KEY)
         preserved_items = [
             (query_key, query_value) for query_key, query_value in query_items if query_key not in stripped_query_keys
@@ -101,8 +176,8 @@ class ClientConfig:
                 (FORMAT_QUERY_KEY, FORMAT_QUERY_VALUE_TEXT_PLAIN),
             ]
         )
-        if self.provider.strip():
-            preserved_items.append((PROVIDER_QUERY_KEY, self.provider.strip()))
+        if provider.strip():
+            preserved_items.append((PROVIDER_QUERY_KEY, provider.strip()))
         return urllib.parse.urlunparse(
             (
                 parsed_url.scheme,
@@ -113,6 +188,73 @@ class ClientConfig:
                 "",
             )
         )
+
+
+def _decode_model_profile(model_profile_path: str, model_profile_document: str) -> _ModelProfile:
+    """Decode one exact provider/model JSON document from a configured path."""
+
+    if not isinstance(model_profile_document, str):
+        raise LLMProxyModelProfileError(
+            f"llm_proxy_client_invalid_model_profile: read {MODEL_PROFILE_SUBJECT} "
+            f"path={model_profile_path!r}: reader must return text"
+        )
+    try:
+        decoded_document = json.loads(model_profile_document, object_pairs_hook=_json_model_profile_object)
+    except json.JSONDecodeError as error:
+        raise LLMProxyModelProfileError(
+            f"llm_proxy_client_invalid_model_profile: decode {MODEL_PROFILE_SUBJECT} "
+            f"path={model_profile_path!r}: {error}"
+        ) from error
+    if not isinstance(decoded_document, _JSONModelProfileObject):
+        raise LLMProxyModelProfileError(
+            f"llm_proxy_client_invalid_model_profile: validate {MODEL_PROFILE_SUBJECT} "
+            f"path={model_profile_path!r}: document must be an object"
+        )
+
+    profile_values: dict[str, str] = {}
+    for profile_field, profile_value in decoded_document.pairs:
+        if profile_field not in MODEL_PROFILE_FIELDS:
+            raise LLMProxyModelProfileError(
+                f"llm_proxy_client_invalid_model_profile: validate {MODEL_PROFILE_SUBJECT} "
+                f"path={model_profile_path!r}: unsupported field={profile_field!r}"
+            )
+        if profile_field in profile_values:
+            raise LLMProxyModelProfileError(
+                f"llm_proxy_client_invalid_model_profile: validate {MODEL_PROFILE_SUBJECT} "
+                f"path={model_profile_path!r}: duplicate field={profile_field!r}"
+            )
+        if not isinstance(profile_value, str):
+            raise LLMProxyModelProfileError(
+                f"llm_proxy_client_invalid_model_profile: validate {MODEL_PROFILE_SUBJECT} "
+                f"path={model_profile_path!r}: field={profile_field!r} must be a string"
+            )
+        profile_values[profile_field] = profile_value
+    try:
+        provider = profile_values[PROVIDER_QUERY_KEY].strip()
+        model = profile_values[MODEL_PROFILE_MODEL_KEY].strip()
+    except KeyError as error:
+        missing_field = str(error).strip("'")
+        raise LLMProxyModelProfileError(
+            f"llm_proxy_client_invalid_model_profile: validate {MODEL_PROFILE_SUBJECT} "
+            f"path={model_profile_path!r}: missing {missing_field}"
+        ) from error
+    if not provider:
+        raise LLMProxyModelProfileError(
+            f"llm_proxy_client_invalid_model_profile: validate {MODEL_PROFILE_SUBJECT} "
+            f"path={model_profile_path!r}: missing provider"
+        )
+    if not model:
+        raise LLMProxyModelProfileError(
+            f"llm_proxy_client_invalid_model_profile: validate {MODEL_PROFILE_SUBJECT} "
+            f"path={model_profile_path!r}: missing model"
+        )
+    return _ModelProfile(provider=provider, model=model)
+
+
+def _json_model_profile_object(profile_pairs: list[tuple[str, Any]]) -> _JSONModelProfileObject:
+    """Preserve profile object field ordering and duplicate keys while decoding JSON."""
+
+    return _JSONModelProfileObject(pairs=tuple(profile_pairs))
 
 
 def v2_endpoint_path(base_path: str) -> str:
@@ -170,12 +312,17 @@ class ClientMessagesRequest:
     def body(self) -> dict[str, Any]:
         """Return the JSON body payload for this v2 request."""
 
+        return self._body_with_model(self.model.strip())
+
+    def _body_with_model(self, model: str) -> dict[str, Any]:
+        """Return the JSON body payload with one resolved model value."""
+
         payload: dict[str, Any] = {
             "messages": [message.body() for message in ordered_messages(self.messages)],
             "web_search": self.web_search,
         }
-        if self.model.strip():
-            payload["model"] = self.model.strip()
+        if model:
+            payload[MODEL_PROFILE_MODEL_KEY] = model
         if self.max_tokens is not None:
             payload["max_tokens"] = self.max_tokens
         return payload
@@ -212,6 +359,17 @@ class Client:
     def post_messages(self, request: ClientMessagesRequest) -> str:
         """Send a v2 messages-only JSON POST request and return the response text."""
 
+        if self.config.model_profile_path.strip():
+            if request.model.strip():
+                raise LLMProxyModelProfileError(
+                    f"llm_proxy_client_invalid_model_profile: request model conflicts with "
+                    f"{MODEL_PROFILE_SUBJECT} path={self.config.model_profile_path.strip()!r}"
+                )
+            model_profile = self.config._current_model_profile()
+            return self._post_json(
+                request._body_with_model(model_profile.model),
+                self.config._messages_post_url_for_provider(model_profile.provider),
+            )
         return self._post_json(request.body(), self.config.messages_post_url())
 
     def _post_json(self, request_payload: dict[str, Any], request_url: str) -> str:

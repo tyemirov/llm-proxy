@@ -21,6 +21,7 @@ const (
 	flagSecret       = "secret"
 	flagProvider     = "provider"
 	flagModel        = "model"
+	flagModelProfile = "model-profile"
 	flagPrompt       = "prompt"
 	flagPromptFile   = "prompt-file"
 	flagWebSearch    = "web-search"
@@ -35,16 +36,17 @@ const (
 )
 
 type commandOptions struct {
-	baseURL      string
-	secret       string
-	provider     string
-	model        string
-	prompt       string
-	promptFile   string
-	webSearch    bool
-	systemPrompt string
-	maxTokens    int
-	timeout      time.Duration
+	baseURL          string
+	secret           string
+	provider         string
+	model            string
+	modelProfilePath string
+	prompt           string
+	promptFile       string
+	webSearch        bool
+	systemPrompt     string
+	maxTokens        int
+	timeout          time.Duration
 }
 
 type httpClientFactory func(timeout time.Duration) llmproxyclient.HTTPDoer
@@ -98,12 +100,17 @@ func newRootCommand(
 			if prompt == "" {
 				return fmt.Errorf("llm_proxy_client_request_failed: %w: missing prompt", llmproxyclient.ErrInvalidClientRequest)
 			}
-			config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
-				BaseURL:  configuredString(command, flagBaseURL, envNameBaseURL, options.baseURL),
-				Secret:   configuredString(command, flagSecret, envNameSecret, options.secret),
-				Provider: options.provider,
-				Timeout:  options.timeout,
-			})
+			configInput := llmproxyclient.ConfigInput{
+				BaseURL:          configuredString(command, flagBaseURL, envNameBaseURL, options.baseURL),
+				Secret:           configuredString(command, flagSecret, envNameSecret, options.secret),
+				Provider:         options.provider,
+				ModelProfilePath: options.modelProfilePath,
+				Timeout:          options.timeout,
+			}
+			if options.modelProfilePath != "" {
+				configInput.ModelProfileReader = os.ReadFile
+			}
+			config, configError := llmproxyclient.NewConfig(configInput)
 			if configError != nil {
 				return fmt.Errorf("llm_proxy_client_config_failed: %w", configError)
 			}
@@ -145,6 +152,7 @@ func newRootCommand(
 	flagSet.StringVar(&options.secret, flagSecret, "", "llm-proxy shared secret")
 	flagSet.StringVar(&options.provider, flagProvider, "", "provider query override")
 	flagSet.StringVar(&options.model, flagModel, "", "v2 model body field")
+	flagSet.StringVar(&options.modelProfilePath, flagModelProfile, "", "path to application-owned JSON provider/model profile")
 	flagSet.StringVar(&options.prompt, flagPrompt, "", "user message text")
 	flagSet.StringVar(&options.promptFile, flagPromptFile, "", "path to user message text file")
 	flagSet.BoolVar(&options.webSearch, flagWebSearch, false, "enable OpenAI web search")

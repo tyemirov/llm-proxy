@@ -22,6 +22,7 @@ const (
 	jsonContentType           = "application/json; charset=utf-8"
 	queryFormat               = "format"
 	queryKey                  = "key"
+	queryModel                = "model"
 	queryProvider             = "provider"
 )
 
@@ -36,13 +37,15 @@ var (
 	ErrInvalidClientConfig = errors.New("llm_proxy_client_invalid_config")
 	// ErrInvalidClientRequest reports invalid llm-proxy request input.
 	ErrInvalidClientRequest = errors.New("llm_proxy_client_invalid_request")
+	// ErrInvalidModelProfile reports an unreadable or invalid model-profile document.
+	ErrInvalidModelProfile = errors.New("llm_proxy_client_invalid_model_profile")
 	// ErrClientHTTPFailure reports an unsuccessful llm-proxy HTTP response.
 	ErrClientHTTPFailure = errors.New("llm_proxy_client_http_failure")
 )
 
 var postBodyQueryKeys = map[string]struct{}{
 	"messages":          {},
-	"model":             {},
+	queryModel:          {},
 	"max_output_tokens": {},
 	"max_tokens":        {},
 	"prompt":            {},
@@ -57,18 +60,22 @@ type HTTPDoer interface {
 
 // ConfigInput is the unvalidated external configuration for an llm-proxy client.
 type ConfigInput struct {
-	BaseURL  string
-	Secret   string
-	Provider string
-	Timeout  time.Duration
+	BaseURL            string
+	Secret             string
+	Provider           string
+	ModelProfilePath   string
+	ModelProfileReader ModelProfileReader
+	Timeout            time.Duration
 }
 
 // Config is validated llm-proxy client configuration.
 type Config struct {
-	baseURL  *url.URL
-	secret   string
-	provider string
-	timeout  time.Duration
+	baseURL            *url.URL
+	secret             string
+	provider           string
+	modelProfilePath   string
+	modelProfileReader ModelProfileReader
+	timeout            time.Duration
 }
 
 // NewConfig validates external client configuration.
@@ -87,6 +94,26 @@ func NewConfig(input ConfigInput) (Config, error) {
 	if parsedBaseURL.Host == "" {
 		return Config{}, fmt.Errorf("%w: base_url must include host", ErrInvalidClientConfig)
 	}
+	trimmedProvider := strings.TrimSpace(input.Provider)
+	trimmedModelProfilePath := strings.TrimSpace(input.ModelProfilePath)
+	if trimmedModelProfilePath == "" && input.ModelProfileReader != nil {
+		return Config{}, fmt.Errorf("%w: model_profile_reader requires model_profile_path", ErrInvalidClientConfig)
+	}
+	if trimmedModelProfilePath != "" {
+		if input.ModelProfileReader == nil {
+			return Config{}, fmt.Errorf("%w: model_profile_path requires model_profile_reader", ErrInvalidClientConfig)
+		}
+		if trimmedProvider != "" {
+			return Config{}, fmt.Errorf("%w: model_profile_path conflicts with provider", ErrInvalidClientConfig)
+		}
+		queryValues := parsedBaseURL.Query()
+		if queryValues.Has(queryProvider) {
+			return Config{}, fmt.Errorf("%w: model_profile_path conflicts with base_url provider query", ErrInvalidClientConfig)
+		}
+		if queryValues.Has(queryModel) {
+			return Config{}, fmt.Errorf("%w: model_profile_path conflicts with base_url model query", ErrInvalidClientConfig)
+		}
+	}
 	trimmedSecret := strings.TrimSpace(input.Secret)
 	if trimmedSecret == "" {
 		return Config{}, fmt.Errorf("%w: missing secret", ErrInvalidClientConfig)
@@ -95,10 +122,12 @@ func NewConfig(input ConfigInput) (Config, error) {
 		return Config{}, fmt.Errorf("%w: timeout must be positive", ErrInvalidClientConfig)
 	}
 	return Config{
-		baseURL:  parsedBaseURL,
-		secret:   trimmedSecret,
-		provider: strings.TrimSpace(input.Provider),
-		timeout:  input.Timeout,
+		baseURL:            parsedBaseURL,
+		secret:             trimmedSecret,
+		provider:           trimmedProvider,
+		modelProfilePath:   trimmedModelProfilePath,
+		modelProfileReader: input.ModelProfileReader,
+		timeout:            input.Timeout,
 	}, nil
 }
 
@@ -108,26 +137,41 @@ func (config Config) Timeout() time.Duration {
 }
 
 // MessagesPostURL builds the authenticated v2 JSON POST URL for this config.
-func (config Config) MessagesPostURL() string {
-	requestURL := config.messagesPostURL()
-	return requestURL.String()
+func (config Config) MessagesPostURL() (string, error) {
+	requestURL, requestError := config.messagesPostURL()
+	if requestError != nil {
+		return "", requestError
+	}
+	return requestURL.String(), nil
 }
 
-func (config Config) messagesPostURL() url.URL {
+func (config Config) messagesPostURL() (url.URL, error) {
+	provider := config.provider
+	if config.modelProfilePath != "" {
+		modelProfile, profileError := config.currentModelProfile()
+		if profileError != nil {
+			return url.URL{}, profileError
+		}
+		provider = modelProfile.provider
+	}
+	return config.messagesPostURLForProvider(provider), nil
+}
+
+func (config Config) messagesPostURLForProvider(provider string) url.URL {
 	requestURL := *config.baseURL
 	requestURL.Path = v2EndpointPath(requestURL.Path)
-	return config.authenticatedPostURL(requestURL)
+	return config.authenticatedPostURL(requestURL, provider)
 }
 
-func (config Config) authenticatedPostURL(requestURL url.URL) url.URL {
+func (config Config) authenticatedPostURL(requestURL url.URL, provider string) url.URL {
 	queryValues := requestURL.Query()
 	for queryKeyName := range postBodyQueryKeys {
 		queryValues.Del(queryKeyName)
 	}
 	queryValues.Set(queryKey, config.secret)
 	queryValues.Set(queryFormat, formatQueryValueTextPlain)
-	if config.provider != "" {
-		queryValues.Set(queryProvider, config.provider)
+	if provider != "" {
+		queryValues.Set(queryProvider, provider)
 	}
 	requestURL.RawQuery = queryValues.Encode()
 	return requestURL
@@ -194,13 +238,13 @@ func NewMessagesRequest(input MessagesRequestInput) (MessagesRequest, error) {
 	}, nil
 }
 
-func (request MessagesRequest) payloadBody() []byte {
+func (request MessagesRequest) payloadBody(model string) []byte {
 	payload := map[string]any{
 		"messages":   messagePayload(request.messages),
 		"web_search": request.webSearch,
 	}
-	if request.model != "" {
-		payload["model"] = request.model
+	if model != "" {
+		payload[queryModel] = model
 	}
 	if request.maxTokens != nil {
 		payload["max_tokens"] = *request.maxTokens
@@ -299,7 +343,29 @@ func NewClient(config Config, httpClient HTTPDoer) (Client, error) {
 
 // PostMessages sends a v2 JSON POST messages request and returns the response text.
 func (client Client) PostMessages(contextValue context.Context, request MessagesRequest) (string, error) {
-	return client.postPayload(contextValue, client.config.messagesPostURL(), request.payloadBody())
+	requestURL, requestBody, requestError := client.messagesPostRequest(request)
+	if requestError != nil {
+		return "", requestError
+	}
+	return client.postPayload(contextValue, requestURL, requestBody)
+}
+
+func (client Client) messagesPostRequest(request MessagesRequest) (url.URL, []byte, error) {
+	if client.config.modelProfilePath == "" {
+		return client.config.messagesPostURLForProvider(client.config.provider), request.payloadBody(request.model), nil
+	}
+	if request.model != "" {
+		return url.URL{}, nil, fmt.Errorf(
+			"%w: request model conflicts with model_profile path=%q",
+			ErrInvalidModelProfile,
+			client.config.modelProfilePath,
+		)
+	}
+	modelProfile, profileError := client.config.currentModelProfile()
+	if profileError != nil {
+		return url.URL{}, nil, profileError
+	}
+	return client.config.messagesPostURLForProvider(modelProfile.provider), request.payloadBody(modelProfile.model), nil
 }
 
 func (client Client) postPayload(contextValue context.Context, requestURL url.URL, requestBody []byte) (string, error) {
