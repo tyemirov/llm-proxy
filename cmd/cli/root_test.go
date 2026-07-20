@@ -29,8 +29,12 @@ func TestRootCommandRunsConfiguredProxyFromConfigFile(t *testing.T) {
 	providerValues.DeepSeekBaseURL = "https://deepseek.example"
 	providerValues.DashScopeAPIKey = ""
 	providerValues.DashScopeBaseURL = "https://dashscope.example"
+	providerValues.QwenCloudAPIKey = ""
+	providerValues.QwenCloudBaseURL = "https://qwencloud.example"
 	providerValues.MoonshotAPIKey = ""
 	providerValues.MoonshotBaseURL = "https://moonshot.example"
+	providerValues.MiniMaxAPIKey = ""
+	providerValues.MiniMaxBaseURL = "https://minimax.example"
 	providerValues.SiliconFlowAPIKey = ""
 	providerValues.SiliconFlowBaseURL = "https://siliconflow.example"
 	providerValues.SiliconFlowTranscriptionsURL = "https://siliconflow.example/audio/transcriptions"
@@ -171,6 +175,12 @@ P411_LEGACY_TOKEN_OWNER_EMAIL=Legacy.Owner@Example.com
 	if capturedConfiguration.GeminiKey != "" {
 		t.Fatalf("geminiKey=%q", capturedConfiguration.GeminiKey)
 	}
+	if capturedConfiguration.QwenCloudKey != "" || capturedConfiguration.QwenCloudBaseURL != "https://qwencloud.example" {
+		t.Fatalf("qwenCloud key/base URL=%q %q", capturedConfiguration.QwenCloudKey, capturedConfiguration.QwenCloudBaseURL)
+	}
+	if capturedConfiguration.MiniMaxKey != "" || capturedConfiguration.MiniMaxBaseURL != "https://minimax.example" {
+		t.Fatalf("miniMax key/base URL=%q %q", capturedConfiguration.MiniMaxKey, capturedConfiguration.MiniMaxBaseURL)
+	}
 	if capturedConfiguration.GeminiBaseURL != "https://gemini.example" {
 		t.Fatalf("geminiBaseURL=%q", capturedConfiguration.GeminiBaseURL)
 	}
@@ -197,6 +207,13 @@ P411_LEGACY_TOKEN_OWNER_EMAIL=Legacy.Owner@Example.com
 	}
 	if capturedConfiguration.ProviderModels[proxy.ProviderNameDeepSeek].Text.DefaultModel != "deepseek-v4-flash" {
 		t.Fatalf("deepseek default model=%q", capturedConfiguration.ProviderModels[proxy.ProviderNameDeepSeek].Text.DefaultModel)
+	}
+	if capturedConfiguration.ProviderModels[proxy.ProviderNameQwenCloud].Text.DefaultModel != proxy.ModelNameQwenCloudQwen38MaxPreview {
+		t.Fatalf("qwenCloud default model=%q", capturedConfiguration.ProviderModels[proxy.ProviderNameQwenCloud].Text.DefaultModel)
+	}
+	miniMaxModels := capturedConfiguration.ProviderModels[proxy.ProviderNameMiniMax].Text.Models
+	if len(miniMaxModels) != 1 || miniMaxModels[0].ID != proxy.ModelNameMiniMaxM27 || miniMaxModels[0].OutputTokenLimit != 2048 {
+		t.Fatalf("miniMax model catalog=%+v", miniMaxModels)
 	}
 	openAIModels := capturedConfiguration.ProviderModels[proxy.ProviderNameOpenAI].Text.Models
 	if len(openAIModels) < 3 || openAIModels[2].ID != "gpt-4.1" || openAIModels[2].RequestProfile != "openai_responses_temperature_tools" || !openAIModels[2].WebSearch {
@@ -962,6 +979,15 @@ func TestRootCommandRejectsMissingDefaultTextProviderKeys(t *testing.T) {
 			expectedError: "provider_api_key_required: provider=dashscope field=providers.dashscope.api_key",
 		},
 		{
+			name:     "qwen cloud canonical",
+			provider: proxy.ProviderNameQwenCloud,
+			model:    proxy.ModelNameQwenCloudQwen38MaxPreview,
+			missingKey: func(values *providerYAMLValues) {
+				values.QwenCloudAPIKey = "${P411_MISSING_QWEN_CLOUD_TOKEN_PLAN_KEY}"
+			},
+			expectedError: "provider_api_key_required: provider=qwencloud field=providers.qwencloud.api_key",
+		},
+		{
 			name:     "deepseek canonical",
 			provider: proxy.ProviderNameDeepSeek,
 			model:    proxy.ModelNameDeepSeekV4Flash,
@@ -978,6 +1004,15 @@ func TestRootCommandRejectsMissingDefaultTextProviderKeys(t *testing.T) {
 				values.MoonshotAPIKey = "${P411_MISSING_MOONSHOT_KEY}"
 			},
 			expectedError: "provider_api_key_required: provider=moonshot field=providers.moonshot.api_key",
+		},
+		{
+			name:     "minimax canonical",
+			provider: proxy.ProviderNameMiniMax,
+			model:    proxy.ModelNameMiniMaxM27,
+			missingKey: func(values *providerYAMLValues) {
+				values.MiniMaxAPIKey = "${P411_MISSING_MINIMAX_KEY}"
+			},
+			expectedError: "provider_api_key_required: provider=minimax field=providers.minimax.api_key",
 		},
 		{
 			name:     "zhipu alias",
@@ -1604,7 +1639,7 @@ tenants:
       model: gemini-3.5-flash
       dictation_provider: openai
       dictation_model: gpt-4o-mini-transcribe
-`+testCase.providersYAML)
+`+withCurrentProviderBaseURLFixtures(testCase.providersYAML))
 			withServeProxy(subTest, failingServeProxy(subTest))
 
 			executeError := executeRootCommand(subTest, "--config", configPath)
@@ -1613,6 +1648,24 @@ tenants:
 			}
 		})
 	}
+}
+
+func withCurrentProviderBaseURLFixtures(providersYAML string) string {
+	if !strings.Contains(providersYAML, "\n  qwencloud:") {
+		providersYAML = strings.Replace(providersYAML, "\n  moonshot:", `
+  qwencloud:
+    api_key: "sk-qwencloud"
+    base_url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+  moonshot:`, 1)
+	}
+	if !strings.Contains(providersYAML, "\n  minimax:") {
+		providersYAML = strings.Replace(providersYAML, "\n  siliconflow:", `
+  minimax:
+    api_key: "sk-minimax"
+    base_url: "https://api.minimax.io/v1"
+  siliconflow:`, 1)
+	}
+	return providersYAML
 }
 
 func executeRootCommand(t *testing.T, arguments ...string) error {
@@ -1731,8 +1784,12 @@ type providerYAMLValues struct {
 	DeepSeekBaseURL              string
 	DashScopeAPIKey              string
 	DashScopeBaseURL             string
+	QwenCloudAPIKey              string
+	QwenCloudBaseURL             string
 	MoonshotAPIKey               string
 	MoonshotBaseURL              string
+	MiniMaxAPIKey                string
+	MiniMaxBaseURL               string
 	SiliconFlowAPIKey            string
 	SiliconFlowBaseURL           string
 	SiliconFlowTranscriptionsURL string
@@ -1759,8 +1816,12 @@ func defaultProviderYAMLValues() providerYAMLValues {
 		DeepSeekBaseURL:              "https://api.deepseek.com",
 		DashScopeAPIKey:              "sk-dashscope",
 		DashScopeBaseURL:             "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+		QwenCloudAPIKey:              "sk-qwencloud",
+		QwenCloudBaseURL:             "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
 		MoonshotAPIKey:               "sk-moonshot",
 		MoonshotBaseURL:              "https://api.moonshot.ai/v1",
+		MiniMaxAPIKey:                "sk-minimax",
+		MiniMaxBaseURL:               "https://api.minimax.io/v1",
 		SiliconFlowAPIKey:            "sk-siliconflow",
 		SiliconFlowBaseURL:           "https://api.siliconflow.com/v1",
 		SiliconFlowTranscriptionsURL: "https://api.siliconflow.com/v1/audio/transcriptions",
@@ -1830,6 +1891,13 @@ providers:
       default_model: "qwen-plus"
       models:
         - id: "qwen-plus"
+  qwencloud:
+    api_key: "%s"
+    base_url: "%s"
+    text:
+      default_model: "qwen3.8-max-preview"
+      models:
+        - id: "qwen3.8-max-preview"
   moonshot:
     api_key: "%s"
     base_url: "%s"
@@ -1837,6 +1905,14 @@ providers:
       default_model: "kimi-k2-0905-preview"
       models:
         - id: "kimi-k2-0905-preview"
+  minimax:
+    api_key: "%s"
+    base_url: "%s"
+    text:
+      default_model: "MiniMax-M2.7"
+      models:
+        - id: "MiniMax-M2.7"
+          output_token_limit: 2048
   siliconflow:
     api_key: "%s"
     base_url: "%s"
@@ -1932,8 +2008,12 @@ providers:
 		values.DeepSeekBaseURL,
 		values.DashScopeAPIKey,
 		values.DashScopeBaseURL,
+		values.QwenCloudAPIKey,
+		values.QwenCloudBaseURL,
 		values.MoonshotAPIKey,
 		values.MoonshotBaseURL,
+		values.MiniMaxAPIKey,
+		values.MiniMaxBaseURL,
 		values.SiliconFlowAPIKey,
 		values.SiliconFlowBaseURL,
 		values.SiliconFlowTranscriptionsURL,

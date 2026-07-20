@@ -987,13 +987,13 @@ const pages = Object.freeze([
     category: "Provider routing",
     primaryKeyword: "OpenAI-compatible provider gateway",
     title: "OpenAI-compatible provider gateway",
-    description: "Route Meta Muse Spark, DeepSeek, Qwen, Kimi, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.",
+    description: "Route Meta Muse Spark, DeepSeek, DashScope Qwen, Qwen Cloud, Kimi, MiniMax, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.",
     audience: "Teams adopting OpenAI-compatible chat providers without rewriting every caller.",
     problem: "OpenAI-compatible providers share a broad shape but still need different base URLs, keys, defaults, and availability rules.",
     solution: "LLM Proxy uses a shared compatible chat adapter for configured providers while keeping provider URLs, keys, and model catalogs in config.",
     steps: [
       "Configure provider base_url, api_key, and text catalog.",
-      "Use provider selectors such as meta, deepseek, dashscope, moonshot, siliconflow, zhipu, or grok.",
+      "Use provider selectors such as meta, deepseek, dashscope, qwencloud, moonshot, minimax, siliconflow, zhipu, or grok.",
       "Send GET, compatibility POST, or canonical /v2 requests.",
       "Let omitted model use the selected provider's configured default.",
     ],
@@ -1005,6 +1005,8 @@ const pages = Object.freeze([
     examples: [
       ["Meta Muse route", "A caller sends provider=meta and model=muse-spark-1.1 through Chat Completions."],
       ["Qwen alias", "A caller uses provider=qwen for DashScope routing."],
+      ["Qwen Cloud route", "A caller uses provider=qwencloud with a Qwen Cloud Token Plan key; it is not the DashScope qwen alias."],
+      ["MiniMax route", "A caller uses provider=minimax and model=MiniMax-M2.7 through the shared Chat Completions adapter."],
       ["xAI route", "A Grok text request uses the OpenAI-compatible chat adapter behind provider=grok."],
     ],
     limitations: [

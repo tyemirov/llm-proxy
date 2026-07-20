@@ -91,6 +91,12 @@ providers:
       default_model: "qwen-plus"
       models:
         - id: "qwen-plus"
+  qwencloud:
+    base_url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+    text:
+      default_model: "qwen3.8-max-preview"
+      models:
+        - id: "qwen3.8-max-preview"
   moonshot:
     base_url: "https://api.moonshot.ai/v1"
     text:
@@ -101,6 +107,13 @@ providers:
         - id: "kimi-k2.7-code"
         - id: "kimi-k2.7-code-highspeed"
         - id: "kimi-k2.6"
+  minimax:
+    base_url: "https://api.minimax.io/v1"
+    text:
+      default_model: "MiniMax-M2.7"
+      models:
+        - id: "MiniMax-M2.7"
+          output_token_limit: 2048
   siliconflow:
     base_url: "https://api.siliconflow.com/v1"
     transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
