@@ -161,8 +161,6 @@ providers:
       default_model: "qwen-plus"
       models:
         - id: "qwen-plus"
-        - id: "qwen3.7-max"
-        - id: "qwen3.7-plus"
   moonshot:
     base_url: "https://api.moonshot.ai/v1"
     text:
@@ -1288,8 +1286,6 @@ positive and lets the upstream provider enforce any provider-side model limit.
 | `deepseek-chat` | DeepSeek | No | - | No |
 | `deepseek-reasoner` | DeepSeek | No | - | No |
 | `qwen-plus` | DashScope/Qwen | Yes | - | No |
-| `qwen3.7-max` | DashScope/Qwen | No | - | No |
-| `qwen3.7-plus` | DashScope/Qwen | No | - | No |
 | `kimi-k2-0905-preview` | Moonshot/Kimi | Yes | - | No |
 | `kimi-k3` | Moonshot/Kimi | No | - | No |
 | `kimi-k2.7-code` | Moonshot/Kimi | No | - | No |
