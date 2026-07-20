@@ -161,6 +161,12 @@ providers:
       default_model: "qwen-plus"
       models:
         - id: "qwen-plus"
+  qwencloud:
+    base_url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+    text:
+      default_model: "qwen3.8-max-preview"
+      models:
+        - id: "qwen3.8-max-preview"
   moonshot:
     base_url: "https://api.moonshot.ai/v1"
     text:
@@ -171,6 +177,13 @@ providers:
         - id: "kimi-k2.7-code"
         - id: "kimi-k2.7-code-highspeed"
         - id: "kimi-k2.6"
+  minimax:
+    base_url: "https://api.minimax.io/v1"
+    text:
+      default_model: "MiniMax-M2.7"
+      models:
+        - id: "MiniMax-M2.7"
+          output_token_limit: 2048
   siliconflow:
     base_url: "https://api.siliconflow.com/v1"
     transcriptions_url: "https://api.siliconflow.com/v1/audio/transcriptions"
@@ -309,7 +322,9 @@ adapters before they are available through `/dictate`.
 | `meta` | none | Meta Model API OpenAI-compatible chat completions | `muse-spark-1.1` | `providers.meta.api_key` | `https://api.meta.ai/v1` | No | No |
 | `deepseek` | none | OpenAI-compatible chat completions | `deepseek-v4-flash` | `providers.deepseek.api_key` | `https://api.deepseek.com` | No | No |
 | `dashscope` | `qwen` | OpenAI-compatible chat completions | `qwen-plus` | `providers.dashscope.api_key` | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` | No | No |
+| `qwencloud` | none | Qwen Cloud Token Plan OpenAI-compatible chat completions | `qwen3.8-max-preview` | `providers.qwencloud.api_key` | `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` | No | No |
 | `moonshot` | `kimi` | OpenAI-compatible chat completions | `kimi-k2-0905-preview` | `providers.moonshot.api_key` | `https://api.moonshot.ai/v1` | No | No |
+| `minimax` | none | MiniMax OpenAI-compatible chat completions | `MiniMax-M2.7` | `providers.minimax.api_key` | `https://api.minimax.io/v1` | No | No |
 | `siliconflow` | none | OpenAI-compatible chat completions | `deepseek-ai/DeepSeek-R1` | `providers.siliconflow.api_key` | `https://api.siliconflow.com/v1` | Yes: `FunAudioLLM/SenseVoiceSmall` | No |
 | `zhipu` | `glm` | OpenAI-compatible chat completions | `glm-5.1` | `providers.zhipu.api_key` | `https://open.bigmodel.cn/api/paas/v4` | Yes: `glm-asr-2512` | No |
 | `gemini` | none | Gemini native `generateContent` | `gemini-2.5-flash` | `providers.gemini.api_key` | `https://generativelanguage.googleapis.com/v1` | No | No |
@@ -334,6 +349,11 @@ values upstream.
 GLM-5.2 uses the existing BigModel/Zhipu Chat Completions endpoint with a
 configured 131072-token output cap; optional `thinking` and `reasoning_effort`
 controls remain outside the proxy contract.
+Qwen Cloud Token Plan is separate from DashScope: select `qwencloud` with a
+dedicated `${QWEN_CLOUD_TOKEN_PLAN_API_KEY}` and its token-plan base URL; the
+existing `qwen` alias remains DashScope-only. MiniMax M2.7 uses
+`max_completion_tokens`, and the proxy rejects `max_tokens` values above the
+documented 2048-token completion maximum before it calls MiniMax.
 
 Each provider must declare a text catalog. A provider with an `api_key`
 configured must have a valid text `default_model`; that default is used when a
@@ -397,6 +417,19 @@ Provider-specific details:
   dictation uses `providers.openai.transcriptions_url`.
 * OpenAI-compatible text providers send chat completion requests with
   `Authorization: Bearer <api_key>` and the selected provider base URL.
+* Qwen Cloud Token Plan uses selector `qwencloud`, exact model
+  `qwen3.8-max-preview`, `${QWEN_CLOUD_TOKEN_PLAN_API_KEY}`, and
+  `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`.
+  It is deliberately separate from DashScope because their API keys and base
+  URLs are not interchangeable. The proxy exposes text generation only and
+  sends the public `max_tokens` value through the compatible Chat Completions
+  field without adding Qwen-specific thinking, tool, or multimodal controls.
+* MiniMax uses selector `minimax`, exact model `MiniMax-M2.7`,
+  `${MINIMAX_API_KEY}`, and `https://api.minimax.io/v1`. The shared compatible
+  Chat Completions adapter maps public `max_tokens` to upstream
+  `max_completion_tokens`; the catalog enforces MiniMax's documented 2048-token
+  completion maximum. The proxy does not expose MiniMax-specific reasoning,
+  tool, streaming, or multimodal controls.
 * Meta Model API requests use that shared Chat Completions adapter with the
   exact `meta` selector, `https://api.meta.ai/v1` base URL,
   `${MODEL_API_KEY}` credential, and `muse-spark-1.1` model. llm-proxy exposes
@@ -697,9 +730,10 @@ to cap one generation. When omitted, the proxy does not send a provider
 max-token field, except Anthropic Messages where `max_tokens` is required
 upstream and the proxy sends the selected model's configured output limit.
 Provider-specific output-token limits are enforced at the request edge when
-known. Gemini text models currently reject `max_tokens` above `65536`; Claude
-models reject values above the configured synchronous Messages output limit.
-Those errors return `400 Bad Request` before any upstream provider call.
+known. MiniMax M2.7 rejects `max_tokens` above `2048`; Gemini text models
+currently reject values above `65536`; Claude models reject values above the
+configured synchronous Messages output limit. Those errors return `400 Bad
+Request` before any upstream provider call.
 
 ## Running
 
@@ -801,7 +835,9 @@ specific provider/model pair.
 | Meta Muse Spark | `MODEL_API_KEY` | `LLM_PROXY_LIVE_META_MODEL` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `LLM_PROXY_LIVE_DEEPSEEK_MODEL` |
 | DashScope/Qwen | `DASHSCOPE_API_KEY` | `LLM_PROXY_LIVE_DASHSCOPE_MODEL` |
+| Qwen Cloud Token Plan | `QWEN_CLOUD_TOKEN_PLAN_API_KEY` | `LLM_PROXY_LIVE_QWEN_CLOUD_MODEL` |
 | Moonshot/Kimi | `MOONSHOT_API_KEY` | `LLM_PROXY_LIVE_MOONSHOT_MODEL` |
+| MiniMax | `MINIMAX_API_KEY` | `LLM_PROXY_LIVE_MINIMAX_MODEL` |
 | SiliconFlow | `SILICONFLOW_API_KEY` | `LLM_PROXY_LIVE_SILICONFLOW_MODEL` |
 | Zhipu/GLM | `ZHIPU_API_KEY` | `LLM_PROXY_LIVE_ZHIPU_MODEL` |
 | Gemini | `GEMINI_API_KEY` | `LLM_PROXY_LIVE_GEMINI_MODEL` |
@@ -1053,7 +1089,7 @@ JSON body fields:
 | `model` | No | tenant or configured provider default | Model identifier from the selected provider's configured model list. Omitted model uses the tenant default when `provider` is omitted; otherwise it uses the selected provider's configured default. |
 | `web_search` | No | `false` | Enables OpenAI web search when the selected provider/model supports it. |
 | `system_prompt` | No | authenticated tenant default | Per-request system prompt override. With `messages`, it is prepended as a system message only when the body does not already contain a system message. |
-| `max_tokens` | No | provider default | Positive integer output-token cap for this request. The proxy maps it to OpenAI `max_output_tokens`, Meta `max_completion_tokens`, other OpenAI-compatible providers' `max_tokens`, Anthropic `max_tokens`, or Gemini `generationConfig.maxOutputTokens`. |
+| `max_tokens` | No | provider default | Positive integer output-token cap for this request. The proxy maps it to OpenAI `max_output_tokens`, Meta, Moonshot, and MiniMax `max_completion_tokens`, other OpenAI-compatible providers' `max_tokens`, Anthropic `max_tokens`, or Gemini `generationConfig.maxOutputTokens`. |
 
 For `POST /`, `provider` remains a query parameter. Query `model` may override
 the JSON body only when the body omits `model` or provides the same value;
@@ -1062,9 +1098,9 @@ Bodies that provide both `prompt` and `messages`, empty `messages`, unsupported
 message roles, empty message content, partially specified `order`, duplicate
 or negative `order`, or both `system_prompt` and a system message return
 `400 Bad Request` before any upstream call.
-Gemini `max_tokens` values above `65536` return `400 Bad Request` before the
-proxy calls Gemini. Anthropic `max_tokens` values above the configured Claude
-model output limit return `400 Bad Request` before the proxy calls Anthropic.
+MiniMax M2.7 `max_tokens` values above `2048`, Gemini values above `65536`, and
+Anthropic values above the configured Claude model output limit return `400 Bad
+Request` before the proxy calls the selected provider.
 
 `POST /v2` is the canonical chat endpoint. It accepts the same `messages`,
 `model`, `web_search`, and `max_tokens` body fields, but rejects `prompt` and
@@ -1286,11 +1322,13 @@ positive and lets the upstream provider enforce any provider-side model limit.
 | `deepseek-chat` | DeepSeek | No | - | No |
 | `deepseek-reasoner` | DeepSeek | No | - | No |
 | `qwen-plus` | DashScope/Qwen | Yes | - | No |
+| `qwen3.8-max-preview` | Qwen Cloud Token Plan | Yes | - | No |
 | `kimi-k2-0905-preview` | Moonshot/Kimi | Yes | - | No |
 | `kimi-k3` | Moonshot/Kimi | No | - | No |
 | `kimi-k2.7-code` | Moonshot/Kimi | No | - | No |
 | `kimi-k2.7-code-highspeed` | Moonshot/Kimi | No | - | No |
 | `kimi-k2.6` | Moonshot/Kimi | No | - | No |
+| `MiniMax-M2.7` | MiniMax | Yes | `2048` | No |
 | `deepseek-ai/DeepSeek-R1` | SiliconFlow | Yes | - | No |
 | `glm-5.1` | Zhipu/GLM | Yes | - | No |
 | `glm-5.2` | Zhipu/GLM | No | `131072` | No |
