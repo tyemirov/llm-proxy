@@ -160,12 +160,15 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 		provider            string
 		model               string
 		tokenParameterField string
+		expectedAPIKey      string
 		forbiddenFields     []string
 	}{
 		{name: "DashScope Qwen Plus", provider: proxy.ProviderNameDashScope, model: proxy.ModelNameDashScopeQwenPlus, tokenParameterField: "max_tokens"},
+		{name: "Qwen Cloud Qwen 3.8 Max preview", provider: proxy.ProviderNameQwenCloud, model: proxy.ModelNameQwenCloudQwen38MaxPreview, tokenParameterField: "max_tokens", expectedAPIKey: "sk-qwencloud"},
 		{name: "Moonshot Kimi K2.6", provider: proxy.ProviderNameMoonshot, model: "kimi-k2.6", tokenParameterField: "max_completion_tokens"},
 		{name: "Moonshot Kimi K3", provider: proxy.ProviderNameMoonshot, model: "kimi-k3", tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
 		{name: "Moonshot Kimi K2.7 Code", provider: proxy.ProviderNameMoonshot, model: "kimi-k2.7-code", tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
+		{name: "MiniMax M2.7", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27, tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
 		{name: "Zhipu GLM 5.2", provider: proxy.ProviderNameZhipu, model: "glm-5.2", tokenParameterField: "max_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
 		{name: "Grok 4.5", provider: proxy.ProviderNameGrok, model: "grok-4.5", tokenParameterField: "max_tokens"},
 		{name: "Grok 4.20 reasoning", provider: proxy.ProviderNameGrok, model: "grok-4.20-0309-reasoning", tokenParameterField: "max_tokens"},
@@ -179,6 +182,9 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 				}
 				if request.URL.Path != "/chat/completions" {
 					subTest.Fatalf("path=%s want=%s", request.URL.Path, "/chat/completions")
+				}
+				if testCase.expectedAPIKey != "" && request.Header.Get("Authorization") != "Bearer "+testCase.expectedAPIKey {
+					subTest.Fatalf("authorization=%q want=%q", request.Header.Get("Authorization"), "Bearer "+testCase.expectedAPIKey)
 				}
 				bodyBytes, readError := io.ReadAll(request.Body)
 				if readError != nil {
@@ -197,8 +203,12 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 				OpenAIKey:             TestAPIKey,
 				DashScopeKey:          "sk-dashscope",
 				DashScopeBaseURL:      upstreamServer.URL,
+				QwenCloudKey:          "sk-qwencloud",
+				QwenCloudBaseURL:      upstreamServer.URL,
 				MoonshotKey:           "sk-moonshot",
 				MoonshotBaseURL:       upstreamServer.URL,
+				MiniMaxKey:            "sk-minimax",
+				MiniMaxBaseURL:        upstreamServer.URL,
 				ZhipuKey:              testZhipuKey,
 				ZhipuBaseURL:          upstreamServer.URL,
 				GrokKey:               testGrokKey,
@@ -266,6 +276,44 @@ func TestProviderRoutingRejectsGLM52MaxTokensAboveModelLimit(t *testing.T) {
 	queryParameters.Set("provider", proxy.ProviderNameZhipu)
 	queryParameters.Set("model", "glm-5.2")
 	queryParameters.Set("max_tokens", "131073")
+	request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
+	}
+	if !strings.Contains(responseRecorder.Body.String(), "invalid max_tokens parameter") {
+		t.Fatalf("body=%q want invalid max_tokens parameter", responseRecorder.Body.String())
+	}
+}
+
+func TestProviderRoutingRejectsMiniMaxM27MaxTokensAboveModelLimit(t *testing.T) {
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		t.Fatal("upstream must not be called for max_tokens above the MiniMax-M2.7 limit")
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		MiniMaxKey:            "sk-minimax",
+		MiniMaxBaseURL:        upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	queryParameters := url.Values{}
+	queryParameters.Set("key", TestSecret)
+	queryParameters.Set("prompt", TestPrompt)
+	queryParameters.Set("provider", proxy.ProviderNameMiniMax)
+	queryParameters.Set("model", proxy.ModelNameMiniMaxM27)
+	queryParameters.Set("max_tokens", "2049")
 	request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
 	responseRecorder := httptest.NewRecorder()
 	router.ServeHTTP(responseRecorder, request)

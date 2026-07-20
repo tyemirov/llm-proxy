@@ -756,7 +756,9 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 	expectedModels := map[string][]string{
 		proxy.ProviderNameOpenAI:    {"gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
 		proxy.ProviderNameDashScope: {proxy.ModelNameDashScopeQwenPlus},
+		proxy.ProviderNameQwenCloud: {proxy.ModelNameQwenCloudQwen38MaxPreview},
 		proxy.ProviderNameMoonshot:  {"kimi-k3", "kimi-k2.7-code", "kimi-k2.7-code-highspeed", "kimi-k2.6"},
+		proxy.ProviderNameMiniMax:   {proxy.ModelNameMiniMaxM27},
 		proxy.ProviderNameZhipu:     {"glm-5.2"},
 		proxy.ProviderNameGemini:    {"gemini-3.1-pro-preview", "gemini-3-flash-preview"},
 		proxy.ProviderNameAnthropic: {"claude-fable-5", "claude-sonnet-5"},
@@ -1323,6 +1325,14 @@ func TestProxyRejectsClientSuppliedProviderKeys(t *testing.T) {
 		t.Fatalf("json status=%d body=%q", jsonResponse.Code, jsonResponse.Body.String())
 	}
 
+	qwenCloudJSONRequest := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret, bytes.NewBufferString(`{"prompt":"hello","qwen_cloud_token_plan_api_key":"sk-client"}`))
+	qwenCloudJSONRequest.Header.Set("Content-Type", "application/json")
+	qwenCloudJSONResponse := httptest.NewRecorder()
+	router.ServeHTTP(qwenCloudJSONResponse, qwenCloudJSONRequest)
+	if qwenCloudJSONResponse.Code != http.StatusBadRequest {
+		t.Fatalf("qwen cloud json status=%d body=%q", qwenCloudJSONResponse.Code, qwenCloudJSONResponse.Body.String())
+	}
+
 	jsonQueryRequest := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret+"&provider_api_key=sk-client", bytes.NewBufferString(`{"prompt":"hello"}`))
 	jsonQueryRequest.Header.Set("Content-Type", "application/json")
 	jsonQueryResponse := httptest.NewRecorder()
@@ -1337,6 +1347,14 @@ func TestProxyRejectsClientSuppliedProviderKeys(t *testing.T) {
 	router.ServeHTTP(v2QueryResponse, v2QueryRequest)
 	if v2QueryResponse.Code != http.StatusBadRequest {
 		t.Fatalf("v2 query status=%d body=%q", v2QueryResponse.Code, v2QueryResponse.Body.String())
+	}
+
+	miniMaxQueryRequest := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret+"&minimax_api_key=sk-client", bytes.NewBufferString(`{"messages":[{"role":"user","content":"hello"}]}`))
+	miniMaxQueryRequest.Header.Set("Content-Type", "application/json")
+	miniMaxQueryResponse := httptest.NewRecorder()
+	router.ServeHTTP(miniMaxQueryResponse, miniMaxQueryRequest)
+	if miniMaxQueryResponse.Code != http.StatusBadRequest {
+		t.Fatalf("minimax query status=%d body=%q", miniMaxQueryResponse.Code, miniMaxQueryResponse.Body.String())
 	}
 
 	v2JSONRequest := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret, bytes.NewBufferString(`{"messages":[{"role":"user","content":"hello"}],"anthropic_api_key":"sk-client"}`))
