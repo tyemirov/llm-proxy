@@ -587,6 +587,18 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Add Playwright coverage for initial Settings hydration, changing text and dictation providers, saving and reloading the resulting pairs, absence of the blank dictation-model option, and explicit failure for a malformed profile response.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
 
+- [x] [B038] (P1) Keep the DashScope catalog valid for the default endpoint.
+  ### Summary
+  The checked-in DashScope base URL is `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`, but the refreshed catalog advertises `qwen3.7-max` and `qwen3.7-plus`. Those selections require a regional or workspace-specific DashScope route and credentials, so default deployments list models that reject requests.
+  ### Acceptance Criteria
+  1. The default DashScope catalog exposes only models supported by its checked-in International endpoint.
+  2. The authenticated management profile does not expose either Qwen 3.7 model.
+  3. The README catalog mirrors the packaged configuration.
+  4. No regional endpoint, credential fallback, alias, or transport change is introduced.
+  5. The required final `timeout -k 350s -s SIGKILL 350s make ci` passes after the last code edit.
+  ### Resolution
+  Removed `qwen3.7-max` and `qwen3.7-plus` from the default DashScope catalog while retaining `qwen-plus` at the checked-in International endpoint. The authenticated management-profile contract now asserts both unsupported Qwen 3.7 IDs remain absent, and the existing public routing scenario continues to exercise Qwen Plus. README configuration and model-capability tables mirror the packaged catalog. Validation passed with `timeout -k 350s -s SIGKILL 350s make ci`.
+
 ## Improvements
 
 - [x] [I023] (P1) Add GLM-5.2 to the existing BigModel/Zhipu catalog.
