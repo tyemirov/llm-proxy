@@ -848,6 +848,52 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   geometry, and clipboard behavior. Baseline and final
   `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
+- [x] [B044] (P1) Make GHCR and GitHub Pages publication verification wait on authoritative readiness.
+  Summary:
+  Publishing `v0.2.35` successfully created matching GHCR `v0.2.35` and
+  `latest` manifests, but `make publish` returned Docker exit `255` after its
+  `latest` publish output and before it could report success. The subsequent Pages activation pushed
+  the correct `gh-pages` commit, while GitHub Pages took about 70 seconds to
+  build it; the current marker-only verifier exhausted its 60-second blind
+  polling window and returned failure shortly before the public marker became
+  current. These are false-negative completion states after external mutation,
+  not valid release failures.
+
+  Requirements:
+  - Use one canonical, standard-Docker manifest-inspection path for publish and
+    deploy. It must consume complete inspection output, preserve Docker's
+    native error output, name the image reference on failure, and wait only on
+    a bounded, visible registry-readiness signal rather than an opaque
+    immediate read after manifest creation.
+  - After a Pages branch push, identify the exact pushed `gh-pages` commit and
+    use GitHub Pages' documented build-status API as the readiness signal. Do
+    not report a public-marker timeout while the matching build is queued or
+    building; reject terminal build errors with the reported reason and never
+    accept a build for another commit.
+  - Verify the public `.mprlab-release.json` only after the matching Pages
+    build is built, using a cache-distinct request tied to the expected source
+    commit. The marker must still match the release version and source commit.
+  - Keep all readiness budgets explicit and validated at the shell boundary;
+    do not hide retries, weaken marker/tag verification, add alternate image
+    paths, or rerun release/deployment stages from tests.
+  - Add black-box release-tool coverage for delayed successful registry and
+    Pages readiness, terminal Pages build failure, stale/mismatched build
+    commits, and contextual inspection failure reporting. Update the release
+    runbook to describe the authoritative readiness contracts.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  Added one bounded, standard-Docker manifest readiness command shared by
+  publish and deploy verification. Pages deployment now observes the exact
+  pushed branch commit through GitHub Pages build status, avoids redundant
+  configuration/build mutations, and only checks a cache-distinct release
+  marker after that commit is built. Added black-box coverage for delayed and
+  failed readiness states, plus runbook guidance. Baseline and final
+  `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
+
+
 ## Improvements
 
 - [x] [I026] (P1) {B036} Add provider/model-capability-driven reasoning-effort to tenant routing defaults.
