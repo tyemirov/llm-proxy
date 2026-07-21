@@ -640,7 +640,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Removed `qwen3.7-max` and `qwen3.7-plus` from the default DashScope catalog while retaining `qwen-plus` at the checked-in International endpoint. The authenticated management-profile contract now asserts both unsupported Qwen 3.7 IDs remain absent, and the existing public routing scenario continues to exercise Qwen Plus. README configuration and model-capability tables mirror the packaged catalog. Validation passed with `timeout -k 350s -s SIGKILL 350s make ci`.
 
-- [ ] [B039] (P1) Remove user query content from proxy request logs.
+- [x] [B039] (P1) Remove user query content from proxy request logs.
   Goal:
   Prevent normal proxy request logging from retaining client prompts, system prompts, or future sensitive query values. The current URI sanitizer replaces only `key`, while the public `GET /` contract accepts user content in query parameters.
   Requirements:
@@ -653,6 +653,8 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Black-box HTTP coverage that sends a distinct prompt, system prompt, tenant key, and rejected credential-shaped query value, then proves none appears in emitted log fields.
   Validation:
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair after the final code edit.
+  Resolved:
+  Structured request logs now use the canonical escaped path without a query component. Black-box router coverage sends distinct prompt, system prompt, tenant-secret, and rejected provider-key query values, then verifies none reach any emitted structured log field. README documents the query-free logging boundary. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
 ## Improvements
 
