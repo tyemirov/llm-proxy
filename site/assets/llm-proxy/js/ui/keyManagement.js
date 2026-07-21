@@ -6,6 +6,7 @@ import {
   DASHBOARD_VIEWS,
   EVENTS,
   MENU_ACTIONS,
+  MPR_UI,
   NOTICE_KINDS,
   ROUTING_DEFAULTS_INVALID_ERROR,
   WORKSPACE_INTEGRITY_ERROR,
@@ -43,6 +44,7 @@ const PROVIDER_DICTATION_EXAMPLE_ID = "provider-dictation";
 const JSON_CONTENT_TYPE_HEADER = "Content-Type: application/json";
 const SAMPLE_TEXT_PROMPT = "Hello";
 const SAMPLE_AUDIO_FILE = "recording.webm";
+const NOTIFICATION_HEADER_BOTTOM_PROPERTY = "--llm-notification-header-bottom";
 
 export function createKeyManagement() {
   return {
@@ -77,6 +79,8 @@ export function createKeyManagement() {
     generatedSecret: EMPTY_STRING,
     settingsOpen: false,
     usageExamplesOpen: false,
+    /** @type {ResizeObserver | null} */
+    notificationRegionObserver: null,
     notice: {
       kind: NOTICE_KINDS.INFO,
       message: EMPTY_STRING,
@@ -100,6 +104,28 @@ export function createKeyManagement() {
         this.handleUserMenuItem(event);
       });
       void this.start();
+    },
+
+    /**
+     * @param {HTMLElement} notificationRegion
+     */
+    bindNotificationRegion(notificationRegion) {
+      if (this.notificationRegionObserver) {
+        throw new Error("notification_region_already_bound");
+      }
+      const headerElement = document.getElementById(MPR_UI.HEADER_ID);
+      if (!headerElement) {
+        throw new Error(MPR_UI.HEADER_MISSING);
+      }
+      const updateNotificationHeaderBottom = () => {
+        const headerBottom = Math.max(0, Math.round(headerElement.getBoundingClientRect().bottom));
+        notificationRegion.style.setProperty(NOTIFICATION_HEADER_BOTTOM_PROPERTY, `${headerBottom}px`);
+      };
+      this.notificationRegionObserver = new ResizeObserver(updateNotificationHeaderBottom);
+      this.notificationRegionObserver.observe(headerElement);
+      window.addEventListener("resize", updateNotificationHeaderBottom);
+      window.addEventListener("scroll", updateNotificationHeaderBottom, { passive: true });
+      updateNotificationHeaderBottom();
     },
 
     get hasSecret() {

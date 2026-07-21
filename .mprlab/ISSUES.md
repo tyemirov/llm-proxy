@@ -571,7 +571,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Resolution:
   MPR UI v3.11.1 is now the sole browser authentication authority. LLM Proxy registers the documented authenticated and unauthenticated lifecycle events before startup, waits for MPR UI orchestration, reconciles an already-settled lifecycle through the documented header `data-mpr-auth-status`, and makes no protected management request until that state is `authenticated`. Removed the application-owned authentication-settlement and queued-retry flags. Once MPR UI authenticates the user, the workspace loads exactly once; every management profile failure, including `401` and the legacy-claim `409`, renders an explicit workspace error without changing the MPR UI session to signed out. The fast browser suite proves zero pre-auth profile calls, one post-auth hydration call, already-settled authenticated startup, dashboard rendering, and explicit failure rendering. The real local-stack scenario proves the same request boundary with actual TAuth access/refresh cookies and the documented `MPRUI.testing.authenticate` lifecycle, then proves reload restoration, access-cookie refresh, and explicit sign-out. Updated README and implementation documentation to state the sole-authority boundary. Focused `make frontend-test` passed 16 scenarios and `make test-management-auth-blackbox` passed the real service/browser scenario. The required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed; final CI included 100.0% aggregate Go coverage, 20 Python tests, 16 frontend Playwright scenarios, the real local TAuth/LLM Proxy browser scenario, 38 release-contract tests, and the live-provider preflight.
 
-- [ ] [B035] (P2) Move workspace notifications above the footer.
+- [x] [B035] (P2) Move workspace notifications above the footer.
   Goal:
   Render `Workspace loaded` and every other management notice in a dedicated top-right notification region directly below the shared MPR header. The current fixed bottom-right notice appears inside or over the footer and makes application feedback look like footer content.
   Requirements:
@@ -589,6 +589,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Add Playwright coverage that triggers the `Workspace loaded` notice and representative success and error notices, then proves their bounding boxes remain below the header, above and separate from the footer, right-aligned, unclipped, and non-obstructive at desktop and mobile viewports.
   - Keep browser coverage proving the Settings modal overlays the notice and that repeated dashboard/settings actions do not move the notice into the footer region.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
+  Resolution: 2026-07-20. Replaced the bottom-fixed notice with one header-measured, top-right live region that reserves normal layout space, stays sticky below MPR UI, and preserves Settings precedence. Added desktop/mobile Playwright coverage for workspace, success, and error notices; viewport/footer separation; pointer reachability; sticky positioning; and the modal overlay. Final `make ci` passed.
 
 - [x] [B036] (P1) Keep routing default provider/model pairs valid.
   Goal:

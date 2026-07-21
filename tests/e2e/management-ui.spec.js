@@ -522,6 +522,59 @@ test("settings modal overlays MPR header and footer layers", async ({ page }) =>
   }
 });
 
+test("management notices stay in a top-right live region above the footer", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+
+  for (const viewport of settingsLayerViewports) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto(baseURL);
+
+    const notificationRegion = page.locator("notification-region");
+    const notice = page.locator(".notice");
+    await expect(notificationRegion).toHaveAttribute("role", "status");
+    await expect(notificationRegion).toHaveAttribute("aria-live", "polite");
+    await expect(notificationRegion).toHaveAttribute("aria-atomic", "true");
+    await expect(notice).toHaveText("Workspace loaded");
+    await expect(notice).toHaveAttribute("data-kind", "success");
+    await expectNoticeGeometry(page);
+
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await expect(notice).toHaveText("Usage refreshed");
+    await expect(notice).toHaveAttribute("data-kind", "success");
+    await expectNoticeGeometry(page);
+
+    await installUsageResponse(page, httpInternalServerError);
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await expect(notice).toHaveText("Request failed");
+    await expect(notice).toHaveAttribute("data-kind", "error");
+    await expectNoticeGeometry(page);
+
+    await page.getByTestId("avatar-menu").click();
+    await expect(page.getByTestId("avatar-dropdown")).toBeVisible();
+    await page.getByTestId("avatar-menu-item").nth(0).click();
+
+    const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+    await expect(settingsDialog).toBeVisible();
+    const layerFacts = await settingsLayerFacts(page);
+    expect(layerFacts.overlayZIndex).toBeGreaterThan(layerFacts.noticeZIndex);
+    expect(layerFacts.noticeHit.inSettingsModal || layerFacts.noticeHit.inSettingsOverlay).toBe(true);
+    expect(layerFacts.noticeHit.inNotice).toBe(false);
+
+    await settingsDialog.getByRole("button", { name: "Close" }).click();
+    await expect(settingsDialog).toBeHidden();
+    await installUsageResponse(page, httpOK);
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await expect(notice).toHaveText("Usage refreshed");
+    await expectNoticeGeometry(page);
+
+    await page.evaluate(() => {
+      window.scrollTo(0, 320);
+    });
+    await expectNoticeBounds(page);
+  }
+});
+
 test("settings stays reachable when usage summary fails", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page, { usageStatus: httpInternalServerError });
@@ -653,8 +706,9 @@ async function settingsLayerFacts(page) {
     const closeButton = modalElement?.querySelector(".settings-header button");
     const headerElement = document.querySelector("mpr-header");
     const footerElement = document.querySelector("mpr-footer");
+    const notificationRegion = document.querySelector("notification-region");
     const noticeElement = document.querySelector(".notice");
-    if (!overlayElement || !modalElement || !closeButton || !headerElement || !footerElement || !noticeElement) {
+    if (!overlayElement || !modalElement || !closeButton || !headerElement || !footerElement || !notificationRegion || !noticeElement) {
       throw new Error("settings_layer_elements_missing");
     }
 
@@ -680,7 +734,7 @@ async function settingsLayerFacts(page) {
       overlayZIndex: Number.parseInt(getComputedStyle(overlayElement).zIndex, 10),
       headerZIndex: Number.parseInt(getComputedStyle(headerElement).zIndex, 10),
       footerZIndex: Number.parseInt(getComputedStyle(footerElement).zIndex, 10),
-      noticeZIndex: Number.parseInt(getComputedStyle(noticeElement).zIndex, 10),
+      noticeZIndex: Number.parseInt(getComputedStyle(notificationRegion).zIndex, 10),
       closeButtonHit: hitAt(
         closeButtonRect.left + closeButtonRect.width / 2,
         closeButtonRect.top + closeButtonRect.height / 2,
@@ -690,6 +744,125 @@ async function settingsLayerFacts(page) {
       headerHit: hitAt(viewportWidth / 2, safeBandCenter(headerRect)),
       footerHit: hitAt(viewportWidth / 2, safeBandCenter(footerRect)),
     };
+  });
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @returns {Promise<void>}
+ */
+async function expectNoticeGeometry(page) {
+  const noticeFacts = await expectNoticeBounds(page);
+  expect(noticeFacts.headerControlHit.inHeader).toBe(true);
+  expect(noticeFacts.headerControlHit.inNotice).toBe(false);
+  expect(noticeFacts.dashboardControlHit.inDashboard).toBe(true);
+  expect(noticeFacts.dashboardControlHit.inNotice).toBe(false);
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @returns {ReturnType<typeof notificationLayerFacts>}
+ */
+async function expectNoticeBounds(page) {
+  const noticeFacts = await notificationLayerFacts(page);
+  expect(noticeFacts.regionPointerEvents).toBe("none");
+  expect(noticeFacts.noticePointerEvents).toBe("auto");
+  expect(noticeFacts.notice.top).toBeGreaterThanOrEqual(noticeFacts.header.bottom);
+  expect(noticeFacts.notice.bottom).toBeLessThanOrEqual(noticeFacts.footer.top);
+  expect(noticeFacts.notice.left).toBeGreaterThanOrEqual(0);
+  expect(noticeFacts.notice.right).toBeLessThanOrEqual(noticeFacts.viewport.width);
+  expect(noticeFacts.notice.top).toBeGreaterThanOrEqual(0);
+  expect(noticeFacts.notice.bottom).toBeLessThanOrEqual(noticeFacts.viewport.height);
+  expect(noticeFacts.notice.rightInset).toBeLessThanOrEqual(noticeFacts.notice.leftInset);
+  expect(noticeFacts.noticeHit.inNotice).toBe(true);
+  return noticeFacts;
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @returns {Promise<{
+ *   regionPointerEvents: string,
+ *   noticePointerEvents: string,
+ *   viewport: { width: number, height: number },
+ *   header: { bottom: number },
+ *   footer: { top: number },
+ *   notice: { top: number, right: number, bottom: number, left: number, rightInset: number, leftInset: number },
+ *   noticeHit: { inNotice: boolean },
+ *   headerControlHit: { inHeader: boolean, inNotice: boolean },
+ *   dashboardControlHit: { inDashboard: boolean, inNotice: boolean },
+ * }>}
+ */
+async function notificationLayerFacts(page) {
+  return page.evaluate(() => {
+    const notificationRegion = document.querySelector("notification-region");
+    const noticeElement = document.querySelector(".notice");
+    const headerElement = document.querySelector("mpr-header");
+    const footerElement = document.querySelector("mpr-footer");
+    const headerControl = headerElement?.querySelector("button");
+    const dashboardControl = Array.from(document.querySelectorAll("dashboard-actions button")).find(
+      (button) => getComputedStyle(button).display !== "none",
+    );
+    if (!notificationRegion || !noticeElement || !headerElement || !footerElement || !headerControl || !dashboardControl) {
+      throw new Error("notification_layer_elements_missing");
+    }
+
+    const noticeRect = noticeElement.getBoundingClientRect();
+    const headerRect = headerElement.getBoundingClientRect();
+    const footerRect = footerElement.getBoundingClientRect();
+    const hitAtElementCenter = (element) => {
+      const rect = element.getBoundingClientRect();
+      return document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    };
+    const headerControlHit = hitAtElementCenter(headerControl);
+    const dashboardControlHit = hitAtElementCenter(dashboardControl);
+    const noticeHit = hitAtElementCenter(noticeElement);
+    const viewportWidth = document.documentElement.clientWidth;
+
+    return {
+      regionPointerEvents: getComputedStyle(notificationRegion).pointerEvents,
+      noticePointerEvents: getComputedStyle(noticeElement).pointerEvents,
+      viewport: {
+        width: viewportWidth,
+        height: document.documentElement.clientHeight,
+      },
+      header: {
+        bottom: headerRect.bottom,
+      },
+      footer: {
+        top: footerRect.top,
+      },
+      notice: {
+        top: noticeRect.top,
+        right: noticeRect.right,
+        bottom: noticeRect.bottom,
+        left: noticeRect.left,
+        rightInset: viewportWidth - noticeRect.right,
+        leftInset: noticeRect.left,
+      },
+      noticeHit: {
+        inNotice: Boolean(noticeHit?.closest(".notice")),
+      },
+      headerControlHit: {
+        inHeader: Boolean(headerControlHit?.closest("mpr-header")),
+        inNotice: Boolean(headerControlHit?.closest(".notice")),
+      },
+      dashboardControlHit: {
+        inDashboard: Boolean(dashboardControlHit?.closest("dashboard-actions")),
+        inNotice: Boolean(dashboardControlHit?.closest(".notice")),
+      },
+    };
+  });
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {number} status
+ * @returns {Promise<void>}
+ */
+async function installUsageResponse(page, status) {
+  await page.unroute(`${baseURL}/api/management/usage`);
+  await page.route(`${baseURL}/api/management/usage`, async (route) => {
+    await route.fulfill({ status, json: managementUsage() });
   });
 }
 

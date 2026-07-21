@@ -40,6 +40,17 @@
 
     <main class="llm-proxy-main">
       <llm-proxy-key-management x-data="llmProxyKeyManagement" x-init="init()" x-bind:data-auth-state="authState">
+        <notification-region
+          x-cloak
+          x-show="notice.message"
+          x-init="bindNotificationRegion($el)"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <p class="notice" x-bind:data-kind="notice.kind" x-text="notice.message"></p>
+        </notification-region>
+
         <section class="llm-panel" x-cloak x-show="authState === states.loading">
           <p class="eyebrow" x-text="copy.loadingEyebrow"></p>
           <h1 x-text="copy.loadingTitle"></h1>
@@ -53,9 +64,6 @@
         <section class="llm-panel" x-cloak x-show="authState === states.error">
           <p class="eyebrow" x-text="copy.profileErrorEyebrow"></p>
           <h1 x-text="copy.profileErrorTitle"></h1>
-          <template x-if="authState === states.error && notice.message">
-            <p x-text="notice.message"></p>
-          </template>
         </section>
 
         <template x-if="authState === states.authenticated">
@@ -386,7 +394,6 @@
               </settings-modal>
             </settings-overlay>
 
-            <output class="notice" x-cloak x-show="notice.message" x-bind:data-kind="notice.kind" x-text="notice.message"></output>
           </workspace-surface>
         </template>
       </llm-proxy-key-management>
