@@ -29,6 +29,12 @@
 
 /**
  * @typedef {{
+ *   api_key: string
+ * }} ProviderKeyReveal
+ */
+
+/**
+ * @typedef {{
  *   id: string,
  *   has_secret: boolean,
  *   defaults: TenantDefaults
