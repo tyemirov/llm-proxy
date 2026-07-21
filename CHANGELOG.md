@@ -6,6 +6,42 @@ All notable changes to this project will be documented in this file.
 
 - Declare the llm-proxy TAuth tenant requirements in the app-owned deployment manifest for gateway assembly.
 
+## [v0.2.34] - 2026-07-21
+
+- Merge pull request #204 from tyemirov/maintenance/M001R-backlog-hygiene
+- Merge pull request #214 from tyemirov/bugfix/B040-web-search-log-privacy
+- fix(logging): keep web search query values out of logs
+- Merge pull request #205 from tyemirov/bugfix/B036-routing-default-pairs
+- Merge pull request #206 from tyemirov/bugfix/B035-notification-placement
+- Merge pull request #207 from tyemirov/improvement/I025-reveal-provider-keys
+- Merge pull request #208 from tyemirov/maintenance/M004R-dependency-security-audit
+- Merge pull request #209 from tyemirov/bugfix/B039-path-only-request-logs
+- Merge pull request #210 from tyemirov/maintenance/M014-go-security-toolchain
+- Merge pull request #211 from tyemirov/maintenance/M015-qpack-security-update
+- Merge pull request #212 from tyemirov/maintenance/M016-pgx-security-update
+- Merge pull request #213 from tyemirov/maintenance/M017-mapstructure-security-update
+- chore(deps): patch mapstructure security update
+- chore(deps): patch pgx security update
+- chore(deps): patch QPACK dependency
+- chore(deps): patch Go toolchain security release
+- fix(logging): remove query content from request logs
+- chore(issues): record M004 security audit findings
+- feat(management): reveal saved provider keys
+- fix(ui): move workspace notices above footer
+- fix(routing): enforce managed default pairs
+- docs(issues): normalize backlog identifiers
+- Merge pull request #203 from tyemirov/gix/add-reloadable-per-user-model-profiles-to-go-python
+- fix(client): normalize all model profile reader failures before HTTP request
+- test(llmproxyclient): reject model profile files with invalid UTF-8 encoding
+- docs(issues): note UTF-8 profile checks and Python error handling improvements
+- feat: add support for dynamic model profiles via JSON file in client config
+- feat: support dynamic model profiles with atomic reload and config validation
+- feat(cli): add --model-profile option and tests for dynamic provider/model selection
+- docs: clarify model-profile config, runtime override, and exclusivity rules
+- docs: document application-user model profile support in Go and Python clients
+- chore(makefile): add LLMProxyModelProfileError to python import test
+- docs(issues): capture and resolve F015 reloadable client model-profile contract
+
 ## [v0.2.33] - 2026-07-20
 
 - Merge pull request #202 from tyemirov/gix/add-qwen-cloud-and-minimax-as-selectable-text-providers
