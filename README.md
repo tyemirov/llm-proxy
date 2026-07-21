@@ -1510,6 +1510,7 @@ positive and lets the upstream provider enforce any provider-side model limit.
 
 * All requests must include a configured tenant secret via `key=...`.
 * Client requests must not include upstream provider API keys; public proxy endpoints reject provider-key-like query, JSON, and multipart form fields.
+* Request logs record only the query-free path plus method, status, latency, client IP, and tenant metadata; they do not record query strings, request bodies, cookies, or authorization headers.
 * Self-service provider API keys are accepted only through TAuth-protected management endpoints and are not returned raw after save.
 * Do not expose this service to the public internet without appropriate network controls.
 

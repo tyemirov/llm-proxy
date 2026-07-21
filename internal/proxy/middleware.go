@@ -12,15 +12,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// sanitizeRequestURI replaces sensitive query parameter values with a placeholder.
-func sanitizeRequestURI(requestURL *url.URL) string {
-	queryParameters := requestURL.Query()
-	if queryParameters.Has(queryParameterKey) {
-		queryParameters.Set(queryParameterKey, redactedPlaceholder)
-	}
-	sanitizedURL := *requestURL
-	sanitizedURL.RawQuery = queryParameters.Encode()
-	return sanitizedURL.RequestURI()
+func requestLogPath(requestURL *url.URL) string {
+	return requestURL.EscapedPath()
 }
 
 // requestResponseLogger emits structured request and response metadata for traceability.
@@ -28,13 +21,13 @@ func requestResponseLogger(structuredLogger *zap.SugaredLogger) gin.HandlerFunc 
 	return func(ginContext *gin.Context) {
 		requestStart := time.Now()
 		requestMethod := ginContext.Request.Method
-		requestPath := sanitizeRequestURI(ginContext.Request.URL)
+		requestPath := requestLogPath(ginContext.Request.URL)
 		requestClientIP := ginContext.ClientIP()
 
 		structuredLogger.Infow(
 			logEventRequestReceived,
 			logFieldMethod, requestMethod,
-			logFieldPath, requestPath,
+			constants.LogFieldPath, requestPath,
 			logFieldClientIP, requestClientIP,
 		)
 
