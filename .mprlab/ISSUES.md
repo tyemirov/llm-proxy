@@ -640,7 +640,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Removed `qwen3.7-max` and `qwen3.7-plus` from the default DashScope catalog while retaining `qwen-plus` at the checked-in International endpoint. The authenticated management-profile contract now asserts both unsupported Qwen 3.7 IDs remain absent, and the existing public routing scenario continues to exercise Qwen Plus. README configuration and model-capability tables mirror the packaged catalog. Validation passed with `timeout -k 350s -s SIGKILL 350s make ci`.
 
-- [ ] [B039] (P1) Remove user query content from proxy request logs.
+- [x] [B039] (P1) Remove user query content from proxy request logs.
   Goal:
   Prevent normal proxy request logging from retaining client prompts, system prompts, or future sensitive query values. The current URI sanitizer replaces only `key`, while the public `GET /` contract accepts user content in query parameters.
   Requirements:
@@ -653,6 +653,8 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Black-box HTTP coverage that sends a distinct prompt, system prompt, tenant key, and rejected credential-shaped query value, then proves none appears in emitted log fields.
   Validation:
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair after the final code edit.
+  Resolved:
+  Structured request logs now use the canonical escaped path without a query component. Black-box router coverage sends distinct prompt, system prompt, tenant-secret, and rejected provider-key query values, then verifies none reach any emitted structured log field. README documents the query-free logging boundary. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
 ## Improvements
 
@@ -1228,7 +1230,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Validation:
   - Verify every product-context path named by root `AGENTS.md` exists and contains current repository guidance.
 
-- [ ] [M014] (P0) Patch the canonical Go toolchain security release.
+- [x] [M014] (P0) Patch the canonical Go toolchain security release.
   Goal:
   Eliminate the standard-library findings GO-2026-5856 and GO-2026-4970 from every build path by moving the repository's Go contract to a fixed security patch release.
   Requirements:
@@ -1240,8 +1242,10 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Updated security-scan evidence without GO-2026-5856 or GO-2026-4970.
   Validation:
   - Run `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved:
+  Raised `go.mod`, the GitHub Actions contract, and the Docker release builder to Go 1.25.12; the release artifact helper retains its `--pull` base-image refresh behavior. A `GOTOOLCHAIN=go1.25.12 make build` binary reports `go1.25.12`, and its reachability scan no longer reports GO-2026-5856 or GO-2026-4970. The remaining QPACK, pgx, and mapstructure findings are the separately queued M015 through M017 work. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
-- [ ] [M015] (P0) {M014} Remove the reachable HTTP/3 QPACK vulnerability from the Go graph.
+- [x] [M015] (P0) {M014} Remove the reachable HTTP/3 QPACK vulnerability from the Go graph.
   Goal:
   Upgrade the dependency owner that supplies `github.com/quic-go/quic-go` so the production graph is at least v0.59.1 and no longer carries GO-2026-5676.
   Requirements:
@@ -1253,8 +1257,10 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Regression coverage for the existing proxy transport surface if the owner update changes it.
   Validation:
   - Run `go mod verify`, `go run golang.org/x/vuln/cmd/govulncheck@latest ./...`, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved:
+  Raised the canonical selected `github.com/quic-go/quic-go` graph entry to v0.59.1 while retaining its supported `github.com/quic-go/qpack` v0.6.0 companion and the existing Gin/TAuth transport APIs. `go mod verify` passed, the Go 1.25.12 reachability scan no longer reports GO-2026-5676, and its only remaining findings are separately queued in M016 and M017. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
-- [ ] [M016] (P0) {M015} Upgrade the reachable PostgreSQL driver dependency past SQL-injection fixes.
+- [x] [M016] (P0) {M015} Upgrade the reachable PostgreSQL driver dependency past SQL-injection fixes.
   Goal:
   Move `github.com/jackc/pgx/v5` to at least v5.9.2 so the GORM PostgreSQL path no longer carries GO-2026-5004 or its earlier v5.9.0 fixes.
   Requirements:
@@ -1266,8 +1272,10 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Existing management-store black-box coverage passing for both configured dialect paths.
   Validation:
   - Run `go mod verify`, `go run golang.org/x/vuln/cmd/govulncheck@latest ./...`, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved:
+  Raised the canonical selected `github.com/jackc/pgx/v5` dependency to v5.9.2 while retaining the supported GORM PostgreSQL driver and its existing SQLite/PostgreSQL management-store model APIs, transaction, and locking paths. `go mod verify` passed, the Go 1.25.12 reachability scan no longer reports GO-2026-5004, and its only remaining reachable finding is separately queued in M017. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
-- [ ] [M017] (P1) {M016} Upgrade mapstructure past sensitive-error leakage.
+- [x] [M017] (P1) {M016} Upgrade mapstructure past sensitive-error leakage.
   Goal:
   Move `github.com/go-viper/mapstructure/v2` to at least v2.4.0 so configuration decoding no longer carries GO-2025-3900.
   Requirements:
@@ -1279,6 +1287,8 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Config-loading coverage proving the current strict failure contract remains intact.
   Validation:
   - Run `go mod verify`, `go run golang.org/x/vuln/cmd/govulncheck@latest ./...`, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved:
+  Raised Viper to its supported v1.21.0 release, which canonically selects `github.com/go-viper/mapstructure/v2` v2.4.0 without an independent decoder override. The existing strict `UnmarshalExact` parsing and missing-placeholder failure coverage remains unchanged. `go mod verify` passed, the Go 1.25.12 reachability scan reports no vulnerabilities, and the separately queued M018 retains the non-reachable module-advisory review. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
 - [ ] [M018] (P2) {M017} Refresh the remaining indirectly reported Go security graph.
   Goal:

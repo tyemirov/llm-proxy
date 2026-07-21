@@ -6,6 +6,8 @@ const (
 
 	// LogFieldLatencyMilliseconds identifies the structured log field name for latency in milliseconds.
 	LogFieldLatencyMilliseconds = "latency_ms"
+	// LogFieldPath identifies the query-free request path recorded in structured logs.
+	LogFieldPath = "path"
 
 	// LogEventReadResponseBodyFailed identifies failures while reading an HTTP response body.
 	LogEventReadResponseBodyFailed = "read response body failed"
