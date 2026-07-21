@@ -17,6 +17,7 @@ const (
 	managementAPIPath                   = "/api/management"
 	managementProfilePath               = "/profile"
 	managementProviderKeysPath          = "/provider-keys/:provider"
+	managementProviderKeyRevealPath     = managementProviderKeysPath + "/reveal"
 	managementDefaultsPath              = "/defaults"
 	managementSecretsPath               = "/secrets"
 	managementUsagePath                 = "/usage"
@@ -102,6 +103,10 @@ type managementProxyResponse struct {
 type managementSecretResponse struct {
 	Secret  string                    `json:"secret"`
 	Profile managementProfileResponse `json:"profile"`
+}
+
+type managementProviderKeyRevealResponse struct {
+	APIKey string `json:"api_key"`
 }
 
 type managementUsageSummaryResponse struct {
@@ -203,6 +208,7 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.GET(managementAdminUsersPath, service.adminUsersHandler())
 	managementGroup.PUT(managementProviderKeysPath, service.saveProviderKeyHandler())
 	managementGroup.DELETE(managementProviderKeysPath, service.removeProviderKeyHandler())
+	managementGroup.POST(managementProviderKeyRevealPath, service.managementCredentialedActionMiddleware(), service.revealProviderKeyHandler())
 	managementGroup.PUT(managementDefaultsPath, service.updateDefaultsHandler())
 	managementGroup.POST(managementSecretsPath, service.generateSecretHandler())
 	managementGroup.DELETE(managementSecretsPath, service.revokeSecretHandler())
@@ -263,6 +269,16 @@ func (service *managementService) managementMutationMiddleware() gin.HandlerFunc
 	}
 }
 
+func (service *managementService) managementCredentialedActionMiddleware() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		if strings.TrimSpace(ginContext.GetHeader(headerOrigin)) != service.configuration.PublicOrigin {
+			ginContext.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+		ginContext.Next()
+	}
+}
+
 func (service *managementService) corsPreflightHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		if strings.TrimSpace(ginContext.GetHeader(headerOrigin)) != service.configuration.PublicOrigin {
@@ -293,7 +309,7 @@ func (service *managementService) profileHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusInternalServerError, snapshotError.Error())
 			return
 		}
-		ginContext.JSON(http.StatusOK, service.profileResponse(principal, snapshot))
+		service.writeProfileResponse(ginContext, principal, snapshot)
 	}
 }
 
@@ -347,7 +363,7 @@ func (service *managementService) saveProviderKeyHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusBadRequest, storeError.Error())
 			return
 		}
-		ginContext.JSON(http.StatusOK, service.profileResponse(principal, snapshot))
+		service.writeProfileResponse(ginContext, principal, snapshot)
 	}
 }
 
@@ -364,25 +380,50 @@ func (service *managementService) removeProviderKeyHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusInternalServerError, storeError.Error())
 			return
 		}
-		ginContext.JSON(http.StatusOK, service.profileResponse(principal, snapshot))
+		service.writeProfileResponse(ginContext, principal, snapshot)
+	}
+}
+
+func (service *managementService) revealProviderKeyHandler() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		ginContext.Header(headerCacheControl, cacheControlNoStore)
+		providerIdentifier, providerError := service.providers.canonicalProviderID(ginContext.Param("provider"))
+		if providerError != nil {
+			ginContext.String(http.StatusBadRequest, providerError.Error())
+			return
+		}
+		apiKey, revealError := service.store.revealProviderKey(managementPrincipalFromContext(ginContext), providerIdentifier)
+		if revealError != nil {
+			if errors.Is(revealError, errManagedProviderKeyNotFound) {
+				ginContext.AbortWithStatus(http.StatusNotFound)
+				return
+			}
+			ginContext.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+		ginContext.JSON(http.StatusOK, managementProviderKeyRevealResponse{APIKey: apiKey})
 	}
 }
 
 func (service *managementService) updateDefaultsHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		principal := managementPrincipalFromContext(ginContext)
-		currentSnapshot, snapshotError := service.store.profile(principal)
-		if snapshotError != nil {
-			ginContext.String(http.StatusInternalServerError, snapshotError.Error())
-			return
-		}
 		var request managementDefaultsRequest
 		if decodeError := decodeManagementJSON(ginContext, &request); decodeError != nil {
 			ginContext.String(http.StatusBadRequest, decodeError.Error())
 			return
 		}
-		defaults := TenantDefaults(request)
-		if defaultsError := service.validateManagedTextDefaults(currentSnapshot.providerAPIKeys, defaults); defaultsError != nil {
+		defaults, defaultsConstructionError := newManagedRoutingDefaults(service.providers, TenantDefaults(request))
+		if defaultsConstructionError != nil {
+			ginContext.String(http.StatusBadRequest, defaultsConstructionError.Error())
+			return
+		}
+		currentSnapshot, snapshotError := service.store.profile(principal)
+		if snapshotError != nil {
+			ginContext.String(http.StatusInternalServerError, snapshotError.Error())
+			return
+		}
+		if defaultsError := service.validateManagedRoutingDefaults(currentSnapshot.providerAPIKeys, defaults); defaultsError != nil {
 			ginContext.String(http.StatusBadRequest, defaultsError.Error())
 			return
 		}
@@ -391,7 +432,7 @@ func (service *managementService) updateDefaultsHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusInternalServerError, storeError.Error())
 			return
 		}
-		ginContext.JSON(http.StatusOK, service.profileResponse(principal, snapshot))
+		service.writeProfileResponse(ginContext, principal, snapshot)
 	}
 }
 
@@ -403,9 +444,15 @@ func (service *managementService) generateSecretHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusInternalServerError, generationError.Error())
 			return
 		}
+		profile, profileError := service.profileResponse(principal, snapshot)
+		if profileError != nil {
+			ginContext.String(http.StatusInternalServerError, profileError.Error())
+			return
+		}
+		ginContext.Header(headerCacheControl, cacheControlNoStore)
 		ginContext.JSON(http.StatusOK, managementSecretResponse{
 			Secret:  rawSecret,
-			Profile: service.profileResponse(principal, snapshot),
+			Profile: profile,
 		})
 	}
 }
@@ -418,11 +465,25 @@ func (service *managementService) revokeSecretHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusInternalServerError, storeError.Error())
 			return
 		}
-		ginContext.JSON(http.StatusOK, service.profileResponse(principal, snapshot))
+		service.writeProfileResponse(ginContext, principal, snapshot)
 	}
 }
 
-func (service *managementService) profileResponse(principal managementPrincipal, snapshot managedTenantSnapshot) managementProfileResponse {
+func (service *managementService) writeProfileResponse(ginContext *gin.Context, principal managementPrincipal, snapshot managedTenantSnapshot) {
+	profile, profileError := service.profileResponse(principal, snapshot)
+	if profileError != nil {
+		ginContext.String(http.StatusInternalServerError, profileError.Error())
+		return
+	}
+	ginContext.Header(headerCacheControl, cacheControlNoStore)
+	ginContext.JSON(http.StatusOK, profile)
+}
+
+func (service *managementService) profileResponse(principal managementPrincipal, snapshot managedTenantSnapshot) (managementProfileResponse, error) {
+	defaults, defaultsError := validatePersistedManagedRoutingDefaults(service.providers, snapshot.defaults)
+	if defaultsError != nil {
+		return managementProfileResponse{}, fmt.Errorf("%w: tenant=%s: %w", errManagedRoutingDefaultsInvalid, snapshot.tenantID, defaultsError)
+	}
 	return managementProfileResponse{
 		User: managementUserResponse{
 			ID:          snapshot.userID,
@@ -434,7 +495,7 @@ func (service *managementService) profileResponse(principal managementPrincipal,
 		Tenant: managementTenantResponse{
 			ID:        snapshot.tenantID,
 			HasSecret: snapshot.hasSecret,
-			Defaults:  managementDefaultsResponse(snapshot.defaults),
+			Defaults:  managementDefaultsResponse(defaults),
 			CreatedAt: snapshot.createdAt.Format(time.RFC3339),
 			UpdatedAt: snapshot.updatedAt.Format(time.RFC3339),
 		},
@@ -444,7 +505,7 @@ func (service *managementService) profileResponse(principal managementPrincipal,
 			V2Path:        v2Path,
 			DictationPath: dictatePath,
 		},
-	}
+	}, nil
 }
 
 func (service *managementService) providerResponses(providerSettings map[providerID]managedProviderSettings) []managementProviderResponse {
@@ -487,10 +548,10 @@ func (service *managementService) validateManagedProviderSettings(providerIdenti
 	return nil
 }
 
-func (service *managementService) validateManagedTextDefaults(providerAPIKeys map[providerID]string, defaults TenantDefaults) error {
+func (service *managementService) validateManagedRoutingDefaults(providerAPIKeys map[providerID]string, defaults managedRoutingDefaults) error {
 	requestTenant := tenant{
 		identifier:      tenantID("management-validation"),
-		defaults:        newTenantDefaults(defaults),
+		defaults:        newTenantDefaults(defaults.value()),
 		managed:         true,
 		providerAPIKeys: providerAPIKeys,
 	}
@@ -535,15 +596,8 @@ func managementPrincipalFromContext(ginContext *gin.Context) managementPrincipal
 	return ginContext.MustGet(contextKeyManagementPrincipal).(managementPrincipal)
 }
 
-func managementDefaultsResponse(defaults TenantDefaults) managementTenantDefaultsResponse {
-	normalizedDefaults := newTenantDefaults(defaults)
-	return managementTenantDefaultsResponse{
-		Provider:          normalizedDefaults.provider,
-		Model:             normalizedDefaults.model,
-		DictationProvider: normalizedDefaults.dictationProvider,
-		DictationModel:    normalizedDefaults.dictationModel,
-		SystemPrompt:      normalizedDefaults.systemPrompt,
-	}
+func managementDefaultsResponse(defaults managedRoutingDefaults) managementTenantDefaultsResponse {
+	return managementTenantDefaultsResponse(defaults.value())
 }
 
 func managementUsageSummary(summary managedUsageSummary) managementUsageSummaryResponse {

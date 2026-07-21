@@ -417,6 +417,31 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 
   Validation passed with baseline `timeout -k 350s -s SIGKILL 350s make ci`, reproduced failure via `timeout -k 120s -s SIGKILL 120s env RELEASE_ARTIFACT_TARGETS="container-artifacts pages-artifact" python3 -m unittest ...` before the patch, focused post-fix `timeout -k 180s -s SIGKILL 180s env RELEASE_ARTIFACT_TARGETS="container-artifacts pages-artifact" python3 -m unittest discover -s tools/gitrelease/tests -p 'test_*.py'` (36 tests), `timeout -k 120s -s SIGKILL 120s python3 -m unittest tools.gitrelease.tests.test_release_pipeline.ReleasePipelineTest.test_prepare_runs_ci_without_release_artifact_environment`, `timeout -k 30s -s SIGKILL 30s bash -n tools/gitrelease/scripts/prepare_release.sh`, and final `timeout -k 350s -s SIGKILL 350s make ci` (Go aggregate coverage 100.0%, Python 20 passed, Playwright 12 passed, release integrations 36 passed, live-provider preflight passed).
 
+- [x] [B026] (P1) Retry management profile after MPR UI refreshes authentication.
+  ### Summary
+  The live Pages UI can show the shared MPR user avatar for `temirov@gmail.com` while the llm-proxy body remains on "Sign in to manage llm-proxy keys". The MPR UI bundle can refresh TAuth through `/auth/session` after llm-proxy's initial `/api/management/profile` call has already received `401`, leaving the app signed out even though the shared `<mpr-user>` component is authenticated.
+  ### Acceptance Criteria
+  1. The management app retries profile loading when the shared MPR shell emits `mpr-ui:auth:authenticated` after an initial profile `401`.
+  2. The retry uses the current TAuth-authenticated shell state and does not read browser cookies, local storage, or session values directly.
+  3. Truly unauthenticated users still see the sign-in panel.
+  4. Browser coverage proves a delayed MPR authentication event transitions the app from the sign-in panel to the usage dashboard.
+  ### Resolution
+  Restored the canonical declarative MPR UI integration: source HTML owns `mpr-header[data-config-url="/config-ui.yaml"]` and the pinned bundle marker, while Pages rendering replaces that URL with the profile-owned production `PAGES_CONFIG_URL`. Removed application-owned MPR config application, bundle injection, production-host inference, and `<mpr-user>` internal status observation. The management app now queues one profile reload only from the documented `mpr-ui:auth:authenticated` event and waits for `MPRUI.whenAutoOrchestrationReady()` before releasing the shared auth transition. Static, renderer, and Playwright coverage reject direct `tauth.js`, missing declarative markers, internal MPR UI probing, invalid Pages config URLs, and the original profile-`401` followed by authenticated-event race. Validation passed with the required baseline and final `make ci` runs, including 100% Go block coverage, 20 Python tests, 13 Playwright tests, 36 release-contract tests, and the live-provider preflight; `git diff --check` also passed.
+
+- [x] [B027] (P1) Make TAuth session validation and deployment one canonical contract.
+  ### Summary
+  Production can show an authenticated MPR user while `/api/management/profile` returns `401`. The prior race fix left a hand-written llm-proxy JWT parser in place and the gateway `llm-proxy` deployment target restarted llm-proxy without restarting TAuth or staging TAuth's runtime inputs, allowing validator and issuer runtime state to diverge.
+  ### Acceptance Criteria
+  1. The backend consumes TAuth's published `pkg/sessionvalidator`; no llm-proxy-owned JWT parser or duplicate claims schema remains.
+  2. llm-proxy retains only product-owned tenant, required-expiry, and principal invariants after TAuth validation.
+  3. Management-session rejection logs expose only stable categories and never cookies, tokens, or identity claims.
+  4. Valid management API coverage signs the session with TAuth's published claims type, while invalid-cookie coverage preserves expiry, issuer, tenant, issued-at, principal, and missing-cookie rejection behavior.
+  5. The gateway `llm-proxy` target stages TAuth env/config, restarts `tauth-api` and llm-proxy together, and verifies both public health checks before Pages activation.
+  6. Repository documentation names the shared validator and coupled deployment contract.
+  7. The app deployment accepts only the canonical gateway target and fails before release or remote operations unless a clean synchronized gateway `origin/master` passes a gateway-owned coupling check.
+  ### Resolution
+  Replaced llm-proxy's duplicate JWT parser and claims schema with TAuth `v1.1.8` `pkg/sessionvalidator`, retaining only the product-owned tenant, required-expiry, and principal checks. The validated runtime configuration now owns the constructed validator and returns constructor failures through startup instead of panicking; public startup coverage replaces the former direct panic test. Management middleware logs stable rejection categories without cookies, tokens, or identity claims, and black-box management API fixtures use TAuth's published claims type while preserving invalid-session coverage. Aligned the module, CI, and container builder with TAuth's Go 1.25.4 requirement. The companion gateway change makes the `llm-proxy` target stage TAuth env/config and Caddy inputs, restart `tauth-api` with llm-proxy, require both health checks, and expose `verify-llm-proxy-deployment-contract`. The app deploy path has one fixed gateway target and rejects non-git, dirty, non-`master`, unsynchronized, or contract-incomplete gateway checkouts before release or remote operations, so the companion gateway commit must land before deployment can proceed. Documentation records the shared validator and coupled rollout invariant. Validation passed with 100% aggregate Go coverage, 38 release-contract tests, the focused gateway-owned contract target, and the repository's remaining CI gates; no production deployment was executed.
+
 - [x] [B028] (P1) Present a direct LLM Proxy sign-in experience.
   Goal:
   Make signing in an action that completes authentication and opens the management dashboard without explaining authentication mechanics to the user.
@@ -546,7 +571,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Resolution:
   MPR UI v3.11.1 is now the sole browser authentication authority. LLM Proxy registers the documented authenticated and unauthenticated lifecycle events before startup, waits for MPR UI orchestration, reconciles an already-settled lifecycle through the documented header `data-mpr-auth-status`, and makes no protected management request until that state is `authenticated`. Removed the application-owned authentication-settlement and queued-retry flags. Once MPR UI authenticates the user, the workspace loads exactly once; every management profile failure, including `401` and the legacy-claim `409`, renders an explicit workspace error without changing the MPR UI session to signed out. The fast browser suite proves zero pre-auth profile calls, one post-auth hydration call, already-settled authenticated startup, dashboard rendering, and explicit failure rendering. The real local-stack scenario proves the same request boundary with actual TAuth access/refresh cookies and the documented `MPRUI.testing.authenticate` lifecycle, then proves reload restoration, access-cookie refresh, and explicit sign-out. Updated README and implementation documentation to state the sole-authority boundary. Focused `make frontend-test` passed 16 scenarios and `make test-management-auth-blackbox` passed the real service/browser scenario. The required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed; final CI included 100.0% aggregate Go coverage, 20 Python tests, 16 frontend Playwright scenarios, the real local TAuth/LLM Proxy browser scenario, 38 release-contract tests, and the live-provider preflight.
 
-- [ ] [B035] (P2) Move workspace notifications above the footer.
+- [x] [B035] (P2) Move workspace notifications above the footer.
   Goal:
   Render `Workspace loaded` and every other management notice in a dedicated top-right notification region directly below the shared MPR header. The current fixed bottom-right notice appears inside or over the footer and makes application feedback look like footer content.
   Requirements:
@@ -564,8 +589,9 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Add Playwright coverage that triggers the `Workspace loaded` notice and representative success and error notices, then proves their bounding boxes remain below the header, above and separate from the footer, right-aligned, unclipped, and non-obstructive at desktop and mobile viewports.
   - Keep browser coverage proving the Settings modal overlays the notice and that repeated dashboard/settings actions do not move the notice into the footer region.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
+  Resolution: 2026-07-20. Replaced the bottom-fixed notice with one header-measured, top-right live region that reserves normal layout space, stays sticky below MPR UI, and preserves Settings precedence. Added desktop/mobile Playwright coverage for workspace, success, and error notices; viewport/footer separation; pointer reachability; sticky positioning; and the modal overlay. Final `make ci` passed.
 
-- [ ] [B036] (P1) Keep routing default provider/model pairs valid.
+- [x] [B036] (P1) Keep routing default provider/model pairs valid.
   Goal:
   Ensure Settings never displays, saves, or executes a routing default whose model does not belong to its selected provider. The current workspace can render impossible combinations such as text provider `Anthropic` with model `gpt-4.1`, and dictation provider `Grok` with `No dictation model`.
   Requirements:
@@ -586,6 +612,21 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Add runtime coverage proving an omitted request model routes through the exact persisted provider/model pair.
   - Add Playwright coverage for initial Settings hydration, changing text and dictation providers, saving and reloading the resulting pairs, absence of the blank dictation-model option, and explicit failure for a malformed profile response.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
+  Resolution: 2026-07-20. Enforced canonical managed text and dictation pairs across storage, startup, management APIs, runtime routing, and Settings; added the versioned transactional repair boundary, explicit workspace-integrity handling, documentation, and black-box coverage. Final `make ci` passed.
+
+- [x] [B037] (P1) Declare the app-owned orchestration manifest completely.
+  Goal:
+  Make llm-proxy's repository the canonical owner of the declarative inputs that the gateway aggregates, while keeping concrete TAuth and service runtime values in the ignored local deployment environment.
+  Requirements:
+  - Declare the `llm-proxy` TAuth tenant in `.mprlab/deploy/resources.yml` with environment placeholders only; do not add tenant configuration to the independent vanilla TAuth repository or commit concrete credentials.
+  - Describe the container through the current resource schema: explicit port records, compose file and project identity, and the exact private environment and application-config assets staged by the gateway.
+  - Keep `.mprlab/deploy/.env` ignored and pair it with the tracked `configs/.env.sample`; keep `configs/config.yml` as the tracked application-owned runtime template.
+  - Pass the repository CI gate and the gateway aggregate verifier from a clean committed owner state.
+  Validation:
+  - Run `timeout -k 350s -s SIGKILL 350s make ci` after the final manifest edit.
+  - Run the gateway `make verify-app-workflows` aggregate after committing the owner contract.
+  Resolution:
+  Declared the `llm-proxy` TAuth tenant in the application-owned manifest using deployment-environment placeholders only, and described the container with the canonical port list, compose file/project identity, ignored private environment asset, tracked environment example, and tracked runtime configuration. The independent TAuth repository remains vanilla and no concrete credential values were added. The post-change `make ci` gate passed with 100.0% aggregate Go coverage, 20 Python tests, 16 Playwright management scenarios, the real local TAuth browser scenario, 38 release-contract tests, and the live-provider harness preflight. The gateway aggregate verifier is run from the gateway after this owner contract is committed.
 
 - [x] [B038] (P1) Keep the DashScope catalog valid for the default endpoint.
   ### Summary
@@ -598,6 +639,37 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   5. The required final `timeout -k 350s -s SIGKILL 350s make ci` passes after the last code edit.
   ### Resolution
   Removed `qwen3.7-max` and `qwen3.7-plus` from the default DashScope catalog while retaining `qwen-plus` at the checked-in International endpoint. The authenticated management-profile contract now asserts both unsupported Qwen 3.7 IDs remain absent, and the existing public routing scenario continues to exercise Qwen Plus. README configuration and model-capability tables mirror the packaged catalog. Validation passed with `timeout -k 350s -s SIGKILL 350s make ci`.
+
+- [x] [B039] (P1) Remove user query content from proxy request logs.
+  Goal:
+  Prevent normal proxy request logging from retaining client prompts, system prompts, or future sensitive query values. The current URI sanitizer replaces only `key`, while the public `GET /` contract accepts user content in query parameters.
+  Requirements:
+  - Emit the canonical request path without any query component; retain method, response status, latency, client IP, and authenticated tenant metadata where those fields remain part of the existing operational contract.
+  - Do not enumerate or selectively redact public query values. A path-only contract must protect `prompt`, `system_prompt`, rejected credential-shaped values, and any sensitive query field introduced later.
+  - Keep request authentication and public request semantics unchanged; this is a logging-boundary correction, not a transport or compatibility change.
+  - Do not log request bodies, cookies, bearer credentials, provider API keys, or generated tenant secrets as a replacement for removed query logging.
+  Deliverables:
+  - One canonical path-only request-log representation used by the structured request logger.
+  - Black-box HTTP coverage that sends a distinct prompt, system prompt, tenant key, and rejected credential-shaped query value, then proves none appears in emitted log fields.
+  Validation:
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair after the final code edit.
+  Resolved:
+  Structured request logs now use the canonical escaped path without a query component. Black-box router coverage sends distinct prompt, system prompt, tenant-secret, and rejected provider-key query values, then verifies none reach any emitted structured log field. README documents the query-free logging boundary. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
+
+- [x] [B040] (P1) Keep invalid web-search query values out of structured logs.
+  Goal:
+  Preserve the query-free logging contract when the public `GET /` parser receives an invalid `web_search` value.
+  Requirements:
+  - Emit only stable parser metadata; do not log the raw query value or an error string that embeds it.
+  - Preserve the current request-authentication and invalid-web-search handling semantics.
+  - Extend router-level log coverage with an authenticated invalid `web_search` sentinel and prove it is absent from every emitted log entry.
+  Deliverables:
+  - A query-free invalid-web-search parser warning.
+  - Regression coverage for the full authenticated HTTP path.
+  Validation:
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair after the final code edit.
+  Resolved:
+  The invalid `web_search` warning now emits only its stable event and no query-derived fields or error values. Router-level black-box coverage drives an authenticated invalid-web-search sentinel through the existing request flow and verifies it, prompts, tenant keys, and rejected credential-shaped values remain absent from every structured log entry. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
 ## Improvements
 
@@ -956,7 +1028,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Added LoopAware traffic pixel script to site/index.html and generate_seo_resources.mjs htmlDocument, updated the modified date to 2026-07-11 in generator and tests, and mocked loopaware network requests in Playwright. All tests passed.
 
-- [ ] [I020] (P1) Let users reveal and edit their saved provider API keys.
+- [x] [I025] (P1) Let users reveal and edit their saved provider API keys.
   Goal:
   Let an authenticated user select any provider whose API key they previously saved, explicitly reveal the complete decrypted key, edit it in the existing provider-key field, and save the updated value. The current profile exposes only masked status and leaves the edit field blank, so users cannot inspect or correct a saved key without replacing it from another source.
   Requirements:
@@ -979,6 +1051,8 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Add persistence coverage proving reveal decrypts the encrypted record without writing plaintext to the database and an edited key is re-encrypted before save while generated-secret proxy routing uses the new value.
   - Add Playwright coverage for explicit reveal, visible/hidden presentation, editing and saving, masked post-save state, provider switching, Settings close/reopen, sign-out cleanup, request-order races, and absence of raw keys from browser storage and unrelated UI surfaces.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
+  ### Resolution
+  Added the strict owner-only reveal endpoint, encrypted owner-scoped lookup, and selected-provider reveal/hide/edit flow with lifecycle cleanup and stale-response invalidation. Documented the sole raw-key response boundary and added HTTP, persistence/routing, and Playwright coverage. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
 
 ## Maintenance
@@ -1000,6 +1074,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Re-read `ISSUES.md` after edits and confirm every issue is under the right section with a unique section-aware ID.
   - Confirm recurring entries remain open and keep the `R` suffix.
   - Confirm no active, blocked, recurring, or planning work was archived.
+  Last run: 2026-07-20. Removed the stale duplicate open F010 and F011 entries because the current provider catalog already includes Grok and GLM 5.2, reassigned the provider-key reveal work to I025, and updated F014 to reference I025. No active, blocked, recurring, or planning issue was archived.
 - [ ] [M002R] (P2) Polish open issues.
   Goal:
   Keep unresolved work executable by making each open issue concrete, ordered, and testable.
@@ -1051,7 +1126,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Rerun the repository-native audit, lint, or dependency checks used for the pass.
   - Confirm every finding is either filed, fixed under a separate issue, or explicitly marked not applicable with evidence.
   - Confirm no secrets or private payloads were written into the tracker.
-  Last run: 2026-06-29.
+  Last run: 2026-07-20. Ran `go mod verify`, `go run golang.org/x/vuln/cmd/govulncheck@latest -show verbose ./...`, `npm audit --json`, and a locked Python `pip-audit` export; npm and Python audits were clean, while Go findings are filed in M014 through M018. Reviewed tracked configuration, ignored runtime-input boundaries, container-base refresh behavior, management auth/CORS/encryption/GORM paths, and request logging; the logging privacy gap is filed in B039. M019 records non-security direct dependency freshness. No secrets or private payloads were added to this tracker.
 - [ ] [M005R] (P1) CI, release, and artifact health.
   Goal:
   Keep the repository's validation, release, publication, and generated artifact surfaces trustworthy.
@@ -1169,6 +1244,92 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Root governance references that resolve to current product-context files.
   Validation:
   - Verify every product-context path named by root `AGENTS.md` exists and contains current repository guidance.
+
+- [x] [M014] (P0) Patch the canonical Go toolchain security release.
+  Goal:
+  Eliminate the standard-library findings GO-2026-5856 and GO-2026-4970 from every build path by moving the repository's Go contract to a fixed security patch release.
+  Requirements:
+  - Raise the Go source and CI contract from 1.25.4 to a supported 1.25 security patch release at or above 1.25.12, the fixed release for GO-2026-5856; keep release builds on that same supported line.
+  - Preserve the release builder's current-base refresh behavior; do not retain an obsolete compiler path, compatibility build, or mixed runtime pin.
+  - Verify the resulting binary and dependency scan no longer report the affected `crypto/tls` and `os` standard-library findings.
+  Deliverables:
+  - One canonical supported Go patch version across source metadata, CI, and release build inputs.
+  - Updated security-scan evidence without GO-2026-5856 or GO-2026-4970.
+  Validation:
+  - Run `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved:
+  Raised `go.mod`, the GitHub Actions contract, and the Docker release builder to Go 1.25.12; the release artifact helper retains its `--pull` base-image refresh behavior. A `GOTOOLCHAIN=go1.25.12 make build` binary reports `go1.25.12`, and its reachability scan no longer reports GO-2026-5856 or GO-2026-4970. The remaining QPACK, pgx, and mapstructure findings are the separately queued M015 through M017 work. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
+
+- [x] [M015] (P0) {M014} Remove the reachable HTTP/3 QPACK vulnerability from the Go graph.
+  Goal:
+  Upgrade the dependency owner that supplies `github.com/quic-go/quic-go` so the production graph is at least v0.59.1 and no longer carries GO-2026-5676.
+  Requirements:
+  - Update through the owning supported dependency graph rather than preserving an obsolete transitive version or adding a compatibility fork.
+  - Keep the public proxy HTTP behavior and configured upstream transports unchanged.
+  - Prove the resolved module graph contains a fixed QPACK implementation and no longer reports the reachable finding.
+  Deliverables:
+  - A canonical resolved QPACK dependency version at or above v0.59.1.
+  - Regression coverage for the existing proxy transport surface if the owner update changes it.
+  Validation:
+  - Run `go mod verify`, `go run golang.org/x/vuln/cmd/govulncheck@latest ./...`, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved:
+  Raised the canonical selected `github.com/quic-go/quic-go` graph entry to v0.59.1 while retaining its supported `github.com/quic-go/qpack` v0.6.0 companion and the existing Gin/TAuth transport APIs. `go mod verify` passed, the Go 1.25.12 reachability scan no longer reports GO-2026-5676, and its only remaining findings are separately queued in M016 and M017. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
+
+- [x] [M016] (P0) {M015} Upgrade the reachable PostgreSQL driver dependency past SQL-injection fixes.
+  Goal:
+  Move `github.com/jackc/pgx/v5` to at least v5.9.2 so the GORM PostgreSQL path no longer carries GO-2026-5004 or its earlier v5.9.0 fixes.
+  Requirements:
+  - Upgrade through the supported GORM/PostgreSQL dependency graph without introducing raw SQL, a driver fork, or a compatibility adapter.
+  - Preserve the existing SQLite and PostgreSQL management-store contracts and their transaction/locking behavior.
+  - Verify the resolved graph and reachability scan no longer report the pgx findings.
+  Deliverables:
+  - A canonical resolved pgx v5 version at or above v5.9.2.
+  - Existing management-store black-box coverage passing for both configured dialect paths.
+  Validation:
+  - Run `go mod verify`, `go run golang.org/x/vuln/cmd/govulncheck@latest ./...`, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved:
+  Raised the canonical selected `github.com/jackc/pgx/v5` dependency to v5.9.2 while retaining the supported GORM PostgreSQL driver and its existing SQLite/PostgreSQL management-store model APIs, transaction, and locking paths. `go mod verify` passed, the Go 1.25.12 reachability scan no longer reports GO-2026-5004, and its only remaining reachable finding is separately queued in M017. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
+
+- [x] [M017] (P1) {M016} Upgrade mapstructure past sensitive-error leakage.
+  Goal:
+  Move `github.com/go-viper/mapstructure/v2` to at least v2.4.0 so configuration decoding no longer carries GO-2025-3900.
+  Requirements:
+  - Upgrade through the Viper-supported graph and preserve strict config parsing and missing-placeholder failure behavior.
+  - Keep configuration errors contextual without serializing expanded secret values into logs or public responses.
+  - Do not retain a pinned vulnerable decoder as a compatibility path.
+  Deliverables:
+  - A canonical resolved mapstructure v2 version at or above v2.4.0.
+  - Config-loading coverage proving the current strict failure contract remains intact.
+  Validation:
+  - Run `go mod verify`, `go run golang.org/x/vuln/cmd/govulncheck@latest ./...`, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved:
+  Raised Viper to its supported v1.21.0 release, which canonically selects `github.com/go-viper/mapstructure/v2` v2.4.0 without an independent decoder override. The existing strict `UnmarshalExact` parsing and missing-placeholder failure coverage remains unchanged. `go mod verify` passed, the Go 1.25.12 reachability scan reports no vulnerabilities, and the separately queued M018 retains the non-reachable module-advisory review. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
+
+- [ ] [M018] (P2) {M017} Refresh the remaining indirectly reported Go security graph.
+  Goal:
+  Remove the non-reachable but reported `golang.org/x/net`, `golang.org/x/crypto`, and platform dependency advisories from the resolved module graph after the reachable fixes land.
+  Requirements:
+  - Raise the graph to fixed supported versions, including `x/net` at or above v0.55.0, `x/crypto` at or above v0.52.0, and the fixed `x/sys` platform release where it remains selected.
+  - Re-evaluate the graph after M014 through M017 rather than carrying stale findings forward or adding direct pins that fight supported dependency owners.
+  - Record any advisory that remains not applicable only with command evidence and no compatibility exemption.
+  Deliverables:
+  - A verified Go module graph with the remaining fixed transitive security versions.
+  - Updated vulnerability-scan evidence distinguishing no-call findings from resolved findings.
+  Validation:
+  - Run `go mod verify`, `go run golang.org/x/vuln/cmd/govulncheck@latest -show verbose ./...`, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [ ] [M019] (P2) {M018} Refresh non-security direct dependency pins.
+  Goal:
+  Bring direct Go, frontend, and Python development dependencies to their current supported releases after the security graph is stable.
+  Requirements:
+  - Evaluate the observed direct-version drift for Gin, JWT, Viper, TAuth, Zap, GORM, Alpine, js-yaml, mypy, and pytest against their current contracts.
+  - Upgrade compatible current releases in one canonical lockfile/module state; do not preserve stale dependency aliases or parallel versions.
+  - Keep generated client, browser, and release behavior covered through their real repository entry points.
+  Deliverables:
+  - Updated Go module graph, npm lockfile, and Python lockfile only where the selected current contract requires them.
+  - A concise compatibility note for any package intentionally left at its current supported version.
+  Validation:
+  - Run `go mod verify`, `npm audit --json`, the locked Python audit, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
 
 ## Features
@@ -1358,8 +1519,6 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Added `management.admin_emails` as the config-owned administrator list, validates configured email values at startup, derives `user.is_admin` from the validated TAuth session email, and keeps public config on environment placeholders for admin addresses. Added admin-only `GET /api/management/admin/users`, returning all managed users with tenant facts and 30-day usage summaries while excluding provider API keys, masked key strings, generated secrets, secret digests, prompts, responses, audio names, and transcripts. Non-admin authenticated sessions receive `403`. The static Pages UI now inserts an `Admin` avatar-menu item only for admin profiles and renders a compact all-users dashboard. README and provider-routing docs describe the admin contract.
   Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run 'TestManagement(AdminUsersDashboard|UsageSummaryRecordsManagedProxyRequests|ConfigurationValidationRequiresBackendAuthFields)'`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./cmd/cli -run 'TestRootCommand|TestRender'`, `timeout -k 240s -s SIGKILL 240s go test -count=1 ./internal/proxy`, `timeout -k 30s -s SIGKILL 30s npm run frontend:lint`, `timeout -k 180s -s SIGKILL 180s npm run frontend:test -- management-ui.spec.js`, and `git diff --check`.
-- [ ] [F010] (P1) Add Grok as a provider.
-- [ ] [F011] (P1) Add GLM 5.2 as a provider.
 - [ ] [F012] (P2) Add GPT 5.6 to the list of supported OpenAI models including the level of efforts.
 - [ ] [F013] (P2) Add selectable usage-dashboard time intervals.
   Goal:
@@ -1385,7 +1544,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Add Playwright coverage proving each option requests the canonical interval, becomes visibly active, updates every dashboard surface from one response, keeps its selection on Refresh, clears stale data on failure, prevents response-order races, and remains usable at desktop and mobile widths.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
 
-- [ ] [F014] (P1) {B036,I020,F013} Support multiple isolated tenants per managed user.
+- [ ] [F014] (P1) {B036,I025,F013} Support multiple isolated tenants per managed user.
   Goal:
   Let one authenticated TAuth user create, select, rename, and delete multiple independently configured LLM Proxy tenants. Each tenant owns its own generated client secret, provider credentials and settings, routing defaults, request examples, and usage history. This feature is one-user-to-many-tenants; shared tenants, invitations, memberships, and team roles are outside scope.
   Current contract:
@@ -1411,7 +1570,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Management API:
   - Replace singular bootstrap with `GET /api/management/account`, returning the authenticated user plus a stable creation-ordered list of tenant summaries. Delete `/api/management/profile`; do not retain it as an alias.
   - Add canonical owner-only tenant lifecycle endpoints: `POST /api/management/tenants`, `GET /api/management/tenants/:tenant_id`, `PUT /api/management/tenants/:tenant_id`, and `DELETE /api/management/tenants/:tenant_id` for create, hydrate, rename, and delete.
-  - Move every tenant operation under that resource: usage, defaults, secret creation/revocation, provider-key save/remove, and I020 provider-key reveal must use `/api/management/tenants/:tenant_id/...`. Delete the former unscoped endpoints instead of keeping compatibility routes.
+  - Move every tenant operation under that resource: usage, defaults, secret creation/revocation, provider-key save/remove, and I025 provider-key reveal must use `/api/management/tenants/:tenant_id/...`. Delete the former unscoped endpoints instead of keeping compatibility routes.
   - Treat tenant creation, rename, deletion, provider mutation, default mutation, and secret mutation as transactional operations with validated tenant-id/name domain types and explicit stable errors. Tenant deletion must cascade its digest, provider settings, and usage only after explicit confirmation at the UI boundary.
   - Keep F013's exact interval query and bucket semantics on the tenant-scoped usage endpoint. A user aggregate is not a substitute for the selected tenant dashboard, and concurrent tabs selecting different tenants must not share server-side active-tenant state.
   UI and interaction:
@@ -1419,7 +1578,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Store the active tenant in the page URL as `tenant=<tenant-id>` so reload, browser history, bookmarks, and independent tabs preserve explicit context. When the parameter is absent, select the oldest tenant returned by the account bootstrap and write it with `history.replaceState`; when a supplied id is invalid or unauthorized, show an explicit workspace error rather than silently choosing another tenant.
   - Add an accessible create-tenant dialog with focused name input and inline validation. Select the new tenant after creation and update the URL without reloading the MPR authentication shell.
   - Put tenant rename and deletion controls in the Settings `Client access` section. Require a destructive confirmation containing the tenant display name, explain why the last tenant cannot be deleted, and after deleting the active tenant select the oldest remaining tenant and replace the URL.
-  - Switching tenants must atomically replace dashboard usage, secret status, defaults, request examples, and provider settings. Clear any one-time generated secret and any I020 revealed provider key immediately; if Settings contains unsaved edits, require an explicit discard decision before switching.
+  - Switching tenants must atomically replace dashboard usage, secret status, defaults, request examples, and provider settings. Clear any one-time generated secret and any I025 revealed provider key immediately; if Settings contains unsaved edits, require an explicit discard decision before switching.
   - Use request identity/cancellation so a late account, tenant, usage, reveal, save, create, rename, or delete response cannot overwrite the newly selected tenant. A failed hydration must clear prior tenant data and render the existing explicit workspace error state rather than displaying stale cross-tenant values.
   - Preserve the compact MPR visual language, shared header/footer/modal stacking contracts, visible focus, screen-reader labels/status announcements, and unclipped switcher/dialog layouts at desktop and mobile widths.
   Deliverables:
@@ -1431,7 +1590,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Validation:
   - Add black-box management HTTP scenarios where one authenticated user creates two tenants with different keys for the same provider, defaults, secrets, and usage; prove each tenant round-trips independently and another authenticated user receives indistinguishable `404` responses for both reads and mutations.
   - Prove through public proxy endpoints that each tenant's generated secret selects only that tenant's provider key/defaults, records usage only for that tenant, and that revoking or deleting one tenant never changes another tenant's authentication or history.
-  - Exercise I020 reveal and F013 intervals through the tenant-scoped endpoints, including cross-tenant denial, response non-caching, concurrent requests, and the absence of raw secrets/keys from account, tenant-summary, usage, and admin payloads.
+  - Exercise I025 reveal and F013 intervals through the tenant-scoped endpoints, including cross-tenant denial, response non-caching, concurrent requests, and the absence of raw secrets/keys from account, tenant-summary, usage, and admin payloads.
   - Add disposable pre-migration database fixtures for SQLite and PostgreSQL containing multiple current users, encrypted provider keys, generated-secret digests, defaults, and usage. Run the real migration entrypoint and prove exact preservation, ciphertext re-binding, old-schema removal, idempotent version rejection, rollback on corrupted/orphaned rows, and unchanged client-secret routing.
   - Add Playwright coverage for first-user bootstrap, create, switch, URL reload/history, independent tabs, rename, guarded final-tenant deletion, confirmed deletion, unsaved-edit handling, one-time secret/key cleanup, response-order races, explicit invalid-URL errors, admin tenant lists, keyboard use, and desktop/mobile geometry.
   - Extend the real local TAuth black-box path to create and use two tenants for one verified session and prove a second verified user cannot access either tenant.
@@ -1474,45 +1633,6 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Run `timeout -k 30s -s SIGKILL 30s git diff --check`.
   ### Resolution
   Replaced the management-mode static-config importer with one explicit, bounded ownership claim configured by legacy tenant id and normalized deployment-owned email. Before claim, every remaining `static-config:*` token is rejected; the matching account's first verified TAuth management session performs one GORM transaction that rekeys the tenant to the TAuth subject, preserves the tenant id, secret digest, defaults, creation time, provider settings, and all usage events, re-encrypts provider keys for the new owner id, and fails conflicts without partial writes. Management mode now rejects config tenants and global provider API keys, resolves usage ownership by preserved tenant id to prevent stale in-process writes, and removes the obsolete importer marker table through GORM. Packaged config, local environment guidance, provider-routing docs, SEO generator sources, generated resource pages, and the live-provider smoke harness now reflect the forward-only user-owned model; the harness builds an explicit static-mode fixture and has a non-paid authenticated-routing preflight in CI. Black-box coverage proves pre-claim rejection, non-owner isolation, first-login claim, unchanged-token routing, historical/new usage visibility, provider-key continuity, idempotent reload, and destination conflict rollback. Validation passed with `make go-test` (aggregate Go coverage 100.0%), `make ci` (Go/Python/frontend lint and tests; Python 20 passed; Playwright 11 passed; live-harness preflight passed), deterministic `node scripts/generate_seo_resources.mjs` (45 pages), `bash -n scripts/test_live_providers.sh`, the no-credential live-smoke skip, and `git diff --check`. Production activation remains an ordered rollout: deploy the current image, drain every old instance before owner sign-in, verify the unchanged token and dashboard history, then remove the temporary migration mapping.
-
-- [x] [B026] (P1) Retry management profile after MPR UI refreshes authentication.
-  ### Summary
-  The live Pages UI can show the shared MPR user avatar for `temirov@gmail.com` while the llm-proxy body remains on "Sign in to manage llm-proxy keys". The MPR UI bundle can refresh TAuth through `/auth/session` after llm-proxy's initial `/api/management/profile` call has already received `401`, leaving the app signed out even though the shared `<mpr-user>` component is authenticated.
-  ### Acceptance Criteria
-  1. The management app retries profile loading when the shared MPR shell emits `mpr-ui:auth:authenticated` after an initial profile `401`.
-  2. The retry uses the current TAuth-authenticated shell state and does not read browser cookies, local storage, or session values directly.
-  3. Truly unauthenticated users still see the sign-in panel.
-  4. Browser coverage proves a delayed MPR authentication event transitions the app from the sign-in panel to the usage dashboard.
-  ### Resolution
-  Restored the canonical declarative MPR UI integration: source HTML owns `mpr-header[data-config-url="/config-ui.yaml"]` and the pinned bundle marker, while Pages rendering replaces that URL with the profile-owned production `PAGES_CONFIG_URL`. Removed application-owned MPR config application, bundle injection, production-host inference, and `<mpr-user>` internal status observation. The management app now queues one profile reload only from the documented `mpr-ui:auth:authenticated` event and waits for `MPRUI.whenAutoOrchestrationReady()` before releasing the shared auth transition. Static, renderer, and Playwright coverage reject direct `tauth.js`, missing declarative markers, internal MPR UI probing, invalid Pages config URLs, and the original profile-`401` followed by authenticated-event race. Validation passed with the required baseline and final `make ci` runs, including 100% Go block coverage, 20 Python tests, 13 Playwright tests, 36 release-contract tests, and the live-provider preflight; `git diff --check` also passed.
-
-- [x] [B027] (P1) Make TAuth session validation and deployment one canonical contract.
-  ### Summary
-  Production can show an authenticated MPR user while `/api/management/profile` returns `401`. The prior race fix left a hand-written llm-proxy JWT parser in place and the gateway `llm-proxy` deployment target restarted llm-proxy without restarting TAuth or staging TAuth's runtime inputs, allowing validator and issuer runtime state to diverge.
-  ### Acceptance Criteria
-  1. The backend consumes TAuth's published `pkg/sessionvalidator`; no llm-proxy-owned JWT parser or duplicate claims schema remains.
-  2. llm-proxy retains only product-owned tenant, required-expiry, and principal invariants after TAuth validation.
-  3. Management-session rejection logs expose only stable categories and never cookies, tokens, or identity claims.
-  4. Valid management API coverage signs the session with TAuth's published claims type, while invalid-cookie coverage preserves expiry, issuer, tenant, issued-at, principal, and missing-cookie rejection behavior.
-  5. The gateway `llm-proxy` target stages TAuth env/config, restarts `tauth-api` and llm-proxy together, and verifies both public health checks before Pages activation.
-  6. Repository documentation names the shared validator and coupled deployment contract.
-  7. The app deployment accepts only the canonical gateway target and fails before release or remote operations unless a clean synchronized gateway `origin/master` passes a gateway-owned coupling check.
-  ### Resolution
-  Replaced llm-proxy's duplicate JWT parser and claims schema with TAuth `v1.1.8` `pkg/sessionvalidator`, retaining only the product-owned tenant, required-expiry, and principal checks. The validated runtime configuration now owns the constructed validator and returns constructor failures through startup instead of panicking; public startup coverage replaces the former direct panic test. Management middleware logs stable rejection categories without cookies, tokens, or identity claims, and black-box management API fixtures use TAuth's published claims type while preserving invalid-session coverage. Aligned the module, CI, and container builder with TAuth's Go 1.25.4 requirement. The companion gateway change makes the `llm-proxy` target stage TAuth env/config and Caddy inputs, restart `tauth-api` with llm-proxy, require both health checks, and expose `verify-llm-proxy-deployment-contract`. The app deploy path has one fixed gateway target and rejects non-git, dirty, non-`master`, unsynchronized, or contract-incomplete gateway checkouts before release or remote operations, so the companion gateway commit must land before deployment can proceed. Documentation records the shared validator and coupled rollout invariant. Validation passed with 100% aggregate Go coverage, 38 release-contract tests, the focused gateway-owned contract target, and the repository's remaining CI gates; no production deployment was executed.
-
-- [x] [B037] (P1) Declare the app-owned orchestration manifest completely.
-  Goal:
-  Make llm-proxy's repository the canonical owner of the declarative inputs that the gateway aggregates, while keeping concrete TAuth and service runtime values in the ignored local deployment environment.
-  Requirements:
-  - Declare the `llm-proxy` TAuth tenant in `.mprlab/deploy/resources.yml` with environment placeholders only; do not add tenant configuration to the independent vanilla TAuth repository or commit concrete credentials.
-  - Describe the container through the current resource schema: explicit port records, compose file and project identity, and the exact private environment and application-config assets staged by the gateway.
-  - Keep `.mprlab/deploy/.env` ignored and pair it with the tracked `configs/.env.sample`; keep `configs/config.yml` as the tracked application-owned runtime template.
-  - Pass the repository CI gate and the gateway aggregate verifier from a clean committed owner state.
-  Validation:
-  - Run `timeout -k 350s -s SIGKILL 350s make ci` after the final manifest edit.
-  - Run the gateway `make verify-app-workflows` aggregate after committing the owner contract.
-  Resolution:
-  Declared the `llm-proxy` TAuth tenant in the application-owned manifest using deployment-environment placeholders only, and described the container with the canonical port list, compose file/project identity, ignored private environment asset, tracked environment example, and tracked runtime configuration. The independent TAuth repository remains vanilla and no concrete credential values were added. The post-change `make ci` gate passed with 100.0% aggregate Go coverage, 20 Python tests, 16 Playwright management scenarios, the real local TAuth browser scenario, 38 release-contract tests, and the live-provider harness preflight. The gateway aggregate verifier is run from the gateway after this owner contract is committed.
 
 - [x] [F015] (P1) Let application users change the model through reloadable client profiles.
   Goal:

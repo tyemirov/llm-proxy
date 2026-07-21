@@ -108,6 +108,9 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		if migrationError := managedTenants.migrateProviderTextSettings(providers); migrationError != nil {
 			return nil, migrationError
 		}
+		if migrationError := managedTenants.migrateRoutingDefaultPairs(providers); migrationError != nil {
+			return nil, migrationError
+		}
 		runtimeStaticTenants = tenantRegistry{}
 	}
 	tenantAuthenticator := newTenantAuthenticator(runtimeStaticTenants, managedTenants)
@@ -278,11 +281,7 @@ func chatRequestFromQuery(ginContext *gin.Context, defaults textRequestDefaults,
 	webSearchQuery := strings.TrimSpace(ginContext.Query(queryParameterWebSearch))
 	webSearchEnabled, webSearchParseError := parseWebSearchParameter(webSearchQuery)
 	if webSearchParseError != nil {
-		structuredLogger.Warnw(
-			logEventParseWebSearchParameterFailed,
-			logFieldValue, webSearchQuery,
-			constants.LogFieldError, webSearchParseError,
-		)
+		structuredLogger.Warnw(logEventParseWebSearchParameterFailed)
 	}
 	maxTokens, maxTokensError := parseMaxTokensParameter(ginContext.Query(queryParameterMaxTokens))
 	if maxTokensError != nil {

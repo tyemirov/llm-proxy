@@ -33,8 +33,7 @@ const (
 	formFieldAudio = "audio"
 	formFieldFile  = "file"
 
-	redactedPlaceholder = "***REDACTED***"
-	contextKeyTenant    = "tenant"
+	contextKeyTenant = "tenant"
 
 	mimeApplicationJSON = "application/json"
 	mimeApplicationXML  = "application/xml"
@@ -156,10 +155,8 @@ const (
 	// logFieldResponseBody captures the raw body returned by the upstream API.
 	logFieldResponseBody = "response_body"
 	logFieldMethod       = "method"
-	logFieldPath         = "path"
 	logFieldClientIP     = "client_ip"
 	logFieldStatus       = "status"
-	logFieldValue        = "value"
 	logFieldTenantID     = "tenant_id"
 	logFieldEndpoint     = "endpoint"
 	logFieldProvider     = "provider"
