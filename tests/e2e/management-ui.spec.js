@@ -73,6 +73,25 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain(`data-config-url="${configPath}"`);
   expect(html).toContain("data-mpr-ui-bundle-src=");
   expect(html).not.toContain("tauth.js");
+  expect(html).toMatch(/<notification-region\s+slot="aux"[\s\S]*?<mpr-user\s+slot="aux"/);
+  expect(html).toContain('<body x-data="llmProxyKeyManagement" x-init="init()">');
+  expect(html).not.toContain('x-init="bindNotificationRegion($el)"');
+  expect(html).toContain('<a slot="brand" class="llm-proxy-header-brand" href="/" aria-label="LLM Proxy home">');
+  expect(html).toContain(`<img class="llm-proxy-header-brand__logo" src="${appIconPath}" alt="" aria-hidden="true">`);
+  expect(html).toContain('<span class="llm-proxy-header-brand__title">LLM Proxy</span>');
+  expect(html).not.toContain("brand-label=");
+  expect(html).not.toContain("data:image");
+  expect(html).toContain(
+    '<button type="button" class="icon-only copy-secret-button" x-on:click="copyGeneratedSecret()" x-bind:title="copy.copySecret" x-bind:aria-label="copy.copySecret">',
+  );
+  expect(html).toContain(
+    '<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">',
+  );
+  expect(html).toContain('<rect x="6" y="5" width="10" height="12" rx="1.5"></rect>');
+  expect(html).toContain('<rect x="8" y="7" width="10" height="12" rx="1.5"></rect>');
+  expect(html).not.toContain('x-bind:aria-label="copy.copySecret">[]</button>');
+  expect(html).toContain('x-model="defaults.reasoning_effort"');
+  expect(html).toContain('x-bind:data-reasoning-effort-active="String(reasoningEffortActiveForCurrentRoute)"');
 
   const mprShellResponse = await request.get(`${baseURL}/assets/llm-proxy/js/core/mprShell.js`);
   expect(mprShellResponse.status()).toBe(httpOK);
@@ -91,6 +110,9 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(keyManagementJavaScript).not.toContain("document.cookie");
   expect(keyManagementJavaScript).not.toContain("localStorage");
   expect(keyManagementJavaScript).not.toContain("/auth/session");
+  expect(keyManagementJavaScript).not.toContain("ResizeObserver");
+  expect(keyManagementJavaScript).not.toContain("NOTIFICATION_HEADER_BOTTOM_PROPERTY");
+  expect(keyManagementJavaScript).not.toContain("bindNotificationRegion");
 
   const faviconResponse = await request.get(`${baseURL}${faviconPath}`);
   expect(faviconResponse.status()).toBe(httpOK);
@@ -458,6 +480,7 @@ test("routing defaults save only complete provider and model pairs", async ({ pa
     dictation_provider: "grok",
     dictation_model: "xai-stt",
     system_prompt: "",
+    reasoning_effort: "",
   });
   expect((await savedDefaultsResponse.json()).tenant.defaults).toEqual({
     provider: "deepseek",
@@ -465,6 +488,7 @@ test("routing defaults save only complete provider and model pairs", async ({ pa
     dictation_provider: "grok",
     dictation_model: "xai-stt",
     system_prompt: "",
+    reasoning_effort: "",
   });
   await expect(page.getByRole("status")).toHaveText("Defaults saved");
 
@@ -481,6 +505,64 @@ test("routing defaults save only complete provider and model pairs", async ({ pa
   await expect(settingsDialog.getByRole("combobox", { name: "Text model" }).first()).toHaveValue("deepseek-chat");
   await expect(settingsDialog.getByRole("combobox", { name: "Dictation provider" })).toHaveValue("grok");
   await expect(settingsDialog.getByRole("combobox", { name: "Dictation model" })).toHaveValue("xai-stt");
+});
+
+test("tenant reasoning effort persists independently of the selected text route", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const textProvider = settingsDialog.getByRole("combobox", { name: "Text provider" });
+  const textModel = settingsDialog.getByRole("combobox", { name: "Text model" }).first();
+  const reasoningEffort = settingsDialog.getByRole("combobox", { name: "Reasoning effort" });
+  const inactiveStatus = settingsDialog.getByText("Inactive for the selected text route");
+
+  await expect(reasoningEffort).toHaveValue("");
+  await expect(reasoningEffort).toHaveAttribute("data-reasoning-effort-active", "false");
+  await expect(inactiveStatus).toBeVisible();
+  await reasoningEffort.focus();
+  await expect(reasoningEffort).toBeFocused();
+  await reasoningEffort.selectOption("high");
+
+  await textModel.selectOption("gpt-5");
+  await expect(reasoningEffort).toHaveValue("high");
+  await expect(reasoningEffort).toHaveAttribute("data-reasoning-effort-active", "true");
+  await expect(inactiveStatus).toBeHidden();
+
+  await textProvider.selectOption("deepseek");
+  await expect(textModel).toHaveValue("deepseek-chat");
+  await expect(reasoningEffort).toHaveValue("high");
+  await expect(reasoningEffort).toHaveAttribute("data-reasoning-effort-active", "false");
+  await expect(inactiveStatus).toBeVisible();
+
+  const defaultsRequest = page.waitForRequest(`${baseURL}/api/management/defaults`);
+  await settingsDialog.getByRole("button", { name: "Save defaults" }).click();
+  expect((await defaultsRequest).postDataJSON()).toMatchObject({
+    provider: "deepseek",
+    model: "deepseek-chat",
+    reasoning_effort: "high",
+  });
+
+  await page.setViewportSize({ width: 390, height: 780 });
+  await expect(reasoningEffort).toBeVisible();
+  const geometry = await reasoningEffort.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { left: rect.left, right: rect.right, width: rect.width };
+  });
+  expect(geometry.width).toBeGreaterThan(0);
+  expect(geometry.left).toBeGreaterThanOrEqual(0);
+  expect(geometry.right).toBeLessThanOrEqual(390);
+
+  const reloadedProfileResponse = page.waitForResponse(`${baseURL}/api/management/profile`);
+  await page.reload();
+  expect((await reloadedProfileResponse).status()).toBe(httpOK);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+  await expect(settingsDialog.getByRole("combobox", { name: "Reasoning effort" })).toHaveValue("high");
 });
 
 test("malformed routing-default profiles become workspace integrity errors", async ({ page }) => {
@@ -632,6 +714,55 @@ test("settings request examples use the freshly generated secret", async ({ page
   await expect(settingsDialog.locator("example-list")).not.toContainText("<generated-secret>");
 });
 
+test("generated-secret copy control uses a standard copy icon and copies the new secret", async ({ page }) => {
+  const generatedSecret = "llmp_test_generated_secret";
+  await installClipboardMock(page);
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { hasSecret: false, generatedSecret });
+
+  for (const viewport of settingsLayerViewports) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto(baseURL);
+    await page.getByTestId("avatar-menu").click();
+    await page.getByTestId("avatar-menu-item").nth(0).click();
+
+    const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+    await settingsDialog.getByRole("button", { name: "Create key" }).click();
+
+    const copyButton = settingsDialog.getByRole("button", { name: "Copy secret" });
+    const copyIcon = copyButton.locator("svg.copy-icon");
+    await expect(copyButton).toHaveAttribute("title", "Copy secret");
+    await expect(copyIcon).toHaveCount(1);
+    await expect(copyIcon).toHaveAttribute("aria-hidden", "true");
+    await expect(copyIcon).toHaveAttribute("focusable", "false");
+    await expect(copyIcon).toHaveAttribute("viewBox", "0 0 24 24");
+    await expect(copyIcon.locator("rect")).toHaveCount(2);
+    await expect(copyButton).not.toContainText("[]");
+
+    await copyButton.focus();
+    await expect(copyButton).toBeFocused();
+    const copyButtonBox = await copyButton.boundingBox();
+    const copyIconBox = await copyIcon.boundingBox();
+    const settingsDialogBox = await settingsDialog.boundingBox();
+    expect(copyButtonBox).not.toBeNull();
+    expect(copyIconBox).not.toBeNull();
+    expect(settingsDialogBox).not.toBeNull();
+    if (!copyButtonBox || !copyIconBox || !settingsDialogBox) {
+      throw new Error(`generated_secret_copy_geometry_missing:${viewport.name}`);
+    }
+    expect(copyButtonBox.width).toBeGreaterThanOrEqual(30);
+    expect(copyIconBox.width).toBeGreaterThan(0);
+    expect(copyIconBox.x).toBeGreaterThanOrEqual(copyButtonBox.x);
+    expect(copyIconBox.x + copyIconBox.width).toBeLessThanOrEqual(copyButtonBox.x + copyButtonBox.width);
+    expect(copyButtonBox.x).toBeGreaterThanOrEqual(settingsDialogBox.x);
+    expect(copyButtonBox.x + copyButtonBox.width).toBeLessThanOrEqual(settingsDialogBox.x + settingsDialogBox.width);
+
+    await copyButton.click();
+    expect(await copiedText(page)).toBe(generatedSecret);
+    await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Secret copied");
+  }
+});
+
 test("settings modal remains usable on narrow screens", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 780 });
   await installAssetRoutes(page);
@@ -641,6 +772,7 @@ test("settings modal remains usable on narrow screens", async ({ page }) => {
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
+  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
   const modalBox = await page.locator("settings-modal").boundingBox();
   expect(modalBox).not.toBeNull();
   expect(modalBox.width).toBeLessThanOrEqual(390);
@@ -664,7 +796,6 @@ test("settings modal overlays MPR header and footer layers", async ({ page }) =>
     const layerFacts = await settingsLayerFacts(page);
     expect(layerFacts.overlayZIndex).toBeGreaterThan(layerFacts.headerZIndex);
     expect(layerFacts.overlayZIndex).toBeGreaterThan(layerFacts.footerZIndex);
-    expect(layerFacts.overlayZIndex).toBeGreaterThan(layerFacts.noticeZIndex);
     expect(layerFacts.closeButtonHit.inSettingsModal).toBe(true);
     expect(layerFacts.closeButtonHit.inMprHeader).toBe(false);
     expect(layerFacts.modalBottomHit.inSettingsModal || layerFacts.modalBottomHit.inSettingsOverlay).toBe(true);
@@ -688,7 +819,7 @@ test("settings modal overlays MPR header and footer layers", async ({ page }) =>
   }
 });
 
-test("management notices stay in a top-right live region above the footer", async ({ page }) => {
+test("management notices occupy the header aux slot immediately before the avatar", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page);
 
@@ -696,25 +827,25 @@ test("management notices stay in a top-right live region above the footer", asyn
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto(baseURL);
 
-    const notificationRegion = page.locator("notification-region");
-    const notice = page.locator(".notice");
+    const notificationRegion = page.locator("#llm-proxy-header notification-region");
+    const notice = notificationRegion.locator(".notice");
     await expect(notificationRegion).toHaveAttribute("role", "status");
     await expect(notificationRegion).toHaveAttribute("aria-live", "polite");
     await expect(notificationRegion).toHaveAttribute("aria-atomic", "true");
     await expect(notice).toHaveText("Workspace loaded");
     await expect(notice).toHaveAttribute("data-kind", "success");
-    await expectNoticeGeometry(page);
+    await expectHeaderNoticeGeometry(page);
 
     await page.getByRole("button", { name: "Refresh" }).click();
     await expect(notice).toHaveText("Usage refreshed");
     await expect(notice).toHaveAttribute("data-kind", "success");
-    await expectNoticeGeometry(page);
+    await expectHeaderNoticeGeometry(page);
 
     await installUsageResponse(page, httpInternalServerError);
     await page.getByRole("button", { name: "Refresh" }).click();
     await expect(notice).toHaveText("Request failed");
     await expect(notice).toHaveAttribute("data-kind", "error");
-    await expectNoticeGeometry(page);
+    await expectHeaderNoticeGeometry(page);
 
     await page.getByTestId("avatar-menu").click();
     await expect(page.getByTestId("avatar-dropdown")).toBeVisible();
@@ -723,7 +854,6 @@ test("management notices stay in a top-right live region above the footer", asyn
     const settingsDialog = page.getByRole("dialog", { name: "Settings" });
     await expect(settingsDialog).toBeVisible();
     const layerFacts = await settingsLayerFacts(page);
-    expect(layerFacts.overlayZIndex).toBeGreaterThan(layerFacts.noticeZIndex);
     expect(layerFacts.noticeHit.inSettingsModal || layerFacts.noticeHit.inSettingsOverlay).toBe(true);
     expect(layerFacts.noticeHit.inNotice).toBe(false);
 
@@ -732,12 +862,49 @@ test("management notices stay in a top-right live region above the footer", asyn
     await installUsageResponse(page, httpOK);
     await page.getByRole("button", { name: "Refresh" }).click();
     await expect(notice).toHaveText("Usage refreshed");
-    await expectNoticeGeometry(page);
+    await expectHeaderNoticeGeometry(page);
+  }
+});
 
-    await page.evaluate(() => {
-      window.scrollTo(0, 320);
+test("header brand uses the local logo before its title without crowding the notice or avatar", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+
+  for (const viewport of settingsLayerViewports) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto(baseURL);
+
+    const brand = page.locator("#llm-proxy-header .llm-proxy-header-brand");
+    const logo = brand.locator(".llm-proxy-header-brand__logo");
+    const title = brand.locator(".llm-proxy-header-brand__title");
+    await expect(brand).toHaveCount(1);
+    await expect(brand).toHaveAttribute("slot", "brand");
+    await expect(brand).toHaveAttribute("href", "/");
+    await expect(brand).toHaveAttribute("aria-label", "LLM Proxy home");
+    await expect(page.getByRole("link", { name: "LLM Proxy home" })).toHaveCount(1);
+    await expect(logo).toHaveAttribute("src", appIconPath);
+    await expect(logo).toHaveAttribute("alt", "");
+    await expect(logo).toHaveAttribute("aria-hidden", "true");
+    await expect(title).toHaveText("LLM Proxy");
+    await expect(page.getByText("LLM Proxy", { exact: true })).toHaveCount(1);
+    await brand.focus();
+    await expect(brand).toBeFocused();
+    await expectHeaderBrandGeometry(page);
+
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Usage refreshed");
+    await expectHeaderBrandGeometry(page);
+
+    await page.getByTestId("avatar-menu").click();
+    await page.getByTestId("avatar-menu-item").nth(0).click();
+    const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+    await expect(settingsDialog).toBeVisible();
+    const brandHit = await page.locator("#llm-proxy-header .llm-proxy-header-brand").evaluate((brandElement) => {
+      const rect = brandElement.getBoundingClientRect();
+      const hitElement = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return Boolean(hitElement?.closest("settings-overlay") || hitElement?.closest("settings-modal"));
     });
-    await expectNoticeBounds(page);
+    expect(brandHit).toBe(true);
   }
 });
 
@@ -857,7 +1024,6 @@ async function copiedText(page) {
  *   overlayZIndex: number,
  *   headerZIndex: number,
  *   footerZIndex: number,
- *   noticeZIndex: number,
  *   closeButtonHit: { inSettingsModal: boolean, inSettingsOverlay: boolean, inMprHeader: boolean, inMprFooter: boolean },
  *   modalBottomHit: { inSettingsModal: boolean, inSettingsOverlay: boolean, inMprHeader: boolean, inMprFooter: boolean },
  *   noticeHit: { inSettingsModal: boolean, inSettingsOverlay: boolean, inMprHeader: boolean, inMprFooter: boolean, inNotice: boolean },
@@ -900,7 +1066,6 @@ async function settingsLayerFacts(page) {
       overlayZIndex: Number.parseInt(getComputedStyle(overlayElement).zIndex, 10),
       headerZIndex: Number.parseInt(getComputedStyle(headerElement).zIndex, 10),
       footerZIndex: Number.parseInt(getComputedStyle(footerElement).zIndex, 10),
-      noticeZIndex: Number.parseInt(getComputedStyle(notificationRegion).zIndex, 10),
       closeButtonHit: hitAt(
         closeButtonRect.left + closeButtonRect.width / 2,
         closeButtonRect.top + closeButtonRect.height / 2,
@@ -917,105 +1082,151 @@ async function settingsLayerFacts(page) {
  * @param {import("@playwright/test").Page} page
  * @returns {Promise<void>}
  */
-async function expectNoticeGeometry(page) {
-  const noticeFacts = await expectNoticeBounds(page);
-  expect(noticeFacts.headerControlHit.inHeader).toBe(true);
-  expect(noticeFacts.headerControlHit.inNotice).toBe(false);
-  expect(noticeFacts.dashboardControlHit.inDashboard).toBe(true);
-  expect(noticeFacts.dashboardControlHit.inNotice).toBe(false);
-}
-
-/**
- * @param {import("@playwright/test").Page} page
- * @returns {ReturnType<typeof notificationLayerFacts>}
- */
-async function expectNoticeBounds(page) {
-  const noticeFacts = await notificationLayerFacts(page);
+async function expectHeaderNoticeGeometry(page) {
+  const noticeFacts = await headerNoticeFacts(page);
+  expect(noticeFacts.regionSlot).toBe("aux");
+  expect(noticeFacts.regionBeforeAvatar).toBe(true);
   expect(noticeFacts.regionPointerEvents).toBe("none");
-  expect(noticeFacts.noticePointerEvents).toBe("auto");
-  expect(noticeFacts.notice.top).toBeGreaterThanOrEqual(noticeFacts.header.bottom);
-  expect(noticeFacts.notice.bottom).toBeLessThanOrEqual(noticeFacts.footer.top);
-  expect(noticeFacts.notice.left).toBeGreaterThanOrEqual(0);
-  expect(noticeFacts.notice.right).toBeLessThanOrEqual(noticeFacts.viewport.width);
-  expect(noticeFacts.notice.top).toBeGreaterThanOrEqual(0);
-  expect(noticeFacts.notice.bottom).toBeLessThanOrEqual(noticeFacts.viewport.height);
-  expect(noticeFacts.notice.rightInset).toBeLessThanOrEqual(noticeFacts.notice.leftInset);
-  expect(noticeFacts.noticeHit.inNotice).toBe(true);
-  return noticeFacts;
+  expect(noticeFacts.noticePointerEvents).toBe("none");
+  expect(noticeFacts.notice.top).toBeGreaterThanOrEqual(noticeFacts.header.top);
+  expect(noticeFacts.notice.bottom).toBeLessThanOrEqual(noticeFacts.header.bottom);
+  expect(noticeFacts.notice.left).toBeGreaterThanOrEqual(noticeFacts.header.left);
+  expect(noticeFacts.notice.right).toBeLessThanOrEqual(noticeFacts.header.right);
+  expect(noticeFacts.notice.right).toBeLessThanOrEqual(noticeFacts.avatar.left);
+  expect(noticeFacts.avatar.right).toBeLessThanOrEqual(noticeFacts.header.right);
+  expect(noticeFacts.avatar.top).toBeGreaterThanOrEqual(noticeFacts.header.top);
+  expect(noticeFacts.avatar.bottom).toBeLessThanOrEqual(noticeFacts.header.bottom);
+  expect(noticeFacts.avatarHit.inUser).toBe(true);
+  expect(noticeFacts.avatarHit.inNotice).toBe(false);
 }
 
 /**
  * @param {import("@playwright/test").Page} page
  * @returns {Promise<{
+ *   regionSlot: string | null,
+ *   regionBeforeAvatar: boolean,
  *   regionPointerEvents: string,
  *   noticePointerEvents: string,
- *   viewport: { width: number, height: number },
- *   header: { bottom: number },
- *   footer: { top: number },
- *   notice: { top: number, right: number, bottom: number, left: number, rightInset: number, leftInset: number },
- *   noticeHit: { inNotice: boolean },
- *   headerControlHit: { inHeader: boolean, inNotice: boolean },
- *   dashboardControlHit: { inDashboard: boolean, inNotice: boolean },
+ *   header: { top: number, right: number, bottom: number, left: number },
+ *   notice: { top: number, right: number, bottom: number, left: number },
+ *   avatar: { top: number, right: number, bottom: number, left: number },
+ *   avatarHit: { inUser: boolean, inNotice: boolean },
  * }>}
  */
-async function notificationLayerFacts(page) {
+async function headerNoticeFacts(page) {
   return page.evaluate(() => {
-    const notificationRegion = document.querySelector("notification-region");
-    const noticeElement = document.querySelector(".notice");
-    const headerElement = document.querySelector("mpr-header");
-    const footerElement = document.querySelector("mpr-footer");
-    const headerControl = headerElement?.querySelector("button");
-    const dashboardControl = Array.from(document.querySelectorAll("dashboard-actions button")).find(
-      (button) => getComputedStyle(button).display !== "none",
-    );
-    if (!notificationRegion || !noticeElement || !headerElement || !footerElement || !headerControl || !dashboardControl) {
-      throw new Error("notification_layer_elements_missing");
+    const headerElement = document.querySelector("#llm-proxy-header");
+    const notificationRegion = headerElement?.querySelector("notification-region");
+    const noticeElement = notificationRegion?.querySelector(".notice");
+    const userMenu = headerElement?.querySelector("mpr-user");
+    const avatarButton = userMenu?.querySelector('[data-testid="avatar-menu"]');
+    if (!headerElement || !notificationRegion || !noticeElement || !userMenu || !avatarButton) {
+      throw new Error("header_notification_elements_missing");
     }
 
     const noticeRect = noticeElement.getBoundingClientRect();
     const headerRect = headerElement.getBoundingClientRect();
-    const footerRect = footerElement.getBoundingClientRect();
+    const avatarRect = avatarButton.getBoundingClientRect();
     const hitAtElementCenter = (element) => {
       const rect = element.getBoundingClientRect();
       return document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
     };
-    const headerControlHit = hitAtElementCenter(headerControl);
-    const dashboardControlHit = hitAtElementCenter(dashboardControl);
-    const noticeHit = hitAtElementCenter(noticeElement);
-    const viewportWidth = document.documentElement.clientWidth;
+    const avatarHit = hitAtElementCenter(avatarButton);
 
     return {
+      regionSlot: notificationRegion.getAttribute("slot"),
+      regionBeforeAvatar: Boolean(notificationRegion.compareDocumentPosition(userMenu) & Node.DOCUMENT_POSITION_FOLLOWING),
       regionPointerEvents: getComputedStyle(notificationRegion).pointerEvents,
       noticePointerEvents: getComputedStyle(noticeElement).pointerEvents,
-      viewport: {
-        width: viewportWidth,
-        height: document.documentElement.clientHeight,
-      },
       header: {
+        top: headerRect.top,
+        right: headerRect.right,
         bottom: headerRect.bottom,
-      },
-      footer: {
-        top: footerRect.top,
+        left: headerRect.left,
       },
       notice: {
         top: noticeRect.top,
         right: noticeRect.right,
         bottom: noticeRect.bottom,
         left: noticeRect.left,
-        rightInset: viewportWidth - noticeRect.right,
-        leftInset: noticeRect.left,
       },
-      noticeHit: {
-        inNotice: Boolean(noticeHit?.closest(".notice")),
+      avatar: {
+        top: avatarRect.top,
+        right: avatarRect.right,
+        bottom: avatarRect.bottom,
+        left: avatarRect.left,
       },
-      headerControlHit: {
-        inHeader: Boolean(headerControlHit?.closest("mpr-header")),
-        inNotice: Boolean(headerControlHit?.closest(".notice")),
+      avatarHit: {
+        inUser: Boolean(avatarHit?.closest("mpr-user")),
+        inNotice: Boolean(avatarHit?.closest(".notice")),
       },
-      dashboardControlHit: {
-        inDashboard: Boolean(dashboardControlHit?.closest("dashboard-actions")),
-        inNotice: Boolean(dashboardControlHit?.closest(".notice")),
-      },
+    };
+  });
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @returns {Promise<void>}
+ */
+async function expectHeaderBrandGeometry(page) {
+  const brandFacts = await headerBrandFacts(page);
+  expect(brandFacts.logoBeforeTitle).toBe(true);
+  expect(brandFacts.brand.top).toBeGreaterThanOrEqual(brandFacts.header.top);
+  expect(brandFacts.brand.bottom).toBeLessThanOrEqual(brandFacts.header.bottom);
+  expect(brandFacts.brand.left).toBeGreaterThanOrEqual(brandFacts.header.left);
+  expect(brandFacts.logo.left).toBeGreaterThanOrEqual(brandFacts.brand.left);
+  expect(brandFacts.logo.right).toBeLessThanOrEqual(brandFacts.title.left);
+  expect(brandFacts.title.right).toBeLessThanOrEqual(brandFacts.brand.right);
+  expect(brandFacts.brand.right).toBeLessThanOrEqual(brandFacts.notice.left);
+  expect(brandFacts.notice.right).toBeLessThanOrEqual(brandFacts.avatar.left);
+  expect(brandFacts.avatar.right).toBeLessThanOrEqual(brandFacts.header.right);
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @returns {Promise<{
+ *   logoBeforeTitle: boolean,
+ *   header: { top: number, right: number, bottom: number, left: number },
+ *   brand: { top: number, right: number, bottom: number, left: number },
+ *   logo: { top: number, right: number, bottom: number, left: number },
+ *   title: { top: number, right: number, bottom: number, left: number },
+ *   notice: { top: number, right: number, bottom: number, left: number },
+ *   avatar: { top: number, right: number, bottom: number, left: number },
+ * }>}
+ */
+async function headerBrandFacts(page) {
+  return page.evaluate(() => {
+    const headerElement = document.querySelector("#llm-proxy-header");
+    const brandElement = headerElement?.querySelector(".llm-proxy-header-brand");
+    const logoElement = brandElement?.querySelector(".llm-proxy-header-brand__logo");
+    const titleElement = brandElement?.querySelector(".llm-proxy-header-brand__title");
+    const noticeElement = headerElement?.querySelector(".notice");
+    const avatarButton = headerElement?.querySelector('[data-testid="avatar-menu"]');
+    if (!headerElement || !brandElement || !logoElement || !titleElement || !noticeElement || !avatarButton) {
+      throw new Error("header_brand_elements_missing");
+    }
+
+    const headerRect = headerElement.getBoundingClientRect();
+    const brandRect = brandElement.getBoundingClientRect();
+    const logoRect = logoElement.getBoundingClientRect();
+    const titleRect = titleElement.getBoundingClientRect();
+    const noticeRect = noticeElement.getBoundingClientRect();
+    const avatarRect = avatarButton.getBoundingClientRect();
+    const rectFacts = (rect) => ({
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      left: rect.left,
+    });
+
+    return {
+      logoBeforeTitle: Boolean(logoElement.compareDocumentPosition(titleElement) & Node.DOCUMENT_POSITION_FOLLOWING),
+      header: rectFacts(headerRect),
+      brand: rectFacts(brandRect),
+      logo: rectFacts(logoRect),
+      title: rectFacts(titleRect),
+      notice: rectFacts(noticeRect),
+      avatar: rectFacts(avatarRect),
     };
   });
 }
@@ -1055,7 +1266,7 @@ async function installManagementRoutes(page, options = {}) {
       text_model: "claude-sonnet-5",
       system_prompt: "",
       text_default_model: "claude-sonnet-5",
-      text_models: ["claude-sonnet-5"],
+      text_models: [{ id: "claude-sonnet-5" }],
       supports_dictation: false,
       dictation_models: [],
     });
@@ -1235,6 +1446,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         dictation_provider: "openai",
         dictation_model: "gpt-4o-mini-transcribe",
         system_prompt: "",
+        reasoning_effort: "",
       },
     },
     providers: [
@@ -1247,7 +1459,17 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         text_model: "gpt-4.1",
         system_prompt: "Use concise answers.",
         text_default_model: "gpt-4.1",
-        text_models: ["gpt-4.1", "gpt-4o-mini"],
+        text_models: [
+          { id: "gpt-4.1" },
+          { id: "gpt-4o-mini" },
+          {
+            id: "gpt-5",
+            reasoning_effort: {
+              adapter: "openai_responses",
+              efforts: ["minimal", "low", "medium", "high"],
+            },
+          },
+        ],
         supports_dictation: true,
         dictation_default_model: "gpt-4o-mini-transcribe",
         dictation_models: ["gpt-4o-mini-transcribe"],
@@ -1261,7 +1483,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         text_model: "deepseek-chat",
         system_prompt: "",
         text_default_model: "deepseek-chat",
-        text_models: ["deepseek-chat"],
+        text_models: [{ id: "deepseek-chat" }],
         supports_dictation: false,
         dictation_models: [],
       },
@@ -1274,7 +1496,7 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         text_model: "muse-spark-1.1",
         system_prompt: "",
         text_default_model: "muse-spark-1.1",
-        text_models: ["muse-spark-1.1"],
+        text_models: [{ id: "muse-spark-1.1" }],
         supports_dictation: false,
         dictation_models: [],
       },
@@ -1286,12 +1508,13 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         text_model: "grok-4.3",
         system_prompt: "",
         text_default_model: "grok-4.3",
-        text_models: ["grok-4.3"],
+        text_models: [{ id: "grok-4.3" }],
         supports_dictation: true,
         dictation_default_model: "xai-stt",
         dictation_models: ["xai-stt"],
       },
     ],
+    reasoning_effort_options: ["minimal", "low", "medium", "high"],
     proxy: {
       text_path: "/",
       v2_path: "/v2",
