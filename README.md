@@ -730,7 +730,8 @@ Then configure GitHub Pages for this repository:
 3. Run `make release` to render and validate the Pages archive, `make publish`
    to upload that immutable archive, and `make deploy` to activate it on
    `gh-pages`. Deployment configures the repository Pages source and verifies
-   `/.mprlab-release.json` at the public origin.
+   the matching GitHub Pages build before fetching a cache-distinct
+   `/.mprlab-release.json` marker at the public origin.
 4. Configure real backend deployment secrets outside the Pages artifact:
    `LLM_PROXY_MANAGEMENT_ADMIN_EMAILS`, `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`,
    `LLM_PROXY_MANAGEMENT_DATABASE_DSN`,
@@ -912,8 +913,8 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make test-live-providers` | Generate a complete temporary static-mode config and run live text smoke tests for every provider whose API key is present; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
 | `make release` | Run CI and prepare the local tag, container archives, and validated Pages archive under `.git/mprlab-release` without remote writes. |
-| `make publish` | Publish the exact prepared Git refs, GitHub Release assets, and container archives without rebuilding or deploying. |
-| `make deploy` | Verify and deploy the published backend through the sibling gateway, then activate and verify the published Pages archive. |
+| `make publish` | Publish the exact prepared Git refs, GitHub Release assets, and container archives without rebuilding or deploying; wait for each GHCR manifest to become readable. |
+| `make deploy` | Verify and deploy the published backend through the sibling gateway, then activate the Pages archive and verify the matching Pages build and public marker. |
 
 Live provider smoke tests are intentionally not part of `make ci`; they call
 paid upstream APIs and depend on local or CI secret availability. The dynamic
@@ -964,7 +965,14 @@ paid provider with `./scripts/test_live_providers.sh --write-config
 `LLM_PROXY_CI_TIMEOUT_SECONDS=<seconds>`, or use the command-specific
 `RELEASE_CI_TIMEOUT_SECONDS` and `DEPLOY_CI_TIMEOUT_SECONDS` variables.
 `make publish` verifies and uploads only the already-prepared immutable
-artifacts; it does not rebuild or rerun CI.
+artifacts; it does not rebuild or rerun CI. GHCR manifest readiness is bounded
+by `CONTAINER_REGISTRY_VERIFY_ATTEMPTS` (default `12`) and
+`CONTAINER_REGISTRY_VERIFY_DELAY_SECONDS` (default `5`). Pages build readiness
+is bounded by `PAGES_BUILD_VERIFY_ATTEMPTS` (default `36`) and
+`PAGES_BUILD_VERIFY_DELAY_SECONDS` (default `5`); the final public marker check
+uses `PAGES_VERIFY_ATTEMPTS` and `PAGES_VERIFY_DELAY_SECONDS` (defaults `12`
+and `5`). Each wait reports its observed external readiness boundary rather
+than treating a completed push as immediate public availability.
 
 `llm-proxy` is a gateway-local service in `mprlab-gateway`, so `make deploy`
 uses the sole gateway `deploy-llm-proxy-backend` target after the gateway-owned
@@ -1608,9 +1616,12 @@ contract, and builds containers from `git archive HEAD` so ignored credentials,
 `.git`, and local artifacts never enter BuildKit. It performs no remote writes.
 
 Use `make publish` to push the prepared Git refs, GitHub Release assets, and
-container archives without rebuilding. Use `make deploy` only after publish;
-it verifies the published image, deploys the backend through the gateway, then
-activates the exact `pages.tar.gz` asset on the live Pages branch.
+container archives without rebuilding. It uses the standard Docker client to
+wait until the exact published manifests are readable. Use `make deploy` only
+after publish; it verifies the published image, deploys the backend through the
+gateway, then activates the exact `pages.tar.gz` asset on the live Pages branch,
+waits for the matching GitHub Pages build, and verifies its cache-distinct
+public marker.
 
 ## License
 
