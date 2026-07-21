@@ -1,6 +1,16 @@
 // @ts-check
 
-import { AUTH_STATES, COPY, DASHBOARD_VIEWS, EVENTS, MENU_ACTIONS, NOTICE_KINDS } from "../constants.js";
+import {
+  AUTH_STATES,
+  COPY,
+  DASHBOARD_VIEWS,
+  EVENTS,
+  MENU_ACTIONS,
+  MPR_UI,
+  NOTICE_KINDS,
+  ROUTING_DEFAULTS_INVALID_ERROR,
+  WORKSPACE_INTEGRITY_ERROR,
+} from "../constants.js";
 import {
   fetchAdminUsers,
   fetchProfile,
@@ -8,6 +18,7 @@ import {
   generateSecret as requestGeneratedSecret,
   loadFrontendRuntimeConfig,
   removeProviderKey as requestRemoveProviderKey,
+  revealProviderKey as requestRevealProviderKey,
   revokeSecret as requestRevokeSecret,
   saveProviderKey as requestSaveProviderKey,
   updateDefaults as requestUpdateDefaults,
@@ -34,6 +45,11 @@ const PROVIDER_DICTATION_EXAMPLE_ID = "provider-dictation";
 const JSON_CONTENT_TYPE_HEADER = "Content-Type: application/json";
 const SAMPLE_TEXT_PROMPT = "Hello";
 const SAMPLE_AUDIO_FILE = "recording.webm";
+const NOTIFICATION_HEADER_BOTTOM_PROPERTY = "--llm-notification-header-bottom";
+const PROVIDER_KEY_INPUT_TYPES = Object.freeze({
+  MASKED: "password",
+  VISIBLE: "text",
+});
 
 export function createKeyManagement() {
   return {
@@ -57,6 +73,10 @@ export function createKeyManagement() {
     selectedProviderID: EMPTY_STRING,
     /** @type {Record<string, string>} */
     providerInputs: {},
+    revealedProviderID: EMPTY_STRING,
+    providerKeyVisible: false,
+    providerKeyRevealPending: false,
+    providerKeyRevealVersion: 0,
     /** @type {import("../types.d.js").TenantDefaults} */
     defaults: emptyDefaults(),
     /** @type {import("../types.d.js").ManagementUsageSummary} */
@@ -68,6 +88,8 @@ export function createKeyManagement() {
     generatedSecret: EMPTY_STRING,
     settingsOpen: false,
     usageExamplesOpen: false,
+    /** @type {ResizeObserver | null} */
+    notificationRegionObserver: null,
     notice: {
       kind: NOTICE_KINDS.INFO,
       message: EMPTY_STRING,
@@ -91,6 +113,28 @@ export function createKeyManagement() {
         this.handleUserMenuItem(event);
       });
       void this.start();
+    },
+
+    /**
+     * @param {HTMLElement} notificationRegion
+     */
+    bindNotificationRegion(notificationRegion) {
+      if (this.notificationRegionObserver) {
+        throw new Error("notification_region_already_bound");
+      }
+      const headerElement = document.getElementById(MPR_UI.HEADER_ID);
+      if (!headerElement) {
+        throw new Error(MPR_UI.HEADER_MISSING);
+      }
+      const updateNotificationHeaderBottom = () => {
+        const headerBottom = Math.max(0, Math.round(headerElement.getBoundingClientRect().bottom));
+        notificationRegion.style.setProperty(NOTIFICATION_HEADER_BOTTOM_PROPERTY, `${headerBottom}px`);
+      };
+      this.notificationRegionObserver = new ResizeObserver(updateNotificationHeaderBottom);
+      this.notificationRegionObserver.observe(headerElement);
+      window.addEventListener("resize", updateNotificationHeaderBottom);
+      window.addEventListener("scroll", updateNotificationHeaderBottom, { passive: true });
+      updateNotificationHeaderBottom();
     },
 
     get hasSecret() {
@@ -141,6 +185,21 @@ export function createKeyManagement() {
     /** @returns {import("../types.d.js").ProviderProfile | null} */
     get selectedProvider() {
       return this.providers.find((candidateProvider) => candidateProvider.id === this.selectedProviderID) || null;
+    },
+
+    get selectedProviderKeyRevealed() {
+      return this.selectedProviderID !== EMPTY_STRING && this.revealedProviderID === this.selectedProviderID;
+    },
+
+    get selectedProviderKeyInputType() {
+      return this.providerKeyVisible ? PROVIDER_KEY_INPUT_TYPES.VISIBLE : PROVIDER_KEY_INPUT_TYPES.MASKED;
+    },
+
+    get selectedProviderKeyActionCopy() {
+      if (!this.selectedProviderKeyRevealed) {
+        return COPY.showProviderKey;
+      }
+      return this.providerKeyVisible ? COPY.hideProviderKey : COPY.showProviderKey;
     },
 
     get chartViewBox() {
@@ -346,7 +405,7 @@ export function createKeyManagement() {
         if (readMprUIAuthStatus() === AUTH_STATES.AUTHENTICATED) {
           this.clearAuthenticatedState();
           this.authState = AUTH_STATES.ERROR;
-          this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+          this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
         }
       } finally {
         this.busy = false;
@@ -450,7 +509,82 @@ export function createKeyManagement() {
     },
 
     closeSettings() {
+      this.clearProviderKeyMaterial();
       this.settingsOpen = false;
+    },
+
+    /**
+     * @param {string} providerID
+     */
+    selectProvider(providerID) {
+      if (providerID === this.selectedProviderID) {
+        return;
+      }
+      this.clearProviderKeyMaterial();
+      this.selectedProviderID = providerID;
+    },
+
+    async handleSelectedProviderKeyAction() {
+      if (!this.selectedProvider || !this.selectedProvider.has_key) {
+        return;
+      }
+      if (this.selectedProviderKeyRevealed) {
+        this.providerKeyVisible = !this.providerKeyVisible;
+        return;
+      }
+      await this.revealSelectedProviderKey();
+    },
+
+    async revealSelectedProviderKey() {
+      const provider = this.selectedProvider;
+      if (!provider || !provider.has_key || this.providerKeyRevealPending) {
+        return;
+      }
+      const revealProviderID = provider.id;
+      const revealVersion = this.providerKeyRevealVersion + 1;
+      this.providerKeyRevealVersion = revealVersion;
+      this.providerKeyRevealPending = true;
+      try {
+        const revealResponse = await requestRevealProviderKey(revealProviderID);
+        if (!this.canApplyProviderKeyReveal(revealProviderID, revealVersion)) {
+          return;
+        }
+        this.providerInputs[revealProviderID] = revealResponse.api_key;
+        this.revealedProviderID = revealProviderID;
+        this.providerKeyVisible = true;
+      } catch (requestError) {
+        if (this.canApplyProviderKeyReveal(revealProviderID, revealVersion)) {
+          this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+        }
+      } finally {
+        if (revealVersion === this.providerKeyRevealVersion) {
+          this.providerKeyRevealPending = false;
+        }
+      }
+    },
+
+    /**
+     * @param {string} providerID
+     * @param {number} revealVersion
+     */
+    canApplyProviderKeyReveal(providerID, revealVersion) {
+      return (
+        this.settingsOpen &&
+        this.selectedProviderID === providerID &&
+        this.providerKeyRevealVersion === revealVersion
+      );
+    },
+
+    clearProviderKeyMaterial() {
+      for (const providerID of [this.selectedProviderID, this.revealedProviderID]) {
+        if (providerID) {
+          this.providerInputs[providerID] = EMPTY_STRING;
+        }
+      }
+      this.revealedProviderID = EMPTY_STRING;
+      this.providerKeyVisible = false;
+      this.providerKeyRevealPending = false;
+      this.providerKeyRevealVersion += 1;
     },
 
     async saveSelectedProviderKey() {
@@ -476,18 +610,25 @@ export function createKeyManagement() {
         this.setNotice(NOTICE_KINDS.ERROR, COPY.providerMissing);
         return;
       }
-      await this.runProfileMutation(
-        async () => requestSaveProviderKey(provider.id, apiKey, provider.text_model, provider.system_prompt),
-        COPY.providerKeySaved,
-      );
-      this.providerInputs[provider.id] = EMPTY_STRING;
+      try {
+        await this.runProfileMutation(
+          async () => requestSaveProviderKey(provider.id, apiKey, provider.text_model, provider.system_prompt),
+          COPY.providerKeySaved,
+        );
+      } finally {
+        this.clearProviderKeyMaterial();
+      }
     },
 
     /**
      * @param {import("../types.d.js").ProviderProfile} provider
      */
     async removeProviderKey(provider) {
-      await this.runProfileMutation(async () => requestRemoveProviderKey(provider.id), COPY.providerKeyRemoved);
+      try {
+        await this.runProfileMutation(async () => requestRemoveProviderKey(provider.id), COPY.providerKeyRemoved);
+      } finally {
+        this.clearProviderKeyMaterial();
+      }
     },
 
     async saveDefaults() {
@@ -502,7 +643,7 @@ export function createKeyManagement() {
         this.applyProfile(secretResponse.profile);
         this.setNotice(NOTICE_KINDS.SUCCESS, COPY.secretGenerated);
       } catch (requestError) {
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+        this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
       } finally {
         this.busy = false;
       }
@@ -535,13 +676,16 @@ export function createKeyManagement() {
     },
 
     selectTextProviderDefaultModel() {
-      const provider = this.providers.find((candidateProvider) => candidateProvider.id === this.defaults.provider);
-      this.defaults.model = provider ? provider.text_default_model : EMPTY_STRING;
+      const provider = profileProvider(this.providers, this.defaults.provider);
+      this.defaults.model = provider.text_default_model;
     },
 
     selectDictationProviderDefaultModel() {
-      const provider = this.providers.find((candidateProvider) => candidateProvider.id === this.defaults.dictation_provider);
-      this.defaults.dictation_model = provider ? provider.dictation_default_model || EMPTY_STRING : EMPTY_STRING;
+      const provider = profileProvider(this.providers, this.defaults.dictation_provider);
+      if (!provider.supports_dictation || !provider.dictation_default_model) {
+        throw new Error(WORKSPACE_INTEGRITY_ERROR);
+      }
+      this.defaults.dictation_model = provider.dictation_default_model;
     },
 
     /**
@@ -555,7 +699,7 @@ export function createKeyManagement() {
         this.applyProfile(updatedProfile);
         this.setNotice(NOTICE_KINDS.SUCCESS, successMessage);
       } catch (requestError) {
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+        this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
       } finally {
         this.busy = false;
       }
@@ -565,28 +709,31 @@ export function createKeyManagement() {
      * @param {import("../types.d.js").ManagementProfile} nextProfile
      */
     applyProfile(nextProfile) {
+      const defaults = createWorkspaceRoutingDefaults(nextProfile);
+      this.clearProviderKeyMaterial();
       this.profile = nextProfile;
       applyUserMenuItems(Boolean(nextProfile.user.is_admin));
       this.providers = nextProfile.providers;
-      this.defaults = {
-        provider: nextProfile.tenant.defaults.provider,
-        model: nextProfile.tenant.defaults.model,
-        dictation_provider: nextProfile.tenant.defaults.dictation_provider,
-        dictation_model: nextProfile.tenant.defaults.dictation_model,
-        system_prompt: nextProfile.tenant.defaults.system_prompt,
-      };
+      this.defaults.provider = defaults.provider;
+      this.defaults.model = defaults.model;
+      this.defaults.dictation_provider = defaults.dictation_provider;
+      this.defaults.dictation_model = defaults.dictation_model;
+      this.defaults.system_prompt = defaults.system_prompt;
       for (const provider of this.providers) {
         if (this.providerInputs[provider.id] === undefined) {
           this.providerInputs[provider.id] = EMPTY_STRING;
         }
       }
       if (!this.providers.find((provider) => provider.id === this.selectedProviderID)) {
-        const defaultProvider = this.providers.find((provider) => provider.id === nextProfile.tenant.defaults.provider);
-        this.selectedProviderID = defaultProvider ? defaultProvider.id : (this.providers[0] ? this.providers[0].id : EMPTY_STRING);
+        this.selectedProviderID = defaults.provider;
       }
+      this.$nextTick(() => {
+        this.defaults = { ...defaults };
+      });
     },
 
     clearAuthenticatedState() {
+      this.clearProviderKeyMaterial();
       this.profile = null;
       this.providers = [];
       this.selectedProviderID = EMPTY_STRING;
@@ -653,6 +800,101 @@ function emptyDefaults() {
     dictation_model: EMPTY_STRING,
     system_prompt: EMPTY_STRING,
   };
+}
+
+/**
+ * @param {import("../types.d.js").ManagementProfile} profile
+ * @returns {import("../types.d.js").TenantDefaults}
+ */
+function createWorkspaceRoutingDefaults(profile) {
+  const tenant = profile && typeof profile.tenant === "object" ? profile.tenant : null;
+  const defaults = tenant && typeof tenant.defaults === "object" ? tenant.defaults : null;
+  const providers = Array.isArray(profile && profile.providers) ? profile.providers : null;
+  if (!defaults || !providers || !routingDefaultsAreStrings(defaults)) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  for (const provider of providers) {
+    assertProviderCatalog(provider);
+  }
+  const textProvider = profileProvider(providers, defaults.provider);
+  if (!textProvider.text_models.includes(defaults.model)) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  const dictationProvider = profileProvider(providers, defaults.dictation_provider);
+  if (!dictationProvider.supports_dictation || !dictationProvider.dictation_models.includes(defaults.dictation_model)) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  return {
+    provider: defaults.provider,
+    model: defaults.model,
+    dictation_provider: defaults.dictation_provider,
+    dictation_model: defaults.dictation_model,
+    system_prompt: defaults.system_prompt,
+  };
+}
+
+/**
+ * @param {import("../types.d.js").TenantDefaults} defaults
+ * @returns {boolean}
+ */
+function routingDefaultsAreStrings(defaults) {
+  return (
+    typeof defaults.provider === "string" &&
+    typeof defaults.model === "string" &&
+    typeof defaults.dictation_provider === "string" &&
+    typeof defaults.dictation_model === "string" &&
+    typeof defaults.system_prompt === "string"
+  );
+}
+
+/**
+ * @param {import("../types.d.js").ProviderProfile} provider
+ */
+function assertProviderCatalog(provider) {
+  if (
+    !provider ||
+    typeof provider.id !== "string" ||
+    !provider.id ||
+    !Array.isArray(provider.text_models) ||
+    !provider.text_models.includes(provider.text_default_model)
+  ) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  if (
+    provider.supports_dictation &&
+    (!Array.isArray(provider.dictation_models) ||
+      typeof provider.dictation_default_model !== "string" ||
+      !provider.dictation_models.includes(provider.dictation_default_model))
+  ) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+}
+
+/**
+ * @param {import("../types.d.js").ProviderProfile[]} providers
+ * @param {string} providerID
+ * @returns {import("../types.d.js").ProviderProfile}
+ */
+function profileProvider(providers, providerID) {
+  const provider = providers.find((candidateProvider) => candidateProvider.id === providerID);
+  if (!provider) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  return provider;
+}
+
+/**
+ * @param {unknown} requestError
+ * @returns {string}
+ */
+function profileFailureMessage(requestError) {
+  if (
+    requestError instanceof Error &&
+    (requestError.message === WORKSPACE_INTEGRITY_ERROR || requestError.message.includes(ROUTING_DEFAULTS_INVALID_ERROR))
+  ) {
+    return COPY.workspaceIntegrityError;
+  }
+  return COPY.requestFailed;
 }
 
 async function dispatchManagementReady() {

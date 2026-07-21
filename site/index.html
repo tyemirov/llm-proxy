@@ -40,6 +40,17 @@
 
     <main class="llm-proxy-main">
       <llm-proxy-key-management x-data="llmProxyKeyManagement" x-init="init()" x-bind:data-auth-state="authState">
+        <notification-region
+          x-cloak
+          x-show="notice.message"
+          x-init="bindNotificationRegion($el)"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <p class="notice" x-bind:data-kind="notice.kind" x-text="notice.message"></p>
+        </notification-region>
+
         <section class="llm-panel" x-cloak x-show="authState === states.loading">
           <p class="eyebrow" x-text="copy.loadingEyebrow"></p>
           <h1 x-text="copy.loadingTitle"></h1>
@@ -287,8 +298,7 @@
                       </label>
                       <label>
                         <span x-text="copy.dictationModel"></span>
-                        <select x-model="defaults.dictation_model" x-bind:disabled="!defaults.dictation_provider">
-                          <option value="" x-text="copy.noDictationModel"></option>
+                        <select x-model="defaults.dictation_model">
                           <template x-for="model in selectedDictationModels" x-bind:key="model">
                             <option x-bind:value="model" x-text="model"></option>
                           </template>
@@ -343,7 +353,7 @@
                       <form class="provider-settings-form" x-on:submit.prevent="saveSelectedProviderKey()">
                         <label>
                           <span x-text="copy.providerSelector"></span>
-                          <select x-model="selectedProviderID">
+                          <select x-bind:value="selectedProviderID" x-on:change="selectProvider($event.target.value)" x-bind:disabled="busy || providerKeyRevealPending">
                             <template x-for="provider in providers" x-bind:key="provider.id">
                               <option x-bind:value="provider.id" x-text="provider.label"></option>
                             </template>
@@ -356,15 +366,16 @@
                                 <strong x-text="selectedProvider.label"></strong>
                                 <p x-text="selectedProvider.has_key ? selectedProvider.masked_key : copy.providerMissing"></p>
                               </div>
-                              <button type="button" class="icon-only danger" x-on:click="removeSelectedProviderKey()" x-bind:disabled="busy || !selectedProvider.has_key" x-bind:title="copy.removeProviderKey" x-bind:aria-label="copy.removeProviderKey">x</button>
+                              <button type="button" x-show="selectedProvider.has_key" x-on:click="handleSelectedProviderKeyAction()" x-bind:disabled="busy || providerKeyRevealPending" x-text="selectedProviderKeyActionCopy"></button>
+                              <button type="button" class="icon-only danger" x-on:click="removeSelectedProviderKey()" x-bind:disabled="busy || providerKeyRevealPending || !selectedProvider.has_key" x-bind:title="copy.removeProviderKey" x-bind:aria-label="copy.removeProviderKey">x</button>
                             </provider-status>
                             <label>
                               <span x-text="selectedProvider.label + copy.providerKeySuffix"></span>
-                              <input type="password" autocomplete="off" x-model="providerInputs[selectedProvider.id]">
+                              <input x-bind:type="selectedProviderKeyInputType" autocomplete="off" x-model="providerInputs[selectedProvider.id]" x-bind:disabled="busy || providerKeyRevealPending">
                             </label>
                             <label>
                               <span x-text="copy.providerTextModel"></span>
-                              <select x-model="selectedProvider.text_model">
+                              <select x-model="selectedProvider.text_model" x-bind:disabled="busy || providerKeyRevealPending">
                                 <template x-for="model in selectedProvider.text_models" x-bind:key="model">
                                   <option x-bind:value="model" x-text="model"></option>
                                 </template>
@@ -372,9 +383,9 @@
                             </label>
                             <label class="provider-system-prompt">
                               <span x-text="copy.providerSystemPrompt"></span>
-                              <textarea rows="3" x-model="selectedProvider.system_prompt"></textarea>
+                              <textarea rows="3" x-model="selectedProvider.system_prompt" x-bind:disabled="busy || providerKeyRevealPending"></textarea>
                             </label>
-                            <button type="submit" x-bind:disabled="busy" x-text="selectedProvider.has_key ? copy.updateProviderKey : copy.saveProviderKey"></button>
+                            <button type="submit" x-bind:disabled="busy || providerKeyRevealPending" x-text="selectedProvider.has_key ? copy.updateProviderKey : copy.saveProviderKey"></button>
                           </provider-settings-fields>
                         </template>
                       </form>
@@ -384,7 +395,6 @@
               </settings-modal>
             </settings-overlay>
 
-            <output class="notice" x-cloak x-show="notice.message" x-bind:data-kind="notice.kind" x-text="notice.message"></output>
           </workspace-surface>
         </template>
       </llm-proxy-key-management>
