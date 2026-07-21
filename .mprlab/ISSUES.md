@@ -1230,7 +1230,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Validation:
   - Verify every product-context path named by root `AGENTS.md` exists and contains current repository guidance.
 
-- [ ] [M014] (P0) Patch the canonical Go toolchain security release.
+- [x] [M014] (P0) Patch the canonical Go toolchain security release.
   Goal:
   Eliminate the standard-library findings GO-2026-5856 and GO-2026-4970 from every build path by moving the repository's Go contract to a fixed security patch release.
   Requirements:
@@ -1242,6 +1242,8 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Updated security-scan evidence without GO-2026-5856 or GO-2026-4970.
   Validation:
   - Run `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved:
+  Raised `go.mod`, the GitHub Actions contract, and the Docker release builder to Go 1.25.12; the release artifact helper retains its `--pull` base-image refresh behavior. A `GOTOOLCHAIN=go1.25.12 make build` binary reports `go1.25.12`, and its reachability scan no longer reports GO-2026-5856 or GO-2026-4970. The remaining QPACK, pgx, and mapstructure findings are the separately queued M015 through M017 work. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
 - [ ] [M015] (P0) {M014} Remove the reachable HTTP/3 QPACK vulnerability from the Go graph.
   Goal:

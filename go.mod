@@ -1,6 +1,6 @@
 module github.com/tyemirov/llm-proxy
 
-go 1.25.4
+go 1.25.12
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
