@@ -1260,7 +1260,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Resolved:
   Raised the canonical selected `github.com/quic-go/quic-go` graph entry to v0.59.1 while retaining its supported `github.com/quic-go/qpack` v0.6.0 companion and the existing Gin/TAuth transport APIs. `go mod verify` passed, the Go 1.25.12 reachability scan no longer reports GO-2026-5676, and its only remaining findings are separately queued in M016 and M017. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
-- [ ] [M016] (P0) {M015} Upgrade the reachable PostgreSQL driver dependency past SQL-injection fixes.
+- [x] [M016] (P0) {M015} Upgrade the reachable PostgreSQL driver dependency past SQL-injection fixes.
   Goal:
   Move `github.com/jackc/pgx/v5` to at least v5.9.2 so the GORM PostgreSQL path no longer carries GO-2026-5004 or its earlier v5.9.0 fixes.
   Requirements:
@@ -1272,6 +1272,8 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Existing management-store black-box coverage passing for both configured dialect paths.
   Validation:
   - Run `go mod verify`, `go run golang.org/x/vuln/cmd/govulncheck@latest ./...`, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved:
+  Raised the canonical selected `github.com/jackc/pgx/v5` dependency to v5.9.2 while retaining the supported GORM PostgreSQL driver and its existing SQLite/PostgreSQL management-store model APIs, transaction, and locking paths. `go mod verify` passed, the Go 1.25.12 reachability scan no longer reports GO-2026-5004, and its only remaining reachable finding is separately queued in M017. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
 - [ ] [M017] (P1) {M016} Upgrade mapstructure past sensitive-error leakage.
   Goal:
