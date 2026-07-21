@@ -16,11 +16,9 @@
   --llm-good: #95c23d;
   --llm-danger: #cc4b4b;
   --llm-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-  --llm-notification-gap: 0.75rem;
   --llm-notification-max-inline-size: 420px;
   /* Above the sticky MPR header/footer and the built-in MPR modal layer. */
   --llm-z-settings-overlay: 2200;
-  --llm-z-notice: 2100;
 }
 
 html,
@@ -74,6 +72,60 @@ settings-section {
 
 #llm-proxy-header .mpr-header__actions {
   margin-left: auto;
+  min-inline-size: 0;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+#llm-proxy-header > .llm-proxy-header-brand[slot="brand"] {
+  margin-right: auto;
+}
+
+#llm-proxy-header .llm-proxy-header-brand {
+  display: inline-flex;
+  min-inline-size: 0;
+  align-items: center;
+  gap: 0.45rem;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+#llm-proxy-header .llm-proxy-header-brand:hover {
+  color: inherit;
+  text-decoration: none;
+}
+
+#llm-proxy-header .llm-proxy-header-brand:focus-visible {
+  outline: 2px solid var(--llm-accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+#llm-proxy-header .llm-proxy-header-brand__logo {
+  display: block;
+  flex: 0 0 auto;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  object-fit: contain;
+}
+
+#llm-proxy-header .llm-proxy-header-brand__title {
+  min-inline-size: 0;
+  white-space: nowrap;
+}
+
+#llm-proxy-header notification-region[slot="aux"] {
+  display: block;
+  flex: 1 1 18rem;
+  min-inline-size: 0;
+  max-inline-size: min(var(--llm-notification-max-inline-size), calc(100vw - 8rem));
+  pointer-events: none;
+}
+
+#llm-proxy-header mpr-user[slot="aux"] {
+  flex: 0 0 auto;
 }
 
 .llm-proxy-main {
@@ -515,6 +567,20 @@ secret-output {
   margin-top: 0.35rem;
 }
 
+secret-output .copy-secret-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+secret-output .copy-icon {
+  display: block;
+  inline-size: 1rem;
+  block-size: 1rem;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .secret-row input {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
@@ -675,6 +741,13 @@ settings-section,
   grid-column: 1 / -1;
 }
 
+.settings-form-note {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--llm-muted);
+  font-size: 0.78rem;
+}
+
 .settings-grid-form button[type="submit"] {
   justify-self: start;
 }
@@ -687,21 +760,10 @@ provider-settings-fields button[type="submit"] {
   justify-self: start;
 }
 
-notification-region {
-  position: sticky;
-  top: calc(var(--llm-notification-header-bottom) + var(--llm-notification-gap));
-  z-index: var(--llm-z-notice);
-  display: grid;
-  justify-items: end;
-  box-sizing: border-box;
-  margin-block-end: var(--llm-notification-gap);
-  pointer-events: none;
-}
-
-.notice {
+#llm-proxy-header notification-region[slot="aux"] .notice {
   display: block;
   box-sizing: border-box;
-  inline-size: min(var(--llm-notification-max-inline-size), 100%);
+  inline-size: 100%;
   max-inline-size: 100%;
   margin: 0;
   border: 1px solid var(--llm-border);
@@ -711,20 +773,31 @@ notification-region {
   box-shadow: var(--llm-shadow);
   padding: 0.55rem 0.65rem;
   font-size: 0.78rem;
-  pointer-events: auto;
+  overflow-wrap: anywhere;
+  pointer-events: none;
 }
 
-.notice[data-kind="error"] {
+#llm-proxy-header notification-region[slot="aux"] .notice[data-kind="error"] {
   border-color: rgba(255, 129, 119, 0.75);
 }
 
-.notice[data-kind="success"] {
+#llm-proxy-header notification-region[slot="aux"] .notice[data-kind="success"] {
   border-color: rgba(102, 209, 158, 0.75);
 }
 
 @media (max-width: 780px) {
-  :root {
-    --llm-notification-gap: 0.55rem;
+  #llm-proxy-header .llm-proxy-header-brand {
+    gap: 0.35rem;
+  }
+
+  #llm-proxy-header .llm-proxy-header-brand__logo {
+    inline-size: 1.35rem;
+    block-size: 1.35rem;
+  }
+
+  #llm-proxy-header notification-region[slot="aux"] {
+    flex-basis: 12rem;
+    max-inline-size: calc(100vw - 7rem);
   }
 
   .llm-proxy-main {

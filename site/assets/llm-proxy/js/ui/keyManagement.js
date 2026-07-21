@@ -6,7 +6,6 @@ import {
   DASHBOARD_VIEWS,
   EVENTS,
   MENU_ACTIONS,
-  MPR_UI,
   NOTICE_KINDS,
   ROUTING_DEFAULTS_INVALID_ERROR,
   WORKSPACE_INTEGRITY_ERROR,
@@ -45,7 +44,6 @@ const PROVIDER_DICTATION_EXAMPLE_ID = "provider-dictation";
 const JSON_CONTENT_TYPE_HEADER = "Content-Type: application/json";
 const SAMPLE_TEXT_PROMPT = "Hello";
 const SAMPLE_AUDIO_FILE = "recording.webm";
-const NOTIFICATION_HEADER_BOTTOM_PROPERTY = "--llm-notification-header-bottom";
 const PROVIDER_KEY_INPUT_TYPES = Object.freeze({
   MASKED: "password",
   VISIBLE: "text",
@@ -88,8 +86,6 @@ export function createKeyManagement() {
     generatedSecret: EMPTY_STRING,
     settingsOpen: false,
     usageExamplesOpen: false,
-    /** @type {ResizeObserver | null} */
-    notificationRegionObserver: null,
     notice: {
       kind: NOTICE_KINDS.INFO,
       message: EMPTY_STRING,
@@ -113,28 +109,6 @@ export function createKeyManagement() {
         this.handleUserMenuItem(event);
       });
       void this.start();
-    },
-
-    /**
-     * @param {HTMLElement} notificationRegion
-     */
-    bindNotificationRegion(notificationRegion) {
-      if (this.notificationRegionObserver) {
-        throw new Error("notification_region_already_bound");
-      }
-      const headerElement = document.getElementById(MPR_UI.HEADER_ID);
-      if (!headerElement) {
-        throw new Error(MPR_UI.HEADER_MISSING);
-      }
-      const updateNotificationHeaderBottom = () => {
-        const headerBottom = Math.max(0, Math.round(headerElement.getBoundingClientRect().bottom));
-        notificationRegion.style.setProperty(NOTIFICATION_HEADER_BOTTOM_PROPERTY, `${headerBottom}px`);
-      };
-      this.notificationRegionObserver = new ResizeObserver(updateNotificationHeaderBottom);
-      this.notificationRegionObserver.observe(headerElement);
-      window.addEventListener("resize", updateNotificationHeaderBottom);
-      window.addEventListener("scroll", updateNotificationHeaderBottom, { passive: true });
-      updateNotificationHeaderBottom();
     },
 
     get hasSecret() {
@@ -170,7 +144,36 @@ export function createKeyManagement() {
 
     get selectedTextModels() {
       const provider = this.providers.find((candidateProvider) => candidateProvider.id === this.defaults.provider);
-      return provider ? provider.text_models : [];
+      return provider ? provider.text_models.map((model) => model.id) : [];
+    },
+
+    /** @returns {import("../types.d.js").ProviderProfile | null} */
+    get selectedTextProvider() {
+      return this.providers.find((candidateProvider) => candidateProvider.id === this.defaults.provider) || null;
+    },
+
+    /** @returns {import("../types.d.js").TextModelProfile | null} */
+    get selectedTextModel() {
+      if (!this.selectedTextProvider) {
+        return null;
+      }
+      return this.selectedTextProvider.text_models.find((model) => model.id === this.defaults.model) || null;
+    },
+
+    get reasoningEffortOptions() {
+      return this.profile ? this.profile.reasoning_effort_options : [];
+    },
+
+    get hasReasoningEffortOptions() {
+      return this.reasoningEffortOptions.length > 0;
+    },
+
+    get reasoningEffortActiveForCurrentRoute() {
+      return Boolean(
+        this.selectedTextProvider &&
+          (this.selectedTextProvider.reasoning_effort ||
+            (this.selectedTextModel && this.selectedTextModel.reasoning_effort)),
+      );
     },
 
     get dictationProviders() {
@@ -719,6 +722,7 @@ export function createKeyManagement() {
       this.defaults.dictation_provider = defaults.dictation_provider;
       this.defaults.dictation_model = defaults.dictation_model;
       this.defaults.system_prompt = defaults.system_prompt;
+      this.defaults.reasoning_effort = defaults.reasoning_effort;
       for (const provider of this.providers) {
         if (this.providerInputs[provider.id] === undefined) {
           this.providerInputs[provider.id] = EMPTY_STRING;
@@ -799,6 +803,7 @@ function emptyDefaults() {
     dictation_provider: EMPTY_STRING,
     dictation_model: EMPTY_STRING,
     system_prompt: EMPTY_STRING,
+    reasoning_effort: EMPTY_STRING,
   };
 }
 
@@ -810,18 +815,26 @@ function createWorkspaceRoutingDefaults(profile) {
   const tenant = profile && typeof profile.tenant === "object" ? profile.tenant : null;
   const defaults = tenant && typeof tenant.defaults === "object" ? tenant.defaults : null;
   const providers = Array.isArray(profile && profile.providers) ? profile.providers : null;
-  if (!defaults || !providers || !routingDefaultsAreStrings(defaults)) {
+  const reasoningEffortOptions = profile && profile.reasoning_effort_options;
+  if (!defaults || !providers || !routingDefaultsAreStrings(defaults) || !reasoningEffortOptionsAreStrings(reasoningEffortOptions)) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
+  let catalogSupportsReasoningEffort = false;
   for (const provider of providers) {
-    assertProviderCatalog(provider);
+    catalogSupportsReasoningEffort = assertProviderCatalog(provider, reasoningEffortOptions) || catalogSupportsReasoningEffort;
+  }
+  if (catalogSupportsReasoningEffort !== (reasoningEffortOptions.length > 0)) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
   const textProvider = profileProvider(providers, defaults.provider);
-  if (!textProvider.text_models.includes(defaults.model)) {
+  if (!textProvider.text_models.some((model) => model.id === defaults.model)) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
   const dictationProvider = profileProvider(providers, defaults.dictation_provider);
   if (!dictationProvider.supports_dictation || !dictationProvider.dictation_models.includes(defaults.dictation_model)) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  if (defaults.reasoning_effort !== EMPTY_STRING && !reasoningEffortOptions.includes(defaults.reasoning_effort)) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
   return {
@@ -830,6 +843,7 @@ function createWorkspaceRoutingDefaults(profile) {
     dictation_provider: defaults.dictation_provider,
     dictation_model: defaults.dictation_model,
     system_prompt: defaults.system_prompt,
+    reasoning_effort: defaults.reasoning_effort,
   };
 }
 
@@ -843,22 +857,32 @@ function routingDefaultsAreStrings(defaults) {
     typeof defaults.model === "string" &&
     typeof defaults.dictation_provider === "string" &&
     typeof defaults.dictation_model === "string" &&
-    typeof defaults.system_prompt === "string"
+    typeof defaults.system_prompt === "string" &&
+    typeof defaults.reasoning_effort === "string"
   );
 }
 
 /**
  * @param {import("../types.d.js").ProviderProfile} provider
+ * @param {string[]} reasoningEffortOptions
+ * @returns {boolean}
  */
-function assertProviderCatalog(provider) {
+function assertProviderCatalog(provider, reasoningEffortOptions) {
   if (
     !provider ||
     typeof provider.id !== "string" ||
     !provider.id ||
     !Array.isArray(provider.text_models) ||
-    !provider.text_models.includes(provider.text_default_model)
+    !provider.text_models.some((model) => model && model.id === provider.text_default_model)
   ) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  let supportsReasoningEffort = assertReasoningEffortCapability(provider.reasoning_effort, reasoningEffortOptions);
+  for (const model of provider.text_models) {
+    if (!model || typeof model.id !== "string" || !model.id) {
+      throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    }
+    supportsReasoningEffort = assertReasoningEffortCapability(model.reasoning_effort, reasoningEffortOptions) || supportsReasoningEffort;
   }
   if (
     provider.supports_dictation &&
@@ -868,6 +892,40 @@ function assertProviderCatalog(provider) {
   ) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
+  return supportsReasoningEffort;
+}
+
+/**
+ * @param {unknown} reasoningEffortOptions
+ * @returns {reasoningEffortOptions is string[]}
+ */
+function reasoningEffortOptionsAreStrings(reasoningEffortOptions) {
+  if (!Array.isArray(reasoningEffortOptions) || new Set(reasoningEffortOptions).size !== reasoningEffortOptions.length) {
+    return false;
+  }
+  return reasoningEffortOptions.every((effort) => typeof effort === "string" && effort.trim() !== EMPTY_STRING);
+}
+
+/**
+ * @param {unknown} capability
+ * @param {string[]} reasoningEffortOptions
+ * @returns {boolean}
+ */
+function assertReasoningEffortCapability(capability, reasoningEffortOptions) {
+  if (capability === undefined) {
+    return false;
+  }
+  if (
+    !capability ||
+    typeof capability.adapter !== "string" ||
+    capability.adapter.trim() === EMPTY_STRING ||
+    !Array.isArray(capability.efforts) ||
+    capability.efforts.length !== reasoningEffortOptions.length ||
+    !capability.efforts.every((effort, index) => effort === reasoningEffortOptions[index])
+  ) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  return true;
 }
 
 /**
