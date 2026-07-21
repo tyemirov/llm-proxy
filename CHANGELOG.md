@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 
 - Declare the llm-proxy TAuth tenant requirements in the app-owned deployment manifest for gateway assembly.
 
+## [v0.2.35] - 2026-07-21
+
+- Merge pull request #215 from tyemirov/gix/add-reasoning-effort-default-and-header-notification
+- test: expand and update management UI E2E coverage for header, copy, notices
+- feat: add Reasoning Effort support to routing, types, and UI styles
+- feat(management): expose reasoning effort options and capability metadata
+- docs: describe reasoning_effort default routing and UI contract enhancements
+- feat(config): add reasoning_effort to gpt-5 and 5.x provider configs
+- feat(config): add reasoning_effort support to config file and model catalog
+- docs: document catalog reasoning_effort and tenant default contract
+- docs(issues): add B041 header notification, B042 header brand, B043 copy icon
+
 ## [v0.2.34] - 2026-07-21
 
 - Merge pull request #204 from tyemirov/maintenance/M001R-backlog-hygiene
