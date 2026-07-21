@@ -26,12 +26,18 @@ type chatHandlerScenario struct {
 
 func TestRequestLogsExcludeQueryContent(testingInstance *testing.T) {
 	const (
+		finalResponse                 = `{"status":"completed", "output":[{"type":"message", "role":"assistant", "content":[{"type":"text","text":"ok"}]}]}`
 		promptQueryValue              = "prompt-log-sentinel"
 		systemPromptQueryValue        = "system-prompt-log-sentinel"
 		tenantSecretQueryValue        = "tenant-secret-log-sentinel"
 		rejectedProviderKeyQueryValue = "provider-key-log-sentinel"
+		invalidWebSearchQueryValue    = "web-search-log-sentinel"
 	)
 
+	mockServer := NewSessionMockServer(finalResponse)
+	testingInstance.Cleanup(mockServer.Close)
+	endpoints := proxy.NewEndpoints()
+	endpoints.SetResponsesURL(mockServer.URL)
 	observedCore, observedLogs := observer.New(zapcore.DebugLevel)
 	loggerInstance := zap.New(observedCore)
 	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
@@ -42,26 +48,41 @@ func TestRequestLogsExcludeQueryContent(testingInstance *testing.T) {
 		WorkerCount:           1,
 		QueueSize:             1,
 		RequestTimeoutSeconds: TestTimeout,
+		Endpoints:             endpoints,
 	}, loggerInstance.Sugar())
 	if buildError != nil {
 		testingInstance.Fatalf(messageBuildRouterError, buildError)
 	}
 
-	requestPath := fmt.Sprintf("/?prompt=%s&system_prompt=%s&key=%s&api_key=%s", promptQueryValue, systemPromptQueryValue, tenantSecretQueryValue, rejectedProviderKeyQueryValue)
-	request := httptest.NewRequest(http.MethodGet, requestPath, nil)
-	responseRecorder := httptest.NewRecorder()
-
-	router.ServeHTTP(responseRecorder, request)
-
-	if responseRecorder.Code != http.StatusBadRequest {
-		testingInstance.Fatalf("status=%d want=%d", responseRecorder.Code, http.StatusBadRequest)
+	requestScenarios := []struct {
+		requestPath        string
+		expectedStatusCode int
+	}{
+		{
+			requestPath:        fmt.Sprintf("/?prompt=%s&system_prompt=%s&key=%s&api_key=%s", promptQueryValue, systemPromptQueryValue, tenantSecretQueryValue, rejectedProviderKeyQueryValue),
+			expectedStatusCode: http.StatusBadRequest,
+		},
+		{
+			requestPath:        fmt.Sprintf("/?prompt=%s&system_prompt=%s&key=%s&web_search=%s", promptQueryValue, systemPromptQueryValue, tenantSecretQueryValue, invalidWebSearchQueryValue),
+			expectedStatusCode: http.StatusOK,
+		},
 	}
-	if observedLogs.FilterField(zap.String(constants.LogFieldPath, "/")).Len() != 1 {
+	for _, requestScenario := range requestScenarios {
+		request := httptest.NewRequest(http.MethodGet, requestScenario.requestPath, nil)
+		responseRecorder := httptest.NewRecorder()
+
+		router.ServeHTTP(responseRecorder, request)
+
+		if responseRecorder.Code != requestScenario.expectedStatusCode {
+			testingInstance.Fatalf("status=%d want=%d", responseRecorder.Code, requestScenario.expectedStatusCode)
+		}
+	}
+	if observedLogs.FilterField(zap.String(constants.LogFieldPath, "/")).Len() != len(requestScenarios) {
 		testingInstance.Fatal("request log does not contain the query-free root path")
 	}
 	for _, loggedEntry := range observedLogs.All() {
 		loggedContent := loggedEntry.Message + fmt.Sprint(loggedEntry.ContextMap())
-		for _, sensitiveQueryValue := range []string{promptQueryValue, systemPromptQueryValue, tenantSecretQueryValue, rejectedProviderKeyQueryValue} {
+		for _, sensitiveQueryValue := range []string{promptQueryValue, systemPromptQueryValue, tenantSecretQueryValue, rejectedProviderKeyQueryValue, invalidWebSearchQueryValue} {
 			if strings.Contains(loggedContent, sensitiveQueryValue) {
 				testingInstance.Fatal("request logs contain query content")
 			}

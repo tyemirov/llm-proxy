@@ -656,6 +656,21 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Resolved:
   Structured request logs now use the canonical escaped path without a query component. Black-box router coverage sends distinct prompt, system prompt, tenant-secret, and rejected provider-key query values, then verifies none reach any emitted structured log field. README documents the query-free logging boundary. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
+- [x] [B040] (P1) Keep invalid web-search query values out of structured logs.
+  Goal:
+  Preserve the query-free logging contract when the public `GET /` parser receives an invalid `web_search` value.
+  Requirements:
+  - Emit only stable parser metadata; do not log the raw query value or an error string that embeds it.
+  - Preserve the current request-authentication and invalid-web-search handling semantics.
+  - Extend router-level log coverage with an authenticated invalid `web_search` sentinel and prove it is absent from every emitted log entry.
+  Deliverables:
+  - A query-free invalid-web-search parser warning.
+  - Regression coverage for the full authenticated HTTP path.
+  Validation:
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair after the final code edit.
+  Resolved:
+  The invalid `web_search` warning now emits only its stable event and no query-derived fields or error values. Router-level black-box coverage drives an authenticated invalid-web-search sentinel through the existing request flow and verifies it, prompts, tenant keys, and rejected credential-shaped values remain absent from every structured log entry. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
+
 ## Improvements
 
 - [x] [I024] (P1) Add Qwen 3.8 Token Plan and MiniMax M2.7 providers.
