@@ -321,6 +321,214 @@ func TestManagementRejectsInvalidSessionsAndRequests(t *testing.T) {
 	}
 }
 
+func TestManagementProviderKeyRevealIsOwnerScoped(t *testing.T) {
+	router := newManagementRouter(t, proxy.Configuration{})
+	ownerCookie := managementSessionCookie(t, "tauth-reveal-owner")
+	otherCookie := managementSessionCookie(t, "tauth-reveal-other")
+	adminCookie := managementSessionCookieWithEmail(t, "tauth-reveal-admin", testManagementAdminEmail)
+
+	saveRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/openai", managementProviderKeyRequestBody(t, testManagementOpenAIKey, proxy.ModelNameGPT41, ""), ownerCookie)
+	saveResponse := httptest.NewRecorder()
+	router.ServeHTTP(saveResponse, saveRequest)
+	if saveResponse.Code != http.StatusOK {
+		t.Fatalf("save provider key status=%d body=%s", saveResponse.Code, saveResponse.Body.String())
+	}
+	if strings.Contains(saveResponse.Body.String(), testManagementOpenAIKey) {
+		t.Fatalf("save provider key response leaked raw key: %s", saveResponse.Body.String())
+	}
+
+	unauthenticatedRevealRequest := httptest.NewRequest(http.MethodPost, "/api/management/provider-keys/openai/reveal", strings.NewReader(`{}`))
+	unauthenticatedRevealRequest.Header.Set("Content-Type", "application/json")
+	unauthenticatedRevealRequest.Header.Set("Origin", "http://localhost:8080")
+	unauthenticatedRevealResponse := httptest.NewRecorder()
+	router.ServeHTTP(unauthenticatedRevealResponse, unauthenticatedRevealRequest)
+	if unauthenticatedRevealResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated reveal status=%d want=%d body=%s", unauthenticatedRevealResponse.Code, http.StatusUnauthorized, unauthenticatedRevealResponse.Body.String())
+	}
+
+	for _, rejectedReveal := range []struct {
+		name       string
+		request    *http.Request
+		statusCode int
+	}{
+		{
+			name:       "missing origin",
+			request:    authenticatedJSONRequest(http.MethodPost, "/api/management/provider-keys/openai/reveal", `{}`, ownerCookie),
+			statusCode: http.StatusForbidden,
+		},
+		{
+			name:       "wrong origin",
+			request:    authenticatedProviderKeyRevealRequest(http.MethodPost, "/api/management/provider-keys/openai/reveal", ownerCookie, "https://other.example"),
+			statusCode: http.StatusForbidden,
+		},
+		{
+			name:       "missing content type",
+			request:    providerKeyRevealRequestWithoutContentType(http.MethodPost, "/api/management/provider-keys/openai/reveal", ownerCookie, "http://localhost:8080"),
+			statusCode: http.StatusUnsupportedMediaType,
+		},
+	} {
+		t.Run(rejectedReveal.name, func(subTest *testing.T) {
+			rejectedRevealResponse := httptest.NewRecorder()
+			router.ServeHTTP(rejectedRevealResponse, rejectedReveal.request)
+			if rejectedRevealResponse.Code != rejectedReveal.statusCode {
+				subTest.Fatalf("reveal status=%d want=%d body=%s", rejectedRevealResponse.Code, rejectedReveal.statusCode, rejectedRevealResponse.Body.String())
+			}
+			if strings.Contains(rejectedRevealResponse.Body.String(), testManagementOpenAIKey) {
+				subTest.Fatalf("rejected reveal leaked raw key: %s", rejectedRevealResponse.Body.String())
+			}
+		})
+	}
+
+	ownerRevealRequest := authenticatedProviderKeyRevealRequest(http.MethodPost, "/api/management/provider-keys/openai/reveal", ownerCookie, "http://localhost:8080")
+	ownerRevealResponse := httptest.NewRecorder()
+	router.ServeHTTP(ownerRevealResponse, ownerRevealRequest)
+	if ownerRevealResponse.Code != http.StatusOK {
+		t.Fatalf("owner reveal status=%d want=%d body=%s", ownerRevealResponse.Code, http.StatusOK, ownerRevealResponse.Body.String())
+	}
+	if ownerRevealResponse.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("owner reveal cache-control=%q want=no-store", ownerRevealResponse.Header().Get("Cache-Control"))
+	}
+	var ownerRevealPayload map[string]string
+	if decodeError := json.Unmarshal(ownerRevealResponse.Body.Bytes(), &ownerRevealPayload); decodeError != nil {
+		t.Fatalf("decode owner reveal: %v", decodeError)
+	}
+	if len(ownerRevealPayload) != 1 || ownerRevealPayload["api_key"] != testManagementOpenAIKey {
+		t.Fatalf("owner reveal payload=%+v", ownerRevealPayload)
+	}
+
+	for _, unavailableReveal := range []struct {
+		name       string
+		path       string
+		cookie     *http.Cookie
+		statusCode int
+	}{
+		{name: "different owner", path: "/api/management/provider-keys/openai/reveal", cookie: otherCookie, statusCode: http.StatusNotFound},
+		{name: "missing provider key", path: "/api/management/provider-keys/deepseek/reveal", cookie: ownerCookie, statusCode: http.StatusNotFound},
+		{name: "unknown provider", path: "/api/management/provider-keys/unknown/reveal", cookie: ownerCookie, statusCode: http.StatusBadRequest},
+	} {
+		t.Run(unavailableReveal.name, func(subTest *testing.T) {
+			unavailableRevealRequest := authenticatedProviderKeyRevealRequest(http.MethodPost, unavailableReveal.path, unavailableReveal.cookie, "http://localhost:8080")
+			unavailableRevealResponse := httptest.NewRecorder()
+			router.ServeHTTP(unavailableRevealResponse, unavailableRevealRequest)
+			if unavailableRevealResponse.Code != unavailableReveal.statusCode {
+				subTest.Fatalf("reveal status=%d want=%d body=%s", unavailableRevealResponse.Code, unavailableReveal.statusCode, unavailableRevealResponse.Body.String())
+			}
+			if strings.Contains(unavailableRevealResponse.Body.String(), testManagementOpenAIKey) {
+				subTest.Fatalf("unavailable reveal leaked raw key: %s", unavailableRevealResponse.Body.String())
+			}
+		})
+	}
+
+	profileRequest := httptest.NewRequest(http.MethodGet, "/api/management/profile", nil)
+	profileRequest.AddCookie(ownerCookie)
+	profileResponse := httptest.NewRecorder()
+	router.ServeHTTP(profileResponse, profileRequest)
+	if profileResponse.Code != http.StatusOK || strings.Contains(profileResponse.Body.String(), testManagementOpenAIKey) {
+		t.Fatalf("profile status=%d body=%s", profileResponse.Code, profileResponse.Body.String())
+	}
+
+	adminRequest := httptest.NewRequest(http.MethodGet, "/api/management/admin/users", nil)
+	adminRequest.AddCookie(adminCookie)
+	adminResponse := httptest.NewRecorder()
+	router.ServeHTTP(adminResponse, adminRequest)
+	if adminResponse.Code != http.StatusOK || strings.Contains(adminResponse.Body.String(), testManagementOpenAIKey) {
+		t.Fatalf("admin status=%d body=%s", adminResponse.Code, adminResponse.Body.String())
+	}
+}
+
+func TestManagementProviderKeyRevealPersistsUpdatedKey(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
+	updatedProviderKey := "sk-user-deepseek-updated"
+	capturedAuthorizations := []string{}
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		capturedAuthorizations = append(capturedAuthorizations, request.Header.Get("Authorization"))
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"updated key ok"}}]}`))
+	}))
+	defer upstreamServer.Close()
+
+	router := newManagementRouterWithDatabasePath(t, proxy.Configuration{DeepSeekBaseURL: upstreamServer.URL}, databasePath)
+	ownerCookie := managementSessionCookie(t, "tauth-reveal-persistence-owner")
+	saveOriginalRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/deepseek", managementProviderKeyRequestBody(t, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""), ownerCookie)
+	saveOriginalResponse := httptest.NewRecorder()
+	router.ServeHTTP(saveOriginalResponse, saveOriginalRequest)
+	if saveOriginalResponse.Code != http.StatusOK {
+		t.Fatalf("save original key status=%d body=%s", saveOriginalResponse.Code, saveOriginalResponse.Body.String())
+	}
+
+	database := openManagedFixtureDatabase(t, databasePath)
+	var originalProviderKeyRecord managedProviderKeyFixture
+	if queryError := database.Where("user_id = ? AND provider_id = ?", "tauth-reveal-persistence-owner", proxy.ProviderNameDeepSeek).First(&originalProviderKeyRecord).Error; queryError != nil {
+		t.Fatalf("load original provider key record: %v", queryError)
+	}
+	if originalProviderKeyRecord.APIKey != "" || strings.Contains(originalProviderKeyRecord.EncryptedAPIKey, testManagementDeepSeekKey) {
+		t.Fatalf("original provider key record=%+v", originalProviderKeyRecord)
+	}
+
+	originalRevealRequest := authenticatedProviderKeyRevealRequest(http.MethodPost, "/api/management/provider-keys/deepseek/reveal", ownerCookie, "http://localhost:8080")
+	originalRevealResponse := httptest.NewRecorder()
+	router.ServeHTTP(originalRevealResponse, originalRevealRequest)
+	if originalRevealResponse.Code != http.StatusOK || !strings.Contains(originalRevealResponse.Body.String(), testManagementDeepSeekKey) {
+		t.Fatalf("original reveal status=%d body=%s", originalRevealResponse.Code, originalRevealResponse.Body.String())
+	}
+
+	saveUpdatedRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/deepseek", managementProviderKeyRequestBody(t, updatedProviderKey, proxy.ModelNameDeepSeekV4Flash, ""), ownerCookie)
+	saveUpdatedResponse := httptest.NewRecorder()
+	router.ServeHTTP(saveUpdatedResponse, saveUpdatedRequest)
+	if saveUpdatedResponse.Code != http.StatusOK || strings.Contains(saveUpdatedResponse.Body.String(), updatedProviderKey) {
+		t.Fatalf("save updated key status=%d body=%s", saveUpdatedResponse.Code, saveUpdatedResponse.Body.String())
+	}
+
+	var updatedProviderKeyRecord managedProviderKeyFixture
+	if queryError := database.Where("user_id = ? AND provider_id = ?", "tauth-reveal-persistence-owner", proxy.ProviderNameDeepSeek).First(&updatedProviderKeyRecord).Error; queryError != nil {
+		t.Fatalf("load updated provider key record: %v", queryError)
+	}
+	if updatedProviderKeyRecord.APIKey != "" || updatedProviderKeyRecord.EncryptedAPIKey == originalProviderKeyRecord.EncryptedAPIKey || strings.Contains(updatedProviderKeyRecord.EncryptedAPIKey, updatedProviderKey) {
+		t.Fatalf("updated provider key record=%+v", updatedProviderKeyRecord)
+	}
+
+	updatedRevealRequest := authenticatedProviderKeyRevealRequest(http.MethodPost, "/api/management/provider-keys/deepseek/reveal", ownerCookie, "http://localhost:8080")
+	updatedRevealResponse := httptest.NewRecorder()
+	router.ServeHTTP(updatedRevealResponse, updatedRevealRequest)
+	if updatedRevealResponse.Code != http.StatusOK || !strings.Contains(updatedRevealResponse.Body.String(), updatedProviderKey) {
+		t.Fatalf("updated reveal status=%d body=%s", updatedRevealResponse.Code, updatedRevealResponse.Body.String())
+	}
+
+	secretRequest := authenticatedJSONRequest(http.MethodPost, "/api/management/secrets", `{}`, ownerCookie)
+	secretResponse := httptest.NewRecorder()
+	router.ServeHTTP(secretResponse, secretRequest)
+	if secretResponse.Code != http.StatusOK {
+		t.Fatalf("generate secret status=%d body=%s", secretResponse.Code, secretResponse.Body.String())
+	}
+	var secretPayload struct {
+		Secret string `json:"secret"`
+	}
+	if decodeError := json.Unmarshal(secretResponse.Body.Bytes(), &secretPayload); decodeError != nil {
+		t.Fatalf("decode generated secret: %v", decodeError)
+	}
+
+	for _, proxyRouter := range []http.Handler{router, newManagementRouterWithDatabasePath(t, proxy.Configuration{DeepSeekBaseURL: upstreamServer.URL}, databasePath)} {
+		proxyRequest := httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(secretPayload.Secret)+"&provider=deepseek&model="+proxy.ModelNameDeepSeekV4Flash+"&prompt=hello", nil)
+		proxyResponse := httptest.NewRecorder()
+		proxyRouter.ServeHTTP(proxyResponse, proxyRequest)
+		if proxyResponse.Code != http.StatusOK || strings.TrimSpace(proxyResponse.Body.String()) != "updated key ok" {
+			t.Fatalf("updated key proxy status=%d body=%s", proxyResponse.Code, proxyResponse.Body.String())
+		}
+	}
+	if len(capturedAuthorizations) != 2 || capturedAuthorizations[0] != "Bearer "+updatedProviderKey || capturedAuthorizations[1] != "Bearer "+updatedProviderKey {
+		t.Fatalf("updated key authorizations=%v", capturedAuthorizations)
+	}
+	if updateError := database.Model(&managedProviderKeyFixture{}).Where("user_id = ? AND provider_id = ?", "tauth-reveal-persistence-owner", proxy.ProviderNameDeepSeek).Updates(map[string]any{"api_key": "", "encrypted_api_key": "invalid"}).Error; updateError != nil {
+		t.Fatalf("corrupt updated provider key record: %v", updateError)
+	}
+	corruptRevealRequest := authenticatedProviderKeyRevealRequest(http.MethodPost, "/api/management/provider-keys/deepseek/reveal", ownerCookie, "http://localhost:8080")
+	corruptRevealResponse := httptest.NewRecorder()
+	router.ServeHTTP(corruptRevealResponse, corruptRevealRequest)
+	if corruptRevealResponse.Code != http.StatusInternalServerError || strings.Contains(corruptRevealResponse.Body.String(), updatedProviderKey) {
+		t.Fatalf("corrupt reveal status=%d body=%s", corruptRevealResponse.Code, corruptRevealResponse.Body.String())
+	}
+}
+
 func TestManagementRoutingDefaultsRequireCompleteCanonicalPairs(t *testing.T) {
 	router := newManagementRouter(t, proxy.Configuration{})
 	sessionCookie := managementSessionCookie(t, "tauth-routing-defaults-user")
@@ -1860,6 +2068,21 @@ func signedManagementSessionCookie(t *testing.T, claims jwt.Claims) *http.Cookie
 func authenticatedJSONRequest(method string, path string, body string, sessionCookie *http.Cookie) *http.Request {
 	request := httptest.NewRequest(method, path, bytes.NewBufferString(body))
 	request.Header.Set("Content-Type", "application/json")
+	request.AddCookie(sessionCookie)
+	return request
+}
+
+func authenticatedProviderKeyRevealRequest(method string, path string, sessionCookie *http.Cookie, origin string) *http.Request {
+	request := httptest.NewRequest(method, path, strings.NewReader(`{}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Origin", origin)
+	request.AddCookie(sessionCookie)
+	return request
+}
+
+func providerKeyRevealRequestWithoutContentType(method string, path string, sessionCookie *http.Cookie, origin string) *http.Request {
+	request := httptest.NewRequest(method, path, strings.NewReader(`{}`))
+	request.Header.Set("Origin", origin)
 	request.AddCookie(sessionCookie)
 	return request
 }

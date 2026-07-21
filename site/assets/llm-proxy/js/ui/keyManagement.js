@@ -18,6 +18,7 @@ import {
   generateSecret as requestGeneratedSecret,
   loadFrontendRuntimeConfig,
   removeProviderKey as requestRemoveProviderKey,
+  revealProviderKey as requestRevealProviderKey,
   revokeSecret as requestRevokeSecret,
   saveProviderKey as requestSaveProviderKey,
   updateDefaults as requestUpdateDefaults,
@@ -45,6 +46,10 @@ const JSON_CONTENT_TYPE_HEADER = "Content-Type: application/json";
 const SAMPLE_TEXT_PROMPT = "Hello";
 const SAMPLE_AUDIO_FILE = "recording.webm";
 const NOTIFICATION_HEADER_BOTTOM_PROPERTY = "--llm-notification-header-bottom";
+const PROVIDER_KEY_INPUT_TYPES = Object.freeze({
+  MASKED: "password",
+  VISIBLE: "text",
+});
 
 export function createKeyManagement() {
   return {
@@ -68,6 +73,10 @@ export function createKeyManagement() {
     selectedProviderID: EMPTY_STRING,
     /** @type {Record<string, string>} */
     providerInputs: {},
+    revealedProviderID: EMPTY_STRING,
+    providerKeyVisible: false,
+    providerKeyRevealPending: false,
+    providerKeyRevealVersion: 0,
     /** @type {import("../types.d.js").TenantDefaults} */
     defaults: emptyDefaults(),
     /** @type {import("../types.d.js").ManagementUsageSummary} */
@@ -176,6 +185,21 @@ export function createKeyManagement() {
     /** @returns {import("../types.d.js").ProviderProfile | null} */
     get selectedProvider() {
       return this.providers.find((candidateProvider) => candidateProvider.id === this.selectedProviderID) || null;
+    },
+
+    get selectedProviderKeyRevealed() {
+      return this.selectedProviderID !== EMPTY_STRING && this.revealedProviderID === this.selectedProviderID;
+    },
+
+    get selectedProviderKeyInputType() {
+      return this.providerKeyVisible ? PROVIDER_KEY_INPUT_TYPES.VISIBLE : PROVIDER_KEY_INPUT_TYPES.MASKED;
+    },
+
+    get selectedProviderKeyActionCopy() {
+      if (!this.selectedProviderKeyRevealed) {
+        return COPY.showProviderKey;
+      }
+      return this.providerKeyVisible ? COPY.hideProviderKey : COPY.showProviderKey;
     },
 
     get chartViewBox() {
@@ -485,7 +509,82 @@ export function createKeyManagement() {
     },
 
     closeSettings() {
+      this.clearProviderKeyMaterial();
       this.settingsOpen = false;
+    },
+
+    /**
+     * @param {string} providerID
+     */
+    selectProvider(providerID) {
+      if (providerID === this.selectedProviderID) {
+        return;
+      }
+      this.clearProviderKeyMaterial();
+      this.selectedProviderID = providerID;
+    },
+
+    async handleSelectedProviderKeyAction() {
+      if (!this.selectedProvider || !this.selectedProvider.has_key) {
+        return;
+      }
+      if (this.selectedProviderKeyRevealed) {
+        this.providerKeyVisible = !this.providerKeyVisible;
+        return;
+      }
+      await this.revealSelectedProviderKey();
+    },
+
+    async revealSelectedProviderKey() {
+      const provider = this.selectedProvider;
+      if (!provider || !provider.has_key || this.providerKeyRevealPending) {
+        return;
+      }
+      const revealProviderID = provider.id;
+      const revealVersion = this.providerKeyRevealVersion + 1;
+      this.providerKeyRevealVersion = revealVersion;
+      this.providerKeyRevealPending = true;
+      try {
+        const revealResponse = await requestRevealProviderKey(revealProviderID);
+        if (!this.canApplyProviderKeyReveal(revealProviderID, revealVersion)) {
+          return;
+        }
+        this.providerInputs[revealProviderID] = revealResponse.api_key;
+        this.revealedProviderID = revealProviderID;
+        this.providerKeyVisible = true;
+      } catch (requestError) {
+        if (this.canApplyProviderKeyReveal(revealProviderID, revealVersion)) {
+          this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+        }
+      } finally {
+        if (revealVersion === this.providerKeyRevealVersion) {
+          this.providerKeyRevealPending = false;
+        }
+      }
+    },
+
+    /**
+     * @param {string} providerID
+     * @param {number} revealVersion
+     */
+    canApplyProviderKeyReveal(providerID, revealVersion) {
+      return (
+        this.settingsOpen &&
+        this.selectedProviderID === providerID &&
+        this.providerKeyRevealVersion === revealVersion
+      );
+    },
+
+    clearProviderKeyMaterial() {
+      for (const providerID of [this.selectedProviderID, this.revealedProviderID]) {
+        if (providerID) {
+          this.providerInputs[providerID] = EMPTY_STRING;
+        }
+      }
+      this.revealedProviderID = EMPTY_STRING;
+      this.providerKeyVisible = false;
+      this.providerKeyRevealPending = false;
+      this.providerKeyRevealVersion += 1;
     },
 
     async saveSelectedProviderKey() {
@@ -511,18 +610,25 @@ export function createKeyManagement() {
         this.setNotice(NOTICE_KINDS.ERROR, COPY.providerMissing);
         return;
       }
-      await this.runProfileMutation(
-        async () => requestSaveProviderKey(provider.id, apiKey, provider.text_model, provider.system_prompt),
-        COPY.providerKeySaved,
-      );
-      this.providerInputs[provider.id] = EMPTY_STRING;
+      try {
+        await this.runProfileMutation(
+          async () => requestSaveProviderKey(provider.id, apiKey, provider.text_model, provider.system_prompt),
+          COPY.providerKeySaved,
+        );
+      } finally {
+        this.clearProviderKeyMaterial();
+      }
     },
 
     /**
      * @param {import("../types.d.js").ProviderProfile} provider
      */
     async removeProviderKey(provider) {
-      await this.runProfileMutation(async () => requestRemoveProviderKey(provider.id), COPY.providerKeyRemoved);
+      try {
+        await this.runProfileMutation(async () => requestRemoveProviderKey(provider.id), COPY.providerKeyRemoved);
+      } finally {
+        this.clearProviderKeyMaterial();
+      }
     },
 
     async saveDefaults() {
@@ -604,6 +710,7 @@ export function createKeyManagement() {
      */
     applyProfile(nextProfile) {
       const defaults = createWorkspaceRoutingDefaults(nextProfile);
+      this.clearProviderKeyMaterial();
       this.profile = nextProfile;
       applyUserMenuItems(Boolean(nextProfile.user.is_admin));
       this.providers = nextProfile.providers;
@@ -626,6 +733,7 @@ export function createKeyManagement() {
     },
 
     clearAuthenticatedState() {
+      this.clearProviderKeyMaterial();
       this.profile = null;
       this.providers = [];
       this.selectedProviderID = EMPTY_STRING;

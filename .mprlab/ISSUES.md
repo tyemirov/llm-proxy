@@ -997,7 +997,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Added LoopAware traffic pixel script to site/index.html and generate_seo_resources.mjs htmlDocument, updated the modified date to 2026-07-11 in generator and tests, and mocked loopaware network requests in Playwright. All tests passed.
 
-- [ ] [I025] (P1) Let users reveal and edit their saved provider API keys.
+- [x] [I025] (P1) Let users reveal and edit their saved provider API keys.
   Goal:
   Let an authenticated user select any provider whose API key they previously saved, explicitly reveal the complete decrypted key, edit it in the existing provider-key field, and save the updated value. The current profile exposes only masked status and leaves the edit field blank, so users cannot inspect or correct a saved key without replacing it from another source.
   Requirements:
@@ -1020,6 +1020,8 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Add persistence coverage proving reveal decrypts the encrypted record without writing plaintext to the database and an edited key is re-encrypted before save while generated-secret proxy routing uses the new value.
   - Add Playwright coverage for explicit reveal, visible/hidden presentation, editing and saving, masked post-save state, provider switching, Settings close/reopen, sign-out cleanup, request-order races, and absence of raw keys from browser storage and unrelated UI surfaces.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
+  ### Resolution
+  Added the strict owner-only reveal endpoint, encrypted owner-scoped lookup, and selected-provider reveal/hide/edit flow with lifecycle cleanup and stale-response invalidation. Documented the sole raw-key response boundary and added HTTP, persistence/routing, and Playwright coverage. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
 
 ## Maintenance
