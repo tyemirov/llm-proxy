@@ -129,6 +129,7 @@ Shared config fields:
 - `tenants[].defaults.dictation_provider`
 - `tenants[].defaults.dictation_model`
 - `tenants[].defaults.system_prompt`
+- `tenants[].defaults.reasoning_effort`
 
 Provider credentials and base URLs:
 
@@ -148,8 +149,10 @@ Provider credentials and base URLs:
 Provider model catalogs:
 
 - `providers.<provider>.text.default_model`
+- `providers.<provider>.text.reasoning_effort`
 - `providers.<provider>.text.models[].id`
 - `providers.<provider>.text.models[].output_token_limit`
+- `providers.<provider>.text.models[].reasoning_effort`
 - `providers.openai.text.models[].request_profile`
 - `providers.openai.text.models[].web_search`
 - `providers.openai.dictation.default_model`
@@ -164,8 +167,9 @@ Provider model catalogs:
 The model catalog is runtime config data. Code owns provider selectors,
 aliases, transports, endpoint shapes, and stable OpenAI request-profile
 implementations. `config.yml` owns provider model ids, provider default models,
-dictation model ids, model-specific web-search enablement, and known
-provider-side output-token limits.
+dictation model ids, model-specific web-search enablement, provider/model
+reasoning-effort capability declarations, and known provider-side output-token
+limits.
 
 The README model-capability table mirrors `config.yml`; refresh those two
 catalog representations together and do not hardcode model ids in provider
@@ -178,7 +182,11 @@ credential boundary. MiniMax M2.7 maps public `max_tokens` to
 `max_completion_tokens` and carries a configured 2048-token output ceiling.
 GLM-5.2 remains on the existing BigModel/Zhipu Chat Completions endpoint. Its
 128K output maximum is catalog metadata; optional `thinking` and
-`reasoning_effort` controls are not part of the proxy request contract.
+`reasoning_effort` controls are not part of the public proxy request contract.
+The distinct tenant routing-default `reasoning_effort` can be forwarded only
+through an explicit catalog capability mapping. The current mapping is the
+OpenAI Responses reasoning adapter; it does not enable GLM or generic
+OpenAI-compatible routes.
 
 OpenAI `request_profile` values select stable payload shapes:
 
@@ -222,20 +230,25 @@ omission keeps the existing tenant/provider-default behavior.
 
 ## Managed Routing Defaults
 
-`PUT /api/management/defaults` requires both a text `provider`/`model` pair and
-a dictation `dictation_provider`/`dictation_model` pair. It constructs and
-validates both catalog pairs before the database write, so a blank, unknown,
-unsupported, or cross-provider model fails with `400
-managed_routing_defaults_invalid` and leaves the prior pair unchanged. The
-profile response contains only canonical catalog-valid pairs; a malformed
-profile is a workspace-integrity failure in the browser, not a UI repair
-opportunity.
+`PUT /api/management/defaults` requires both a text `provider`/`model` pair, a
+dictation `dictation_provider`/`dictation_model` pair, and an explicit
+`reasoning_effort` value. Empty is the explicit unset value; a nonempty value
+must be a canonical option from the configured capability catalog. The handler
+constructs and validates all defaults before the database write, so a blank,
+unknown, unsupported, cross-provider model, or invalid effort fails with `400
+managed_routing_defaults_invalid` and leaves the prior defaults unchanged.
+The profile response contains only canonical catalog-valid defaults plus the
+one option list and structured provider/model effort-capability projection; a
+malformed profile is a workspace-integrity failure in the browser, not a UI
+repair opportunity.
 
 Startup owns a single versioned, transactional migration for previously stored
-management defaults. Before the version marker is written, it repairs only a
-blank model or a model configured for a different provider at the same endpoint
-by selecting the saved provider's configured endpoint default. It rejects
-unknown models and unknown or dictation-unsupported providers with contextual
+management defaults. Version 2 writes the explicit unset effort for existing
+valid rows; it never derives an effort from a model, provider, profile, or
+web-search state. Before the version marker is written, it repairs only a blank
+model or a model configured for a different provider at the same endpoint by
+selecting the saved provider's configured endpoint default. It rejects unknown
+models and unknown or dictation-unsupported providers with contextual
 tenant, endpoint, provider, and model errors. After the marker exists, all
 persisted pairs must be canonical and valid; startup fails rather than retaining
 a fallback, compatibility read, or runtime repair path.
@@ -283,7 +296,7 @@ On startup, the pinned MPR UI shell restores the browser session through TAuth `
 
 The backend consumes TAuth's published Go `pkg/sessionvalidator` for cookie/JWT validation and adds only llm-proxy's tenant, required-expiry, and principal invariants; no application-owned JWT parser or claims schema exists. The gateway `llm-proxy` target stages both services' runtime inputs, restarts `tauth-api` and `llm-proxy`, and verifies both health checks before Pages activation so signing-key, cookie-name, and cookie-domain changes cannot leave the two runtimes split.
 
-The authenticated management landing view is usage-focused. `GET /api/management/usage` returns 30-day aggregate, daily, provider, model, and status-code usage for the signed-in user's managed tenant. Managed proxy requests record endpoint, provider, model, status, success flag, latency, and normalized token counts only; prompts, audio, transcripts, responses, tenant secrets, and provider API keys are excluded from usage events. Client access, generated secrets, routing defaults, copyable request examples, and provider key controls live in a large Settings modal opened from the shared `<mpr-user>` avatar dropdown, where the `Settings` item is inserted before `Sign out`. Request examples include copyable default text, v2, and dictation commands plus copyable selected-provider text and v2 commands; dictation-capable selected providers also show a provider-specific dictation command. Provider key controls use one selected-provider editor with API key, text model, and system prompt fields because those settings are part of the provider-owned managed routing contract.
+The authenticated management landing view is usage-focused. `GET /api/management/usage` returns 30-day aggregate, daily, provider, model, and status-code usage for the signed-in user's managed tenant. Managed proxy requests record endpoint, provider, model, status, success flag, latency, and normalized token counts only; prompts, audio, transcripts, responses, tenant secrets, and provider API keys are excluded from usage events. Client access, generated secrets, routing defaults, copyable request examples, and provider key controls live in a large Settings modal opened from the shared `<mpr-user>` avatar dropdown, where the `Settings` item is inserted before `Sign out`. The routing-default form contains one tenant-level Reasoning effort control from the profile's canonical option list. Its value survives provider/model changes, and the form labels it inactive rather than clearing it when the selected text route has no capability. Request examples include copyable default text, v2, and dictation commands plus copyable selected-provider text and v2 commands; dictation-capable selected providers also show a provider-specific dictation command. Provider key controls use one selected-provider editor with API key, text model, and system prompt fields because those settings are part of the provider-owned managed routing contract.
 
 ## Error Contract
 
