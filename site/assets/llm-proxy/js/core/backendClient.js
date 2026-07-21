@@ -66,6 +66,14 @@ export function removeProviderKey(provider) {
 }
 
 /**
+ * @param {string} provider
+ * @returns {Promise<import("../types.d.js").ProviderKeyReveal>}
+ */
+export function revealProviderKey(provider) {
+  return requestJSON(`${MANAGEMENT_BASE_PATH}/provider-keys/${encodeURIComponent(provider)}/reveal`, { method: "POST" });
+}
+
+/**
  * @param {import("../types.d.js").TenantDefaults} defaults
  * @returns {Promise<import("../types.d.js").ManagementProfile>}
  */

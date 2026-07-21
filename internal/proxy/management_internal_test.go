@@ -1089,6 +1089,13 @@ func TestManagementHandlerStoreErrorEdges(t *testing.T) {
 		t.Fatalf("profile error status=%d want=%d", responseCode, http.StatusInternalServerError)
 	}
 
+	revealErrorDatabase := newFakeManagedTenantDatabase()
+	revealErrorDatabase.userQueryErrors = []error{errInternalTestDatabase}
+	revealErrorService := newInternalManagementService(t, revealErrorDatabase)
+	if responseCode := executeInternalManagementHandler(revealErrorService.revealProviderKeyHandler(), http.MethodPost, "/api/management/provider-keys/openai/reveal", "", gin.Params{{Key: "provider", Value: "openai"}}, principal); responseCode != http.StatusInternalServerError {
+		t.Fatalf("reveal error status=%d want=%d", responseCode, http.StatusInternalServerError)
+	}
+
 	removeErrorDatabase := newFakeManagedTenantDatabase()
 	removeRecord := internalManagedTenantRecord(principal.userID, "", fixedTime)
 	removeRecord.ProviderAPIKeys = []managedProviderAPIKeyRecord{internalManagedProviderKeyRecord(t, principal.userID, "openai", "sk-openai", fixedTime)}

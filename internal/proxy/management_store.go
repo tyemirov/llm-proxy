@@ -48,6 +48,7 @@ var (
 	errManagedProviderKeyInvalid    = errors.New("managed_provider_key_invalid")
 	errManagedProviderKeyEncryption = errors.New("managed_provider_key_encryption_failed")
 	errManagedProviderKeyDecryption = errors.New("managed_provider_key_decryption_failed")
+	errManagedProviderKeyNotFound   = errors.New("managed_provider_key_not_found")
 	errManagedSecretGeneration      = errors.New("managed_secret_generation_failed")
 	errManagedSecretCollision       = errors.New("managed_secret_collision")
 	errManagedLegacyTokenMigration  = errors.New("managed_legacy_token_migration_failed")
@@ -879,6 +880,24 @@ func (store *managedTenantStore) saveProviderKey(principal managementPrincipal, 
 		return managedTenantSnapshot{}, fmt.Errorf("%w: user_id=%s: %v", errManagedTenantStorePersist, record.UserID, persistError)
 	}
 	return store.snapshotByUserIDLocked(record.UserID)
+}
+
+func (store *managedTenantStore) revealProviderKey(principal managementPrincipal, providerIdentifier providerID) (string, error) {
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+	record, recordError := store.ensureRecordLocked(principal)
+	if recordError != nil {
+		return constants.EmptyString, recordError
+	}
+	providerKeyRecord, hasProviderKey := managedProviderKeyRecordForProvider(record.ProviderAPIKeys, providerIdentifier)
+	if !hasProviderKey {
+		return constants.EmptyString, fmt.Errorf("%w: provider=%s", errManagedProviderKeyNotFound, providerIdentifier.string())
+	}
+	apiKey, decryptError := store.providerKeyCipher.decrypt(providerKeyRecord)
+	if decryptError != nil {
+		return constants.EmptyString, decryptError
+	}
+	return apiKey, nil
 }
 
 func managedProviderKeyRecordForProvider(providerKeyRecords []managedProviderAPIKeyRecord, providerIdentifier providerID) (managedProviderAPIKeyRecord, bool) {

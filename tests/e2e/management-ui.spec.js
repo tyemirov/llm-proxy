@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const siteRoot = path.join(repoRoot, "site");
 const configPath = "/config-ui.yaml";
+const managementProviderKeysPath = "/api/management/provider-keys";
 const faviconPath = "/assets/llm-proxy/img/favicon.svg";
 const appIconPath = "/assets/llm-proxy/img/llm-proxy-icon.svg";
 const resourcesPath = "/resources/";
@@ -254,6 +255,171 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
     "provider=meta",
   );
   await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
+});
+
+test("saved provider keys reveal, edit, and clear without browser persistence", async ({ page }) => {
+  const revealedProviderKey = "sk-owner-openai-revealed";
+  const editedProviderKey = "sk-owner-openai-edited";
+  let revealRequestCount = 0;
+  let savedProviderKeyPayload = null;
+  page.on("request", (request) => {
+    if (request.url() === providerKeyEndpointURL("openai", "reveal")) {
+      revealRequestCount += 1;
+    }
+    if (request.url() === providerKeyEndpointURL("openai") && request.method() === "PUT") {
+      savedProviderKeyPayload = JSON.parse(request.postData() || "{}");
+    }
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { providerKeys: { openai: revealedProviderKey } });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const providerEditor = settingsDialog.locator("provider-editor");
+  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider" });
+  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
+  await expect(providerKeyInput).toHaveValue("");
+  await expect(providerKeyInput).toHaveAttribute("type", "password");
+  await expect(providerEditor.getByRole("button", { name: "Show key" })).toBeVisible();
+  await expect(providerEditor.locator("provider-status")).not.toContainText(revealedProviderKey);
+  await expect(settingsDialog.locator("example-list")).not.toContainText(revealedProviderKey);
+
+  await providerEditor.getByRole("button", { name: "Show key" }).click();
+  await expect(providerKeyInput).toHaveValue(revealedProviderKey);
+  await expect(providerKeyInput).toHaveAttribute("type", "text");
+  await expect(providerEditor.getByRole("button", { name: "Hide key" })).toBeVisible();
+  expect(revealRequestCount).toBe(1);
+  expect(await providerKeyInput.evaluate((inputElement) => inputElement.outerHTML)).not.toContain(revealedProviderKey);
+  await expect(providerEditor.locator("provider-status")).not.toContainText(revealedProviderKey);
+  await expect(settingsDialog.locator("example-list")).not.toContainText(revealedProviderKey);
+
+  await providerEditor.getByRole("button", { name: "Hide key" }).click();
+  await expect(providerKeyInput).toHaveAttribute("type", "password");
+  await expect(providerKeyInput).toHaveValue(revealedProviderKey);
+  await providerEditor.getByRole("button", { name: "Show key" }).click();
+  await expect(providerKeyInput).toHaveAttribute("type", "text");
+  expect(revealRequestCount).toBe(1);
+
+  await providerKeyInput.fill(editedProviderKey);
+  await providerEditor.getByRole("button", { name: "Update key" }).click();
+  await expect(providerKeyInput).toHaveValue("");
+  await expect(providerKeyInput).toHaveAttribute("type", "password");
+  await expect(providerEditor.getByRole("button", { name: "Show key" })).toBeVisible();
+  expect(savedProviderKeyPayload).toMatchObject({ api_key: editedProviderKey });
+  await expect(providerEditor.locator("provider-status")).not.toContainText(editedProviderKey);
+  await expect(settingsDialog.locator("example-list")).not.toContainText(editedProviderKey);
+  expect(await browserStorageContains(page, revealedProviderKey)).toBe(false);
+  expect(await browserStorageContains(page, editedProviderKey)).toBe(false);
+
+  await providerEditor.getByRole("button", { name: "Show key" }).click();
+  await expect(providerKeyInput).toHaveValue(editedProviderKey);
+  await providerSelector.selectOption("deepseek");
+  const deepSeekKeyInput = providerEditor.getByRole("textbox", { name: "DeepSeek API key" });
+  await expect(deepSeekKeyInput).toHaveValue("");
+  await expect(deepSeekKeyInput).toHaveAttribute("type", "password");
+  await providerSelector.selectOption("openai");
+  await expect(providerKeyInput).toHaveValue("");
+  await expect(providerKeyInput).toHaveAttribute("type", "password");
+
+  await providerEditor.getByRole("button", { name: "Show key" }).click();
+  await expect(providerKeyInput).toHaveValue(editedProviderKey);
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
+  await expect(settingsDialog).toBeHidden();
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+  await expect(providerKeyInput).toHaveValue("");
+  await expect(providerKeyInput).toHaveAttribute("type", "password");
+
+  await providerEditor.getByRole("button", { name: "Show key" }).click();
+  await expect(providerKeyInput).toHaveValue(editedProviderKey);
+  await page.reload();
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+  await expect(providerKeyInput).toHaveValue("");
+  await expect(providerKeyInput).toHaveAttribute("type", "password");
+
+  await providerEditor.getByRole("button", { name: "Show key" }).click();
+  await expect(providerKeyInput).toHaveValue(editedProviderKey);
+  await page.evaluate(() => {
+    document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
+  });
+  await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
+  expect(await browserStorageContains(page, editedProviderKey)).toBe(false);
+});
+
+test("removing a revealed provider key clears the selected editor", async ({ page }) => {
+  const revealedProviderKey = "sk-owner-openai-remove";
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { providerKeys: { openai: revealedProviderKey } });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const providerEditor = settingsDialog.locator("provider-editor");
+  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
+  await providerEditor.getByRole("button", { name: "Show key" }).click();
+  await expect(providerKeyInput).toHaveValue(revealedProviderKey);
+  await providerEditor.getByRole("button", { name: "Remove provider key and settings" }).click();
+
+  await expect(providerKeyInput).toHaveValue("");
+  await expect(providerKeyInput).toHaveAttribute("type", "password");
+  await expect(providerEditor.locator("provider-status")).toContainText("No key saved");
+  await expect(providerEditor.getByRole("button", { name: "Show key" })).toBeHidden();
+  expect(await browserStorageContains(page, revealedProviderKey)).toBe(false);
+});
+
+test("late provider-key reveals cannot populate a reopened editor", async ({ page }) => {
+  const delayedProviderKey = "sk-owner-openai-delayed";
+  let fulfillReveal;
+  const revealFulfilled = new Promise((resolve) => {
+    fulfillReveal = resolve;
+  });
+  let revealStarted;
+  const revealRequested = new Promise((resolve) => {
+    revealStarted = resolve;
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { providerKeys: { openai: delayedProviderKey } });
+  await page.route(providerKeyEndpointURL("openai", "reveal"), async (route) => {
+    revealStarted();
+    await revealFulfilled;
+    await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: { api_key: delayedProviderKey } });
+  });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const providerEditor = settingsDialog.locator("provider-editor");
+  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider" });
+  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
+  await providerEditor.getByRole("button", { name: "Show key" }).click();
+  await revealRequested;
+  await expect(providerSelector).toBeDisabled();
+  await expect(providerEditor.getByRole("button", { name: "Show key" })).toBeDisabled();
+  await expect(providerEditor.getByRole("button", { name: "Update key" })).toBeDisabled();
+  await expect(providerEditor.getByRole("button", { name: "Remove provider key and settings" })).toBeDisabled();
+
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+  await providerSelector.selectOption("deepseek");
+  fulfillReveal();
+  const deepSeekKeyInput = providerEditor.getByRole("textbox", { name: "DeepSeek API key" });
+  await expect(deepSeekKeyInput).toHaveValue("");
+  await expect(deepSeekKeyInput).toHaveAttribute("type", "password");
+  await expect(providerEditor.locator("provider-status")).not.toContainText(delayedProviderKey);
+  expect(await browserStorageContains(page, delayedProviderKey)).toBe(false);
+
+  await providerSelector.selectOption("openai");
+  await expect(providerKeyInput).toHaveValue("");
+  await expect(providerKeyInput).toHaveAttribute("type", "password");
 });
 
 test("routing defaults save only complete provider and model pairs", async ({ page }) => {
@@ -868,12 +1034,18 @@ async function installUsageResponse(page, status) {
 
 /**
  * @param {import("@playwright/test").Page} page
- * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatus?: number, profileStatuses?: number[], profileError?: string, malformedRoutingDefaults?: boolean }} options
+ * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatus?: number, profileStatuses?: number[], profileError?: string, malformedRoutingDefaults?: boolean, providerKeys?: Record<string, string> }} options
  * @returns {Promise<void>}
  */
 async function installManagementRoutes(page, options = {}) {
   const profileStatuses = [...(options.profileStatuses || [])];
   const profile = managementProfile(options.admin || false, options.hasSecret !== false);
+  const providerKeys = {
+    openai: "sk-owner-openai",
+    deepseek: "sk-owner-deepseek",
+    meta: "sk-owner-meta",
+    ...options.providerKeys,
+  };
   if (options.malformedRoutingDefaults) {
     profile.providers.push({
       id: "anthropic",
@@ -918,11 +1090,73 @@ async function installManagementRoutes(page, options = {}) {
     profile.tenant.has_secret = false;
     await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
   });
-  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+	await page.route(`${baseURL}/api/management/defaults`, async (route) => {
     const defaults = /** @type {typeof profile.tenant.defaults} */ (route.request().postDataJSON());
     profile.tenant.defaults = defaults;
-    await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+		await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+	});
+  await page.route(`${baseURL}${managementProviderKeysPath}/**`, async (route) => {
+    const request = route.request();
+    const providerPath = new URL(request.url()).pathname.slice(`${managementProviderKeysPath}/`.length);
+    const [providerID, action] = providerPath.split("/");
+    const provider = profile.providers.find((candidateProvider) => candidateProvider.id === providerID);
+    if (!provider) {
+      await route.fulfill({ status: 404 });
+      return;
+    }
+    if (action === "reveal") {
+      if (!provider.has_key) {
+        await route.fulfill({ status: 404 });
+        return;
+      }
+      await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: { api_key: providerKeys[providerID] } });
+      return;
+    }
+    if (request.method() === "PUT") {
+      const providerSettings = request.postDataJSON();
+      if (providerSettings.api_key) {
+        providerKeys[providerID] = providerSettings.api_key;
+      }
+      provider.has_key = true;
+      provider.masked_key = "sk-...saved";
+      provider.text_model = providerSettings.text_model;
+      provider.system_prompt = providerSettings.system_prompt;
+      await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+      return;
+    }
+    if (request.method() === "DELETE") {
+      delete providerKeys[providerID];
+      provider.has_key = false;
+      delete provider.masked_key;
+      await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+      return;
+    }
+    await route.fulfill({ status: httpInternalServerError });
   });
+}
+
+/**
+ * @param {string} providerID
+ * @param {string} [action]
+ * @returns {string}
+ */
+function providerKeyEndpointURL(providerID, action = "") {
+	return `${baseURL}${managementProviderKeysPath}/${providerID}${action ? `/${action}` : ""}`;
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {string} value
+ * @returns {Promise<boolean>}
+ */
+async function browserStorageContains(page, value) {
+	return page.evaluate((candidateValue) => {
+		const browserStorageValues = [
+			...Object.values(localStorage),
+			...Object.values(sessionStorage),
+		];
+		return browserStorageValues.some((storedValue) => storedValue.includes(candidateValue));
+	}, value);
 }
 
 /**
