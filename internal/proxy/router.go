@@ -108,6 +108,9 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		if migrationError := managedTenants.migrateProviderTextSettings(providers); migrationError != nil {
 			return nil, migrationError
 		}
+		if migrationError := managedTenants.migrateRoutingDefaultPairs(providers); migrationError != nil {
+			return nil, migrationError
+		}
 		runtimeStaticTenants = tenantRegistry{}
 	}
 	tenantAuthenticator := newTenantAuthenticator(runtimeStaticTenants, managedTenants)

@@ -256,6 +256,88 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
 });
 
+test("routing defaults save only complete provider and model pairs", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const textProvider = settingsDialog.getByRole("combobox", { name: "Text provider" });
+  const textModel = settingsDialog.getByRole("combobox", { name: "Text model" }).first();
+  const dictationProvider = settingsDialog.getByRole("combobox", { name: "Dictation provider" });
+  const dictationModel = settingsDialog.getByRole("combobox", { name: "Dictation model" });
+
+  await expect(textProvider).toHaveValue("openai");
+  await expect(textModel).toHaveValue("gpt-4.1");
+  await expect(dictationProvider).toHaveValue("openai");
+  await expect(dictationModel).toHaveValue("gpt-4o-mini-transcribe");
+  await expect(dictationModel.locator('option[value=""]')).toHaveCount(0);
+
+  await textProvider.selectOption("deepseek");
+  await expect(textModel).toHaveValue("deepseek-chat");
+  await dictationProvider.selectOption("grok");
+  await expect(dictationModel).toHaveValue("xai-stt");
+
+  const defaultsRequest = page.waitForRequest(`${baseURL}/api/management/defaults`);
+  const defaultsResponse = page.waitForResponse(`${baseURL}/api/management/defaults`);
+  await settingsDialog.getByRole("button", { name: "Save defaults" }).click();
+  const submittedRequest = await defaultsRequest;
+  const savedDefaultsResponse = await defaultsResponse;
+  expect(submittedRequest.postDataJSON()).toEqual({
+    provider: "deepseek",
+    model: "deepseek-chat",
+    dictation_provider: "grok",
+    dictation_model: "xai-stt",
+    system_prompt: "",
+  });
+  expect((await savedDefaultsResponse.json()).tenant.defaults).toEqual({
+    provider: "deepseek",
+    model: "deepseek-chat",
+    dictation_provider: "grok",
+    dictation_model: "xai-stt",
+    system_prompt: "",
+  });
+  await expect(page.getByRole("status")).toHaveText("Defaults saved");
+
+  const reloadedProfileResponse = page.waitForResponse(`${baseURL}/api/management/profile`);
+  await page.reload();
+  expect((await reloadedProfileResponse).status()).toBe(httpOK);
+  expect(await (await reloadedProfileResponse).json()).toMatchObject({
+    tenant: { defaults: { provider: "deepseek", model: "deepseek-chat" } },
+  });
+  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+  await expect(settingsDialog.getByRole("combobox", { name: "Text provider" })).toHaveValue("deepseek");
+  await expect(settingsDialog.getByRole("combobox", { name: "Text model" }).first()).toHaveValue("deepseek-chat");
+  await expect(settingsDialog.getByRole("combobox", { name: "Dictation provider" })).toHaveValue("grok");
+  await expect(settingsDialog.getByRole("combobox", { name: "Dictation model" })).toHaveValue("xai-stt");
+});
+
+test("malformed routing-default profiles become workspace integrity errors", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { malformedRoutingDefaults: true });
+
+  await page.goto(baseURL);
+
+  await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toBeVisible();
+  await expect(page.getByText("Workspace integrity error")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Settings" })).toBeHidden();
+});
+
+test("invalid persisted routing-default profiles become workspace integrity errors", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { profileStatus: 500, profileError: "managed_routing_defaults_invalid" });
+
+  await page.goto(baseURL);
+
+  await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toBeVisible();
+  await expect(page.getByText("Workspace integrity error")).toBeVisible();
+});
+
 test("dashboard loads only after MPR UI authenticates the user", async ({ page }) => {
   const profileRequests = [];
   page.on("request", (request) => {
@@ -613,18 +695,34 @@ async function settingsLayerFacts(page) {
 
 /**
  * @param {import("@playwright/test").Page} page
- * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatus?: number, profileStatuses?: number[] }} options
+ * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatus?: number, profileStatuses?: number[], profileError?: string, malformedRoutingDefaults?: boolean }} options
  * @returns {Promise<void>}
  */
 async function installManagementRoutes(page, options = {}) {
   const profileStatuses = [...(options.profileStatuses || [])];
+  const profile = managementProfile(options.admin || false, options.hasSecret !== false);
+  if (options.malformedRoutingDefaults) {
+    profile.providers.push({
+      id: "anthropic",
+      label: "Anthropic",
+      aliases: [],
+      has_key: false,
+      text_model: "claude-sonnet-5",
+      system_prompt: "",
+      text_default_model: "claude-sonnet-5",
+      text_models: ["claude-sonnet-5"],
+      supports_dictation: false,
+      dictation_models: [],
+    });
+    profile.tenant.defaults.provider = "anthropic";
+  }
   await page.route(`${baseURL}/api/management/profile`, async (route) => {
     const profileStatus = profileStatuses.length > 0 ? profileStatuses.shift() : options.profileStatus;
     if (profileStatus && profileStatus !== httpOK) {
-      await route.fulfill({ status: profileStatus, json: { error: "authentication_required" } });
+      await route.fulfill({ status: profileStatus, body: options.profileError || "authentication_required" });
       return;
     }
-    await route.fulfill({ json: managementProfile(options.admin || false, options.hasSecret !== false) });
+    await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
   });
   await page.route(`${baseURL}/api/management/usage`, async (route) => {
     await route.fulfill({ status: options.usageStatus || httpOK, json: managementUsage() });
@@ -634,15 +732,23 @@ async function installManagementRoutes(page, options = {}) {
   });
   await page.route(`${baseURL}/api/management/secrets`, async (route) => {
     if (route.request().method() === "POST") {
+      profile.tenant.has_secret = true;
       await route.fulfill({
+        headers: { "Cache-Control": "no-store" },
         json: {
           secret: options.generatedSecret || "llmp_test_generated_secret",
-          profile: managementProfile(options.admin || false, true),
+          profile,
         },
       });
       return;
     }
-    await route.fulfill({ json: managementProfile(options.admin || false, false) });
+    profile.tenant.has_secret = false;
+    await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+  });
+  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+    const defaults = /** @type {typeof profile.tenant.defaults} */ (route.request().postDataJSON());
+    profile.tenant.defaults = defaults;
+    await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
   });
 }
 
@@ -764,6 +870,19 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         text_models: ["muse-spark-1.1"],
         supports_dictation: false,
         dictation_models: [],
+      },
+      {
+        id: "grok",
+        label: "Grok",
+        aliases: ["xai"],
+        has_key: false,
+        text_model: "grok-4.3",
+        system_prompt: "",
+        text_default_model: "grok-4.3",
+        text_models: ["grok-4.3"],
+        supports_dictation: true,
+        dictation_default_model: "xai-stt",
+        dictation_models: ["xai-stt"],
       },
     ],
     proxy: {

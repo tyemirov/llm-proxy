@@ -12,6 +12,7 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - Omitted `provider` means the authenticated tenant's default provider.
 - `model` keeps its current meaning; omitted `model` means the authenticated tenant's default model when set, otherwise the selected provider's configured default model.
 - A provider with an API key configured must have a configured default text model so provider-selected requests can omit `model` consistently.
+- Managed tenants persist complete canonical text and dictation provider/model pairs. A request that omits the routing fields uses the exact saved text pair; management persistence never substitutes a different provider/model pair at runtime.
 - Compatibility JSON `POST /` accepts exactly one text input shape: `prompt` for a single user prompt or `messages[]` for an OpenRouter/OpenAI-compatible chat transcript.
 - Canonical JSON `POST /v2` accepts only `messages[]` as the text input shape; request-body `prompt` and `system_prompt` are invalid.
 - `messages[]` items contain `role` and string `content`. Supported roles are `system`, `user`, and `assistant`; at least one `user` message is required.
@@ -218,6 +219,26 @@ incomplete, or competing profile fails before HTTP and never reuses a previous
 profile or tenant/provider default. The proxy remains the authority for whether
 the resulting provider/model pair is valid. Without a profile path, model
 omission keeps the existing tenant/provider-default behavior.
+
+## Managed Routing Defaults
+
+`PUT /api/management/defaults` requires both a text `provider`/`model` pair and
+a dictation `dictation_provider`/`dictation_model` pair. It constructs and
+validates both catalog pairs before the database write, so a blank, unknown,
+unsupported, or cross-provider model fails with `400
+managed_routing_defaults_invalid` and leaves the prior pair unchanged. The
+profile response contains only canonical catalog-valid pairs; a malformed
+profile is a workspace-integrity failure in the browser, not a UI repair
+opportunity.
+
+Startup owns a single versioned, transactional migration for previously stored
+management defaults. Before the version marker is written, it repairs only a
+blank model or a model configured for a different provider at the same endpoint
+by selecting the saved provider's configured endpoint default. It rejects
+unknown models and unknown or dictation-unsupported providers with contextual
+tenant, endpoint, provider, and model errors. After the marker exists, all
+persisted pairs must be canonical and valid; startup fails rather than retaining
+a fallback, compatibility read, or runtime repair path.
 
 `server.workers` limits concurrent upstream provider HTTP operations, not whole
 client request lifecycles. `server.queue_size` limits the number of additional

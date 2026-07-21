@@ -1,6 +1,15 @@
 // @ts-check
 
-import { AUTH_STATES, COPY, DASHBOARD_VIEWS, EVENTS, MENU_ACTIONS, NOTICE_KINDS } from "../constants.js";
+import {
+  AUTH_STATES,
+  COPY,
+  DASHBOARD_VIEWS,
+  EVENTS,
+  MENU_ACTIONS,
+  NOTICE_KINDS,
+  ROUTING_DEFAULTS_INVALID_ERROR,
+  WORKSPACE_INTEGRITY_ERROR,
+} from "../constants.js";
 import {
   fetchAdminUsers,
   fetchProfile,
@@ -346,7 +355,7 @@ export function createKeyManagement() {
         if (readMprUIAuthStatus() === AUTH_STATES.AUTHENTICATED) {
           this.clearAuthenticatedState();
           this.authState = AUTH_STATES.ERROR;
-          this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+          this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
         }
       } finally {
         this.busy = false;
@@ -502,7 +511,7 @@ export function createKeyManagement() {
         this.applyProfile(secretResponse.profile);
         this.setNotice(NOTICE_KINDS.SUCCESS, COPY.secretGenerated);
       } catch (requestError) {
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+        this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
       } finally {
         this.busy = false;
       }
@@ -535,13 +544,16 @@ export function createKeyManagement() {
     },
 
     selectTextProviderDefaultModel() {
-      const provider = this.providers.find((candidateProvider) => candidateProvider.id === this.defaults.provider);
-      this.defaults.model = provider ? provider.text_default_model : EMPTY_STRING;
+      const provider = profileProvider(this.providers, this.defaults.provider);
+      this.defaults.model = provider.text_default_model;
     },
 
     selectDictationProviderDefaultModel() {
-      const provider = this.providers.find((candidateProvider) => candidateProvider.id === this.defaults.dictation_provider);
-      this.defaults.dictation_model = provider ? provider.dictation_default_model || EMPTY_STRING : EMPTY_STRING;
+      const provider = profileProvider(this.providers, this.defaults.dictation_provider);
+      if (!provider.supports_dictation || !provider.dictation_default_model) {
+        throw new Error(WORKSPACE_INTEGRITY_ERROR);
+      }
+      this.defaults.dictation_model = provider.dictation_default_model;
     },
 
     /**
@@ -555,7 +567,7 @@ export function createKeyManagement() {
         this.applyProfile(updatedProfile);
         this.setNotice(NOTICE_KINDS.SUCCESS, successMessage);
       } catch (requestError) {
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+        this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
       } finally {
         this.busy = false;
       }
@@ -565,25 +577,26 @@ export function createKeyManagement() {
      * @param {import("../types.d.js").ManagementProfile} nextProfile
      */
     applyProfile(nextProfile) {
+      const defaults = createWorkspaceRoutingDefaults(nextProfile);
       this.profile = nextProfile;
       applyUserMenuItems(Boolean(nextProfile.user.is_admin));
       this.providers = nextProfile.providers;
-      this.defaults = {
-        provider: nextProfile.tenant.defaults.provider,
-        model: nextProfile.tenant.defaults.model,
-        dictation_provider: nextProfile.tenant.defaults.dictation_provider,
-        dictation_model: nextProfile.tenant.defaults.dictation_model,
-        system_prompt: nextProfile.tenant.defaults.system_prompt,
-      };
+      this.defaults.provider = defaults.provider;
+      this.defaults.model = defaults.model;
+      this.defaults.dictation_provider = defaults.dictation_provider;
+      this.defaults.dictation_model = defaults.dictation_model;
+      this.defaults.system_prompt = defaults.system_prompt;
       for (const provider of this.providers) {
         if (this.providerInputs[provider.id] === undefined) {
           this.providerInputs[provider.id] = EMPTY_STRING;
         }
       }
       if (!this.providers.find((provider) => provider.id === this.selectedProviderID)) {
-        const defaultProvider = this.providers.find((provider) => provider.id === nextProfile.tenant.defaults.provider);
-        this.selectedProviderID = defaultProvider ? defaultProvider.id : (this.providers[0] ? this.providers[0].id : EMPTY_STRING);
+        this.selectedProviderID = defaults.provider;
       }
+      this.$nextTick(() => {
+        this.defaults = { ...defaults };
+      });
     },
 
     clearAuthenticatedState() {
@@ -653,6 +666,101 @@ function emptyDefaults() {
     dictation_model: EMPTY_STRING,
     system_prompt: EMPTY_STRING,
   };
+}
+
+/**
+ * @param {import("../types.d.js").ManagementProfile} profile
+ * @returns {import("../types.d.js").TenantDefaults}
+ */
+function createWorkspaceRoutingDefaults(profile) {
+  const tenant = profile && typeof profile.tenant === "object" ? profile.tenant : null;
+  const defaults = tenant && typeof tenant.defaults === "object" ? tenant.defaults : null;
+  const providers = Array.isArray(profile && profile.providers) ? profile.providers : null;
+  if (!defaults || !providers || !routingDefaultsAreStrings(defaults)) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  for (const provider of providers) {
+    assertProviderCatalog(provider);
+  }
+  const textProvider = profileProvider(providers, defaults.provider);
+  if (!textProvider.text_models.includes(defaults.model)) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  const dictationProvider = profileProvider(providers, defaults.dictation_provider);
+  if (!dictationProvider.supports_dictation || !dictationProvider.dictation_models.includes(defaults.dictation_model)) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  return {
+    provider: defaults.provider,
+    model: defaults.model,
+    dictation_provider: defaults.dictation_provider,
+    dictation_model: defaults.dictation_model,
+    system_prompt: defaults.system_prompt,
+  };
+}
+
+/**
+ * @param {import("../types.d.js").TenantDefaults} defaults
+ * @returns {boolean}
+ */
+function routingDefaultsAreStrings(defaults) {
+  return (
+    typeof defaults.provider === "string" &&
+    typeof defaults.model === "string" &&
+    typeof defaults.dictation_provider === "string" &&
+    typeof defaults.dictation_model === "string" &&
+    typeof defaults.system_prompt === "string"
+  );
+}
+
+/**
+ * @param {import("../types.d.js").ProviderProfile} provider
+ */
+function assertProviderCatalog(provider) {
+  if (
+    !provider ||
+    typeof provider.id !== "string" ||
+    !provider.id ||
+    !Array.isArray(provider.text_models) ||
+    !provider.text_models.includes(provider.text_default_model)
+  ) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  if (
+    provider.supports_dictation &&
+    (!Array.isArray(provider.dictation_models) ||
+      typeof provider.dictation_default_model !== "string" ||
+      !provider.dictation_models.includes(provider.dictation_default_model))
+  ) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+}
+
+/**
+ * @param {import("../types.d.js").ProviderProfile[]} providers
+ * @param {string} providerID
+ * @returns {import("../types.d.js").ProviderProfile}
+ */
+function profileProvider(providers, providerID) {
+  const provider = providers.find((candidateProvider) => candidateProvider.id === providerID);
+  if (!provider) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  return provider;
+}
+
+/**
+ * @param {unknown} requestError
+ * @returns {string}
+ */
+function profileFailureMessage(requestError) {
+  if (
+    requestError instanceof Error &&
+    (requestError.message === WORKSPACE_INTEGRITY_ERROR || requestError.message.includes(ROUTING_DEFAULTS_INVALID_ERROR))
+  ) {
+    return COPY.workspaceIntegrityError;
+  }
+  return COPY.requestFailed;
 }
 
 async function dispatchManagementReady() {

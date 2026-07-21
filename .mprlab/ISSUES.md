@@ -590,7 +590,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Keep browser coverage proving the Settings modal overlays the notice and that repeated dashboard/settings actions do not move the notice into the footer region.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
 
-- [ ] [B036] (P1) Keep routing default provider/model pairs valid.
+- [x] [B036] (P1) Keep routing default provider/model pairs valid.
   Goal:
   Ensure Settings never displays, saves, or executes a routing default whose model does not belong to its selected provider. The current workspace can render impossible combinations such as text provider `Anthropic` with model `gpt-4.1`, and dictation provider `Grok` with `No dictation model`.
   Requirements:
@@ -611,6 +611,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Add runtime coverage proving an omitted request model routes through the exact persisted provider/model pair.
   - Add Playwright coverage for initial Settings hydration, changing text and dictation providers, saving and reloading the resulting pairs, absence of the blank dictation-model option, and explicit failure for a malformed profile response.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
+  Resolution: 2026-07-20. Enforced canonical managed text and dictation pairs across storage, startup, management APIs, runtime routing, and Settings; added the versioned transactional repair boundary, explicit workspace-integrity handling, documentation, and black-box coverage. Final `make ci` passed.
 
 - [x] [B037] (P1) Declare the app-owned orchestration manifest completely.
   Goal:

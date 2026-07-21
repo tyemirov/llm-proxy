@@ -53,6 +53,9 @@
         <section class="llm-panel" x-cloak x-show="authState === states.error">
           <p class="eyebrow" x-text="copy.profileErrorEyebrow"></p>
           <h1 x-text="copy.profileErrorTitle"></h1>
+          <template x-if="authState === states.error && notice.message">
+            <p x-text="notice.message"></p>
+          </template>
         </section>
 
         <template x-if="authState === states.authenticated">
@@ -287,8 +290,7 @@
                       </label>
                       <label>
                         <span x-text="copy.dictationModel"></span>
-                        <select x-model="defaults.dictation_model" x-bind:disabled="!defaults.dictation_provider">
-                          <option value="" x-text="copy.noDictationModel"></option>
+                        <select x-model="defaults.dictation_model">
                           <template x-for="model in selectedDictationModels" x-bind:key="model">
                             <option x-bind:value="model" x-text="model"></option>
                           </template>

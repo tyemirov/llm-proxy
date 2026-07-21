@@ -582,6 +582,25 @@ zero-knowledge guarantee. Generated tenant secrets are returned once and the
 database retains only their SHA-256 digest. Revoking a generated secret
 immediately makes future public proxy requests with that secret return `403`.
 
+Managed routing defaults are two required, canonical provider/model pairs: one
+for text and one for dictation. `PUT /api/management/defaults` accepts both
+pairs atomically; a blank model, unknown provider, unsupported dictation
+provider, or model that belongs to a different provider returns `400
+managed_routing_defaults_invalid` before either pair is persisted. The profile
+endpoint returns defaults only when they remain catalog-valid. The browser does
+not repair malformed profile data; it renders an explicit workspace-integrity
+error instead.
+
+Management startup performs one versioned, transactional routing-defaults
+migration. Before its version marker exists, it repairs only a blank model or a
+model known to the other configured provider for that same endpoint by choosing
+the selected provider's current catalog default. Unknown models and unknown or
+unsupported providers fail startup with the tenant, endpoint, provider, and
+model in the error. Once the marker exists, every stored pair must already be
+canonical and catalog-valid; startup rejects invalid data rather than selecting
+a replacement at runtime. A request that omits both routing fields therefore
+uses the exact persisted text pair.
+
 The authenticated landing screen is a usage dashboard. It shows 30-day request
 and token graphs, total request and token counts, success rate, and provider and
 model breakdowns for the signed-in user's managed tenant. The prior dashboard

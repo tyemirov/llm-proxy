@@ -31,6 +31,9 @@ export const DASHBOARD_VIEWS = Object.freeze({
   ADMIN: "admin",
 });
 
+export const WORKSPACE_INTEGRITY_ERROR = "workspace_integrity_error";
+export const ROUTING_DEFAULTS_INVALID_ERROR = "managed_routing_defaults_invalid";
+
 export const USER_MENU_ITEMS = Object.freeze([
   Object.freeze({
     label: "Settings",
@@ -107,7 +110,6 @@ export const COPY = Object.freeze({
   textModel: "Text model",
   dictationProvider: "Dictation provider",
   dictationModel: "Dictation model",
-  noDictationModel: "No dictation model",
   systemPrompt: "System prompt",
   saveDefaults: "Save defaults",
   examplesEyebrow: "Usage",
@@ -141,4 +143,5 @@ export const COPY = Object.freeze({
   copyUnavailable: "Copy unavailable",
   authenticationRequired: "Authentication required",
   requestFailed: "Request failed",
+  workspaceIntegrityError: "Workspace integrity error",
 });

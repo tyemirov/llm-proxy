@@ -52,6 +52,21 @@ func managementProviderKeyRequestBody(t *testing.T, apiKey string, textModel str
 	return string(requestBody)
 }
 
+func managementDefaultsRequestBody(t *testing.T, provider string, model string, dictationProvider string, dictationModel string, systemPrompt string) string {
+	t.Helper()
+	requestBody, marshalError := json.Marshal(map[string]string{
+		"provider":           provider,
+		"model":              model,
+		"dictation_provider": dictationProvider,
+		"dictation_model":    dictationModel,
+		"system_prompt":      systemPrompt,
+	})
+	if marshalError != nil {
+		t.Fatalf("marshal defaults request: %v", marshalError)
+	}
+	return string(requestBody)
+}
+
 func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 	staticServer := httptest.NewServer(http.FileServer(http.Dir("../../site")))
 	defer staticServer.Close()
@@ -306,9 +321,378 @@ func TestManagementRejectsInvalidSessionsAndRequests(t *testing.T) {
 	}
 }
 
+func TestManagementRoutingDefaultsRequireCompleteCanonicalPairs(t *testing.T) {
+	router := newManagementRouter(t, proxy.Configuration{})
+	sessionCookie := managementSessionCookie(t, "tauth-routing-defaults-user")
+	providerKeyRequests := []struct {
+		provider string
+		apiKey   string
+		model    string
+	}{
+		{provider: proxy.ProviderNameDeepSeek, apiKey: testManagementDeepSeekKey, model: proxy.ModelNameDeepSeekV4Flash},
+		{provider: proxy.ProviderNameOpenAI, apiKey: testManagementOpenAIKey, model: proxy.ModelNameGPT41},
+	}
+	for _, providerKeyRequest := range providerKeyRequests {
+		request := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/"+providerKeyRequest.provider, managementProviderKeyRequestBody(t, providerKeyRequest.apiKey, providerKeyRequest.model, ""), sessionCookie)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("save provider=%s status=%d body=%s", providerKeyRequest.provider, response.Code, response.Body.String())
+		}
+	}
+
+	expectedDefaults := managementTenantDefaultsTestResponse{
+		Provider:          proxy.ProviderNameDeepSeek,
+		Model:             proxy.ModelNameDeepSeekV4Flash,
+		DictationProvider: proxy.ProviderNameOpenAI,
+		DictationModel:    proxy.DefaultDictationModel,
+	}
+	validRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/defaults", managementDefaultsRequestBody(t, expectedDefaults.Provider, expectedDefaults.Model, expectedDefaults.DictationProvider, expectedDefaults.DictationModel, ""), sessionCookie)
+	validResponse := httptest.NewRecorder()
+	router.ServeHTTP(validResponse, validRequest)
+	if validResponse.Code != http.StatusOK {
+		t.Fatalf("save defaults status=%d body=%s", validResponse.Code, validResponse.Body.String())
+	}
+	if validResponse.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("save defaults cache control=%q want=no-store", validResponse.Header().Get("Cache-Control"))
+	}
+	assertManagementProfileDefaults(t, router, sessionCookie, expectedDefaults)
+
+	invalidRequests := []struct {
+		name              string
+		provider          string
+		model             string
+		dictationProvider string
+		dictationModel    string
+		expectedPair      string
+	}{
+		{
+			name:              "text model belongs to another provider",
+			provider:          proxy.ProviderNameDeepSeek,
+			model:             proxy.ModelNameGPT41,
+			dictationProvider: proxy.ProviderNameOpenAI,
+			dictationModel:    proxy.DefaultDictationModel,
+			expectedPair:      "endpoint=text provider=deepseek model=gpt-4.1",
+		},
+		{
+			name:              "blank text model",
+			provider:          proxy.ProviderNameDeepSeek,
+			model:             "",
+			dictationProvider: proxy.ProviderNameOpenAI,
+			dictationModel:    proxy.DefaultDictationModel,
+			expectedPair:      "endpoint=text provider=deepseek model=",
+		},
+		{
+			name:              "unsupported dictation provider",
+			provider:          proxy.ProviderNameDeepSeek,
+			model:             proxy.ModelNameDeepSeekV4Flash,
+			dictationProvider: proxy.ProviderNameDeepSeek,
+			dictationModel:    proxy.ModelNameDeepSeekV4Flash,
+			expectedPair:      "endpoint=dictation provider=deepseek model=deepseek-v4-flash",
+		},
+		{
+			name:              "blank dictation model",
+			provider:          proxy.ProviderNameDeepSeek,
+			model:             proxy.ModelNameDeepSeekV4Flash,
+			dictationProvider: proxy.ProviderNameOpenAI,
+			dictationModel:    "",
+			expectedPair:      "endpoint=dictation provider=openai model=",
+		},
+	}
+	for _, invalidRequest := range invalidRequests {
+		t.Run(invalidRequest.name, func(subTest *testing.T) {
+			request := authenticatedJSONRequest(http.MethodPut, "/api/management/defaults", managementDefaultsRequestBody(subTest, invalidRequest.provider, invalidRequest.model, invalidRequest.dictationProvider, invalidRequest.dictationModel, ""), sessionCookie)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "managed_routing_defaults_invalid") || !strings.Contains(response.Body.String(), invalidRequest.expectedPair) {
+				subTest.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			assertManagementProfileDefaults(subTest, router, sessionCookie, expectedDefaults)
+		})
+	}
+}
+
+func TestManagementRoutingDefaultsRequireSavedProviderKeys(t *testing.T) {
+	router := newManagementRouter(t, proxy.Configuration{})
+	noKeyCookie := managementSessionCookie(t, "tauth-routing-defaults-no-key")
+	noKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/defaults", managementDefaultsRequestBody(t, proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel, ""), noKeyCookie)
+	noKeyResponse := httptest.NewRecorder()
+	router.ServeHTTP(noKeyResponse, noKeyRequest)
+	if noKeyResponse.Code != http.StatusBadRequest || !strings.Contains(noKeyResponse.Body.String(), "management_defaults_invalid") {
+		t.Fatalf("missing text provider key status=%d body=%s", noKeyResponse.Code, noKeyResponse.Body.String())
+	}
+
+	textOnlyCookie := managementSessionCookie(t, "tauth-routing-defaults-text-only")
+	saveDeepSeekKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/deepseek", managementProviderKeyRequestBody(t, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""), textOnlyCookie)
+	saveDeepSeekKeyResponse := httptest.NewRecorder()
+	router.ServeHTTP(saveDeepSeekKeyResponse, saveDeepSeekKeyRequest)
+	if saveDeepSeekKeyResponse.Code != http.StatusOK {
+		t.Fatalf("save deepseek key status=%d body=%s", saveDeepSeekKeyResponse.Code, saveDeepSeekKeyResponse.Body.String())
+	}
+	missingDictationKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/defaults", managementDefaultsRequestBody(t, proxy.ProviderNameDeepSeek, proxy.ModelNameDeepSeekV4Flash, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel, ""), textOnlyCookie)
+	missingDictationKeyResponse := httptest.NewRecorder()
+	router.ServeHTTP(missingDictationKeyResponse, missingDictationKeyRequest)
+	if missingDictationKeyResponse.Code != http.StatusBadRequest || !strings.Contains(missingDictationKeyResponse.Body.String(), "management_defaults_invalid") {
+		t.Fatalf("missing dictation provider key status=%d body=%s", missingDictationKeyResponse.Code, missingDictationKeyResponse.Body.String())
+	}
+}
+
+func TestManagementMigratesLegacyRoutingDefaultPairs(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
+	blankUserID := "tauth-routing-defaults-blank"
+	crossProviderUserID := "tauth-routing-defaults-cross-provider"
+	validPairUserID := "tauth-routing-defaults-valid-pair"
+	prepareLegacyRoutingDefaultsDatabase(t, databasePath,
+		managedRoutingDefaultsTenantFixture(blankUserID, "managed-routing-defaults-blank", proxy.ProviderNameDeepSeek, "", proxy.ProviderNameOpenAI, ""),
+		managedRoutingDefaultsTenantFixture(crossProviderUserID, "managed-routing-defaults-cross-provider", proxy.ProviderNameDeepSeek, proxy.ModelNameGPT41, proxy.ProviderNameOpenAI, "xai-stt"),
+		managedRoutingDefaultsTenantFixture(validPairUserID, "managed-routing-defaults-valid-pair", proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel),
+	)
+
+	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
+	router, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+	expectedDefaults := managementTenantDefaultsTestResponse{
+		Provider:          proxy.ProviderNameDeepSeek,
+		Model:             proxy.ModelNameDeepSeekV4Flash,
+		DictationProvider: proxy.ProviderNameOpenAI,
+		DictationModel:    proxy.DefaultDictationModel,
+	}
+	assertManagementProfileDefaults(t, router, managementSessionCookie(t, blankUserID), expectedDefaults)
+	assertManagementProfileDefaults(t, router, managementSessionCookie(t, crossProviderUserID), expectedDefaults)
+	assertManagementProfileDefaults(t, router, managementSessionCookie(t, validPairUserID), managementTenantDefaultsTestResponse{
+		Provider:          proxy.ProviderNameOpenAI,
+		Model:             proxy.ModelNameGPT41,
+		DictationProvider: proxy.ProviderNameOpenAI,
+		DictationModel:    proxy.DefaultDictationModel,
+	})
+
+	if _, reloadError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar()); reloadError != nil {
+		t.Fatalf("reload migrated defaults: %v", reloadError)
+	}
+}
+
+func TestManagementRoutingDefaultsMigrationRejectsInvalidLegacyPairs(t *testing.T) {
+	testCases := []struct {
+		name         string
+		provider     string
+		model        string
+		dictation    string
+		dictationMod string
+		expectedPair string
+	}{
+		{
+			name:         "unknown text provider",
+			provider:     "unknown-provider",
+			model:        proxy.ModelNameGPT41,
+			dictation:    proxy.ProviderNameOpenAI,
+			dictationMod: proxy.DefaultDictationModel,
+			expectedPair: "endpoint=text provider=unknown-provider model=gpt-4.1",
+		},
+		{
+			name:         "unsupported dictation provider",
+			provider:     proxy.ProviderNameDeepSeek,
+			model:        proxy.ModelNameDeepSeekV4Flash,
+			dictation:    proxy.ProviderNameDeepSeek,
+			dictationMod: proxy.ModelNameDeepSeekV4Flash,
+			expectedPair: "endpoint=dictation provider=deepseek model=deepseek-v4-flash",
+		},
+		{
+			name:         "unknown text model",
+			provider:     proxy.ProviderNameDeepSeek,
+			model:        "unknown-text-model",
+			dictation:    proxy.ProviderNameOpenAI,
+			dictationMod: proxy.DefaultDictationModel,
+			expectedPair: "endpoint=text provider=deepseek model=unknown-text-model",
+		},
+		{
+			name:         "unknown dictation provider",
+			provider:     proxy.ProviderNameOpenAI,
+			model:        proxy.ModelNameGPT41,
+			dictation:    "unknown-provider",
+			dictationMod: "unknown-dictation-model",
+			expectedPair: "endpoint=dictation provider=unknown-provider model=unknown-dictation-model",
+		},
+		{
+			name:         "unknown dictation model",
+			provider:     proxy.ProviderNameOpenAI,
+			model:        proxy.ModelNameGPT41,
+			dictation:    proxy.ProviderNameOpenAI,
+			dictationMod: "unknown-dictation-model",
+			expectedPair: "endpoint=dictation provider=openai model=unknown-dictation-model",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			databasePath := filepath.Join(subTest.TempDir(), "managed-tenants.db")
+			prepareLegacyRoutingDefaultsDatabase(subTest, databasePath, managedRoutingDefaultsTenantFixture("tauth-routing-defaults-invalid", "managed-routing-defaults-invalid", testCase.provider, testCase.model, testCase.dictation, testCase.dictationMod))
+			configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
+			if _, buildError := buildRouterWithCatalogs(subTest, configuration, zap.NewNop().Sugar()); buildError == nil || !strings.Contains(buildError.Error(), "managed_routing_defaults_migration_failed") || !strings.Contains(buildError.Error(), "tenant=managed-routing-defaults-invalid") || !strings.Contains(buildError.Error(), testCase.expectedPair) {
+				subTest.Fatalf("BuildRouter error=%v", buildError)
+			}
+		})
+	}
+}
+
+func TestManagementRoutingDefaultsMigrationIsAtomic(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
+	userID := "tauth-routing-defaults-atomic"
+	prepareLegacyRoutingDefaultsDatabase(t, databasePath, managedRoutingDefaultsTenantFixture(userID, "managed-routing-defaults-atomic", proxy.ProviderNameDeepSeek, "", proxy.ProviderNameOpenAI, ""))
+	database := openManagedFixtureDatabase(t, databasePath)
+	if triggerError := database.Exec("CREATE TRIGGER reject_routing_defaults_update BEFORE UPDATE ON managed_tenant_records BEGIN SELECT RAISE(ABORT, 'routing defaults migration rejected'); END").Error; triggerError != nil {
+		t.Fatalf("create routing defaults migration trigger: %v", triggerError)
+	}
+
+	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
+	if _, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar()); buildError == nil || !strings.Contains(buildError.Error(), "managed_routing_defaults_migration_failed") || !strings.Contains(buildError.Error(), "persist_version=1") || !strings.Contains(buildError.Error(), "routing defaults migration rejected") {
+		t.Fatalf("BuildRouter error=%v", buildError)
+	}
+	var tenantRecord managedTenantFixture
+	if queryError := database.Where(&managedTenantFixture{UserID: userID}).First(&tenantRecord).Error; queryError != nil {
+		t.Fatalf("read atomic tenant fixture: %v", queryError)
+	}
+	if tenantRecord.DefaultModel != "" || tenantRecord.DefaultDictationModel != "" {
+		t.Fatalf("atomic migration changed defaults=%+v", tenantRecord)
+	}
+	var migrationCount int64
+	if countError := database.Model(&managedRoutingDefaultsMigrationFixture{}).Count(&migrationCount).Error; countError != nil {
+		t.Fatalf("count atomic migration markers: %v", countError)
+	}
+	if migrationCount != 0 {
+		t.Fatalf("atomic migration marker count=%d want=0", migrationCount)
+	}
+}
+
+func TestManagementRoutingDefaultsStartupRejectsInvalidPersistedPairs(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
+	userID := "tauth-routing-defaults-corrupted"
+	router := newManagementRouterWithDatabasePath(t, proxy.Configuration{}, databasePath)
+	assertManagementProfileDefaults(t, router, managementSessionCookie(t, userID), managementTenantDefaultsTestResponse{
+		Provider:          proxy.ProviderNameOpenAI,
+		Model:             proxy.ModelNameGPT41,
+		DictationProvider: proxy.ProviderNameOpenAI,
+		DictationModel:    proxy.DefaultDictationModel,
+	})
+
+	database := openManagedFixtureDatabase(t, databasePath)
+	if updateError := database.Model(&managedTenantFixture{}).
+		Where(&managedTenantFixture{UserID: userID}).
+		Updates(map[string]any{"default_provider": proxy.ProviderNameDeepSeek, "default_model": proxy.ModelNameGPT41}).
+		Error; updateError != nil {
+		t.Fatalf("corrupt managed routing defaults fixture: %v", updateError)
+	}
+	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
+	if _, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar()); buildError == nil || !strings.Contains(buildError.Error(), "managed_routing_defaults_migration_failed") || !strings.Contains(buildError.Error(), "tenant=managed-") || !strings.Contains(buildError.Error(), "endpoint=text provider=deepseek model=gpt-4.1") {
+		t.Fatalf("BuildRouter error=%v", buildError)
+	}
+}
+
+func TestManagementRoutingDefaultsRejectMalformedProfilesAndRuntimeState(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
+	userID := "tauth-routing-defaults-malformed"
+	secret := "routing-defaults-malformed-secret"
+	sessionCookie := managementSessionCookie(t, userID)
+	router := newManagementRouterWithDatabasePath(t, proxy.Configuration{}, databasePath)
+	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
+		Provider:          proxy.ProviderNameOpenAI,
+		Model:             proxy.ModelNameGPT41,
+		DictationProvider: proxy.ProviderNameOpenAI,
+		DictationModel:    proxy.DefaultDictationModel,
+	})
+
+	secretDigest := sha256.Sum256([]byte(secret))
+	database := openManagedFixtureDatabase(t, databasePath)
+	if updateError := database.Model(&managedTenantFixture{}).
+		Where(&managedTenantFixture{UserID: userID}).
+		Updates(map[string]any{
+			"default_provider": "DeepSeek",
+			"default_model":    proxy.ModelNameDeepSeekV4Flash,
+			"secret_digest":    hex.EncodeToString(secretDigest[:]),
+		}).
+		Error; updateError != nil {
+		t.Fatalf("corrupt text routing defaults fixture: %v", updateError)
+	}
+	profileRequest := httptest.NewRequest(http.MethodGet, "/api/management/profile", nil)
+	profileRequest.AddCookie(sessionCookie)
+	profileResponse := httptest.NewRecorder()
+	router.ServeHTTP(profileResponse, profileRequest)
+	if profileResponse.Code != http.StatusInternalServerError || !strings.Contains(profileResponse.Body.String(), "managed_routing_defaults_invalid") || !strings.Contains(profileResponse.Body.String(), "endpoint=text provider=DeepSeek model=deepseek-v4-flash reason=not_canonical") {
+		t.Fatalf("malformed text profile status=%d body=%s", profileResponse.Code, profileResponse.Body.String())
+	}
+
+	runtimeRequest := httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(secret)+"&prompt=hello", nil)
+	runtimeResponse := httptest.NewRecorder()
+	router.ServeHTTP(runtimeResponse, runtimeRequest)
+	if runtimeResponse.Code != http.StatusForbidden {
+		t.Fatalf("malformed runtime defaults status=%d body=%s", runtimeResponse.Code, runtimeResponse.Body.String())
+	}
+
+	secretRequest := authenticatedJSONRequest(http.MethodPost, "/api/management/secrets", `{}`, sessionCookie)
+	secretResponse := httptest.NewRecorder()
+	router.ServeHTTP(secretResponse, secretRequest)
+	if secretResponse.Code != http.StatusInternalServerError || !strings.Contains(secretResponse.Body.String(), "managed_routing_defaults_invalid") {
+		t.Fatalf("malformed generated-secret profile status=%d body=%s", secretResponse.Code, secretResponse.Body.String())
+	}
+
+	if updateError := database.Model(&managedTenantFixture{}).
+		Where(&managedTenantFixture{UserID: userID}).
+		Updates(map[string]any{
+			"default_provider":           proxy.ProviderNameDeepSeek,
+			"default_dictation_provider": "OpenAI",
+		}).
+		Error; updateError != nil {
+		t.Fatalf("corrupt dictation routing defaults fixture: %v", updateError)
+	}
+	dictationProfileRequest := httptest.NewRequest(http.MethodGet, "/api/management/profile", nil)
+	dictationProfileRequest.AddCookie(sessionCookie)
+	dictationProfileResponse := httptest.NewRecorder()
+	router.ServeHTTP(dictationProfileResponse, dictationProfileRequest)
+	if dictationProfileResponse.Code != http.StatusInternalServerError || !strings.Contains(dictationProfileResponse.Body.String(), "endpoint=dictation provider=OpenAI model=gpt-4o-mini-transcribe reason=not_canonical") {
+		t.Fatalf("malformed dictation profile status=%d body=%s", dictationProfileResponse.Code, dictationProfileResponse.Body.String())
+	}
+}
+
+func TestManagementRoutingDefaultsMigrationRejectsUnknownVersion(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
+	newManagementRouterWithDatabasePath(t, proxy.Configuration{}, databasePath)
+	database := openManagedFixtureDatabase(t, databasePath)
+	if updateError := database.Model(&managedRoutingDefaultsMigrationFixture{}).
+		Where(&managedRoutingDefaultsMigrationFixture{Version: 1}).
+		Update("version", 2).
+		Error; updateError != nil {
+		t.Fatalf("set migration version fixture: %v", updateError)
+	}
+	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
+	if _, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar()); buildError == nil || !strings.Contains(buildError.Error(), "managed_routing_defaults_migration_failed") || !strings.Contains(buildError.Error(), "version=2 supported_version=1") {
+		t.Fatalf("BuildRouter error=%v", buildError)
+	}
+}
+
+func TestManagementRoutingDefaultsRequireConfiguredStaticDefault(t *testing.T) {
+	configuration := withProviderModelCatalogs(t, managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "managed-tenants.db")))
+	openAIModels := configuration.ProviderModels[proxy.ProviderNameOpenAI]
+	openAIModels.Text = proxy.ModelEndpointCatalog{
+		DefaultModel: "gpt-4o-mini",
+		Models:       []proxy.ModelConfiguration{{ID: "gpt-4o-mini", RequestProfile: "openai_responses_temperature"}},
+	}
+	configuration.ProviderModels[proxy.ProviderNameOpenAI] = openAIModels
+	if _, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar()); buildError == nil || !strings.Contains(buildError.Error(), "managed_routing_defaults_migration_failed") || !strings.Contains(buildError.Error(), "default: managed_routing_defaults_invalid") || !strings.Contains(buildError.Error(), "endpoint=text provider=openai model=gpt-4.1") {
+		t.Fatalf("BuildRouter error=%v", buildError)
+	}
+}
+
 func TestManagementDatabasePersistenceAndOpenFailures(t *testing.T) {
 	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
+	requestedModels := []string{}
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		var requestPayload struct {
+			Model string `json:"model"`
+		}
+		if decodeError := json.NewDecoder(request.Body).Decode(&requestPayload); decodeError != nil {
+			t.Fatalf("decode persisted upstream request: %v", decodeError)
+		}
+		requestedModels = append(requestedModels, requestPayload.Model)
 		responseWriter.Header().Set("Content-Type", "application/json")
 		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"persisted ok"}}]}`))
 	}))
@@ -354,6 +738,9 @@ func TestManagementDatabasePersistenceAndOpenFailures(t *testing.T) {
 	reloadedRouter.ServeHTTP(reloadedResponse, reloadedRequest)
 	if reloadedResponse.Code != http.StatusOK || strings.TrimSpace(reloadedResponse.Body.String()) != "persisted ok" {
 		t.Fatalf("reloaded status=%d body=%s", reloadedResponse.Code, reloadedResponse.Body.String())
+	}
+	if len(requestedModels) != 1 || requestedModels[0] != proxy.ModelNameDeepSeekV4Flash {
+		t.Fatalf("persisted default models=%v want=[%s]", requestedModels, proxy.ModelNameDeepSeekV4Flash)
 	}
 
 	parentFile := filepath.Join(t.TempDir(), "parent-file")
@@ -1540,6 +1927,38 @@ func requestManagementUsage(t *testing.T, router http.Handler, sessionCookie *ht
 	return usage
 }
 
+type managementTenantDefaultsTestResponse struct {
+	Provider          string `json:"provider"`
+	Model             string `json:"model"`
+	DictationProvider string `json:"dictation_provider"`
+	DictationModel    string `json:"dictation_model"`
+}
+
+func assertManagementProfileDefaults(t *testing.T, router http.Handler, sessionCookie *http.Cookie, expectedDefaults managementTenantDefaultsTestResponse) {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodGet, "/api/management/profile", nil)
+	request.AddCookie(sessionCookie)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("profile status=%d body=%s", response.Code, response.Body.String())
+	}
+	if response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("profile cache control=%q want=no-store", response.Header().Get("Cache-Control"))
+	}
+	var profile struct {
+		Tenant struct {
+			Defaults managementTenantDefaultsTestResponse `json:"defaults"`
+		} `json:"tenant"`
+	}
+	if decodeError := json.Unmarshal(response.Body.Bytes(), &profile); decodeError != nil {
+		t.Fatalf("decode profile: %v", decodeError)
+	}
+	if profile.Tenant.Defaults != expectedDefaults {
+		t.Fatalf("profile defaults=%+v want=%+v", profile.Tenant.Defaults, expectedDefaults)
+	}
+}
+
 type managedTenantFixture struct {
 	UserID                   string `gorm:"primaryKey"`
 	UserEmail                string
@@ -1593,6 +2012,52 @@ type managedUsageFixture struct {
 
 func (managedUsageFixture) TableName() string {
 	return "managed_usage_event_records"
+}
+
+type managedRoutingDefaultsMigrationFixture struct {
+	Version   int `gorm:"primaryKey"`
+	AppliedAt time.Time
+}
+
+func (managedRoutingDefaultsMigrationFixture) TableName() string {
+	return "managed_routing_defaults_migration_records"
+}
+
+func openManagedFixtureDatabase(t *testing.T, databasePath string) *gorm.DB {
+	t.Helper()
+	database, openError := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+	if openError != nil {
+		t.Fatalf("open managed fixture database: %v", openError)
+	}
+	return database
+}
+
+func prepareLegacyRoutingDefaultsDatabase(t *testing.T, databasePath string, tenantRecords ...managedTenantFixture) {
+	t.Helper()
+	newManagementRouterWithDatabasePath(t, proxy.Configuration{}, databasePath)
+	database := openManagedFixtureDatabase(t, databasePath)
+	if deleteError := database.Where("1 = 1").Delete(&managedRoutingDefaultsMigrationFixture{}).Error; deleteError != nil {
+		t.Fatalf("remove routing-defaults migration fixture: %v", deleteError)
+	}
+	for _, tenantRecord := range tenantRecords {
+		if createError := database.Create(&tenantRecord).Error; createError != nil {
+			t.Fatalf("create routing-defaults tenant fixture: %v", createError)
+		}
+	}
+}
+
+func managedRoutingDefaultsTenantFixture(userID string, tenantID string, provider string, model string, dictationProvider string, dictationModel string) managedTenantFixture {
+	timestamp := time.Now().UTC().Add(-time.Hour)
+	return managedTenantFixture{
+		UserID:                   userID,
+		TenantID:                 tenantID,
+		DefaultProvider:          provider,
+		DefaultModel:             model,
+		DefaultDictationProvider: dictationProvider,
+		DefaultDictationModel:    dictationModel,
+		CreatedAt:                timestamp,
+		UpdatedAt:                timestamp,
+	}
 }
 
 func seedLegacyManagedTenant(t *testing.T, databasePath string, tenantID string, rawSecret string, providerAPIKey string) {

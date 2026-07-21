@@ -290,14 +290,14 @@ func TestManagedTenantStoreDatabaseErrorEdges(t *testing.T) {
 	updateDefaultsErrorDatabase.records[principal.userID] = internalManagedTenantRecord(principal.userID, "", fixedTime)
 	updateDefaultsErrorDatabase.saveTenantErrors = []error{nil, errInternalTestDatabase}
 	updateDefaultsErrorStore := newManagedTenantStoreWithDatabase(updateDefaultsErrorDatabase)
-	if _, updateError := updateDefaultsErrorStore.updateDefaults(principal, DefaultTenantDefaults()); !errors.Is(updateError, errManagedTenantStorePersist) {
+	if _, updateError := updateDefaultsErrorStore.updateDefaults(principal, internalManagedRoutingDefaults(t)); !errors.Is(updateError, errManagedTenantStorePersist) {
 		t.Fatalf("defaults update error=%v want %v", updateError, errManagedTenantStorePersist)
 	}
 
 	updateDefaultsRecordErrorDatabase := newFakeManagedTenantDatabase()
 	updateDefaultsRecordErrorDatabase.userQueryErrors = []error{errInternalTestDatabase}
 	updateDefaultsRecordErrorStore := newManagedTenantStoreWithDatabase(updateDefaultsRecordErrorDatabase)
-	if _, updateError := updateDefaultsRecordErrorStore.updateDefaults(principal, DefaultTenantDefaults()); !errors.Is(updateError, errManagedTenantStorePersist) {
+	if _, updateError := updateDefaultsRecordErrorStore.updateDefaults(principal, internalManagedRoutingDefaults(t)); !errors.Is(updateError, errManagedTenantStorePersist) {
 		t.Fatalf("defaults update record error=%v want %v", updateError, errManagedTenantStorePersist)
 	}
 
@@ -1153,6 +1153,45 @@ func TestBuildRouterReturnsProviderTextSettingsMigrationError(t *testing.T) {
 	}
 }
 
+func TestBuildRouterReturnsRoutingDefaultsMigrationErrors(t *testing.T) {
+	testCases := []struct {
+		name              string
+		configureDatabase func(*fakeManagedTenantDatabase)
+	}{
+		{
+			name: "migration version query",
+			configureDatabase: func(database *fakeManagedTenantDatabase) {
+				database.routingDefaultsMigrationErr = errInternalTestDatabase
+			},
+		},
+		{
+			name: "legacy tenant query",
+			configureDatabase: func(database *fakeManagedTenantDatabase) {
+				database.userQueryErrors = []error{nil, errInternalTestDatabase}
+			},
+		},
+		{
+			name: "versioned tenant query",
+			configureDatabase: func(database *fakeManagedTenantDatabase) {
+				database.routingDefaultsMigrationRecord = &managedRoutingDefaultsMigrationRecord{Version: managedRoutingDefaultsMigrationVersion}
+				database.userQueryErrors = []error{nil, errInternalTestDatabase}
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			failingDatabase := newFakeManagedTenantDatabase()
+			testCase.configureDatabase(failingDatabase)
+			_, buildError := buildRouter(internalManagementRouterConfiguration(), zap.NewNop().Sugar(), func(ManagementConfiguration) (*managedTenantStore, error) {
+				return newManagedTenantStoreWithDatabase(failingDatabase), nil
+			})
+			if buildError == nil || !strings.Contains(buildError.Error(), errManagedRoutingDefaultsMigration.Error()) || !strings.Contains(buildError.Error(), errInternalTestDatabase.Error()) {
+				subTest.Fatalf("BuildRouter error=%v", buildError)
+			}
+		})
+	}
+}
+
 func TestTextRequestDefaultsForProviderInternalEdges(t *testing.T) {
 	providers := newProviderRegistry(Configuration{
 		OpenAIKey:      "sk-openai",
@@ -1340,20 +1379,23 @@ func newGORMManagedLegacyClaimFixture(t *testing.T, withProvider bool, withUsage
 }
 
 type fakeManagedTenantDatabase struct {
-	records                     map[string]managedTenantRecord
-	usageEvents                 []managedUsageEventRecord
-	userQueryErrors             []error
-	secretQueryErrors           []error
-	secretQueryRecord           *managedTenantRecord
-	createError                 error
-	saveTenantError             error
-	saveTenantErrors            []error
-	saveProviderKeyError        error
-	deleteProviderKeyError      error
-	createUsageEventError       error
-	usageEventsQueryError       error
-	usageEventsQueryPeriodStart time.Time
-	claimLegacyTenantError      error
+	records                        map[string]managedTenantRecord
+	usageEvents                    []managedUsageEventRecord
+	userQueryErrors                []error
+	secretQueryErrors              []error
+	secretQueryRecord              *managedTenantRecord
+	createError                    error
+	saveTenantError                error
+	saveTenantErrors               []error
+	saveProviderKeyError           error
+	deleteProviderKeyError         error
+	createUsageEventError          error
+	usageEventsQueryError          error
+	usageEventsQueryPeriodStart    time.Time
+	routingDefaultsMigrationRecord *managedRoutingDefaultsMigrationRecord
+	routingDefaultsMigrationErr    error
+	migrateRoutingDefaultsErr      error
+	claimLegacyTenantError         error
 }
 
 func (database *fakeManagedTenantDatabase) tenantByUserID(userID string) (managedTenantRecord, error) {
@@ -1513,6 +1555,27 @@ func (database *fakeManagedTenantDatabase) usageEventsSince(periodStart time.Tim
 		}
 	}
 	return records, nil
+}
+
+func (database *fakeManagedTenantDatabase) routingDefaultsMigration() (managedRoutingDefaultsMigrationRecord, error) {
+	if database.routingDefaultsMigrationErr != nil {
+		return managedRoutingDefaultsMigrationRecord{}, database.routingDefaultsMigrationErr
+	}
+	if database.routingDefaultsMigrationRecord == nil {
+		return managedRoutingDefaultsMigrationRecord{}, gorm.ErrRecordNotFound
+	}
+	return *database.routingDefaultsMigrationRecord, nil
+}
+
+func (database *fakeManagedTenantDatabase) migrateRoutingDefaults(records []managedTenantRecord, migration managedRoutingDefaultsMigrationRecord) error {
+	if database.migrateRoutingDefaultsErr != nil {
+		return database.migrateRoutingDefaultsErr
+	}
+	for _, record := range records {
+		database.records[record.UserID] = cloneManagedTenantRecord(record)
+	}
+	database.routingDefaultsMigrationRecord = &migration
+	return nil
 }
 
 func (database *fakeManagedTenantDatabase) claimLegacyTenant(claim managedLegacyTenantClaim) error {
@@ -1734,8 +1797,17 @@ func internalManagedTenantRecord(userID string, secretDigest string, now time.Ti
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
-	record.applyDefaults(DefaultTenantDefaults())
+	record.applyRoutingDefaults(defaultManagedRoutingDefaults())
 	return record
+}
+
+func internalManagedRoutingDefaults(t *testing.T) managedRoutingDefaults {
+	t.Helper()
+	defaults, defaultsError := newManagedRoutingDefaults(internalManagementProviderRegistry(), DefaultTenantDefaults())
+	if defaultsError != nil {
+		t.Fatalf("new managed routing defaults: %v", defaultsError)
+	}
+	return defaults
 }
 
 func internalManagedProviderKeyRecord(t *testing.T, userID string, providerIdentifier string, apiKey string, now time.Time) managedProviderAPIKeyRecord {

@@ -22,23 +22,24 @@ import (
 )
 
 const (
-	generatedTenantSecretBytes         = 32
-	generatedTenantSecretAttempts      = 16
-	generatedTenantSecretPrefix        = "llmp_"
-	legacyStaticTenantUserIDPrefix     = "static-config:"
-	managedTenantIdentifierPrefix      = "managed-"
-	managedTenantIdentifierHashBytes   = 12
-	managedTenantUserEmailColumn       = "user_email"
-	managedTenantUserIDColumn          = "user_id"
-	managedTenantUserDisplayNameColumn = "user_display_name"
-	managedTenantUserAvatarURLColumn   = "user_avatar_url"
-	managedRecordUpdatedAtColumn       = "updated_at"
-	managedUsageCreatedAtColumn        = "created_at"
-	obsoleteStaticMigrationTable       = "managed_static_config_migration_records"
-	managedProviderKeyCiphertextPrefix = "llmpk1:"
-	maskedSecretPrefixLength           = 3
-	maskedSecretSuffixLength           = 4
-	managedUsageSummaryDays            = 30
+	generatedTenantSecretBytes          = 32
+	generatedTenantSecretAttempts       = 16
+	generatedTenantSecretPrefix         = "llmp_"
+	legacyStaticTenantUserIDPrefix      = "static-config:"
+	managedTenantIdentifierPrefix       = "managed-"
+	managedTenantIdentifierHashBytes    = 12
+	managedTenantUserEmailColumn        = "user_email"
+	managedTenantUserIDColumn           = "user_id"
+	managedTenantUserDisplayNameColumn  = "user_display_name"
+	managedTenantUserAvatarURLColumn    = "user_avatar_url"
+	managedRecordUpdatedAtColumn        = "updated_at"
+	managedUsageCreatedAtColumn         = "created_at"
+	managedRoutingDefaultsVersionColumn = "version"
+	obsoleteStaticMigrationTable        = "managed_static_config_migration_records"
+	managedProviderKeyCiphertextPrefix  = "llmpk1:"
+	maskedSecretPrefixLength            = 3
+	maskedSecretSuffixLength            = 4
+	managedUsageSummaryDays             = 30
 )
 
 var (
@@ -58,6 +59,7 @@ type managedTenantStore struct {
 	mutex             sync.RWMutex
 	database          managedTenantDatabase
 	providerKeyCipher managedProviderKeyCipher
+	routingDefaults   *providerRegistry
 	legacyMigration   managedLegacyTokenMigration
 	randomReader      io.Reader
 	now               func() time.Time
@@ -76,6 +78,8 @@ type managedTenantDatabase interface {
 	createUsageEvent(record managedUsageEventRecord) error
 	usageEventsByUserIDSince(userID string, periodStart time.Time) ([]managedUsageEventRecord, error)
 	usageEventsSince(periodStart time.Time) ([]managedUsageEventRecord, error)
+	routingDefaultsMigration() (managedRoutingDefaultsMigrationRecord, error)
+	migrateRoutingDefaults(records []managedTenantRecord, migration managedRoutingDefaultsMigrationRecord) error
 	claimLegacyTenant(claim managedLegacyTenantClaim) error
 }
 
@@ -125,6 +129,11 @@ type managedUsageEventRecord struct {
 	ResponseTokens      int
 	TotalTokens         int
 	CreatedAt           time.Time `gorm:"index:idx_managed_usage_user_created;index:idx_managed_usage_created_at"`
+}
+
+type managedRoutingDefaultsMigrationRecord struct {
+	Version   int `gorm:"primaryKey"`
+	AppliedAt time.Time
 }
 
 type managedTenantSnapshot struct {
@@ -300,7 +309,7 @@ func newGORMManagedTenantDatabase(configuration ManagementConfiguration) (*gormM
 	if openError != nil {
 		return nil, fmt.Errorf("%w: %v", errManagedTenantStoreOpen, openError)
 	}
-	if migrateError := database.AutoMigrate(&managedTenantRecord{}, &managedProviderAPIKeyRecord{}, &managedUsageEventRecord{}); migrateError != nil {
+	if migrateError := database.AutoMigrate(&managedTenantRecord{}, &managedProviderAPIKeyRecord{}, &managedUsageEventRecord{}, &managedRoutingDefaultsMigrationRecord{}); migrateError != nil {
 		return nil, fmt.Errorf("%w: migrate: %v", errManagedTenantStoreOpen, migrateError)
 	}
 	if cleanupError := removeObsoleteStaticMigrationTable(database); cleanupError != nil {
@@ -419,6 +428,26 @@ func (database *gormManagedTenantDatabase) usageEventsSince(periodStart time.Tim
 		Find(&records).
 		Error
 	return records, queryError
+}
+
+func (database *gormManagedTenantDatabase) routingDefaultsMigration() (managedRoutingDefaultsMigrationRecord, error) {
+	var record managedRoutingDefaultsMigrationRecord
+	queryError := database.database.
+		Order(clause.OrderBy{Columns: []clause.OrderByColumn{{Column: clause.Column{Name: managedRoutingDefaultsVersionColumn}, Desc: true}}}).
+		First(&record).
+		Error
+	return record, queryError
+}
+
+func (database *gormManagedTenantDatabase) migrateRoutingDefaults(records []managedTenantRecord, migration managedRoutingDefaultsMigrationRecord) error {
+	return database.database.Transaction(func(transaction *gorm.DB) error {
+		for _, record := range records {
+			if persistError := transaction.Omit("ProviderAPIKeys").Save(&record).Error; persistError != nil {
+				return persistError
+			}
+		}
+		return transaction.Create(&migration).Error
+	})
 }
 
 func (database *gormManagedTenantDatabase) claimLegacyTenant(claim managedLegacyTenantClaim) error {
@@ -667,6 +696,68 @@ func providerDefaultTextModels(providers *providerRegistry) map[providerID]strin
 	return defaultModels
 }
 
+func (store *managedTenantStore) migrateRoutingDefaultPairs(providers *providerRegistry) error {
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+	if _, defaultError := newManagedRoutingDefaults(providers, DefaultTenantDefaults()); defaultError != nil {
+		return fmt.Errorf("%w: default: %w", errManagedRoutingDefaultsMigration, defaultError)
+	}
+	migration, migrationError := store.database.routingDefaultsMigration()
+	if migrationError == nil {
+		if migration.Version != managedRoutingDefaultsMigrationVersion {
+			return fmt.Errorf("%w: version=%d supported_version=%d", errManagedRoutingDefaultsMigration, migration.Version, managedRoutingDefaultsMigrationVersion)
+		}
+		if validationError := store.validatePersistedRoutingDefaultsLocked(providers); validationError != nil {
+			return validationError
+		}
+		store.routingDefaults = providers
+		return nil
+	}
+	if !errors.Is(migrationError, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("%w: read_version: %v", errManagedRoutingDefaultsMigration, migrationError)
+	}
+	tenantRecords, tenantRecordsError := store.database.tenants()
+	if tenantRecordsError != nil {
+		return fmt.Errorf("%w: tenant_records: %v", errManagedRoutingDefaultsMigration, tenantRecordsError)
+	}
+	timestamp := store.now()
+	migratedRecords := make([]managedTenantRecord, 0, len(tenantRecords))
+	for _, record := range tenantRecords {
+		migratedDefaults, defaultsError := migrateManagedRoutingDefaults(providers, record.defaults())
+		if defaultsError != nil {
+			return fmt.Errorf("%w: %w", errManagedRoutingDefaultsMigration, managedRoutingDefaultsTenantError(record.TenantID, defaultsError))
+		}
+		record.applyRoutingDefaults(migratedDefaults)
+		record.UpdatedAt = timestamp
+		migratedRecords = append(migratedRecords, record)
+	}
+	if persistError := store.database.migrateRoutingDefaults(migratedRecords, managedRoutingDefaultsMigrationRecord{
+		Version:   managedRoutingDefaultsMigrationVersion,
+		AppliedAt: timestamp,
+	}); persistError != nil {
+		return fmt.Errorf("%w: persist_version=%d: %v", errManagedRoutingDefaultsMigration, managedRoutingDefaultsMigrationVersion, persistError)
+	}
+	store.routingDefaults = providers
+	return nil
+}
+
+func (store *managedTenantStore) validatePersistedRoutingDefaultsLocked(providers *providerRegistry) error {
+	tenantRecords, tenantRecordsError := store.database.tenants()
+	if tenantRecordsError != nil {
+		return fmt.Errorf("%w: tenant_records: %v", errManagedRoutingDefaultsMigration, tenantRecordsError)
+	}
+	for _, record := range tenantRecords {
+		if _, defaultsError := validatePersistedManagedRoutingDefaults(providers, record.defaults()); defaultsError != nil {
+			return fmt.Errorf("%w: %w", errManagedRoutingDefaultsMigration, managedRoutingDefaultsTenantError(record.TenantID, defaultsError))
+		}
+	}
+	return nil
+}
+
+func managedRoutingDefaultsTenantError(tenantIdentifier string, defaultsError error) error {
+	return fmt.Errorf("tenant=%s: %w", tenantIdentifier, defaultsError)
+}
+
 func (store *managedTenantStore) validateLegacyTokenMigrationState() error {
 	store.mutex.RLock()
 	defer store.mutex.RUnlock()
@@ -816,14 +907,14 @@ func (store *managedTenantStore) removeProviderKey(principal managementPrincipal
 	return store.snapshotByUserIDLocked(record.UserID)
 }
 
-func (store *managedTenantStore) updateDefaults(principal managementPrincipal, defaults TenantDefaults) (managedTenantSnapshot, error) {
+func (store *managedTenantStore) updateDefaults(principal managementPrincipal, defaults managedRoutingDefaults) (managedTenantSnapshot, error) {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 	record, recordError := store.ensureRecordLocked(principal)
 	if recordError != nil {
 		return managedTenantSnapshot{}, recordError
 	}
-	record.applyDefaults(defaults)
+	record.applyRoutingDefaults(defaults)
 	record.UpdatedAt = store.now()
 	if persistError := store.database.saveTenant(record); persistError != nil {
 		return managedTenantSnapshot{}, fmt.Errorf("%w: user_id=%s: %v", errManagedTenantStorePersist, record.UserID, persistError)
@@ -958,7 +1049,7 @@ func newManagedTenantRecord(principal managementPrincipal, createdAt time.Time) 
 		CreatedAt:       createdAt,
 		UpdatedAt:       createdAt,
 	}
-	record.applyDefaults(DefaultTenantDefaults())
+	record.applyRoutingDefaults(defaultManagedRoutingDefaults())
 	return record
 }
 
@@ -966,13 +1057,13 @@ func legacyStaticTenantUserID(identifier tenantID) string {
 	return legacyStaticTenantUserIDPrefix + identifier.string()
 }
 
-func (record *managedTenantRecord) applyDefaults(defaults TenantDefaults) {
-	normalizedDefaults := newTenantDefaults(defaults)
-	record.DefaultProvider = normalizedDefaults.provider
-	record.DefaultModel = normalizedDefaults.model
-	record.DefaultDictationProvider = normalizedDefaults.dictationProvider
-	record.DefaultDictationModel = normalizedDefaults.dictationModel
-	record.DefaultSystemPrompt = normalizedDefaults.systemPrompt
+func (record *managedTenantRecord) applyRoutingDefaults(defaults managedRoutingDefaults) {
+	validatedDefaults := defaults.value()
+	record.DefaultProvider = validatedDefaults.Provider
+	record.DefaultModel = validatedDefaults.Model
+	record.DefaultDictationProvider = validatedDefaults.DictationProvider
+	record.DefaultDictationModel = validatedDefaults.DictationModel
+	record.DefaultSystemPrompt = validatedDefaults.SystemPrompt
 }
 
 func (store *managedTenantStore) snapshot(record managedTenantRecord) (managedTenantSnapshot, error) {
@@ -1026,11 +1117,19 @@ func (store *managedTenantStore) tenant(record managedTenantRecord, secretDigest
 		return tenant{}, providerKeyError
 	}
 	providerAPIKeys := managedProviderAPIKeys(providerSettings)
+	defaults := record.defaults()
+	if store.routingDefaults != nil {
+		validatedDefaults, defaultsError := validatePersistedManagedRoutingDefaults(store.routingDefaults, defaults)
+		if defaultsError != nil {
+			return tenant{}, managedRoutingDefaultsTenantError(record.TenantID, defaultsError)
+		}
+		defaults = validatedDefaults.value()
+	}
 	return tenant{
 		identifier:       tenantID(record.TenantID),
 		userID:           record.UserID,
 		secretDigest:     secretDigest,
-		defaults:         newTenantDefaults(record.defaults()),
+		defaults:         newTenantDefaults(defaults),
 		managed:          true,
 		providerAPIKeys:  providerAPIKeys,
 		providerSettings: providerSettings,
