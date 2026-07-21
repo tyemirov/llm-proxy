@@ -1245,7 +1245,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Resolved:
   Raised `go.mod`, the GitHub Actions contract, and the Docker release builder to Go 1.25.12; the release artifact helper retains its `--pull` base-image refresh behavior. A `GOTOOLCHAIN=go1.25.12 make build` binary reports `go1.25.12`, and its reachability scan no longer reports GO-2026-5856 or GO-2026-4970. The remaining QPACK, pgx, and mapstructure findings are the separately queued M015 through M017 work. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
-- [ ] [M015] (P0) {M014} Remove the reachable HTTP/3 QPACK vulnerability from the Go graph.
+- [x] [M015] (P0) {M014} Remove the reachable HTTP/3 QPACK vulnerability from the Go graph.
   Goal:
   Upgrade the dependency owner that supplies `github.com/quic-go/quic-go` so the production graph is at least v0.59.1 and no longer carries GO-2026-5676.
   Requirements:
@@ -1257,6 +1257,8 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Regression coverage for the existing proxy transport surface if the owner update changes it.
   Validation:
   - Run `go mod verify`, `go run golang.org/x/vuln/cmd/govulncheck@latest ./...`, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved:
+  Raised the canonical selected `github.com/quic-go/quic-go` graph entry to v0.59.1 while retaining its supported `github.com/quic-go/qpack` v0.6.0 companion and the existing Gin/TAuth transport APIs. `go mod verify` passed, the Go 1.25.12 reachability scan no longer reports GO-2026-5676, and its only remaining findings are separately queued in M016 and M017. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
 - [ ] [M016] (P0) {M015} Upgrade the reachable PostgreSQL driver dependency past SQL-injection fixes.
   Goal:
