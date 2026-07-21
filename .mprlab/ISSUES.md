@@ -1275,7 +1275,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Resolved:
   Raised the canonical selected `github.com/jackc/pgx/v5` dependency to v5.9.2 while retaining the supported GORM PostgreSQL driver and its existing SQLite/PostgreSQL management-store model APIs, transaction, and locking paths. `go mod verify` passed, the Go 1.25.12 reachability scan no longer reports GO-2026-5004, and its only remaining reachable finding is separately queued in M017. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
-- [ ] [M017] (P1) {M016} Upgrade mapstructure past sensitive-error leakage.
+- [x] [M017] (P1) {M016} Upgrade mapstructure past sensitive-error leakage.
   Goal:
   Move `github.com/go-viper/mapstructure/v2` to at least v2.4.0 so configuration decoding no longer carries GO-2025-3900.
   Requirements:
@@ -1287,6 +1287,8 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Config-loading coverage proving the current strict failure contract remains intact.
   Validation:
   - Run `go mod verify`, `go run golang.org/x/vuln/cmd/govulncheck@latest ./...`, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved:
+  Raised Viper to its supported v1.21.0 release, which canonically selects `github.com/go-viper/mapstructure/v2` v2.4.0 without an independent decoder override. The existing strict `UnmarshalExact` parsing and missing-placeholder failure coverage remains unchanged. `go mod verify` passed, the Go 1.25.12 reachability scan reports no vulnerabilities, and the separately queued M018 retains the non-reachable module-advisory review. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
 - [ ] [M018] (P2) {M017} Refresh the remaining indirectly reported Go security graph.
   Goal:
