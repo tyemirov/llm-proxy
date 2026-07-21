@@ -10,8 +10,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tyemirov/llm-proxy/internal/constants"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // chatHandlerScenario defines a single test scenario for model validation.
@@ -19,6 +22,51 @@ type chatHandlerScenario struct {
 	scenarioName       string
 	modelIdentifier    string
 	expectedStatusCode int
+}
+
+func TestRequestLogsExcludeQueryContent(testingInstance *testing.T) {
+	const (
+		promptQueryValue              = "prompt-log-sentinel"
+		systemPromptQueryValue        = "system-prompt-log-sentinel"
+		tenantSecretQueryValue        = "tenant-secret-log-sentinel"
+		rejectedProviderKeyQueryValue = "provider-key-log-sentinel"
+	)
+
+	observedCore, observedLogs := observer.New(zapcore.DebugLevel)
+	loggerInstance := zap.New(observedCore)
+	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
+	router, buildError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
+		Tenants:               proxy.SingleTenantConfigurations("logging", tenantSecretQueryValue),
+		OpenAIKey:             TestAPIKey,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+	}, loggerInstance.Sugar())
+	if buildError != nil {
+		testingInstance.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	requestPath := fmt.Sprintf("/?prompt=%s&system_prompt=%s&key=%s&api_key=%s", promptQueryValue, systemPromptQueryValue, tenantSecretQueryValue, rejectedProviderKeyQueryValue)
+	request := httptest.NewRequest(http.MethodGet, requestPath, nil)
+	responseRecorder := httptest.NewRecorder()
+
+	router.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusBadRequest {
+		testingInstance.Fatalf("status=%d want=%d", responseRecorder.Code, http.StatusBadRequest)
+	}
+	if observedLogs.FilterField(zap.String(constants.LogFieldPath, "/")).Len() != 1 {
+		testingInstance.Fatal("request log does not contain the query-free root path")
+	}
+	for _, loggedEntry := range observedLogs.All() {
+		loggedContent := loggedEntry.Message + fmt.Sprint(loggedEntry.ContextMap())
+		for _, sensitiveQueryValue := range []string{promptQueryValue, systemPromptQueryValue, tenantSecretQueryValue, rejectedProviderKeyQueryValue} {
+			if strings.Contains(loggedContent, sensitiveQueryValue) {
+				testingInstance.Fatal("request logs contain query content")
+			}
+		}
+	}
 }
 
 // TestChatHandlerValidatesModel verifies model validation and a successful request flow.

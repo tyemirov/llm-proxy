@@ -126,6 +126,8 @@ export const COPY = Object.freeze({
   providerSelector: "Provider",
   providerMissing: "No key saved",
   providerKeySuffix: " API key",
+  showProviderKey: "Show key",
+  hideProviderKey: "Hide key",
   providerTextModel: "Text model",
   providerSystemPrompt: "System prompt",
   removeProviderKey: "Remove provider key and settings",

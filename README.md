@@ -566,9 +566,12 @@ never mutated for user signup, provider enablement, or usage tracking, and
 database access must stay on GORM model APIs without raw SQL. Generated secrets
 continue to authenticate the public proxy endpoints with the same
 `key=<tenant secret>` query parameter. Provider API keys are accepted only
-through authenticated management endpoints, are encrypted at rest with AES-GCM
-before database persistence, and after save the UI/API returns only masked key
-status. Provider-key records also store the selected text model and
+through authenticated management endpoints and are encrypted at rest with AES-GCM
+before database persistence. Normal save, profile, and administrator responses
+return only masked key status. The sole raw-key response is the explicit
+owner-authenticated `POST /api/management/provider-keys/:provider/reveal`
+management action, which requires the configured management origin and returns
+`Cache-Control: no-store`. Provider-key records also store the selected text model and
 provider-specific system prompt for that provider. Managed text requests that
 select a provider and omit `model` use the saved provider text model; when
 request-level system instructions are omitted, the provider-specific system
@@ -576,8 +579,8 @@ prompt is injected before routing upstream. Existing plaintext provider-key
 rows are encrypted and cleared during management startup. Existing provider-key
 rows without a text model are normalized to the current configured provider
 default model at startup. The backend decrypts provider keys only inside the runtime
-path that routes requests to upstream providers, so this protects database
-dumps, backups, and direct storage access; it is not a user-only decryption or
+path that routes requests to upstream providers and the explicit owner reveal action,
+so this protects database dumps, backups, and direct storage access; it is not a user-only decryption or
 zero-knowledge guarantee. Generated tenant secrets are returned once and the
 database retains only their SHA-256 digest. Revoking a generated secret
 immediately makes future public proxy requests with that secret return `403`.
@@ -1507,6 +1510,7 @@ positive and lets the upstream provider enforce any provider-side model limit.
 
 * All requests must include a configured tenant secret via `key=...`.
 * Client requests must not include upstream provider API keys; public proxy endpoints reject provider-key-like query, JSON, and multipart form fields.
+* Request logs record only the query-free path plus method, status, latency, client IP, and tenant metadata; they do not record query strings, request bodies, cookies, or authorization headers.
 * Self-service provider API keys are accepted only through TAuth-protected management endpoints and are not returned raw after save.
 * Do not expose this service to the public internet without appropriate network controls.
 

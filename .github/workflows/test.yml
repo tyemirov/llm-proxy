@@ -28,7 +28,7 @@ on:
       - 'Dockerfile'
 
 env:
-  GO_VERSION: '1.25.4'
+  GO_VERSION: '1.25.12'
   NODE_VERSION: '22'
   PYTHON_VERSION: '3.11'
 

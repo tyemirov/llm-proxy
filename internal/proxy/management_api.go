@@ -17,6 +17,7 @@ const (
 	managementAPIPath                   = "/api/management"
 	managementProfilePath               = "/profile"
 	managementProviderKeysPath          = "/provider-keys/:provider"
+	managementProviderKeyRevealPath     = managementProviderKeysPath + "/reveal"
 	managementDefaultsPath              = "/defaults"
 	managementSecretsPath               = "/secrets"
 	managementUsagePath                 = "/usage"
@@ -102,6 +103,10 @@ type managementProxyResponse struct {
 type managementSecretResponse struct {
 	Secret  string                    `json:"secret"`
 	Profile managementProfileResponse `json:"profile"`
+}
+
+type managementProviderKeyRevealResponse struct {
+	APIKey string `json:"api_key"`
 }
 
 type managementUsageSummaryResponse struct {
@@ -203,6 +208,7 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.GET(managementAdminUsersPath, service.adminUsersHandler())
 	managementGroup.PUT(managementProviderKeysPath, service.saveProviderKeyHandler())
 	managementGroup.DELETE(managementProviderKeysPath, service.removeProviderKeyHandler())
+	managementGroup.POST(managementProviderKeyRevealPath, service.managementCredentialedActionMiddleware(), service.revealProviderKeyHandler())
 	managementGroup.PUT(managementDefaultsPath, service.updateDefaultsHandler())
 	managementGroup.POST(managementSecretsPath, service.generateSecretHandler())
 	managementGroup.DELETE(managementSecretsPath, service.revokeSecretHandler())
@@ -257,6 +263,16 @@ func (service *managementService) managementMutationMiddleware() gin.HandlerFunc
 		}
 		if !managementRequestJSON(ginContext.GetHeader(headerContentType)) {
 			ginContext.AbortWithStatus(http.StatusUnsupportedMediaType)
+			return
+		}
+		ginContext.Next()
+	}
+}
+
+func (service *managementService) managementCredentialedActionMiddleware() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		if strings.TrimSpace(ginContext.GetHeader(headerOrigin)) != service.configuration.PublicOrigin {
+			ginContext.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 		ginContext.Next()
@@ -365,6 +381,27 @@ func (service *managementService) removeProviderKeyHandler() gin.HandlerFunc {
 			return
 		}
 		service.writeProfileResponse(ginContext, principal, snapshot)
+	}
+}
+
+func (service *managementService) revealProviderKeyHandler() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		ginContext.Header(headerCacheControl, cacheControlNoStore)
+		providerIdentifier, providerError := service.providers.canonicalProviderID(ginContext.Param("provider"))
+		if providerError != nil {
+			ginContext.String(http.StatusBadRequest, providerError.Error())
+			return
+		}
+		apiKey, revealError := service.store.revealProviderKey(managementPrincipalFromContext(ginContext), providerIdentifier)
+		if revealError != nil {
+			if errors.Is(revealError, errManagedProviderKeyNotFound) {
+				ginContext.AbortWithStatus(http.StatusNotFound)
+				return
+			}
+			ginContext.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+		ginContext.JSON(http.StatusOK, managementProviderKeyRevealResponse{APIKey: apiKey})
 	}
 }
 
