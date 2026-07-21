@@ -174,12 +174,48 @@ const (
 	requestProfileOpenAIResponsesReasoningTools   modelRequestProfile = "openai_responses_reasoning_tools"
 )
 
+type reasoningEffortAdapter string
+
+const (
+	reasoningEffortAdapterNone            reasoningEffortAdapter = ""
+	reasoningEffortAdapterOpenAIResponses reasoningEffortAdapter = "openai_responses"
+)
+
+var canonicalReasoningEfforts = []string{
+	"minimal",
+	"low",
+	"medium",
+	"high",
+}
+
+type reasoningEffortCapability struct {
+	adapter reasoningEffortAdapter
+}
+
+func knownReasoningEffortAdapter(adapter reasoningEffortAdapter) bool {
+	return adapter == reasoningEffortAdapterOpenAIResponses
+}
+
+func canonicalReasoningEffortOptions() []string {
+	return append([]string(nil), canonicalReasoningEfforts...)
+}
+
+func isCanonicalReasoningEffort(rawEffort string) bool {
+	for _, effort := range canonicalReasoningEfforts {
+		if rawEffort == effort {
+			return true
+		}
+	}
+	return false
+}
+
 type textModelDefinition struct {
 	identifier          modelID
 	requestProfile      modelRequestProfile
 	supportsWebSearch   bool
 	outputTokenLimit    int
 	hasOutputTokenLimit bool
+	reasoningEffort     *reasoningEffortCapability
 }
 
 func (definition textModelDefinition) string() string {
@@ -197,10 +233,18 @@ type providerDefinition struct {
 	defaultTranscriptionModel modelID
 	transcriptionModelField   string
 	textModels                map[string]textModelDefinition
+	textReasoningEffort       *reasoningEffortCapability
 	transcriptionModels       map[string]modelID
 	supportsDictation         bool
 	textTransport             providerTextTransport
 	chatTokenLimitParameter   chatCompletionTokenLimitParameter
+}
+
+func (definition providerDefinition) effectiveReasoningEffort(model textModelDefinition) *reasoningEffortCapability {
+	if definition.textReasoningEffort != nil {
+		return definition.textReasoningEffort
+	}
+	return model.reasoningEffort
 }
 
 func (definition providerDefinition) credentialFor(endpoint endpointKind) string {

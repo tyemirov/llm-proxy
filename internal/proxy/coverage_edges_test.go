@@ -69,13 +69,17 @@ func coverageRouter(t *testing.T, configuration proxy.Configuration) *gin.Engine
 }
 
 func textRouterWithResponsesHandler(t *testing.T, handler http.HandlerFunc) *gin.Engine {
+	return textRouterWithResponsesHandlerAndDefaults(t, handler, proxy.DefaultTenantDefaults())
+}
+
+func textRouterWithResponsesHandlerAndDefaults(t *testing.T, handler http.HandlerFunc, defaults proxy.TenantDefaults) *gin.Engine {
 	t.Helper()
 	upstreamServer := httptest.NewServer(handler)
 	t.Cleanup(upstreamServer.Close)
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetResponsesURL(upstreamServer.URL)
 	return coverageRouter(t, proxy.Configuration{
-		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, defaults),
 		OpenAIKey:             TestAPIKey,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
@@ -893,7 +897,10 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 
 	t.Run("completed without final message starts synthesis continuation", func(subTest *testing.T) {
 		var synthesisPayload map[string]any
-		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		defaults := proxy.DefaultTenantDefaults()
+		defaults.Model = proxy.ModelNameGPT5
+		defaults.ReasoningEffort = "high"
+		router := textRouterWithResponsesHandlerAndDefaults(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			switch {
 			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
@@ -911,7 +918,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 			default:
 				http.NotFound(responseWriter, httpRequest)
 			}
-		})
+		}, defaults)
 		queryParameters := url.Values{}
 		queryParameters.Set("max_tokens", "222")
 		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
@@ -920,6 +927,10 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}
 		if synthesisPayload["max_output_tokens"] != float64(222) {
 			subTest.Fatalf("synthesis max_output_tokens=%v payload=%v", synthesisPayload["max_output_tokens"], synthesisPayload)
+		}
+		reasoning, hasReasoning := synthesisPayload["reasoning"].(map[string]any)
+		if !hasReasoning || reasoning["effort"] != "high" {
+			subTest.Fatalf("synthesis reasoning=%v want high", synthesisPayload["reasoning"])
 		}
 	})
 

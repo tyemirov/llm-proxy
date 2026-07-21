@@ -51,6 +51,7 @@ type chatRequestParameters struct {
 	model            textModelDefinition
 	webSearchEnabled bool
 	maxTokens        *int
+	reasoningEffort  string
 }
 
 type dictationRequestParameters struct {
@@ -177,7 +178,9 @@ func chatJSONHandler(upstreamProviders *providerRouter, providers *providerRegis
 			return
 		}
 		var payload chatRequestPayload
-		if decodeError := json.Unmarshal(bodyBytes, &payload); decodeError != nil {
+		jsonDecoder := json.NewDecoder(strings.NewReader(string(bodyBytes)))
+		jsonDecoder.DisallowUnknownFields()
+		if decodeError := jsonDecoder.Decode(&payload); decodeError != nil {
 			ginContext.String(http.StatusBadRequest, errorInvalidJSONRequest)
 			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointText, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, constants.EmptyString, requestTenant.defaults), requestStart)
 			return
@@ -233,17 +236,19 @@ func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerReg
 }
 
 type textRequestDefaults struct {
-	provider     string
-	model        string
-	systemPrompt string
+	provider        string
+	model           string
+	systemPrompt    string
+	reasoningEffort string
 }
 
 func textRequestDefaultsForProvider(rawProvider string, requestTenant tenant, providers *providerRegistry) textRequestDefaults {
 	providerExplicit := strings.TrimSpace(rawProvider) != constants.EmptyString
 	defaults := textRequestDefaults{
-		provider:     requestTenant.defaults.provider,
-		model:        requestTenant.defaults.model,
-		systemPrompt: requestTenant.defaults.systemPrompt,
+		provider:        requestTenant.defaults.provider,
+		model:           requestTenant.defaults.model,
+		systemPrompt:    requestTenant.defaults.systemPrompt,
+		reasoningEffort: requestTenant.defaults.reasoningEffort,
 	}
 	if providerExplicit {
 		defaults.model = constants.EmptyString
@@ -311,6 +316,7 @@ func chatRequestFromQuery(ginContext *gin.Context, defaults textRequestDefaults,
 		model:            modelIdentifier,
 		webSearchEnabled: webSearchEnabled,
 		maxTokens:        maxTokens,
+		reasoningEffort:  reasoningEffortForResolvedTextRoute(providerDefinition, modelIdentifier, defaults.reasoningEffort),
 	}, true
 }
 
@@ -378,6 +384,7 @@ func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload,
 		model:            resolvedModel,
 		webSearchEnabled: payload.WebSearch,
 		maxTokens:        payload.MaxTokens,
+		reasoningEffort:  reasoningEffortForResolvedTextRoute(providerDefinition, resolvedModel, defaults.reasoningEffort),
 	}, true
 }
 
@@ -433,7 +440,16 @@ func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayl
 		model:            resolvedModel,
 		webSearchEnabled: payload.WebSearch,
 		maxTokens:        payload.MaxTokens,
+		reasoningEffort:  reasoningEffortForResolvedTextRoute(providerDefinition, resolvedModel, defaults.reasoningEffort),
 	}, true
+}
+
+func reasoningEffortForResolvedTextRoute(provider providerDefinition, model textModelDefinition, rawEffort string) string {
+	effort := strings.TrimSpace(rawEffort)
+	if effort == constants.EmptyString || provider.effectiveReasoningEffort(model) == nil {
+		return constants.EmptyString
+	}
+	return effort
 }
 
 func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRouter, chatRequest chatRequestParameters, requestTenant tenant, usageEndpoint string, requestTimeout time.Duration, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger) {

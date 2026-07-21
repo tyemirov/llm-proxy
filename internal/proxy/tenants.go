@@ -30,6 +30,7 @@ type TenantDefaults struct {
 	DictationProvider string
 	DictationModel    string
 	SystemPrompt      string
+	ReasoningEffort   string
 }
 
 type tenantID string
@@ -52,6 +53,7 @@ type tenantDefaults struct {
 	dictationProvider string
 	dictationModel    string
 	systemPrompt      string
+	reasoningEffort   string
 }
 
 func newTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
@@ -61,6 +63,7 @@ func newTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
 		dictationProvider: strings.TrimSpace(rawDefaults.DictationProvider),
 		dictationModel:    strings.TrimSpace(rawDefaults.DictationModel),
 		systemPrompt:      rawDefaults.SystemPrompt,
+		reasoningEffort:   rawDefaults.ReasoningEffort,
 	}
 	if defaults.provider == constants.EmptyString {
 		defaults.provider = DefaultProvider
@@ -170,6 +173,7 @@ func DefaultTenantDefaults() TenantDefaults {
 		DictationProvider: DefaultDictationProvider,
 		DictationModel:    DefaultDictationModel,
 		SystemPrompt:      constants.EmptyString,
+		ReasoningEffort:   constants.EmptyString,
 	}
 }
 

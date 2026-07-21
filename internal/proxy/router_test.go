@@ -186,6 +186,42 @@ func TestChatHandlerAcceptsJSONBody(testingInstance *testing.T) {
 	}
 }
 
+func TestChatHandlersRejectPublicReasoningEffortParameter(testingInstance *testing.T) {
+	mockServer := NewSessionMockServer(`{"status":"completed","output_text":"unused"}`)
+	testingInstance.Cleanup(mockServer.Close)
+	router := NewTestRouter(testingInstance, mockServer.URL)
+
+	testCases := []struct {
+		name string
+		path string
+		body string
+	}{
+		{
+			name: "root request",
+			path: "/?key=" + TestSecret,
+			body: `{"prompt":"public effort is unsupported","reasoning_effort":"low"}`,
+		},
+		{
+			name: "v2 request",
+			path: "/v2?key=" + TestSecret,
+			body: `{"messages":[{"role":"user","content":"public effort is unsupported"}],"reasoning_effort":"low"}`,
+		},
+	}
+	for _, testCase := range testCases {
+		testingInstance.Run(testCase.name, func(subTest *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, testCase.path, bytes.NewBufferString(testCase.body))
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != http.StatusBadRequest {
+				subTest.Fatalf("status=%d want=%d body=%s", response.Code, http.StatusBadRequest, response.Body.String())
+			}
+		})
+	}
+}
+
 func TestChatHandlerAcceptsMessagesJSONBodyForOpenAIResponses(testingInstance *testing.T) {
 	const finalResponse = `{"status":"completed", "output":[{"type":"message", "role":"assistant", "content":[{"type":"text","text":"ok"}]}]}`
 
@@ -276,7 +312,22 @@ func TestChatHandlerContinuesIncompleteGPT55JSONBody(testingInstance *testing.T)
 	}))
 	defer mockServer.Close()
 
-	router := NewTestRouter(testingInstance, mockServer.URL)
+	endpoints := proxy.NewEndpoints()
+	endpoints.SetResponsesURL(mockServer.URL)
+	defaults := proxy.DefaultTenantDefaults()
+	defaults.ReasoningEffort = "high"
+	router, buildRouterError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
+		Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, defaults),
+		OpenAIKey:             TestAPIKey,
+		LogLevel:              proxy.LogLevelDebug,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+		Endpoints:             endpoints,
+	}, zap.NewNop().Sugar())
+	if buildRouterError != nil {
+		testingInstance.Fatalf(messageBuildRouterError, buildRouterError)
+	}
 	requestBody := bytes.NewBufferString(`{"prompt":"search current model facts","model":"` + proxy.ModelNameGPT55 + `","web_search":true}`)
 	request := httptest.NewRequest(http.MethodPost, "/?key="+TestSecret, requestBody)
 	request.Header.Set("Content-Type", "application/json")
@@ -304,6 +355,10 @@ func TestChatHandlerContinuesIncompleteGPT55JSONBody(testingInstance *testing.T)
 	}
 	if _, found := capturedPayloads[1]["tools"]; !found {
 		testingInstance.Fatalf("continued tools missing: %v", capturedPayloads[1])
+	}
+	reasoning, hasReasoning := capturedPayloads[1]["reasoning"].(map[string]any)
+	if !hasReasoning || reasoning["effort"] != "high" {
+		testingInstance.Fatalf("continued reasoning=%v want high", capturedPayloads[1]["reasoning"])
 	}
 }
 

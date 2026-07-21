@@ -100,6 +100,7 @@ type managedTenantRecord struct {
 	DefaultDictationProvider string
 	DefaultDictationModel    string
 	DefaultSystemPrompt      string
+	DefaultReasoningEffort   string
 	ProviderAPIKeys          []managedProviderAPIKeyRecord `gorm:"foreignKey:UserID;references:UserID;constraint:OnDelete:CASCADE"`
 	CreatedAt                time.Time
 	UpdatedAt                time.Time
@@ -705,16 +706,18 @@ func (store *managedTenantStore) migrateRoutingDefaultPairs(providers *providerR
 	}
 	migration, migrationError := store.database.routingDefaultsMigration()
 	if migrationError == nil {
-		if migration.Version != managedRoutingDefaultsMigrationVersion {
+		if migration.Version == managedRoutingDefaultsMigrationVersion {
+			if validationError := store.validatePersistedRoutingDefaultsLocked(providers); validationError != nil {
+				return validationError
+			}
+			store.routingDefaults = providers
+			return nil
+		}
+		if migration.Version != managedRoutingDefaultsMigrationVersion-1 {
 			return fmt.Errorf("%w: version=%d supported_version=%d", errManagedRoutingDefaultsMigration, migration.Version, managedRoutingDefaultsMigrationVersion)
 		}
-		if validationError := store.validatePersistedRoutingDefaultsLocked(providers); validationError != nil {
-			return validationError
-		}
-		store.routingDefaults = providers
-		return nil
 	}
-	if !errors.Is(migrationError, gorm.ErrRecordNotFound) {
+	if migrationError != nil && !errors.Is(migrationError, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("%w: read_version: %v", errManagedRoutingDefaultsMigration, migrationError)
 	}
 	tenantRecords, tenantRecordsError := store.database.tenants()
@@ -1083,6 +1086,7 @@ func (record *managedTenantRecord) applyRoutingDefaults(defaults managedRoutingD
 	record.DefaultDictationProvider = validatedDefaults.DictationProvider
 	record.DefaultDictationModel = validatedDefaults.DictationModel
 	record.DefaultSystemPrompt = validatedDefaults.SystemPrompt
+	record.DefaultReasoningEffort = validatedDefaults.ReasoningEffort
 }
 
 func (store *managedTenantStore) snapshot(record managedTenantRecord) (managedTenantSnapshot, error) {
@@ -1127,6 +1131,7 @@ func (record managedTenantRecord) defaults() TenantDefaults {
 		DictationProvider: record.DefaultDictationProvider,
 		DictationModel:    record.DefaultDictationModel,
 		SystemPrompt:      record.DefaultSystemPrompt,
+		ReasoningEffort:   record.DefaultReasoningEffort,
 	}
 }
 

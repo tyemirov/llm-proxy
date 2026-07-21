@@ -31,6 +31,7 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 			request.messages,
 			request.webSearchEnabled,
 			request.maxTokens,
+			request.reasoningEffort,
 			structuredLogger,
 		)
 	}

@@ -8,7 +8,7 @@ import (
 	"github.com/tyemirov/llm-proxy/internal/constants"
 )
 
-const managedRoutingDefaultsMigrationVersion = 1
+const managedRoutingDefaultsMigrationVersion = 2
 
 var (
 	errManagedRoutingDefaultsInvalid   = errors.New("managed_routing_defaults_invalid")
@@ -28,12 +28,17 @@ func newManagedRoutingDefaults(providers *providerRegistry, rawDefaults TenantDe
 	if dictationError != nil {
 		return managedRoutingDefaults{}, dictationError
 	}
+	reasoningEffort := rawDefaults.ReasoningEffort
+	if reasoningEffortError := providers.validatesReasoningEffort(reasoningEffort); reasoningEffortError != nil {
+		return managedRoutingDefaults{}, fmt.Errorf("%w: field=reasoning_effort effort=%s: %w", errManagedRoutingDefaultsInvalid, reasoningEffort, reasoningEffortError)
+	}
 	return managedRoutingDefaults{tenantDefaults: TenantDefaults{
 		Provider:          textProvider.string(),
 		Model:             textModel.string(),
 		DictationProvider: dictationProvider.string(),
 		DictationModel:    dictationModel.string(),
 		SystemPrompt:      rawDefaults.SystemPrompt,
+		ReasoningEffort:   reasoningEffort,
 	}}, nil
 }
 
@@ -74,6 +79,7 @@ func migrateManagedRoutingDefaults(providers *providerRegistry, rawDefaults Tena
 		DictationProvider: dictationProvider.string(),
 		DictationModel:    dictationModel.string(),
 		SystemPrompt:      rawDefaults.SystemPrompt,
+		ReasoningEffort:   constants.EmptyString,
 	})
 }
 

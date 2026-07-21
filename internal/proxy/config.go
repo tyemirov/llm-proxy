@@ -174,19 +174,22 @@ func validateConfig(configuration Configuration) (tenantRegistry, error) {
 	providers := newProviderRegistry(configuration)
 	validator := newModelValidator(providers)
 	for _, currentTenant := range tenants.tenants {
-		if validationError := validateTenantDefaultRuntime(validator, currentTenant); validationError != nil {
+		if validationError := validateTenantDefaultRuntime(providers, validator, currentTenant); validationError != nil {
 			return tenantRegistry{}, validationError
 		}
 	}
 	return tenants, nil
 }
 
-func validateTenantDefaultRuntime(validator *modelValidator, currentTenant tenant) error {
+func validateTenantDefaultRuntime(providers *providerRegistry, validator *modelValidator, currentTenant tenant) error {
 	if _, _, verificationError := validator.ResolveText(constants.EmptyString, constants.EmptyString, currentTenant.defaults.provider, currentTenant.defaults.model, false); verificationError != nil {
 		return fmt.Errorf(tenantValidationErrorFormat, verificationError, currentTenant.identifier.string())
 	}
 	if _, _, verificationError := validator.ResolveDictation(constants.EmptyString, constants.EmptyString, currentTenant.defaults.dictationProvider, currentTenant.defaults.dictationModel); verificationError != nil {
 		return fmt.Errorf(tenantValidationErrorFormat, verificationError, currentTenant.identifier.string())
+	}
+	if reasoningEffortError := providers.validatesReasoningEffort(currentTenant.defaults.reasoningEffort); reasoningEffortError != nil {
+		return fmt.Errorf(tenantValidationErrorFormat, reasoningEffortError, currentTenant.identifier.string())
 	}
 	return nil
 }
