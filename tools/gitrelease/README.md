@@ -11,4 +11,8 @@ SemVer contract, with optional SemVer prerelease identifiers.
 Pages artifacts always contain an empty `.nojekyll` file and a schema-versioned
 `.mprlab-release.json` marker. Deployment validates the archive contract and
 matches the release tag to `release_commit` while matching artifact and public
-marker provenance to the distinct `source_commit`.
+marker provenance to the distinct `source_commit`. Container publication waits
+for the exact OCI manifests to become readable through the standard Docker
+client. Pages activation matches GitHub Pages build state to the pushed
+`gh-pages` commit before verifying a cache-distinct public marker, so a branch
+push alone is never treated as public availability.

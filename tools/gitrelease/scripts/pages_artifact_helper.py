@@ -9,6 +9,11 @@ import pathlib
 import tarfile
 
 
+PAGES_BUILD_BUILT = "built"
+PAGES_BUILD_ERRORED = "errored"
+PAGES_BUILD_WAITING = frozenset({"queued", "building"})
+
+
 def read_json(path: str) -> dict[str, object]:
     data = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
     if not isinstance(data, dict):
@@ -86,6 +91,58 @@ def command_validate_public_marker(args: argparse.Namespace) -> int:
     return 0 if marker.get("source_commit") == args.source_commit else 1
 
 
+def command_pages_build_state(args: argparse.Namespace) -> int:
+    payload = json.loads(pathlib.Path(args.builds).read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        raise SystemExit("GitHub Pages builds response must be a list")
+    matching_builds: list[dict[str, object]] = []
+    for build in payload:
+        if not isinstance(build, dict):
+            raise SystemExit("GitHub Pages builds response contains an invalid build")
+        if build.get("commit") == args.commit:
+            matching_builds.append(build)
+    if not matching_builds:
+        print("waiting")
+        return 0
+    statuses: set[str] = set()
+    for build in matching_builds:
+        status = build.get("status")
+        if not isinstance(status, str):
+            raise SystemExit("GitHub Pages build has an invalid status")
+        statuses.add(status)
+    if PAGES_BUILD_BUILT in statuses:
+        print(PAGES_BUILD_BUILT)
+        return 0
+    if statuses.intersection(PAGES_BUILD_WAITING):
+        print("waiting")
+        return 0
+    if statuses != {PAGES_BUILD_ERRORED}:
+        raise SystemExit(f"GitHub Pages build has an unknown status set: {sorted(statuses)}")
+    error_message = "no error message reported"
+    for build in matching_builds:
+        error = build.get("error")
+        if isinstance(error, dict):
+            message = error.get("message")
+            if isinstance(message, str) and message:
+                error_message = message
+                break
+    print("errored")
+    print(error_message)
+    return 0
+
+
+def command_pages_site_matches(args: argparse.Namespace) -> int:
+    site = read_json(args.site)
+    source = site.get("source")
+    if not isinstance(source, dict):
+        return 1
+    return int(
+        source.get("branch") != args.branch
+        or source.get("path") != "/"
+        or site.get("https_enforced") is not True
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -110,6 +167,16 @@ def build_parser() -> argparse.ArgumentParser:
     public_marker.add_argument("--source-commit", required=True)
     public_marker.add_argument("--version", required=True)
     public_marker.set_defaults(func=command_validate_public_marker)
+
+    pages_build_state = subparsers.add_parser("pages-build-state")
+    pages_build_state.add_argument("--builds", required=True)
+    pages_build_state.add_argument("--commit", required=True)
+    pages_build_state.set_defaults(func=command_pages_build_state)
+
+    pages_site_matches = subparsers.add_parser("pages-site-matches")
+    pages_site_matches.add_argument("--site", required=True)
+    pages_site_matches.add_argument("--branch", required=True)
+    pages_site_matches.set_defaults(func=command_pages_site_matches)
     return parser
 
 

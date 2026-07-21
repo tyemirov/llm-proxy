@@ -17,6 +17,7 @@ HELPER = SKILL_ROOT / "scripts" / "release_helper.py"
 PREPARE = SKILL_ROOT / "scripts" / "prepare_release.sh"
 PREPARE_PAGES = SKILL_ROOT / "scripts" / "prepare_pages_artifact.sh"
 DEPLOY_PAGES = SKILL_ROOT / "scripts" / "deploy_pages_artifact.sh"
+CONTAINER_MANIFEST_DIGEST = SKILL_ROOT / "scripts" / "resolve_container_manifest_digest.sh"
 RELEASE_ENVIRONMENT_KEYS = (
     "RELEASE_ARTIFACT_TARGETS",
     "RELEASE_VERSION",
@@ -248,6 +249,87 @@ class ReleasePipelineTest(unittest.TestCase):
                 },
             )
 
+    def test_container_manifest_digest_waits_for_registry_readiness(self) -> None:
+        fake_binary_directory = self.root / "manifest-bin"
+        fake_binary_directory.mkdir()
+        fake_docker = fake_binary_directory / "docker"
+        fake_docker.write_text(
+            """#!/usr/bin/env bash
+set -euo pipefail
+[[ \"$1 $2 $3\" == \"buildx imagetools inspect\" ]] || exit 2
+attempt=0
+if [[ -f \"${FAKE_DOCKER_STATE}\" ]]; then attempt=\"$(cat \"${FAKE_DOCKER_STATE}\")\"; fi
+attempt=$((attempt + 1))
+printf '%s\\n' \"${attempt}\" >\"${FAKE_DOCKER_STATE}\"
+if (( attempt <= FAKE_DOCKER_UNREADY_ATTEMPTS )); then
+  echo 'simulated manifest is not available' >&2
+  exit 255
+fi
+printf '%s\\n' 'Name: ghcr.io/example/image:latest' 'Digest:    sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+""",
+            encoding="utf-8",
+        )
+        fake_docker.chmod(0o755)
+        state_path = self.root / "docker-inspect-attempts"
+        environment = os.environ.copy() | {
+            "PATH": f"{fake_binary_directory}{os.pathsep}{os.environ['PATH']}",
+            "FAKE_DOCKER_STATE": str(state_path),
+            "FAKE_DOCKER_UNREADY_ATTEMPTS": "1",
+            "CONTAINER_REGISTRY_VERIFY_ATTEMPTS": "2",
+            "CONTAINER_REGISTRY_VERIFY_DELAY_SECONDS": "1",
+        }
+
+        result = self.command(
+            "bash",
+            str(CONTAINER_MANIFEST_DIGEST),
+            "ghcr.io/example/image:latest",
+            cwd=self.repo,
+            check=False,
+            env=environment,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(
+            result.stdout.strip(),
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )
+        self.assertEqual(state_path.read_text(encoding="utf-8").strip(), "2")
+        self.assertIn("Waiting for ghcr.io/example/image:latest manifest", result.stderr)
+        self.assertIn("Docker exit 255", result.stderr)
+
+    def test_container_manifest_digest_reports_docker_failure_with_image_context(self) -> None:
+        fake_binary_directory = self.root / "manifest-error-bin"
+        fake_binary_directory.mkdir()
+        fake_docker = fake_binary_directory / "docker"
+        fake_docker.write_text(
+            """#!/usr/bin/env bash
+set -euo pipefail
+[[ \"$1 $2 $3\" == \"buildx imagetools inspect\" ]] || exit 2
+echo 'simulated registry inspection failure' >&2
+exit 255
+""",
+            encoding="utf-8",
+        )
+        fake_docker.chmod(0o755)
+        environment = os.environ.copy() | {
+            "PATH": f"{fake_binary_directory}{os.pathsep}{os.environ['PATH']}",
+            "CONTAINER_REGISTRY_VERIFY_ATTEMPTS": "1",
+            "CONTAINER_REGISTRY_VERIFY_DELAY_SECONDS": "1",
+        }
+
+        result = self.command(
+            "bash",
+            str(CONTAINER_MANIFEST_DIGEST),
+            "ghcr.io/example/image:latest",
+            cwd=self.repo,
+            check=False,
+            env=environment,
+        )
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("simulated registry inspection failure", result.stderr)
+        self.assertIn("container manifest did not become readable for ghcr.io/example/image:latest", result.stderr)
+
     def test_pages_deploy_verifies_prepared_source_commit(self) -> None:
         source_commit, environment = self.pages_release_fixture()
         release_commit = self.command("git", "rev-parse", "v1.0.0^{}", cwd=self.repo).stdout.strip()
@@ -258,6 +340,78 @@ class ReleasePipelineTest(unittest.TestCase):
         result = self.deploy_pages(environment)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(f"Verified https://pages.example.invalid/ at source {source_commit}.", result.stdout)
+
+    def test_pages_deploy_waits_for_matching_pages_build_before_marker(self) -> None:
+        source_commit, environment = self.pages_release_fixture()
+        build_counter = self.root / "pages-build-counter"
+        environment |= {
+            "FAKE_PAGES_BUILD_STATES": "queued,built",
+            "FAKE_PAGES_BUILD_COUNTER": str(build_counter),
+            "PAGES_BUILD_VERIFY_ATTEMPTS": "2",
+            "PAGES_BUILD_VERIFY_DELAY_SECONDS": "1",
+        }
+
+        result = self.deploy_pages(environment)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(build_counter.read_text(encoding="utf-8").strip(), "2")
+        self.assertIn("Waiting for GitHub Pages build", result.stdout)
+        self.assertIn(f"Verified https://pages.example.invalid/ at source {source_commit}.", result.stdout)
+
+    def test_pages_deploy_rejects_terminal_matching_pages_build_error(self) -> None:
+        _, environment = self.pages_release_fixture()
+        environment |= {
+            "FAKE_PAGES_BUILD_STATES": "errored",
+            "FAKE_PAGES_BUILD_ERROR": "simulated Pages build failure",
+            "PAGES_BUILD_VERIFY_ATTEMPTS": "1",
+            "PAGES_BUILD_VERIFY_DELAY_SECONDS": "1",
+        }
+
+        result = self.deploy_pages(environment)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("GitHub Pages build failed for branch commit", result.stderr)
+        self.assertIn("simulated Pages build failure", result.stderr)
+        self.assertTrue(self.remote_branch_exists("gh-pages"), result.stdout + result.stderr)
+
+    def test_pages_deploy_rejects_built_pages_build_for_another_commit(self) -> None:
+        _, environment = self.pages_release_fixture()
+        environment |= {
+            "FAKE_PAGES_BUILD_COMMIT": "0" * 40,
+            "PAGES_BUILD_VERIFY_ATTEMPTS": "1",
+            "PAGES_BUILD_VERIFY_DELAY_SECONDS": "1",
+        }
+
+        result = self.deploy_pages(environment)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("GitHub Pages build did not reach built state for branch commit", result.stderr)
+        self.assertTrue(self.remote_branch_exists("gh-pages"), result.stdout + result.stderr)
+
+    def test_pages_deploy_uses_cache_distinct_public_marker_request(self) -> None:
+        source_commit, environment = self.pages_release_fixture()
+        curl_log = self.root / "pages-curl.log"
+        environment["FAKE_CURL_COMMAND_LOG"] = str(curl_log)
+
+        result = self.deploy_pages(environment)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(f".mprlab-release.json?source_commit={source_commit}", curl_log.read_text(encoding="utf-8"))
+
+    def test_pages_deploy_does_not_request_a_duplicate_build_for_matching_site_settings(self) -> None:
+        _, environment = self.pages_release_fixture()
+        command_log = self.root / "pages-gh.log"
+        environment |= {
+            "FAKE_GH_COMMAND_LOG": str(command_log),
+            "FAKE_PAGES_SITE_MATCHES": "true",
+        }
+
+        result = self.deploy_pages(environment, configure=True)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        gh_commands = command_log.read_text(encoding="utf-8")
+        self.assertNotIn("--method PUT", gh_commands)
+        self.assertNotIn("--method POST", gh_commands)
 
     def test_pages_deploy_scopes_release_download_to_selected_remote_repository(self) -> None:
         _, environment = self.pages_release_fixture()
@@ -443,6 +597,7 @@ class ReleasePipelineTest(unittest.TestCase):
             test_environment = environment | {
                 "GIT_CONFIG_GLOBAL": str(global_config),
                 "GIT_CONFIG_NOSYSTEM": "1",
+                "FAKE_PAGES_REMOTE": str(first_push_remote),
             }
             self.assertEqual(
                 self.command(
@@ -565,6 +720,8 @@ class ReleasePipelineTest(unittest.TestCase):
         invalid_settings = (
             {"PAGES_VERIFY_ATTEMPTS": "1+1", "PAGES_VERIFY_DELAY_SECONDS": "1"},
             {"PAGES_VERIFY_ATTEMPTS": "1", "PAGES_VERIFY_DELAY_SECONDS": "0"},
+            {"PAGES_BUILD_VERIFY_ATTEMPTS": "1+1", "PAGES_BUILD_VERIFY_DELAY_SECONDS": "1"},
+            {"PAGES_BUILD_VERIFY_ATTEMPTS": "1", "PAGES_BUILD_VERIFY_DELAY_SECONDS": "0"},
         )
         for settings in invalid_settings:
             with self.subTest(settings=settings):
@@ -945,7 +1102,27 @@ raise SystemExit(f"unexpected gh command: {arguments}")
             """#!/usr/bin/env bash
 set -euo pipefail
 if [[ -n "${FAKE_GH_COMMAND_LOG:-}" ]]; then printf '%s\n' "$*" >>"${FAKE_GH_COMMAND_LOG}"; fi
-if [[ "$1" == "api" ]]; then exit 0; fi
+if [[ "$1" == "api" ]]; then
+  if [[ "$*" == *"/pages/builds?per_page=100"* ]]; then
+    build_index=0
+    if [[ -n "${FAKE_PAGES_BUILD_COUNTER:-}" ]]; then
+      if [[ -f "${FAKE_PAGES_BUILD_COUNTER}" ]]; then build_index="$(cat "${FAKE_PAGES_BUILD_COUNTER}")"; fi
+      printf '%s\n' "$((build_index + 1))" >"${FAKE_PAGES_BUILD_COUNTER}"
+    fi
+    IFS=, read -r -a build_states <<<"${FAKE_PAGES_BUILD_STATES:-built}"
+    if (( build_index >= ${#build_states[@]} )); then build_index=$((${#build_states[@]} - 1)); fi
+    build_status="${build_states[build_index]}"
+    build_commit="${FAKE_PAGES_BUILD_COMMIT:-$(git --git-dir="${FAKE_PAGES_REMOTE}" rev-parse refs/heads/gh-pages)}"
+    build_error='null'
+    if [[ "${build_status}" == "errored" ]]; then build_error="\\\"${FAKE_PAGES_BUILD_ERROR:-simulated Pages build failure}\\\""; fi
+    printf '[{\"commit\":\"%s\",\"status\":\"%s\",\"error\":{\"message\":%s}}]\n' "${build_commit}" "${build_status}" "${build_error}"
+  elif [[ "${FAKE_PAGES_SITE_MATCHES:-}" == "true" ]]; then
+    printf '%s\n' '{"source":{"branch":"gh-pages","path":"/"},"https_enforced":true}'
+  else
+    printf '%s\n' '{}'
+  fi
+  exit 0
+fi
 [[ "$1" == "release" && "$2" == "download" ]]
 destination=""
 while [[ $# -gt 0 ]]; do
@@ -959,13 +1136,17 @@ cp "${FAKE_RELEASE_DIR}/pages.tar.gz" "${destination}/pages.tar.gz"
         )
         fake_gh.chmod(0o755)
         fake_curl = fake_binary_directory / "curl"
-        fake_curl.write_text("#!/usr/bin/env bash\ncat \"${FAKE_MARKER_PATH}\"\n", encoding="utf-8")
+        fake_curl.write_text(
+            "#!/usr/bin/env bash\nset -euo pipefail\nif [[ -n \"${FAKE_CURL_COMMAND_LOG:-}\" ]]; then printf '%s\\n' \"$*\" >>\"${FAKE_CURL_COMMAND_LOG}\"; fi\ncat \"${FAKE_MARKER_PATH}\"\n",
+            encoding="utf-8",
+        )
         fake_curl.chmod(0o755)
 
         environment = os.environ.copy()
         environment["PATH"] = f"{fake_binary_directory}{os.pathsep}{environment['PATH']}"
         environment["FAKE_RELEASE_DIR"] = str(release_directory)
         environment["FAKE_MARKER_PATH"] = str(marker_path)
+        environment["FAKE_PAGES_REMOTE"] = str(self.remote)
         environment["PAGES_HOOK_SENTINEL"] = str(self.root / "pages-hook-executed")
         return source_commit, environment
 
