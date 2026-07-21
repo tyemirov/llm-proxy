@@ -157,7 +157,6 @@ const (
 	logFieldMethod       = "method"
 	logFieldClientIP     = "client_ip"
 	logFieldStatus       = "status"
-	logFieldValue        = "value"
 	logFieldTenantID     = "tenant_id"
 	logFieldEndpoint     = "endpoint"
 	logFieldProvider     = "provider"

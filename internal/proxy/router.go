@@ -281,11 +281,7 @@ func chatRequestFromQuery(ginContext *gin.Context, defaults textRequestDefaults,
 	webSearchQuery := strings.TrimSpace(ginContext.Query(queryParameterWebSearch))
 	webSearchEnabled, webSearchParseError := parseWebSearchParameter(webSearchQuery)
 	if webSearchParseError != nil {
-		structuredLogger.Warnw(
-			logEventParseWebSearchParameterFailed,
-			logFieldValue, webSearchQuery,
-			constants.LogFieldError, webSearchParseError,
-		)
+		structuredLogger.Warnw(logEventParseWebSearchParameterFailed)
 	}
 	maxTokens, maxTokensError := parseMaxTokensParameter(ginContext.Query(queryParameterMaxTokens))
 	if maxTokensError != nil {
