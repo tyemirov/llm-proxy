@@ -6,8 +6,23 @@
  *   model: string,
  *   dictation_provider: string,
  *   dictation_model: string,
- *   system_prompt: string
+ *   system_prompt: string,
+ *   reasoning_effort: string
  * }} TenantDefaults
+ */
+
+/**
+ * @typedef {{
+ *   adapter: string,
+ *   efforts: string[]
+ * }} ReasoningEffortCapability
+ */
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   reasoning_effort?: ReasoningEffortCapability
+ * }} TextModelProfile
  */
 
 /**
@@ -20,7 +35,8 @@
  *   text_model: string,
  *   system_prompt: string,
  *   text_default_model: string,
- *   text_models: string[],
+ *   text_models: TextModelProfile[],
+ *   reasoning_effort?: ReasoningEffortCapability,
  *   supports_dictation: boolean,
  *   dictation_default_model?: string,
  *   dictation_models: string[]
@@ -46,6 +62,7 @@
  *   user: { id: string, email?: string, display_name?: string, avatar_url?: string, is_admin: boolean },
  *   tenant: TenantProfile,
  *   providers: ProviderProfile[],
+ *   reasoning_effort_options: string[],
  *   proxy: { text_path: string, v2_path: string, dictation_path: string }
  * }} ManagementProfile
  */

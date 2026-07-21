@@ -27,30 +27,31 @@
     <script type="module" src="/assets/llm-proxy/js/app.js"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
-  <body>
+  <body x-data="llmProxyKeyManagement" x-init="init()">
     <mpr-header
       id="llm-proxy-header"
       data-config-url="/config-ui.yaml"
-      brand-label="LLM Proxy"
-      brand-href="/"
       auth-transition='{"title":"Opening LLM Proxy","message":"Loading your key workspace.","completionEvent":"llm-proxy:management-ready"}'
     >
+      <a slot="brand" class="llm-proxy-header-brand" href="/" aria-label="LLM Proxy home">
+        <img class="llm-proxy-header-brand__logo" src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" aria-hidden="true">
+        <span class="llm-proxy-header-brand__title">LLM Proxy</span>
+      </a>
+      <notification-region
+        slot="aux"
+        x-cloak
+        x-show="notice.message"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <p class="notice" x-bind:data-kind="notice.kind" x-text="notice.message"></p>
+      </notification-region>
       <mpr-user slot="aux" display-mode="avatar" logout-url="/" logout-label="Sign out"></mpr-user>
     </mpr-header>
 
     <main class="llm-proxy-main">
-      <llm-proxy-key-management x-data="llmProxyKeyManagement" x-init="init()" x-bind:data-auth-state="authState">
-        <notification-region
-          x-cloak
-          x-show="notice.message"
-          x-init="bindNotificationRegion($el)"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          <p class="notice" x-bind:data-kind="notice.kind" x-text="notice.message"></p>
-        </notification-region>
-
+      <llm-proxy-key-management x-bind:data-auth-state="authState">
         <section class="llm-panel" x-cloak x-show="authState === states.loading">
           <p class="eyebrow" x-text="copy.loadingEyebrow"></p>
           <h1 x-text="copy.loadingTitle"></h1>
@@ -259,7 +260,12 @@
                       <label for="generated-secret" x-text="copy.generatedSecret"></label>
                       <div class="secret-row">
                         <input id="generated-secret" type="text" readonly x-bind:value="generatedSecret">
-                        <button type="button" class="icon-only" x-on:click="copyGeneratedSecret()" x-bind:title="copy.copySecret" x-bind:aria-label="copy.copySecret">[]</button>
+                        <button type="button" class="icon-only copy-secret-button" x-on:click="copyGeneratedSecret()" x-bind:title="copy.copySecret" x-bind:aria-label="copy.copySecret">
+                          <svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
+                            <rect x="6" y="5" width="10" height="12" rx="1.5"></rect>
+                            <rect x="8" y="7" width="10" height="12" rx="1.5"></rect>
+                          </svg>
+                        </button>
                       </div>
                     </secret-output>
                   </settings-section>
@@ -287,6 +293,20 @@
                             <option x-bind:value="model" x-text="model"></option>
                           </template>
                         </select>
+                      </label>
+                      <label class="settings-form-wide" x-show="hasReasoningEffortOptions">
+                        <span x-text="copy.reasoningEffort"></span>
+                        <select
+                          x-model="defaults.reasoning_effort"
+                          x-bind:aria-describedby="reasoningEffortActiveForCurrentRoute ? null : 'reasoning-effort-status'"
+                          x-bind:data-reasoning-effort-active="String(reasoningEffortActiveForCurrentRoute)"
+                        >
+                          <option value="" x-text="copy.reasoningEffortUnset"></option>
+                          <template x-for="effort in reasoningEffortOptions" x-bind:key="effort">
+                            <option x-bind:value="effort" x-text="effort"></option>
+                          </template>
+                        </select>
+                        <small id="reasoning-effort-status" class="settings-form-note" x-show="!reasoningEffortActiveForCurrentRoute" x-text="copy.reasoningEffortInactive"></small>
                       </label>
                       <label>
                         <span x-text="copy.dictationProvider"></span>
@@ -376,8 +396,8 @@
                             <label>
                               <span x-text="copy.providerTextModel"></span>
                               <select x-model="selectedProvider.text_model" x-bind:disabled="busy || providerKeyRevealPending">
-                                <template x-for="model in selectedProvider.text_models" x-bind:key="model">
-                                  <option x-bind:value="model" x-text="model"></option>
+                                <template x-for="model in selectedProvider.text_models" x-bind:key="model.id">
+                                  <option x-bind:value="model.id" x-text="model.id"></option>
                                 </template>
                               </select>
                             </label>

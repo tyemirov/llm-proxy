@@ -1118,7 +1118,7 @@ func TestManagementHandlerStoreErrorEdges(t *testing.T) {
 	defaultsProfileErrorDatabase := newFakeManagedTenantDatabase()
 	defaultsProfileErrorDatabase.userQueryErrors = []error{errInternalTestDatabase}
 	defaultsProfileErrorService := newInternalManagementService(t, defaultsProfileErrorDatabase)
-	defaultsBody := `{"provider":"openai","model":"` + ModelNameGPT41 + `","dictation_provider":"openai","dictation_model":"` + DefaultDictationModel + `","system_prompt":""}`
+	defaultsBody := `{"provider":"openai","model":"` + ModelNameGPT41 + `","dictation_provider":"openai","dictation_model":"` + DefaultDictationModel + `","system_prompt":"","reasoning_effort":""}`
 	if responseCode := executeInternalManagementHandler(defaultsProfileErrorService.updateDefaultsHandler(), http.MethodPut, "/api/management/defaults", defaultsBody, nil, principal); responseCode != http.StatusInternalServerError {
 		t.Fatalf("defaults profile error status=%d want=%d", responseCode, http.StatusInternalServerError)
 	}
@@ -1266,12 +1266,12 @@ func TestProviderKeyRejectionInternalEdges(t *testing.T) {
 }
 
 func TestProviderSummaryInternalEdges(t *testing.T) {
-	textModels := sortedTextModels(map[string]textModelDefinition{
+	textModels := sortedTextModelSummaries(map[string]textModelDefinition{
 		"alias-a": {identifier: newModelID("same-text-model")},
 		"alias-b": {identifier: newModelID("same-text-model")},
 		"other":   {identifier: newModelID("other-text-model")},
 	})
-	if !reflect.DeepEqual(textModels, []string{"other-text-model", "same-text-model"}) {
+	if !reflect.DeepEqual(textModels, []textModelSummary{{identifier: "other-text-model"}, {identifier: "same-text-model"}}) {
 		t.Fatalf("text models=%v", textModels)
 	}
 	dictationModels := sortedDictationModels(map[string]modelID{

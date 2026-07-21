@@ -18,10 +18,16 @@ type providerSummary struct {
 	label                 string
 	aliases               []string
 	textDefaultModel      string
-	textModels            []string
+	textModels            []textModelSummary
+	textReasoningEffort   *reasoningEffortCapability
 	supportsDictation     bool
 	dictationDefaultModel string
 	dictationModels       []string
+}
+
+type textModelSummary struct {
+	identifier      string
+	reasoningEffort *reasoningEffortCapability
 }
 
 func newProviderRegistry(configuration Configuration) *providerRegistry {
@@ -198,6 +204,11 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 		definitions: definitions,
 		aliases:     map[string]providerID{},
 	}
+	for identifier, definition := range registry.definitions {
+		catalog := configuration.ProviderModels[identifier.string()]
+		definition.textReasoningEffort = configuredReasoningEffortCapability(catalog.Text.ReasoningEffort)
+		registry.definitions[identifier] = definition
+	}
 	for identifier, definition := range definitions {
 		registry.aliases[identifier.string()] = identifier
 		for _, alias := range definition.aliases {
@@ -290,13 +301,38 @@ func (registry *providerRegistry) providerSummaries() []providerSummary {
 			label:                 providerLabel(definition.identifier),
 			aliases:               aliases,
 			textDefaultModel:      definition.defaultTextModel.string(),
-			textModels:            sortedTextModels(definition.textModels),
+			textModels:            sortedTextModelSummaries(definition.textModels),
+			textReasoningEffort:   definition.textReasoningEffort,
 			supportsDictation:     definition.supportsDictation,
 			dictationDefaultModel: definition.defaultTranscriptionModel.string(),
 			dictationModels:       sortedDictationModels(definition.transcriptionModels),
 		})
 	}
 	return summaries
+}
+
+func (registry *providerRegistry) reasoningEffortOptions() []string {
+	for _, definition := range registry.definitions {
+		if definition.textReasoningEffort != nil {
+			return canonicalReasoningEffortOptions()
+		}
+		for _, model := range definition.textModels {
+			if model.reasoningEffort != nil {
+				return canonicalReasoningEffortOptions()
+			}
+		}
+	}
+	return []string{}
+}
+
+func (registry *providerRegistry) validatesReasoningEffort(rawEffort string) error {
+	if rawEffort == constants.EmptyString {
+		return nil
+	}
+	if !isCanonicalReasoningEffort(rawEffort) || len(registry.reasoningEffortOptions()) == 0 {
+		return fmt.Errorf("%w: capability=reasoning_effort effort=%s", ErrUnsupportedCapability, rawEffort)
+	}
+	return nil
 }
 
 func (registry *providerRegistry) resolveProvider(rawProvider string, defaultProvider string) (providerDefinition, error) {
@@ -396,18 +432,25 @@ func resolveTextModelFromSet(modelIdentifiers map[string]textModelDefinition, ra
 	return textModelDefinition{}, fmt.Errorf("%w: %s", ErrUnknownModel, resolvedModel.string())
 }
 
-func sortedTextModels(modelIdentifiers map[string]textModelDefinition) []string {
-	models := make([]string, 0, len(modelIdentifiers))
-	seenModels := map[string]struct{}{}
+func sortedTextModelSummaries(modelIdentifiers map[string]textModelDefinition) []textModelSummary {
+	modelsByIdentifier := map[string]textModelSummary{}
+	modelIdentifiersByName := make([]string, 0, len(modelIdentifiers))
 	for _, modelDefinition := range modelIdentifiers {
 		modelIdentifier := modelDefinition.string()
-		if _, seen := seenModels[modelIdentifier]; seen {
+		if _, seen := modelsByIdentifier[modelIdentifier]; seen {
 			continue
 		}
-		seenModels[modelIdentifier] = struct{}{}
-		models = append(models, modelIdentifier)
+		modelsByIdentifier[modelIdentifier] = textModelSummary{
+			identifier:      modelIdentifier,
+			reasoningEffort: modelDefinition.reasoningEffort,
+		}
+		modelIdentifiersByName = append(modelIdentifiersByName, modelIdentifier)
 	}
-	sort.Strings(models)
+	sort.Strings(modelIdentifiersByName)
+	models := make([]textModelSummary, 0, len(modelIdentifiersByName))
+	for _, modelIdentifier := range modelIdentifiersByName {
+		models = append(models, modelsByIdentifier[modelIdentifier])
+	}
 	return models
 }
 

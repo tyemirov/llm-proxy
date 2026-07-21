@@ -53,24 +53,45 @@ providers:
         - id: "gpt-5"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
+          reasoning_effort:
+            adapter: "openai_responses"
+            efforts: ["minimal", "low", "medium", "high"]
         - id: "gpt-5.5"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
+          reasoning_effort:
+            adapter: "openai_responses"
+            efforts: ["minimal", "low", "medium", "high"]
         - id: "gpt-5.5-pro"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
+          reasoning_effort:
+            adapter: "openai_responses"
+            efforts: ["minimal", "low", "medium", "high"]
         - id: "gpt-5.6"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
+          reasoning_effort:
+            adapter: "openai_responses"
+            efforts: ["minimal", "low", "medium", "high"]
         - id: "gpt-5.6-sol"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
+          reasoning_effort:
+            adapter: "openai_responses"
+            efforts: ["minimal", "low", "medium", "high"]
         - id: "gpt-5.6-terra"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
+          reasoning_effort:
+            adapter: "openai_responses"
+            efforts: ["minimal", "low", "medium", "high"]
         - id: "gpt-5.6-luna"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
+          reasoning_effort:
+            adapter: "openai_responses"
+            efforts: ["minimal", "low", "medium", "high"]
     dictation:
       default_model: "gpt-4o-mini-transcribe"
       models:

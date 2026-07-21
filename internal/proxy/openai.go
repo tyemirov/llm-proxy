@@ -78,8 +78,8 @@ func hasFinalMessage(rawPayload []byte) bool {
 }
 
 // openAIRequest sends messages to the OpenAI responses API and returns the resulting text.
-func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, messages chatMessages, webSearchEnabled bool, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	payload := BuildRequestPayload(modelIdentifier.string(), modelIdentifier.requestProfile.string(), messages.openAIResponsesInput(), webSearchEnabled, maxTokens)
+func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, messages chatMessages, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	payload := BuildRequestPayload(modelIdentifier.string(), modelIdentifier.requestProfile.string(), messages.openAIResponsesInput(), webSearchEnabled, maxTokens, reasoningEffort)
 	payloadBytes, _ := json.Marshal(payload)
 
 	requestContext, cancelRequest := context.WithTimeout(parentContext, client.requestTimeout)
@@ -119,7 +119,7 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 		return textGenerationResult{}, errors.New(errorOpenAIAPI)
 	}
 
-	return client.resolveOpenAIResponse(requestContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, responseSnapshot, structuredLogger)
+	return client.resolveOpenAIResponse(requestContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 }
 
 type openAIResponseSnapshot struct {
@@ -171,9 +171,9 @@ func (responseSnapshot openAIResponseSnapshot) generation() textGenerationResult
 	return textGenerationResult{text: responseSnapshot.text, usage: responseSnapshot.usage}
 }
 
-func (client *OpenAIClient) resolveOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *OpenAIClient) resolveOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if !responseSnapshot.isTerminal() && !utils.IsBlank(responseSnapshot.identifier) {
-		finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, responseSnapshot.identifier, modelIdentifier, webSearchEnabled, maxTokens, structuredLogger)
+		finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, responseSnapshot.identifier, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, structuredLogger)
 		if pollError != nil {
 			structuredLogger.Errorw(
 				logEventOpenAIPollError,
@@ -193,28 +193,28 @@ func (client *OpenAIClient) resolveOpenAIResponse(parentContext context.Context,
 		}
 		return responseSnapshot.generation(), nil
 	}
-	return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, responseSnapshot, structuredLogger)
+	return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 }
 
-func (client *OpenAIClient) resolveTerminalOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *OpenAIClient) resolveTerminalOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	switch responseSnapshot.status {
 	case statusCancelled, statusFailed, statusErrored:
 		return textGenerationResult{}, errors.New(errorOpenAIFailedStatus)
 	case statusIncomplete:
-		return client.resolveIncompleteOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, responseSnapshot, structuredLogger)
+		return client.resolveIncompleteOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 	default:
-		return client.resolveCompleteOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, responseSnapshot, structuredLogger)
+		return client.resolveCompleteOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 	}
 }
 
-func (client *OpenAIClient) resolveIncompleteOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *OpenAIClient) resolveIncompleteOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if !utils.IsBlank(responseSnapshot.text) {
 		return responseSnapshot.generation(), nil
 	}
 	if !canContinueIncompleteResponse(responseSnapshot.decodedObject) || utils.IsBlank(responseSnapshot.identifier) {
 		return textGenerationResult{}, ErrUpstreamIncomplete
 	}
-	continuedResponseID, continuationError := client.startIncompleteContinuation(parentContext, openAIKey, responseSnapshot.identifier, modelIdentifier, webSearchEnabled, maxTokens, structuredLogger)
+	continuedResponseID, continuationError := client.startIncompleteContinuation(parentContext, openAIKey, responseSnapshot.identifier, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, structuredLogger)
 	if continuationError != nil {
 		structuredLogger.Errorw(
 			logEventOpenAIContinueError,
@@ -223,7 +223,7 @@ func (client *OpenAIClient) resolveIncompleteOpenAIResponse(parentContext contex
 		)
 		return textGenerationResult{}, openAIStageError(continuationError)
 	}
-	finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, continuedResponseID, modelIdentifier, webSearchEnabled, maxTokens, structuredLogger)
+	finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, continuedResponseID, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, structuredLogger)
 	if pollError != nil {
 		structuredLogger.Errorw(
 			logEventOpenAIPollError,
@@ -236,10 +236,10 @@ func (client *OpenAIClient) resolveIncompleteOpenAIResponse(parentContext contex
 	return finalGeneration, nil
 }
 
-func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if responseSnapshot.needsSynthesis() && !utils.IsBlank(responseSnapshot.identifier) {
 		structuredLogger.Debugw(logEventMissingFinalMessage)
-		continuedResponseID, synthErr := client.startSynthesisContinuation(parentContext, openAIKey, responseSnapshot.identifier, modelIdentifier.string(), maxTokens, structuredLogger)
+		continuedResponseID, synthErr := client.startSynthesisContinuation(parentContext, openAIKey, responseSnapshot.identifier, modelIdentifier.string(), maxTokens, reasoningEffort, structuredLogger)
 		if synthErr != nil {
 			structuredLogger.Errorw(
 				logEventOpenAIContinueError,
@@ -248,7 +248,7 @@ func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.
 			)
 			return textGenerationResult{}, openAIStageError(synthErr)
 		}
-		finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, continuedResponseID, modelIdentifier, webSearchEnabled, maxTokens, structuredLogger)
+		finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, continuedResponseID, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, structuredLogger)
 		if pollError != nil {
 			structuredLogger.Errorw(
 				logEventOpenAIPollError,
@@ -274,9 +274,10 @@ func openAIStageError(stageError error) error {
 }
 
 // startSynthesisContinuation begins a synthesis-only pass by POSTing /v1/responses with
-// previous_response_id and tool_choice set to "none". It allocates enough output tokens, limits reasoning effort to minimal, and includes a low-verbosity text format hint.
+// previous_response_id and tool_choice set to "none". It retains the tenant-selected
+// reasoning effort when one is configured and includes a low-verbosity text format hint.
 // It returns the identifier of the new response.
-func (client *OpenAIClient) startSynthesisContinuation(parentContext context.Context, openAIKey string, previousResponseID string, modelIdentifier string, maxTokens *int, structuredLogger *zap.SugaredLogger) (string, error) {
+func (client *OpenAIClient) startSynthesisContinuation(parentContext context.Context, openAIKey string, previousResponseID string, modelIdentifier string, maxTokens *int, reasoningEffort string, structuredLogger *zap.SugaredLogger) (string, error) {
 	payload := map[string]any{
 		keyModel:              modelIdentifier,
 		keyPreviousResponseID: previousResponseID,
@@ -284,13 +285,13 @@ func (client *OpenAIClient) startSynthesisContinuation(parentContext context.Con
 		keyStore:              true,
 		keyToolChoice:         toolChoiceNone,
 		keyInput:              synthesisInstructionPrimary,
-		keyReasoning: map[string]any{
-			keyEffort: reasoningEffortMinimal,
-		},
 		keyText: map[string]any{
 			keyFormat:    map[string]any{keyType: textFormatType},
 			keyVerbosity: verbosityLow,
 		},
+	}
+	if strings.TrimSpace(reasoningEffort) != constants.EmptyString {
+		payload[keyReasoning] = map[string]any{keyEffort: reasoningEffort}
 	}
 	if maxTokens != nil {
 		payload[keyMaxOutputTokens] = *maxTokens
@@ -298,8 +299,8 @@ func (client *OpenAIClient) startSynthesisContinuation(parentContext context.Con
 	return client.startContinuationResponse(parentContext, openAIKey, payload, structuredLogger)
 }
 
-func (client *OpenAIClient) startIncompleteContinuation(parentContext context.Context, openAIKey string, previousResponseID string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, structuredLogger *zap.SugaredLogger) (string, error) {
-	payload := buildStatefulContinuationPayload(modelIdentifier, continuationInstructionPrimary, webSearchEnabled, maxTokens, previousResponseID)
+func (client *OpenAIClient) startIncompleteContinuation(parentContext context.Context, openAIKey string, previousResponseID string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredLogger *zap.SugaredLogger) (string, error) {
+	payload := buildStatefulContinuationPayload(modelIdentifier, continuationInstructionPrimary, webSearchEnabled, maxTokens, reasoningEffort, previousResponseID)
 	return client.startContinuationResponse(parentContext, openAIKey, payload, structuredLogger)
 }
 
@@ -329,8 +330,8 @@ func (client *OpenAIClient) startContinuationResponse(parentContext context.Cont
 	return newID, nil
 }
 
-func buildStatefulContinuationPayload(modelIdentifier textModelDefinition, inputText string, webSearchEnabled bool, maxTokens *int, previousResponseID string) map[string]any {
-	payloadBytes, _ := json.Marshal(BuildRequestPayload(modelIdentifier.string(), modelIdentifier.requestProfile.string(), inputText, webSearchEnabled, maxTokens))
+func buildStatefulContinuationPayload(modelIdentifier textModelDefinition, inputText string, webSearchEnabled bool, maxTokens *int, reasoningEffort string, previousResponseID string) map[string]any {
+	payloadBytes, _ := json.Marshal(BuildRequestPayload(modelIdentifier.string(), modelIdentifier.requestProfile.string(), inputText, webSearchEnabled, maxTokens, reasoningEffort))
 	var payload map[string]any
 	_ = json.Unmarshal(payloadBytes, &payload)
 	payload[keyPreviousResponseID] = previousResponseID
@@ -352,7 +353,7 @@ func canContinueIncompleteResponse(decodedObject map[string]any) bool {
 }
 
 // pollResponseUntilDone repeatedly fetches a response until it is complete or the request context expires.
-func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context, openAIKey string, responseIdentifier string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context, openAIKey string, responseIdentifier string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	for {
 		responseSnapshot, responseComplete, fetchError := client.fetchResponseByID(parentContext, openAIKey, responseIdentifier, structuredLogger)
 		if fetchError != nil {
@@ -362,7 +363,7 @@ func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context,
 			return textGenerationResult{}, fetchError
 		}
 		if responseComplete {
-			return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, responseSnapshot, structuredLogger)
+			return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 		}
 		select {
 		case <-time.After(responsePollInterval):

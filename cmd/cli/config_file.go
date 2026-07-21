@@ -109,6 +109,7 @@ type tenantDefaultsConfig struct {
 	DictationProvider string `mapstructure:"dictation_provider"`
 	DictationModel    string `mapstructure:"dictation_model"`
 	SystemPrompt      string `mapstructure:"system_prompt"`
+	ReasoningEffort   string `mapstructure:"reasoning_effort"`
 }
 
 type providersConfiguration struct {
@@ -141,15 +142,22 @@ type transcribingProviderConfiguration struct {
 }
 
 type modelEndpointConfiguration struct {
-	DefaultModel string               `mapstructure:"default_model"`
-	Models       []modelConfiguration `mapstructure:"models"`
+	DefaultModel    string                           `mapstructure:"default_model"`
+	Models          []modelConfiguration             `mapstructure:"models"`
+	ReasoningEffort *reasoningEffortCapabilityConfig `mapstructure:"reasoning_effort"`
 }
 
 type modelConfiguration struct {
-	ID               string `mapstructure:"id"`
-	RequestProfile   string `mapstructure:"request_profile"`
-	WebSearch        bool   `mapstructure:"web_search"`
-	OutputTokenLimit int    `mapstructure:"output_token_limit"`
+	ID               string                           `mapstructure:"id"`
+	RequestProfile   string                           `mapstructure:"request_profile"`
+	WebSearch        bool                             `mapstructure:"web_search"`
+	OutputTokenLimit int                              `mapstructure:"output_token_limit"`
+	ReasoningEffort  *reasoningEffortCapabilityConfig `mapstructure:"reasoning_effort"`
+}
+
+type reasoningEffortCapabilityConfig struct {
+	Adapter string   `mapstructure:"adapter"`
+	Efforts []string `mapstructure:"efforts"`
 }
 
 type providerAPIKeyRequirement struct {
@@ -410,11 +418,23 @@ func (configuration modelEndpointConfiguration) proxyCatalog() proxy.ModelEndpoi
 			RequestProfile:   currentModel.RequestProfile,
 			WebSearch:        currentModel.WebSearch,
 			OutputTokenLimit: currentModel.OutputTokenLimit,
+			ReasoningEffort:  proxyReasoningEffortCapability(currentModel.ReasoningEffort),
 		})
 	}
 	return proxy.ModelEndpointCatalog{
-		DefaultModel: configuration.DefaultModel,
-		Models:       models,
+		DefaultModel:    configuration.DefaultModel,
+		Models:          models,
+		ReasoningEffort: proxyReasoningEffortCapability(configuration.ReasoningEffort),
+	}
+}
+
+func proxyReasoningEffortCapability(configuration *reasoningEffortCapabilityConfig) *proxy.ReasoningEffortCapability {
+	if configuration == nil {
+		return nil
+	}
+	return &proxy.ReasoningEffortCapability{
+		Adapter: configuration.Adapter,
+		Efforts: append([]string(nil), configuration.Efforts...),
 	}
 }
 
@@ -537,6 +557,7 @@ func tenantConfigurations(rawTenants []tenantConfiguration) []proxy.TenantConfig
 				DictationProvider: rawTenant.Defaults.DictationProvider,
 				DictationModel:    rawTenant.Defaults.DictationModel,
 				SystemPrompt:      rawTenant.Defaults.SystemPrompt,
+				ReasoningEffort:   rawTenant.Defaults.ReasoningEffort,
 			},
 		})
 	}

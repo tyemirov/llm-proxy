@@ -49,10 +49,11 @@ type managementService struct {
 }
 
 type managementProfileResponse struct {
-	User      managementUserResponse       `json:"user"`
-	Tenant    managementTenantResponse     `json:"tenant"`
-	Providers []managementProviderResponse `json:"providers"`
-	Proxy     managementProxyResponse      `json:"proxy"`
+	User                   managementUserResponse       `json:"user"`
+	Tenant                 managementTenantResponse     `json:"tenant"`
+	Providers              []managementProviderResponse `json:"providers"`
+	ReasoningEffortOptions []string                     `json:"reasoning_effort_options"`
+	Proxy                  managementProxyResponse      `json:"proxy"`
 }
 
 type managementUserResponse struct {
@@ -77,21 +78,33 @@ type managementTenantDefaultsResponse struct {
 	DictationProvider string `json:"dictation_provider"`
 	DictationModel    string `json:"dictation_model"`
 	SystemPrompt      string `json:"system_prompt"`
+	ReasoningEffort   string `json:"reasoning_effort"`
 }
 
 type managementProviderResponse struct {
-	ID                    string   `json:"id"`
-	Label                 string   `json:"label"`
-	Aliases               []string `json:"aliases"`
-	HasKey                bool     `json:"has_key"`
-	MaskedKey             string   `json:"masked_key,omitempty"`
-	TextModel             string   `json:"text_model"`
-	SystemPrompt          string   `json:"system_prompt"`
-	TextDefaultModel      string   `json:"text_default_model"`
-	TextModels            []string `json:"text_models"`
-	SupportsDictation     bool     `json:"supports_dictation"`
-	DictationDefaultModel string   `json:"dictation_default_model,omitempty"`
-	DictationModels       []string `json:"dictation_models"`
+	ID                    string                                       `json:"id"`
+	Label                 string                                       `json:"label"`
+	Aliases               []string                                     `json:"aliases"`
+	HasKey                bool                                         `json:"has_key"`
+	MaskedKey             string                                       `json:"masked_key,omitempty"`
+	TextModel             string                                       `json:"text_model"`
+	SystemPrompt          string                                       `json:"system_prompt"`
+	TextDefaultModel      string                                       `json:"text_default_model"`
+	TextModels            []managementTextModelResponse                `json:"text_models"`
+	ReasoningEffort       *managementReasoningEffortCapabilityResponse `json:"reasoning_effort,omitempty"`
+	SupportsDictation     bool                                         `json:"supports_dictation"`
+	DictationDefaultModel string                                       `json:"dictation_default_model,omitempty"`
+	DictationModels       []string                                     `json:"dictation_models"`
+}
+
+type managementTextModelResponse struct {
+	ID              string                                       `json:"id"`
+	ReasoningEffort *managementReasoningEffortCapabilityResponse `json:"reasoning_effort,omitempty"`
+}
+
+type managementReasoningEffortCapabilityResponse struct {
+	Adapter string   `json:"adapter"`
+	Efforts []string `json:"efforts"`
 }
 
 type managementProxyResponse struct {
@@ -176,11 +189,12 @@ type managementProviderKeyRequest struct {
 }
 
 type managementDefaultsRequest struct {
-	Provider          string `json:"provider"`
-	Model             string `json:"model"`
-	DictationProvider string `json:"dictation_provider"`
-	DictationModel    string `json:"dictation_model"`
-	SystemPrompt      string `json:"system_prompt"`
+	Provider          string  `json:"provider"`
+	Model             string  `json:"model"`
+	DictationProvider string  `json:"dictation_provider"`
+	DictationModel    string  `json:"dictation_model"`
+	SystemPrompt      string  `json:"system_prompt"`
+	ReasoningEffort   *string `json:"reasoning_effort"`
 }
 
 func newManagementService(configuration ManagementConfiguration, sessionValidator *managementSessionValidator, store *managedTenantStore, providers *providerRegistry, authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger) *managementService {
@@ -413,7 +427,12 @@ func (service *managementService) updateDefaultsHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusBadRequest, decodeError.Error())
 			return
 		}
-		defaults, defaultsConstructionError := newManagedRoutingDefaults(service.providers, TenantDefaults(request))
+		rawDefaults, defaultsRequestError := request.tenantDefaults()
+		if defaultsRequestError != nil {
+			ginContext.String(http.StatusBadRequest, defaultsRequestError.Error())
+			return
+		}
+		defaults, defaultsConstructionError := newManagedRoutingDefaults(service.providers, rawDefaults)
 		if defaultsConstructionError != nil {
 			ginContext.String(http.StatusBadRequest, defaultsConstructionError.Error())
 			return
@@ -499,7 +518,8 @@ func (service *managementService) profileResponse(principal managementPrincipal,
 			CreatedAt: snapshot.createdAt.Format(time.RFC3339),
 			UpdatedAt: snapshot.updatedAt.Format(time.RFC3339),
 		},
-		Providers: service.providerResponses(snapshot.providerSettings),
+		Providers:              service.providerResponses(snapshot.providerSettings),
+		ReasoningEffortOptions: service.providers.reasoningEffortOptions(),
 		Proxy: managementProxyResponse{
 			TextPath:      rootPath,
 			V2Path:        v2Path,
@@ -514,6 +534,13 @@ func (service *managementService) providerResponses(providerSettings map[provide
 	for _, summary := range summaries {
 		providerIdentifier := providerID(summary.identifier)
 		settings, hasKey := providerSettings[providerIdentifier]
+		textModels := make([]managementTextModelResponse, 0, len(summary.textModels))
+		for _, model := range summary.textModels {
+			textModels = append(textModels, managementTextModelResponse{
+				ID:              model.identifier,
+				ReasoningEffort: managementReasoningEffortCapabilityResponseFor(model.reasoningEffort),
+			})
+		}
 		response := managementProviderResponse{
 			ID:                    summary.identifier,
 			Label:                 summary.label,
@@ -522,7 +549,8 @@ func (service *managementService) providerResponses(providerSettings map[provide
 			TextModel:             summary.textDefaultModel,
 			SystemPrompt:          constants.EmptyString,
 			TextDefaultModel:      summary.textDefaultModel,
-			TextModels:            summary.textModels,
+			TextModels:            textModels,
+			ReasoningEffort:       managementReasoningEffortCapabilityResponseFor(summary.textReasoningEffort),
 			SupportsDictation:     summary.supportsDictation,
 			DictationDefaultModel: summary.dictationDefaultModel,
 			DictationModels:       summary.dictationModels,
@@ -535,6 +563,30 @@ func (service *managementService) providerResponses(providerSettings map[provide
 		responses = append(responses, response)
 	}
 	return responses
+}
+
+func (request managementDefaultsRequest) tenantDefaults() (TenantDefaults, error) {
+	if request.ReasoningEffort == nil {
+		return TenantDefaults{}, fmt.Errorf("%w: field=reasoning_effort", errManagementBadRequest)
+	}
+	return TenantDefaults{
+		Provider:          request.Provider,
+		Model:             request.Model,
+		DictationProvider: request.DictationProvider,
+		DictationModel:    request.DictationModel,
+		SystemPrompt:      request.SystemPrompt,
+		ReasoningEffort:   *request.ReasoningEffort,
+	}, nil
+}
+
+func managementReasoningEffortCapabilityResponseFor(capability *reasoningEffortCapability) *managementReasoningEffortCapabilityResponse {
+	if capability == nil {
+		return nil
+	}
+	return &managementReasoningEffortCapabilityResponse{
+		Adapter: string(capability.adapter),
+		Efforts: canonicalReasoningEffortOptions(),
+	}
 }
 
 func (service *managementService) validateManagedProviderSettings(providerIdentifier providerID, request managementProviderKeyRequest) error {

@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/internal/testfixtures"
 	"go.uber.org/zap"
 )
 
@@ -25,6 +26,13 @@ const (
 	testMetaKey        = "sk-meta"
 	testGrokKey        = "sk-xai"
 )
+
+func openAIResponsesReasoningEffortCapability() *proxy.ReasoningEffortCapability {
+	return &proxy.ReasoningEffortCapability{
+		Adapter: "openai_responses",
+		Efforts: []string{"minimal", "low", "medium", "high"},
+	}
+}
 
 func TestProviderRoutingUsesConfiguredOpenAIURLsForTextAndDictation(t *testing.T) {
 	var capturedPaths []string
@@ -527,6 +535,170 @@ func TestProviderRoutingUsesConfiguredTextModelCatalog(t *testing.T) {
 	}
 	if capturedPayload["model"] != configuredDeepSeekModel {
 		t.Fatalf("model=%v want=%s", capturedPayload["model"], configuredDeepSeekModel)
+	}
+}
+
+func TestProviderRoutingAppliesProviderLevelReasoningEffortCapability(t *testing.T) {
+	catalogs := testfixtures.ProviderModelCatalogs(t)
+	openAIModels := catalogs[proxy.ProviderNameOpenAI]
+	for modelIndex := range openAIModels.Text.Models {
+		openAIModels.Text.Models[modelIndex].RequestProfile = "openai_responses_reasoning_tools"
+	}
+	openAIModels.Text.ReasoningEffort = openAIResponsesReasoningEffortCapability()
+	catalogs[proxy.ProviderNameOpenAI] = openAIModels
+
+	var capturedPayload map[string]any
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost || request.URL.Path != "/" {
+			t.Fatalf("upstream method=%s path=%s", request.Method, request.URL.Path)
+		}
+		bodyBytes, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			t.Fatalf("read body: %v", readError)
+		}
+		if unmarshalError := json.Unmarshal(bodyBytes, &capturedPayload); unmarshalError != nil {
+			t.Fatalf("unmarshal body: %v", unmarshalError)
+		}
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"id":"provider-reasoning-effort","status":"completed","output_text":"provider capability ok"}`))
+	}))
+	defer upstreamServer.Close()
+
+	endpoints := proxy.NewEndpoints()
+	endpoints.SetResponsesURL(upstreamServer.URL)
+	defaults := proxy.DefaultTenantDefaults()
+	defaults.ReasoningEffort = "high"
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, defaults),
+		OpenAIKey:             TestAPIKey,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+		Endpoints:             endpoints,
+		ProviderModels:        catalogs,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=provider-capability", nil))
+	if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != "provider capability ok" {
+		t.Fatalf("status=%d body=%q", response.Code, response.Body.String())
+	}
+	reasoning, hasReasoning := capturedPayload["reasoning"].(map[string]any)
+	if !hasReasoning || reasoning["effort"] != "high" {
+		t.Fatalf("reasoning=%v want high", capturedPayload["reasoning"])
+	}
+}
+
+func TestProviderRoutingRejectsProviderReasoningEffortCapabilityOnUnsupportedModel(t *testing.T) {
+	catalogs := testfixtures.ProviderModelCatalogs(t)
+	openAIModels := catalogs[proxy.ProviderNameOpenAI]
+	openAIModels.Text.ReasoningEffort = openAIResponsesReasoningEffortCapability()
+	catalogs[proxy.ProviderNameOpenAI] = openAIModels
+
+	_, configurationError := proxy.NewConfiguration(proxy.Configuration{
+		Tenants:        proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:      TestAPIKey,
+		ProviderModels: catalogs,
+	})
+	if configurationError == nil || !strings.Contains(configurationError.Error(), "invalid_model_catalog") || !strings.Contains(configurationError.Error(), "adapter=openai_responses") {
+		t.Fatalf("configuration error=%v want unsupported provider-level capability", configurationError)
+	}
+}
+
+func TestProviderRoutingRejectsInvalidReasoningEffortCatalogCapabilities(t *testing.T) {
+	testCases := []struct {
+		name      string
+		configure func(proxy.ProviderModelCatalogs)
+	}{
+		{
+			name: "provider capability has no adapter",
+			configure: func(catalogs proxy.ProviderModelCatalogs) {
+				openAIModels := catalogs[proxy.ProviderNameOpenAI]
+				capability := openAIResponsesReasoningEffortCapability()
+				capability.Adapter = ""
+				openAIModels.Text.ReasoningEffort = capability
+				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+			},
+		},
+		{
+			name: "provider capability has unknown adapter",
+			configure: func(catalogs proxy.ProviderModelCatalogs) {
+				openAIModels := catalogs[proxy.ProviderNameOpenAI]
+				capability := openAIResponsesReasoningEffortCapability()
+				capability.Adapter = "unsupported_adapter"
+				openAIModels.Text.ReasoningEffort = capability
+				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+			},
+		},
+		{
+			name: "provider capability has an incomplete option list",
+			configure: func(catalogs proxy.ProviderModelCatalogs) {
+				openAIModels := catalogs[proxy.ProviderNameOpenAI]
+				capability := openAIResponsesReasoningEffortCapability()
+				capability.Efforts = capability.Efforts[:3]
+				openAIModels.Text.ReasoningEffort = capability
+				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+			},
+		},
+		{
+			name: "provider capability has a reordered option list",
+			configure: func(catalogs proxy.ProviderModelCatalogs) {
+				openAIModels := catalogs[proxy.ProviderNameOpenAI]
+				capability := openAIResponsesReasoningEffortCapability()
+				capability.Efforts[0], capability.Efforts[1] = capability.Efforts[1], capability.Efforts[0]
+				openAIModels.Text.ReasoningEffort = capability
+				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+			},
+		},
+		{
+			name: "model capability has no adapter",
+			configure: func(catalogs proxy.ProviderModelCatalogs) {
+				openAIModels := catalogs[proxy.ProviderNameOpenAI]
+				capability := openAIResponsesReasoningEffortCapability()
+				capability.Adapter = ""
+				openAIModels.Text.Models[0].ReasoningEffort = capability
+				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+			},
+		},
+		{
+			name: "dictation capability is forbidden",
+			configure: func(catalogs proxy.ProviderModelCatalogs) {
+				openAIModels := catalogs[proxy.ProviderNameOpenAI]
+				openAIModels.Dictation.ReasoningEffort = openAIResponsesReasoningEffortCapability()
+				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			catalogs := testfixtures.ProviderModelCatalogs(subTest)
+			testCase.configure(catalogs)
+			_, configurationError := proxy.NewConfiguration(proxy.Configuration{
+				Tenants:        proxy.SingleTenantConfigurations("test", TestSecret),
+				OpenAIKey:      TestAPIKey,
+				ProviderModels: catalogs,
+			})
+			if configurationError == nil || !strings.Contains(configurationError.Error(), "invalid_model_catalog") {
+				subTest.Fatalf("configuration error=%v want invalid capability", configurationError)
+			}
+		})
+	}
+}
+
+func TestProviderRoutingRejectsUnsupportedStaticTenantReasoningEffort(t *testing.T) {
+	defaults := proxy.DefaultTenantDefaults()
+	defaults.ReasoningEffort = "unsupported_effort"
+	_, configurationError := proxy.NewConfiguration(proxy.Configuration{
+		Tenants:        proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, defaults),
+		OpenAIKey:      TestAPIKey,
+		ProviderModels: testfixtures.ProviderModelCatalogs(t),
+	})
+	if configurationError == nil || !strings.Contains(configurationError.Error(), "unsupported provider capability") {
+		t.Fatalf("configuration error=%v want unsupported tenant reasoning effort", configurationError)
 	}
 }
 

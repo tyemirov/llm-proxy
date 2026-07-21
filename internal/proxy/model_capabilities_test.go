@@ -46,6 +46,7 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 		modelIdentifier   string
 		requestProfile    string
 		webSearchEnabled  bool
+		reasoningEffort   string
 		expectTemperature bool
 		expectTools       bool
 		expectReasoning   bool
@@ -55,24 +56,27 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 			modelIdentifier:   proxy.ModelNameGPT5,
 			requestProfile:    "openai_responses_reasoning_tools",
 			webSearchEnabled:  true,
+			reasoningEffort:   "high",
 			expectTemperature: false,
 			expectTools:       true,
 			expectReasoning:   true,
 		},
 		{
-			name:              "GPT-5 without web search",
+			name:              "GPT-5 retains saved reasoning effort without web search",
 			modelIdentifier:   proxy.ModelNameGPT5,
 			requestProfile:    "openai_responses_reasoning_tools",
 			webSearchEnabled:  false,
+			reasoningEffort:   "high",
 			expectTemperature: false,
 			expectTools:       false,
-			expectReasoning:   false,
+			expectReasoning:   true,
 		},
 		{
 			name:              "GPT-5.5 with web search",
 			modelIdentifier:   proxy.ModelNameGPT55,
 			requestProfile:    "openai_responses_reasoning_tools",
 			webSearchEnabled:  true,
+			reasoningEffort:   "high",
 			expectTemperature: false,
 			expectTools:       true,
 			expectReasoning:   true,
@@ -82,6 +86,7 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 			modelIdentifier:   proxy.ModelNameGPT55Pro,
 			requestProfile:    "openai_responses_reasoning_tools",
 			webSearchEnabled:  true,
+			reasoningEffort:   "high",
 			expectTemperature: false,
 			expectTools:       true,
 			expectReasoning:   true,
@@ -135,7 +140,7 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 
 	for _, testCase := range testCases {
 		testFramework.Run(testCase.name, func(subTestFramework *testing.T) {
-			payload := proxy.BuildRequestPayload(testCase.modelIdentifier, testCase.requestProfile, promptValue, testCase.webSearchEnabled, nil)
+			payload := proxy.BuildRequestPayload(testCase.modelIdentifier, testCase.requestProfile, promptValue, testCase.webSearchEnabled, nil, testCase.reasoningEffort)
 			payloadBytes, marshalError := json.Marshal(payload)
 			if marshalError != nil {
 				subTestFramework.Fatalf(marshalPayloadErrorFormat, marshalError)
@@ -155,6 +160,9 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 			if reasoningFieldPresent != testCase.expectReasoning {
 				subTestFramework.Errorf(reasoningFieldPresenceMismatch, payloadJSON, testCase.expectReasoning)
 			}
+			if testCase.expectReasoning && !strings.Contains(payloadJSON, `"effort":"`+testCase.reasoningEffort+`"`) {
+				subTestFramework.Errorf("reasoning effort=%q missing from payload: %s", testCase.reasoningEffort, payloadJSON)
+			}
 			if strings.Contains(payloadJSON, maxOutputTokensFieldJSONFragment) {
 				subTestFramework.Errorf("max_output_tokens must be omitted without request max_tokens: %s", payloadJSON)
 			}
@@ -166,7 +174,7 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 			}
 
 			maxTokens := 555
-			cappedPayload := proxy.BuildRequestPayload(testCase.modelIdentifier, testCase.requestProfile, promptValue, testCase.webSearchEnabled, &maxTokens)
+			cappedPayload := proxy.BuildRequestPayload(testCase.modelIdentifier, testCase.requestProfile, promptValue, testCase.webSearchEnabled, &maxTokens, testCase.reasoningEffort)
 			cappedPayloadBytes, cappedMarshalError := json.Marshal(cappedPayload)
 			if cappedMarshalError != nil {
 				subTestFramework.Fatalf(marshalPayloadErrorFormat, cappedMarshalError)

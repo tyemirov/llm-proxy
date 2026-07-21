@@ -13,8 +13,8 @@ const (
 // These structs are mapped directly to the capabilities of known models.
 
 // Reasoning specifies configuration options for reasoning-capable models.
-// Effort indicates the desired reasoning intensity and uses constants such as
-// reasoningEffortMinimal or reasoningEffortMedium.
+// Effort indicates the tenant-selected reasoning intensity supported by the
+// configured upstream adapter.
 type Reasoning struct {
 	Effort string `json:"effort"`
 }
@@ -56,7 +56,7 @@ type Tool struct {
 }
 
 // BuildRequestPayload selects the correct OpenAI Responses payload shape for the configured request profile.
-func BuildRequestPayload(modelIdentifier string, rawRequestProfile string, combinedPrompt string, webSearchEnabled bool, maxTokens *int) any {
+func BuildRequestPayload(modelIdentifier string, rawRequestProfile string, combinedPrompt string, webSearchEnabled bool, maxTokens *int, reasoningEffort string) any {
 	base := requestPayloadBase{
 		Model:           modelIdentifier,
 		Input:           combinedPrompt,
@@ -81,7 +81,9 @@ func BuildRequestPayload(modelIdentifier string, rawRequestProfile string, combi
 		if webSearchEnabled {
 			payload.Tools = []Tool{{Type: toolTypeWebSearch}}
 			payload.ToolChoice = keyAuto
-			payload.Reasoning = &Reasoning{Effort: reasoningEffortMedium}
+		}
+		if strings.TrimSpace(reasoningEffort) != "" {
+			payload.Reasoning = &Reasoning{Effort: reasoningEffort}
 		}
 		return payload
 	case requestProfileOpenAIResponsesTemperature:

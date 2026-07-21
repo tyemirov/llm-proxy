@@ -671,7 +671,303 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Resolved:
   The invalid `web_search` warning now emits only its stable event and no query-derived fields or error values. Router-level black-box coverage drives an authenticated invalid-web-search sentinel through the existing request flow and verifies it, prompts, tenant keys, and rejected credential-shaped values remain absent from every structured log entry. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
+- [x] [B041] (P1) {B020,B035} Render management notifications in the header immediately left of the avatar.
+  Goal:
+  Move the canonical management notice region from the dashboard below the
+  header into the shared MPR header's action area, directly to the left of the
+  avatar or signed-out control. A success notice such as `Defaults saved` must
+  read as header feedback, not as a floating dashboard panel.
+
+  Requirements:
+  - Use the documented `<mpr-header>` `aux` slot only. Render one semantic
+    application-owned notification region in that slot before the existing
+    `<mpr-user slot="aux">` so visual and DOM order place every notice directly
+    to the avatar/sign-in control's left. Do not inspect or mutate MPR UI shadow
+    DOM, add a second header implementation, or move authentication ownership
+    away from MPR UI.
+  - Reshape the Alpine composition so the existing single notice state and
+    `setNotice` behavior drive the slotted header region without copying state,
+    mirroring messages, ad-hoc window events, or a second notification API.
+    Keep the current success, error, and informational message kinds and their
+    live-region semantics.
+  - Remove the B035 below-header sticky geometry completely: the `main`-owned
+    notification element, header-bottom CSS custom property, `ResizeObserver`,
+    scroll/resize positioning listeners, and independent notice z-index must
+    not remain as obsolete layout paths after the header-slot contract exists.
+  - Keep the LLM Proxy brand on the left and the avatar/sign-in control at the
+    header's right edge. Notices use only the available space between them and
+    never overlap, hide, push off-screen, or intercept the avatar/sign-in
+    control. At narrow widths, retain the notice before the avatar with an
+    accessible, readable constrained layout; do not relocate it below the
+    header or silently drop its message.
+  - Preserve B020's stacking boundary: Settings and other explicit modal
+    overlays remain above the header notice, while an ordinary notice remains
+    visible and non-obstructive during normal dashboard use. The notice must
+    not cover header navigation, menu interaction, or focus indicators.
+
+  Deliverables:
+  - Update the static management shell and notice-state composition so the
+    header `aux` area owns the sole rendered notification region before the
+    MPR user/avatar control.
+  - Replace the retired B035 sticky-notice styles and measurement code with
+    scoped header-slot layout styles, retaining user-facing strings in the
+    existing constants contract.
+  - Update the browser layout contract documentation/tests to state that all
+    management notices appear in the header left of the avatar.
+
+  Validation:
+  - Add Playwright coverage that triggers `Defaults saved`, a representative
+    error, and an informational notice through real user-visible flows. At
+    desktop and narrow widths, assert each notice's bounding box is inside the
+    shared header and immediately precedes the avatar/sign-in control without
+    overlap, clipping, or loss of keyboard/pointer access.
+  - Prove the notice remains a correctly announced status/live region, the
+    avatar menu is still operable while a notice is visible, and opening the
+    Settings modal wins hit testing over the header notice.
+  - Add a static/runtime regression that fails if a notice region is rendered
+    below `<mpr-header>`, header-bottom measurement code returns, or a second
+    notification state/region is introduced.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
+  Resolved:
+  The sole live notification region now occupies the MPR header `aux` slot before
+  the avatar, driven by the existing shared Alpine notice state. Retired sticky
+  positioning, resize/scroll measurement, and notice z-index paths were
+  removed. Playwright verifies live notices at desktop and narrow widths, avatar
+  hit testing, and Settings-overlay precedence. Baseline and final
+  `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
+
+- [x] [B042] (P2) {B041,I014,I015} Place the LLM Proxy logo directly left of its shared-header title.
+  Goal:
+  Make the `LLM Proxy` title at the left of the shared management header a
+  recognizable product brand by placing the existing LLM Proxy logo immediately
+  to its left, as shown by the requested hero/header treatment.
+
+  Requirements:
+  - Use the existing local
+    `/assets/llm-proxy/img/llm-proxy-icon.svg` asset; do not create a second
+    logo, use the favicon as a substitute, embed a data URL, or add an external
+    image dependency.
+  - Replace the attribute-only header label with one canonical custom `brand`
+    slot: a single focusable home link containing the logo followed by visible
+    `LLM Proxy` text. Remove the default label path so the title cannot render
+    twice or create two competing home controls.
+  - Keep the image decorative when the adjacent visible product name supplies
+    the link's accessible name, while retaining an explicit accessible home-link
+    label. Preserve the current root navigation target and visible keyboard
+    focus behavior.
+  - Scope all sizing, gap, alignment, and responsive rules to LLM Proxy's
+    static site. Do not patch MPR UI internals, query its shadow DOM, or change
+    the shared package. The logo must remain left of and vertically aligned to
+    the title without stretching, clipping, or layout shift.
+  - Preserve I014's right-aligned avatar/sign-in control and B041's
+    header-resident notice. At desktop and narrow widths, brand logo/title,
+    notice, and avatar must remain visible, ordered, and non-overlapping; do
+    not remove the logo or the visible title as a narrow-screen fallback.
+
+  Deliverables:
+  - Update the static header markup to use the documented MPR header `brand`
+    slot with the existing local logo and canonical LLM Proxy home link.
+  - Add scoped header-brand CSS for stable icon/title sizing and responsive
+    spacing alongside the existing avatar and notification layout contracts.
+  - Update browser/static-site coverage for the branded header.
+
+  Validation:
+  - Add Playwright coverage at desktop and narrow widths proving the local logo
+    is visible immediately left of the visible `LLM Proxy` title, both are
+    contained by one accessible home link, the image has the intended
+    accessibility treatment, and no duplicate title or logo is rendered.
+  - Trigger the B041 notice state and prove the logo/title, notice, and
+    avatar/sign-in control remain visible, ordered, keyboard reachable, and
+    non-overlapping; confirm the Settings overlay still wins its established
+    stacking boundary.
+  - Add a static-site regression that rejects an external/data-URL logo,
+    attribute-only duplicate header title, missing local icon asset, or private
+    MPR UI implementation selector.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
+  Resolved:
+  The header now uses one custom `brand` slot: an accessible home link containing
+  the existing local LLM Proxy SVG followed by the visible title. The
+  attribute-only label path is removed, and scoped responsive styles preserve
+  the logo/title, B041 notice, and avatar at desktop and narrow widths.
+  Playwright verifies the brand geometry, accessibility, and modal precedence.
+  Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
+
+- [x] [B043] (P2) {B001} Replace the generated-secret bracket glyph with a standard copy icon.
+  Goal:
+  Make the one-time generated-secret copy control visually recognizable as a
+  copy action. The current literal `[]` resembles square brackets rather than
+  the conventional two-overlapping-documents copy icon shown by the tooltip.
+
+  Requirements:
+  - Replace only the generated-secret button's literal bracket glyph with one
+    canonical, local standard copy icon: two overlapping document/rectangle
+    outlines rendered as semantic inline SVG. Do not use `[]`, textual
+    substitutes, emoji, a Unicode lookalike, a remote icon CDN, a data URL, or
+    a new binary asset.
+  - Keep the icon decorative (`aria-hidden`) while the existing button remains
+    the accessible control with its `Copy secret` name and tooltip sourced from
+    the current constants contract. The SVG must not create a duplicate
+    accessible name or become independently focusable.
+  - Preserve the existing `copyGeneratedSecret()` clipboard action, generated
+    secret visibility boundary, success/error notices, disabled/focus/hover
+    behavior, and icon-only button dimensions. This is a glyph correction, not
+    a change to secret storage, clipboard permission handling, or request
+    example copy controls.
+  - Keep the icon centered, high-contrast, and visually distinct from the
+    bracket glyph at supported desktop and narrow widths. Scope any SVG/button
+    styling to LLM Proxy's static site and do not patch MPR UI internals or add
+    a second button implementation.
+
+  Deliverables:
+  - Replace the generated-secret button content with the canonical local copy
+    SVG and scoped presentation styles where needed.
+  - Retain the existing constants-backed tooltip and accessible label.
+  - Add browser/static-site regression coverage for the corrected icon-only
+    control.
+
+  Validation:
+  - Add Playwright coverage that creates a secret, finds one button named
+    `Copy secret`, verifies its visible SVG has the standard two-document
+    shape, confirms the literal bracket glyph is absent, and proves clicking it
+    still performs the existing copy action and success notice flow.
+  - Verify keyboard focus, tooltip/title, accessible name, contrast, and
+    narrow-layout geometry remain usable without exposing the secret in a new
+    DOM attribute, log, or notification.
+  - Add a static regression that rejects a bracket/text/emoji copy glyph,
+    external/data-URL icon source, focusable/decoratively misnamed SVG, or
+    duplicate generated-secret copy button.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
+
+  Resolution:
+  Replaced the literal bracket glyph with a decorative local two-document SVG
+  while retaining the existing button name, tooltip, clipboard action, and
+  notice flow. Playwright covers static markup plus desktop/narrow focus,
+  geometry, and clipboard behavior. Baseline and final
+  `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
+
 ## Improvements
+
+- [x] [I026] (P1) {B036} Add provider/model-capability-driven reasoning-effort to tenant routing defaults.
+  Goal:
+  Let Settings save one tenant-level `reasoning_effort` as part of its routing
+  defaults, independent of any particular model. When a resolved text provider
+  or model declares effort support, the proxy forwards that saved default using
+  the declared adapter mapping. The current OpenAI Responses reasoning profile
+  instead hard-codes `medium` only when web search is enabled, while the
+  management/defaults contract cannot express an effort default at all.
+
+  Requirements:
+  - Make reasoning effort an explicit catalog capability that may be declared
+    at either the text-provider or individual text-model level. A
+    provider-level declaration covers that provider's configured text routes;
+    a model-level declaration enables the capability for that model when its
+    provider does not declare it. When both declarations exist, validate one
+    deterministic effective capability and reject conflicts rather than
+    guessing precedence.
+  - Define one canonical effort vocabulary and ordered option set for the
+    tenant-level setting. Capability declarations may state that a provider or
+    model supports the setting and its upstream adapter mapping, but they must
+    not create separate model-owned persisted settings or incompatible browser
+    option lists. Fail catalog validation if declared capabilities cannot
+    produce one unambiguous default-configuration control.
+  - Extend the canonical tenant routing-default shape with optional
+    `reasoning_effort` as an independent default field, not a member of a
+    provider key, provider setting, or text-model selection. An unset effort
+    is explicit; a set effort must be one canonical configured value. Changing
+    a default provider or model must neither clear, replace, nor rebind the
+    saved effort merely because that newly selected route lacks the capability.
+  - Extend the strict `PUT /api/management/defaults` request and profile
+    response so `reasoning_effort` round-trips atomically with the text
+    provider/model, dictation pair, and system prompt. Preserve B036's pair
+    atomicity and saved-key checks, tenant isolation, and no-partial-write
+    behavior. Reject unknown, malformed, or catalog-unsupported effort values
+    at the management boundary; never silently substitute a level.
+  - Replace the management profile's bare text-model string list with one
+    canonical provider/model capability projection that exposes provider-level
+    and model-level effort support plus the one effective default option set.
+    Update all first-party frontend types and consumers together; do not retain
+    a legacy string-list field or add a second capability endpoint that can
+    drift from the configured catalog.
+  - Add one bounded, versioned managed-defaults migration that transactionally
+    adds the new field with the explicit unset value for every current valid
+    row. Do not infer a value from a model name, a provider name, request
+    profile, or the current web-search-only `medium` behavior. Existing invalid
+    provider/model rows must still fail with B036's contextual migration error.
+    Remove the migration bridge after it has been applied; do not introduce
+    runtime fallback or compatibility reads.
+  - In Settings, render one `Reasoning effort` control as part of the tenant
+    routing-default form whenever the catalog exposes effort support through at
+    least one provider or model. Its options and current value come solely from
+    the profile projection. It is not nested under a specific model or provider
+    editor, and provider/model changes must preserve the selected value. When
+    the current default route lacks support, make that inactive state explicit
+    without hiding, clearing, or overwriting the tenant's setting. Do not
+    hard-code option lists in the browser or create model-specific effort
+    controls.
+  - Carry the saved tenant-level effort through routing whenever the final
+    resolved text provider or model reports the capability, including an
+    explicitly selected supported route. For a configured supporting OpenAI
+    Responses route, set upstream `reasoning.effort` to the saved value whether
+    or not web search is enabled, replacing the hard-coded web-search-only
+    `medium` behavior. Omit the field only when the resolved route does not
+    declare support; never send a generic reasoning field to dictation or an
+    adapter without an explicit mapping.
+  - Keep this scope to a routing default. Do not add a public
+    `reasoning_effort` query or JSON request parameter, provider-specific
+    thinking controls, aliases, or compatibility behavior. Do not infer support
+    from a provider/model name or expose GLM, Moonshot, Qwen, or other routes
+    merely because an upstream API uses similarly named controls.
+  - Keep configuration, model-catalog documentation, management API
+    documentation, static UI copy, and routing examples synchronized with the
+    final provider-or-model capability contract.
+
+  Deliverables:
+  - Add validated provider/model effort-capability metadata, the canonical
+    tenant-default/storage field, the bounded migration, and strict
+    management-profile/default-update contracts.
+  - Update default routing and supported upstream adapters to forward the one
+    saved tenant effort whenever their resolved route declares the capability.
+  - Add the single tenant-default Settings control and update all first-party
+    frontend types, copy, and documentation to consume the canonical capability
+    projection.
+
+  Validation:
+  - Add catalog/startup coverage for provider-only support, model-only support,
+    both declarations, conflicting declarations, empty/duplicate/invalid effort
+    values, unsupported endpoint or adapter mappings, and every configuration
+    shape that cannot yield one canonical tenant-default control.
+  - Add black-box management API and persistence coverage proving an effort
+    round-trips per tenant independently of default provider/model changes;
+    invalid or unsupported values and cross-tenant mutations fail without
+    partial writes; the profile exposes only catalog-declared capabilities; and
+    migration rows receive the explicit unset state or fail contextually for
+    invalid legacy provider/model data.
+  - Add public HTTP routing coverage with controlled upstreams proving the
+    saved effort reaches a supporting provider-level route and a
+    model-level-only route, with and without web search and when explicitly
+    selected. Prove it is absent from unsupported routes, dictation, and every
+    adapter without an explicit effort mapping.
+  - Add Playwright coverage for the single default-form control, capability
+    visibility, options, save/reload persistence, provider/model changes that
+    preserve the selected effort, inactive-current-route state, keyboard
+    accessibility, and desktop/narrow layout.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
+
+  Resolution:
+  Added one canonical tenant-level `reasoning_effort` default with explicit
+  unset state, validated provider/model catalog declarations, and the version-2
+  managed-defaults migration. The profile now exposes structured route
+  capability data and one option list; Settings preserves the selected effort
+  across route changes and identifies inactive routes. Only resolved declared
+  OpenAI Responses routes forward the value, independent of web search; public
+  request fields and unsupported/dictation routes do not. Configuration,
+  documentation, management/persistence, routing, and browser coverage were
+  synchronized. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+  runs passed.
 
 - [x] [I024] (P1) Add Qwen 3.8 Token Plan and MiniMax M2.7 providers.
   Goal:
@@ -1918,5 +2214,132 @@ Format: `- [ ] [B042] (P1) {I007} Title`
     specificity, doorway safety, metadata, conversion clarity, duplicate-risk,
     site integration, and indexing readiness, and exactly 5/5 for factual
     integrity before publication.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
+
+- [ ] [P004] (P1) {P002,P003} Make Resources an always-available footer surface and enforce the resource-page shell.
+  Goal:
+  Make the public Resources entry point continuously discoverable from the
+  shared footer, and make every public resource page use one unambiguous
+  document order: header, resource content, then footer.
+
+  Requirements:
+  - Render a semantic `Resources` navigation section in the shared public
+    footer on the landing page, the resource hub, and every generated public
+    resource page. It must contain a descriptive, crawlable anchor to the
+    canonical `/resources/` hub; it must not depend on JavaScript interaction,
+    a sitemap, or an authenticated `/manage/` page to discover the resources.
+  - Treat the footer as an always-rendered part of the public document shell,
+    rather than an optional resource-hub-only fragment. The Resources entry
+    must remain available in normal document flow at every supported viewport
+    without covering page content or creating a duplicate navigation surface.
+  - Give each generated resource document exactly one shared shell in this
+    order: the canonical public header, one `main` element containing all
+    resource-specific visible content, and the canonical public footer. No
+    resource article, related-link group, CTA, or generated navigation may sit
+    before the header, after the footer, or outside the page's `main` region.
+  - Generate the footer Resources link and the resource-page shell from the
+    same deterministic site manifest/template contract as the hub, pages,
+    canonical URLs, and sitemap. Do not hand-maintain duplicate footer links,
+    retain the current hub-only footer, or create a legacy layout path.
+  - Preserve P002's public-root versus private-`/manage/` separation and
+    P003's canonical trailing-slash, accessibility, and indexing contracts.
+    The footer must never expose tenant data, secrets, private API routes, or
+    noindex management URLs as public resource navigation.
+
+  Deliverables:
+  - Extend the generated public site shell with the canonical footer Resources
+    navigation and apply it consistently to the landing page, resource hub,
+    and every generated public resource page.
+  - Update the resource generator and any site-rendering documentation so the
+    header-main-footer ordering and footer-based resource discovery are explicit
+    invariants.
+  - Add black-box static-site and Playwright coverage that checks the footer
+    Resources link on every public route family, verifies its target is the
+    canonical hub URL, and proves generated resource pages place all visible
+    resource content between the shared header and footer at desktop and narrow
+    widths.
+
+  Validation:
+  - Make generation fail when a public resource page omits the canonical
+    header, `main`, footer, or footer Resources anchor; when those elements are
+    out of order; when resource content escapes `main`; or when the footer link
+    is not the canonical public hub URL.
+  - Extend the public-site link/canonical audit to prove footer discovery uses
+    a normal crawlable anchor and keeps `/manage/`, APIs, secrets, redirects,
+    and noindex pages out of resource navigation.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
+
+- [ ] [P005] (P1) {P002,P004} Normalize public Privacy and Terms pages using PoodleScanner's legal-page contract as the structural reference.
+  Goal:
+  Give LLM Proxy one coherent, public legal-page experience: canonical Privacy
+  and Terms pages with LLM Proxy-specific, evidence-backed content, a readable
+  no-JavaScript fallback, and consistent legal links in the shared footer.
+
+  Requirements:
+  - Establish `/privacy/` and `/terms/` as the only canonical public legal
+    routes. Use those exact trailing-slash URLs in page metadata, Open Graph,
+    sitemap, shared footer links, and all internal links; do not add `/tos`,
+    slashless, duplicate, or compatibility routes.
+  - Use PoodleScanner's current `web/site/privacy/index.html`,
+    `web/site/tos/index.html`, and `test/web/tests/footer-legal-links.spec.js`
+    as a structural and test-design reference only. Do not copy PoodleScanner's
+    product-specific clauses, dates, contact details, YouTube sections, refund
+    policy, branding, or external-link assertions into LLM Proxy.
+  - Render each legal page through the canonical public shell established by
+    P002 and P004: one shared header, one `main` element containing the legal
+    document, and the shared footer. The footer must expose descriptive,
+    crawlable `Privacy` and `Terms` links on the landing page, `/manage/`, the
+    resource hub, every resource page, and both legal pages themselves.
+  - Follow the PoodleScanner pattern of a semantic `mpr-legal-document` for
+    `privacy` and `terms`, with a fully readable static fallback inside the
+    document when the component cannot render. First verify support in the
+    pinned MPR UI version; any upgrade must be explicit and pinned, never a
+    switch to a floating `latest` asset or a second legal renderer.
+  - Source policy statements only from verified LLM Proxy behavior and an
+    approved legal-content input. Privacy content must accurately distinguish
+    MPR UI/TAuth session handling from LLM Proxy persistence; describe
+    tenant-owned provider keys as encrypted at rest, generated secrets as
+    digest-only storage, and usage records as excluding prompts, audio,
+    transcripts, responses, raw provider keys, and raw tenant secrets. Terms
+    content must state the documented proxy/provider limitations and user
+    responsibility for submitted data and upstream-provider use without
+    inventing privacy, retention, compliance, deletion, uptime, payment,
+    refund, jurisdiction, or legal-rights claims.
+  - Give each page a specific title, description, canonical URL, Open Graph
+    values, visible H1, effective date, and last-updated date derived from one
+    maintained source. Keep the legal pages indexable only if the final legal
+    policy authorizes that public status; they must otherwise be handled by an
+    explicit site-indexing decision, never silently omitted or disguised.
+  - Keep the legal-page source, footer links, sitemap inclusion decision, and
+    rendered fallback synchronized from one canonical site contract. Do not
+    hand-maintain divergent footer fragments, duplicate legal copy, or a
+    legacy management-only footer path.
+
+  Deliverables:
+  - Add a deterministic, canonical legal-page source/template and render the
+    public `/privacy/` and `/terms/` pages from it with the current pinned MPR
+    UI legal-document component and accessible static fallback content.
+  - Extend the shared footer contract with the canonical Privacy and Terms
+    anchors across public and management surfaces, alongside P004's Resources
+    navigation.
+  - Update public-site and deployment documentation with the final legal URLs,
+    policy-content ownership, effective/modified-date source, and indexability
+    decision.
+
+  Validation:
+  - Add black-box static-site and Playwright coverage that requests both legal
+    routes, verifies their public metadata, visible headings, canonical URLs,
+    footer links, and keyboard-accessible navigation, and proves every required
+    site route exposes the same canonical Privacy and Terms anchors.
+  - Verify that static fallback legal content remains readable when the custom
+    element is unavailable, and that an initialized element does not duplicate
+    visible legal copy, obscure the footer, or put legal content outside
+    `main` at desktop and narrow widths.
+  - Make rendering fail on missing approved legal content, invalid/missing
+    effective or modified dates, route/metadata/footer disagreement, duplicate
+    legal pages, unsupported MPR UI legal-component use, or policy claims that
+    are not tied to an approved source.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.

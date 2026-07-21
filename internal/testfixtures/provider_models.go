@@ -19,15 +19,22 @@ type providerModelsProviderConfiguration struct {
 }
 
 type providerModelsEndpointConfiguration struct {
-	DefaultModel string                             `mapstructure:"default_model"`
-	Models       []providerModelsModelConfiguration `mapstructure:"models"`
+	DefaultModel    string                               `mapstructure:"default_model"`
+	Models          []providerModelsModelConfiguration   `mapstructure:"models"`
+	ReasoningEffort *providerModelsReasoningEffortConfig `mapstructure:"reasoning_effort"`
 }
 
 type providerModelsModelConfiguration struct {
-	ID               string `mapstructure:"id"`
-	RequestProfile   string `mapstructure:"request_profile"`
-	WebSearch        bool   `mapstructure:"web_search"`
-	OutputTokenLimit int    `mapstructure:"output_token_limit"`
+	ID               string                               `mapstructure:"id"`
+	RequestProfile   string                               `mapstructure:"request_profile"`
+	WebSearch        bool                                 `mapstructure:"web_search"`
+	OutputTokenLimit int                                  `mapstructure:"output_token_limit"`
+	ReasoningEffort  *providerModelsReasoningEffortConfig `mapstructure:"reasoning_effort"`
+}
+
+type providerModelsReasoningEffortConfig struct {
+	Adapter string   `mapstructure:"adapter"`
+	Efforts []string `mapstructure:"efforts"`
 }
 
 // ProviderModelCatalogs loads the repository config model catalogs for tests that build proxy.Configuration directly.
@@ -73,10 +80,22 @@ func (configuration providerModelsEndpointConfiguration) proxyCatalog() proxy.Mo
 			RequestProfile:   modelConfiguration.RequestProfile,
 			WebSearch:        modelConfiguration.WebSearch,
 			OutputTokenLimit: modelConfiguration.OutputTokenLimit,
+			ReasoningEffort:  providerModelsReasoningEffortCapability(modelConfiguration.ReasoningEffort),
 		})
 	}
 	return proxy.ModelEndpointCatalog{
-		DefaultModel: configuration.DefaultModel,
-		Models:       models,
+		DefaultModel:    configuration.DefaultModel,
+		Models:          models,
+		ReasoningEffort: providerModelsReasoningEffortCapability(configuration.ReasoningEffort),
+	}
+}
+
+func providerModelsReasoningEffortCapability(configuration *providerModelsReasoningEffortConfig) *proxy.ReasoningEffortCapability {
+	if configuration == nil {
+		return nil
+	}
+	return &proxy.ReasoningEffortCapability{
+		Adapter: configuration.Adapter,
+		Efforts: append([]string(nil), configuration.Efforts...),
 	}
 }

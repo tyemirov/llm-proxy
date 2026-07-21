@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"testing"
 
 	"github.com/tyemirov/llm-proxy/internal/proxy"
@@ -24,8 +25,8 @@ const (
 	typeField = "type"
 	// toolChoiceAutoValue is the expected value of the tool_choice field when web search is enabled.
 	toolChoiceAutoValue = "auto"
-	// reasoningEffortMediumValue is the expected reasoning effort for GPT-5.
-	reasoningEffortMediumValue = "medium"
+	// reasoningEffortHighValue is the saved tenant reasoning effort for GPT-5.
+	reasoningEffortHighValue = "high"
 	// toolTypeWebSearchValue is the expected tool type when web search is requested.
 	toolTypeWebSearchValue = "web_search"
 	// toolChoiceMismatchFormat reports an unexpected tool_choice value.
@@ -117,19 +118,86 @@ func TestProxyResponseDelivery(testingInstance *testing.T) {
 	}
 }
 
-// TestProxyGPT5WebSearchIncludesReasoning verifies that GPT-5 requests with web search
-// include tools, tool_choice, and reasoning fields.
-func TestProxyGPT5WebSearchIncludesReasoning(testingInstance *testing.T) {
+// TestProxyGPT5SavedReasoningEffortFollowsTheResolvedRoute verifies that a
+// tenant default is forwarded to an explicitly selected supported model with
+// and without web search.
+func TestProxyGPT5SavedReasoningEffortFollowsTheResolvedRoute(testingInstance *testing.T) {
+	for _, webSearchEnabled := range []bool{false, true} {
+		testingInstance.Run("web_search="+strconv.FormatBool(webSearchEnabled), func(subTest *testing.T) {
+			var capturedPayload any
+			openAIServer := newOpenAIServer(subTest, integrationSearchBody, &capturedPayload)
+			subTest.Cleanup(openAIServer.Close)
+			applicationServer := newIntegrationServerWithDefaults(subTest, openAIServer, proxy.TenantDefaults{
+				Provider:          proxy.ProviderNameOpenAI,
+				Model:             proxy.ModelNameGPT41,
+				DictationProvider: proxy.ProviderNameOpenAI,
+				DictationModel:    proxy.DefaultDictationModel,
+				ReasoningEffort:   reasoningEffortHighValue,
+			})
+			requestURL, _ := url.Parse(applicationServer.URL)
+			queryValues := requestURL.Query()
+			queryValues.Set(promptQueryParameter, promptValue)
+			queryValues.Set(keyQueryParameter, integrationServiceSecret)
+			queryValues.Set(adaptiveModelQueryParameter, proxy.ModelNameGPT5)
+			if webSearchEnabled {
+				queryValues.Set(webSearchQueryParameter, "1")
+			}
+			requestURL.RawQuery = queryValues.Encode()
+			httpResponse, requestError := http.Get(requestURL.String())
+			if requestError != nil {
+				subTest.Fatalf(requestErrorFormat, requestError)
+			}
+			defer httpResponse.Body.Close()
+			if httpResponse.StatusCode != http.StatusOK {
+				responseBody, _ := io.ReadAll(httpResponse.Body)
+				subTest.Fatalf(unexpectedStatusFormat, httpResponse.StatusCode, string(responseBody))
+			}
+			_, _ = io.ReadAll(httpResponse.Body)
+			payloadMap, _ := capturedPayload.(map[string]any)
+			if webSearchEnabled {
+				toolsValue, ok := payloadMap[toolsField].([]any)
+				if !ok || len(toolsValue) == 0 {
+					subTest.Fatalf(toolsMissingFormat, payloadMap)
+				}
+				firstTool, _ := toolsValue[0].(map[string]any)
+				if firstTool[typeField] != toolTypeWebSearchValue {
+					subTest.Fatalf(toolTypeMismatchFormat, firstTool[typeField])
+				}
+				toolChoiceValue, ok := payloadMap[toolChoiceField].(string)
+				if !ok || toolChoiceValue != toolChoiceAutoValue {
+					subTest.Fatalf(toolChoiceMismatchFormat, payloadMap[toolChoiceField], toolChoiceAutoValue)
+				}
+			} else if _, hasTools := payloadMap[toolsField]; hasTools {
+				subTest.Fatalf("unexpected tools in non-search payload: %v", payloadMap)
+			}
+			reasoningValue, ok := payloadMap[reasoningField].(map[string]any)
+			if !ok {
+				subTest.Fatalf(reasoningMissingFormat, payloadMap)
+			}
+			effortValue, ok := reasoningValue[effortField].(string)
+			if !ok || effortValue != reasoningEffortHighValue {
+				subTest.Fatalf(reasoningEffortMismatchFormat, reasoningValue[effortField], reasoningEffortHighValue)
+			}
+		})
+	}
+}
+
+func TestProxyTenantReasoningEffortDoesNotLeakToUnsupportedResolvedRoute(testingInstance *testing.T) {
 	var capturedPayload any
-	openAIServer := newOpenAIServer(testingInstance, integrationSearchBody, &capturedPayload)
+	openAIServer := newOpenAIServer(testingInstance, integrationOKBody, &capturedPayload)
 	testingInstance.Cleanup(openAIServer.Close)
-	applicationServer := newIntegrationServer(testingInstance, openAIServer)
+	applicationServer := newIntegrationServerWithDefaults(testingInstance, openAIServer, proxy.TenantDefaults{
+		Provider:          proxy.ProviderNameOpenAI,
+		Model:             proxy.ModelNameGPT41,
+		DictationProvider: proxy.ProviderNameOpenAI,
+		DictationModel:    proxy.DefaultDictationModel,
+		ReasoningEffort:   reasoningEffortHighValue,
+	})
+
 	requestURL, _ := url.Parse(applicationServer.URL)
 	queryValues := requestURL.Query()
 	queryValues.Set(promptQueryParameter, promptValue)
 	queryValues.Set(keyQueryParameter, integrationServiceSecret)
-	queryValues.Set(webSearchQueryParameter, "1")
-	queryValues.Set(adaptiveModelQueryParameter, proxy.ModelNameGPT5)
 	requestURL.RawQuery = queryValues.Encode()
 	httpResponse, requestError := http.Get(requestURL.String())
 	if requestError != nil {
@@ -142,24 +210,7 @@ func TestProxyGPT5WebSearchIncludesReasoning(testingInstance *testing.T) {
 	}
 	_, _ = io.ReadAll(httpResponse.Body)
 	payloadMap, _ := capturedPayload.(map[string]any)
-	toolsValue, ok := payloadMap[toolsField].([]any)
-	if !ok || len(toolsValue) == 0 {
-		testingInstance.Fatalf(toolsMissingFormat, payloadMap)
-	}
-	firstTool, _ := toolsValue[0].(map[string]any)
-	if firstTool[typeField] != toolTypeWebSearchValue {
-		testingInstance.Fatalf(toolTypeMismatchFormat, firstTool[typeField])
-	}
-	toolChoiceValue, ok := payloadMap[toolChoiceField].(string)
-	if !ok || toolChoiceValue != toolChoiceAutoValue {
-		testingInstance.Fatalf(toolChoiceMismatchFormat, payloadMap[toolChoiceField], toolChoiceAutoValue)
-	}
-	reasoningValue, ok := payloadMap[reasoningField].(map[string]any)
-	if !ok {
-		testingInstance.Fatalf(reasoningMissingFormat, payloadMap)
-	}
-	effortValue, ok := reasoningValue[effortField].(string)
-	if !ok || effortValue != reasoningEffortMediumValue {
-		testingInstance.Fatalf(reasoningEffortMismatchFormat, reasoningValue[effortField], reasoningEffortMediumValue)
+	if _, hasReasoning := payloadMap[reasoningField]; hasReasoning {
+		testingInstance.Fatalf("unsupported route received reasoning: %v", payloadMap)
 	}
 }

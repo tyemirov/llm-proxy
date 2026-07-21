@@ -18,8 +18,9 @@ type ProviderModelCatalog struct {
 
 // ModelEndpointCatalog declares allowed models and the endpoint default model.
 type ModelEndpointCatalog struct {
-	DefaultModel string
-	Models       []ModelConfiguration
+	DefaultModel    string
+	Models          []ModelConfiguration
+	ReasoningEffort *ReasoningEffortCapability
 }
 
 // ModelConfiguration declares runtime metadata for one configured model.
@@ -28,6 +29,14 @@ type ModelConfiguration struct {
 	RequestProfile   string
 	WebSearch        bool
 	OutputTokenLimit int
+	ReasoningEffort  *ReasoningEffortCapability
+}
+
+// ReasoningEffortCapability declares one configured upstream mapping for the
+// canonical tenant-level reasoning effort setting.
+type ReasoningEffortCapability struct {
+	Adapter string
+	Efforts []string
 }
 
 func validateProviderModelCatalogs(catalogs ProviderModelCatalogs) error {
@@ -71,6 +80,10 @@ func validateModelEndpointCatalog(providerName string, endpoint endpointKind, ca
 	if len(catalog.Models) == 0 {
 		return fmt.Errorf("%w: provider=%s endpoint=%s field=%s.models", ErrInvalidModelCatalog, providerName, endpointName, fieldPrefix)
 	}
+	providerReasoningEffort, providerCapabilityError := validatedReasoningEffortCapability(catalog.ReasoningEffort, fieldPrefix+".reasoning_effort")
+	if providerCapabilityError != nil {
+		return fmt.Errorf("%w: provider=%s endpoint=%s", providerCapabilityError, providerName, endpointName)
+	}
 	seenModelIdentifiers := map[string]struct{}{}
 	defaultModelFound := false
 	for modelIndex, modelConfiguration := range catalog.Models {
@@ -98,9 +111,60 @@ func validateModelEndpointCatalog(providerName string, endpoint endpointKind, ca
 		if profileError := validateModelRequestProfile(providerName, endpoint, modelConfiguration); profileError != nil {
 			return fmt.Errorf("%w: field=%s.models[%d].request_profile", profileError, fieldPrefix, modelIndex)
 		}
+		modelFieldPrefix := fmt.Sprintf("%s.models[%d]", fieldPrefix, modelIndex)
+		modelReasoningEffort, modelCapabilityError := validatedReasoningEffortCapability(modelConfiguration.ReasoningEffort, modelFieldPrefix+".reasoning_effort")
+		if modelCapabilityError != nil {
+			return fmt.Errorf("%w: provider=%s endpoint=%s", modelCapabilityError, providerName, endpointName)
+		}
+		// Every valid capability has the one canonical adapter and ordered option
+		// set, so provider and model declarations cannot conflict. Provider scope
+		// covers every configured text route; model scope applies only when the
+		// provider does not declare the capability.
+		effectiveReasoningEffort := providerReasoningEffort
+		if effectiveReasoningEffort == nil {
+			effectiveReasoningEffort = modelReasoningEffort
+		}
+		if effectiveReasoningEffort != nil {
+			if capabilityError := validateReasoningEffortAdapterMapping(providerName, endpoint, modelConfiguration, *effectiveReasoningEffort); capabilityError != nil {
+				return fmt.Errorf("%w: field=%s.reasoning_effort", capabilityError, modelFieldPrefix)
+			}
+		}
 	}
 	if !defaultModelFound {
 		return fmt.Errorf("%w: provider=%s endpoint=%s default_model=%s", ErrInvalidModelCatalog, providerName, endpointName, defaultModel)
+	}
+	return nil
+}
+
+func validatedReasoningEffortCapability(rawCapability *ReasoningEffortCapability, fieldPrefix string) (*reasoningEffortCapability, error) {
+	if rawCapability == nil {
+		return nil, nil
+	}
+	adapter := reasoningEffortAdapter(strings.TrimSpace(rawCapability.Adapter))
+	if adapter == reasoningEffortAdapterNone {
+		return nil, fmt.Errorf("%w: field=%s.adapter", ErrInvalidModelCatalog, fieldPrefix)
+	}
+	if !knownReasoningEffortAdapter(adapter) {
+		return nil, fmt.Errorf("%w: field=%s.adapter adapter=%s", ErrInvalidModelCatalog, fieldPrefix, adapter)
+	}
+	if len(rawCapability.Efforts) != len(canonicalReasoningEfforts) {
+		return nil, fmt.Errorf("%w: field=%s.efforts", ErrInvalidModelCatalog, fieldPrefix)
+	}
+	for effortIndex, rawEffort := range rawCapability.Efforts {
+		effort := strings.TrimSpace(rawEffort)
+		if effort != canonicalReasoningEfforts[effortIndex] {
+			return nil, fmt.Errorf("%w: field=%s.efforts[%d] effort=%s", ErrInvalidModelCatalog, fieldPrefix, effortIndex, effort)
+		}
+	}
+	return &reasoningEffortCapability{adapter: adapter}, nil
+}
+
+func validateReasoningEffortAdapterMapping(providerName string, endpoint endpointKind, modelConfiguration ModelConfiguration, capability reasoningEffortCapability) error {
+	if endpoint != endpointKindText {
+		return fmt.Errorf("%w: provider=%s endpoint=%s adapter=%s", ErrInvalidModelCatalog, providerName, endpoint, capability.adapter)
+	}
+	if capability.adapter != reasoningEffortAdapterOpenAIResponses || providerName != ProviderNameOpenAI || modelRequestProfile(strings.TrimSpace(modelConfiguration.RequestProfile)) != requestProfileOpenAIResponsesReasoningTools {
+		return fmt.Errorf("%w: provider=%s endpoint=%s adapter=%s profile=%s", ErrInvalidModelCatalog, providerName, endpoint, capability.adapter, strings.TrimSpace(modelConfiguration.RequestProfile))
 	}
 	return nil
 }
@@ -145,10 +209,18 @@ func textModelSet(catalog ModelEndpointCatalog) map[string]textModelDefinition {
 				supportsWebSearch:   modelConfiguration.WebSearch,
 				outputTokenLimit:    modelConfiguration.OutputTokenLimit,
 				hasOutputTokenLimit: modelConfiguration.OutputTokenLimit > 0,
+				reasoningEffort:     configuredReasoningEffortCapability(modelConfiguration.ReasoningEffort),
 			}
 		}
 	}
 	return models
+}
+
+func configuredReasoningEffortCapability(configuration *ReasoningEffortCapability) *reasoningEffortCapability {
+	if configuration == nil {
+		return nil
+	}
+	return &reasoningEffortCapability{adapter: reasoningEffortAdapter(strings.TrimSpace(configuration.Adapter))}
 }
 
 func dictationModelSet(catalog ModelEndpointCatalog) map[string]modelID {

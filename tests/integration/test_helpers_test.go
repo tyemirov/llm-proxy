@@ -143,6 +143,32 @@ func newIntegrationServer(testingInstance *testing.T, openAIServer *httptest.Ser
 	return server
 }
 
+func newIntegrationServerWithDefaults(testingInstance *testing.T, openAIServer *httptest.Server, defaults proxy.TenantDefaults) *httptest.Server {
+	testingInstance.Helper()
+	endpoints := proxy.NewEndpoints()
+	endpoints.SetModelsURL(openAIServer.URL + integrationModelsPath)
+	endpoints.SetResponsesURL(openAIServer.URL + integrationResponsesPath)
+	originalClient := proxy.HTTPClient
+	proxy.HTTPClient = openAIServer.Client()
+	testingInstance.Cleanup(func() { proxy.HTTPClient = originalClient })
+	loggerInstance, _ := zap.NewDevelopment()
+	testingInstance.Cleanup(func() { _ = loggerInstance.Sync() })
+	router, buildRouterError := proxy.BuildRouter(integrationConfiguration(testingInstance, proxy.Configuration{
+		Tenants:     proxy.SingleTenantConfigurationsWithDefaults("integration", integrationServiceSecret, defaults),
+		OpenAIKey:   integrationOpenAIKey,
+		LogLevel:    logLevelDebug,
+		WorkerCount: 1,
+		QueueSize:   4,
+		Endpoints:   endpoints,
+	}), loggerInstance.Sugar())
+	if buildRouterError != nil {
+		testingInstance.Fatalf(buildRouterErrorFormat, buildRouterError)
+	}
+	server := httptest.NewServer(router)
+	testingInstance.Cleanup(server.Close)
+	return server
+}
+
 func integrationConfiguration(testingInstance testing.TB, configuration proxy.Configuration) proxy.Configuration {
 	testingInstance.Helper()
 	if len(configuration.ProviderModels) == 0 {
