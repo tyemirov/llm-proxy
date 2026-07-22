@@ -955,7 +955,10 @@ disabled, a temporary tenant, and placeholder values for unused provider keys,
 so live checks never open the configured management database or reuse its
 migration state. Inspect that generated contract without building or calling a
 paid provider with `./scripts/test_live_providers.sh --write-config
-/tmp/llm-proxy-live.yml`.
+/tmp/llm-proxy-live.yml`. Unless `LLM_PROXY_LIVE_PORT` explicitly selects a
+port, each harness run allocates a fresh loopback port. It removes only the
+temporary proxy child it started and never terminates an unrelated local
+listener.
 
 `make release` and `make deploy` run the local `make ci` gate with the standard
 350-second timeout. Override both with

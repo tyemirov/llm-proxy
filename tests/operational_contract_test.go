@@ -3,11 +3,14 @@ package tests_test
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -518,6 +521,201 @@ func TestOperationalLiveConfigWritesWithoutProviderKeys(testingInstance *testing
 	}
 	if !strings.Contains(configuration, "management:\n  enabled: false") {
 		testingInstance.Fatalf("generated live config did not disable management: %s", configuration)
+	}
+}
+
+func TestOperationalLiveConfigAllocatesDefaultHarnessPort(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	configurationOutput := filepath.Join(testingInstance.TempDir(), "live-config.yml")
+	environment := append(
+		os.Environ(),
+		"LLM_PROXY_LIVE_PORT=",
+		"GO=/does/not/exist",
+	)
+	runOperationalCommand(
+		testingInstance,
+		repositoryRoot,
+		environment,
+		filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"),
+		"--write-config", configurationOutput,
+	)
+	configurationBytes, readError := os.ReadFile(configurationOutput)
+	if readError != nil {
+		testingInstance.Fatalf("read generated default-port live config: %v", readError)
+	}
+	allocatedPort := operationalLiveConfigPort(testingInstance, string(configurationBytes))
+	if allocatedPort == 18080 {
+		testingInstance.Fatalf("default live config retained shared port 18080: %s", configurationBytes)
+	}
+	if allocatedPort < 1024 {
+		testingInstance.Fatalf("default live config did not allocate an unprivileged port: %d", allocatedPort)
+	}
+}
+
+func TestOperationalLiveHarnessReapsOwnedProxyChild(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	reservedPort := operationalLoopbackPort(testingInstance)
+	fixture := newOperationalLiveHarnessFixture(testingInstance)
+	environment := fixture.environment(reservedPort)
+	runOperationalCommand(
+		testingInstance,
+		repositoryRoot,
+		environment,
+		filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"),
+		"--preflight",
+	)
+	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
+}
+
+func TestOperationalLiveHarnessReapsOwnedProxyChildAfterTermination(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixture := newOperationalLiveHarnessFixture(testingInstance)
+	preflightBlockPath := filepath.Join(testingInstance.TempDir(), "preflight-blocked")
+	command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), "--preflight")
+	command.Dir = repositoryRoot
+	command.Env = fixture.environment(
+		operationalLoopbackPort(testingInstance),
+		"CURL_PREFLIGHT_BLOCK_PATH="+preflightBlockPath,
+		"CURL_PREFLIGHT_BLOCK_SECONDS=2",
+	)
+	if startError := command.Start(); startError != nil {
+		testingInstance.Fatalf("start live harness: %v", startError)
+	}
+	waitForOperationalFile(testingInstance, preflightBlockPath)
+	if signalError := command.Process.Signal(syscall.SIGTERM); signalError != nil {
+		testingInstance.Fatalf("terminate live harness: %v", signalError)
+	}
+	if waitError := command.Wait(); waitError == nil {
+		testingInstance.Fatal("live harness succeeded after termination")
+	}
+	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
+}
+
+func operationalLiveConfigPort(testingInstance *testing.T, configuration string) int {
+	testingInstance.Helper()
+	portMatch := regexp.MustCompile(`(?m)^  port: ([0-9]+)$`).FindStringSubmatch(configuration)
+	if len(portMatch) != 2 {
+		testingInstance.Fatalf("generated live config omitted port: %s", configuration)
+	}
+	port, parseError := strconv.Atoi(portMatch[1])
+	if parseError != nil {
+		testingInstance.Fatalf("parse generated live config port: %v", parseError)
+	}
+	return port
+}
+
+type operationalLiveHarnessFixture struct {
+	proxyPIDPath  string
+	toolDirectory string
+}
+
+func newOperationalLiveHarnessFixture(testingInstance *testing.T) operationalLiveHarnessFixture {
+	testingInstance.Helper()
+	fixtureRoot := testingInstance.TempDir()
+	toolDirectory := filepath.Join(fixtureRoot, "tools")
+	proxyPIDPath := filepath.Join(fixtureRoot, "proxy.pid")
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "go"), `#!/usr/bin/env bash
+set -euo pipefail
+
+[[ "${1:?}" == "build" ]]
+shift
+output_path=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    -o)
+      output_path="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+[[ -n "${output_path}" ]]
+builtin printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'builtin printf "%s\n" "$$" >"${PROXY_PID_CAPTURE:?}"' \
+  'exec sleep 60' >"${output_path}"
+chmod +x "${output_path}"
+`, 0o755)
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env bash
+set -euo pipefail
+
+for argument in "$@"; do
+  case "${argument}" in
+    *provider=unsupported-live-preflight*)
+      if [[ -n "${CURL_PREFLIGHT_BLOCK_PATH:-}" ]]; then
+        builtin printf '%s\n' ready >"${CURL_PREFLIGHT_BLOCK_PATH}"
+        sleep "${CURL_PREFLIGHT_BLOCK_SECONDS:-1}"
+      fi
+      builtin printf '%s' 400
+      exit 0
+      ;;
+  esac
+done
+builtin printf '%s' 403
+`, 0o755)
+	return operationalLiveHarnessFixture{
+		proxyPIDPath:  proxyPIDPath,
+		toolDirectory: toolDirectory,
+	}
+}
+
+func (fixture operationalLiveHarnessFixture) environment(port int, extraEnvironment ...string) []string {
+	environment := append(
+		os.Environ(),
+		"PATH="+fixture.toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"GO="+filepath.Join(fixture.toolDirectory, "go"),
+		"LLM_PROXY_LIVE_PORT="+strconv.Itoa(port),
+		"PROXY_PID_CAPTURE="+fixture.proxyPIDPath,
+	)
+	return append(environment, extraEnvironment...)
+}
+
+func operationalLoopbackPort(testingInstance *testing.T) int {
+	testingInstance.Helper()
+	listener, listenError := net.Listen("tcp", "127.0.0.1:0")
+	if listenError != nil {
+		testingInstance.Fatalf("reserve loopback port: %v", listenError)
+	}
+	reservedAddress, addressOK := listener.Addr().(*net.TCPAddr)
+	if !addressOK {
+		testingInstance.Fatalf("reserved address type=%T", listener.Addr())
+	}
+	if closeError := listener.Close(); closeError != nil {
+		testingInstance.Fatalf("release loopback port: %v", closeError)
+	}
+	return reservedAddress.Port
+}
+
+func waitForOperationalFile(testingInstance *testing.T, path string) {
+	testingInstance.Helper()
+	deadline := time.Now().Add(operationalHelpTimeout)
+	for {
+		if _, statError := os.Stat(path); statError == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			testingInstance.Fatalf("timed out waiting for operational file: %s", path)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func assertOperationalProxyChildStopped(testingInstance *testing.T, proxyPIDPath string) {
+	testingInstance.Helper()
+	proxyPIDBytes, readError := os.ReadFile(proxyPIDPath)
+	if readError != nil {
+		testingInstance.Fatalf("read proxy pid: %v", readError)
+	}
+	proxyPID, parseError := strconv.Atoi(strings.TrimSpace(string(proxyPIDBytes)))
+	if parseError != nil {
+		testingInstance.Fatalf("parse proxy pid: %v", parseError)
+	}
+	if killError := exec.Command("kill", "-0", strconv.Itoa(proxyPID)).Run(); killError == nil {
+		_ = exec.Command("kill", "-TERM", strconv.Itoa(proxyPID)).Run()
+		testingInstance.Fatalf("live harness left proxy child running: pid=%d", proxyPID)
 	}
 }
 
