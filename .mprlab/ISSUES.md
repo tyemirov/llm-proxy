@@ -1153,6 +1153,12 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   notices expire after their own deadline without impairing header interaction.
   Baseline and final `make ci` runs passed.
 
+  Follow-up synchronized the same-kind replacement proof with the second
+  refresh's observed Requests total (37 to 38), so the identical prior success
+  message cannot satisfy the new-deadline assertion before its timer is armed.
+  The reported failure was reproduced in the baseline; final `make ci` passed
+  with `LLM_PROXY_LIVE_PORT=18183` because Docker Desktop owns port 18080.
+
 
 ## Improvements
 
