@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 
 - Declare the llm-proxy TAuth tenant requirements in the app-owned deployment manifest for gateway assembly.
 
+## [v0.2.38] - 2026-07-22
+
+- Merge pull request #217 from tyemirov/gix/isolate-live-harness-from-unrelated-listeners-and-add
+- test: verify live harness allocates ports and reaps child processes
+- chore(scripts): dynamically allocate default port in test_live_providers.sh
+- docs: clarify loopback port allocation and cleanup in preflight contract
+- docs: clarify live test harness port allocation and cleanup behavior
+- docs(ISSUES): record B049—robust harness port allocation for live-provider test
+
 ## [v0.2.37] - 2026-07-21
 
 - test: verify client probe in coverage script uses explicit --prompt argument
