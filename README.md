@@ -125,37 +125,37 @@ providers:
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts: ["none", "low", "medium", "high", "xhigh"]
         - id: "gpt-5.5-pro"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts: ["medium", "high", "xhigh"]
         - id: "gpt-5.6"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
         - id: "gpt-5.6-sol"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
         - id: "gpt-5.6-terra"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
         - id: "gpt-5.6-luna"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
     dictation:
       default_model: "gpt-4o-mini-transcribe"
       models:
@@ -418,14 +418,14 @@ proxy-side maximum for `max_tokens`. Anthropic text models require
 `output_token_limit` because Anthropic Messages requires `max_tokens` even when
 the client omits it.
 
-`reasoning_effort` is an optional text capability declaration. It can appear
-under `providers.<provider>.text` to cover every configured text model for that
-provider, or under one model to cover only that model when no provider-level
-declaration exists. The current catalog accepts only the exact
-`openai_responses` adapter and ordered `minimal`, `low`, `medium`, `high`
-options, and only for an OpenAI `openai_responses_reasoning_tools` route. The
-capability declares whether the one tenant-level setting may be forwarded; it
-does not create a model-owned setting or a public request parameter.
+`reasoning_effort` is an optional text-model capability declaration. It appears
+only under `providers.<provider>.text.models[]` and belongs to that exact
+provider/model route; provider-level and catalog-wide declarations are rejected.
+Each declaration uses the `openai_responses` adapter and a nonempty,
+duplicate-free ordered list of values that adapter supports, and only an OpenAI
+`openai_responses_reasoning_tools` route may declare it. The capability limits
+the tenant default that can be persisted for that route; it is not a public
+request parameter.
 
 `request_profile` is currently required only for OpenAI text models. It selects
 the stable proxy payload shape for that OpenAI model and must be one of:
@@ -622,35 +622,33 @@ database retains only their SHA-256 digest. Revoking a generated secret
 immediately makes future public proxy requests with that secret return `403`.
 
 Managed routing defaults contain two required, canonical provider/model pairs:
-one for text and one for dictation, plus an independent tenant-level
-`reasoning_effort`. `PUT /api/management/defaults` requires all of those fields
-and validates them atomically. An empty `reasoning_effort` is the explicit unset
-value; a nonempty value must be one of the canonical options exposed by the
-catalog. A blank model, unknown provider, unsupported dictation provider, model
-that belongs to a different provider, or invalid effort returns `400
+one for text and one for dictation, plus a route-bound `reasoning_effort`.
+`PUT /api/management/defaults` resolves the supplied text pair before validating
+the effort. Empty is the explicit unset value; a nonempty value must be in that
+exact route's declared list. A blank model, unknown provider, unsupported
+dictation provider, cross-provider model, or incompatible effort returns `400
 managed_routing_defaults_invalid` before any default is persisted.
 
-The saved effort does not belong to a provider or model. Changing either routing
-pair leaves it intact, including when the new text route cannot use it. The
-profile returns the saved value, `reasoning_effort_options`, and structured
-provider/model capability metadata so the Settings form can show the single
-control and identify an inactive selected route. The browser does not repair
-malformed profile data; it renders an explicit workspace-integrity error
-instead. Public `GET /`, `POST /`, and `POST /v2` contracts do not accept a
-caller-supplied reasoning-effort field.
+The profile exposes capability data only as
+`providers[].text_models[].reasoning_effort`; it has no global option list or
+provider-level capability. The Settings form keeps Text provider, Text model,
+and Reasoning effort in one desktop row, clears an incompatible saved value on
+a model change, and reports `Not supported` for routes without a declaration.
+The browser rejects malformed profile data instead of repairing it. Public
+`GET /`, `POST /`, and `POST /v2` contracts do not accept caller-supplied
+reasoning effort.
 
-Management startup performs one versioned, transactional routing-defaults
-migration. The version-2 migration adds the explicit unset
-`reasoning_effort` to existing valid rows; it never infers an effort from a
-model name, provider, request profile, or web-search behavior. Before its
-version marker exists, it repairs only a blank model or a model known to the
-other configured provider for that same endpoint by choosing the selected
+Management startup performs a bounded, transactional version-3 routing-defaults
+migration. It retains a stored effort only when it is valid for the stored text
+pair; every invalid nonempty value becomes the explicit unset value. It never
+infers an effort from a model name, provider, request profile, or web-search
+behavior. Before its marker exists, it repairs only a blank model or a model
+known to the other configured provider for that endpoint by choosing the saved
 provider's current catalog default. Unknown models and unknown or unsupported
 providers fail startup with the tenant, endpoint, provider, and model in the
 error. Once the marker exists, every stored field must already be canonical and
 catalog-valid; startup rejects invalid data rather than selecting a replacement
-at runtime. A request that omits routing fields therefore uses the exact
-persisted text pair and independently stored effort.
+at runtime.
 
 The authenticated landing screen is a usage dashboard. It shows 30-day request
 and token graphs, total request and token counts, success rate, and provider and
@@ -660,11 +658,11 @@ the `Settings` menu item is inserted before `Sign out` through the shared
 `<mpr-user>` menu contract. The modal contains client access, generated secret,
 routing defaults, copyable default request examples, copyable selected-provider
 request examples, and one selected-provider editor for API key, provider text
-model, and provider system prompt settings. The routing-default form owns one
-tenant-level Reasoning effort control whenever the profile exposes it; it
-preserves its value while the text route changes and labels the control inactive
-when that route lacks the declared capability. Default examples omit `provider`;
-selected-provider examples include the current provider selector and text model.
+model, and provider system prompt settings. The routing-default form exposes
+Reasoning effort only for the exact selected text route, clears an incompatible
+value when that route changes, and shows `Not supported` when the route has no
+declaration. Default examples omit `provider`; selected-provider examples include
+the current provider selector and text model.
 
 Administrators are configured only through `management.admin_emails`; use the
 plural `${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` placeholder in public config files
@@ -837,10 +835,9 @@ tenants:
       model: deepseek-v4-flash
 ```
 
-For a static tenant, `reasoning_effort` is the same independent default used by
-managed tenants. Set it only when the catalog declares a compatible route; it
-is not a per-request or per-model setting. For example, a supported OpenAI
-route can use one canonical value:
+For a static tenant, `reasoning_effort` is a route-bound default. Set it only
+when the exact configured provider/model declares the value; it is not a
+per-request setting. For example, a supported OpenAI route can use `high`:
 
 ```yaml
 tenants:
@@ -852,10 +849,10 @@ tenants:
       reasoning_effort: high
 ```
 
-The only set values are `minimal`, `low`, `medium`, and `high`; omit the field
-or use an empty value to leave it explicitly unset. The proxy preserves the
-saved value if a later default route has no capability and forwards it only
-when the resolved route declares support.
+The allowed values are the selected route's configured list; omit the field or
+use an empty value to leave it explicitly unset. The proxy rejects an
+incompatible static default at startup and forwards an effort only when the
+resolved route declares that exact value.
 
 Set Gemini as the default text provider:
 
@@ -1505,6 +1502,23 @@ Grok/xAI through their provider selectors. Not all configured models support
 tools; use a model marked `Yes` below for web search. A dash in the proxy
 `max_tokens` limit column means the proxy validates only that `max_tokens` is
 positive and lets the upstream provider enforce any provider-side model limit.
+
+### OpenAI reasoning-effort capabilities
+
+The checked-in OpenAI catalog follows the current model documentation and keeps
+each model's list separate:
+
+| Model | Allowed `reasoning_effort` values |
+|-------|-----------------------------------|
+| `gpt-5` | `minimal`, `low`, `medium`, `high` |
+| `gpt-5.5` | `none`, `low`, `medium`, `high`, `xhigh` |
+| `gpt-5.5-pro` | `medium`, `high`, `xhigh` |
+| `gpt-5.6`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` | `none`, `low`, `medium`, `high`, `xhigh`, `max` |
+
+See OpenAI's [GPT-5 model reference](https://developers.openai.com/api/docs/models/gpt-5),
+[GPT-5.5 model reference](https://developers.openai.com/api/docs/models/gpt-5.5),
+[GPT-5.5 Pro model reference](https://developers.openai.com/api/docs/models/gpt-5.5-pro),
+and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-model).
 
 ### Model capabilities
 
