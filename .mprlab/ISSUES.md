@@ -1283,7 +1283,9 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   and cleanup flow. The provider-scoped model control now reads `Provider
   default model`, while the tenant-level routing-default control remains `Text
   model`; exact accessible-name assertions keep the two controls distinct.
-  Baseline and final `make ci` runs passed.
+  Post-review, the backend `masked_key: "saved"` sentinel renders as a generic
+  `****` mask rather than a misleading suffix, with browser coverage for the
+  short-key contract. Baseline and final `make ci` runs passed.
 
 - [x] [B051] (P2) Present Client access as a compact tenant/key row.
   Goal:
@@ -1317,7 +1319,10 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   keys are masked first, revealable and copyable only while Settings remains
   open, and have a trailing per-key trash action. Retained keys are revocable
   but cannot be recovered. Request examples retain their placeholder rather
-  than echoing raw key material. Baseline and final `make ci` runs passed.
+  than echoing raw key material. Post-review, a generated-key response must
+  match the current Settings/session version before it can restore raw material
+  or profile state; browser coverage proves both close/reopen and sign-out
+  cleanup discard late responses. Baseline and final `make ci` runs passed.
 
 - [x] [B052] (P2) Add the standard `make up` local service command.
   Goal:
@@ -1348,9 +1353,91 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   the local proxy URL, and stops its owned process on interruption. The
   black-box operational test invokes the Make target in an isolated fixture,
   verifies the canonical config and readiness route, and proves the child is
-  reaped. Baseline and final `make ci` runs passed; a real local run reached
-  the ready message on `http://localhost:8080/` and released port 8080 after
-  interruption.
+  reaped. Post-review, the readiness response is accepted only after the
+  spawned proxy child is still live; an isolated fixture proves another
+  process's `403` cannot yield a ready message. Baseline and final `make ci`
+  runs passed; a real local run reached the ready message on
+  `http://localhost:8080/` and released port 8080 after interruption.
+
+- [x] [B053] (P1) Make `make up` run the complete local browser orchestration.
+  Goal:
+  Replace the single-process localhost proxy command with the actual local
+  browser topology: static content through ghttp, the versioned backend API,
+  and the shared TAuth tenant.
+
+  Requirements:
+  - Serve the tracked `site/` content through ghttp at one canonical localhost
+    UI origin and proxy only the API-served `/config-ui.yaml` runtime contract.
+  - Expose the current-source API backend on a direct localhost API origin;
+    preserve the unauthenticated proxy and management API boundaries rather
+    than embedding a second backend configuration in the static app.
+  - Start TAuth locally with the same tenant id, session cookie name, issuer,
+    and JWT signing key that the backend validates. Local HTTP cookies must use
+    the single `localhost` host, with explicit credentialed CORS origins.
+  - Keep `make up` foreground-owned, seed only ignored local environment
+    files, generate local-only secret material once, and stop all owned
+    containers on interruption without deleting persisted local volumes.
+  - Exclude local environment files and private config from the Docker build
+    context.
+
+  Validation:
+  - Add black-box operational coverage for the Make entrypoint, Compose
+    lifecycle, ghttp/static/runtime-config API boundaries, TAuth session
+    boundary, and cleanup after interruption.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  `make up` now starts a foreground-owned Compose project with ghttp serving
+  the tracked static UI at `http://localhost:4179`, the current-source API at
+  `http://localhost:8080`, and TAuth at `http://localhost:8082`. The ignored
+  local profile is seeded once from the tracked example, generates local JWT
+  and provider-key encryption material, shares the `llm-proxy` tenant and
+  `app_session_llm_proxy` contract between TAuth and the API, and keeps local
+  data volumes across clean interruption shutdowns. ghttp proxies only
+  `/config-ui.yaml` to the API, so the browser consumes the same API/TAuth
+  runtime configuration shape as the split production topology. The new
+  black-box operational test proves the Compose lifecycle, static/config/API/
+  TAuth readiness boundaries, generated local profile, Docker secret
+  exclusions, and cleanup; it also rejects a readiness response after the
+  owned Compose process has exited. A real local run reached all five
+  readiness contracts and stopped its containers and network on Ctrl-C.
+  The baseline `make ci` had one transient browser-test failure after 31
+  browser tests passed; the required final `make ci` passed all lint, 100%
+  Go coverage, 30 Python tests, 32 browser tests, the TAuth black-box test,
+  release tests, and the provider preflight.
+
+- [x] [B054] (P2) Compact and align the Settings controls.
+  Goal:
+  Keep the Provider selector, API-key field, and Provider default model field
+  aligned on one input baseline, and present Client access as one compact
+  tenant/key/action row on desktop.
+
+  Requirements:
+  - Preserve the selector's accessible name and compact desktop form layout.
+  - Align the desktop controls even though the selector's label is intentionally
+    visually hidden.
+  - Preserve the narrow single-column layout.
+  - Keep Default tenant, client key controls, and Create/Replace key action in
+    one desktop row without changing their accessible names or key lifecycle.
+
+  Validation:
+  - Add Playwright coverage that checks the desktop provider and client-control
+    geometry, plus the narrow stacked layout.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  Provider settings now aligns its selector, API-key input, and Provider
+  default model input on one desktop input baseline. Client access now targets
+  its semantic `client-access-row` element rather than an unused class,
+  placing Default tenant, key controls, and Create/Replace key in one compact
+  row through a 480px viewport; it stacks only at 460px and below. Browser
+  coverage verifies both desktop and compact-row geometry plus the mobile
+  stack, while preserving key reveal, copy, revoke, and replacement behavior.
+  Baseline and final `make ci` runs passed.
 
 
 ## Improvements
