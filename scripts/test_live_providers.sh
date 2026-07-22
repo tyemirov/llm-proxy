@@ -31,7 +31,8 @@ Optional environment:
   LIVE_ENV_FILE              Path to a dotenv file to parse before discovery.
   LLM_PROXY_LIVE_PROVIDERS   Comma or space separated provider list. If set,
                              every listed provider must have its key.
-  LLM_PROXY_LIVE_PORT        Local port for the temporary proxy. Default: 18080.
+  LLM_PROXY_LIVE_PORT        Local port for the temporary proxy. Default: a
+                             freshly allocated loopback port.
   LLM_PROXY_LIVE_TIMEOUT     Per-request curl timeout in seconds. Default: 45.
   SERVICE_SECRET             Tenant secret. Generated when omitted.
   GO                         Go binary. Default: go.
@@ -69,6 +70,18 @@ env_or_default() {
   else
     printf "%s\n" "${fallback}"
   fi
+}
+
+allocate_loopback_port() {
+  command -v python3 >/dev/null 2>&1 || { echo "error: python3 is required to allocate a live-provider harness port" >&2; exit 1; }
+  python3 -c '
+import socket
+
+listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+listener.bind(("127.0.0.1", 0))
+print(listener.getsockname()[1])
+listener.close()
+'
 }
 
 load_env_file() {
@@ -376,13 +389,19 @@ TMP_DIR="$(mktemp -d)"
 PROXY_PID=""
 
 cleanup() {
+  local exit_status=$?
+  trap - EXIT HUP INT TERM
   if [[ -n "${PROXY_PID}" ]] && kill -0 "${PROXY_PID}" >/dev/null 2>&1; then
-    kill "${PROXY_PID}" >/dev/null 2>&1 || true
+    kill -TERM "${PROXY_PID}" >/dev/null 2>&1 || true
     wait "${PROXY_PID}" >/dev/null 2>&1 || true
   fi
   rm -rf "${TMP_DIR}"
+  return "${exit_status}"
 }
 trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 if [[ -n "${LIVE_ENV_FILE:-}" ]]; then
   [[ -f "${LIVE_ENV_FILE}" ]] || { echo "error: LIVE_ENV_FILE not found: ${LIVE_ENV_FILE}" >&2; exit 1; }
@@ -397,7 +416,11 @@ if [[ "${PREFLIGHT_ONLY}" != "true" && -z "${WRITE_CONFIG_PATH}" ]]; then
   fi
 fi
 
-PORT="$(env_or_default LLM_PROXY_LIVE_PORT 18080)"
+if [[ -n "${LLM_PROXY_LIVE_PORT:-}" ]]; then
+  PORT="${LLM_PROXY_LIVE_PORT}"
+else
+  PORT="$(allocate_loopback_port)"
+fi
 LIVE_TIMEOUT="$(env_or_default LLM_PROXY_LIVE_TIMEOUT 45)"
 if [[ -n "${WRITE_CONFIG_PATH}" ]]; then
   mkdir -p "$(dirname "${WRITE_CONFIG_PATH}")"
