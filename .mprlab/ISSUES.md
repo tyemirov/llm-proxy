@@ -893,6 +893,13 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   failed readiness states, plus runbook guidance. Baseline and final
   `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
+  Review follow-up selects only the newest same-commit Pages build by
+  `created_at`, so a stale `built` record cannot override a queued or errored
+  rebuild. It also gives each Docker manifest inspection an explicit,
+  shell-validated deadline through
+  `CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS`; black-box coverage
+  simulates both stale build records and stalled Docker reads.
+
 - [x] [B045] (P1) {I026,F012} Make routing reasoning effort provider/model-specific and co-locate it with the text route.
   Goal:
   Correct the tenant routing-default form so Reasoning effort is the third
