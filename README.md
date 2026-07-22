@@ -964,8 +964,10 @@ paid provider with `./scripts/test_live_providers.sh --write-config
 `make publish` verifies and uploads only the already-prepared immutable
 artifacts; it does not rebuild or rerun CI. GHCR manifest readiness is bounded
 by `CONTAINER_REGISTRY_VERIFY_ATTEMPTS` (default `12`) and
-`CONTAINER_REGISTRY_VERIFY_DELAY_SECONDS` (default `5`). Pages build readiness
-is bounded by `PAGES_BUILD_VERIFY_ATTEMPTS` (default `36`) and
+`CONTAINER_REGISTRY_VERIFY_DELAY_SECONDS` (default `5`), with every Docker
+inspection bounded by `CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS`
+(default `30`). Pages build readiness is bounded by
+`PAGES_BUILD_VERIFY_ATTEMPTS` (default `36`) and
 `PAGES_BUILD_VERIFY_DELAY_SECONDS` (default `5`); the final public marker check
 uses `PAGES_VERIFY_ATTEMPTS` and `PAGES_VERIFY_DELAY_SECONDS` (defaults `12`
 and `5`). Each wait reports its observed external readiness boundary rather
