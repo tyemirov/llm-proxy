@@ -1319,6 +1319,39 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   but cannot be recovered. Request examples retain their placeholder rather
   than echoing raw key material. Baseline and final `make ci` runs passed.
 
+- [x] [B052] (P2) Add the standard `make up` local service command.
+  Goal:
+  Give LLM Proxy the same single-command local startup contract used by the
+  neighboring application repositories.
+
+  Requirements:
+  - `make up` builds and starts the current service against the canonical
+    `configs/config.yml` local configuration.
+  - Prove startup with a safe local HTTP readiness request that does not call a
+    paid upstream provider or require a tenant secret.
+  - Keep the process foreground-owned by the command and clean up its child on
+    an intentional interrupt after readiness.
+  - Document the command, local URL, and readiness response as the canonical
+    local verification path.
+
+  Validation:
+  - Add a black-box operational test that invokes `make up` in an isolated
+    fixture, proves the canonical configuration and readiness contract, and
+    confirms the started child is stopped on interruption.
+  - Run the required baseline and final `make ci` pair, with the final run
+    after the last code edit.
+
+  Resolution:
+  `make up` now builds the current CLI and runs the canonical
+  `configs/config.yml` service through `scripts/up.sh`. The script waits for
+  the unauthenticated `GET /?prompt=ready` response to return `403`, announces
+  the local proxy URL, and stops its owned process on interruption. The
+  black-box operational test invokes the Make target in an isolated fixture,
+  verifies the canonical config and readiness route, and proves the child is
+  reaped. Baseline and final `make ci` runs passed; a real local run reached
+  the ready message on `http://localhost:8080/` and released port 8080 after
+  interruption.
+
 
 ## Improvements
 
