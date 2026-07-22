@@ -104,6 +104,89 @@ func TestOperationalShellScriptsDoNotUseHeredocs(testingInstance *testing.T) {
 	}
 }
 
+func TestOperationalCoverageClientProbeUsesExplicitPrompt(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	coverageScriptPath := filepath.Join(fixtureRoot, operationalScriptsDirectory, "check_coverage.sh")
+	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, operationalScriptsDirectory, "check_coverage.sh"), coverageScriptPath)
+
+	fakeGoPath := filepath.Join(fixtureRoot, "fake-go")
+	writeOperationalFile(testingInstance, fakeGoPath, `#!/usr/bin/env bash
+set -euo pipefail
+
+command_name="${1:?}"
+shift
+
+case "${command_name}" in
+  test)
+    coverage_profile=""
+    for argument in "$@"; do
+      case "${argument}" in
+        -coverprofile=*)
+          coverage_profile="${argument#-coverprofile=}"
+          ;;
+      esac
+    done
+    [[ -n "${coverage_profile}" ]]
+    builtin printf '%s\n' 'mode: count' 'fake.go:1.1,1.2 1 1' >"${coverage_profile}"
+    ;;
+  build)
+    output_path=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        -o)
+          output_path="$2"
+          shift 2
+          ;;
+        *)
+          shift
+          ;;
+      esac
+    done
+    [[ -n "${output_path}" ]]
+    builtin printf '%s\n' \
+      '#!/bin/bash' \
+      'set -euo pipefail' \
+      'binary_name="${0##*/}"' \
+      'if [[ "${binary_name}" == "llm-proxy-client.cover" && "${1:-}" != "--prompt" ]]; then' \
+      '  exit 124' \
+      'fi' \
+      'exit 0' >"${output_path}"
+    chmod +x "${output_path}"
+    ;;
+  tool)
+    tool_name="${1:?}"
+    shift
+    case "${tool_name}" in
+      covdata)
+        coverage_profile=""
+        for argument in "$@"; do
+          case "${argument}" in
+            -o=*)
+              coverage_profile="${argument#-o=}"
+              ;;
+          esac
+        done
+        [[ -n "${coverage_profile}" ]]
+        builtin printf '%s\n' 'mode: count' 'fake.go:1.1,1.2 1 1' >"${coverage_profile}"
+        ;;
+      cover)
+        builtin printf '%s\n' 'total: (statements) 100.0%'
+        ;;
+      *)
+        exit 1
+        ;;
+    esac
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+`, 0o755)
+
+	runOperationalCommand(testingInstance, fixtureRoot, append(os.Environ(), "GO="+fakeGoPath), coverageScriptPath)
+}
+
 func TestOperationalContainerArtifactUsesTrackedSnapshot(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixtureRoot := testingInstance.TempDir()
