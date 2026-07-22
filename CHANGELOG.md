@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 - Declare the llm-proxy TAuth tenant requirements in the app-owned deployment manifest for gateway assembly.
 
+## [v0.2.37] - 2026-07-21
+
+- test: verify client probe in coverage script uses explicit --prompt argument
+- chore(scripts): set prompt for client coverage probe in check_coverage.sh
+- docs(issues): document fix for coverage client probe independence from stdin EOF
+- test: allow custom usage values and assert Requests card updates after refresh
+- docs(issues): update with synchronized replacement proof and port note
+
 ## [v0.2.36] - 2026-07-21
 
 - Merge pull request #216 from tyemirov/gix/add-bounded-docker-pages-readiness-checks-to-release-and
