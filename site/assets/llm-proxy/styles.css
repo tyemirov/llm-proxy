@@ -118,6 +118,7 @@ settings-section {
 
 #llm-proxy-header notification-region[slot="aux"] {
   display: block;
+  order: -1;
   flex: 1 1 18rem;
   min-inline-size: 0;
   max-inline-size: min(var(--llm-notification-max-inline-size), calc(100vw - 8rem));
@@ -741,11 +742,23 @@ settings-section,
   grid-column: 1 / -1;
 }
 
-.settings-form-note {
-  display: block;
-  margin-top: 0.35rem;
+.text-routing-controls {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.reasoning-effort-unsupported {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
   color: var(--llm-muted);
   font-size: 0.78rem;
+}
+
+.reasoning-effort-unsupported strong {
+  color: var(--llm-text);
 }
 
 .settings-grid-form button[type="submit"] {
@@ -810,6 +823,7 @@ provider-settings-fields button[type="submit"] {
   usage-metrics,
   .dashboard-grid,
   .settings-grid-form,
+  .text-routing-controls,
   provider-settings-fields {
     grid-template-columns: 1fr;
   }

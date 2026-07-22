@@ -6,6 +6,7 @@ import {
   DASHBOARD_VIEWS,
   EVENTS,
   MENU_ACTIONS,
+  NOTICE_AUTO_DISMISS_MILLISECONDS,
   NOTICE_KINDS,
   ROUTING_DEFAULTS_INVALID_ERROR,
   WORKSPACE_INTEGRITY_ERROR,
@@ -90,6 +91,9 @@ export function createKeyManagement() {
       kind: NOTICE_KINDS.INFO,
       message: EMPTY_STRING,
     },
+    /** @type {number | null} */
+    noticeDismissTimerID: null,
+    noticeVersion: 0,
 
     init() {
       document.addEventListener(EVENTS.AUTHENTICATED, () => {
@@ -161,19 +165,11 @@ export function createKeyManagement() {
     },
 
     get reasoningEffortOptions() {
-      return this.profile ? this.profile.reasoning_effort_options : [];
+      return this.selectedTextModel && this.selectedTextModel.reasoning_effort ? this.selectedTextModel.reasoning_effort.efforts : [];
     },
 
     get hasReasoningEffortOptions() {
       return this.reasoningEffortOptions.length > 0;
-    },
-
-    get reasoningEffortActiveForCurrentRoute() {
-      return Boolean(
-        this.selectedTextProvider &&
-          (this.selectedTextProvider.reasoning_effort ||
-            (this.selectedTextModel && this.selectedTextModel.reasoning_effort)),
-      );
     },
 
     get dictationProviders() {
@@ -681,6 +677,13 @@ export function createKeyManagement() {
     selectTextProviderDefaultModel() {
       const provider = profileProvider(this.providers, this.defaults.provider);
       this.defaults.model = provider.text_default_model;
+      this.normalizeReasoningEffortDefault();
+    },
+
+    normalizeReasoningEffortDefault() {
+      if (!this.reasoningEffortOptions.includes(this.defaults.reasoning_effort)) {
+        this.defaults.reasoning_effort = EMPTY_STRING;
+      }
     },
 
     selectDictationProviderDefaultModel() {
@@ -737,6 +740,7 @@ export function createKeyManagement() {
     },
 
     clearAuthenticatedState() {
+      this.clearNotice();
       this.clearProviderKeyMaterial();
       this.profile = null;
       this.providers = [];
@@ -788,7 +792,28 @@ export function createKeyManagement() {
      * @param {string} message
      */
     setNotice(kind, message) {
+      this.clearNotice();
       this.notice = { kind, message };
+      if (message === EMPTY_STRING) {
+        return;
+      }
+      const noticeVersion = this.noticeVersion + 1;
+      this.noticeVersion = noticeVersion;
+      this.noticeDismissTimerID = window.setTimeout(() => {
+        if (this.noticeVersion !== noticeVersion) {
+          return;
+        }
+        this.clearNotice();
+      }, NOTICE_AUTO_DISMISS_MILLISECONDS);
+    },
+
+    clearNotice() {
+      this.noticeVersion += 1;
+      if (this.noticeDismissTimerID !== null) {
+        window.clearTimeout(this.noticeDismissTimerID);
+        this.noticeDismissTimerID = null;
+      }
+      this.notice = { kind: NOTICE_KINDS.INFO, message: EMPTY_STRING };
     },
   };
 }
@@ -815,26 +840,22 @@ function createWorkspaceRoutingDefaults(profile) {
   const tenant = profile && typeof profile.tenant === "object" ? profile.tenant : null;
   const defaults = tenant && typeof tenant.defaults === "object" ? tenant.defaults : null;
   const providers = Array.isArray(profile && profile.providers) ? profile.providers : null;
-  const reasoningEffortOptions = profile && profile.reasoning_effort_options;
-  if (!defaults || !providers || !routingDefaultsAreStrings(defaults) || !reasoningEffortOptionsAreStrings(reasoningEffortOptions)) {
+  if (!defaults || !providers || !routingDefaultsAreStrings(defaults) || Object.hasOwn(profile, "reasoning_effort_options")) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
-  let catalogSupportsReasoningEffort = false;
   for (const provider of providers) {
-    catalogSupportsReasoningEffort = assertProviderCatalog(provider, reasoningEffortOptions) || catalogSupportsReasoningEffort;
-  }
-  if (catalogSupportsReasoningEffort !== (reasoningEffortOptions.length > 0)) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    assertProviderCatalog(provider);
   }
   const textProvider = profileProvider(providers, defaults.provider);
-  if (!textProvider.text_models.some((model) => model.id === defaults.model)) {
+  const textModel = textProvider.text_models.find((model) => model.id === defaults.model);
+  if (!textModel) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
   const dictationProvider = profileProvider(providers, defaults.dictation_provider);
   if (!dictationProvider.supports_dictation || !dictationProvider.dictation_models.includes(defaults.dictation_model)) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
-  if (defaults.reasoning_effort !== EMPTY_STRING && !reasoningEffortOptions.includes(defaults.reasoning_effort)) {
+  if (defaults.reasoning_effort !== EMPTY_STRING && !reasoningEffortOptionsForTextModel(textModel).includes(defaults.reasoning_effort)) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
   return {
@@ -864,10 +885,9 @@ function routingDefaultsAreStrings(defaults) {
 
 /**
  * @param {import("../types.d.js").ProviderProfile} provider
- * @param {string[]} reasoningEffortOptions
- * @returns {boolean}
+ * @returns {void}
  */
-function assertProviderCatalog(provider, reasoningEffortOptions) {
+function assertProviderCatalog(provider) {
   if (
     !provider ||
     typeof provider.id !== "string" ||
@@ -877,12 +897,14 @@ function assertProviderCatalog(provider, reasoningEffortOptions) {
   ) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
-  let supportsReasoningEffort = assertReasoningEffortCapability(provider.reasoning_effort, reasoningEffortOptions);
+  if (Object.hasOwn(provider, "reasoning_effort")) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
   for (const model of provider.text_models) {
     if (!model || typeof model.id !== "string" || !model.id) {
       throw new Error(WORKSPACE_INTEGRITY_ERROR);
     }
-    supportsReasoningEffort = assertReasoningEffortCapability(model.reasoning_effort, reasoningEffortOptions) || supportsReasoningEffort;
+    assertReasoningEffortCapability(model.reasoning_effort);
   }
   if (
     provider.supports_dictation &&
@@ -892,40 +914,36 @@ function assertProviderCatalog(provider, reasoningEffortOptions) {
   ) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
-  return supportsReasoningEffort;
 }
 
 /**
- * @param {unknown} reasoningEffortOptions
- * @returns {reasoningEffortOptions is string[]}
+ * @param {import("../types.d.js").TextModelProfile} model
+ * @returns {string[]}
  */
-function reasoningEffortOptionsAreStrings(reasoningEffortOptions) {
-  if (!Array.isArray(reasoningEffortOptions) || new Set(reasoningEffortOptions).size !== reasoningEffortOptions.length) {
-    return false;
-  }
-  return reasoningEffortOptions.every((effort) => typeof effort === "string" && effort.trim() !== EMPTY_STRING);
+function reasoningEffortOptionsForTextModel(model) {
+  return model.reasoning_effort ? model.reasoning_effort.efforts : [];
 }
 
 /**
  * @param {unknown} capability
- * @param {string[]} reasoningEffortOptions
- * @returns {boolean}
+ * @returns {void}
  */
-function assertReasoningEffortCapability(capability, reasoningEffortOptions) {
+function assertReasoningEffortCapability(capability) {
   if (capability === undefined) {
-    return false;
+    return;
   }
   if (
     !capability ||
     typeof capability.adapter !== "string" ||
-    capability.adapter.trim() === EMPTY_STRING ||
+    capability.adapter === EMPTY_STRING ||
+    capability.adapter !== capability.adapter.trim() ||
     !Array.isArray(capability.efforts) ||
-    capability.efforts.length !== reasoningEffortOptions.length ||
-    !capability.efforts.every((effort, index) => effort === reasoningEffortOptions[index])
+    capability.efforts.length === 0 ||
+    new Set(capability.efforts).size !== capability.efforts.length ||
+    !capability.efforts.every((effort) => typeof effort === "string" && effort !== EMPTY_STRING && effort === effort.trim())
   ) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
-  return true;
 }
 
 /**
