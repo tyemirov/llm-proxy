@@ -1194,6 +1194,47 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   timed-out stdin-mode probe unless it receives `--prompt`. Baseline and final
   `make ci` runs passed.
 
+- [x] [B049] (P1) {M005R,B048} Isolate the disposable live-provider harness from unrelated local listeners.
+  Goal:
+  Keep `make ci` and `make release` deterministic when an unrelated local
+  service, including Docker Desktop, owns the historical harness port 18080.
+
+  Current failure:
+  `scripts/test_live_providers.sh --preflight` starts a disposable static-mode
+  proxy but defaults it to port 18080. On 2026-07-22, that address belonged to
+  Docker Desktop's `com.docker.backend`, not a prior harness child. The harness
+  correctly rejected the occupied address, but asking it to kill a listener by
+  port would terminate unrelated software and can make later container release
+  work fail.
+
+  Requirements:
+  - Default the disposable harness to a freshly allocated loopback TCP port;
+    retain `LLM_PROXY_LIVE_PORT` as an exact explicit override for operators.
+  - Generate the temporary config and make all readiness, preflight, and smoke
+    requests use that one selected port.
+  - On normal exit or termination, remove only the temporary files and the
+    exact proxy child the harness started; never kill a process discovered only
+    by its listening port.
+  - Add black-box operational coverage proving the default generated config no
+    longer uses 18080, an explicit port remains exact, and a completed preflight
+    releases its selected port.
+  - Update the local-automation contract and run the required baseline and
+    final `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run
+    after the last code edit.
+
+  ### Resolution
+
+  The live-provider harness now asks the operating system for a fresh loopback
+  TCP port unless `LLM_PROXY_LIVE_PORT` is explicitly set. Its EXIT cleanup
+  preserves the command status, removes the temporary directory, and sends
+  `TERM` only to its tracked proxy child; HUP, INT, and TERM first exit through
+  that cleanup. It never terminates a process merely because it listens on a
+  port. Black-box operational coverage proves the default config no longer
+  emits 18080, explicit ports remain exact, and both normal completion and a
+  forced harness TERM reap the owned child. A real preflight also passed while a
+  separate listener held 18080. Baseline and final `make ci` runs passed with
+  100.0% Go coverage.
+
 
 ## Improvements
 
