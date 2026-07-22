@@ -19,9 +19,8 @@ type providerModelsProviderConfiguration struct {
 }
 
 type providerModelsEndpointConfiguration struct {
-	DefaultModel    string                               `mapstructure:"default_model"`
-	Models          []providerModelsModelConfiguration   `mapstructure:"models"`
-	ReasoningEffort *providerModelsReasoningEffortConfig `mapstructure:"reasoning_effort"`
+	DefaultModel string                             `mapstructure:"default_model"`
+	Models       []providerModelsModelConfiguration `mapstructure:"models"`
 }
 
 type providerModelsModelConfiguration struct {
@@ -84,9 +83,8 @@ func (configuration providerModelsEndpointConfiguration) proxyCatalog() proxy.Mo
 		})
 	}
 	return proxy.ModelEndpointCatalog{
-		DefaultModel:    configuration.DefaultModel,
-		Models:          models,
-		ReasoningEffort: providerModelsReasoningEffortCapability(configuration.ReasoningEffort),
+		DefaultModel: configuration.DefaultModel,
+		Models:       models,
 	}
 }
 

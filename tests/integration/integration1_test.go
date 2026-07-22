@@ -129,7 +129,7 @@ func TestProxyGPT5SavedReasoningEffortFollowsTheResolvedRoute(testingInstance *t
 			subTest.Cleanup(openAIServer.Close)
 			applicationServer := newIntegrationServerWithDefaults(subTest, openAIServer, proxy.TenantDefaults{
 				Provider:          proxy.ProviderNameOpenAI,
-				Model:             proxy.ModelNameGPT41,
+				Model:             proxy.ModelNameGPT5,
 				DictationProvider: proxy.ProviderNameOpenAI,
 				DictationModel:    proxy.DefaultDictationModel,
 				ReasoningEffort:   reasoningEffortHighValue,
@@ -182,13 +182,45 @@ func TestProxyGPT5SavedReasoningEffortFollowsTheResolvedRoute(testingInstance *t
 	}
 }
 
+func TestProxyGPT56SavedReasoningEffortFollowsTheResolvedRoute(testingInstance *testing.T) {
+	var capturedPayload any
+	openAIServer := newOpenAIServer(testingInstance, integrationOKBody, &capturedPayload)
+	testingInstance.Cleanup(openAIServer.Close)
+	applicationServer := newIntegrationServerWithDefaults(testingInstance, openAIServer, proxy.TenantDefaults{
+		Provider:          proxy.ProviderNameOpenAI,
+		Model:             proxy.ModelNameGPT56,
+		DictationProvider: proxy.ProviderNameOpenAI,
+		DictationModel:    proxy.DefaultDictationModel,
+		ReasoningEffort:   "max",
+	})
+
+	httpResponse, requestError := http.Get(applicationServer.URL + "?prompt=" + url.QueryEscape(promptValue) + "&key=" + integrationServiceSecret)
+	if requestError != nil {
+		testingInstance.Fatalf(requestErrorFormat, requestError)
+	}
+	defer httpResponse.Body.Close()
+	if httpResponse.StatusCode != http.StatusOK {
+		responseBody, _ := io.ReadAll(httpResponse.Body)
+		testingInstance.Fatalf(unexpectedStatusFormat, httpResponse.StatusCode, string(responseBody))
+	}
+	_, _ = io.ReadAll(httpResponse.Body)
+	payloadMap, _ := capturedPayload.(map[string]any)
+	if payloadMap["model"] != proxy.ModelNameGPT56 {
+		testingInstance.Fatalf("model=%v want=%s", payloadMap["model"], proxy.ModelNameGPT56)
+	}
+	reasoningValue, ok := payloadMap[reasoningField].(map[string]any)
+	if !ok || reasoningValue[effortField] != "max" {
+		testingInstance.Fatalf("reasoning=%v want max", payloadMap[reasoningField])
+	}
+}
+
 func TestProxyTenantReasoningEffortDoesNotLeakToUnsupportedResolvedRoute(testingInstance *testing.T) {
 	var capturedPayload any
 	openAIServer := newOpenAIServer(testingInstance, integrationOKBody, &capturedPayload)
 	testingInstance.Cleanup(openAIServer.Close)
 	applicationServer := newIntegrationServerWithDefaults(testingInstance, openAIServer, proxy.TenantDefaults{
 		Provider:          proxy.ProviderNameOpenAI,
-		Model:             proxy.ModelNameGPT41,
+		Model:             proxy.ModelNameGPT5,
 		DictationProvider: proxy.ProviderNameOpenAI,
 		DictationModel:    proxy.DefaultDictationModel,
 		ReasoningEffort:   reasoningEffortHighValue,
@@ -198,6 +230,7 @@ func TestProxyTenantReasoningEffortDoesNotLeakToUnsupportedResolvedRoute(testing
 	queryValues := requestURL.Query()
 	queryValues.Set(promptQueryParameter, promptValue)
 	queryValues.Set(keyQueryParameter, integrationServiceSecret)
+	queryValues.Set(adaptiveModelQueryParameter, proxy.ModelNameGPT41)
 	requestURL.RawQuery = queryValues.Encode()
 	httpResponse, requestError := http.Get(requestURL.String())
 	if requestError != nil {

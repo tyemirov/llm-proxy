@@ -13,6 +13,8 @@ export const NOTICE_KINDS = Object.freeze({
   ERROR: "error",
 });
 
+export const NOTICE_AUTO_DISMISS_MILLISECONDS = 10_000;
+
 export const EVENTS = Object.freeze({
   AUTHENTICATED: "mpr-ui:auth:authenticated",
   AUTH_STATUS_CHANGE: "mpr-ui:auth:status-change",
@@ -110,7 +112,7 @@ export const COPY = Object.freeze({
   textModel: "Text model",
   reasoningEffort: "Reasoning effort",
   reasoningEffortUnset: "Not set",
-  reasoningEffortInactive: "Inactive for the selected text route",
+  reasoningEffortUnsupported: "Not supported",
   dictationProvider: "Dictation provider",
   dictationModel: "Dictation model",
   systemPrompt: "System prompt",

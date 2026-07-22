@@ -278,36 +278,37 @@
                       </div>
                     </header>
                     <form class="settings-grid-form" x-on:submit.prevent="saveDefaults()">
-                      <label>
-                        <span x-text="copy.textProvider"></span>
-                        <select x-model="defaults.provider" x-on:change="selectTextProviderDefaultModel()">
-                          <template x-for="provider in providers" x-bind:key="provider.id">
-                            <option x-bind:value="provider.id" x-text="provider.label"></option>
-                          </template>
-                        </select>
-                      </label>
-                      <label>
-                        <span x-text="copy.textModel"></span>
-                        <select x-model="defaults.model">
-                          <template x-for="model in selectedTextModels" x-bind:key="model">
-                            <option x-bind:value="model" x-text="model"></option>
-                          </template>
-                        </select>
-                      </label>
-                      <label class="settings-form-wide" x-show="hasReasoningEffortOptions">
-                        <span x-text="copy.reasoningEffort"></span>
-                        <select
-                          x-model="defaults.reasoning_effort"
-                          x-bind:aria-describedby="reasoningEffortActiveForCurrentRoute ? null : 'reasoning-effort-status'"
-                          x-bind:data-reasoning-effort-active="String(reasoningEffortActiveForCurrentRoute)"
-                        >
-                          <option value="" x-text="copy.reasoningEffortUnset"></option>
-                          <template x-for="effort in reasoningEffortOptions" x-bind:key="effort">
-                            <option x-bind:value="effort" x-text="effort"></option>
-                          </template>
-                        </select>
-                        <small id="reasoning-effort-status" class="settings-form-note" x-show="!reasoningEffortActiveForCurrentRoute" x-text="copy.reasoningEffortInactive"></small>
-                      </label>
+                      <div class="text-routing-controls">
+                        <label>
+                          <span x-text="copy.textProvider"></span>
+                          <select x-model="defaults.provider" x-on:change="selectTextProviderDefaultModel()">
+                            <template x-for="provider in providers" x-bind:key="provider.id">
+                              <option x-bind:value="provider.id" x-text="provider.label"></option>
+                            </template>
+                          </select>
+                        </label>
+                        <label>
+                          <span x-text="copy.textModel"></span>
+                          <select x-model="defaults.model" x-on:change="normalizeReasoningEffortDefault()">
+                            <template x-for="model in selectedTextModels" x-bind:key="model">
+                              <option x-bind:value="model" x-text="model"></option>
+                            </template>
+                          </select>
+                        </label>
+                        <label x-show="hasReasoningEffortOptions">
+                          <span x-text="copy.reasoningEffort"></span>
+                          <select x-model="defaults.reasoning_effort">
+                            <option value="" x-text="copy.reasoningEffortUnset"></option>
+                            <template x-for="effort in reasoningEffortOptions" x-bind:key="effort">
+                              <option x-bind:value="effort" x-text="effort"></option>
+                            </template>
+                          </select>
+                        </label>
+                        <p class="reasoning-effort-unsupported" role="status" x-show="!hasReasoningEffortOptions">
+                          <span x-text="copy.reasoningEffort"></span>
+                          <strong x-text="copy.reasoningEffortUnsupported"></strong>
+                        </p>
+                      </div>
                       <label>
                         <span x-text="copy.dictationProvider"></span>
                         <select x-model="defaults.dictation_provider" x-on:change="selectDictationProviderDefaultModel()">

@@ -126,6 +126,9 @@ IFS='|' read -r github_repository github_api_repository github_hostname <<<"${gi
 require_matching_push_repository "${remote_push_url}" "${remote_url}" "${github_repository}"
 github_repository_args=()
 if [[ -n "${github_repository}" ]]; then github_repository_args=(--repo "${github_repository}"); fi
+github_api_repository="${github_api_repository:-\{owner\}/\{repo\}}"
+github_api_args=()
+if [[ -n "${github_hostname}" ]]; then github_api_args=(--hostname "${github_hostname}"); fi
 if [[ -z "${version}" ]]; then
   version="$(git tag --points-at HEAD --list 'v*' --sort=-version:refname | head -n 1)"
 fi
@@ -133,9 +136,13 @@ fi
 python3 "${release_helper}" validate-version --version "${version}" >/dev/null
 attempts="${PAGES_VERIFY_ATTEMPTS:-12}"
 delay_seconds="${PAGES_VERIFY_DELAY_SECONDS:-5}"
+build_attempts="${PAGES_BUILD_VERIFY_ATTEMPTS:-36}"
+build_delay_seconds="${PAGES_BUILD_VERIFY_DELAY_SECONDS:-5}"
 if [[ "${verify}" == "true" ]]; then
   [[ "${attempts}" =~ ^[1-9][0-9]*$ ]] || { echo "error: PAGES_VERIFY_ATTEMPTS must be a positive integer" >&2; exit 1; }
   [[ "${delay_seconds}" =~ ^[1-9][0-9]*$ ]] || { echo "error: PAGES_VERIFY_DELAY_SECONDS must be a positive integer" >&2; exit 1; }
+  [[ "${build_attempts}" =~ ^[1-9][0-9]*$ ]] || { echo "error: PAGES_BUILD_VERIFY_ATTEMPTS must be a positive integer" >&2; exit 1; }
+  [[ "${build_delay_seconds}" =~ ^[1-9][0-9]*$ ]] || { echo "error: PAGES_BUILD_VERIFY_DELAY_SECONDS must be a positive integer" >&2; exit 1; }
 fi
 
 download_directory="${temporary_directory}/download"
@@ -187,24 +194,61 @@ if ! git -C "${checkout_directory}" diff --cached --quiet; then
 else
   echo "Pages branch already contains ${version}."
 fi
+pages_branch_commit="$(git -C "${checkout_directory}" rev-parse HEAD)"
 
 if [[ "${configure}" == "true" ]]; then
-  github_api_repository="${github_api_repository:-\{owner\}/\{repo\}}"
-  github_api_args=()
-  if [[ -n "${github_hostname}" ]]; then github_api_args=(--hostname "${github_hostname}"); fi
-  if gh api "${github_api_args[@]}" "repos/${github_api_repository}/pages" >/dev/null 2>&1; then
-    gh api "${github_api_args[@]}" --method PUT "repos/${github_api_repository}/pages" -f build_type=legacy -f "source[branch]=${branch}" -f 'source[path]=/' -F https_enforced=true >/dev/null
+  pages_site_path="${temporary_directory}/pages-site.json"
+  if gh api "${github_api_args[@]}" "repos/${github_api_repository}/pages" >"${pages_site_path}"; then
+    if ! python3 "${pages_helper}" pages-site-matches --site "${pages_site_path}" --branch "${branch}"; then
+      gh api "${github_api_args[@]}" --method PUT "repos/${github_api_repository}/pages" -f build_type=legacy -f "source[branch]=${branch}" -f 'source[path]=/' -F https_enforced=true >/dev/null
+    fi
   else
     gh api "${github_api_args[@]}" --method POST "repos/${github_api_repository}/pages" -f build_type=legacy -f "source[branch]=${branch}" -f 'source[path]=/' -F https_enforced=true >/dev/null
   fi
-  gh api "${github_api_args[@]}" --method POST "repos/${github_api_repository}/pages/builds" >/dev/null
 fi
 
 if [[ "${verify}" == "true" ]]; then
-  marker_url="${url%/}/.mprlab-release.json"
+  pages_builds_path="${temporary_directory}/pages-builds.json"
+  for ((attempt = 1; attempt <= build_attempts; attempt += 1)); do
+    if ! gh api "${github_api_args[@]}" "repos/${github_api_repository}/pages/builds?per_page=100" >"${pages_builds_path}"; then
+      echo "error: could not read GitHub Pages build state for branch commit ${pages_branch_commit}" >&2
+      exit 1
+    fi
+    if ! pages_build_state_output="$(python3 "${pages_helper}" pages-build-state --builds "${pages_builds_path}" --commit "${pages_branch_commit}")"; then
+      echo "error: GitHub Pages returned an invalid build-state response for branch commit ${pages_branch_commit}" >&2
+      exit 1
+    fi
+    readarray -t pages_build_state_values <<<"${pages_build_state_output}"
+    [[ "${#pages_build_state_values[@]}" -ge 1 ]] || { echo "error: GitHub Pages build-state response is empty for branch commit ${pages_branch_commit}" >&2; exit 1; }
+    case "${pages_build_state_values[0]}" in
+      built)
+        break
+        ;;
+      waiting)
+        if (( attempt < build_attempts )); then
+          echo "==> [pages] Waiting for GitHub Pages build ${pages_branch_commit} (attempt ${attempt}/${build_attempts})."
+          sleep "${build_delay_seconds}"
+          continue
+        fi
+        echo "error: GitHub Pages build did not reach built state for branch commit ${pages_branch_commit} after ${build_attempts} attempts" >&2
+        exit 1
+        ;;
+      errored)
+        pages_build_error="${pages_build_state_values[1]:-no error message reported}"
+        echo "error: GitHub Pages build failed for branch commit ${pages_branch_commit}: ${pages_build_error}" >&2
+        exit 1
+        ;;
+      *)
+        echo "error: GitHub Pages build-state response has unknown state '${pages_build_state_values[0]}' for branch commit ${pages_branch_commit}" >&2
+        exit 1
+        ;;
+    esac
+  done
+
+  marker_url="${url%/}/.mprlab-release.json?source_commit=${source_commit}"
   public_marker_path="${temporary_directory}/public-marker.json"
   for ((attempt = 1; attempt <= attempts; attempt += 1)); do
-    marker="$(curl --fail --silent --show-error "${marker_url}" 2>/dev/null || true)"
+    marker="$(curl --fail --silent --show-error "${marker_url}" || true)"
     printf '%s' "${marker}" >"${public_marker_path}"
     if python3 "${pages_helper}" validate-public-marker \
       --marker "${public_marker_path}" \
@@ -214,7 +258,10 @@ if [[ "${verify}" == "true" ]]; then
       echo "Verified ${url} at source ${source_commit}."
       exit 0
     fi
-    sleep "${delay_seconds}"
+    if (( attempt < attempts )); then
+      echo "==> [pages] Waiting for public marker at source ${source_commit} (attempt ${attempt}/${attempts})."
+      sleep "${delay_seconds}"
+    fi
   done
   echo "error: Pages marker did not reach source ${source_commit}: ${marker_url}" >&2
   exit 1

@@ -22,6 +22,8 @@ repo_root="$(git rev-parse --show-toplevel)"
 artifact_dir="$(git rev-parse --git-path mprlab-release)"
 [[ "${artifact_dir}" == /* ]] || artifact_dir="${repo_root}/${artifact_dir}"
 helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/release_helper.py"
+container_manifest_digest_helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/resolve_container_manifest_digest.sh"
+[[ -f "${container_manifest_digest_helper}" ]] || { echo "error: container manifest digest helper is missing: ${container_manifest_digest_helper}" >&2; exit 1; }
 "${helper}" verify-release-artifact >/dev/null
 release_version="$(python3 -c '
 import json
@@ -92,12 +94,12 @@ for platform in data["platforms"]:
   [[ "${#sources[@]}" -gt 0 ]] || { echo "error: ${name} has no prepared platforms" >&2; exit 1; }
   echo "==> [publish] Creating ${image}:${version}"
   timeout -k "${publish_timeout}s" -s SIGKILL "${publish_timeout}s" docker buildx imagetools create --tag "${image}:${version}" "${sources[@]}"
-  version_digest="$(docker buildx imagetools inspect "${image}:${version}" | awk '/^Digest:/ {print $2; exit}')"
+  version_digest="$(bash "${container_manifest_digest_helper}" "${image}:${version}")"
   [[ -n "${version_digest}" ]] || { echo "error: published version digest is missing for ${image}:${version}" >&2; exit 1; }
   if [[ "${publish_latest}" == "true" ]]; then
     echo "==> [publish] Updating ${image}:latest"
     timeout -k "${publish_timeout}s" -s SIGKILL "${publish_timeout}s" docker buildx imagetools create --tag "${image}:latest" "${sources[@]}"
-    latest_digest="$(docker buildx imagetools inspect "${image}:latest" | awk '/^Digest:/ {print $2; exit}')"
+    latest_digest="$(bash "${container_manifest_digest_helper}" "${image}:latest")"
     [[ "${version_digest}" == "${latest_digest}" ]] || { echo "error: published version and latest digests differ for ${image}" >&2; exit 1; }
   else
     echo "==> [publish] Leaving ${image}:latest unchanged for prerelease ${version}"

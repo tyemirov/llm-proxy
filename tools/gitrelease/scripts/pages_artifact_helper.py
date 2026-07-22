@@ -4,9 +4,15 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 import pathlib
 import tarfile
+
+
+PAGES_BUILD_BUILT = "built"
+PAGES_BUILD_ERRORED = "errored"
+PAGES_BUILD_WAITING = frozenset({"queued", "building"})
 
 
 def read_json(path: str) -> dict[str, object]:
@@ -86,6 +92,68 @@ def command_validate_public_marker(args: argparse.Namespace) -> int:
     return 0 if marker.get("source_commit") == args.source_commit else 1
 
 
+def pages_build_created_at(build: dict[str, object]) -> datetime:
+    """Return the validated creation timestamp for a Pages build."""
+    raw_created_at = build.get("created_at")
+    if not isinstance(raw_created_at, str):
+        raise SystemExit("GitHub Pages build has an invalid created_at")
+    try:
+        created_at = datetime.fromisoformat(raw_created_at.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise SystemExit("GitHub Pages build has an invalid created_at") from error
+    if created_at.tzinfo is None:
+        raise SystemExit("GitHub Pages build has an invalid created_at")
+    return created_at
+
+
+def command_pages_build_state(args: argparse.Namespace) -> int:
+    payload = json.loads(pathlib.Path(args.builds).read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        raise SystemExit("GitHub Pages builds response must be a list")
+    matching_builds: list[dict[str, object]] = []
+    for build in payload:
+        if not isinstance(build, dict):
+            raise SystemExit("GitHub Pages builds response contains an invalid build")
+        if build.get("commit") == args.commit:
+            matching_builds.append(build)
+    if not matching_builds:
+        print("waiting")
+        return 0
+    newest_build = max(matching_builds, key=pages_build_created_at)
+    status = newest_build.get("status")
+    if not isinstance(status, str):
+        raise SystemExit("GitHub Pages build has an invalid status")
+    if status == PAGES_BUILD_BUILT:
+        print(PAGES_BUILD_BUILT)
+        return 0
+    if status in PAGES_BUILD_WAITING:
+        print("waiting")
+        return 0
+    if status != PAGES_BUILD_ERRORED:
+        raise SystemExit(f"GitHub Pages build has an unknown status: {status}")
+    error_message = "no error message reported"
+    error = newest_build.get("error")
+    if isinstance(error, dict):
+        message = error.get("message")
+        if isinstance(message, str) and message:
+            error_message = message
+    print("errored")
+    print(error_message)
+    return 0
+
+
+def command_pages_site_matches(args: argparse.Namespace) -> int:
+    site = read_json(args.site)
+    source = site.get("source")
+    if not isinstance(source, dict):
+        return 1
+    return int(
+        source.get("branch") != args.branch
+        or source.get("path") != "/"
+        or site.get("https_enforced") is not True
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -110,6 +178,16 @@ def build_parser() -> argparse.ArgumentParser:
     public_marker.add_argument("--source-commit", required=True)
     public_marker.add_argument("--version", required=True)
     public_marker.set_defaults(func=command_validate_public_marker)
+
+    pages_build_state = subparsers.add_parser("pages-build-state")
+    pages_build_state.add_argument("--builds", required=True)
+    pages_build_state.add_argument("--commit", required=True)
+    pages_build_state.set_defaults(func=command_pages_build_state)
+
+    pages_site_matches = subparsers.add_parser("pages-site-matches")
+    pages_site_matches.add_argument("--site", required=True)
+    pages_site_matches.add_argument("--branch", required=True)
+    pages_site_matches.set_defaults(func=command_pages_site_matches)
     return parser
 
 

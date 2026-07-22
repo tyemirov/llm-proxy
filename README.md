@@ -125,37 +125,37 @@ providers:
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts: ["none", "low", "medium", "high", "xhigh"]
         - id: "gpt-5.5-pro"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts: ["medium", "high", "xhigh"]
         - id: "gpt-5.6"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
         - id: "gpt-5.6-sol"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
         - id: "gpt-5.6-terra"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
         - id: "gpt-5.6-luna"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
     dictation:
       default_model: "gpt-4o-mini-transcribe"
       models:
@@ -418,14 +418,14 @@ proxy-side maximum for `max_tokens`. Anthropic text models require
 `output_token_limit` because Anthropic Messages requires `max_tokens` even when
 the client omits it.
 
-`reasoning_effort` is an optional text capability declaration. It can appear
-under `providers.<provider>.text` to cover every configured text model for that
-provider, or under one model to cover only that model when no provider-level
-declaration exists. The current catalog accepts only the exact
-`openai_responses` adapter and ordered `minimal`, `low`, `medium`, `high`
-options, and only for an OpenAI `openai_responses_reasoning_tools` route. The
-capability declares whether the one tenant-level setting may be forwarded; it
-does not create a model-owned setting or a public request parameter.
+`reasoning_effort` is an optional text-model capability declaration. It appears
+only under `providers.<provider>.text.models[]` and belongs to that exact
+provider/model route; provider-level and catalog-wide declarations are rejected.
+Each declaration uses the `openai_responses` adapter and a nonempty,
+duplicate-free ordered list of values that adapter supports, and only an OpenAI
+`openai_responses_reasoning_tools` route may declare it. The capability limits
+the tenant default that can be persisted for that route; it is not a public
+request parameter.
 
 `request_profile` is currently required only for OpenAI text models. It selects
 the stable proxy payload shape for that OpenAI model and must be one of:
@@ -622,35 +622,33 @@ database retains only their SHA-256 digest. Revoking a generated secret
 immediately makes future public proxy requests with that secret return `403`.
 
 Managed routing defaults contain two required, canonical provider/model pairs:
-one for text and one for dictation, plus an independent tenant-level
-`reasoning_effort`. `PUT /api/management/defaults` requires all of those fields
-and validates them atomically. An empty `reasoning_effort` is the explicit unset
-value; a nonempty value must be one of the canonical options exposed by the
-catalog. A blank model, unknown provider, unsupported dictation provider, model
-that belongs to a different provider, or invalid effort returns `400
+one for text and one for dictation, plus a route-bound `reasoning_effort`.
+`PUT /api/management/defaults` resolves the supplied text pair before validating
+the effort. Empty is the explicit unset value; a nonempty value must be in that
+exact route's declared list. A blank model, unknown provider, unsupported
+dictation provider, cross-provider model, or incompatible effort returns `400
 managed_routing_defaults_invalid` before any default is persisted.
 
-The saved effort does not belong to a provider or model. Changing either routing
-pair leaves it intact, including when the new text route cannot use it. The
-profile returns the saved value, `reasoning_effort_options`, and structured
-provider/model capability metadata so the Settings form can show the single
-control and identify an inactive selected route. The browser does not repair
-malformed profile data; it renders an explicit workspace-integrity error
-instead. Public `GET /`, `POST /`, and `POST /v2` contracts do not accept a
-caller-supplied reasoning-effort field.
+The profile exposes capability data only as
+`providers[].text_models[].reasoning_effort`; it has no global option list or
+provider-level capability. The Settings form keeps Text provider, Text model,
+and Reasoning effort in one desktop row, clears an incompatible saved value on
+a model change, and reports `Not supported` for routes without a declaration.
+The browser rejects malformed profile data instead of repairing it. Public
+`GET /`, `POST /`, and `POST /v2` contracts do not accept caller-supplied
+reasoning effort.
 
-Management startup performs one versioned, transactional routing-defaults
-migration. The version-2 migration adds the explicit unset
-`reasoning_effort` to existing valid rows; it never infers an effort from a
-model name, provider, request profile, or web-search behavior. Before its
-version marker exists, it repairs only a blank model or a model known to the
-other configured provider for that same endpoint by choosing the selected
+Management startup performs a bounded, transactional version-3 routing-defaults
+migration. It retains a stored effort only when it is valid for the stored text
+pair; every invalid nonempty value becomes the explicit unset value. It never
+infers an effort from a model name, provider, request profile, or web-search
+behavior. Before its marker exists, it repairs only a blank model or a model
+known to the other configured provider for that endpoint by choosing the saved
 provider's current catalog default. Unknown models and unknown or unsupported
 providers fail startup with the tenant, endpoint, provider, and model in the
 error. Once the marker exists, every stored field must already be canonical and
 catalog-valid; startup rejects invalid data rather than selecting a replacement
-at runtime. A request that omits routing fields therefore uses the exact
-persisted text pair and independently stored effort.
+at runtime.
 
 The authenticated landing screen is a usage dashboard. It shows 30-day request
 and token graphs, total request and token counts, success rate, and provider and
@@ -660,11 +658,11 @@ the `Settings` menu item is inserted before `Sign out` through the shared
 `<mpr-user>` menu contract. The modal contains client access, generated secret,
 routing defaults, copyable default request examples, copyable selected-provider
 request examples, and one selected-provider editor for API key, provider text
-model, and provider system prompt settings. The routing-default form owns one
-tenant-level Reasoning effort control whenever the profile exposes it; it
-preserves its value while the text route changes and labels the control inactive
-when that route lacks the declared capability. Default examples omit `provider`;
-selected-provider examples include the current provider selector and text model.
+model, and provider system prompt settings. The routing-default form exposes
+Reasoning effort only for the exact selected text route, clears an incompatible
+value when that route changes, and shows `Not supported` when the route has no
+declaration. Default examples omit `provider`; selected-provider examples include
+the current provider selector and text model.
 
 Administrators are configured only through `management.admin_emails`; use the
 plural `${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` placeholder in public config files
@@ -730,7 +728,8 @@ Then configure GitHub Pages for this repository:
 3. Run `make release` to render and validate the Pages archive, `make publish`
    to upload that immutable archive, and `make deploy` to activate it on
    `gh-pages`. Deployment configures the repository Pages source and verifies
-   `/.mprlab-release.json` at the public origin.
+   the matching GitHub Pages build before fetching a cache-distinct
+   `/.mprlab-release.json` marker at the public origin.
 4. Configure real backend deployment secrets outside the Pages artifact:
    `LLM_PROXY_MANAGEMENT_ADMIN_EMAILS`, `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`,
    `LLM_PROXY_MANAGEMENT_DATABASE_DSN`,
@@ -836,10 +835,9 @@ tenants:
       model: deepseek-v4-flash
 ```
 
-For a static tenant, `reasoning_effort` is the same independent default used by
-managed tenants. Set it only when the catalog declares a compatible route; it
-is not a per-request or per-model setting. For example, a supported OpenAI
-route can use one canonical value:
+For a static tenant, `reasoning_effort` is a route-bound default. Set it only
+when the exact configured provider/model declares the value; it is not a
+per-request setting. For example, a supported OpenAI route can use `high`:
 
 ```yaml
 tenants:
@@ -851,10 +849,10 @@ tenants:
       reasoning_effort: high
 ```
 
-The only set values are `minimal`, `low`, `medium`, and `high`; omit the field
-or use an empty value to leave it explicitly unset. The proxy preserves the
-saved value if a later default route has no capability and forwards it only
-when the resolved route declares support.
+The allowed values are the selected route's configured list; omit the field or
+use an empty value to leave it explicitly unset. The proxy rejects an
+incompatible static default at startup and forwards an effort only when the
+resolved route declares that exact value.
 
 Set Gemini as the default text provider:
 
@@ -912,8 +910,8 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make test-live-providers` | Generate a complete temporary static-mode config and run live text smoke tests for every provider whose API key is present; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
 | `make release` | Run CI and prepare the local tag, container archives, and validated Pages archive under `.git/mprlab-release` without remote writes. |
-| `make publish` | Publish the exact prepared Git refs, GitHub Release assets, and container archives without rebuilding or deploying. |
-| `make deploy` | Verify and deploy the published backend through the sibling gateway, then activate and verify the published Pages archive. |
+| `make publish` | Publish the exact prepared Git refs, GitHub Release assets, and container archives without rebuilding or deploying; wait for each GHCR manifest to become readable. |
+| `make deploy` | Verify and deploy the published backend through the sibling gateway, then activate the Pages archive and verify the matching Pages build and public marker. |
 
 Live provider smoke tests are intentionally not part of `make ci`; they call
 paid upstream APIs and depend on local or CI secret availability. The dynamic
@@ -964,7 +962,16 @@ paid provider with `./scripts/test_live_providers.sh --write-config
 `LLM_PROXY_CI_TIMEOUT_SECONDS=<seconds>`, or use the command-specific
 `RELEASE_CI_TIMEOUT_SECONDS` and `DEPLOY_CI_TIMEOUT_SECONDS` variables.
 `make publish` verifies and uploads only the already-prepared immutable
-artifacts; it does not rebuild or rerun CI.
+artifacts; it does not rebuild or rerun CI. GHCR manifest readiness is bounded
+by `CONTAINER_REGISTRY_VERIFY_ATTEMPTS` (default `12`) and
+`CONTAINER_REGISTRY_VERIFY_DELAY_SECONDS` (default `5`), with every Docker
+inspection bounded by `CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS`
+(default `30`). Pages build readiness is bounded by
+`PAGES_BUILD_VERIFY_ATTEMPTS` (default `36`) and
+`PAGES_BUILD_VERIFY_DELAY_SECONDS` (default `5`); the final public marker check
+uses `PAGES_VERIFY_ATTEMPTS` and `PAGES_VERIFY_DELAY_SECONDS` (defaults `12`
+and `5`). Each wait reports its observed external readiness boundary rather
+than treating a completed push as immediate public availability.
 
 `llm-proxy` is a gateway-local service in `mprlab-gateway`, so `make deploy`
 uses the sole gateway `deploy-llm-proxy-backend` target after the gateway-owned
@@ -1498,6 +1505,23 @@ tools; use a model marked `Yes` below for web search. A dash in the proxy
 `max_tokens` limit column means the proxy validates only that `max_tokens` is
 positive and lets the upstream provider enforce any provider-side model limit.
 
+### OpenAI reasoning-effort capabilities
+
+The checked-in OpenAI catalog follows the current model documentation and keeps
+each model's list separate:
+
+| Model | Allowed `reasoning_effort` values |
+|-------|-----------------------------------|
+| `gpt-5` | `minimal`, `low`, `medium`, `high` |
+| `gpt-5.5` | `none`, `low`, `medium`, `high`, `xhigh` |
+| `gpt-5.5-pro` | `medium`, `high`, `xhigh` |
+| `gpt-5.6`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` | `none`, `low`, `medium`, `high`, `xhigh`, `max` |
+
+See OpenAI's [GPT-5 model reference](https://developers.openai.com/api/docs/models/gpt-5),
+[GPT-5.5 model reference](https://developers.openai.com/api/docs/models/gpt-5.5),
+[GPT-5.5 Pro model reference](https://developers.openai.com/api/docs/models/gpt-5.5-pro),
+and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-model).
+
 ### Model capabilities
 
 | Model | Provider | Provider default | Proxy `max_tokens` limit | Web search |
@@ -1608,9 +1632,12 @@ contract, and builds containers from `git archive HEAD` so ignored credentials,
 `.git`, and local artifacts never enter BuildKit. It performs no remote writes.
 
 Use `make publish` to push the prepared Git refs, GitHub Release assets, and
-container archives without rebuilding. Use `make deploy` only after publish;
-it verifies the published image, deploys the backend through the gateway, then
-activates the exact `pages.tar.gz` asset on the live Pages branch.
+container archives without rebuilding. It uses the standard Docker client to
+wait until the exact published manifests are readable. Use `make deploy` only
+after publish; it verifies the published image, deploys the backend through the
+gateway, then activates the exact `pages.tar.gz` asset on the live Pages branch,
+waits for the matching GitHub Pages build, and verifies its cache-distinct
+public marker.
 
 ## License
 

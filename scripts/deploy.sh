@@ -74,11 +74,6 @@ resolve_release_tag() {
   git tag --points-at HEAD --list 'v*' --sort=-version:refname | head -n 1
 }
 
-image_digest() {
-  local image_ref="$1"
-  docker buildx imagetools inspect "$image_ref" | awk '/^Digest:/ { print $2; exit }'
-}
-
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gateway-dir)
@@ -227,9 +222,11 @@ fi
 if [[ "${SKIP_IMAGE_VERIFY}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then
   command -v docker >/dev/null 2>&1 || { echo "error: docker is required for image verification" >&2; exit 1; }
   docker buildx version >/dev/null 2>&1 || { echo "error: docker buildx is required for image verification" >&2; exit 1; }
+  container_manifest_digest_helper="${repo_root}/tools/gitrelease/scripts/resolve_container_manifest_digest.sh"
+  [[ -f "${container_manifest_digest_helper}" ]] || { echo "error: container manifest digest helper is missing: ${container_manifest_digest_helper}" >&2; exit 1; }
   echo "==> [deploy] Verifying ${IMAGE_REPOSITORY}:latest matches ${release_tag}"
-  release_digest="$(image_digest "${IMAGE_REPOSITORY}:${release_tag}")"
-  latest_digest="$(image_digest "${IMAGE_REPOSITORY}:latest")"
+  release_digest="$(bash "${container_manifest_digest_helper}" "${IMAGE_REPOSITORY}:${release_tag}")"
+  latest_digest="$(bash "${container_manifest_digest_helper}" "${IMAGE_REPOSITORY}:latest")"
   [[ -n "${release_digest}" ]] || { echo "error: could not resolve digest for ${IMAGE_REPOSITORY}:${release_tag}" >&2; exit 1; }
   [[ -n "${latest_digest}" ]] || { echo "error: could not resolve digest for ${IMAGE_REPOSITORY}:latest" >&2; exit 1; }
   if [[ "${release_digest}" != "${latest_digest}" ]]; then

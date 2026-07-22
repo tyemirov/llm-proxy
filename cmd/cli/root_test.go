@@ -508,6 +508,14 @@ func TestRootCommandRendersStaticSiteWithoutBackendConfig(t *testing.T) {
 	if _, statError := os.Stat(filepath.Join(outputDirectory, "assets", "llm-proxy", "js", "app.js")); statError != nil {
 		t.Fatalf("rendered app.js: %v", statError)
 	}
+	stylesheetBytes, readStylesheetError := os.ReadFile(filepath.Join(outputDirectory, "assets", "llm-proxy", "styles.css"))
+	if readStylesheetError != nil {
+		t.Fatalf("rendered stylesheet: %v", readStylesheetError)
+	}
+	stylesheet := string(stylesheetBytes)
+	if !strings.Contains(stylesheet, `#llm-proxy-header notification-region[slot="aux"]`) || !strings.Contains(stylesheet, "order: -1;") {
+		t.Fatalf("rendered stylesheet omits notification ordering contract")
+	}
 }
 
 func TestRootCommandRendersSiteFromDefaultSourceDirectory(t *testing.T) {
@@ -1189,6 +1197,32 @@ providers:
 	executeError := executeRootCommand(t, "--config", configPath)
 	if executeError == nil || !strings.Contains(executeError.Error(), "config_file_parse_failed") {
 		t.Fatalf("error=%v want config parse failure", executeError)
+	}
+}
+
+func TestRootCommandRejectsStaleProviderLevelReasoningEffortDeclaration(t *testing.T) {
+	tempDir := t.TempDir()
+	providersYAML := strings.Replace(completeLiteralProvidersYAML(), `    text:
+      default_model: "gpt-4.1"`, `    text:
+      reasoning_effort:
+        adapter: "openai_responses"
+        efforts: ["minimal", "low", "medium", "high"]
+      default_model: "gpt-4.1"`, 1)
+	configPath := writeTestConfig(t, tempDir, `
+tenants:
+  - id: default
+    secret: "sekret"
+    defaults:
+      provider: openai
+      model: gpt-4.1
+      dictation_provider: openai
+      dictation_model: gpt-4o-mini-transcribe
+`+providersYAML)
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath)
+	if executeError == nil || !strings.Contains(executeError.Error(), "config_file_parse_failed") || !strings.Contains(executeError.Error(), "reasoning_effort") {
+		t.Fatalf("error=%v want stale provider-level reasoning effort rejection", executeError)
 	}
 }
 
