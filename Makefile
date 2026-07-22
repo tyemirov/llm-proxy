@@ -27,7 +27,7 @@ GATEWAY_DIR ?=
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-root-import-test frontend-test test-management-auth-blackbox release-test test-live-provider-harness test-live-providers test-live-gemini build clean ci release container-artifacts pages-artifact publish-release publish pages-deploy deploy
+.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-root-import-test frontend-test test-management-auth-blackbox release-test test-live-provider-harness test-live-providers test-live-gemini build clean ci up release container-artifacts pages-artifact publish-release publish pages-deploy deploy
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -86,6 +86,9 @@ test-live-gemini:
 build:
 	mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 $(GO) build -o $(BIN_DIR)/$(BINARY_NAME) ./cmd/cli
+
+up: build
+	@LLM_PROXY_UP_BINARY="$(abspath $(BIN_DIR)/$(BINARY_NAME))" ./scripts/up.sh
 
 clean:
 	rm -rf $(BIN_DIR)
