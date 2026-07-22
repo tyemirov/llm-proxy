@@ -82,14 +82,49 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).not.toContain("brand-label=");
   expect(html).not.toContain("data:image");
   expect(html).toContain(
-    '<button type="button" class="icon-only copy-secret-button" x-on:click="copyGeneratedSecret()" x-bind:title="copy.copySecret" x-bind:aria-label="copy.copySecret">',
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=delete,visibility,visibility_off&amp;display=block">',
   );
+  expect(html).toContain(
+    '<span class="material-symbols-outlined" x-show="!providerKeyVisible" aria-hidden="true">visibility</span>',
+  );
+  expect(html).toContain(
+    '<span class="material-symbols-outlined" x-show="providerKeyVisible" aria-hidden="true">visibility_off</span>',
+  );
+  expect(html).toContain('<span class="material-symbols-outlined" aria-hidden="true">delete</span>');
+  expect(html).toContain('class="icon-only danger provider-key-remove"');
+  expect(html).not.toContain("provider-editor-actions");
+  expect(html).not.toContain('<svg x-show="!providerKeyVisible"');
+  expect(html).not.toContain('<svg x-show="providerKeyVisible"');
+  const providerSelectorOffset = html.indexOf('<label class="provider-selector">');
+  const providerKeyFieldOffset = html.indexOf("<provider-key-field>");
+  const textModelOffset = html.indexOf('x-model="selectedProvider.text_model"');
+  const providerRemovalOffset = html.indexOf('class="icon-only danger provider-key-remove"');
+  expect(providerSelectorOffset).toBeGreaterThan(-1);
+  expect(providerSelectorOffset).toBeLessThan(providerKeyFieldOffset);
+  expect(providerKeyFieldOffset).toBeLessThan(textModelOffset);
+  expect(textModelOffset).toBeLessThan(providerRemovalOffset);
+  expect(html).toContain(
+    '<client-access-row>',
+  );
+  expect(html).toContain('<strong x-text="tenantName"></strong>');
+  expect(html).toContain(
+    '<button type="button" class="icon-only client-key-copy" x-cloak x-show="hasGeneratedSecret" x-on:click="copyGeneratedSecret()" x-bind:disabled="busy" x-bind:title="copy.copyClientKey" x-bind:aria-label="copy.copyClientKey">',
+  );
+  expect(html).toContain(
+    '<button type="button" class="icon-only danger client-key-revoke" x-cloak x-show="hasSecret" x-on:click="revokeSecret()" x-bind:disabled="busy" x-bind:title="copy.revokeKey" x-bind:aria-label="copy.revokeKey">',
+  );
+  expect(html).toContain('<span class="material-symbols-outlined" x-show="!generatedSecretVisible" aria-hidden="true">visibility</span>');
+  expect(html).toContain('<span class="material-symbols-outlined" x-show="generatedSecretVisible" aria-hidden="true">visibility_off</span>');
   expect(html).toContain(
     '<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">',
   );
   expect(html).toContain('<rect x="6" y="5" width="10" height="12" rx="1.5"></rect>');
   expect(html).toContain('<rect x="8" y="7" width="10" height="12" rx="1.5"></rect>');
-  expect(html).not.toContain('x-bind:aria-label="copy.copySecret">[]</button>');
+  expect(html).not.toContain("tenant-facts");
+  expect(html).not.toContain("secret-output");
+  expect(html).not.toContain("copy.tenantId");
+  expect(html).not.toContain("copy.copySecret");
+  expect(html).not.toContain("Generated secret");
   expect(html).toContain('x-model="defaults.reasoning_effort"');
   expect(html).toContain('class="text-routing-controls"');
   expect(html).toContain('x-on:change="normalizeReasoningEffortDefault()"');
@@ -229,6 +264,12 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await expect(settingsDialog).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Client access" })).toBeVisible();
+  const clientAccessRow = settingsDialog.locator("client-access-row");
+  await expect(clientAccessRow).toContainText("Tenant");
+  await expect(clientAccessRow).toContainText("Default");
+  await expect(clientAccessRow).toContainText("Key retained");
+  await expect(clientAccessRow).not.toContainText("Tenant ID");
+  await expect(clientAccessRow.getByRole("button", { name: "Revoke key" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Routing defaults" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Request examples" })).toBeVisible();
   const requestExamplesSection = settingsDialog.locator(".usage-examples-section");
@@ -254,22 +295,28 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"] .usage-snippet')).toContainText(
     "provider=openai",
   );
-  await expect(settingsDialog.getByRole("heading", { name: "Provider settings" })).toBeVisible();
   const providerEditor = settingsDialog.locator("provider-editor");
-  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider" });
+  await providerEditor.scrollIntoViewIfNeeded();
+  await expect(settingsDialog.getByRole("heading", { name: "Provider settings" })).toBeVisible();
+  await expect(providerEditor).toBeInViewport();
+  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
   await expect(providerEditor.locator("provider-settings-fields")).toHaveCount(1);
   await expect(settingsDialog.locator("provider-key-card")).toHaveCount(0);
+  await expect(providerEditor.locator("provider-status")).toHaveCount(0);
+  await expect(providerEditor.locator(".provider-selector > .visually-hidden")).toHaveText("Provider");
   await expect(providerSelector).toHaveValue("openai");
-  await expect(providerEditor.locator("provider-status")).toContainText("OpenAI");
-  await expect(providerEditor.locator("provider-status")).toContainText("sk-...1234");
-  await expect(providerEditor.getByRole("combobox", { name: "Text model" })).toHaveValue("gpt-4.1");
+  await expect(providerEditor.getByRole("textbox", { name: "OpenAI API key" })).toHaveValue("****1234");
+  await expect(providerEditor.getByRole("textbox", { name: "OpenAI API key" })).toHaveAttribute("readonly", "readonly");
+  await expect(providerEditor.getByRole("button", { name: "Show key" })).toHaveAttribute("aria-pressed", "false");
+  const providerRemovalButton = providerEditor.getByRole("button", { name: "Remove provider key and settings" });
+  await expect(providerRemovalButton).toBeVisible();
+  await expect(providerRemovalButton.locator(".material-symbols-outlined")).toHaveText("delete");
+  await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toHaveValue("gpt-4.1");
   await expect(providerEditor.getByRole("textbox", { name: "System prompt" })).toHaveValue("Use concise answers.");
 
   await providerSelector.selectOption("deepseek");
-  await expect(providerEditor.locator("provider-status")).toContainText("DeepSeek");
-  await expect(providerEditor.locator("provider-status")).toContainText("sk-...5678");
-  await expect(providerEditor.getByRole("textbox", { name: "DeepSeek API key" })).toBeVisible();
-  await expect(providerEditor.getByRole("combobox", { name: "Text model" })).toHaveValue("deepseek-chat");
+  await expect(providerEditor.getByRole("textbox", { name: "DeepSeek API key" })).toHaveValue("****5678");
+  await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toHaveValue("deepseek-chat");
   await expect(providerEditor.getByRole("textbox", { name: "System prompt" })).toHaveValue("");
   await expect(settingsDialog.locator("request-example")).toHaveCount(5);
   await expect(settingsDialog.locator('request-example[data-example-id="provider-text"] .usage-snippet')).toContainText(
@@ -281,10 +328,8 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
 
   await providerSelector.selectOption("meta");
-  await expect(providerEditor.locator("provider-status")).toContainText("Meta");
-  await expect(providerEditor.locator("provider-status")).toContainText("sk-...meta");
-  await expect(providerEditor.getByRole("textbox", { name: "Meta API key" })).toBeVisible();
-  await expect(providerEditor.getByRole("combobox", { name: "Text model" })).toHaveValue("muse-spark-1.1");
+  await expect(providerEditor.getByRole("textbox", { name: "Meta API key" })).toHaveValue("****meta");
+  await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toHaveValue("muse-spark-1.1");
   await expect(settingsDialog.locator("request-example")).toHaveCount(5);
   await expect(settingsDialog.locator('request-example[data-example-id="provider-text"] .usage-snippet')).toContainText(
     "provider=meta",
@@ -317,37 +362,46 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
 
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   const providerEditor = settingsDialog.locator("provider-editor");
-  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider" });
+  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
   const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
-  await expect(providerKeyInput).toHaveValue("");
-  await expect(providerKeyInput).toHaveAttribute("type", "password");
+  await expect(providerKeyInput).toHaveValue("****1234");
+  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
   await expect(providerEditor.getByRole("button", { name: "Show key" })).toBeVisible();
-  await expect(providerEditor.locator("provider-status")).not.toContainText(revealedProviderKey);
+  const visibilitySymbols = providerEditor
+    .locator(".provider-key-visibility-toggle")
+    .locator(".material-symbols-outlined");
+  await expect(visibilitySymbols).toHaveCount(2);
+  await expect(visibilitySymbols.nth(0)).toHaveText("visibility");
+  await expect(visibilitySymbols.nth(0)).toBeVisible();
+  await expect(visibilitySymbols.nth(1)).toHaveText("visibility_off");
+  await expect(visibilitySymbols.nth(1)).toBeHidden();
+  await expect(providerEditor.getByRole("button", { name: "Remove provider key and settings" }).locator(".material-symbols-outlined")).toHaveText("delete");
   await expect(settingsDialog.locator("example-list")).not.toContainText(revealedProviderKey);
 
   await providerEditor.getByRole("button", { name: "Show key" }).click();
   await expect(providerKeyInput).toHaveValue(revealedProviderKey);
-  await expect(providerKeyInput).toHaveAttribute("type", "text");
+  await expect(providerKeyInput).not.toHaveAttribute("readonly", "readonly");
   await expect(providerEditor.getByRole("button", { name: "Hide key" })).toBeVisible();
+  await expect(visibilitySymbols.nth(0)).toBeHidden();
+  await expect(visibilitySymbols.nth(1)).toBeVisible();
+  await expect(providerEditor.getByText("Hide key", { exact: true })).toHaveCount(0);
   expect(revealRequestCount).toBe(1);
   expect(await providerKeyInput.evaluate((inputElement) => inputElement.outerHTML)).not.toContain(revealedProviderKey);
-  await expect(providerEditor.locator("provider-status")).not.toContainText(revealedProviderKey);
   await expect(settingsDialog.locator("example-list")).not.toContainText(revealedProviderKey);
 
   await providerEditor.getByRole("button", { name: "Hide key" }).click();
-  await expect(providerKeyInput).toHaveAttribute("type", "password");
-  await expect(providerKeyInput).toHaveValue(revealedProviderKey);
+  await expect(providerKeyInput).toHaveValue("****aled");
+  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
   await providerEditor.getByRole("button", { name: "Show key" }).click();
-  await expect(providerKeyInput).toHaveAttribute("type", "text");
+  await expect(providerKeyInput).toHaveValue(revealedProviderKey);
   expect(revealRequestCount).toBe(1);
 
   await providerKeyInput.fill(editedProviderKey);
   await providerEditor.getByRole("button", { name: "Update key" }).click();
-  await expect(providerKeyInput).toHaveValue("");
-  await expect(providerKeyInput).toHaveAttribute("type", "password");
+  await expect(providerKeyInput).not.toHaveValue(editedProviderKey);
+  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
   await expect(providerEditor.getByRole("button", { name: "Show key" })).toBeVisible();
   expect(savedProviderKeyPayload).toMatchObject({ api_key: editedProviderKey });
-  await expect(providerEditor.locator("provider-status")).not.toContainText(editedProviderKey);
   await expect(settingsDialog.locator("example-list")).not.toContainText(editedProviderKey);
   expect(await browserStorageContains(page, revealedProviderKey)).toBe(false);
   expect(await browserStorageContains(page, editedProviderKey)).toBe(false);
@@ -356,11 +410,11 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
   await expect(providerKeyInput).toHaveValue(editedProviderKey);
   await providerSelector.selectOption("deepseek");
   const deepSeekKeyInput = providerEditor.getByRole("textbox", { name: "DeepSeek API key" });
-  await expect(deepSeekKeyInput).toHaveValue("");
-  await expect(deepSeekKeyInput).toHaveAttribute("type", "password");
+  await expect(deepSeekKeyInput).toHaveValue("****5678");
+  await expect(deepSeekKeyInput).toHaveAttribute("readonly", "readonly");
   await providerSelector.selectOption("openai");
-  await expect(providerKeyInput).toHaveValue("");
-  await expect(providerKeyInput).toHaveAttribute("type", "password");
+  await expect(providerKeyInput).not.toHaveValue(editedProviderKey);
+  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
 
   await providerEditor.getByRole("button", { name: "Show key" }).click();
   await expect(providerKeyInput).toHaveValue(editedProviderKey);
@@ -368,16 +422,16 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
   await expect(settingsDialog).toBeHidden();
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
-  await expect(providerKeyInput).toHaveValue("");
-  await expect(providerKeyInput).toHaveAttribute("type", "password");
+  await expect(providerKeyInput).not.toHaveValue(editedProviderKey);
+  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
 
   await providerEditor.getByRole("button", { name: "Show key" }).click();
   await expect(providerKeyInput).toHaveValue(editedProviderKey);
   await page.reload();
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
-  await expect(providerKeyInput).toHaveValue("");
-  await expect(providerKeyInput).toHaveAttribute("type", "password");
+  await expect(providerKeyInput).not.toHaveValue(editedProviderKey);
+  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
 
   await providerEditor.getByRole("button", { name: "Show key" }).click();
   await expect(providerKeyInput).toHaveValue(editedProviderKey);
@@ -405,8 +459,7 @@ test("removing a revealed provider key clears the selected editor", async ({ pag
   await providerEditor.getByRole("button", { name: "Remove provider key and settings" }).click();
 
   await expect(providerKeyInput).toHaveValue("");
-  await expect(providerKeyInput).toHaveAttribute("type", "password");
-  await expect(providerEditor.locator("provider-status")).toContainText("No key saved");
+  await expect(providerKeyInput).not.toHaveAttribute("readonly", "readonly");
   await expect(providerEditor.getByRole("button", { name: "Show key" })).toBeHidden();
   expect(await browserStorageContains(page, revealedProviderKey)).toBe(false);
 });
@@ -435,7 +488,7 @@ test("late provider-key reveals cannot populate a reopened editor", async ({ pag
 
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   const providerEditor = settingsDialog.locator("provider-editor");
-  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider" });
+  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
   const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
   await providerEditor.getByRole("button", { name: "Show key" }).click();
   await revealRequested;
@@ -450,14 +503,13 @@ test("late provider-key reveals cannot populate a reopened editor", async ({ pag
   await providerSelector.selectOption("deepseek");
   fulfillReveal();
   const deepSeekKeyInput = providerEditor.getByRole("textbox", { name: "DeepSeek API key" });
-  await expect(deepSeekKeyInput).toHaveValue("");
-  await expect(deepSeekKeyInput).toHaveAttribute("type", "password");
-  await expect(providerEditor.locator("provider-status")).not.toContainText(delayedProviderKey);
+  await expect(deepSeekKeyInput).toHaveValue("****5678");
+  await expect(deepSeekKeyInput).toHaveAttribute("readonly", "readonly");
   expect(await browserStorageContains(page, delayedProviderKey)).toBe(false);
 
   await providerSelector.selectOption("openai");
-  await expect(providerKeyInput).toHaveValue("");
-  await expect(providerKeyInput).toHaveAttribute("type", "password");
+  await expect(providerKeyInput).not.toHaveValue(delayedProviderKey);
+  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
 });
 
 test("routing defaults save only complete provider and model pairs", async ({ page }) => {
@@ -722,7 +774,7 @@ test("settings shows placeholder request examples before generated secret exists
   await expect(settingsDialog.getByRole("heading", { name: "Provider settings" })).toBeVisible();
 });
 
-test("settings request examples use the freshly generated secret", async ({ page }) => {
+test("settings request examples retain the generated-key placeholder", async ({ page }) => {
   const generatedSecret = "llmp_test_generated_secret";
   await installAssetRoutes(page);
   await installManagementRoutes(page, { hasSecret: false, generatedSecret });
@@ -740,19 +792,21 @@ test("settings request examples use the freshly generated secret", async ({ page
 
   await settingsDialog.getByRole("button", { name: "Create key" }).click();
 
-  await expect(settingsDialog.getByLabel("Generated secret")).toHaveValue(generatedSecret);
-  await expect(defaultTextExample).toContainText(`key=${generatedSecret}`);
+  await expect(settingsDialog.locator("client-access-row").getByRole("textbox", { name: "Key", exact: true })).not.toHaveValue(
+    generatedSecret,
+  );
+  await expect(defaultTextExample).toContainText("key=<generated-secret>");
   await expect(settingsDialog.locator('request-example[data-example-id="default-v2"] .usage-snippet')).toContainText(
-    `/v2?key=${generatedSecret}`,
+    "/v2?key=<generated-secret>",
   );
   await expect(settingsDialog.locator('request-example[data-example-id="default-dictation"] .usage-snippet')).toContainText(
-    `/dictate?key=${generatedSecret}`,
+    "/dictate?key=<generated-secret>",
   );
-  await expect(providerV2Example).toContainText(`key=${generatedSecret}`);
-  await expect(settingsDialog.locator("example-list")).not.toContainText("<generated-secret>");
+  await expect(providerV2Example).toContainText("key=<generated-secret>");
+  await expect(settingsDialog.locator("example-list")).not.toContainText(generatedSecret);
 });
 
-test("generated-secret copy control uses a standard copy icon and copies the new secret", async ({ page }) => {
+test("new client keys are masked, revealable, copyable, and revocable per row", async ({ page }) => {
   const generatedSecret = "llmp_test_generated_secret";
   await installClipboardMock(page);
   await installAssetRoutes(page);
@@ -767,9 +821,23 @@ test("generated-secret copy control uses a standard copy icon and copies the new
     const settingsDialog = page.getByRole("dialog", { name: "Settings" });
     await settingsDialog.getByRole("button", { name: "Create key" }).click();
 
-    const copyButton = settingsDialog.getByRole("button", { name: "Copy secret" });
+    const clientAccessRow = settingsDialog.locator("client-access-row");
+    const clientKeyInput = clientAccessRow.getByRole("textbox", { name: "Key", exact: true });
+    const visibilityButton = clientAccessRow.getByRole("button", { name: "Show key", exact: true });
+    const copyButton = clientAccessRow.getByRole("button", { name: "Copy key", exact: true });
+    const revokeButton = clientAccessRow.getByRole("button", { name: "Revoke key", exact: true });
     const copyIcon = copyButton.locator("svg.copy-icon");
-    await expect(copyButton).toHaveAttribute("title", "Copy secret");
+    const visibilitySymbols = visibilityButton.locator(".material-symbols-outlined");
+    await expect(clientKeyInput).toHaveValue("••••••••••••");
+    await expect(clientKeyInput).toHaveAttribute("readonly", "");
+    await expect(visibilityButton).toHaveAttribute("aria-pressed", "false");
+    await expect(visibilitySymbols).toHaveCount(2);
+    await expect(visibilitySymbols.nth(0)).toHaveText("visibility");
+    await expect(visibilitySymbols.nth(0)).toBeVisible();
+    await expect(visibilitySymbols.nth(1)).toHaveText("visibility_off");
+    await expect(visibilitySymbols.nth(1)).toBeHidden();
+    await expect(revokeButton.locator(".material-symbols-outlined")).toHaveText("delete");
+    await expect(copyButton).toHaveAttribute("title", "Copy key");
     await expect(copyIcon).toHaveCount(1);
     await expect(copyIcon).toHaveAttribute("aria-hidden", "true");
     await expect(copyIcon).toHaveAttribute("focusable", "false");
@@ -795,9 +863,35 @@ test("generated-secret copy control uses a standard copy icon and copies the new
     expect(copyButtonBox.x).toBeGreaterThanOrEqual(settingsDialogBox.x);
     expect(copyButtonBox.x + copyButtonBox.width).toBeLessThanOrEqual(settingsDialogBox.x + settingsDialogBox.width);
 
+    await visibilityButton.click();
+    await expect(clientKeyInput).toHaveValue(generatedSecret);
+    const hideKeyButton = clientAccessRow.getByRole("button", { name: "Hide key", exact: true });
+    await expect(hideKeyButton).toHaveAttribute("aria-pressed", "true");
+    expect(await clientKeyInput.evaluate((inputElement) => inputElement.outerHTML)).not.toContain(generatedSecret);
+    await expect(settingsDialog.locator("example-list")).not.toContainText(generatedSecret);
+    expect(await browserStorageContains(page, generatedSecret)).toBe(false);
+
     await copyButton.click();
     expect(await copiedText(page)).toBe(generatedSecret);
-    await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Secret copied");
+    await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Key copied");
+
+    await hideKeyButton.click();
+    await expect(clientKeyInput).toHaveValue("••••••••••••");
+    await settingsDialog.getByRole("button", { name: "Close" }).click();
+    await expect(settingsDialog).toBeHidden();
+
+    await page.getByTestId("avatar-menu").click();
+    await page.getByTestId("avatar-menu-item").nth(0).click();
+    await expect(clientAccessRow.getByText("Key retained — create a replacement to copy a new value")).toBeVisible();
+    await expect(clientKeyInput).toBeHidden();
+    await expect(clientAccessRow.getByRole("button", { name: "Show key", exact: true })).toBeHidden();
+    await expect(clientAccessRow.getByRole("button", { name: "Copy key", exact: true })).toBeHidden();
+    await expect(revokeButton).toBeVisible();
+
+    await revokeButton.click();
+    await expect(clientAccessRow.getByText("No key created")).toBeVisible();
+    await expect(revokeButton).toBeHidden();
+    await expect(settingsDialog.getByRole("button", { name: "Create key" })).toBeVisible();
   }
 });
 
