@@ -45,10 +45,17 @@ const PROVIDER_DICTATION_EXAMPLE_ID = "provider-dictation";
 const JSON_CONTENT_TYPE_HEADER = "Content-Type: application/json";
 const SAMPLE_TEXT_PROMPT = "Hello";
 const SAMPLE_AUDIO_FILE = "recording.webm";
-const PROVIDER_KEY_INPUT_TYPES = Object.freeze({
-  MASKED: "password",
-  VISIBLE: "text",
-});
+const MASKED_PROVIDER_KEY_PREFIX = "****";
+const MASKED_PROVIDER_KEY_FINAL_CHARACTER_COUNT = 4;
+const MASKED_CLIENT_KEY = "••••••••••••";
+
+/**
+ * @param {string} keyValue
+ * @returns {string}
+ */
+function maskedProviderKey(keyValue) {
+  return `${MASKED_PROVIDER_KEY_PREFIX}${keyValue.slice(-MASKED_PROVIDER_KEY_FINAL_CHARACTER_COUNT)}`;
+}
 
 export function createKeyManagement() {
   return {
@@ -85,6 +92,7 @@ export function createKeyManagement() {
     /** @type {Promise<void> | null} */
     profileLoadPromise: null,
     generatedSecret: EMPTY_STRING,
+    generatedSecretVisible: false,
     settingsOpen: false,
     usageExamplesOpen: false,
     notice: {
@@ -139,11 +147,24 @@ export function createKeyManagement() {
       return this.adminUsers.length > 0;
     },
 
-    get tenantId() {
-      if (!this.profile) {
-        return EMPTY_STRING;
-      }
-      return this.profile.tenant.id;
+    get tenantName() {
+      return COPY.defaultTenantName;
+    },
+
+    get hasGeneratedSecret() {
+      return Boolean(this.generatedSecret);
+    },
+
+    get generatedSecretValue() {
+      return this.generatedSecretVisible ? this.generatedSecret : MASKED_CLIENT_KEY;
+    },
+
+    get generatedSecretVisibilityActionCopy() {
+      return this.generatedSecretVisible ? COPY.hideClientKey : COPY.showClientKey;
+    },
+
+    get clientKeyCreateCopy() {
+      return this.hasSecret ? COPY.replaceKey : COPY.createKey;
     },
 
     get selectedTextModels() {
@@ -190,14 +211,32 @@ export function createKeyManagement() {
       return this.selectedProviderID !== EMPTY_STRING && this.revealedProviderID === this.selectedProviderID;
     },
 
-    get selectedProviderKeyInputType() {
-      return this.providerKeyVisible ? PROVIDER_KEY_INPUT_TYPES.VISIBLE : PROVIDER_KEY_INPUT_TYPES.MASKED;
+    get selectedProviderKeyHasInput() {
+      const provider = this.selectedProvider;
+      return Boolean(provider && this.providerInputs[provider.id]);
+    },
+
+    get selectedProviderKeyInputValue() {
+      const provider = this.selectedProvider;
+      if (!provider) {
+        return EMPTY_STRING;
+      }
+      const providerKeyInput = String(this.providerInputs[provider.id] || EMPTY_STRING);
+      if (this.providerKeyVisible || (!provider.has_key && !providerKeyInput)) {
+        return providerKeyInput;
+      }
+      return maskedProviderKey(providerKeyInput || String(provider.masked_key || EMPTY_STRING));
+    },
+
+    get selectedProviderKeyInputReadOnly() {
+      const provider = this.selectedProvider;
+      if (!provider) {
+        return false;
+      }
+      return Boolean(!this.providerKeyVisible && (provider.has_key || this.providerInputs[provider.id]));
     },
 
     get selectedProviderKeyActionCopy() {
-      if (!this.selectedProviderKeyRevealed) {
-        return COPY.showProviderKey;
-      }
       return this.providerKeyVisible ? COPY.hideProviderKey : COPY.showProviderKey;
     },
 
@@ -279,7 +318,7 @@ export function createKeyManagement() {
     },
 
     get exampleSecret() {
-      return this.generatedSecret || EMPTY_SECRET_PLACEHOLDER;
+      return EMPTY_SECRET_PLACEHOLDER;
     },
 
     get proxyOrigin() {
@@ -295,7 +334,7 @@ export function createKeyManagement() {
     },
 
     defaultV2Curl() {
-      const secret = this.generatedSecret || EMPTY_SECRET_PLACEHOLDER;
+      const secret = this.exampleSecret;
       return [
         `curl -sS ${JSON.stringify(`${this.proxyOrigin}/v2?key=${secret}`)} \\`,
         `  -H '${JSON_CONTENT_TYPE_HEADER}' \\`,
@@ -509,6 +548,7 @@ export function createKeyManagement() {
 
     closeSettings() {
       this.clearProviderKeyMaterial();
+      this.clearGeneratedSecret();
       this.settingsOpen = false;
     },
 
@@ -524,14 +564,30 @@ export function createKeyManagement() {
     },
 
     async handleSelectedProviderKeyAction() {
-      if (!this.selectedProvider || !this.selectedProvider.has_key) {
+      const provider = this.selectedProvider;
+      if (!provider) {
         return;
       }
-      if (this.selectedProviderKeyRevealed) {
+      if (this.selectedProviderKeyRevealed || this.selectedProviderKeyHasInput) {
         this.providerKeyVisible = !this.providerKeyVisible;
         return;
       }
-      await this.revealSelectedProviderKey();
+      if (provider.has_key) {
+        await this.revealSelectedProviderKey();
+      }
+    },
+
+    /**
+     * @param {Event} event
+     */
+    handleSelectedProviderKeyInput(event) {
+      const provider = this.selectedProvider;
+      if (!provider) {
+        return;
+      }
+      const keyInput = /** @type {HTMLInputElement} */ (event.target);
+      this.providerInputs[provider.id] = keyInput.value;
+      this.providerKeyVisible = true;
     },
 
     async revealSelectedProviderKey() {
@@ -584,6 +640,11 @@ export function createKeyManagement() {
       this.providerKeyVisible = false;
       this.providerKeyRevealPending = false;
       this.providerKeyRevealVersion += 1;
+    },
+
+    clearGeneratedSecret() {
+      this.generatedSecret = EMPTY_STRING;
+      this.generatedSecretVisible = false;
     },
 
     async saveSelectedProviderKey() {
@@ -639,8 +700,9 @@ export function createKeyManagement() {
       try {
         const secretResponse = await requestGeneratedSecret();
         this.generatedSecret = secretResponse.secret;
+        this.generatedSecretVisible = false;
         this.applyProfile(secretResponse.profile);
-        this.setNotice(NOTICE_KINDS.SUCCESS, COPY.secretGenerated);
+        this.setNotice(NOTICE_KINDS.SUCCESS, COPY.keyGenerated);
       } catch (requestError) {
         this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
       } finally {
@@ -649,8 +711,17 @@ export function createKeyManagement() {
     },
 
     async revokeSecret() {
-      await this.runProfileMutation(async () => requestRevokeSecret(), COPY.secretRevoked);
-      this.generatedSecret = EMPTY_STRING;
+      const keyRevoked = await this.runProfileMutation(async () => requestRevokeSecret(), COPY.keyRevoked);
+      if (keyRevoked) {
+        this.clearGeneratedSecret();
+      }
+    },
+
+    toggleGeneratedSecretVisibility() {
+      if (!this.generatedSecret) {
+        return;
+      }
+      this.generatedSecretVisible = !this.generatedSecretVisible;
     },
 
     async copyGeneratedSecret() {
@@ -659,7 +730,7 @@ export function createKeyManagement() {
         return;
       }
       await navigator.clipboard.writeText(this.generatedSecret);
-      this.setNotice(NOTICE_KINDS.SUCCESS, COPY.secretCopied);
+      this.setNotice(NOTICE_KINDS.SUCCESS, COPY.keyCopied);
     },
 
     /**
@@ -697,6 +768,7 @@ export function createKeyManagement() {
     /**
      * @param {() => Promise<import("../types.d.js").ManagementProfile>} mutation
      * @param {string} successMessage
+     * @returns {Promise<boolean>}
      */
     async runProfileMutation(mutation, successMessage) {
       this.busy = true;
@@ -704,8 +776,10 @@ export function createKeyManagement() {
         const updatedProfile = await mutation();
         this.applyProfile(updatedProfile);
         this.setNotice(NOTICE_KINDS.SUCCESS, successMessage);
+        return true;
       } catch (requestError) {
         this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+        return false;
       } finally {
         this.busy = false;
       }
@@ -749,7 +823,7 @@ export function createKeyManagement() {
       this.defaults = emptyDefaults();
       this.usage = emptyUsageSummary();
       this.adminUsers = [];
-      this.generatedSecret = EMPTY_STRING;
+      this.clearGeneratedSecret();
       this.settingsOpen = false;
       this.dashboardView = DASHBOARD_VIEWS.USAGE;
       applyUserMenuItems(false);

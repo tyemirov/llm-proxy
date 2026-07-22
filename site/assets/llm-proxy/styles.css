@@ -42,7 +42,10 @@ llm-proxy-key-management textarea {
 
 llm-proxy-key-management,
 workspace-surface,
-tenant-actions,
+client-access-row,
+client-access-tenant,
+client-access-key,
+client-key-row,
 defaults-editor,
 dashboard-actions,
 usage-dashboard,
@@ -61,8 +64,8 @@ example-list,
 request-example,
 provider-editor,
 provider-settings-fields,
-provider-status,
-secret-output,
+provider-key-field,
+provider-key-input,
 settings-overlay,
 settings-modal,
 settings-body,
@@ -417,6 +420,18 @@ admin-user-card header span {
   font-size: 0.86rem;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .eyebrow {
   margin: 0 0 0.2rem;
   color: var(--llm-accent);
@@ -451,19 +466,81 @@ h3 {
   font-weight: 600;
 }
 
-.tenant-facts {
+.client-access-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.45rem;
-  margin: 0 0 0.65rem;
-}
-
-.tenant-facts div {
-  min-width: 0;
+  grid-template-columns: minmax(8rem, 0.65fr) minmax(0, 1.5fr);
+  gap: 0.55rem;
   border: 1px solid var(--llm-border);
   border-radius: 6px;
-  padding: 0.45rem 0.55rem;
   background: var(--llm-panel-strong);
+  padding: 0.55rem 0.65rem;
+}
+
+client-access-tenant,
+client-access-key {
+  min-width: 0;
+}
+
+client-access-tenant {
+  display: grid;
+  align-content: start;
+  gap: 0.1rem;
+}
+
+client-access-tenant strong {
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
+}
+
+client-access-key {
+  display: grid;
+  gap: 0.2rem;
+}
+
+client-key-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 30px);
+  align-items: center;
+  gap: 0.35rem;
+}
+
+client-key-row input {
+  min-width: 0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.client-key-state {
+  margin: 0;
+  color: var(--llm-muted);
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+.client-key-visibility-toggle,
+.client-key-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.client-key-visibility-toggle .material-symbols-outlined,
+.client-key-revoke .material-symbols-outlined {
+  display: block;
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+.client-key-copy .copy-icon {
+  display: block;
+  inline-size: 1rem;
+  block-size: 1rem;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.client-key-revoke {
+  grid-column: -2;
 }
 
 dt {
@@ -478,13 +555,6 @@ dd {
   margin: 0.15rem 0 0;
   overflow-wrap: anywhere;
   font-size: 0.78rem;
-}
-
-tenant-actions,
-.secret-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
 }
 
 .stack {
@@ -564,28 +634,6 @@ llm-proxy-key-management button:disabled {
   color: var(--llm-danger);
 }
 
-secret-output {
-  margin-top: 0.35rem;
-}
-
-secret-output .copy-secret-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-secret-output .copy-icon {
-  display: block;
-  inline-size: 1rem;
-  block-size: 1rem;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.secret-row input {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-}
-
 .usage-snippet {
   margin: 0;
   overflow: auto;
@@ -634,24 +682,72 @@ request-example + request-example {
   gap: 0.55rem;
 }
 
+.provider-selector {
+  display: block;
+  min-width: 0;
+}
+
+.provider-selector select {
+  margin: 0;
+}
+
 provider-settings-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(8.5rem, 0.8fr) minmax(12rem, 1.45fr) minmax(10rem, 1.2fr) 30px;
   gap: 0.55rem;
 }
 
-provider-status {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.5rem;
-  grid-column: 1 / -1;
+provider-key-field {
+  display: block;
+  min-width: 0;
 }
 
-provider-status p {
-  margin-bottom: 0;
+provider-settings-fields > label {
+  min-width: 0;
+}
+
+provider-key-input {
+  position: relative;
+  display: block;
+}
+
+provider-key-input input {
+  width: 100%;
+  padding-right: 2.4rem;
+}
+
+provider-key-input input[readonly] {
   color: var(--llm-muted);
-  font-size: 0.72rem;
+}
+
+.provider-key-visibility-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.2rem;
+  transform: translateY(-50%);
+  border-color: transparent;
+  background: transparent;
+}
+
+.provider-key-visibility-toggle:hover {
+  border-color: var(--llm-border);
+  background: var(--llm-panel-strong);
+}
+
+.provider-key-visibility-toggle .material-symbols-outlined {
+  display: block;
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+.provider-key-remove {
+  align-self: end;
+}
+
+.provider-key-remove .material-symbols-outlined {
+  display: block;
+  font-size: 1.125rem;
+  line-height: 1;
 }
 
 settings-overlay {
@@ -819,7 +915,7 @@ provider-settings-fields button[type="submit"] {
   }
 
   .llm-grid,
-  .tenant-facts,
+  .client-access-row,
   usage-metrics,
   .dashboard-grid,
   .settings-grid-form,
@@ -831,10 +927,17 @@ provider-settings-fields button[type="submit"] {
   .section-header,
   .settings-header,
   dashboard-actions,
-  tenant-actions,
   .public-resource-link {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .provider-selector {
+    min-width: 0;
+  }
+
+  .provider-selector select {
+    width: 100%;
   }
 
   h1 {
