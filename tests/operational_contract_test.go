@@ -1,6 +1,7 @@
 package tests_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net"
@@ -74,6 +75,101 @@ func TestOperationalHelpCommandsUseBuiltinOutput(testingInstance *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestOperationalMakeUpStartsCanonicalLocalProxy(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, "Makefile"), filepath.Join(fixtureRoot, "Makefile"))
+	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, operationalScriptsDirectory, "up.sh"), filepath.Join(fixtureRoot, operationalScriptsDirectory, "up.sh"))
+	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, "configs", "config.yml"), filepath.Join(fixtureRoot, "configs", "config.yml"))
+
+	toolDirectory := filepath.Join(fixtureRoot, "tools")
+	proxyPIDPath := filepath.Join(fixtureRoot, "proxy.pid")
+	proxyArgumentsPath := filepath.Join(fixtureRoot, "proxy-arguments")
+	curlArgumentsPath := filepath.Join(fixtureRoot, "curl-arguments")
+	fakeGoPath := filepath.Join(toolDirectory, "go")
+	writeOperationalFile(testingInstance, fakeGoPath, `#!/usr/bin/env bash
+set -euo pipefail
+
+[[ "${1:?}" == "build" ]]
+shift
+output_path=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    -o)
+      output_path="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+[[ -n "${output_path}" ]]
+mkdir -p "$(dirname "${output_path}")"
+builtin printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'builtin printf "%s\n" "$$" >"${PROXY_PID_CAPTURE:?}"' \
+  'builtin printf "%s\n" "$*" >"${PROXY_ARGUMENT_CAPTURE:?}"' \
+  'trap "exit 0" INT TERM' \
+  'while :; do sleep 1; done' >"${output_path}"
+chmod +x "${output_path}"
+`, 0o755)
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env bash
+set -euo pipefail
+
+builtin printf '%s\n' "$*" >"${CURL_ARGUMENT_CAPTURE:?}"
+builtin printf '%s' 403
+`, 0o755)
+
+	command := exec.Command("make", "up")
+	command.Dir = fixtureRoot
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	command.Env = append(
+		os.Environ(),
+		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"GO="+fakeGoPath,
+		"PROXY_PID_CAPTURE="+proxyPIDPath,
+		"PROXY_ARGUMENT_CAPTURE="+proxyArgumentsPath,
+		"CURL_ARGUMENT_CAPTURE="+curlArgumentsPath,
+	)
+	var output bytes.Buffer
+	command.Stdout = &output
+	command.Stderr = &output
+	if startError := command.Start(); startError != nil {
+		testingInstance.Fatalf("start make up: %v", startError)
+	}
+	waitForOperationalFile(testingInstance, proxyArgumentsPath)
+	waitForOperationalFile(testingInstance, curlArgumentsPath)
+	if signalError := syscall.Kill(-command.Process.Pid, syscall.SIGINT); signalError != nil {
+		testingInstance.Fatalf("interrupt make up: %v", signalError)
+	}
+	waitForOperationalCommand(testingInstance, command)
+	assertOperationalProxyChildStopped(testingInstance, proxyPIDPath)
+
+	proxyArguments, readProxyArgumentsError := os.ReadFile(proxyArgumentsPath)
+	if readProxyArgumentsError != nil {
+		testingInstance.Fatalf("read proxy arguments: %v", readProxyArgumentsError)
+	}
+	expectedConfigPath, resolveConfigPathError := filepath.EvalSymlinks(filepath.Join(fixtureRoot, "configs", "config.yml"))
+	if resolveConfigPathError != nil {
+		testingInstance.Fatalf("resolve canonical config path: %v", resolveConfigPathError)
+	}
+	if !strings.Contains(string(proxyArguments), "--config "+expectedConfigPath) {
+		testingInstance.Fatalf("make up did not start the canonical config: %s", proxyArguments)
+	}
+	curlArguments, readCurlArgumentsError := os.ReadFile(curlArgumentsPath)
+	if readCurlArgumentsError != nil {
+		testingInstance.Fatalf("read curl arguments: %v", readCurlArgumentsError)
+	}
+	if !strings.Contains(string(curlArguments), "http://127.0.0.1:8080/?prompt=ready") {
+		testingInstance.Fatalf("make up did not verify the local readiness route: %s", curlArguments)
+	}
+	if !strings.Contains(output.String(), "LLM Proxy localhost service is ready.") {
+		testingInstance.Fatalf("make up did not report readiness: %s", output.String())
 	}
 }
 
@@ -700,6 +796,21 @@ func waitForOperationalFile(testingInstance *testing.T, path string) {
 			testingInstance.Fatalf("timed out waiting for operational file: %s", path)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func waitForOperationalCommand(testingInstance *testing.T, command *exec.Cmd) {
+	testingInstance.Helper()
+	completed := make(chan error, 1)
+	go func() {
+		completed <- command.Wait()
+	}()
+	select {
+	case <-completed:
+	case <-time.After(operationalHelpTimeout):
+		_ = syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
+		<-completed
+		testingInstance.Fatal("make up did not stop after interruption")
 	}
 }
 
