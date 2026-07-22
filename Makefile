@@ -87,8 +87,8 @@ build:
 	mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 $(GO) build -o $(BIN_DIR)/$(BINARY_NAME) ./cmd/cli
 
-up: build
-	@LLM_PROXY_UP_BINARY="$(abspath $(BIN_DIR)/$(BINARY_NAME))" ./scripts/up.sh
+up:
+	@./scripts/up.sh
 
 clean:
 	rm -rf $(BIN_DIR)
