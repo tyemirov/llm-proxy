@@ -91,7 +91,10 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain('<rect x="8" y="7" width="10" height="12" rx="1.5"></rect>');
   expect(html).not.toContain('x-bind:aria-label="copy.copySecret">[]</button>');
   expect(html).toContain('x-model="defaults.reasoning_effort"');
-  expect(html).toContain('x-bind:data-reasoning-effort-active="String(reasoningEffortActiveForCurrentRoute)"');
+  expect(html).toContain('class="text-routing-controls"');
+  expect(html).toContain('x-on:change="normalizeReasoningEffortDefault()"');
+  expect(html).toContain('copy.reasoningEffortUnsupported');
+  expect(html).not.toContain("reasoning_effort_options");
 
   const mprShellResponse = await request.get(`${baseURL}/assets/llm-proxy/js/core/mprShell.js`);
   expect(mprShellResponse.status()).toBe(httpOK);
@@ -113,6 +116,19 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(keyManagementJavaScript).not.toContain("ResizeObserver");
   expect(keyManagementJavaScript).not.toContain("NOTIFICATION_HEADER_BOTTOM_PROPERTY");
   expect(keyManagementJavaScript).not.toContain("bindNotificationRegion");
+  expect(keyManagementJavaScript.match(/window\.setTimeout/g)).toHaveLength(1);
+  expect(keyManagementJavaScript).toContain("NOTICE_AUTO_DISMISS_MILLISECONDS");
+
+  const constantsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/constants.js`);
+  expect(constantsResponse.status()).toBe(httpOK);
+  expect(await constantsResponse.text()).toContain("export const NOTICE_AUTO_DISMISS_MILLISECONDS = 10_000;");
+
+  const stylesheetResponse = await request.get(`${baseURL}/assets/llm-proxy/styles.css`);
+  expect(stylesheetResponse.status()).toBe(httpOK);
+  const stylesheet = await stylesheetResponse.text();
+  expect(stylesheet).toContain("#llm-proxy-header notification-region[slot=\"aux\"]");
+  expect(stylesheet).toContain("order: -1;");
+  expect(stylesheet).not.toContain("shadowRoot");
 
   const faviconResponse = await request.get(`${baseURL}${faviconPath}`);
   expect(faviconResponse.status()).toBe(httpOK);
@@ -490,7 +506,7 @@ test("routing defaults save only complete provider and model pairs", async ({ pa
     system_prompt: "",
     reasoning_effort: "",
   });
-  await expect(page.getByRole("status")).toHaveText("Defaults saved");
+  await expect(page.locator("notification-region")).toHaveText("Defaults saved");
 
   const reloadedProfileResponse = page.waitForResponse(`${baseURL}/api/management/profile`);
   await page.reload();
@@ -507,7 +523,7 @@ test("routing defaults save only complete provider and model pairs", async ({ pa
   await expect(settingsDialog.getByRole("combobox", { name: "Dictation model" })).toHaveValue("xai-stt");
 });
 
-test("tenant reasoning effort persists independently of the selected text route", async ({ page }) => {
+test("reasoning effort is exact to the selected text route and the controls remain responsive", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page);
 
@@ -516,53 +532,75 @@ test("tenant reasoning effort persists independently of the selected text route"
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const textProvider = settingsDialog.getByRole("combobox", { name: "Text provider" });
-  const textModel = settingsDialog.getByRole("combobox", { name: "Text model" }).first();
-  const reasoningEffort = settingsDialog.getByRole("combobox", { name: "Reasoning effort" });
-  const inactiveStatus = settingsDialog.getByText("Inactive for the selected text route");
+  const textRoutingControls = settingsDialog.locator(".text-routing-controls");
+  const textProvider = textRoutingControls.getByRole("combobox", { name: "Text provider" });
+  const textModel = textRoutingControls.getByRole("combobox", { name: "Text model" });
+  const reasoningEffort = textRoutingControls.getByRole("combobox", { name: "Reasoning effort" });
+  const unsupportedEffort = textRoutingControls.locator(".reasoning-effort-unsupported");
 
+  await expect(unsupportedEffort).toBeVisible();
+  await expect(unsupportedEffort).toContainText("Not supported");
+  await textModel.selectOption("gpt-5");
   await expect(reasoningEffort).toHaveValue("");
-  await expect(reasoningEffort).toHaveAttribute("data-reasoning-effort-active", "false");
-  await expect(inactiveStatus).toBeVisible();
-  await reasoningEffort.focus();
-  await expect(reasoningEffort).toBeFocused();
+  await expect(reasoningEffort.locator("option")).toHaveText(["Not set", "minimal", "low", "medium", "high"]);
   await reasoningEffort.selectOption("high");
 
-  await textModel.selectOption("gpt-5");
+  const desktopBoxes = await Promise.all([textProvider, textModel, reasoningEffort].map((control) => control.boundingBox()));
+  const [desktopProviderBox, desktopModelBox, desktopEffortBox] = desktopBoxes;
+  if (!desktopProviderBox || !desktopModelBox || !desktopEffortBox) {
+    throw new Error("desktop_text_routing_controls_missing");
+  }
+  expect(Math.abs(desktopProviderBox.y - desktopModelBox.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(desktopModelBox.y - desktopEffortBox.y)).toBeLessThanOrEqual(1);
+  expect(desktopProviderBox.x + desktopProviderBox.width).toBeLessThanOrEqual(desktopModelBox.x);
+  expect(desktopModelBox.x + desktopModelBox.width).toBeLessThanOrEqual(desktopEffortBox.x);
+
+  await textModel.selectOption("gpt-5.6");
   await expect(reasoningEffort).toHaveValue("high");
-  await expect(reasoningEffort).toHaveAttribute("data-reasoning-effort-active", "true");
-  await expect(inactiveStatus).toBeHidden();
+  await expect(reasoningEffort.locator("option")).toHaveText(["Not set", "none", "low", "medium", "high", "xhigh", "max"]);
+  await reasoningEffort.selectOption("max");
+  await textModel.selectOption("gpt-5");
+  await expect(reasoningEffort).toHaveValue("");
+  await expect(reasoningEffort.locator('option[value="max"]')).toHaveCount(0);
 
   await textProvider.selectOption("deepseek");
   await expect(textModel).toHaveValue("deepseek-chat");
-  await expect(reasoningEffort).toHaveValue("high");
-  await expect(reasoningEffort).toHaveAttribute("data-reasoning-effort-active", "false");
-  await expect(inactiveStatus).toBeVisible();
+  await expect(reasoningEffort).toBeHidden();
+  await expect(unsupportedEffort).toBeVisible();
+
+  await textProvider.selectOption("openai");
+  await textModel.selectOption("gpt-5.6");
+  await reasoningEffort.selectOption("max");
 
   const defaultsRequest = page.waitForRequest(`${baseURL}/api/management/defaults`);
   await settingsDialog.getByRole("button", { name: "Save defaults" }).click();
   expect((await defaultsRequest).postDataJSON()).toMatchObject({
-    provider: "deepseek",
-    model: "deepseek-chat",
-    reasoning_effort: "high",
+    provider: "openai",
+    model: "gpt-5.6",
+    reasoning_effort: "max",
   });
 
   await page.setViewportSize({ width: 390, height: 780 });
   await expect(reasoningEffort).toBeVisible();
-  const geometry = await reasoningEffort.evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    return { left: rect.left, right: rect.right, width: rect.width };
-  });
-  expect(geometry.width).toBeGreaterThan(0);
-  expect(geometry.left).toBeGreaterThanOrEqual(0);
-  expect(geometry.right).toBeLessThanOrEqual(390);
+  const narrowBoxes = await Promise.all([textProvider, textModel, reasoningEffort].map((control) => control.boundingBox()));
+  const [narrowProviderBox, narrowModelBox, narrowEffortBox] = narrowBoxes;
+  if (!narrowProviderBox || !narrowModelBox || !narrowEffortBox) {
+    throw new Error("narrow_text_routing_controls_missing");
+  }
+  expect(narrowModelBox.y).toBeGreaterThan(narrowProviderBox.y);
+  expect(narrowEffortBox.y).toBeGreaterThan(narrowModelBox.y);
+  for (const box of [narrowProviderBox, narrowModelBox, narrowEffortBox]) {
+    expect(box.width).toBeGreaterThan(0);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+  }
 
   const reloadedProfileResponse = page.waitForResponse(`${baseURL}/api/management/profile`);
   await page.reload();
   expect((await reloadedProfileResponse).status()).toBe(httpOK);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
-  await expect(settingsDialog.getByRole("combobox", { name: "Reasoning effort" })).toHaveValue("high");
+  await expect(settingsDialog.locator(".text-routing-controls").getByRole("combobox", { name: "Reasoning effort" })).toHaveValue("max");
 });
 
 test("malformed routing-default profiles become workspace integrity errors", async ({ page }) => {
@@ -866,6 +904,80 @@ test("management notices occupy the header aux slot immediately before the avata
   }
 });
 
+test("signed-out management notices occupy the header immediately before Sign in", async ({ page }) => {
+  await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
+  await installManagementRoutes(page);
+
+  for (const viewport of settingsLayerViewports) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto(baseURL);
+
+    const notificationRegion = page.locator("#llm-proxy-header notification-region");
+    const notice = notificationRegion.locator(".notice");
+    const signIn = page.getByRole("button", { name: "Sign in" });
+    await expect(notice).toHaveText("Authentication required");
+    await expect(signIn).toBeVisible();
+    await expectHeaderNoticeSignInGeometry(page);
+
+    await signIn.focus();
+    await expect(signIn).toBeFocused();
+  }
+});
+
+test("management notices auto-dismiss after ten seconds and replacement notices own a new deadline", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-07-21T12:00:00Z") });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await page.goto(baseURL);
+
+  const notificationRegion = page.locator("#llm-proxy-header notification-region");
+  const notice = notificationRegion.locator(".notice");
+  const refresh = page.getByRole("button", { name: "Refresh" });
+  await expect(notice).toHaveText("Workspace loaded");
+  await page.clock.fastForward(9_999);
+  await expect(notificationRegion).toBeVisible();
+  await page.clock.fastForward(1);
+  await expect(notificationRegion).toBeHidden();
+
+  await refresh.click();
+  await expect(notice).toHaveText("Usage refreshed");
+  await page.clock.fastForward(5_000);
+  await refresh.click();
+  await expect(notice).toHaveText("Usage refreshed");
+  await page.clock.fastForward(5_000);
+  await expect(notificationRegion).toBeVisible();
+  await page.clock.fastForward(5_000);
+  await expect(notificationRegion).toBeHidden();
+
+  await installUsageResponse(page, httpInternalServerError);
+  await refresh.click();
+  await expect(notice).toHaveText("Request failed");
+  await page.clock.fastForward(5_000);
+  await installUsageResponse(page, httpOK);
+  await refresh.click();
+  await expect(notice).toHaveText("Usage refreshed");
+  await page.clock.fastForward(5_000);
+  await expect(notificationRegion).toBeVisible();
+  await page.clock.fastForward(5_000);
+  await expect(notificationRegion).toBeHidden();
+});
+
+test("informational notices auto-dismiss without impairing the signed-out Sign in control", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-07-21T12:00:00Z") });
+  await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
+  await installManagementRoutes(page);
+  await page.goto(baseURL);
+
+  const notificationRegion = page.locator("#llm-proxy-header notification-region");
+  await expect(notificationRegion.locator(".notice")).toHaveText("Authentication required");
+  await expectHeaderNoticeSignInGeometry(page);
+  await page.clock.fastForward(9_999);
+  await expect(notificationRegion).toBeVisible();
+  await page.clock.fastForward(1);
+  await expect(notificationRegion).toBeHidden();
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+});
+
 test("header brand uses the local logo before its title without crowding the notice or avatar", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page);
@@ -1098,6 +1210,37 @@ async function expectHeaderNoticeGeometry(page) {
   expect(noticeFacts.avatar.bottom).toBeLessThanOrEqual(noticeFacts.header.bottom);
   expect(noticeFacts.avatarHit.inUser).toBe(true);
   expect(noticeFacts.avatarHit.inNotice).toBe(false);
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @returns {Promise<void>}
+ */
+async function expectHeaderNoticeSignInGeometry(page) {
+  const noticeFacts = await page.evaluate(() => {
+    const headerElement = document.querySelector("#llm-proxy-header");
+    const notificationRegion = headerElement?.querySelector("notification-region");
+    const noticeElement = notificationRegion?.querySelector(".notice");
+    const signInButton = headerElement?.querySelector('[data-testid="sign-in"]');
+    if (!headerElement || !notificationRegion || !noticeElement || !signInButton) {
+      throw new Error("header_sign_in_notification_elements_missing");
+    }
+    const noticeRect = noticeElement.getBoundingClientRect();
+    const signInRect = signInButton.getBoundingClientRect();
+    const headerRect = headerElement.getBoundingClientRect();
+    const hit = document.elementFromPoint(signInRect.left + signInRect.width / 2, signInRect.top + signInRect.height / 2);
+    return {
+      header: { top: headerRect.top, right: headerRect.right, bottom: headerRect.bottom, left: headerRect.left },
+      notice: { top: noticeRect.top, right: noticeRect.right, bottom: noticeRect.bottom, left: noticeRect.left },
+      signIn: { top: signInRect.top, right: signInRect.right, bottom: signInRect.bottom, left: signInRect.left },
+      signInHit: Boolean(hit?.closest('[data-testid="sign-in"]')),
+    };
+  });
+  expect(noticeFacts.notice.top).toBeGreaterThanOrEqual(noticeFacts.header.top);
+  expect(noticeFacts.notice.bottom).toBeLessThanOrEqual(noticeFacts.header.bottom);
+  expect(noticeFacts.notice.right).toBeLessThanOrEqual(noticeFacts.signIn.left);
+  expect(noticeFacts.signIn.right).toBeLessThanOrEqual(noticeFacts.header.right);
+  expect(noticeFacts.signInHit).toBe(true);
 }
 
 /**
@@ -1469,6 +1612,27 @@ function managementProfile(isAdmin = false, hasSecret = true) {
               efforts: ["minimal", "low", "medium", "high"],
             },
           },
+          {
+            id: "gpt-5.5",
+            reasoning_effort: {
+              adapter: "openai_responses",
+              efforts: ["none", "low", "medium", "high", "xhigh"],
+            },
+          },
+          {
+            id: "gpt-5.5-pro",
+            reasoning_effort: {
+              adapter: "openai_responses",
+              efforts: ["medium", "high", "xhigh"],
+            },
+          },
+          {
+            id: "gpt-5.6",
+            reasoning_effort: {
+              adapter: "openai_responses",
+              efforts: ["none", "low", "medium", "high", "xhigh", "max"],
+            },
+          },
         ],
         supports_dictation: true,
         dictation_default_model: "gpt-4o-mini-transcribe",
@@ -1514,7 +1678,6 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         dictation_models: ["xai-stt"],
       },
     ],
-    reasoning_effort_options: ["minimal", "low", "medium", "high"],
     proxy: {
       text_path: "/",
       v2_path: "/v2",
@@ -1645,7 +1808,8 @@ function mprUIBundleMock(initialAuthStatus, emitInitialAuthEvent) {
   return `
 class MprHeader extends HTMLElement {
   connectedCallback() {
-    this.setAttribute("data-mpr-auth-status", ${JSON.stringify(initialAuthStatus)});
+    this.mountActions();
+    this.setAuthStatus(${JSON.stringify(initialAuthStatus)});
     queueMicrotask(() => {
       this.dispatchEvent(new CustomEvent("mpr-ui:auth:status-change", {
         bubbles: true,
@@ -1658,6 +1822,29 @@ class MprHeader extends HTMLElement {
         }));
       }
     });
+  }
+
+  mountActions() {
+    const actions = document.createElement("div");
+    actions.className = "mpr-header__actions";
+    const signIn = document.createElement("button");
+    signIn.type = "button";
+    signIn.dataset.testid = "sign-in";
+    signIn.textContent = "Sign in";
+    actions.append(signIn, ...this.querySelectorAll('[slot="aux"]'));
+    this.append(actions);
+  }
+
+  setAuthStatus(status) {
+    this.setAttribute("data-mpr-auth-status", status);
+    const signIn = this.querySelector('[data-testid="sign-in"]');
+    const userMenu = this.querySelector("mpr-user");
+    if (signIn) {
+      signIn.hidden = status === "authenticated";
+    }
+    if (userMenu) {
+      userMenu.hidden = status !== "authenticated";
+    }
   }
 }
 class MprFooter extends HTMLElement {}
@@ -1706,7 +1893,7 @@ window.__llmProxyMprAuthenticate = () => {
   if (!header) {
     throw new Error("mpr_header_missing");
   }
-  header.setAttribute("data-mpr-auth-status", "authenticated");
+  header.setAuthStatus("authenticated");
   header.dispatchEvent(new CustomEvent("mpr-ui:auth:status-change", {
     bubbles: true,
     detail: { status: "authenticated" }
@@ -1780,6 +1967,12 @@ mpr-header {
   box-sizing: border-box;
   padding: 0 16px;
   background: rgba(3, 23, 32, 0.95);
+}
+
+mpr-header .mpr-header__actions {
+  display: flex;
+  min-inline-size: 0;
+  align-items: center;
 }
 
 mpr-footer {

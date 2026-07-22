@@ -109,7 +109,7 @@ func TestIntegrationModelCatalogRejectsUnsupportedWebSearch(testingInstance *tes
 
 // TestIntegrationGPT56TemperatureSuppression verifies that temperature is omitted and tools retained for GPT-5.6.
 func TestIntegrationGPT56TemperatureSuppression(testingInstance *testing.T) {
-	const currentOpenAIModel = "gpt-5.6"
+	const currentOpenAIModel = proxy.ModelNameGPT56
 
 	gin.SetMode(gin.TestMode)
 	endpoints := proxy.NewEndpoints()
