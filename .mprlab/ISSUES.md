@@ -1235,6 +1235,90 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   separate listener held 18080. Baseline and final `make ci` runs passed with
   100.0% Go coverage.
 
+- [x] [B050] (P2) Compact selected-provider settings and inline key visibility.
+  Goal:
+  Make the selected-provider editor denser without changing its provider-key
+  ownership, reveal, save, removal, or cleanup contract.
+
+  Requirements:
+  - Put the provider selector first on the same desktop row as the API-key and
+    text-model controls. Keep its accessible name, but remove the redundant
+    visible `Provider` label.
+  - Remove the selected-provider status row that repeats the selected provider
+    name and its separate masked-key status. Keep the existing removal action
+    available without recreating that duplicated metadata.
+  - Replace the textual Show key/Hide key action with one accessible eye icon
+    at the end of the API-key input. A hidden saved key shows only asterisks and
+    its final four characters; an explicit owner reveal shows the complete key,
+    and the same eye returns it to the masked presentation.
+  - Use a standard icon font or icon library for the eye affordance; do not
+    hand-author SVG eye artwork.
+  - Put the accessible provider selector first in the API-key and text-model
+    row. Move removal to the row's trailing control and use the standard
+    Material Symbols trash glyph instead of a literal `x`.
+  - Label the provider-scoped model control `Provider default model` so it is
+    distinct from the tenant-level `Text model` routing default.
+  - Keep raw key material out of profile data, notices, URLs, browser storage,
+    and unrelated UI. Preserve the existing on-demand owner-only reveal,
+    in-flight disabling, stale-response protection, save/remove clearing, and
+    close/provider-change/sign-out cleanup behavior.
+
+  Validation:
+  - Add Playwright coverage for the compact header row, hidden last-four mask,
+    inline eye reveal/hide behavior, editing/saving, and existing lifecycle
+    cleanup guarantees.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+  ### Resolution
+  Provider settings uses one desktop row: the accessible selector, API-key
+  field, text-model selector, and trailing removal action, with no duplicated
+  selected-provider status row. The API-key field renders `****` plus the
+  final four key characters while hidden; inline Material Symbols
+  `visibility` / `visibility_off` glyphs reveal and remask it, and a trailing
+  Material Symbols `delete` glyph replaces the literal removal control. No
+  hand-authored eye SVG remains. Existing owner-only reveal, update/remove,
+  in-flight, and lifecycle clearing behavior remains unchanged. Browser
+  coverage verifies the compact layout, standard icon-font controls, editing,
+  and cleanup flow. The provider-scoped model control now reads `Provider
+  default model`, while the tenant-level routing-default control remains `Text
+  model`; exact accessible-name assertions keep the two controls distinct.
+  Baseline and final `make ci` runs passed.
+
+- [x] [B051] (P2) Present Client access as a compact tenant/key row.
+  Goal:
+  Replace opaque tenant-id and secret-status tiles with the human-readable
+  tenant and client-key workflow users actually operate.
+
+  Requirements:
+  - Present the current singular managed tenant as `Default`; do not expose its
+    opaque internal id in Client access.
+  - Render the key in the same compact row as the tenant. A newly created key
+    starts masked, has inline accessible eye and copy controls, and has a
+    trailing trash action that revokes that key.
+  - Keep the generated client key one-time: raw material remains only in
+    in-memory UI state, is cleared when Settings closes or the session ends,
+    and is never added to profile responses, URLs, notices, or browser storage.
+    A retained key that was not created in the current Settings session remains
+    revocable but is explicitly not revealable or copyable.
+  - Use key-oriented copy (`Key created`, `Copy key`, `Key copied`, and
+    `Revoke key`), not the previous ambiguous Secret status wording.
+
+  Validation:
+  - Add Playwright coverage for the Default tenant row, masked/reveal/copy
+    controls, per-row revoke, cleanup after closing Settings, and narrow-layout
+    usability.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  Client access now renders `Default` with a compact same-row key control. New
+  keys are masked first, revealable and copyable only while Settings remains
+  open, and have a trailing per-key trash action. Retained keys are revocable
+  but cannot be recovered. Request examples retain their placeholder rather
+  than echoing raw key material. Baseline and final `make ci` runs passed.
+
 
 ## Improvements
 
