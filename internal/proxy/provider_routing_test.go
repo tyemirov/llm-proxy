@@ -538,15 +538,8 @@ func TestProviderRoutingUsesConfiguredTextModelCatalog(t *testing.T) {
 	}
 }
 
-func TestProviderRoutingAppliesProviderLevelReasoningEffortCapability(t *testing.T) {
+func TestProviderRoutingAppliesModelSpecificReasoningEffortCapability(t *testing.T) {
 	catalogs := testfixtures.ProviderModelCatalogs(t)
-	openAIModels := catalogs[proxy.ProviderNameOpenAI]
-	for modelIndex := range openAIModels.Text.Models {
-		openAIModels.Text.Models[modelIndex].RequestProfile = "openai_responses_reasoning_tools"
-	}
-	openAIModels.Text.ReasoningEffort = openAIResponsesReasoningEffortCapability()
-	catalogs[proxy.ProviderNameOpenAI] = openAIModels
-
 	var capturedPayload map[string]any
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost || request.URL.Path != "/" {
@@ -560,13 +553,14 @@ func TestProviderRoutingAppliesProviderLevelReasoningEffortCapability(t *testing
 			t.Fatalf("unmarshal body: %v", unmarshalError)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"id":"provider-reasoning-effort","status":"completed","output_text":"provider capability ok"}`))
+		_, _ = responseWriter.Write([]byte(`{"id":"model-reasoning-effort","status":"completed","output_text":"model capability ok"}`))
 	}))
 	defer upstreamServer.Close()
 
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetResponsesURL(upstreamServer.URL)
 	defaults := proxy.DefaultTenantDefaults()
+	defaults.Model = proxy.ModelNameGPT5
 	defaults.ReasoningEffort = "high"
 	router, buildError := proxy.BuildRouter(proxy.Configuration{
 		Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, defaults),
@@ -583,8 +577,8 @@ func TestProviderRoutingAppliesProviderLevelReasoningEffortCapability(t *testing
 	}
 
 	response := httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=provider-capability", nil))
-	if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != "provider capability ok" {
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=model-capability", nil))
+	if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != "model capability ok" {
 		t.Fatalf("status=%d body=%q", response.Code, response.Body.String())
 	}
 	reasoning, hasReasoning := capturedPayload["reasoning"].(map[string]any)
@@ -593,10 +587,10 @@ func TestProviderRoutingAppliesProviderLevelReasoningEffortCapability(t *testing
 	}
 }
 
-func TestProviderRoutingRejectsProviderReasoningEffortCapabilityOnUnsupportedModel(t *testing.T) {
+func TestProviderRoutingRejectsModelReasoningEffortCapabilityOnUnsupportedRoute(t *testing.T) {
 	catalogs := testfixtures.ProviderModelCatalogs(t)
 	openAIModels := catalogs[proxy.ProviderNameOpenAI]
-	openAIModels.Text.ReasoningEffort = openAIResponsesReasoningEffortCapability()
+	openAIModels.Text.Models[0].ReasoningEffort = openAIResponsesReasoningEffortCapability()
 	catalogs[proxy.ProviderNameOpenAI] = openAIModels
 
 	_, configurationError := proxy.NewConfiguration(proxy.Configuration{
@@ -605,7 +599,7 @@ func TestProviderRoutingRejectsProviderReasoningEffortCapabilityOnUnsupportedMod
 		ProviderModels: catalogs,
 	})
 	if configurationError == nil || !strings.Contains(configurationError.Error(), "invalid_model_catalog") || !strings.Contains(configurationError.Error(), "adapter=openai_responses") {
-		t.Fatalf("configuration error=%v want unsupported provider-level capability", configurationError)
+		t.Fatalf("configuration error=%v want unsupported model capability", configurationError)
 	}
 }
 
@@ -615,52 +609,52 @@ func TestProviderRoutingRejectsInvalidReasoningEffortCatalogCapabilities(t *test
 		configure func(proxy.ProviderModelCatalogs)
 	}{
 		{
-			name: "provider capability has no adapter",
-			configure: func(catalogs proxy.ProviderModelCatalogs) {
-				openAIModels := catalogs[proxy.ProviderNameOpenAI]
-				capability := openAIResponsesReasoningEffortCapability()
-				capability.Adapter = ""
-				openAIModels.Text.ReasoningEffort = capability
-				catalogs[proxy.ProviderNameOpenAI] = openAIModels
-			},
-		},
-		{
-			name: "provider capability has unknown adapter",
-			configure: func(catalogs proxy.ProviderModelCatalogs) {
-				openAIModels := catalogs[proxy.ProviderNameOpenAI]
-				capability := openAIResponsesReasoningEffortCapability()
-				capability.Adapter = "unsupported_adapter"
-				openAIModels.Text.ReasoningEffort = capability
-				catalogs[proxy.ProviderNameOpenAI] = openAIModels
-			},
-		},
-		{
-			name: "provider capability has an incomplete option list",
-			configure: func(catalogs proxy.ProviderModelCatalogs) {
-				openAIModels := catalogs[proxy.ProviderNameOpenAI]
-				capability := openAIResponsesReasoningEffortCapability()
-				capability.Efforts = capability.Efforts[:3]
-				openAIModels.Text.ReasoningEffort = capability
-				catalogs[proxy.ProviderNameOpenAI] = openAIModels
-			},
-		},
-		{
-			name: "provider capability has a reordered option list",
-			configure: func(catalogs proxy.ProviderModelCatalogs) {
-				openAIModels := catalogs[proxy.ProviderNameOpenAI]
-				capability := openAIResponsesReasoningEffortCapability()
-				capability.Efforts[0], capability.Efforts[1] = capability.Efforts[1], capability.Efforts[0]
-				openAIModels.Text.ReasoningEffort = capability
-				catalogs[proxy.ProviderNameOpenAI] = openAIModels
-			},
-		},
-		{
 			name: "model capability has no adapter",
 			configure: func(catalogs proxy.ProviderModelCatalogs) {
 				openAIModels := catalogs[proxy.ProviderNameOpenAI]
 				capability := openAIResponsesReasoningEffortCapability()
 				capability.Adapter = ""
-				openAIModels.Text.Models[0].ReasoningEffort = capability
+				openAIModels.Text.Models[4].ReasoningEffort = capability
+				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+			},
+		},
+		{
+			name: "model capability has unknown adapter",
+			configure: func(catalogs proxy.ProviderModelCatalogs) {
+				openAIModels := catalogs[proxy.ProviderNameOpenAI]
+				capability := openAIResponsesReasoningEffortCapability()
+				capability.Adapter = "unsupported_adapter"
+				openAIModels.Text.Models[4].ReasoningEffort = capability
+				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+			},
+		},
+		{
+			name: "model capability has an empty option list",
+			configure: func(catalogs proxy.ProviderModelCatalogs) {
+				openAIModels := catalogs[proxy.ProviderNameOpenAI]
+				capability := openAIResponsesReasoningEffortCapability()
+				capability.Efforts = []string{}
+				openAIModels.Text.Models[4].ReasoningEffort = capability
+				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+			},
+		},
+		{
+			name: "model capability has duplicate options",
+			configure: func(catalogs proxy.ProviderModelCatalogs) {
+				openAIModels := catalogs[proxy.ProviderNameOpenAI]
+				capability := openAIResponsesReasoningEffortCapability()
+				capability.Efforts = []string{"minimal", "low", "low"}
+				openAIModels.Text.Models[4].ReasoningEffort = capability
+				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+			},
+		},
+		{
+			name: "model capability has unsupported effort",
+			configure: func(catalogs proxy.ProviderModelCatalogs) {
+				openAIModels := catalogs[proxy.ProviderNameOpenAI]
+				capability := openAIResponsesReasoningEffortCapability()
+				capability.Efforts = []string{"warp"}
+				openAIModels.Text.Models[4].ReasoningEffort = capability
 				catalogs[proxy.ProviderNameOpenAI] = openAIModels
 			},
 		},
@@ -668,7 +662,7 @@ func TestProviderRoutingRejectsInvalidReasoningEffortCatalogCapabilities(t *test
 			name: "dictation capability is forbidden",
 			configure: func(catalogs proxy.ProviderModelCatalogs) {
 				openAIModels := catalogs[proxy.ProviderNameOpenAI]
-				openAIModels.Dictation.ReasoningEffort = openAIResponsesReasoningEffortCapability()
+				openAIModels.Dictation.Models[0].ReasoningEffort = openAIResponsesReasoningEffortCapability()
 				catalogs[proxy.ProviderNameOpenAI] = openAIModels
 			},
 		},

@@ -713,7 +713,7 @@ func (store *managedTenantStore) migrateRoutingDefaultPairs(providers *providerR
 			store.routingDefaults = providers
 			return nil
 		}
-		if migration.Version != managedRoutingDefaultsMigrationVersion-1 {
+		if migration.Version < 1 || migration.Version >= managedRoutingDefaultsMigrationVersion {
 			return fmt.Errorf("%w: version=%d supported_version=%d", errManagedRoutingDefaultsMigration, migration.Version, managedRoutingDefaultsMigrationVersion)
 		}
 	}

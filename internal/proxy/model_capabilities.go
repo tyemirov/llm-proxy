@@ -121,6 +121,8 @@ const (
 	ModelNameGPT55 = "gpt-5.5"
 	// ModelNameGPT55Pro identifies the GPT-5.5 pro model which does not accept the temperature field.
 	ModelNameGPT55Pro = "gpt-5.5-pro"
+	// ModelNameGPT56 identifies the GPT-5.6 model which does not accept the temperature field.
+	ModelNameGPT56 = "gpt-5.6"
 )
 
 var (

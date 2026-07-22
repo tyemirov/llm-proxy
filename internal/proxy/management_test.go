@@ -639,7 +639,7 @@ func TestManagementRoutingDefaultsRequireCompleteCanonicalPairs(t *testing.T) {
 	}
 }
 
-func TestManagementRoutingDefaultsPersistTenantReasoningEffortIndependentlyOfRoute(t *testing.T) {
+func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *testing.T) {
 	router := newManagementRouter(t, proxy.Configuration{})
 	sessionCookie := managementSessionCookie(t, "tauth-reasoning-effort-user")
 	for _, providerKeyRequest := range []struct {
@@ -670,14 +670,13 @@ func TestManagementRoutingDefaultsPersistTenantReasoningEffortIndependentlyOfRou
 		return response
 	}
 
-	initialResponse := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT5, "high")
-	if initialResponse.Code != http.StatusOK {
-		t.Fatalf("save reasoning defaults status=%d body=%s", initialResponse.Code, initialResponse.Body.String())
+	legacyResponse := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT5, "high")
+	if legacyResponse.Code != http.StatusOK {
+		t.Fatalf("save GPT-5 reasoning defaults status=%d body=%s", legacyResponse.Code, legacyResponse.Body.String())
 	}
-
-	updatedRouteResponse := saveReasoningDefault(proxy.ProviderNameDeepSeek, proxy.ModelNameDeepSeekV4Flash, "high")
-	if updatedRouteResponse.Code != http.StatusOK {
-		t.Fatalf("save inactive-route reasoning defaults status=%d body=%s", updatedRouteResponse.Code, updatedRouteResponse.Body.String())
+	gpt56Response := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT56, "max")
+	if gpt56Response.Code != http.StatusOK {
+		t.Fatalf("save GPT-5.6 reasoning defaults status=%d body=%s", gpt56Response.Code, gpt56Response.Body.String())
 	}
 
 	profileRequest := httptest.NewRequest(http.MethodGet, "/api/management/profile", nil)
@@ -687,9 +686,15 @@ func TestManagementRoutingDefaultsPersistTenantReasoningEffortIndependentlyOfRou
 	if profileResponse.Code != http.StatusOK {
 		t.Fatalf("profile status=%d body=%s", profileResponse.Code, profileResponse.Body.String())
 	}
+	var rawProfile map[string]json.RawMessage
+	if decodeError := json.Unmarshal(profileResponse.Body.Bytes(), &rawProfile); decodeError != nil {
+		t.Fatalf("decode raw capability profile: %v", decodeError)
+	}
+	if _, foundGlobalOptions := rawProfile["reasoning_effort_options"]; foundGlobalOptions {
+		t.Fatalf("profile retains global reasoning effort options")
+	}
 	var profile struct {
-		ReasoningEffortOptions []string `json:"reasoning_effort_options"`
-		Tenant                 struct {
+		Tenant struct {
 			Defaults struct {
 				Provider        string `json:"provider"`
 				Model           string `json:"model"`
@@ -697,12 +702,9 @@ func TestManagementRoutingDefaultsPersistTenantReasoningEffortIndependentlyOfRou
 			} `json:"defaults"`
 		} `json:"tenant"`
 		Providers []struct {
-			ID              string `json:"id"`
-			ReasoningEffort *struct {
-				Adapter string   `json:"adapter"`
-				Efforts []string `json:"efforts"`
-			} `json:"reasoning_effort"`
-			TextModels []struct {
+			ID              string          `json:"id"`
+			ReasoningEffort json.RawMessage `json:"reasoning_effort"`
+			TextModels      []struct {
 				ID              string `json:"id"`
 				ReasoningEffort *struct {
 					Adapter string   `json:"adapter"`
@@ -714,41 +716,55 @@ func TestManagementRoutingDefaultsPersistTenantReasoningEffortIndependentlyOfRou
 	if decodeError := json.Unmarshal(profileResponse.Body.Bytes(), &profile); decodeError != nil {
 		t.Fatalf("decode capability profile: %v", decodeError)
 	}
-	if profile.Tenant.Defaults.Provider != proxy.ProviderNameDeepSeek || profile.Tenant.Defaults.Model != proxy.ModelNameDeepSeekV4Flash || profile.Tenant.Defaults.ReasoningEffort != "high" {
+	if profile.Tenant.Defaults.Provider != proxy.ProviderNameOpenAI || profile.Tenant.Defaults.Model != proxy.ModelNameGPT56 || profile.Tenant.Defaults.ReasoningEffort != "max" {
 		t.Fatalf("profile defaults=%+v", profile.Tenant.Defaults)
 	}
-	if expectedOptions := []string{"minimal", "low", "medium", "high"}; !reflect.DeepEqual(profile.ReasoningEffortOptions, expectedOptions) {
-		t.Fatalf("reasoning options=%v want=%v", profile.ReasoningEffortOptions, expectedOptions)
+	expectedModelEfforts := map[string][]string{
+		proxy.ModelNameGPT5:     {"minimal", "low", "medium", "high"},
+		proxy.ModelNameGPT55:    {"none", "low", "medium", "high", "xhigh"},
+		proxy.ModelNameGPT56:    {"none", "low", "medium", "high", "xhigh", "max"},
+		proxy.ModelNameGPT55Pro: {"medium", "high", "xhigh"},
 	}
-	openAIProfileFound := false
+	matchedModelEfforts := map[string]bool{}
 	for _, provider := range profile.Providers {
 		if provider.ID != proxy.ProviderNameOpenAI {
 			continue
 		}
+		if len(provider.ReasoningEffort) != 0 {
+			t.Fatalf("OpenAI profile retains provider-level reasoning capability=%s", string(provider.ReasoningEffort))
+		}
 		for _, model := range provider.TextModels {
-			if model.ID == proxy.ModelNameGPT5 && model.ReasoningEffort != nil && model.ReasoningEffort.Adapter == "openai_responses" && reflect.DeepEqual(model.ReasoningEffort.Efforts, profile.ReasoningEffortOptions) {
-				openAIProfileFound = true
+			expectedEfforts, required := expectedModelEfforts[model.ID]
+			if required {
+				if model.ReasoningEffort == nil || model.ReasoningEffort.Adapter != "openai_responses" || !reflect.DeepEqual(model.ReasoningEffort.Efforts, expectedEfforts) {
+					t.Fatalf("model=%s reasoning capability=%+v want=%v", model.ID, model.ReasoningEffort, expectedEfforts)
+				}
+				matchedModelEfforts[model.ID] = true
 			}
 		}
 	}
-	if !openAIProfileFound {
-		t.Fatalf("profile must expose model-level OpenAI reasoning capability: %+v", profile.Providers)
+	if len(matchedModelEfforts) != len(expectedModelEfforts) {
+		t.Fatalf("profile model capabilities=%v want=%v", matchedModelEfforts, expectedModelEfforts)
 	}
 
-	invalidResponse := saveReasoningDefault(proxy.ProviderNameDeepSeek, proxy.ModelNameDeepSeekV4Flash, "warp")
-	if invalidResponse.Code != http.StatusBadRequest || !strings.Contains(invalidResponse.Body.String(), "managed_routing_defaults_invalid") {
-		t.Fatalf("invalid reasoning effort status=%d body=%s", invalidResponse.Code, invalidResponse.Body.String())
+	incompatibleResponse := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT5, "max")
+	if incompatibleResponse.Code != http.StatusBadRequest || !strings.Contains(incompatibleResponse.Body.String(), "managed_routing_defaults_invalid") {
+		t.Fatalf("incompatible GPT-5 reasoning effort status=%d body=%s", incompatibleResponse.Code, incompatibleResponse.Body.String())
 	}
-	nonCanonicalResponse := saveReasoningDefault(proxy.ProviderNameDeepSeek, proxy.ModelNameDeepSeekV4Flash, " high ")
+	unsupportedResponse := saveReasoningDefault(proxy.ProviderNameDeepSeek, proxy.ModelNameDeepSeekV4Flash, "high")
+	if unsupportedResponse.Code != http.StatusBadRequest || !strings.Contains(unsupportedResponse.Body.String(), "managed_routing_defaults_invalid") {
+		t.Fatalf("unsupported-route reasoning effort status=%d body=%s", unsupportedResponse.Code, unsupportedResponse.Body.String())
+	}
+	nonCanonicalResponse := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT56, " max ")
 	if nonCanonicalResponse.Code != http.StatusBadRequest || !strings.Contains(nonCanonicalResponse.Body.String(), "managed_routing_defaults_invalid") {
 		t.Fatalf("noncanonical reasoning effort status=%d body=%s", nonCanonicalResponse.Code, nonCanonicalResponse.Body.String())
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
-		Provider:          proxy.ProviderNameDeepSeek,
-		Model:             proxy.ModelNameDeepSeekV4Flash,
+		Provider:          proxy.ProviderNameOpenAI,
+		Model:             proxy.ModelNameGPT56,
 		DictationProvider: proxy.ProviderNameOpenAI,
 		DictationModel:    proxy.DefaultDictationModel,
-		ReasoningEffort:   "high",
+		ReasoningEffort:   "max",
 	})
 }
 
@@ -768,10 +784,9 @@ func TestManagementRoutingDefaultsRequireExplicitReasoningEffort(t *testing.T) {
 	}
 }
 
-func TestManagementProfileProvidesNoReasoningEffortOptionsWithoutCatalogCapability(t *testing.T) {
+func TestManagementProfileOmitsReasoningCapabilitiesWithoutModelDeclarations(t *testing.T) {
 	catalogs := testfixtures.ProviderModelCatalogs(t)
 	openAIModels := catalogs[proxy.ProviderNameOpenAI]
-	openAIModels.Text.ReasoningEffort = nil
 	for modelIndex := range openAIModels.Text.Models {
 		openAIModels.Text.Models[modelIndex].ReasoningEffort = nil
 	}
@@ -784,14 +799,21 @@ func TestManagementProfileProvidesNoReasoningEffortOptionsWithoutCatalogCapabili
 	if response.Code != http.StatusOK {
 		t.Fatalf("profile status=%d body=%s", response.Code, response.Body.String())
 	}
-	var profile struct {
-		ReasoningEffortOptions []string `json:"reasoning_effort_options"`
-	}
+	var profile map[string]json.RawMessage
 	if decodeError := json.Unmarshal(response.Body.Bytes(), &profile); decodeError != nil {
 		t.Fatalf("decode profile: %v", decodeError)
 	}
-	if len(profile.ReasoningEffortOptions) != 0 {
-		t.Fatalf("reasoning effort options=%v want none", profile.ReasoningEffortOptions)
+	if _, foundGlobalOptions := profile["reasoning_effort_options"]; foundGlobalOptions {
+		t.Fatalf("profile retains global reasoning effort options")
+	}
+	var providers []map[string]json.RawMessage
+	if decodeError := json.Unmarshal(profile["providers"], &providers); decodeError != nil {
+		t.Fatalf("decode profile providers: %v", decodeError)
+	}
+	for _, provider := range providers {
+		if _, foundProviderCapability := provider["reasoning_effort"]; foundProviderCapability {
+			t.Fatalf("provider retains reasoning capability=%s", string(provider["reasoning_effort"]))
+		}
 	}
 }
 
@@ -856,15 +878,21 @@ func TestManagementMigratesLegacyRoutingDefaultPairs(t *testing.T) {
 	}
 }
 
-func TestManagementRoutingDefaultsMigrationFromVersionOneSetsUnsetReasoningEffort(t *testing.T) {
+func TestManagementRoutingDefaultsMigrationRetainsOnlyRouteCompatibleReasoningEfforts(t *testing.T) {
 	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
-	userID := "tauth-routing-defaults-v1-reasoning-effort"
+	validUserID := "tauth-routing-defaults-v2-valid-reasoning-effort"
+	invalidUserID := "tauth-routing-defaults-v2-invalid-reasoning-effort"
+	validRecord := managedRoutingDefaultsTenantFixture(validUserID, "managed-routing-defaults-v2-valid-reasoning-effort", proxy.ProviderNameOpenAI, proxy.ModelNameGPT56, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel)
+	validRecord.DefaultReasoningEffort = "max"
+	invalidRecord := managedRoutingDefaultsTenantFixture(invalidUserID, "managed-routing-defaults-v2-invalid-reasoning-effort", proxy.ProviderNameOpenAI, proxy.ModelNameGPT5, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel)
+	invalidRecord.DefaultReasoningEffort = "max"
 	prepareLegacyRoutingDefaultsDatabase(t, databasePath,
-		managedRoutingDefaultsTenantFixture(userID, "managed-routing-defaults-v1-reasoning-effort", proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel),
+		validRecord,
+		invalidRecord,
 	)
 	database := openManagedFixtureDatabase(t, databasePath)
-	if createError := database.Create(&managedRoutingDefaultsMigrationFixture{Version: 1, AppliedAt: time.Now().UTC().Add(-time.Hour)}).Error; createError != nil {
-		t.Fatalf("create version-one migration fixture: %v", createError)
+	if createError := database.Create(&managedRoutingDefaultsMigrationFixture{Version: 2, AppliedAt: time.Now().UTC().Add(-time.Hour)}).Error; createError != nil {
+		t.Fatalf("create version-two migration fixture: %v", createError)
 	}
 
 	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
@@ -872,16 +900,23 @@ func TestManagementRoutingDefaultsMigrationFromVersionOneSetsUnsetReasoningEffor
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
 
-	var tenantRecord managedTenantFixture
-	if recordError := database.Where(&managedTenantFixture{UserID: userID}).First(&tenantRecord).Error; recordError != nil {
-		t.Fatalf("read migrated tenant record: %v", recordError)
+	var persistedValidRecord managedTenantFixture
+	if recordError := database.Where(&managedTenantFixture{UserID: validUserID}).First(&persistedValidRecord).Error; recordError != nil {
+		t.Fatalf("read valid migrated tenant record: %v", recordError)
 	}
-	if tenantRecord.DefaultReasoningEffort != "" {
-		t.Fatalf("migrated reasoning effort=%q want explicit unset", tenantRecord.DefaultReasoningEffort)
+	if persistedValidRecord.DefaultReasoningEffort != "max" {
+		t.Fatalf("valid migrated reasoning effort=%q want=max", persistedValidRecord.DefaultReasoningEffort)
+	}
+	var persistedInvalidRecord managedTenantFixture
+	if recordError := database.Where(&managedTenantFixture{UserID: invalidUserID}).First(&persistedInvalidRecord).Error; recordError != nil {
+		t.Fatalf("read invalid migrated tenant record: %v", recordError)
+	}
+	if persistedInvalidRecord.DefaultReasoningEffort != "" {
+		t.Fatalf("invalid migrated reasoning effort=%q want explicit unset", persistedInvalidRecord.DefaultReasoningEffort)
 	}
 	var migration managedRoutingDefaultsMigrationFixture
-	if markerError := database.Where(&managedRoutingDefaultsMigrationFixture{Version: 2}).First(&migration).Error; markerError != nil {
-		t.Fatalf("read version-two migration marker: %v", markerError)
+	if markerError := database.Where(&managedRoutingDefaultsMigrationFixture{Version: 3}).First(&migration).Error; markerError != nil {
+		t.Fatalf("read version-three migration marker: %v", markerError)
 	}
 }
 
@@ -983,7 +1018,7 @@ func TestManagementRoutingDefaultsMigrationIsAtomic(t *testing.T) {
 	}
 
 	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
-	if _, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar()); buildError == nil || !strings.Contains(buildError.Error(), "managed_routing_defaults_migration_failed") || !strings.Contains(buildError.Error(), "persist_version=2") || !strings.Contains(buildError.Error(), "routing defaults migration rejected") {
+	if _, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar()); buildError == nil || !strings.Contains(buildError.Error(), "managed_routing_defaults_migration_failed") || !strings.Contains(buildError.Error(), "persist_version=3") || !strings.Contains(buildError.Error(), "routing defaults migration rejected") {
 		t.Fatalf("BuildRouter error=%v", buildError)
 	}
 	var tenantRecord managedTenantFixture
@@ -1096,13 +1131,13 @@ func TestManagementRoutingDefaultsMigrationRejectsUnknownVersion(t *testing.T) {
 	newManagementRouterWithDatabasePath(t, proxy.Configuration{}, databasePath)
 	database := openManagedFixtureDatabase(t, databasePath)
 	if updateError := database.Model(&managedRoutingDefaultsMigrationFixture{}).
-		Where(&managedRoutingDefaultsMigrationFixture{Version: 2}).
-		Update("version", 3).
+		Where(&managedRoutingDefaultsMigrationFixture{Version: 3}).
+		Update("version", 4).
 		Error; updateError != nil {
 		t.Fatalf("set migration version fixture: %v", updateError)
 	}
 	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
-	if _, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar()); buildError == nil || !strings.Contains(buildError.Error(), "managed_routing_defaults_migration_failed") || !strings.Contains(buildError.Error(), "version=3 supported_version=2") {
+	if _, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar()); buildError == nil || !strings.Contains(buildError.Error(), "managed_routing_defaults_migration_failed") || !strings.Contains(buildError.Error(), "version=4 supported_version=3") {
 		t.Fatalf("BuildRouter error=%v", buildError)
 	}
 }

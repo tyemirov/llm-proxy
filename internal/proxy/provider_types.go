@@ -181,28 +181,41 @@ const (
 	reasoningEffortAdapterOpenAIResponses reasoningEffortAdapter = "openai_responses"
 )
 
-var canonicalReasoningEfforts = []string{
-	"minimal",
-	"low",
-	"medium",
-	"high",
-}
-
 type reasoningEffortCapability struct {
 	adapter reasoningEffortAdapter
+	efforts []string
+}
+
+// reasoningEffortAdapterSupportedValues is the adapter's accepted vocabulary;
+// each configured text route owns the ordered subset it exposes.
+var reasoningEffortAdapterSupportedValues = map[reasoningEffortAdapter]map[string]struct{}{
+	reasoningEffortAdapterOpenAIResponses: {
+		"none":    {},
+		"minimal": {},
+		"low":     {},
+		"medium":  {},
+		"high":    {},
+		"xhigh":   {},
+		"max":     {},
+	},
 }
 
 func knownReasoningEffortAdapter(adapter reasoningEffortAdapter) bool {
-	return adapter == reasoningEffortAdapterOpenAIResponses
+	_, known := reasoningEffortAdapterSupportedValues[adapter]
+	return known
 }
 
-func canonicalReasoningEffortOptions() []string {
-	return append([]string(nil), canonicalReasoningEfforts...)
+func reasoningEffortAdapterSupports(adapter reasoningEffortAdapter, effort string) bool {
+	_, supported := reasoningEffortAdapterSupportedValues[adapter][effort]
+	return supported
 }
 
-func isCanonicalReasoningEffort(rawEffort string) bool {
-	for _, effort := range canonicalReasoningEfforts {
-		if rawEffort == effort {
+func (capability *reasoningEffortCapability) supports(effort string) bool {
+	if capability == nil {
+		return false
+	}
+	for _, configuredEffort := range capability.efforts {
+		if configuredEffort == effort {
 			return true
 		}
 	}
@@ -233,18 +246,10 @@ type providerDefinition struct {
 	defaultTranscriptionModel modelID
 	transcriptionModelField   string
 	textModels                map[string]textModelDefinition
-	textReasoningEffort       *reasoningEffortCapability
 	transcriptionModels       map[string]modelID
 	supportsDictation         bool
 	textTransport             providerTextTransport
 	chatTokenLimitParameter   chatCompletionTokenLimitParameter
-}
-
-func (definition providerDefinition) effectiveReasoningEffort(model textModelDefinition) *reasoningEffortCapability {
-	if definition.textReasoningEffort != nil {
-		return definition.textReasoningEffort
-	}
-	return model.reasoningEffort
 }
 
 func (definition providerDefinition) credentialFor(endpoint endpointKind) string {

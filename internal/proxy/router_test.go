@@ -315,6 +315,7 @@ func TestChatHandlerContinuesIncompleteGPT55JSONBody(testingInstance *testing.T)
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetResponsesURL(mockServer.URL)
 	defaults := proxy.DefaultTenantDefaults()
+	defaults.Model = proxy.ModelNameGPT55
 	defaults.ReasoningEffort = "high"
 	router, buildRouterError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
 		Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, defaults),

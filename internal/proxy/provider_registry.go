@@ -19,7 +19,6 @@ type providerSummary struct {
 	aliases               []string
 	textDefaultModel      string
 	textModels            []textModelSummary
-	textReasoningEffort   *reasoningEffortCapability
 	supportsDictation     bool
 	dictationDefaultModel string
 	dictationModels       []string
@@ -204,11 +203,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 		definitions: definitions,
 		aliases:     map[string]providerID{},
 	}
-	for identifier, definition := range registry.definitions {
-		catalog := configuration.ProviderModels[identifier.string()]
-		definition.textReasoningEffort = configuredReasoningEffortCapability(catalog.Text.ReasoningEffort)
-		registry.definitions[identifier] = definition
-	}
 	for identifier, definition := range definitions {
 		registry.aliases[identifier.string()] = identifier
 		for _, alias := range definition.aliases {
@@ -302,37 +296,12 @@ func (registry *providerRegistry) providerSummaries() []providerSummary {
 			aliases:               aliases,
 			textDefaultModel:      definition.defaultTextModel.string(),
 			textModels:            sortedTextModelSummaries(definition.textModels),
-			textReasoningEffort:   definition.textReasoningEffort,
 			supportsDictation:     definition.supportsDictation,
 			dictationDefaultModel: definition.defaultTranscriptionModel.string(),
 			dictationModels:       sortedDictationModels(definition.transcriptionModels),
 		})
 	}
 	return summaries
-}
-
-func (registry *providerRegistry) reasoningEffortOptions() []string {
-	for _, definition := range registry.definitions {
-		if definition.textReasoningEffort != nil {
-			return canonicalReasoningEffortOptions()
-		}
-		for _, model := range definition.textModels {
-			if model.reasoningEffort != nil {
-				return canonicalReasoningEffortOptions()
-			}
-		}
-	}
-	return []string{}
-}
-
-func (registry *providerRegistry) validatesReasoningEffort(rawEffort string) error {
-	if rawEffort == constants.EmptyString {
-		return nil
-	}
-	if !isCanonicalReasoningEffort(rawEffort) || len(registry.reasoningEffortOptions()) == 0 {
-		return fmt.Errorf("%w: capability=reasoning_effort effort=%s", ErrUnsupportedCapability, rawEffort)
-	}
-	return nil
 }
 
 func (registry *providerRegistry) resolveProvider(rawProvider string, defaultProvider string) (providerDefinition, error) {
@@ -346,6 +315,16 @@ func (registry *providerRegistry) resolveProvider(rawProvider string, defaultPro
 		return providerDefinition{}, fmt.Errorf("%w: %s", ErrUnknownProvider, normalizedProvider.string())
 	}
 	return registry.definitions[canonicalIdentifier], nil
+}
+
+func validateReasoningEffortForResolvedTextRoute(provider providerDefinition, model textModelDefinition, effort string) error {
+	if effort == constants.EmptyString {
+		return nil
+	}
+	if !model.reasoningEffort.supports(effort) {
+		return fmt.Errorf("%w: provider=%s model=%s capability=reasoning_effort effort=%s", ErrUnsupportedCapability, provider.identifier.string(), model.string(), effort)
+	}
+	return nil
 }
 
 func (registry *providerRegistry) resolveTextRequest(rawProvider string, rawModel string, defaultProvider string, defaultModel string, webSearchEnabled bool) (providerDefinition, textModelDefinition, error) {

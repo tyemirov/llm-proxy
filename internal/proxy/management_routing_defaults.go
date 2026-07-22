@@ -8,7 +8,7 @@ import (
 	"github.com/tyemirov/llm-proxy/internal/constants"
 )
 
-const managedRoutingDefaultsMigrationVersion = 2
+const managedRoutingDefaultsMigrationVersion = 3
 
 var (
 	errManagedRoutingDefaultsInvalid   = errors.New("managed_routing_defaults_invalid")
@@ -29,11 +29,11 @@ func newManagedRoutingDefaults(providers *providerRegistry, rawDefaults TenantDe
 		return managedRoutingDefaults{}, dictationError
 	}
 	reasoningEffort := rawDefaults.ReasoningEffort
-	if reasoningEffortError := providers.validatesReasoningEffort(reasoningEffort); reasoningEffortError != nil {
+	if reasoningEffortError := validateReasoningEffortForResolvedTextRoute(textProvider, textModel, reasoningEffort); reasoningEffortError != nil {
 		return managedRoutingDefaults{}, fmt.Errorf("%w: field=reasoning_effort effort=%s: %w", errManagedRoutingDefaultsInvalid, reasoningEffort, reasoningEffortError)
 	}
 	return managedRoutingDefaults{tenantDefaults: TenantDefaults{
-		Provider:          textProvider.string(),
+		Provider:          textProvider.identifier.string(),
 		Model:             textModel.string(),
 		DictationProvider: dictationProvider.string(),
 		DictationModel:    dictationModel.string(),
@@ -73,27 +73,31 @@ func migrateManagedRoutingDefaults(providers *providerRegistry, rawDefaults Tena
 	if dictationError != nil {
 		return managedRoutingDefaults{}, dictationError
 	}
+	reasoningEffort := rawDefaults.ReasoningEffort
+	if validateReasoningEffortForResolvedTextRoute(textProvider, textModel, reasoningEffort) != nil {
+		reasoningEffort = constants.EmptyString
+	}
 	return newManagedRoutingDefaults(providers, TenantDefaults{
-		Provider:          textProvider.string(),
+		Provider:          textProvider.identifier.string(),
 		Model:             textModel.string(),
 		DictationProvider: dictationProvider.string(),
 		DictationModel:    dictationModel.string(),
 		SystemPrompt:      rawDefaults.SystemPrompt,
-		ReasoningEffort:   constants.EmptyString,
+		ReasoningEffort:   reasoningEffort,
 	})
 }
 
-func resolveManagedTextRoutingDefaultPair(providers *providerRegistry, rawProvider string, rawModel string) (providerID, modelID, error) {
+func resolveManagedTextRoutingDefaultPair(providers *providerRegistry, rawProvider string, rawModel string) (providerDefinition, textModelDefinition, error) {
 	provider := strings.TrimSpace(rawProvider)
 	model := strings.TrimSpace(rawModel)
 	if provider == constants.EmptyString || model == constants.EmptyString {
-		return providerID(""), modelID(""), managedRoutingDefaultsPairError(endpointKindText, rawProvider, rawModel, errManagedRoutingDefaultsInvalid)
+		return providerDefinition{}, textModelDefinition{}, managedRoutingDefaultsPairError(endpointKindText, rawProvider, rawModel, errManagedRoutingDefaultsInvalid)
 	}
 	definition, resolvedModel, resolutionError := providers.resolveTextModel(provider, model, constants.EmptyString, constants.EmptyString, false)
 	if resolutionError != nil {
-		return providerID(""), modelID(""), managedRoutingDefaultsPairError(endpointKindText, rawProvider, rawModel, resolutionError)
+		return providerDefinition{}, textModelDefinition{}, managedRoutingDefaultsPairError(endpointKindText, rawProvider, rawModel, resolutionError)
 	}
-	return definition.identifier, resolvedModel.identifier, nil
+	return definition, resolvedModel, nil
 }
 
 func resolveManagedDictationRoutingDefaultPair(providers *providerRegistry, rawProvider string, rawModel string) (providerID, modelID, error) {
@@ -109,23 +113,23 @@ func resolveManagedDictationRoutingDefaultPair(providers *providerRegistry, rawP
 	return definition.identifier, resolvedModel, nil
 }
 
-func migrateManagedTextRoutingDefaultPair(providers *providerRegistry, rawProvider string, rawModel string) (providerID, modelID, error) {
+func migrateManagedTextRoutingDefaultPair(providers *providerRegistry, rawProvider string, rawModel string) (providerDefinition, textModelDefinition, error) {
 	definition, providerError := providers.resolveProvider(rawProvider, constants.EmptyString)
 	if providerError != nil {
-		return providerID(""), modelID(""), managedRoutingDefaultsPairError(endpointKindText, rawProvider, rawModel, providerError)
+		return providerDefinition{}, textModelDefinition{}, managedRoutingDefaultsPairError(endpointKindText, rawProvider, rawModel, providerError)
 	}
 	model := strings.TrimSpace(rawModel)
 	if model == constants.EmptyString {
-		return definition.identifier, definition.defaultTextModel, nil
+		return definition, definition.textModels[strings.ToLower(definition.defaultTextModel.string())], nil
 	}
 	_, resolvedModel, resolutionError := providers.resolveTextModel(definition.identifier.string(), model, constants.EmptyString, constants.EmptyString, false)
 	if resolutionError == nil {
-		return definition.identifier, resolvedModel.identifier, nil
+		return definition, resolvedModel, nil
 	}
 	if providers.hasConfiguredTextModel(model) {
-		return definition.identifier, definition.defaultTextModel, nil
+		return definition, definition.textModels[strings.ToLower(definition.defaultTextModel.string())], nil
 	}
-	return providerID(""), modelID(""), managedRoutingDefaultsPairError(endpointKindText, rawProvider, rawModel, resolutionError)
+	return providerDefinition{}, textModelDefinition{}, managedRoutingDefaultsPairError(endpointKindText, rawProvider, rawModel, resolutionError)
 }
 
 func migrateManagedDictationRoutingDefaultPair(providers *providerRegistry, rawProvider string, rawModel string) (providerID, modelID, error) {

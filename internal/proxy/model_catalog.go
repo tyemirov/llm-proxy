@@ -18,9 +18,8 @@ type ProviderModelCatalog struct {
 
 // ModelEndpointCatalog declares allowed models and the endpoint default model.
 type ModelEndpointCatalog struct {
-	DefaultModel    string
-	Models          []ModelConfiguration
-	ReasoningEffort *ReasoningEffortCapability
+	DefaultModel string
+	Models       []ModelConfiguration
 }
 
 // ModelConfiguration declares runtime metadata for one configured model.
@@ -32,8 +31,8 @@ type ModelConfiguration struct {
 	ReasoningEffort  *ReasoningEffortCapability
 }
 
-// ReasoningEffortCapability declares one configured upstream mapping for the
-// canonical tenant-level reasoning effort setting.
+// ReasoningEffortCapability declares the configured upstream mapping for one
+// exact text provider/model route.
 type ReasoningEffortCapability struct {
 	Adapter string
 	Efforts []string
@@ -80,10 +79,6 @@ func validateModelEndpointCatalog(providerName string, endpoint endpointKind, ca
 	if len(catalog.Models) == 0 {
 		return fmt.Errorf("%w: provider=%s endpoint=%s field=%s.models", ErrInvalidModelCatalog, providerName, endpointName, fieldPrefix)
 	}
-	providerReasoningEffort, providerCapabilityError := validatedReasoningEffortCapability(catalog.ReasoningEffort, fieldPrefix+".reasoning_effort")
-	if providerCapabilityError != nil {
-		return fmt.Errorf("%w: provider=%s endpoint=%s", providerCapabilityError, providerName, endpointName)
-	}
 	seenModelIdentifiers := map[string]struct{}{}
 	defaultModelFound := false
 	for modelIndex, modelConfiguration := range catalog.Models {
@@ -116,16 +111,8 @@ func validateModelEndpointCatalog(providerName string, endpoint endpointKind, ca
 		if modelCapabilityError != nil {
 			return fmt.Errorf("%w: provider=%s endpoint=%s", modelCapabilityError, providerName, endpointName)
 		}
-		// Every valid capability has the one canonical adapter and ordered option
-		// set, so provider and model declarations cannot conflict. Provider scope
-		// covers every configured text route; model scope applies only when the
-		// provider does not declare the capability.
-		effectiveReasoningEffort := providerReasoningEffort
-		if effectiveReasoningEffort == nil {
-			effectiveReasoningEffort = modelReasoningEffort
-		}
-		if effectiveReasoningEffort != nil {
-			if capabilityError := validateReasoningEffortAdapterMapping(providerName, endpoint, modelConfiguration, *effectiveReasoningEffort); capabilityError != nil {
+		if modelReasoningEffort != nil {
+			if capabilityError := validateReasoningEffortAdapterMapping(providerName, endpoint, modelConfiguration, *modelReasoningEffort); capabilityError != nil {
 				return fmt.Errorf("%w: field=%s.reasoning_effort", capabilityError, modelFieldPrefix)
 			}
 		}
@@ -147,16 +134,22 @@ func validatedReasoningEffortCapability(rawCapability *ReasoningEffortCapability
 	if !knownReasoningEffortAdapter(adapter) {
 		return nil, fmt.Errorf("%w: field=%s.adapter adapter=%s", ErrInvalidModelCatalog, fieldPrefix, adapter)
 	}
-	if len(rawCapability.Efforts) != len(canonicalReasoningEfforts) {
+	if len(rawCapability.Efforts) == 0 {
 		return nil, fmt.Errorf("%w: field=%s.efforts", ErrInvalidModelCatalog, fieldPrefix)
 	}
-	for effortIndex, rawEffort := range rawCapability.Efforts {
-		effort := strings.TrimSpace(rawEffort)
-		if effort != canonicalReasoningEfforts[effortIndex] {
+	efforts := make([]string, 0, len(rawCapability.Efforts))
+	seenEfforts := map[string]struct{}{}
+	for effortIndex, effort := range rawCapability.Efforts {
+		if effort == constants.EmptyString || effort != strings.TrimSpace(effort) || !reasoningEffortAdapterSupports(adapter, effort) {
 			return nil, fmt.Errorf("%w: field=%s.efforts[%d] effort=%s", ErrInvalidModelCatalog, fieldPrefix, effortIndex, effort)
 		}
+		if _, duplicate := seenEfforts[effort]; duplicate {
+			return nil, fmt.Errorf("%w: field=%s.efforts[%d] effort=%s", ErrInvalidModelCatalog, fieldPrefix, effortIndex, effort)
+		}
+		seenEfforts[effort] = struct{}{}
+		efforts = append(efforts, effort)
 	}
-	return &reasoningEffortCapability{adapter: adapter}, nil
+	return &reasoningEffortCapability{adapter: adapter, efforts: efforts}, nil
 }
 
 func validateReasoningEffortAdapterMapping(providerName string, endpoint endpointKind, modelConfiguration ModelConfiguration, capability reasoningEffortCapability) error {
@@ -220,7 +213,10 @@ func configuredReasoningEffortCapability(configuration *ReasoningEffortCapabilit
 	if configuration == nil {
 		return nil
 	}
-	return &reasoningEffortCapability{adapter: reasoningEffortAdapter(strings.TrimSpace(configuration.Adapter))}
+	return &reasoningEffortCapability{
+		adapter: reasoningEffortAdapter(strings.TrimSpace(configuration.Adapter)),
+		efforts: append([]string(nil), configuration.Efforts...),
+	}
 }
 
 func dictationModelSet(catalog ModelEndpointCatalog) map[string]modelID {

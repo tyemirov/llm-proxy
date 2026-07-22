@@ -316,7 +316,7 @@ func chatRequestFromQuery(ginContext *gin.Context, defaults textRequestDefaults,
 		model:            modelIdentifier,
 		webSearchEnabled: webSearchEnabled,
 		maxTokens:        maxTokens,
-		reasoningEffort:  reasoningEffortForResolvedTextRoute(providerDefinition, modelIdentifier, defaults.reasoningEffort),
+		reasoningEffort:  reasoningEffortForResolvedTextRoute(modelIdentifier, defaults.reasoningEffort),
 	}, true
 }
 
@@ -384,7 +384,7 @@ func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload,
 		model:            resolvedModel,
 		webSearchEnabled: payload.WebSearch,
 		maxTokens:        payload.MaxTokens,
-		reasoningEffort:  reasoningEffortForResolvedTextRoute(providerDefinition, resolvedModel, defaults.reasoningEffort),
+		reasoningEffort:  reasoningEffortForResolvedTextRoute(resolvedModel, defaults.reasoningEffort),
 	}, true
 }
 
@@ -440,16 +440,15 @@ func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayl
 		model:            resolvedModel,
 		webSearchEnabled: payload.WebSearch,
 		maxTokens:        payload.MaxTokens,
-		reasoningEffort:  reasoningEffortForResolvedTextRoute(providerDefinition, resolvedModel, defaults.reasoningEffort),
+		reasoningEffort:  reasoningEffortForResolvedTextRoute(resolvedModel, defaults.reasoningEffort),
 	}, true
 }
 
-func reasoningEffortForResolvedTextRoute(provider providerDefinition, model textModelDefinition, rawEffort string) string {
-	effort := strings.TrimSpace(rawEffort)
-	if effort == constants.EmptyString || provider.effectiveReasoningEffort(model) == nil {
+func reasoningEffortForResolvedTextRoute(model textModelDefinition, rawEffort string) string {
+	if rawEffort == constants.EmptyString || !model.reasoningEffort.supports(rawEffort) {
 		return constants.EmptyString
 	}
-	return effort
+	return rawEffort
 }
 
 func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRouter, chatRequest chatRequestParameters, requestTenant tenant, usageEndpoint string, requestTimeout time.Duration, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger) {
