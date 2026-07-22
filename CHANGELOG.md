@@ -6,6 +6,26 @@ All notable changes to this project will be documented in this file.
 
 - Declare the llm-proxy TAuth tenant requirements in the app-owned deployment manifest for gateway assembly.
 
+## [v0.2.36] - 2026-07-21
+
+- Merge pull request #216 from tyemirov/gix/add-bounded-docker-pages-readiness-checks-to-release-and
+- fix(gitrelease): bound inspection timeouts and build selection logic
+- docs: document CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS in README
+- docs(ISSUES): clarify Pages artifact handling and Docker manifest timeouts
+- test(management-ui): improve reasoning effort, notice, and sign-in coverage
+- refactor: simplify reasoning effort controls and clean up settings grid UI
+- fix(management): validate reasoning effort for specific provider/model pair
+- docs: clarify managed effort validation and update UI/routing-defaults behavior
+- feat(config): expand reasoning_effort efforts for GPT-5 models
+- test(cli): reject stale provider-level reasoning_effort in config files
+- docs: clarify reasoning_effort as route-bound and update OpenAI model options
+- docs(issues): document routing effort, header notice, and auto-dismiss tasks
+- feat(gitrelease): verify public marker after Pages build, not branch push
+- refactor(deploy): use external script for container manifest digest resolution
+- docs: clarify GitHub Pages build state and marker verification steps
+- docs: clarify publish and deploy wait logic and public readiness boundaries
+- docs(issues): record authoritative readiness contracts for GHCR and Pages
+
 ## [v0.2.35] - 2026-07-21
 
 - Merge pull request #215 from tyemirov/gix/add-reasoning-effort-default-and-header-notification
