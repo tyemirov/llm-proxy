@@ -234,10 +234,6 @@
                         <p class="eyebrow" x-text="copy.tenantEyebrow"></p>
                         <h2 x-text="copy.tenantTitle"></h2>
                       </div>
-                      <button type="button" class="icon-button" x-on:click="generateSecret()" x-bind:disabled="busy" x-bind:title="clientKeyCreateCopy">
-                        <span aria-hidden="true">+</span>
-                        <span x-text="clientKeyCreateCopy"></span>
-                      </button>
                     </header>
 
                     <client-access-row>
@@ -266,6 +262,10 @@
                           </button>
                         </client-key-row>
                       </client-access-key>
+                      <button type="button" class="icon-button client-key-create" x-on:click="generateSecret()" x-bind:disabled="busy" x-bind:title="clientKeyCreateCopy">
+                        <span aria-hidden="true">+</span>
+                        <span x-text="clientKeyCreateCopy"></span>
+                      </button>
                     </client-access-row>
                   </settings-section>
 

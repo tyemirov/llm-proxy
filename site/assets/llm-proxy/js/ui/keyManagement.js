@@ -48,6 +48,7 @@ const SAMPLE_AUDIO_FILE = "recording.webm";
 const MASKED_PROVIDER_KEY_PREFIX = "****";
 const MASKED_PROVIDER_KEY_FINAL_CHARACTER_COUNT = 4;
 const MASKED_CLIENT_KEY = "••••••••••••";
+const SAVED_PROVIDER_KEY_MASK = "saved";
 
 /**
  * @param {string} keyValue
@@ -93,6 +94,7 @@ export function createKeyManagement() {
     profileLoadPromise: null,
     generatedSecret: EMPTY_STRING,
     generatedSecretVisible: false,
+    generatedSecretVersion: 0,
     settingsOpen: false,
     usageExamplesOpen: false,
     notice: {
@@ -225,7 +227,11 @@ export function createKeyManagement() {
       if (this.providerKeyVisible || (!provider.has_key && !providerKeyInput)) {
         return providerKeyInput;
       }
-      return maskedProviderKey(providerKeyInput || String(provider.masked_key || EMPTY_STRING));
+      const providerMaskedKey = String(provider.masked_key || EMPTY_STRING);
+      if (!providerKeyInput && providerMaskedKey === SAVED_PROVIDER_KEY_MASK) {
+        return MASKED_PROVIDER_KEY_PREFIX;
+      }
+      return maskedProviderKey(providerKeyInput || providerMaskedKey);
     },
 
     get selectedProviderKeyInputReadOnly() {
@@ -643,8 +649,21 @@ export function createKeyManagement() {
     },
 
     clearGeneratedSecret() {
+      this.generatedSecretVersion += 1;
       this.generatedSecret = EMPTY_STRING;
       this.generatedSecretVisible = false;
+    },
+
+    /**
+     * @param {number} generatedSecretVersion
+     * @returns {boolean}
+     */
+    canApplyGeneratedSecret(generatedSecretVersion) {
+      return (
+        this.settingsOpen &&
+        this.authState === AUTH_STATES.AUTHENTICATED &&
+        this.generatedSecretVersion === generatedSecretVersion
+      );
     },
 
     async saveSelectedProviderKey() {
@@ -696,15 +715,21 @@ export function createKeyManagement() {
     },
 
     async generateSecret() {
+      const generatedSecretVersion = this.generatedSecretVersion;
       this.busy = true;
       try {
         const secretResponse = await requestGeneratedSecret();
+        if (!this.canApplyGeneratedSecret(generatedSecretVersion)) {
+          return;
+        }
         this.generatedSecret = secretResponse.secret;
         this.generatedSecretVisible = false;
         this.applyProfile(secretResponse.profile);
         this.setNotice(NOTICE_KINDS.SUCCESS, COPY.keyGenerated);
       } catch (requestError) {
-        this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+        if (this.canApplyGeneratedSecret(generatedSecretVersion)) {
+          this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+        }
       } finally {
         this.busy = false;
       }

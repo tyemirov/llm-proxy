@@ -466,9 +466,10 @@ h3 {
   font-weight: 600;
 }
 
-.client-access-row {
+client-access-row {
   display: grid;
-  grid-template-columns: minmax(8rem, 0.65fr) minmax(0, 1.5fr);
+  grid-template-columns: minmax(4.5rem, 0.55fr) minmax(0, 1.5fr) auto;
+  align-items: end;
   gap: 0.55rem;
   border: 1px solid var(--llm-border);
   border-radius: 6px;
@@ -483,7 +484,7 @@ client-access-key {
 
 client-access-tenant {
   display: grid;
-  align-content: start;
+  align-content: end;
   gap: 0.1rem;
 }
 
@@ -541,6 +542,11 @@ client-key-row input {
 
 .client-key-revoke {
   grid-column: -2;
+}
+
+.client-key-create {
+  align-self: end;
+  white-space: nowrap;
 }
 
 dt {
@@ -694,6 +700,7 @@ request-example + request-example {
 provider-settings-fields {
   display: grid;
   grid-template-columns: minmax(8.5rem, 0.8fr) minmax(12rem, 1.45fr) minmax(10rem, 1.2fr) 30px;
+  align-items: end;
   gap: 0.55rem;
 }
 
@@ -915,7 +922,6 @@ provider-settings-fields button[type="submit"] {
   }
 
   .llm-grid,
-  .client-access-row,
   usage-metrics,
   .dashboard-grid,
   .settings-grid-form,
@@ -964,5 +970,15 @@ provider-settings-fields button[type="submit"] {
 
   usage-card {
     min-height: 58px;
+  }
+}
+
+@media (max-width: 460px) {
+  client-access-row {
+    grid-template-columns: 1fr;
+  }
+
+  .client-key-create {
+    justify-self: start;
   }
 }
