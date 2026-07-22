@@ -933,6 +933,7 @@ test("management notices auto-dismiss after ten seconds and replacement notices 
   const notificationRegion = page.locator("#llm-proxy-header notification-region");
   const notice = notificationRegion.locator(".notice");
   const refresh = page.getByRole("button", { name: "Refresh" });
+  const requests = page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong");
   await expect(notice).toHaveText("Workspace loaded");
   await page.clock.fastForward(9_999);
   await expect(notificationRegion).toBeVisible();
@@ -942,7 +943,13 @@ test("management notices auto-dismiss after ten seconds and replacement notices 
   await refresh.click();
   await expect(notice).toHaveText("Usage refreshed");
   await page.clock.fastForward(5_000);
+  await installUsageResponse(page, httpOK, managementUsage({
+    requests: 38,
+    successful_requests: 36,
+    text_requests: 36,
+  }));
   await refresh.click();
+  await expect(requests).toHaveText("38");
   await expect(notice).toHaveText("Usage refreshed");
   await page.clock.fastForward(5_000);
   await expect(notificationRegion).toBeVisible();
@@ -1377,12 +1384,13 @@ async function headerBrandFacts(page) {
 /**
  * @param {import("@playwright/test").Page} page
  * @param {number} status
+ * @param {object} [usage]
  * @returns {Promise<void>}
  */
-async function installUsageResponse(page, status) {
+async function installUsageResponse(page, status, usage = managementUsage()) {
   await page.unroute(`${baseURL}/api/management/usage`);
   await page.route(`${baseURL}/api/management/usage`, async (route) => {
-    await route.fulfill({ status, json: managementUsage() });
+    await route.fulfill({ status, json: usage });
   });
 }
 
@@ -1734,9 +1742,10 @@ function managementAdminUsers() {
 }
 
 /**
+ * @param {Partial<Record<string, number>>} [totalOverrides]
  * @returns {object}
  */
-function managementUsage() {
+function managementUsage(totalOverrides = {}) {
   const daily = Array.from({ length: 30 }, (_, index) => ({
     date: `2026-06-${String(index + 1).padStart(2, "0")}`,
     data: usageAggregate(),
@@ -1762,6 +1771,7 @@ function managementUsage() {
       response_tokens: 7778,
       total_tokens: 12345,
       average_latency_ms: 312,
+      ...totalOverrides,
     }),
     daily,
     providers: [
