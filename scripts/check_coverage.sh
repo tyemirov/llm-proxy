@@ -8,6 +8,7 @@ COVERPKG="$RUNTIME_COVERPKG,$CLIENT_COVERPKG"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
 COVERAGE_PROBE_TIMEOUT_SECONDS=5
+CLIENT_COVERAGE_PROBE_PROMPT="coverage probe"
 
 cleanup() {
   rm -rf "$TMP_DIR"
@@ -41,7 +42,7 @@ mkdir -p "$TMP_DIR/cov-help" "$TMP_DIR/cov-missing-config" "$TMP_DIR/cov-missing
 run_coverage_probe "$TMP_DIR/cov-help" "$TMP_DIR/llm-proxy.cover" --help
 run_coverage_probe "$TMP_DIR/cov-missing-config" "$TMP_DIR/llm-proxy.cover" --config "$TMP_DIR/missing.yml"
 run_coverage_probe "$TMP_DIR/cov-missing-openai" "$TMP_DIR/llm-proxy.cover" --config "$TMP_DIR/missing-openai.yml"
-run_coverage_probe "$TMP_DIR/cov-client-missing-config" "$TMP_DIR/llm-proxy-client.cover"
+run_coverage_probe "$TMP_DIR/cov-client-missing-config" "$TMP_DIR/llm-proxy-client.cover" --prompt "$CLIENT_COVERAGE_PROBE_PROMPT"
 
 "$GO_BIN" tool covdata textfmt -i="$TMP_DIR/cov-help" -o="$TMP_DIR/bin-help.coverprofile"
 "$GO_BIN" tool covdata textfmt -i="$TMP_DIR/cov-missing-config" -o="$TMP_DIR/bin-missing-config.coverprofile"
