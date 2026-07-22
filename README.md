@@ -815,11 +815,17 @@ Generate a secret:
 openssl rand -hex 32
 ```
 
-Run the service with OpenAI defaults:
+Run the canonical local service:
 
 ```shell
-./llm-proxy --config config.yml
+make up
 ```
+
+`make up` builds the current source, starts it with `configs/config.yml`, and
+keeps the process in the foreground. It reports readiness after
+`GET http://localhost:8080/?prompt=ready` returns `403`, which verifies the
+local HTTP and tenant-auth boundary without a tenant secret or upstream call.
+Use `Ctrl-C` to stop the local service.
 
 With `management.enabled: false`, set a static tenant's default text
 provider/model to route omitted-provider requests to DeepSeek. Static tenant
@@ -905,6 +911,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | Command | Purpose |
 |---------|---------|
 | `npm ci` | Install pinned frontend validation dependencies before running local frontend checks. |
+| `make up` | Build and run the canonical local proxy from `configs/config.yml`; it reports ready when the unauthenticated local request returns `403`. |
 | `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, repository-owned release integration tests, and the non-paid live-harness preflight. |
 | `make test-live-provider-harness` | Generate the temporary static-mode live-test config and verify authenticated routing without an upstream call. |
 | `make test-live-providers` | Generate a complete temporary static-mode config and run live text smoke tests for every provider whose API key is present; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
