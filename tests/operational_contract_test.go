@@ -78,51 +78,96 @@ func TestOperationalHelpCommandsUseBuiltinOutput(testingInstance *testing.T) {
 	}
 }
 
-func TestOperationalMakeUpStartsCanonicalLocalProxy(testingInstance *testing.T) {
+func TestOperationalMakeUpStartsLocalWebOrchestration(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixtureRoot := testingInstance.TempDir()
-	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, "Makefile"), filepath.Join(fixtureRoot, "Makefile"))
-	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, operationalScriptsDirectory, "up.sh"), filepath.Join(fixtureRoot, operationalScriptsDirectory, "up.sh"))
-	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, "configs", "config.yml"), filepath.Join(fixtureRoot, "configs", "config.yml"))
+	for _, relativePath := range []string{
+		"Makefile",
+		".dockerignore",
+		"docker-compose.local.yml",
+		filepath.Join(operationalScriptsDirectory, "up.sh"),
+		filepath.Join("configs", "config.yml"),
+		filepath.Join("configs", ".env.sample"),
+		filepath.Join("configs", ".env.local.example"),
+		filepath.Join("configs", "tauth.local.yml"),
+	} {
+		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
+	}
 
 	toolDirectory := filepath.Join(fixtureRoot, "tools")
-	proxyPIDPath := filepath.Join(fixtureRoot, "proxy.pid")
-	proxyArgumentsPath := filepath.Join(fixtureRoot, "proxy-arguments")
+	composePIDPath := filepath.Join(fixtureRoot, "compose.pid")
+	composeArgumentsPath := filepath.Join(fixtureRoot, "compose-arguments")
+	composeDownPath := filepath.Join(fixtureRoot, "compose-down")
 	curlArgumentsPath := filepath.Join(fixtureRoot, "curl-arguments")
-	fakeGoPath := filepath.Join(toolDirectory, "go")
-	writeOperationalFile(testingInstance, fakeGoPath, `#!/usr/bin/env bash
+	curlReadyPath := filepath.Join(fixtureRoot, "curl-ready")
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "docker"), `#!/usr/bin/env bash
 set -euo pipefail
 
-[[ "${1:?}" == "build" ]]
+builtin printf '%s\n' "$*" >>"${DOCKER_ARGUMENT_CAPTURE:?}"
+[[ "${1:?}" == "compose" ]]
 shift
-output_path=""
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
-    -o)
-      output_path="$2"
+    --project-name|--file)
       shift 2
       ;;
     *)
-      shift
+      break
       ;;
   esac
 done
-[[ -n "${output_path}" ]]
-mkdir -p "$(dirname "${output_path}")"
-builtin printf '%s\n' \
-  '#!/usr/bin/env bash' \
-  'set -euo pipefail' \
-  'builtin printf "%s\n" "$$" >"${PROXY_PID_CAPTURE:?}"' \
-  'builtin printf "%s\n" "$*" >"${PROXY_ARGUMENT_CAPTURE:?}"' \
-  'trap "exit 0" INT TERM' \
-  'while :; do sleep 1; done' >"${output_path}"
-chmod +x "${output_path}"
+case "${1:?}" in
+  version)
+    exit 0
+    ;;
+  up)
+    builtin printf '%s\n' "$$" >"${COMPOSE_PID_CAPTURE:?}"
+    trap 'exit 0' INT TERM
+    while :; do sleep 1; done
+    ;;
+  down)
+    builtin printf '%s\n' down >"${COMPOSE_DOWN_CAPTURE:?}"
+    exit 0
+    ;;
+  *)
+    exit 1
+    ;;
+esac
 `, 0o755)
 	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env bash
 set -euo pipefail
 
-builtin printf '%s\n' "$*" >"${CURL_ARGUMENT_CAPTURE:?}"
-builtin printf '%s' 403
+arguments="$*"
+builtin printf '%s\n' "${arguments}" >>"${CURL_ARGUMENT_CAPTURE:?}"
+case "${arguments}" in
+  *"http://127.0.0.1:4179/config-ui.yaml"*)
+    status=200
+    ;;
+  *"http://127.0.0.1:4179/"*)
+    status=200
+    ;;
+  *"http://127.0.0.1:8080/?prompt=ready"*)
+    status=403
+    ;;
+  *"http://127.0.0.1:8082/auth/session"*)
+    status=204
+    ;;
+  *"http://127.0.0.1:8080/api/management/profile"*)
+    status=401
+    builtin printf '%s\n' ready >"${CURL_READY_CAPTURE:?}"
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+builtin printf '%s' "${status}"
+`, 0o755)
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "openssl"), `#!/usr/bin/env bash
+set -euo pipefail
+
+[[ "${1:?}" == "rand" ]]
+[[ "${2:?}" == "-base64" ]]
+builtin printf '%s' generated-local-value
 `, 0o755)
 
 	command := exec.Command("make", "up")
@@ -131,10 +176,11 @@ builtin printf '%s' 403
 	command.Env = append(
 		os.Environ(),
 		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"GO="+fakeGoPath,
-		"PROXY_PID_CAPTURE="+proxyPIDPath,
-		"PROXY_ARGUMENT_CAPTURE="+proxyArgumentsPath,
+		"DOCKER_ARGUMENT_CAPTURE="+composeArgumentsPath,
+		"COMPOSE_PID_CAPTURE="+composePIDPath,
+		"COMPOSE_DOWN_CAPTURE="+composeDownPath,
 		"CURL_ARGUMENT_CAPTURE="+curlArgumentsPath,
+		"CURL_READY_CAPTURE="+curlReadyPath,
 	)
 	var output bytes.Buffer
 	command.Stdout = &output
@@ -142,34 +188,210 @@ builtin printf '%s' 403
 	if startError := command.Start(); startError != nil {
 		testingInstance.Fatalf("start make up: %v", startError)
 	}
-	waitForOperationalFile(testingInstance, proxyArgumentsPath)
-	waitForOperationalFile(testingInstance, curlArgumentsPath)
+	waitForOperationalFile(testingInstance, curlReadyPath)
+	waitForOperationalOutput(testingInstance, &output, "LLM Proxy local orchestration is ready.")
 	if signalError := syscall.Kill(-command.Process.Pid, syscall.SIGINT); signalError != nil {
 		testingInstance.Fatalf("interrupt make up: %v", signalError)
 	}
 	waitForOperationalCommand(testingInstance, command)
-	assertOperationalProxyChildStopped(testingInstance, proxyPIDPath)
+	assertOperationalProxyChildStopped(testingInstance, composePIDPath)
 
-	proxyArguments, readProxyArgumentsError := os.ReadFile(proxyArgumentsPath)
-	if readProxyArgumentsError != nil {
-		testingInstance.Fatalf("read proxy arguments: %v", readProxyArgumentsError)
+	composeArguments, readComposeArgumentsError := os.ReadFile(composeArgumentsPath)
+	if readComposeArgumentsError != nil {
+		testingInstance.Fatalf("read Compose arguments: %v", readComposeArgumentsError)
 	}
-	expectedConfigPath, resolveConfigPathError := filepath.EvalSymlinks(filepath.Join(fixtureRoot, "configs", "config.yml"))
-	if resolveConfigPathError != nil {
-		testingInstance.Fatalf("resolve canonical config path: %v", resolveConfigPathError)
+	expectedComposeFilePath, resolveComposeFileError := filepath.EvalSymlinks(filepath.Join(fixtureRoot, "docker-compose.local.yml"))
+	if resolveComposeFileError != nil {
+		testingInstance.Fatalf("resolve local Compose file: %v", resolveComposeFileError)
 	}
-	if !strings.Contains(string(proxyArguments), "--config "+expectedConfigPath) {
-		testingInstance.Fatalf("make up did not start the canonical config: %s", proxyArguments)
+	for _, expectedFragment := range []string{
+		"--project-name llm-proxy-local",
+		"--file " + expectedComposeFilePath,
+		"up --build --remove-orphans",
+		"down --remove-orphans",
+	} {
+		if !strings.Contains(string(composeArguments), expectedFragment) {
+			testingInstance.Fatalf("make up did not use the local Compose contract %q: %s", expectedFragment, composeArguments)
+		}
 	}
+	if _, downReadError := os.ReadFile(composeDownPath); downReadError != nil {
+		testingInstance.Fatalf("make up did not stop the local Compose stack: %v", downReadError)
+	}
+
 	curlArguments, readCurlArgumentsError := os.ReadFile(curlArgumentsPath)
 	if readCurlArgumentsError != nil {
 		testingInstance.Fatalf("read curl arguments: %v", readCurlArgumentsError)
 	}
-	if !strings.Contains(string(curlArguments), "http://127.0.0.1:8080/?prompt=ready") {
-		testingInstance.Fatalf("make up did not verify the local readiness route: %s", curlArguments)
+	for _, expectedURL := range []string{
+		"http://127.0.0.1:4179/",
+		"http://127.0.0.1:4179/config-ui.yaml",
+		"http://127.0.0.1:8080/?prompt=ready",
+		"http://127.0.0.1:8082/auth/session",
+		"http://127.0.0.1:8080/api/management/profile",
+	} {
+		if !strings.Contains(string(curlArguments), expectedURL) {
+			testingInstance.Fatalf("make up did not verify %s: %s", expectedURL, curlArguments)
+		}
 	}
-	if !strings.Contains(output.String(), "LLM Proxy localhost service is ready.") {
-		testingInstance.Fatalf("make up did not report readiness: %s", output.String())
+	if !strings.Contains(string(curlArguments), "Origin: http://localhost:4179") {
+		testingInstance.Fatalf("make up did not verify browser-origin authentication boundaries: %s", curlArguments)
+	}
+
+	localEnvironment, readLocalEnvironmentError := os.ReadFile(filepath.Join(fixtureRoot, "configs", ".env.local"))
+	if readLocalEnvironmentError != nil {
+		testingInstance.Fatalf("read generated local environment: %v", readLocalEnvironmentError)
+	}
+	for _, expectedFragment := range []string{
+		"LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN=http://localhost:4179",
+		"LLM_PROXY_MANAGEMENT_TAUTH_URL=http://localhost:8082",
+		"LLM_PROXY_MANAGEMENT_API_ORIGIN=http://localhost:8080",
+		"GHTTP_SERVE_DIRECTORY=/app/site",
+		"GHTTP_SERVE_PROXIES=/config-ui.yaml=http://api:8080",
+		"LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY=generated-local-value",
+		"LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=generated-local-value",
+	} {
+		if !strings.Contains(string(localEnvironment), expectedFragment) {
+			testingInstance.Fatalf("local environment omitted %q: %s", expectedFragment, localEnvironment)
+		}
+	}
+	if strings.Contains(string(localEnvironment), "__GENERATE_ON_FIRST_MAKE_UP__") {
+		testingInstance.Fatalf("make up left generated local secrets unresolved: %s", localEnvironment)
+	}
+
+	for _, configurationContract := range []struct {
+		path              string
+		expectedFragments []string
+	}{
+		{
+			path: filepath.Join(fixtureRoot, "docker-compose.local.yml"),
+			expectedFragments: []string{
+				"image: ghcr.io/tyemirov/ghttp:latest",
+				"127.0.0.1:4179:4179",
+				"127.0.0.1:8080:8080",
+				"127.0.0.1:8082:8080",
+				"./site:/app/site:ro",
+			},
+		},
+		{
+			path: filepath.Join(fixtureRoot, "configs", "tauth.local.yml"),
+			expectedFragments: []string{
+				"id: \"${LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID}\"",
+				"jwt_signing_key: \"${LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY}\"",
+				"session_cookie_name: \"${LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME}\"",
+				"refresh_cookie_name: \"${LLM_PROXY_LOCAL_TAUTH_REFRESH_COOKIE_NAME}\"",
+			},
+		},
+		{
+			path: filepath.Join(fixtureRoot, ".dockerignore"),
+			expectedFragments: []string{
+				"configs/.env",
+				"configs/.env.local",
+			},
+		},
+	} {
+		configurationBytes, readConfigurationError := os.ReadFile(configurationContract.path)
+		if readConfigurationError != nil {
+			testingInstance.Fatalf("read local orchestration configuration %s: %v", configurationContract.path, readConfigurationError)
+		}
+		for _, expectedFragment := range configurationContract.expectedFragments {
+			if !strings.Contains(string(configurationBytes), expectedFragment) {
+				testingInstance.Fatalf("local orchestration configuration %s omitted %q: %s", configurationContract.path, expectedFragment, configurationBytes)
+			}
+		}
+	}
+	if !strings.Contains(output.String(), "LLM Proxy local orchestration stopped.") {
+		testingInstance.Fatalf("make up did not report local stack shutdown: %s", output.String())
+	}
+}
+
+func TestOperationalMakeUpRejectsAnotherProcessReadinessResponse(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	for _, relativePath := range []string{
+		"Makefile",
+		"docker-compose.local.yml",
+		filepath.Join(operationalScriptsDirectory, "up.sh"),
+		filepath.Join("configs", ".env.sample"),
+		filepath.Join("configs", ".env.local.example"),
+	} {
+		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
+	}
+
+	toolDirectory := filepath.Join(fixtureRoot, "tools")
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "docker"), `#!/usr/bin/env bash
+set -euo pipefail
+
+[[ "${1:?}" == "compose" ]]
+shift
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --project-name|--file)
+      shift 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+case "${1:?}" in
+  version|down)
+    exit 0
+    ;;
+  up)
+    exit 1
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+`, 0o755)
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env bash
+set -euo pipefail
+
+builtin printf '%s' 200
+`, 0o755)
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "openssl"), `#!/usr/bin/env bash
+set -euo pipefail
+
+[[ "${1:?}" == "rand" ]]
+[[ "${2:?}" == "-base64" ]]
+builtin printf '%s' generated-local-value
+`, 0o755)
+
+	commandContext, cancelCommand := context.WithTimeout(context.Background(), operationalHelpTimeout)
+	defer cancelCommand()
+	command := exec.CommandContext(commandContext, "make", "up")
+	command.Dir = fixtureRoot
+	command.Env = append(
+		os.Environ(),
+		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
+	)
+	output, commandError := command.CombinedOutput()
+	if commandContext.Err() == context.DeadlineExceeded {
+		testingInstance.Fatal("make up did not fail after the owned Compose process exited")
+	}
+	if commandError == nil {
+		testingInstance.Fatalf("make up accepted readiness from another process: %s", output)
+	}
+	if strings.Contains(string(output), "LLM Proxy local orchestration is ready.") {
+		testingInstance.Fatalf("make up reported readiness for an exited Compose process: %s", output)
+	}
+	if !strings.Contains(string(output), "local orchestration exited before readiness with status 1") {
+		testingInstance.Fatalf("make up did not report the owned Compose failure: %s", output)
+	}
+}
+
+func waitForOperationalOutput(testingInstance *testing.T, output *bytes.Buffer, expectedFragment string) {
+	testingInstance.Helper()
+	deadline := time.Now().Add(operationalHelpTimeout)
+	for {
+		if strings.Contains(output.String(), expectedFragment) {
+			return
+		}
+		if time.Now().After(deadline) {
+			testingInstance.Fatalf("timed out waiting for operational output %q: %s", expectedFragment, output.String())
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

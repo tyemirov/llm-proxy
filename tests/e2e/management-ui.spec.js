@@ -31,6 +31,7 @@ const generatedResourcePageCount = 45;
 const seoContentModifiedDate = "2026-07-11";
 const settingsLayerViewports = Object.freeze([
   { name: "desktop", width: 1280, height: 720 },
+  { name: "compact", width: 480, height: 780 },
   { name: "mobile", width: 390, height: 780 },
 ]);
 
@@ -107,6 +108,9 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
     '<client-access-row>',
   );
   expect(html).toContain('<strong x-text="tenantName"></strong>');
+  expect(html).toContain(
+    '<button type="button" class="icon-button client-key-create" x-on:click="generateSecret()" x-bind:disabled="busy" x-bind:title="clientKeyCreateCopy">',
+  );
   expect(html).toContain(
     '<button type="button" class="icon-only client-key-copy" x-cloak x-show="hasGeneratedSecret" x-on:click="copyGeneratedSecret()" x-bind:disabled="busy" x-bind:title="copy.copyClientKey" x-bind:aria-label="copy.copyClientKey">',
   );
@@ -305,14 +309,28 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(providerEditor.locator("provider-status")).toHaveCount(0);
   await expect(providerEditor.locator(".provider-selector > .visually-hidden")).toHaveText("Provider");
   await expect(providerSelector).toHaveValue("openai");
-  await expect(providerEditor.getByRole("textbox", { name: "OpenAI API key" })).toHaveValue("****1234");
-  await expect(providerEditor.getByRole("textbox", { name: "OpenAI API key" })).toHaveAttribute("readonly", "readonly");
+  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
+  const providerModelSelector = providerEditor.getByRole("combobox", { name: "Provider default model" });
+  await expect(providerKeyInput).toHaveValue("****1234");
+  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
   await expect(providerEditor.getByRole("button", { name: "Show key" })).toHaveAttribute("aria-pressed", "false");
   const providerRemovalButton = providerEditor.getByRole("button", { name: "Remove provider key and settings" });
   await expect(providerRemovalButton).toBeVisible();
   await expect(providerRemovalButton.locator(".material-symbols-outlined")).toHaveText("delete");
-  await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toHaveValue("gpt-4.1");
+  await expect(providerModelSelector).toHaveValue("gpt-4.1");
   await expect(providerEditor.getByRole("textbox", { name: "System prompt" })).toHaveValue("Use concise answers.");
+
+  const providerControlBoxes = await Promise.all(
+    [providerSelector, providerKeyInput, providerModelSelector].map((control) => control.boundingBox()),
+  );
+  const [providerSelectorBox, providerKeyBox, providerModelBox] = providerControlBoxes;
+  if (!providerSelectorBox || !providerKeyBox || !providerModelBox) {
+    throw new Error("desktop_provider_controls_missing");
+  }
+  expect(Math.abs(providerSelectorBox.y + providerSelectorBox.height - (providerKeyBox.y + providerKeyBox.height))).toBeLessThanOrEqual(1);
+  expect(Math.abs(providerKeyBox.y + providerKeyBox.height - (providerModelBox.y + providerModelBox.height))).toBeLessThanOrEqual(1);
+  expect(providerSelectorBox.x + providerSelectorBox.width).toBeLessThanOrEqual(providerKeyBox.x);
+  expect(providerKeyBox.x + providerKeyBox.width).toBeLessThanOrEqual(providerModelBox.x);
 
   await providerSelector.selectOption("deepseek");
   await expect(providerEditor.getByRole("textbox", { name: "DeepSeek API key" })).toHaveValue("****5678");
@@ -510,6 +528,22 @@ test("late provider-key reveals cannot populate a reopened editor", async ({ pag
   await providerSelector.selectOption("openai");
   await expect(providerKeyInput).not.toHaveValue(delayedProviderKey);
   await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
+});
+
+test("short saved provider keys use a generic mask", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { maskedKeys: { meta: "saved" } });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const providerEditor = settingsDialog.locator("provider-editor");
+  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("meta");
+  const providerKeyInput = providerEditor.getByRole("textbox", { name: "Meta API key" });
+  await expect(providerKeyInput).toHaveValue("****");
+  await expect(providerKeyInput).not.toHaveValue("****saved");
 });
 
 test("routing defaults save only complete provider and model pairs", async ({ page }) => {
@@ -806,6 +840,104 @@ test("settings request examples retain the generated-key placeholder", async ({ 
   await expect(settingsDialog.locator("example-list")).not.toContainText(generatedSecret);
 });
 
+test("late generated client keys cannot populate a reopened Settings session", async ({ page }) => {
+  const lateGeneratedSecret = "llmp_test_late_settings_secret";
+  let fulfillSecretResponse;
+  const secretResponseReady = new Promise((resolve) => {
+    fulfillSecretResponse = resolve;
+  });
+  let generatedSecretRequested;
+  const secretRequestStarted = new Promise((resolve) => {
+    generatedSecretRequested = resolve;
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { hasSecret: false });
+  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+    generatedSecretRequested();
+    await secretResponseReady;
+    await route.fulfill({
+      headers: { "Cache-Control": "no-store" },
+      json: {
+        secret: lateGeneratedSecret,
+        profile: managementProfile(false, true),
+      },
+    });
+  });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await settingsDialog.getByRole("button", { name: "Create key" }).click();
+  await secretRequestStarted;
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+  fulfillSecretResponse();
+
+  const clientAccessRow = settingsDialog.locator("client-access-row");
+  await expect(clientAccessRow.getByText("No key created")).toBeVisible();
+  await expect(clientAccessRow.getByRole("textbox", { name: "Key", exact: true })).toBeHidden();
+  await expect(settingsDialog.getByRole("button", { name: "Create key" })).toBeEnabled();
+  await expect(settingsDialog).not.toContainText(lateGeneratedSecret);
+  expect(await browserStorageContains(page, lateGeneratedSecret)).toBe(false);
+});
+
+test("late generated client keys cannot restore after session cleanup", async ({ page }) => {
+  const lateGeneratedSecret = "llmp_test_late_session_secret";
+  let fulfillSecretResponse;
+  const secretResponseReady = new Promise((resolve) => {
+    fulfillSecretResponse = resolve;
+  });
+  let generatedSecretRequested;
+  const secretRequestStarted = new Promise((resolve) => {
+    generatedSecretRequested = resolve;
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { hasSecret: false });
+  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+    generatedSecretRequested();
+    await secretResponseReady;
+    await route.fulfill({
+      headers: { "Cache-Control": "no-store" },
+      json: {
+        secret: lateGeneratedSecret,
+        profile: managementProfile(false, true),
+      },
+    });
+  });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await settingsDialog.getByRole("button", { name: "Create key" }).click();
+  await secretRequestStarted;
+  await page.evaluate(() => {
+    document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
+  });
+  await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
+  const generatedSecretResponse = page.waitForResponse(
+    (response) => response.url() === `${baseURL}/api/management/secrets` && response.request().method() === "POST",
+  );
+  fulfillSecretResponse();
+  await generatedSecretResponse;
+  await expect(page.locator("body")).not.toContainText(lateGeneratedSecret);
+  expect(await browserStorageContains(page, lateGeneratedSecret)).toBe(false);
+
+  await page.evaluate(() => window.__llmProxyMprAuthenticate());
+  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+  const clientAccessRow = settingsDialog.locator("client-access-row");
+  await expect(settingsDialog.getByRole("button", { name: "Create key" })).toBeEnabled();
+  await expect(clientAccessRow.getByText("No key created")).toBeVisible();
+  await expect(clientAccessRow.getByRole("textbox", { name: "Key", exact: true })).toBeHidden();
+  await expect(settingsDialog).not.toContainText(lateGeneratedSecret);
+});
+
 test("new client keys are masked, revealable, copyable, and revocable per row", async ({ page }) => {
   const generatedSecret = "llmp_test_generated_secret";
   await installClipboardMock(page);
@@ -822,6 +954,7 @@ test("new client keys are masked, revealable, copyable, and revocable per row", 
     await settingsDialog.getByRole("button", { name: "Create key" }).click();
 
     const clientAccessRow = settingsDialog.locator("client-access-row");
+    const clientTenant = clientAccessRow.locator("client-access-tenant");
     const clientKeyInput = clientAccessRow.getByRole("textbox", { name: "Key", exact: true });
     const visibilityButton = clientAccessRow.getByRole("button", { name: "Show key", exact: true });
     const copyButton = clientAccessRow.getByRole("button", { name: "Copy key", exact: true });
@@ -830,6 +963,8 @@ test("new client keys are masked, revealable, copyable, and revocable per row", 
     const visibilitySymbols = visibilityButton.locator(".material-symbols-outlined");
     await expect(clientKeyInput).toHaveValue("••••••••••••");
     await expect(clientKeyInput).toHaveAttribute("readonly", "");
+    const replaceKeyButton = clientAccessRow.getByRole("button", { name: "Replace key", exact: true });
+    await expect(replaceKeyButton).toBeVisible();
     await expect(visibilityButton).toHaveAttribute("aria-pressed", "false");
     await expect(visibilitySymbols).toHaveCount(2);
     await expect(visibilitySymbols.nth(0)).toHaveText("visibility");
@@ -862,6 +997,22 @@ test("new client keys are masked, revealable, copyable, and revocable per row", 
     expect(copyIconBox.x + copyIconBox.width).toBeLessThanOrEqual(copyButtonBox.x + copyButtonBox.width);
     expect(copyButtonBox.x).toBeGreaterThanOrEqual(settingsDialogBox.x);
     expect(copyButtonBox.x + copyButtonBox.width).toBeLessThanOrEqual(settingsDialogBox.x + settingsDialogBox.width);
+
+    const clientTenantBox = await clientTenant.boundingBox();
+    const clientKeyInputBox = await clientKeyInput.boundingBox();
+    const replaceKeyButtonBox = await replaceKeyButton.boundingBox();
+    if (!clientTenantBox || !clientKeyInputBox || !replaceKeyButtonBox) {
+      throw new Error(`client_access_geometry_missing:${viewport.name}`);
+    }
+    if (viewport.name === "mobile") {
+      expect(clientKeyInputBox.y).toBeGreaterThan(clientTenantBox.y);
+      expect(replaceKeyButtonBox.y).toBeGreaterThan(clientKeyInputBox.y);
+    } else {
+      expect(clientTenantBox.x + clientTenantBox.width).toBeLessThanOrEqual(clientKeyInputBox.x);
+      expect(clientKeyInputBox.x + clientKeyInputBox.width).toBeLessThanOrEqual(replaceKeyButtonBox.x);
+      expect(Math.abs(clientTenantBox.y + clientTenantBox.height - (clientKeyInputBox.y + clientKeyInputBox.height))).toBeLessThanOrEqual(1);
+      expect(Math.abs(clientKeyInputBox.y + clientKeyInputBox.height - (replaceKeyButtonBox.y + replaceKeyButtonBox.height))).toBeLessThanOrEqual(1);
+    }
 
     await visibilityButton.click();
     await expect(clientKeyInput).toHaveValue(generatedSecret);
@@ -1490,7 +1641,7 @@ async function installUsageResponse(page, status, usage = managementUsage()) {
 
 /**
  * @param {import("@playwright/test").Page} page
- * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatus?: number, profileStatuses?: number[], profileError?: string, malformedRoutingDefaults?: boolean, providerKeys?: Record<string, string> }} options
+ * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatus?: number, profileStatuses?: number[], profileError?: string, malformedRoutingDefaults?: boolean, maskedKeys?: Record<string, string>, providerKeys?: Record<string, string> }} options
  * @returns {Promise<void>}
  */
 async function installManagementRoutes(page, options = {}) {
@@ -1502,6 +1653,13 @@ async function installManagementRoutes(page, options = {}) {
     meta: "sk-owner-meta",
     ...options.providerKeys,
   };
+  for (const [providerID, maskedKey] of Object.entries(options.maskedKeys || {})) {
+    const provider = profile.providers.find((candidateProvider) => candidateProvider.id === providerID);
+    if (!provider) {
+      throw new Error(`management_fixture_provider_missing:${providerID}`);
+    }
+    provider.masked_key = maskedKey;
+  }
   if (options.malformedRoutingDefaults) {
     profile.providers.push({
       id: "anthropic",
