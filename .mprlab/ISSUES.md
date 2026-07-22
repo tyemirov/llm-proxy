@@ -893,6 +893,259 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   failed readiness states, plus runbook guidance. Baseline and final
   `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
+- [x] [B045] (P1) {I026,F012} Make routing reasoning effort provider/model-specific and co-locate it with the text route.
+  Goal:
+  Correct the tenant routing-default form so Reasoning effort is the third
+  control on the same desktop row as Text provider and Text model, and so it
+  exposes only the exact effort values supported by that selected provider/model
+  route.
+
+  Current failure:
+  The current catalog gives every configured OpenAI reasoning model the same
+  `minimal`, `low`, `medium`, `high` list. The Go catalog validator rejects any
+  list that differs from its global canonical list, the management profile also
+  publishes one global `reasoning_effort_options` array, and the static form
+  renders the selector as a full-width row below the provider/model pair. That
+  shape both hides valid model-specific choices and permits a tenant default
+  that the selected model does not accept. For example, OpenAI documents
+  GPT-5 as supporting `minimal`, `low`, `medium`, and `high`, while the GPT-5.6
+  family supports `none`, `low`, `medium`, `high`, `xhigh`, and `max`:
+  https://developers.openai.com/api/docs/models/gpt-5 and
+  https://developers.openai.com/api/docs/guides/latest-model.
+
+  Requirements:
+  - Make the effective capability key the exact text `(provider, model)` pair.
+    Remove provider-level and catalog-wide reasoning-effort capability reads;
+    the checked-in catalog and the runtime schema must declare the adapter and
+    ordered effort list on each supporting text model. Do not preserve a
+    provider-level alias, a global union/intersection list, or a fallback list.
+  - Retire the one global `canonicalReasoningEfforts` contract. Validate each
+    model declaration as a nonempty, duplicate-free, adapter-supported ordered
+    list, then retain that exact list in the validated route capability. Refresh
+    every OpenAI model declaration from its current upstream model documentation
+    instead of copying another model's values. The documented GPT-5 and GPT-5.6
+    lists above must remain distinct.
+  - Make the management profile project only effective model-level capability
+    data through `providers[].text_models[]`. Remove the top-level
+    `reasoning_effort_options` field and the redundant provider-level profile
+    capability; do not retain them as deprecated response fields or browser
+    fallbacks.
+  - Validate `PUT /api/management/defaults` after resolving its text
+    provider/model pair. Empty remains the explicit unset value; a nonempty
+    value must be in that exact route's declared list. Reject incompatible
+    combinations atomically with the existing managed-routing-defaults error
+    contract, without changing any stored defaults.
+  - Keep persisted defaults canonical: add one bounded, versioned migration
+    that retains a value only when it is valid for its saved text pair and
+    converts an invalid nonempty value to the explicit unset value. It must not
+    guess a nearest effort, preserve an inactive incompatible value, dual-read
+    an old shape, or add a runtime compatibility path.
+  - Route a saved effort only after the final provider/model pair has been
+    resolved and its exact capability accepts that value. A valid GPT-5.6
+    `max` setting must reach the OpenAI Responses payload; an unsupported
+    effort must never be sent upstream or silently substituted.
+  - In Settings at desktop widths, render Text provider, Text model, and
+    Reasoning effort as the three controls in one logical text-routing row.
+    Remove the full-width effort label. On a narrow viewport, stack the same
+    controls without overlap or clipped labels. When the selected route has no
+    capability, render an accessible `Not supported` state in the effort slot,
+    not a selector populated from another route.
+  - Recompute the displayed choices immediately when either text provider or
+    text model changes. If the current value is not accepted by the new route,
+    replace it in the form with the explicit unset value before save; do not
+    preserve the old inactive value. Keep the browser types, constants, copied
+    explanatory text, README, and provider-routing documentation synchronized
+    with the replacement response and persistence contracts.
+
+  Deliverables:
+  - A model-owned validated reasoning-effort catalog and exact management
+    profile/default-update contract with no global effort option field.
+  - A bounded persisted-defaults migration and route-time forwarding that
+    enforce the selected provider/model capability.
+  - A responsive three-control Settings row with clear unsupported-route state.
+  - Updated model capability documentation, including the model-specific
+    OpenAI effort matrix and source links.
+
+  Validation:
+  - Add catalog/startup coverage with multiple OpenAI models that deliberately
+    have different lists, including GPT-5 and GPT-5.6, plus empty, duplicate,
+    unknown-adapter, unsupported-route, and stale provider-level declaration
+    failures.
+  - Add black-box management API and persistence coverage proving the profile
+    contains only per-model choices; a compatible effort saves and reloads;
+    incompatible route/effort pairs reject with no partial write; and the
+    migration preserves valid values while unsetting only invalid ones.
+  - Add public routing coverage with controlled OpenAI Responses upstreams:
+    GPT-5 forwards a valid legacy list value, GPT-5.6 forwards `max`, and an
+    unsupported effort is rejected before any upstream call.
+  - Add Playwright coverage at desktop and narrow widths proving the three
+    text-routing controls share one desktop row, the selected model alone
+    determines visible effort options, model changes clear incompatible values,
+    unsupported routes expose the accessible state, and save/reload remains
+    coherent.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
+
+  ### Resolution
+
+  Replaced provider/global effort capabilities with exact model-owned lists,
+  including route-time validation and a bounded version-3 persistence migration
+  that keeps only route-compatible values. The management profile and Settings
+  form now expose one responsive provider/model/effort row, clear incompatible
+  selections, and show `Not supported` on routes without a capability. Browser,
+  management API, persistence, catalog, and upstream-forwarding coverage verify
+  the exact route contract. Baseline and final `make ci` runs passed.
+
+- [x] [B046] (P1) {B041} Restore management notifications immediately left of the avatar or Sign in control.
+  Goal:
+  Make every visible management notification render in the shared header
+  immediately to the left of the right-edge identity control: the signed-in
+  avatar menu or the signed-out Sign in button. The reported screenshot shows
+  that the rendered UI does not reliably preserve this relationship.
+
+  Current boundary:
+  B041's source contract places the one application-owned notification region
+  in the MPR header `aux` slot before `<mpr-user slot="aux">`, and the existing
+  Playwright fixture checks source/geometry for an avatar state. The visible
+  regression must therefore be investigated at the rendered MPR-header and
+  published-Pages boundary, including slot layout, scoped CSS, pinned MPR UI
+  behavior, and the current public artifact. Do not declare the issue fixed
+  merely because the light-DOM source order looks correct.
+
+  Requirements:
+  - Preserve one canonical application-owned live notification region and one
+    MPR-owned identity control. Use the documented header slot contract; do not
+    create a second header, query or mutate MPR UI shadow DOM, duplicate notice
+    state, or take sign-in/session ownership from MPR UI.
+  - In left-to-right rendering, the visible notification's right edge must be
+    at or before the avatar/Sign in control's left edge, with no header action
+    or unrelated element between them. Both controls must remain wholly inside
+    the shared header, visible, and independently hit-testable.
+  - Apply the same positional contract to authenticated avatar-menu and
+    unauthenticated Sign in states. A success, error, or informational notice
+    must not move to the right of the identity control, below the header,
+    behind an overlay, outside the viewport, or into an inaccessible visual
+    order.
+  - Keep the LLM Proxy brand at the header's left and constrain long notices to
+    the space between brand and identity control without overlap, clipping, or
+    stealing pointer/keyboard access. At narrow widths, retain the same order
+    with readable wrapping or sizing; do not silently hide, relocate, or
+    truncate the notice into an unusable control.
+  - Treat source, release artifact, and public Pages rendering as distinct
+    proof stages. If the source is correct but the public page is stale or the
+    pinned MPR UI renders the slot differently, repair the owning stage and
+    verify the final public layout without adding a browser-only workaround or
+    compatibility layout path.
+
+  Deliverables:
+  - One canonical rendered header layout in which notification then avatar or
+    Sign in are adjacent in visual order.
+  - Scoped static-site and/or pinned-shell changes at the actual owning
+    boundary, with obsolete competing layout rules removed.
+  - Updated browser regression coverage and header-layout documentation when
+    the public contract changes.
+
+  Validation:
+  - Add Playwright coverage that triggers success, error, and informational
+    notices through real visible flows. At desktop and narrow widths, measure
+    the rendered header and prove the notice is inside it and immediately left
+    of the avatar menu without overlap; prove the avatar remains clickable and
+    keyboard reachable.
+  - Add equivalent signed-out coverage that displays a real notification and
+    proves it is immediately left of the Sign in control, with its accessible
+    name and hit target intact.
+  - Assert rendered geometry and hit testing after the MPR custom elements
+    settle, not only light-DOM slot order or CSS declarations. Add a static
+    guard against a second notification region, reversed `aux` order, below-
+    header notice placement, or private MPR UI selector.
+  - Validate the current Pages artifact and public page separately from local
+    browser proof, recording any stale-artifact or pinned-shell cause. Stop
+    before a production deploy/apply unless separately authorized.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
+
+  ### Resolution
+
+  The canonical notification region now has visual precedence within the
+  MPR-header `aux` action flex container, immediately before the visible MPR
+  avatar or Sign in control. Rendered Playwright geometry and hit-target checks
+  cover signed-in and signed-out states at desktop and narrow widths, and the
+  release-renderer test proves the packaged stylesheet retains the ordering
+  rule. The public Pages page was inspected separately and still serves the
+  prior artifact (Sign in is left of the notice); no publish or production
+  deploy was authorized in this task. Baseline and final `make ci` runs passed.
+
+- [x] [B047] (P2) {B041,B046} Auto-dismiss management notifications after the configured 10 seconds.
+  Goal:
+  Make every transient management notification disappear automatically 10
+  seconds after it is shown, while preserving the current single header notice
+  region and its success, error, and informational semantics.
+
+  Current failure:
+  The current `setNotice()` operation only replaces the Alpine notice object;
+  it creates no dismissal lifecycle. A visible notice therefore remains in the
+  header indefinitely until another operation happens to replace it, consuming
+  the space immediately left of the avatar or Sign in control.
+
+  Requirements:
+  - Define one canonical application-owned notification auto-dismiss duration
+    of 10 seconds (10,000 milliseconds) in the frontend constants/configuration
+    surface. Do not reuse a server request timeout, add a per-call magic
+    number, or introduce a second backend/config-ui setting for this transient
+    browser-only behavior.
+  - Every nonempty notice starts one dismissal deadline from the moment it is
+    rendered. On expiry, clear only the active notice message so the existing
+    header region hides through its current state contract; do not replace it
+    with an empty visible card, a new notification API, or a page reload.
+  - A newer success, error, or informational message must cancel and replace
+    the older deadline. An expired callback for an earlier notice must never
+    clear a later notice, even when messages arrive quickly or are identical.
+  - Keep exactly one timer/lifecycle owner with the existing notice state. It
+    must be cancelled when its notice is cleared or replaced, and it must not
+    produce unhandled errors, background duplicate timers, or stale state after
+    authentication transitions.
+  - Preserve B041/B046's header placement, live-region behavior, modal stacking
+    boundary, avatar/Sign in hit targets, and narrow-screen layout for the full
+    visible lifetime. Auto-dismissal must not make the notice inaccessible to
+    assistive technology before it has been exposed or reannounce stale text.
+  - Keep this scope to transient notices. Do not auto-dismiss generated-secret
+    values, form data, errors that remain in their owning panels, or MPR UI
+    authentication controls.
+
+  Deliverables:
+  - One named 10-second frontend notification-duration configuration and a
+    reset-safe lifecycle owned by the existing notice state.
+  - Updated user-facing/header documentation describing that transient notices
+    expire after 10 seconds.
+  - Browser coverage for all notice kinds, expiry, replacement, and existing
+    header interaction guarantees.
+
+  Validation:
+  - Add Playwright coverage with a controlled browser clock proving success,
+    error, and informational notices remain visible before 10 seconds and are
+    absent after their 10-second deadline, without leaving an empty visible
+    notification container.
+  - Prove a second notice shown before the first deadline stays visible through
+    the first callback and expires only 10 seconds after its own display. Cover
+    both same-kind and changed-kind replacements.
+  - At desktop and narrow widths, prove the notification remains immediately
+    left of the avatar or Sign in control while visible, then disappears without
+    impairing header keyboard/pointer interaction or Settings-overlay
+    precedence.
+  - Add a static regression that rejects duplicate timer ownership, duplicated
+    10-second literals outside the canonical configuration, a server-timeout
+    coupling, or a second notice region/state.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
+
+  ### Resolution
+
+  Added the single `NOTICE_AUTO_DISMISS_MILLISECONDS = 10_000` frontend
+  contract and a replacement-safe timer owned by the existing notice state.
+  Controlled-clock browser coverage proves success, error, and informational
+  notices expire after their own deadline without impairing header interaction.
+  Baseline and final `make ci` runs passed.
+
 
 ## Improvements
 
@@ -1861,7 +2114,14 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ### Resolution
   Added `management.admin_emails` as the config-owned administrator list, validates configured email values at startup, derives `user.is_admin` from the validated TAuth session email, and keeps public config on environment placeholders for admin addresses. Added admin-only `GET /api/management/admin/users`, returning all managed users with tenant facts and 30-day usage summaries while excluding provider API keys, masked key strings, generated secrets, secret digests, prompts, responses, audio names, and transcripts. Non-admin authenticated sessions receive `403`. The static Pages UI now inserts an `Admin` avatar-menu item only for admin profiles and renders a compact all-users dashboard. README and provider-routing docs describe the admin contract.
   Validation passed with `timeout -k 180s -s SIGKILL 180s go test -count=1 ./internal/proxy -run 'TestManagement(AdminUsersDashboard|UsageSummaryRecordsManagedProxyRequests|ConfigurationValidationRequiresBackendAuthFields)'`, `timeout -k 180s -s SIGKILL 180s go test -count=1 ./cmd/cli -run 'TestRootCommand|TestRender'`, `timeout -k 240s -s SIGKILL 240s go test -count=1 ./internal/proxy`, `timeout -k 30s -s SIGKILL 30s npm run frontend:lint`, `timeout -k 180s -s SIGKILL 180s npm run frontend:test -- management-ui.spec.js`, and `git diff --check`.
-- [ ] [F012] (P2) Add GPT 5.6 to the list of supported OpenAI models including the level of efforts.
+- [x] [F012] (P2) Add GPT 5.6 to the list of supported OpenAI models including the level of efforts.
+  ### Resolution
+
+  Added `gpt-5.6`, `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna` to the
+  OpenAI catalog with their exact `none`, `low`, `medium`, `high`, `xhigh`, and
+  `max` effort lists. The README model matrix links the current OpenAI model
+  references, and integration coverage proves a saved `max` reaches the
+  Responses payload. Baseline and final `make ci` runs passed.
 - [ ] [F013] (P2) Add selectable usage-dashboard time intervals.
   Goal:
   Let signed-in users filter the complete usage dashboard through one compact interval control offering `ALL`, `30 days`, `7 days`, and `1 day`.
