@@ -1159,6 +1159,41 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   The reported failure was reproduced in the baseline; final `make ci` passed
   with `LLM_PROXY_LIVE_PORT=18183` because Docker Desktop owns port 18080.
 
+- [x] [B048] (P1) {M005R} Make the Go coverage client probe independent of stdin EOF.
+  Goal:
+  Keep `make ci` and `make release` deterministic when collecting coverage from
+  the installable `llm-proxy-client` command.
+
+  Current failure:
+  `scripts/check_coverage.sh` runs the coverage-instrumented client with no
+  arguments. That intentionally selects the public stdin prompt contract, which
+  waits until EOF. The release gate's five-second watchdog killed that probe
+  with exit 137. The real CLI demonstrably blocks while its stdin remains open
+  and returns promptly when given `--prompt`, so the harness must not depend on
+  an implicit stdin-EOF lifecycle.
+
+  Requirements:
+  - Keep stdin prompt support unchanged for real `llm-proxy-client` callers.
+  - Give the coverage-only client probe one explicit, canonical prompt value so
+    it takes the noninteractive flag path and fails at the existing missing
+    configuration boundary without an HTTP request.
+  - Preserve the existing coverage watchdog; do not increase its timeout,
+    introduce retries, or turn a failed probe into a best-effort result.
+  - Add black-box operational coverage proving the coverage script fails fast
+    when a client probe would reject stdin mode and passes only when it supplies
+    an explicit prompt.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair, with the final run after the last code edit.
+
+  ### Resolution
+
+  The coverage client probe now provides the one named `coverage probe` prompt,
+  preserving the public stdin contract while deterministically reaching the
+  missing-configuration boundary without an HTTP request. An operational test
+  runs the real coverage script against a fake client binary that exits as a
+  timed-out stdin-mode probe unless it receives `--prompt`. Baseline and final
+  `make ci` runs passed.
+
 
 ## Improvements
 
