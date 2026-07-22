@@ -6,7 +6,8 @@ usage() {
   resolve_container_manifest_digest.sh <image-reference>
 
 Reads a published OCI manifest through Docker Buildx and prints its canonical
-digest. It waits only while the registry has not made the manifest readable.'
+digest. It bounds each inspection attempt and waits only while the registry has
+not made the manifest readable.'
 }
 
 if [[ $# -eq 1 && "$1" == "--help" || $# -eq 1 && "$1" == "-h" ]]; then
@@ -19,6 +20,7 @@ fi
 image_reference="$1"
 attempts="${CONTAINER_REGISTRY_VERIFY_ATTEMPTS:-12}"
 delay_seconds="${CONTAINER_REGISTRY_VERIFY_DELAY_SECONDS:-5}"
+inspection_timeout_seconds="${CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS:-30}"
 
 require_positive_integer() {
   local name="$1"
@@ -52,12 +54,14 @@ manifest_digest_from_inspection() {
 
 command -v docker >/dev/null 2>&1 || { echo "error: docker is required" >&2; exit 1; }
 command -v sleep >/dev/null 2>&1 || { echo "error: sleep is required" >&2; exit 1; }
+command -v timeout >/dev/null 2>&1 || { echo "error: timeout is required" >&2; exit 1; }
 require_positive_integer "CONTAINER_REGISTRY_VERIFY_ATTEMPTS" "${attempts}"
 require_positive_integer "CONTAINER_REGISTRY_VERIFY_DELAY_SECONDS" "${delay_seconds}"
+require_positive_integer "CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS" "${inspection_timeout_seconds}"
 
 for ((attempt = 1; attempt <= attempts; attempt += 1)); do
   inspection=""
-  if inspection="$(docker buildx imagetools inspect "${image_reference}")"; then
+  if inspection="$(timeout -k "${inspection_timeout_seconds}s" -s SIGKILL "${inspection_timeout_seconds}s" docker buildx imagetools inspect "${image_reference}")"; then
     if manifest_digest="$(manifest_digest_from_inspection "${inspection}")"; then
       printf '%s\n' "${manifest_digest}"
       exit 0
@@ -74,5 +78,5 @@ for ((attempt = 1; attempt <= attempts; attempt += 1)); do
   fi
 done
 
-echo "error: container manifest did not become readable for ${image_reference} after ${attempts} attempts" >&2
+echo "error: container manifest did not become readable for ${image_reference} after ${attempts} attempts (last Docker exit ${docker_exit_status})" >&2
 exit 1

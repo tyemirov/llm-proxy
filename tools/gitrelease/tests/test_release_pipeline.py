@@ -297,6 +297,78 @@ printf '%s\\n' 'Name: ghcr.io/example/image:latest' 'Digest:    sha256:aaaaaaaaa
         self.assertIn("Waiting for ghcr.io/example/image:latest manifest", result.stderr)
         self.assertIn("Docker exit 255", result.stderr)
 
+    def test_container_manifest_digest_bounds_each_inspection_attempt(self) -> None:
+        fake_binary_directory = self.root / "manifest-timeout-bin"
+        fake_binary_directory.mkdir()
+        fake_docker = fake_binary_directory / "docker"
+        fake_docker.write_text(
+            """#!/usr/bin/env bash
+set -euo pipefail
+[[ \"$1 $2 $3\" == \"buildx imagetools inspect\" ]] || exit 2
+attempt=0
+if [[ -f \"${FAKE_DOCKER_STATE}\" ]]; then attempt=\"$(cat \"${FAKE_DOCKER_STATE}\")\"; fi
+attempt=$((attempt + 1))
+printf '%s\\n' \"${attempt}\" >\"${FAKE_DOCKER_STATE}\"
+exec sleep \"${FAKE_DOCKER_HANG_SECONDS}\"
+""",
+            encoding="utf-8",
+        )
+        fake_docker.chmod(0o755)
+        state_path = self.root / "docker-timeout-attempts"
+        environment = os.environ.copy() | {
+            "PATH": f"{fake_binary_directory}{os.pathsep}{os.environ['PATH']}",
+            "FAKE_DOCKER_STATE": str(state_path),
+            "FAKE_DOCKER_HANG_SECONDS": "30",
+            "CONTAINER_REGISTRY_VERIFY_ATTEMPTS": "2",
+            "CONTAINER_REGISTRY_VERIFY_DELAY_SECONDS": "1",
+            "CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS": "1",
+        }
+
+        result = self.command(
+            "timeout",
+            "-k",
+            "5s",
+            "-s",
+            "SIGKILL",
+            "5s",
+            "bash",
+            str(CONTAINER_MANIFEST_DIGEST),
+            "ghcr.io/example/image:latest",
+            cwd=self.repo,
+            check=False,
+            env=environment,
+        )
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(state_path.read_text(encoding="utf-8").strip(), "2")
+        self.assertIn("Docker exit", result.stderr)
+        self.assertIn("container manifest did not become readable for ghcr.io/example/image:latest", result.stderr)
+
+    def test_container_manifest_digest_rejects_invalid_attempt_timeout(self) -> None:
+        fake_binary_directory = self.root / "manifest-invalid-timeout-bin"
+        fake_binary_directory.mkdir()
+        fake_docker = fake_binary_directory / "docker"
+        fake_docker.write_text("#!/usr/bin/env bash\nexit 2\n", encoding="utf-8")
+        fake_docker.chmod(0o755)
+        environment = os.environ.copy() | {
+            "PATH": f"{fake_binary_directory}{os.pathsep}{os.environ['PATH']}",
+            "CONTAINER_REGISTRY_VERIFY_ATTEMPTS": "1",
+            "CONTAINER_REGISTRY_VERIFY_DELAY_SECONDS": "1",
+            "CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS": "0",
+        }
+
+        result = self.command(
+            "bash",
+            str(CONTAINER_MANIFEST_DIGEST),
+            "ghcr.io/example/image:latest",
+            cwd=self.repo,
+            check=False,
+            env=environment,
+        )
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS must be a positive integer", result.stderr)
+
     def test_container_manifest_digest_reports_docker_failure_with_image_context(self) -> None:
         fake_binary_directory = self.root / "manifest-error-bin"
         fake_binary_directory.mkdir()
@@ -341,10 +413,11 @@ exit 255
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(f"Verified https://pages.example.invalid/ at source {source_commit}.", result.stdout)
 
-    def test_pages_deploy_waits_for_matching_pages_build_before_marker(self) -> None:
+    def test_pages_deploy_waits_for_newest_matching_pages_build_before_marker(self) -> None:
         source_commit, environment = self.pages_release_fixture()
         build_counter = self.root / "pages-build-counter"
         environment |= {
+            "FAKE_PAGES_PREVIOUS_BUILD_STATUS": "built",
             "FAKE_PAGES_BUILD_STATES": "queued,built",
             "FAKE_PAGES_BUILD_COUNTER": str(build_counter),
             "PAGES_BUILD_VERIFY_ATTEMPTS": "2",
@@ -361,6 +434,7 @@ exit 255
     def test_pages_deploy_rejects_terminal_matching_pages_build_error(self) -> None:
         _, environment = self.pages_release_fixture()
         environment |= {
+            "FAKE_PAGES_PREVIOUS_BUILD_STATUS": "built",
             "FAKE_PAGES_BUILD_STATES": "errored",
             "FAKE_PAGES_BUILD_ERROR": "simulated Pages build failure",
             "PAGES_BUILD_VERIFY_ATTEMPTS": "1",
@@ -1115,7 +1189,17 @@ if [[ "$1" == "api" ]]; then
     build_commit="${FAKE_PAGES_BUILD_COMMIT:-$(git --git-dir="${FAKE_PAGES_REMOTE}" rev-parse refs/heads/gh-pages)}"
     build_error='null'
     if [[ "${build_status}" == "errored" ]]; then build_error="\\\"${FAKE_PAGES_BUILD_ERROR:-simulated Pages build failure}\\\""; fi
-    printf '[{\"commit\":\"%s\",\"status\":\"%s\",\"error\":{\"message\":%s}}]\n' "${build_commit}" "${build_status}" "${build_error}"
+    build_created_at="${FAKE_PAGES_BUILD_CREATED_AT:-2026-07-21T20:43:32Z}"
+    previous_build_status="${FAKE_PAGES_PREVIOUS_BUILD_STATUS:-}"
+    if [[ -n "${previous_build_status}" ]]; then
+      previous_build_error='null'
+      if [[ "${previous_build_status}" == "errored" ]]; then previous_build_error="\\\"${FAKE_PAGES_PREVIOUS_BUILD_ERROR:-simulated stale Pages build failure}\\\""; fi
+      previous_build_created_at="${FAKE_PAGES_PREVIOUS_BUILD_CREATED_AT:-2026-07-21T20:43:31Z}"
+      printf '[{\"commit\":\"%s\",\"status\":\"%s\",\"created_at\":\"%s\",\"error\":{\"message\":%s}},' "${build_commit}" "${previous_build_status}" "${previous_build_created_at}" "${previous_build_error}"
+    else
+      printf '['
+    fi
+    printf '{\"commit\":\"%s\",\"status\":\"%s\",\"created_at\":\"%s\",\"error\":{\"message\":%s}}]\n' "${build_commit}" "${build_status}" "${build_created_at}" "${build_error}"
   elif [[ "${FAKE_PAGES_SITE_MATCHES:-}" == "true" ]]; then
     printf '%s\n' '{"source":{"branch":"gh-pages","path":"/"},"https_enforced":true}'
   else

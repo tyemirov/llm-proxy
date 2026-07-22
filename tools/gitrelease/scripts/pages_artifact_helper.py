@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 import pathlib
 import tarfile
@@ -91,6 +92,20 @@ def command_validate_public_marker(args: argparse.Namespace) -> int:
     return 0 if marker.get("source_commit") == args.source_commit else 1
 
 
+def pages_build_created_at(build: dict[str, object]) -> datetime:
+    """Return the validated creation timestamp for a Pages build."""
+    raw_created_at = build.get("created_at")
+    if not isinstance(raw_created_at, str):
+        raise SystemExit("GitHub Pages build has an invalid created_at")
+    try:
+        created_at = datetime.fromisoformat(raw_created_at.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise SystemExit("GitHub Pages build has an invalid created_at") from error
+    if created_at.tzinfo is None:
+        raise SystemExit("GitHub Pages build has an invalid created_at")
+    return created_at
+
+
 def command_pages_build_state(args: argparse.Namespace) -> int:
     payload = json.loads(pathlib.Path(args.builds).read_text(encoding="utf-8"))
     if not isinstance(payload, list):
@@ -104,28 +119,24 @@ def command_pages_build_state(args: argparse.Namespace) -> int:
     if not matching_builds:
         print("waiting")
         return 0
-    statuses: set[str] = set()
-    for build in matching_builds:
-        status = build.get("status")
-        if not isinstance(status, str):
-            raise SystemExit("GitHub Pages build has an invalid status")
-        statuses.add(status)
-    if PAGES_BUILD_BUILT in statuses:
+    newest_build = max(matching_builds, key=pages_build_created_at)
+    status = newest_build.get("status")
+    if not isinstance(status, str):
+        raise SystemExit("GitHub Pages build has an invalid status")
+    if status == PAGES_BUILD_BUILT:
         print(PAGES_BUILD_BUILT)
         return 0
-    if statuses.intersection(PAGES_BUILD_WAITING):
+    if status in PAGES_BUILD_WAITING:
         print("waiting")
         return 0
-    if statuses != {PAGES_BUILD_ERRORED}:
-        raise SystemExit(f"GitHub Pages build has an unknown status set: {sorted(statuses)}")
+    if status != PAGES_BUILD_ERRORED:
+        raise SystemExit(f"GitHub Pages build has an unknown status: {status}")
     error_message = "no error message reported"
-    for build in matching_builds:
-        error = build.get("error")
-        if isinstance(error, dict):
-            message = error.get("message")
-            if isinstance(message, str) and message:
-                error_message = message
-                break
+    error = newest_build.get("error")
+    if isinstance(error, dict):
+        message = error.get("message")
+        if isinstance(message, str) and message:
+            error_message = message
     print("errored")
     print(error_message)
     return 0

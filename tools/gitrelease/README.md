@@ -13,6 +13,8 @@ Pages artifacts always contain an empty `.nojekyll` file and a schema-versioned
 matches the release tag to `release_commit` while matching artifact and public
 marker provenance to the distinct `source_commit`. Container publication waits
 for the exact OCI manifests to become readable through the standard Docker
-client. Pages activation matches GitHub Pages build state to the pushed
-`gh-pages` commit before verifying a cache-distinct public marker, so a branch
-push alone is never treated as public availability.
+client, with each inspection bounded by
+`CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS`. Pages activation selects
+the newest GitHub Pages build for the pushed `gh-pages` commit before verifying
+a cache-distinct public marker, so a branch push or an older successful build
+is never treated as public availability.
