@@ -181,8 +181,7 @@ func validateModelRequestProfile(providerName string, endpoint endpointKind, mod
 
 func knownModelRequestProfile(requestProfile modelRequestProfile) bool {
 	switch requestProfile {
-	case requestProfileOpenAIResponsesBase,
-		requestProfileOpenAIResponsesTemperature,
+	case requestProfileOpenAIResponsesTemperature,
 		requestProfileOpenAIResponsesTemperatureTools,
 		requestProfileOpenAIResponsesReasoningTools:
 		return true

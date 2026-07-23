@@ -168,7 +168,6 @@ func (identifier modelID) string() string {
 type modelRequestProfile string
 
 const (
-	requestProfileOpenAIResponsesBase             modelRequestProfile = "openai_responses_base"
 	requestProfileOpenAIResponsesTemperature      modelRequestProfile = "openai_responses_temperature"
 	requestProfileOpenAIResponsesTemperatureTools modelRequestProfile = "openai_responses_temperature_tools"
 	requestProfileOpenAIResponsesReasoningTools   modelRequestProfile = "openai_responses_reasoning_tools"

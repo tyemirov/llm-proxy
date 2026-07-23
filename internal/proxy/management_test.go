@@ -670,9 +670,13 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 		return response
 	}
 
-	legacyResponse := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT5, "high")
-	if legacyResponse.Code != http.StatusOK {
-		t.Fatalf("save GPT-5 reasoning defaults status=%d body=%s", legacyResponse.Code, legacyResponse.Body.String())
+	gpt5Response := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT5, "high")
+	if gpt5Response.Code != http.StatusOK {
+		t.Fatalf("save GPT-5 reasoning defaults status=%d body=%s", gpt5Response.Code, gpt5Response.Body.String())
+	}
+	gpt5MiniResponse := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT5Mini, "high")
+	if gpt5MiniResponse.Code != http.StatusOK {
+		t.Fatalf("save GPT-5 mini reasoning defaults status=%d body=%s", gpt5MiniResponse.Code, gpt5MiniResponse.Body.String())
 	}
 	gpt56Response := saveReasoningDefault(proxy.ProviderNameOpenAI, proxy.ModelNameGPT56, "max")
 	if gpt56Response.Code != http.StatusOK {
@@ -720,6 +724,7 @@ func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *test
 		t.Fatalf("profile defaults=%+v", profile.Tenant.Defaults)
 	}
 	expectedModelEfforts := map[string][]string{
+		proxy.ModelNameGPT5Mini: {"minimal", "low", "medium", "high"},
 		proxy.ModelNameGPT5:     {"minimal", "low", "medium", "high"},
 		proxy.ModelNameGPT55:    {"none", "low", "medium", "high", "xhigh"},
 		proxy.ModelNameGPT56:    {"none", "low", "medium", "high", "xhigh", "max"},
