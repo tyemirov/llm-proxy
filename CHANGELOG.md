@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 - Declare the llm-proxy TAuth tenant requirements in the app-owned deployment manifest for gateway assembly.
 
+## [v0.2.40] - 2026-07-23
+
+- test: add check for PROXY_PID_CAPTURE file in curl operational script
+- docs(issues): document deterministic harness proxy ownership coverage fix
+- test(management-ui): improve notice auto-dismiss timing with clock controls
+- docs(issues): run 2026-07-23 triage, resolve B008, add B063 and B062
+
 ## [v0.2.39] - 2026-07-23
 
 - Merge pull request #218 from tyemirov/gix/compact-provider-settings-and-client-key-rows-with
