@@ -27,7 +27,7 @@ Constraint: every post in the `Post` column is under 300 characters.
 | 9 | 2026-07-14 | AM | Admins need usage visibility without seeing secrets or prompts. LLM Proxy admin views summarize users, tenants, and 30-day usage without exposing sensitive content. |
 | 9 | 2026-07-14 | PM | Teams need to know whether AI calls are succeeding. LLM Proxy records status, latency, provider, model, and token counts for managed tenants. |
 | 10 | 2026-07-15 | AM | Usage dashboards often become prompt databases by accident. LLM Proxy tracks usage metadata without storing prompts, transcripts, responses, tenant secrets, or provider keys. |
-| 10 | 2026-07-15 | PM | Your AI gateway should show cost signals, not just request counts. LLM Proxy includes 30-day request and token graphs plus provider and model breakdowns. |
+| 10 | 2026-07-15 | PM | Your AI gateway should show cost signals, not just request counts. LLM Proxy includes selectable all-time, 30-day, 7-day, and 1-day request and token graphs plus provider and model breakdowns. |
 | 11 | 2026-07-16 | AM | Browser apps need current config, not stale build-time files. LLM Proxy serves management runtime config from the backend at `/config-ui.yaml`. |
 | 11 | 2026-07-16 | PM | Static sites should not carry live environment secrets. LLM Proxy keeps the management frontend static while the backend owns runtime config and API calls. |
 | 12 | 2026-07-17 | AM | Some providers support web search and others do not. LLM Proxy exposes web search per request only when the selected OpenAI model is configured for it. |
