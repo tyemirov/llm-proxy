@@ -1587,8 +1587,225 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   The required baseline and final `make ci` runs passed; the final browser suite
   ran 36 scenarios and the real TAuth black-box passed.
 
+- [x] [B058] (P1) Autosave selected-provider settings and clarify retained client-key state.
+  Goal:
+  Remove the hidden draft-versus-persisted boundary from Settings so provider
+  credentials and their provider-owned settings save through ordinary field
+  interactions, while every visible key action accurately describes the state
+  it controls.
+
+  Requirements:
+  - Autosave the selected provider's API key, default model, and system prompt
+    through the current authenticated provider-key endpoint. Remove the
+    explicit Save key and Update key controls and their dead frontend paths.
+  - Complete or reject the current provider autosave before changing provider
+    editors or closing Settings. Never submit raw key material to a provider
+    other than the editor session that owns it, and never restore a late result
+    after authentication or Settings cleanup.
+  - Keep mandatory setup derived from persisted `providers[].has_key`, but make
+    close wait for an in-flight autosave so a newly entered valid key unlocks
+    Settings without a misleading save instruction or transient error.
+  - Show the key removal control whenever the selected editor contains either
+    a persisted key or a newly entered key. Discard a transient key locally;
+    retain confirmation and authenticated deletion for a persisted key.
+  - Replace retained client-key copy with: `This key is saved and can’t be shown
+    again. Replace it to create and copy a new key.`
+  - Keep provider controls aligned, the reveal action stationary, raw values
+    transient, and the forward-only managed-profile contract unchanged.
+
+  Validation:
+  - Add rendered-browser coverage for automatic key/model/prompt persistence,
+    provider-switch and Settings-close ordering, mutation failure, transient
+    removal, persisted removal confirmation, absence of save/update controls,
+    session cleanup, and exact retained-key copy.
+  - Extend the real local TAuth black-box onboarding flow to complete through
+    provider autosave without an explicit save/update action.
+  - Update README and generated resource guidance through the canonical
+    resource generator, then run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+  Resolution:
+  The provider editor now owns API key, model, and prompt edits in one
+  versioned session and autosaves them through the selected provider's existing
+  endpoint. Provider changes and Settings close wait for that transaction;
+  failures retain the editor, and authentication or Settings cleanup rejects
+  late responses. Transient keys expose immediate local removal, persisted keys
+  retain confirmed deletion, and the explicit Save/Update controls are gone.
+  Mandatory setup copy now asks users to add a key, while retained client-key
+  copy explains that replacement creates the next copyable value. README and
+  generated resource guidance describe the same contract. The required
+  baseline and final `make ci` runs passed; final validation included 39
+  rendered-browser scenarios and the real local TAuth black-box flow.
+
+- [x] [B059] (P1) Expose GPT-5 mini reasoning effort from the current OpenAI contract.
+  Goal:
+  Keep the Settings reasoning-effort control exact to OpenAI's model-specific
+  API contract: GPT-4.1 remains explicitly non-reasoning, while GPT-5 mini
+  exposes the effort values it accepts.
+
+  Requirements:
+  - Keep `gpt-4.1` on the non-reasoning Responses payload and do not send a
+    `reasoning` object for it. OpenAI documents GPT-4.1 as a non-reasoning
+    model without a reasoning step.
+  - Declare `gpt-5-mini` reasoning support as `minimal`, `low`, `medium`, and
+    `high`, and route it through the canonical OpenAI Responses reasoning
+    payload so the selected tenant default reaches the upstream API.
+  - Remove the now-unused `openai_responses_base` request-profile contract;
+    do not retain an alias or compatibility path after GPT-5 mini advances to
+    its current profile.
+  - Keep the management profile and Settings control model-owned. Selecting
+    GPT-5 mini must expose only its exact effort list, while selecting GPT-4.1
+    must continue to show the unsupported state and clear an incompatible
+    saved selection.
+  - Update the checked-in config example and model-capability documentation to
+    match the current OpenAI sources.
+
+  Validation:
+  - Add rendered-browser coverage for the GPT-4.1 and GPT-5 mini capability
+    boundary and integration coverage proving GPT-5 mini sends the selected
+    `reasoning.effort` without temperature.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  The OpenAI model catalog now keeps GPT-4.1 explicitly non-reasoning and
+  exposes GPT-5 mini's exact `minimal`, `low`, `medium`, and `high` effort
+  values. GPT-5 mini uses the Responses reasoning payload, while the retired
+  base request profile is rejected and removed from the current contract.
+  Management-profile, rendered-browser, CLI-validation, and public HTTP
+  integration coverage prove the model boundary and upstream payload. The
+  required baseline and final `make ci` runs passed; final validation included
+  39 rendered-browser scenarios, the real TAuth black-box, and 100% aggregate
+  Go coverage.
+
+- [x] [B060] (P1) Autosave routing defaults and remove their manual save action.
+  Goal:
+  Make every editable Settings value persist through its ordinary interaction,
+  so routing defaults require no separate Save defaults action.
+
+  Requirements:
+  - Autosave text provider/model, reasoning effort, dictation provider/model,
+    and the tenant system prompt through the canonical management-defaults
+    endpoint. Select changes save immediately; the text prompt saves when the
+    user leaves the changed field.
+  - Persist dependent provider/model values together. A provider change must
+    submit its catalog-owned default model and any normalized reasoning effort
+    as one valid routing-default payload.
+  - Queue edits made while a defaults request is pending and apply only the
+    latest successful profile. Never let a response overwrite newer defaults,
+    the selected-provider editor, or authenticated-state cleanup.
+  - Complete or reject provider and routing-default autosaves before Settings
+    closes. A failed defaults save must keep Settings open, retain the edited
+    values, and remain retryable.
+  - Remove the Save defaults button, submit handler, dead copy, and dead styling.
+    Keep the current management endpoint and forward-only profile contract.
+  - Update current management documentation to state that both provider-owned
+    settings and tenant routing defaults autosave.
+
+  Validation:
+  - Add rendered-browser coverage for the absence of the manual action,
+    complete provider/model payloads, model-owned reasoning effort, prompt
+    blur, queued edits, Settings-close ordering, mutation failure, and late
+    session cleanup.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  Every routing-default selection now autosaves a complete canonical payload,
+  and the tenant system prompt autosaves when its changed field loses focus.
+  Versioned requests queue newer edits, preserve the selected-provider editor,
+  and reject late responses after authenticated cleanup. Settings waits for
+  provider and routing-default autosaves; failures retain the edited values and
+  keep the modal open for retry. The Save defaults control, submit handler,
+  copy, and styling are removed, and current management documentation describes
+  the automatic contract. The required baseline and final `make ci` runs
+  passed; final validation included 43 rendered-browser scenarios, the real
+  TAuth black-box, and 100% aggregate Go coverage.
+
 
 ## Improvements
+
+- [ ] [I027] (P1) Redesign the user dashboard around connected-provider widgets.
+  Goal:
+  Make the authenticated dashboard answer, at a glance, which upstream
+  providers the current tenant has connected. Preserve usage reporting as a
+  separate measure of activity so an unused connected provider remains visible
+  and historical traffic never implies that a provider is still connected.
+
+  Requirements:
+  - Define a connected provider solely as an entry in the current authenticated
+    management profile whose canonical `has_key` value is `true`. Do not infer
+    connection from catalog membership, aliases, routing defaults, local
+    environment credentials, or a provider's presence in historical usage.
+  - Add a prominent `Connected providers` section to the user usage dashboard
+    and render exactly one widget for each connected provider, in the
+    deterministic order returned by the management profile. Do not hard-code
+    provider names or duplicate provider-registration state in the browser.
+  - Give each widget a concise, consistent summary: the profile label,
+    `Connected` status, saved text model, declared text/dictation capabilities,
+    and current-period request and token totals matched by exact canonical
+    provider ID. A connected provider with no usage in the period must still
+    render with zero activity; a usage-load failure must render as unavailable,
+    not as a false zero or a disconnected provider.
+  - Add a provider-specific `Manage` action that opens Settings with that exact
+    provider selected. It must not reveal a key, invoke the key-reveal endpoint,
+    or alter provider/default settings merely by opening the editor.
+  - Replace the ambiguous usage-derived `Providers` summary metric with a
+    `Connected providers` count derived from the same `has_key` projection.
+    Keep provider/model usage breakdowns explicitly labeled as activity for the
+    selected reporting period, including historical rows for providers that are
+    no longer connected.
+  - Render a purposeful empty state when no providers are connected, with one
+    action that opens Settings. The state must coexist with mandatory onboarding
+    and must not create a path around its persisted-key requirements.
+  - Keep the widgets synchronized with the profile: a successful provider-key
+    autosave adds its widget, a successful removal removes it, failed mutations
+    leave the current projection unchanged, and dashboard refresh reloads both
+    current profile state and usage. Never let an out-of-order response restore
+    stale connection state.
+  - Treat widgets as non-secret metadata. Never render provider API keys,
+    masked-key suffixes, client keys, system prompts, or credential-bearing
+    values in widget text, attributes, accessible names, or browser storage.
+  - Use semantic headings and per-provider articles, unique accessible action
+    names such as `Manage OpenAI`, full keyboard operation, and a responsive
+    grid that remains aligned without horizontal overflow on narrow screens.
+    Keep the provider widgets confined to the current user's dashboard; the
+    admin dashboard must not project another tenant's provider credentials or
+    connection state.
+  - Consume the existing management-profile and usage contracts unless a
+    demonstrated missing field requires one canonical contract change. Do not
+    add a parallel provider-registration endpoint, cached shadow state,
+    compatibility aliases, or fallback matching.
+  - Update dashboard and self-service documentation so `connected provider` and
+    `active provider` have explicit, non-overlapping meanings.
+
+  Deliverables:
+  - Add the connected-provider widget grid, connected count, provider-specific
+    Settings navigation, empty/error states, and responsive styling to the user
+    dashboard.
+  - Add one derived presentation model that joins profile providers to usage by
+    exact canonical ID while keeping registration authoritative to `has_key`.
+  - Update first-party frontend types, copy, documentation, and rendered-browser
+    coverage for the final dashboard contract.
+
+  Validation:
+  - Add Playwright scenarios for zero, one, and multiple connected providers;
+    deterministic widget order; a connected provider with zero activity; an
+    unconnected provider with historical activity; exact model/capability and
+    usage rendering; and the connected-provider count.
+  - Prove successful key autosave/removal and dashboard refresh update the
+    widgets, while rejected or out-of-order requests do not mutate the visible
+    projection and usage failure leaves connection state intact with activity
+    marked unavailable.
+  - Prove each `Manage` action selects the intended provider without a reveal or
+    mutation request, no secret-bearing value reaches the rendered dashboard or
+    browser storage, and admin/user dashboard switching preserves isolation.
+  - Cover keyboard navigation, accessible names, and desktop/narrow viewport
+    layout without overlap or horizontal overflow.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
 
 - [x] [I026] (P1) {B036} Add provider/model-capability-driven reasoning-effort to tenant routing defaults.
   Goal:
