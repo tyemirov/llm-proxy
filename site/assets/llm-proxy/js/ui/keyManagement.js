@@ -86,6 +86,11 @@ export function createKeyManagement() {
     routingDefaultsAutosavePending: false,
     /** @type {Promise<boolean> | null} */
     routingDefaultsAutosavePromise: null,
+    /** @type {Promise<void>} */
+    profileMutationTail: Promise.resolve(),
+    profileMutationFailureVersion: 0,
+    /** @type {Promise<boolean> | null} */
+    clientKeyMutationPromise: null,
     profileApplicationVersion: 0,
     providerRemovalConfirmationProviderID: EMPTY_STRING,
     /** @type {import("../types.d.js").TenantDefaults} */
@@ -101,6 +106,7 @@ export function createKeyManagement() {
     generatedSecretVisible: false,
     generatedSecretVersion: 0,
     settingsOpen: false,
+    settingsClosePending: false,
     usageExamplesOpen: false,
     notice: {
       kind: NOTICE_KINDS.INFO,
@@ -154,6 +160,10 @@ export function createKeyManagement() {
         return COPY.settingsRequiresClientKey;
       }
       return COPY.settingsRequiresProviderKey;
+    },
+
+    get settingsControlsDisabled() {
+      return this.busy || this.settingsClosePending;
     },
 
     get isAdmin() {
@@ -607,21 +617,44 @@ export function createKeyManagement() {
     },
 
     async closeSettings() {
-      if (!(await this.autosaveSelectedProvider())) {
+      if (this.settingsClosePending) {
         return;
       }
-      if (!(await this.autosaveRoutingDefaults())) {
-        return;
+      const clientKeyMutationAtClose = this.clientKeyMutationPromise;
+      const profileMutationFailureVersion = this.profileMutationFailureVersion;
+      this.settingsClosePending = true;
+      try {
+        if (!(await this.autosaveSelectedProvider())) {
+          return;
+        }
+        if (!(await this.autosaveRoutingDefaults())) {
+          return;
+        }
+        await this.waitForProfileMutations();
+        if (!this.settingsOpen || this.authState !== AUTH_STATES.AUTHENTICATED) {
+          return;
+        }
+        if (this.profileMutationFailureVersion !== profileMutationFailureVersion) {
+          return;
+        }
+        if (clientKeyMutationAtClose) {
+          const clientKeyMutationSucceeded = await clientKeyMutationAtClose;
+          if (!clientKeyMutationSucceeded || this.hasGeneratedSecret) {
+            return;
+          }
+        }
+        if (this.settingsRequired) {
+          this.setNotice(NOTICE_KINDS.ERROR, this.settingsRequirementCopy);
+          this.focusSettingsRequirement();
+          return;
+        }
+        this.dismissProviderKeyRemovalConfirmation();
+        this.clearProviderKeyMaterial();
+        this.clearGeneratedSecret();
+        this.settingsOpen = false;
+      } finally {
+        this.settingsClosePending = false;
       }
-      if (this.settingsRequired) {
-        this.setNotice(NOTICE_KINDS.ERROR, this.settingsRequirementCopy);
-        this.focusSettingsRequirement();
-        return;
-      }
-      this.dismissProviderKeyRemovalConfirmation();
-      this.clearProviderKeyMaterial();
-      this.clearGeneratedSecret();
-      this.settingsOpen = false;
     },
 
     focusSettingsRequirement() {
@@ -907,21 +940,30 @@ export function createKeyManagement() {
         const workspaceVersion = this.workspaceVersion;
         editorSession.dirty = false;
         try {
-          const updatedProfile = await requestSaveProviderKey(
-            providerID,
-            apiKey,
-            editorSession.textModel,
-            editorSession.systemPrompt,
-          );
-          if (!this.canApplyProviderAutosave(providerID, revealVersion, workspaceVersion)) {
+          const profileApplied = await this.enqueueProfileMutation(workspaceVersion, async () => {
+            const updatedProfile = await requestSaveProviderKey(
+              providerID,
+              apiKey,
+              editorSession.textModel,
+              editorSession.systemPrompt,
+            );
+            if (!this.canApplyProviderAutosave(providerID, revealVersion, workspaceVersion)) {
+              return false;
+            }
+            const preserveProviderEditor = this.providerEditorSession.editVersion !== editVersion;
+            this.applyProfile(
+              updatedProfile,
+              preserveProviderEditor,
+              this.routingDefaultsDirty || this.routingDefaultsAutosavePending,
+            );
+            if (!preserveProviderEditor) {
+              this.setNotice(NOTICE_KINDS.SUCCESS, COPY.providerSettingsSaved);
+            }
+            return true;
+          });
+          if (!profileApplied) {
             return false;
           }
-          if (this.providerEditorSession.editVersion !== editVersion) {
-            this.applyProfile(updatedProfile, true, this.routingDefaultsDirty || this.routingDefaultsAutosavePending);
-            continue;
-          }
-          this.applyProfile(updatedProfile, false, this.routingDefaultsDirty || this.routingDefaultsAutosavePending);
-          this.setNotice(NOTICE_KINDS.SUCCESS, COPY.providerSettingsSaved);
         } catch (requestError) {
           if (this.canApplyProviderAutosave(providerID, revealVersion, workspaceVersion)) {
             this.providerEditorSession.dirty = true;
@@ -987,15 +1029,21 @@ export function createKeyManagement() {
         const workspaceVersion = this.workspaceVersion;
         this.routingDefaultsDirty = false;
         try {
-          const updatedProfile = await requestUpdateDefaults(defaults);
-          if (!this.canApplyRoutingDefaultsAutosave(workspaceVersion)) {
+          const profileApplied = await this.enqueueProfileMutation(workspaceVersion, async () => {
+            const updatedProfile = await requestUpdateDefaults(defaults);
+            if (!this.canApplyRoutingDefaultsAutosave(workspaceVersion)) {
+              return false;
+            }
+            if (this.routingDefaultsEditVersion !== editVersion) {
+              return true;
+            }
+            this.applyProfile(updatedProfile, true);
+            this.setNotice(NOTICE_KINDS.SUCCESS, COPY.defaultsSaved);
+            return true;
+          });
+          if (!profileApplied) {
             return false;
           }
-          if (this.routingDefaultsEditVersion !== editVersion) {
-            continue;
-          }
-          this.applyProfile(updatedProfile, true);
-          this.setNotice(NOTICE_KINDS.SUCCESS, COPY.defaultsSaved);
         } catch (requestError) {
           if (this.canApplyRoutingDefaultsAutosave(workspaceVersion)) {
             this.routingDefaultsDirty = true;
@@ -1020,19 +1068,52 @@ export function createKeyManagement() {
     },
 
     async requestAndApplyGeneratedSecret() {
+      return this.runClientKeyMutation(async () => this.generateAndApplySecret());
+    },
+
+    async generateAndApplySecret() {
       const generatedSecretVersion = this.generatedSecretVersion;
+      const workspaceVersion = this.workspaceVersion;
       try {
-        const secretResponse = await requestGeneratedSecret();
-        if (!this.canApplyGeneratedSecret(generatedSecretVersion)) {
-          return;
-        }
-        this.generatedSecret = secretResponse.secret;
-        this.generatedSecretVisible = false;
-        this.applyProfile(secretResponse.profile);
-        this.setNotice(NOTICE_KINDS.SUCCESS, COPY.keyGenerated);
+        const profileApplied = await this.enqueueProfileMutation(workspaceVersion, async () => {
+          const secretResponse = await requestGeneratedSecret();
+          if (!this.canApplyGeneratedSecret(generatedSecretVersion)) {
+            return false;
+          }
+          this.generatedSecret = secretResponse.secret;
+          this.generatedSecretVisible = false;
+          this.applyProfile(
+            secretResponse.profile,
+            this.providerEditorSession.dirty || this.providerAutosavePending,
+            this.routingDefaultsDirty || this.routingDefaultsAutosavePending,
+          );
+          this.setNotice(NOTICE_KINDS.SUCCESS, COPY.keyGenerated);
+          return true;
+        });
+        return Boolean(profileApplied);
       } catch (requestError) {
         if (this.canApplyGeneratedSecret(generatedSecretVersion)) {
           this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+        }
+        return false;
+      }
+    },
+
+    /**
+     * @param {() => Promise<boolean>} mutation
+     * @returns {Promise<boolean>}
+     */
+    async runClientKeyMutation(mutation) {
+      if (this.clientKeyMutationPromise) {
+        return this.clientKeyMutationPromise;
+      }
+      const clientKeyMutationPromise = mutation();
+      this.clientKeyMutationPromise = clientKeyMutationPromise;
+      try {
+        return await clientKeyMutationPromise;
+      } finally {
+        if (this.clientKeyMutationPromise === clientKeyMutationPromise) {
+          this.clientKeyMutationPromise = null;
         }
       }
     },
@@ -1047,7 +1128,9 @@ export function createKeyManagement() {
     },
 
     async revokeSecret() {
-      const keyRevoked = await this.runProfileMutation(async () => requestRevokeSecret(), COPY.keyRevoked);
+      const keyRevoked = await this.runClientKeyMutation(
+        async () => this.runProfileMutation(async () => requestRevokeSecret(), COPY.keyRevoked),
+      );
       if (keyRevoked) {
         this.clearGeneratedSecret();
         this.focusSettingsRequirement();
@@ -1155,18 +1238,83 @@ export function createKeyManagement() {
      * @returns {Promise<boolean>}
      */
     async runProfileMutation(mutation, successMessage) {
+      const workspaceVersion = this.workspaceVersion;
       this.busy = true;
       try {
-        const updatedProfile = await mutation();
-        this.applyProfile(updatedProfile, false, this.routingDefaultsDirty || this.routingDefaultsAutosavePending);
-        this.setNotice(NOTICE_KINDS.SUCCESS, successMessage);
-        return true;
+        const profileApplied = await this.enqueueProfileMutation(workspaceVersion, async () => {
+          const updatedProfile = await mutation();
+          if (!this.canApplyProfileMutation(workspaceVersion)) {
+            return false;
+          }
+          this.applyProfile(
+            updatedProfile,
+            this.providerEditorSession.dirty || this.providerAutosavePending,
+            this.routingDefaultsDirty || this.routingDefaultsAutosavePending,
+          );
+          this.setNotice(NOTICE_KINDS.SUCCESS, successMessage);
+          return true;
+        });
+        return Boolean(profileApplied);
       } catch (requestError) {
-        this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+        if (this.canApplyProfileMutation(workspaceVersion)) {
+          this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+        }
         return false;
       } finally {
         this.busy = false;
       }
+    },
+
+    /**
+     * @template MutationResult
+     * @param {number} workspaceVersion
+     * @param {() => Promise<MutationResult>} mutation
+     * @returns {Promise<MutationResult | null>}
+     */
+    async enqueueProfileMutation(workspaceVersion, mutation) {
+      const previousMutation = this.profileMutationTail;
+      /** @type {() => void} */
+      let releaseMutation = () => {};
+      const mutationCompleted = new Promise((resolve) => {
+        releaseMutation = resolve;
+      });
+      this.profileMutationTail = previousMutation.then(() => mutationCompleted);
+      await previousMutation;
+      try {
+        if (!this.canApplyProfileMutation(workspaceVersion)) {
+          return null;
+        }
+        return await mutation();
+      } catch (requestError) {
+        if (this.canApplyProfileMutation(workspaceVersion)) {
+          this.profileMutationFailureVersion += 1;
+        }
+        throw requestError;
+      } finally {
+        releaseMutation();
+      }
+    },
+
+    async waitForProfileMutations() {
+      while (true) {
+        const profileMutationTail = this.profileMutationTail;
+        await profileMutationTail;
+        if (profileMutationTail === this.profileMutationTail) {
+          return;
+        }
+      }
+    },
+
+    /**
+     * @param {number} workspaceVersion
+     * @returns {boolean}
+     */
+    canApplyProfileMutation(workspaceVersion) {
+      return (
+        this.settingsOpen &&
+        this.authState === AUTH_STATES.AUTHENTICATED &&
+        this.workspaceVersion === workspaceVersion
+      );
     },
 
     /**
@@ -1224,6 +1372,9 @@ export function createKeyManagement() {
       this.routingDefaultsAutosavePending = false;
       this.routingDefaultsDirty = false;
       this.routingDefaultsEditVersion += 1;
+      this.clientKeyMutationPromise = null;
+      this.profileMutationFailureVersion = 0;
+      this.settingsClosePending = false;
       this.clearNotice();
       this.dismissProviderKeyRemovalConfirmation();
       this.profile = null;
