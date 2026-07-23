@@ -100,7 +100,7 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).not.toContain("brand-label=");
   expect(html).not.toContain("data:image");
   expect(html).toContain(
-    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=delete,visibility,visibility_off&amp;display=block">',
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=delete,key,visibility,visibility_off&amp;display=block">',
   );
   expect(html).toContain(
     '<span class="material-symbols-outlined" x-show="!providerKeyVisible" aria-hidden="true">visibility</span>',
@@ -152,11 +152,11 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
     '<button type="button" class="icon-button client-key-create" x-cloak x-show="!hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.createKey">',
   );
   expect(html).toContain(
-    '<button type="button" class="icon-only client-key-replace" x-cloak x-show="hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.replaceKey" x-bind:aria-label="copy.replaceKey">',
+    '<button type="button" class="icon-button client-key-replace" x-cloak x-show="hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.replaceKey" x-bind:aria-label="copy.replaceKey">',
   );
-  expect(html).toContain(
-    '<svg class="utility-icon recycle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">',
-  );
+  expect(html).toContain('<span class="material-symbols-outlined" aria-hidden="true">key</span>');
+  expect(html).toContain('<span class="client-key-replace-label" x-text="copy.replaceKey"></span>');
+  expect(html).not.toContain("recycle-icon");
   expect(html).toContain(
     '<button type="button" class="icon-only client-key-copy" x-cloak x-show="hasGeneratedSecret" x-on:click="copyGeneratedSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.copyClientKey" x-bind:aria-label="copy.copyClientKey">',
   );
@@ -423,8 +423,9 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
     "This key is saved and can’t be shown again. Replace it to create and copy a new key.",
   );
   const replaceKeyButton = clientAccessRow.getByRole("button", { name: "Replace key" });
-  await expect(replaceKeyButton).toHaveText("");
-  await expect(replaceKeyButton.locator("svg.recycle-icon")).toHaveCount(1);
+  await expect(replaceKeyButton.locator(".material-symbols-outlined")).toHaveText("key");
+  await expect(replaceKeyButton.locator(".client-key-replace-label")).toHaveText("Replace key");
+  await expect(replaceKeyButton.locator("svg")).toHaveCount(0);
   await expect(clientAccessRow.getByRole("button", { name: "Revoke key" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Routing defaults" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Request examples" })).toBeVisible();
@@ -535,7 +536,25 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
   const intervalButtons = intervalGroup.getByRole("button");
   await expect(intervalButtons).toHaveCount(usageIntervals.length);
   await expect(intervalButtons).toHaveText(usageIntervals.map((interval) => interval.label));
-  await expect(intervalGroup.getByRole("button", { name: "30 days" })).toHaveAttribute("aria-pressed", "true");
+  const activeIntervalButton = intervalGroup.getByRole("button", { name: "30 days" });
+  await expect(activeIntervalButton).toHaveAttribute("aria-pressed", "true");
+  const activeIntervalStyle = async () =>
+    activeIntervalButton.evaluate((button) => {
+      const style = getComputedStyle(button);
+      return {
+        backgroundColor: style.backgroundColor,
+        borderColor: style.borderColor,
+        color: style.color,
+      };
+    });
+  const expectedActiveIntervalStyle = {
+    backgroundColor: "rgba(93, 147, 255, 0.14)",
+    borderColor: "rgb(93, 147, 255)",
+    color: "rgb(93, 147, 255)",
+  };
+  expect(await activeIntervalStyle()).toEqual(expectedActiveIntervalStyle);
+  await activeIntervalButton.hover();
+  expect(await activeIntervalStyle()).toEqual(expectedActiveIntervalStyle);
   expect(requestedIntervals).toEqual(["30d"]);
 
   for (const interval of usageIntervals) {
@@ -2031,14 +2050,17 @@ test("new client keys stay left-aligned and read-only while supporting key actio
     await expect(clientKeyInput).toHaveValue("••••••••••••");
     await expect(clientKeyInput).toHaveAttribute("readonly", "");
     const replaceKeyButton = clientAccessRow.getByRole("button", { name: "Replace key", exact: true });
-    const recycleIcon = replaceKeyButton.locator("svg.recycle-icon");
+    const replaceKeyIcon = replaceKeyButton.locator(".material-symbols-outlined");
+    const replaceKeyLabel = replaceKeyButton.locator(".client-key-replace-label");
     await expect(replaceKeyButton).toBeVisible();
-    await expect(replaceKeyButton).toHaveText("");
+    await expect(replaceKeyButton).toHaveClass(/icon-button/);
     await expect(replaceKeyButton).toHaveAttribute("title", "Replace key");
-    await expect(recycleIcon).toHaveAttribute("aria-hidden", "true");
-    await expect(recycleIcon).toHaveAttribute("focusable", "false");
-    await expect(recycleIcon).toHaveAttribute("viewBox", "0 0 24 24");
-    await expect(recycleIcon.locator("path")).toHaveCount(4);
+    await expect(replaceKeyButton.locator("svg")).toHaveCount(0);
+    await expect(replaceKeyIcon).toHaveAttribute("aria-hidden", "true");
+    await expect(replaceKeyIcon).toHaveText("key");
+    await expect(replaceKeyIcon).toBeVisible();
+    await expect(replaceKeyLabel).toHaveText("Replace key");
+    await expect(replaceKeyLabel).toBeVisible();
     await expect(visibilityButton).toHaveAttribute("aria-pressed", "false");
     await expect(visibilitySymbols).toHaveCount(2);
     await expect(visibilitySymbols.nth(0)).toHaveText("visibility");
@@ -2076,6 +2098,8 @@ test("new client keys stay left-aligned and read-only while supporting key actio
     const clientKeyBox = await clientKey.boundingBox();
     const clientKeyInputBox = await clientKeyInput.boundingBox();
     const replaceKeyButtonBox = await replaceKeyButton.boundingBox();
+    const replaceKeyIconBox = await replaceKeyIcon.boundingBox();
+    const replaceKeyLabelBox = await replaceKeyLabel.boundingBox();
     const keyLabelBox = await keyLabel.boundingBox();
     const clientKeyRowBox = await clientKeyRow.boundingBox();
     if (
@@ -2083,6 +2107,8 @@ test("new client keys stay left-aligned and read-only while supporting key actio
       !clientKeyBox ||
       !clientKeyInputBox ||
       !replaceKeyButtonBox ||
+      !replaceKeyIconBox ||
+      !replaceKeyLabelBox ||
       !keyLabelBox ||
       !clientKeyRowBox
     ) {
@@ -2102,6 +2128,16 @@ test("new client keys stay left-aligned and read-only while supporting key actio
           (replaceKeyButtonBox.y + replaceKeyButtonBox.height / 2),
       ),
     ).toBeLessThanOrEqual(1);
+    expect(replaceKeyButtonBox.width).toBeGreaterThan(30);
+    expect(replaceKeyButtonBox.width).toBeLessThanOrEqual(120);
+    expect(replaceKeyIconBox.x).toBeGreaterThanOrEqual(replaceKeyButtonBox.x);
+    expect(replaceKeyLabelBox.x).toBeGreaterThan(replaceKeyIconBox.x + replaceKeyIconBox.width);
+    expect(replaceKeyLabelBox.x + replaceKeyLabelBox.width).toBeLessThanOrEqual(
+      replaceKeyButtonBox.x + replaceKeyButtonBox.width,
+    );
+    expect(replaceKeyButtonBox.x + replaceKeyButtonBox.width).toBeLessThanOrEqual(
+      clientAccessRowBox.x + clientAccessRowBox.width,
+    );
 
     await visibilityButton.click();
     await expect(clientKeyInput).toHaveValue(generatedSecret);
@@ -2130,6 +2166,10 @@ test("new client keys stay left-aligned and read-only while supporting key actio
     await expect(clientAccessRow.getByRole("button", { name: "Copy key", exact: true })).toBeHidden();
     await expect(revokeButton).toBeVisible();
 
+    await replaceKeyButton.click();
+    await expect(clientKeyInput).toBeVisible();
+    await expect(clientKeyInput).toHaveValue("••••••••••••");
+    await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Key created");
     await revokeButton.click();
     await expect(clientAccessRow.getByText("No key created")).toBeVisible();
     await expect(revokeButton).toBeHidden();
