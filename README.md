@@ -604,11 +604,15 @@ successful first provider-key autosave unlocks Settings without changing
 routing defaults, and Settings remains open until the user closes it explicitly.
 Text and dictation provider/model defaults plus reasoning effort autosave on
 selection, while the tenant system prompt autosaves when the user leaves the
-changed field. Settings waits for both provider and routing-default autosaves;
-a failed save retains the edited values and keeps Settings open for retry.
-Revoking the client key or removing the last managed provider key makes Settings
-mandatory again, while a failed automatic client-key request remains retryable
-through Create key.
+changed field. Settings serializes every mutation that returns a complete
+management profile, including provider and routing-default autosaves, provider
+removal, and client-key creation, replacement, or revocation. A close request
+locks the controls and waits for the mutations already in progress. If a client
+key is created or replaced during that wait, Settings stays open so the one-time
+value can be copied before a second explicit close. A failed save retains the
+edited values for retry. Revoking the client key or removing the last managed
+provider key makes Settings mandatory again, while a failed automatic
+client-key request remains retryable through Create key.
 
 Signed-in users also choose each provider's text model and provider-specific
 system prompt, choose routing defaults, and replace or revoke llm-proxy client
@@ -618,11 +622,12 @@ providers, defaults, generated secret digests, and usage events survive restarts
 in a GORM-managed database. `postgres` uses a Postgres DSN, while `sqlite` uses
 a SQLite database path or SQLite DSN. The packaged management config uses
 strict expandable placeholders for the hosted profile values; define every
-`LLM_PROXY_MANAGEMENT_*` key in the runtime environment or local `configs/.env`.
-Placeholders without matching values fail startup. The runtime config file is
-never mutated for user signup, provider enablement, or usage tracking, and
-database access must stay on GORM model APIs without raw SQL. Generated secrets
-continue to authenticate the public proxy endpoints with the same
+`LLM_PROXY_MANAGEMENT_*` key in the API runtime environment. Local `make up`
+projects those values from `configs/.env.local` into the ignored, API-scoped
+`configs/.env.api.local`. Placeholders without matching values fail startup.
+The runtime config file is never mutated for user signup, provider enablement,
+or usage tracking, and database access must stay on GORM model APIs without raw
+SQL. Generated secrets continue to authenticate the public proxy endpoints with the same
 `key=<tenant secret>` query parameter. Provider API keys are accepted only
 through authenticated management endpoints and are encrypted at rest with AES-GCM
 before database persistence. Normal save, profile, and administrator responses
@@ -848,10 +853,14 @@ make up
 
 `make up` creates the ignored local profile from
 `configs/.env.local.example` when needed, generates its local TAuth signing
-key and provider-key encryption key once, then keeps the full Compose stack in
-the foreground. The API image is built from the current source and runs the
-canonical `configs/config.yml` configuration. The stack has three explicit
-browser-facing endpoints:
+key and provider-key encryption key once, and writes ignored, service-scoped
+environment projections for ghttp, llm-proxy, and TAuth. ghttp receives only
+its `GHTTP_*` inputs. TAuth receives only its server and tenant inputs, including
+the signing key it shares with the API. Only llm-proxy receives the provider-key
+encryption configuration; aggregate dotenv files and live provider smoke-test
+credentials are not injected into auxiliary containers. The API image is built
+from the current source and runs the canonical `configs/config.yml`
+configuration. The stack has three explicit browser-facing endpoints:
 
 - Static UI: `http://localhost:4179/`, served from `site/` by ghttp.
 - Backend API: `http://localhost:8080/`, including the proxy and
@@ -865,12 +874,15 @@ configuration, matching the production split-origin contract. Use the
 `localhost` UI URL rather than `127.0.0.1`: TAuth's insecure local HTTP cookie
 profile is intentionally scoped to the single `localhost` host.
 
-Readiness proves static content (`200`), the ghttp-served runtime config
-(`200`), the unauthenticated API boundary (`403`), the anonymous TAuth session
-boundary (`204`), and the unauthenticated management API boundary (`401`). It
-does not call a paid provider. Use `Ctrl-C` to stop the containers and network;
-the named local data volumes keep local TAuth and management state for the next
-run.
+Compose first completes image pulls/builds and reports all three services
+running through `docker compose up --wait`; only then does the bounded HTTP
+readiness budget begin. Readiness proves static content (`200`), the
+ghttp-served runtime config (`200`), the unauthenticated API boundary (`403`),
+the anonymous TAuth session boundary (`204`), and the unauthenticated management
+API boundary (`401`). It does not call a paid provider. After readiness, Compose
+logs remain attached in the foreground. Use `Ctrl-C` to stop the containers and
+network; the named local data volumes keep local TAuth and management state for
+the next run.
 
 With `management.enabled: false`, set a static tenant's default text
 provider/model to route omitted-provider requests to DeepSeek. Static tenant
@@ -956,7 +968,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | Command | Purpose |
 |---------|---------|
 | `npm ci` | Install pinned frontend validation dependencies before running local frontend checks. |
-| `make up` | Build and run the complete local browser orchestration: ghttp static UI on `localhost:4179`, API on `localhost:8080`, and TAuth on `localhost:8082`. It verifies the static/config/auth/API boundaries before reporting ready. |
+| `make up` | Build and run the complete local browser orchestration: ghttp static UI on `localhost:4179`, API on `localhost:8080`, and TAuth on `localhost:8082`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
 | `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, repository-owned release integration tests, and the non-paid live-harness preflight. |
 | `make test-live-provider-harness` | Generate the temporary static-mode live-test config and verify authenticated routing without an upstream call. |
 | `make test-live-providers` | Generate a complete temporary static-mode config and run live text smoke tests for every provider whose API key is present; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
