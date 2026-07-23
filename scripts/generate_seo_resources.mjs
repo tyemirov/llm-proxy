@@ -69,7 +69,7 @@ const pages = Object.freeze([
     features: [
       ["Tenant secret authentication", "Clients authenticate to the proxy, not directly to provider APIs.", "A browser app can call the proxy without handling an OpenAI key."],
       ["Provider-key rejection", "Public endpoints reject provider key fields in query, JSON, and multipart input.", "A mistaken api_key field fails before the upstream call."],
-      ["Managed provider storage", "Signed-in users can save provider keys through authenticated management endpoints.", "The API returns masked status after save, not raw key values."],
+      ["Managed provider storage", "Signed-in users can persist provider keys through authenticated management endpoints.", "Mutation responses return masked status; raw retrieval is a separate owner-authenticated reveal action."],
     ],
     examples: [
       ["Browser dashboard", "A static Pages app can show copyable proxy examples without embedding upstream keys."],
@@ -118,31 +118,31 @@ const pages = Object.freeze([
     category: "Management UI",
     primaryKeyword: "self-service LLM key management",
     title: "Self-service LLM key management for internal teams",
-    description: "Automatically create a signed-in user's LLM Proxy client key, then require one saved provider API key before they leave Settings.",
+    description: "Automatically create a signed-in user's LLM Proxy client key, then autosave one provider API key before they leave Settings.",
     audience: "Teams that want user-owned AI access without asking operators to edit YAML for every change.",
     problem: "Operator-provisioned AI access does not scale when each user or team needs provider keys, defaults, generated secrets, and examples updated separately.",
-    solution: "LLM Proxy includes an optional TAuth-protected management UI that creates a missing client key after authentication and keeps Settings open until the user saves at least one managed provider key.",
+    solution: "LLM Proxy includes an optional TAuth-protected management UI that creates a missing client key after authentication, autosaves provider settings, and keeps Settings open until at least one managed provider key persists.",
     steps: [
       "Enable management mode with TAuth and database configuration.",
       "Publish the static Pages UI and serve runtime config from the API backend.",
       "Users sign in; the UI creates and presents a missing client key once.",
-      "Users save at least one provider key before leaving Settings, then copy request examples from current profile data.",
+      "Users enter at least one provider key; the selected provider settings autosave before they leave Settings.",
     ],
     features: [
       ["TAuth-gated UI", "Management controls appear only after login.", "Unauthenticated users see the sign-in state, not tenant controls."],
       ["Required first-run setup", "Settings stays open until a client key and one persisted provider key exist.", "Typed drafts and local dotenv credentials do not bypass onboarding."],
-      ["Selected-provider editor", "Provider key, text model, and system prompt live together.", "A user can update one provider without scanning every provider card."],
+      ["Selected-provider editor", "Provider key, text model, and system prompt live together and autosave.", "A user can update one provider without scanning every provider card or pressing a save button."],
       ["Copyable examples", "Default and provider-specific curl examples use the current proxy origin and generated-secret placeholder.", "Users can start with the exact request shape shown in Settings."],
     ],
     examples: [
-      ["New team onboarding", "A user signs in, copies the automatically created client key, saves an OpenAI key, and then closes Settings."],
-      ["Provider update", "A user switches the selected provider editor to DeepSeek and saves the model for that provider."],
+      ["New team onboarding", "A user signs in, copies the automatically created client key, enters an OpenAI key, and closes Settings after autosave completes."],
+      ["Provider update", "A user switches the selected provider editor to DeepSeek and its changed model autosaves."],
       ["Usage review", "The user returns to the dashboard to see 30-day request and token summaries."],
     ],
     limitations: [
       "Management mode requires configured TAuth, CORS origins, database settings, and provider-key encryption key.",
       "The backend serves management APIs and runtime config; the static Pages app is only the shell.",
-      "Raw provider keys are not returned after save.",
+      "Autosave responses return masked key status; raw retrieval requires the separate owner-authenticated reveal action.",
     ],
     repoExample: {
       source: "site/assets/llm-proxy/js/ui/keyManagement.js",
@@ -166,7 +166,7 @@ if (!this.hasSecret) {
       },
       {
         question: "Does typing a provider key unlock Settings?",
-        answer: "No. Only a provider record returned with has_key after a successful save counts; drafts and local dotenv credentials do not satisfy managed onboarding.",
+        answer: "No. Only a provider record returned with has_key after a successful autosave counts; drafts and local dotenv credentials do not satisfy managed onboarding.",
       },
       {
         question: "Does onboarding change provider or model defaults?",
@@ -1331,7 +1331,7 @@ export function revokeSecret() {
       "Open the selected-provider editor in Settings.",
       "Choose the provider to configure.",
       "Set the provider text model and provider system prompt.",
-      "Save the provider settings with or without updating the API key as allowed by the current state.",
+      "Leave the changed field or switch providers; the selected provider settings autosave without a separate save action.",
     ],
     features: [
       ["Provider-owned settings", "Model and prompt live with the selected provider record.", "Provider-specific routing context is explicit."],
@@ -1346,7 +1346,7 @@ export function revokeSecret() {
     limitations: [
       "Request-level system instructions take precedence over server-injected defaults.",
       "Provider settings are scoped to the authenticated managed tenant.",
-      "Raw provider keys are not returned after save.",
+      "Autosave responses return masked key status; raw retrieval requires the separate owner-authenticated reveal action.",
     ],
   }),
   page({
@@ -2105,7 +2105,7 @@ Generated: ${currentResourceModifiedDate}
 - It routes text to OpenAI, Meta Muse Spark 1.1 and other OpenAI-compatible providers, Anthropic, Gemini, and Grok/xAI as documented in the provider matrix.
 - It routes dictation through /dictate for OpenAI, SiliconFlow, Zhipu, and Grok/xAI as documented.
 - It keeps upstream provider API keys server-side and rejects provider-key-like fields on public proxy requests.
-- It can run a TAuth-protected self-service management UI that automatically creates a missing client key and requires one saved provider key before Settings can close.
+- It can run a TAuth-protected self-service management UI that automatically creates a missing client key, autosaves selected-provider settings, and requires one persisted provider key before Settings can close.
 - Managed provider keys are encrypted at rest with AES-GCM; this protects storage/backups/dumps and is not a zero-knowledge guarantee.
 - Browser runtime config is served by the backend /config-ui.yaml endpoint.
 
