@@ -40,9 +40,13 @@ test.afterAll(async () => {
 
 test("TAuth sign-in stays legible and the session survives until explicit sign out", async ({ context, page }) => {
   let browserProfileRequestCount = 0;
+  let browserSecretRequestCount = 0;
   page.on("request", (request) => {
     if (request.url() === `${stack.llmProxyOrigin}/api/management/profile`) {
       browserProfileRequestCount += 1;
+    }
+    if (request.url() === `${stack.llmProxyOrigin}/api/management/secrets` && request.method() === "POST") {
+      browserSecretRequestCount += 1;
     }
   });
   await installLocalAssetRoutes(page);
@@ -137,6 +141,10 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   );
 
   const authenticatedProfileResponsePromise = waitForManagementProfile(page);
+  const generatedSecretResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url() === `${stack.llmProxyOrigin}/api/management/secrets` && response.request().method() === "POST",
+  );
   await page.evaluate((profile) => {
     window.MPRUI.testing.authenticate(document.querySelector("mpr-header"), profile);
   }, loginResult.profile);
@@ -150,6 +158,36 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   });
   expect(browserProfileRequestCount).toBe(1);
 
+  const generatedSecretResponse = await generatedSecretResponsePromise;
+  expect(generatedSecretResponse.status()).toBe(httpOK);
+  expect(generatedSecretResponse.headers()["cache-control"]).toBe("no-store");
+  expect(browserSecretRequestCount).toBe(1);
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await expect(settingsDialog).toBeVisible();
+  await expect(settingsDialog.getByRole("alert")).toHaveText(
+    "Save at least one provider API key before leaving Settings.",
+  );
+  const clientKeyInput = settingsDialog.getByRole("textbox", { name: "Key", exact: true });
+  await expect(clientKeyInput).toHaveValue("••••••••••••");
+  await expect(clientKeyInput).toHaveAttribute("readonly", "");
+  await settingsDialog.locator("client-access-row").getByRole("button", { name: "Show key", exact: true }).click();
+  await expect(clientKeyInput).toHaveValue(/^llmp_/);
+
+  const providerEditor = settingsDialog.locator("provider-editor");
+  await providerEditor.getByRole("textbox", { name: "OpenAI API key" }).fill("sk-local-blackbox-provider-key");
+  const providerSaveResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url() === `${stack.llmProxyOrigin}/api/management/provider-keys/openai` &&
+      response.request().method() === "PUT",
+  );
+  await providerEditor.getByRole("button", { name: "Save key" }).click();
+  expect((await providerSaveResponsePromise).status()).toBe(httpOK);
+  await expect(settingsDialog.getByRole("alert")).toBeHidden();
+  await expect(settingsDialog).toBeVisible();
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
+  await expect(settingsDialog).toBeHidden();
+
   await expectAuthenticatedDashboard(page);
   await expectNoSignedOutStateAfterAuthentication(page);
 
@@ -157,7 +195,9 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   await page.reload();
   expect((await ordinaryReloadSessionResponsePromise).status()).toBe(httpOK);
   await expectAuthenticatedDashboard(page);
+  await expect(settingsDialog).toBeHidden();
   await expectNoSignedOutState(page);
+  expect(browserSecretRequestCount).toBe(1);
 
   await context.clearCookies({ name: localManagementProfile.sessionCookieName });
   await expectCookies(context, {
@@ -169,7 +209,9 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   await page.reload();
   expect((await recoveredSessionResponsePromise).status()).toBe(httpOK);
   await expectAuthenticatedDashboard(page);
+  await expect(settingsDialog).toBeHidden();
   await expectNoSignedOutState(page);
+  expect(browserSecretRequestCount).toBe(1);
   await expectCookies(context, {
     session: true,
     refresh: true,
