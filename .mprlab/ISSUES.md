@@ -1887,6 +1887,65 @@ remains scheduled work.
   coverage, 30 Python tests, 46 browser scenarios, the TAuth black-box, 47
   release tests, and the non-paid live-provider preflight.
 
+- [x] [B065] (P2) {F013} Improve selected usage-interval contrast.
+  Goal:
+  Make the active usage interval read as a clear MPR selection instead of a
+  bright blue button whose dark label appears black.
+
+  Requirements:
+  - Replace the full accent fill and dark foreground with a tinted charcoal
+    selection surface, accent border, and legible accent foreground.
+  - Preserve the selected treatment while hovering, along with the current
+    compact dimensions, active semantics, keyboard behavior, and disabled
+    loading state.
+  - Keep unselected intervals and Refresh visually secondary.
+
+  Validation:
+  - Add browser-visible coverage for the active interval's computed foreground,
+    background, border, and hover treatment.
+  - Run the required baseline and final `make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  Active usage intervals now use a translucent accent surface with accent text
+  and border instead of a solid accent fill with dark text. The active
+  treatment remains stable on hover, while secondary controls and interaction
+  semantics are unchanged. Browser coverage asserts the rendered foreground,
+  background, and border in both states. The required baseline and final
+  `make ci` runs passed; the final gate covered 100% aggregate Go coverage, 30
+  Python tests, 49 browser scenarios, the TAuth black-box, 47 release tests,
+  and the non-paid live-provider preflight.
+
+- [x] [B066] (P2) {F013} Clarify the client-key replacement action.
+  Goal:
+  Make client-key replacement recognizable without interpreting an ambiguous
+  refresh-like glyph or depending on its tooltip.
+
+  Requirements:
+  - Replace the locally defined recycle SVG with the standard Material Symbols
+    key glyph already used by the application's icon system.
+  - Show the canonical "Replace key" label beside the glyph while preserving
+    the current replacement behavior, accessible name, disabled state, and
+    compact MPR control treatment.
+  - Keep the neighboring standard delete action visually distinct and remove
+    obsolete recycle-icon styling and assertions.
+
+  Validation:
+  - Add browser-visible coverage for the standard key glyph, visible label,
+    accessible name, compact geometry, and replacement behavior.
+  - Run the required baseline and final `make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  The icon-only local recycle SVG is removed. Client-key replacement now uses
+  the standard Material Symbols key glyph with a visible "Replace key" label,
+  while retaining its accessible name, tooltip, disabled state, and replacement
+  behavior. Browser coverage verifies the glyph and label, rejects inline SVG,
+  checks compact desktop/mobile geometry, and executes a replacement. The
+  required baseline and final `make ci` runs passed; the final gate covered 100%
+  aggregate Go coverage, 30 Python tests, 49 browser scenarios, the TAuth
+  black-box, 47 release tests, and the non-paid live-provider preflight.
+
 
 ## Improvements
 
