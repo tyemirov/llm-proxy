@@ -250,6 +250,7 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
   expect(hubResponse.headers()["content-type"]).toContain(mimeTypes[".html"]);
   const hubHTML = await hubResponse.text();
   expect(hubHTML).toContain("LLM Proxy resource hub");
+  expect(hubHTML).toContain('<script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>');
   expect(hubHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/">');
   expect(hubHTML).toContain('"@type":"CollectionPage"');
   expect(hubHTML).toContain(`href="${representativeResourcePath}"`);
@@ -261,6 +262,7 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
   expect(pageResponse.headers()["content-type"]).toContain(mimeTypes[".html"]);
   const pageHTML = await pageResponse.text();
   expect(pageHTML).toContain("<h1>Multi-provider LLM proxy for internal tools</h1>");
+  expect(pageHTML).toContain('<script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>');
   expect(pageHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/">');
   expect(pageHTML).toContain('"@type":"FAQPage"');
   expect(pageHTML).toContain('<a class="resource-button" href="/">Open LLM Proxy</a>');
