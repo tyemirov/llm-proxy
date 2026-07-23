@@ -101,6 +101,7 @@ type ManagementConfiguration struct {
 	LoginPath                string
 	LogoutPath               string
 	NoncePath                string
+	SessionPath              string
 	JWTSigningKey            string
 	JWTIssuer                string
 	SessionCookieName        string
@@ -312,6 +313,7 @@ func (configuration *ManagementConfiguration) ApplyTunables() {
 	configuration.LoginPath = strings.TrimSpace(configuration.LoginPath)
 	configuration.LogoutPath = strings.TrimSpace(configuration.LogoutPath)
 	configuration.NoncePath = strings.TrimSpace(configuration.NoncePath)
+	configuration.SessionPath = strings.TrimSpace(configuration.SessionPath)
 	configuration.JWTSigningKey = strings.TrimSpace(configuration.JWTSigningKey)
 	configuration.JWTIssuer = strings.TrimSpace(configuration.JWTIssuer)
 	if configuration.JWTIssuer == constants.EmptyString {
@@ -347,6 +349,7 @@ func validateManagementConfiguration(configuration ManagementConfiguration) erro
 		{fieldName: "management.login_path", fieldValue: configuration.LoginPath},
 		{fieldName: "management.logout_path", fieldValue: configuration.LogoutPath},
 		{fieldName: "management.nonce_path", fieldValue: configuration.NoncePath},
+		{fieldName: "management.session_path", fieldValue: configuration.SessionPath},
 		{fieldName: "management.database_dialect", fieldValue: configuration.DatabaseDialect},
 		{fieldName: "management.database_dsn", fieldValue: configuration.DatabaseDSN},
 		{fieldName: "management.provider_key_encryption_key", fieldValue: configuration.ProviderKeyEncryptionKey},

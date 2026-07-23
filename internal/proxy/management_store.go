@@ -77,7 +77,8 @@ type managedTenantDatabase interface {
 	saveProviderKey(record managedProviderAPIKeyRecord) error
 	deleteProviderKey(record managedProviderAPIKeyRecord) error
 	createUsageEvent(record managedUsageEventRecord) error
-	usageEventsByUserIDSince(userID string, periodStart time.Time) ([]managedUsageEventRecord, error)
+	usageEventsByUserIDBetween(userID string, periodStart time.Time, periodEnd time.Time) ([]managedUsageEventRecord, error)
+	usageEventsByUserIDThrough(userID string, periodEnd time.Time) ([]managedUsageEventRecord, error)
 	usageEventsSince(periodStart time.Time) ([]managedUsageEventRecord, error)
 	routingDefaultsMigration() (managedRoutingDefaultsMigrationRecord, error)
 	migrateRoutingDefaults(records []managedTenantRecord, migration managedRoutingDefaultsMigrationRecord) error
@@ -161,7 +162,7 @@ type managedAdminUserSnapshot struct {
 	hasSecret       bool
 	createdAt       time.Time
 	updatedAt       time.Time
-	usage           managedUsageSummary
+	usage           managedAdminUsageSummary
 }
 
 type managedProviderKeyCipher struct {
@@ -413,11 +414,30 @@ func (database *gormManagedTenantDatabase) createUsageEvent(record managedUsageE
 	return database.database.Create(&record).Error
 }
 
-func (database *gormManagedTenantDatabase) usageEventsByUserIDSince(userID string, periodStart time.Time) ([]managedUsageEventRecord, error) {
+func (database *gormManagedTenantDatabase) usageEventsByUserIDBetween(userID string, periodStart time.Time, periodEnd time.Time) ([]managedUsageEventRecord, error) {
 	var records []managedUsageEventRecord
 	queryError := database.database.
 		Where(&managedUsageEventRecord{UserID: userID}).
 		Where(clause.Gte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: periodStart}).
+		Where(clause.Lte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: periodEnd}).
+		Order(clause.OrderBy{Columns: []clause.OrderByColumn{
+			{Column: clause.Column{Name: managedUsageCreatedAtColumn}},
+			{Column: clause.Column{Name: "id"}},
+		}}).
+		Find(&records).
+		Error
+	return records, queryError
+}
+
+func (database *gormManagedTenantDatabase) usageEventsByUserIDThrough(userID string, periodEnd time.Time) ([]managedUsageEventRecord, error) {
+	var records []managedUsageEventRecord
+	queryError := database.database.
+		Where(&managedUsageEventRecord{UserID: userID}).
+		Where(clause.Lte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: periodEnd}).
+		Order(clause.OrderBy{Columns: []clause.OrderByColumn{
+			{Column: clause.Column{Name: managedUsageCreatedAtColumn}},
+			{Column: clause.Column{Name: "id"}},
+		}}).
 		Find(&records).
 		Error
 	return records, queryError
@@ -1110,7 +1130,7 @@ func (store *managedTenantStore) snapshot(record managedTenantRecord) (managedTe
 	}, nil
 }
 
-func (record managedTenantRecord) adminSnapshot(usageSummary managedUsageSummary) managedAdminUserSnapshot {
+func (record managedTenantRecord) adminSnapshot(usageSummary managedAdminUsageSummary) managedAdminUserSnapshot {
 	return managedAdminUserSnapshot{
 		userID:          record.UserID,
 		userEmail:       record.UserEmail,

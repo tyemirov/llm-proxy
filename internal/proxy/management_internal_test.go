@@ -365,6 +365,14 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 	fixedTime := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
 	principal := managementPrincipal{userID: "tauth-usage-error-user"}
 	managedTenant := tenant{identifier: tenantID("managed-usage"), userID: principal.userID, managed: true}
+	thirtyDayInterval, intervalError := newUsageInterval("30d")
+	if intervalError != nil {
+		t.Fatalf("new usage interval: %v", intervalError)
+	}
+	allInterval, allIntervalError := newUsageInterval("all")
+	if allIntervalError != nil {
+		t.Fatalf("new all usage interval: %v", allIntervalError)
+	}
 
 	noOpDatabase := newFakeManagedTenantDatabase()
 	noOpStore := newManagedTenantStoreWithDatabase(noOpDatabase)
@@ -416,7 +424,7 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 	queryRecordErrorDatabase := newFakeManagedTenantDatabase()
 	queryRecordErrorDatabase.userQueryErrors = []error{errInternalTestDatabase}
 	queryRecordErrorStore := newManagedTenantStoreWithDatabase(queryRecordErrorDatabase)
-	if _, summaryError := queryRecordErrorStore.usageSummary(principal); !errors.Is(summaryError, errManagedTenantStorePersist) {
+	if _, summaryError := queryRecordErrorStore.usageSummary(principal, thirtyDayInterval); !errors.Is(summaryError, errManagedTenantStorePersist) {
 		t.Fatalf("usage summary record error=%v want %v", summaryError, errManagedTenantStorePersist)
 	}
 
@@ -424,24 +432,34 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 	queryUsageErrorDatabase.records[principal.userID] = internalManagedTenantRecord(principal.userID, "", fixedTime)
 	queryUsageErrorDatabase.usageEventsQueryError = errInternalTestDatabase
 	queryUsageErrorStore := newManagedTenantStoreWithDatabase(queryUsageErrorDatabase)
-	if _, summaryError := queryUsageErrorStore.usageSummary(principal); !errors.Is(summaryError, errManagedTenantStorePersist) {
+	if _, summaryError := queryUsageErrorStore.usageSummary(principal, thirtyDayInterval); !errors.Is(summaryError, errManagedTenantStorePersist) {
 		t.Fatalf("usage summary usage error=%v want %v", summaryError, errManagedTenantStorePersist)
 	}
 
 	boundedUsageDatabase := newFakeManagedTenantDatabase()
 	boundedUsageDatabase.records[principal.userID] = internalManagedTenantRecord(principal.userID, "", fixedTime)
 	boundedUsageDatabase.usageEvents = []managedUsageEventRecord{
-		{UserID: principal.userID, ProviderID: "old", ModelID: "old-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: fixedTime.AddDate(0, 0, -managedUsageSummaryDays)},
+		{UserID: principal.userID, ProviderID: "old", ModelID: "old-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: fixedTime.Add(-managedUsageSummaryDays*time.Hour*24 - time.Nanosecond)},
+		{UserID: "other-user", ProviderID: "other", ModelID: "other-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: fixedTime},
 		{UserID: principal.userID, ProviderID: "current", ModelID: "current-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: fixedTime},
+		{UserID: principal.userID, ProviderID: "future", ModelID: "future-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: fixedTime.Add(time.Nanosecond)},
 	}
 	boundedUsageStore := newManagedTenantStoreWithDatabase(boundedUsageDatabase)
 	boundedUsageStore.now = func() time.Time { return fixedTime }
-	boundedSummary, boundedSummaryError := boundedUsageStore.usageSummary(principal)
+	boundedSummary, boundedSummaryError := boundedUsageStore.usageSummary(principal, thirtyDayInterval)
 	if boundedSummaryError != nil {
 		t.Fatalf("bounded usage summary error=%v", boundedSummaryError)
 	}
-	if boundedSummary.totals.requests != 1 || !boundedUsageDatabase.usageEventsQueryPeriodStart.Equal(usagePeriodStart(fixedTime)) {
-		t.Fatalf("bounded summary=%+v period_start=%s", boundedSummary.totals, boundedUsageDatabase.usageEventsQueryPeriodStart)
+	expectedPeriodStart := fixedTime.Add(-managedUsageSummaryDays * 24 * time.Hour)
+	if boundedSummary.totals.requests != 1 || !boundedUsageDatabase.usageEventsQueryPeriodStart.Equal(expectedPeriodStart) || !boundedUsageDatabase.usageEventsQueryPeriodEnd.Equal(fixedTime) {
+		t.Fatalf("bounded summary=%+v period_start=%s period_end=%s", boundedSummary.totals, boundedUsageDatabase.usageEventsQueryPeriodStart, boundedUsageDatabase.usageEventsQueryPeriodEnd)
+	}
+	allSummary, allSummaryError := boundedUsageStore.usageSummary(principal, allInterval)
+	if allSummaryError != nil {
+		t.Fatalf("all usage summary error=%v", allSummaryError)
+	}
+	if allSummary.totals.requests != 2 || boundedUsageDatabase.usageEventsQueryMode != "all" || !boundedUsageDatabase.usageEventsQueryPeriodEnd.Equal(fixedTime) {
+		t.Fatalf("all summary=%+v mode=%s period_end=%s", allSummary.totals, boundedUsageDatabase.usageEventsQueryMode, boundedUsageDatabase.usageEventsQueryPeriodEnd)
 	}
 
 	observedCore, observedLogs := observer.New(zapcore.WarnLevel)
@@ -451,7 +469,7 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 	}
 
 	service := newInternalManagementService(t, queryUsageErrorDatabase)
-	status := executeInternalManagementHandler(service.usageHandler(), http.MethodGet, "/api/management/usage", "", nil, principal)
+	status := executeInternalManagementHandler(service.usageHandler(), http.MethodGet, "/api/management/usage?interval=30d", "", nil, principal)
 	if status != http.StatusInternalServerError {
 		t.Fatalf("usage handler status=%d want=%d", status, http.StatusInternalServerError)
 	}
@@ -483,13 +501,77 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 }
 
 func TestManagedUsageSummaryBucketsAndOrdering(t *testing.T) {
-	now := time.Date(2026, 6, 30, 12, 0, 0, 0, time.UTC)
-	summary := summarizeManagedUsage([]managedUsageEventRecord{
-		{UserID: "user", ProviderID: "old", ModelID: "old-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: now.AddDate(0, 0, -managedUsageSummaryDays)},
+	now := time.Date(2026, 6, 30, 12, 30, 0, 0, time.UTC)
+	for _, invalidInterval := range []string{"", "30", "1h", "ALL"} {
+		if _, intervalError := newUsageInterval(invalidInterval); !errors.Is(intervalError, errManagedUsageIntervalInvalid) {
+			t.Fatalf("interval=%q error=%v", invalidInterval, intervalError)
+		}
+	}
+	func() {
+		defer func() {
+			if recovered := recover(); recovered != errManagedUsageIntervalInvalid {
+				t.Fatalf("invalid constructed interval panic=%v", recovered)
+			}
+		}()
+		_, _, _, _ = usageInterval("invalid").finiteWindow()
+	}()
+	for _, intervalExpectation := range []struct {
+		identifier  string
+		bucketUnit  usageBucketUnit
+		bucketCount int
+		duration    time.Duration
+	}{
+		{identifier: "30d", bucketUnit: usageBucketUnitDay, bucketCount: 30, duration: 30 * 24 * time.Hour},
+		{identifier: "7d", bucketUnit: usageBucketUnitDay, bucketCount: 7, duration: 7 * 24 * time.Hour},
+		{identifier: "1d", bucketUnit: usageBucketUnitHour, bucketCount: 24, duration: 24 * time.Hour},
+	} {
+		interval, intervalError := newUsageInterval(intervalExpectation.identifier)
+		if intervalError != nil {
+			t.Fatalf("interval=%s error=%v", intervalExpectation.identifier, intervalError)
+		}
+		periodStart := now.Add(-intervalExpectation.duration)
+		summary := summarizeManagedUsage([]managedUsageEventRecord{
+			{UserID: "user", ProviderID: "excluded-before", ModelID: "old-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: periodStart.Add(-time.Nanosecond)},
+			{UserID: "user", ProviderID: "included-start", ModelID: "start-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: periodStart},
+			{UserID: "user", ProviderID: "included-end", ModelID: "end-model", Endpoint: usageEndpointText, StatusCode: http.StatusBadGateway, Success: false, CreatedAt: now},
+			{UserID: "user", ProviderID: "excluded-after", ModelID: "future-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: now.Add(time.Nanosecond)},
+		}, interval, now)
+		if summary.interval != interval || summary.bucketUnit != intervalExpectation.bucketUnit || len(summary.buckets) != intervalExpectation.bucketCount || summary.totals.requests != 2 || summary.totals.successfulRequests != 1 || summary.totals.failedRequests != 1 {
+			t.Fatalf("interval=%s summary=%+v buckets=%d", intervalExpectation.identifier, summary, len(summary.buckets))
+		}
+		if !summary.buckets[0].start.Equal(periodStart) || summary.buckets[0].aggregate.requests != 1 || summary.buckets[len(summary.buckets)-1].aggregate.requests != 1 {
+			t.Fatalf("interval=%s first=%+v last=%+v", intervalExpectation.identifier, summary.buckets[0], summary.buckets[len(summary.buckets)-1])
+		}
+	}
+
+	allInterval, allIntervalError := newUsageInterval("all")
+	if allIntervalError != nil {
+		t.Fatalf("all interval error=%v", allIntervalError)
+	}
+	emptyAllSummary := summarizeManagedUsage(nil, allInterval, now)
+	if emptyAllSummary.interval != allInterval || emptyAllSummary.bucketUnit != usageBucketUnitDay || len(emptyAllSummary.buckets) != 0 {
+		t.Fatalf("empty all summary=%+v", emptyAllSummary)
+	}
+	earliest := time.Date(2026, 4, 20, 23, 59, 0, 0, time.FixedZone("fixture", -7*60*60))
+	allSummary := summarizeManagedUsage([]managedUsageEventRecord{
+		{UserID: "user", ProviderID: "earliest", ModelID: "earliest-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: earliest},
 		{UserID: "user", ProviderID: "current", ModelID: "current-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: now},
+		{UserID: "user", ProviderID: "future", ModelID: "future-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: now.Add(time.Nanosecond)},
+	}, allInterval, now)
+	expectedAllStart := time.Date(2026, 4, 21, 0, 0, 0, 0, time.UTC)
+	expectedAllBucketCount := int(now.Sub(expectedAllStart).Hours()/24) + 1
+	if allSummary.totals.requests != 2 || len(allSummary.buckets) != expectedAllBucketCount || !allSummary.buckets[0].start.Equal(expectedAllStart) || allSummary.providers[0].providerIdentifier != "current" {
+		t.Fatalf("all summary=%+v buckets=%d providers=%+v", allSummary.totals, len(allSummary.buckets), allSummary.providers)
+	}
+
+	adminPeriodStart := usagePeriodStart(now)
+	adminSummary := summarizeManagedAdminUsage([]managedUsageEventRecord{
+		{ProviderID: "excluded-before", ModelID: "old-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: adminPeriodStart.Add(-time.Nanosecond)},
+		{ProviderID: "included", ModelID: "current-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: now},
+		{ProviderID: "excluded-after", ModelID: "future-model", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: now.Add(time.Nanosecond)},
 	}, now)
-	if summary.totals.requests != 1 || summary.providers[0].providerIdentifier != "current" {
-		t.Fatalf("summary totals=%+v providers=%+v", summary.totals, summary.providers)
+	if adminSummary.periodDays != managedUsageSummaryDays || adminSummary.totals.requests != 1 || adminSummary.daily[len(adminSummary.daily)-1].aggregate.requests != 1 {
+		t.Fatalf("admin summary=%+v daily=%+v", adminSummary.totals, adminSummary.daily)
 	}
 
 	providers := usageProviderBucketList(map[string]managedUsageAggregate{
@@ -1076,6 +1158,26 @@ func TestManagedTenantGORMDatabaseMigratesUsageIndexes(t *testing.T) {
 			t.Fatalf("missing usage index %s", indexName)
 		}
 	}
+	periodEnd := time.Date(2026, 6, 30, 12, 30, 0, 0, time.UTC)
+	periodStart := periodEnd.Add(-24 * time.Hour)
+	records := []managedUsageEventRecord{
+		{UserID: "owner", ProviderID: "old", CreatedAt: periodStart.Add(-time.Nanosecond)},
+		{UserID: "owner", ProviderID: "start", CreatedAt: periodStart},
+		{UserID: "owner", ProviderID: "end", CreatedAt: periodEnd},
+		{UserID: "owner", ProviderID: "future", CreatedAt: periodEnd.Add(time.Nanosecond)},
+		{UserID: "other", ProviderID: "other", CreatedAt: periodStart},
+	}
+	if createError := database.database.Create(&records).Error; createError != nil {
+		t.Fatalf("create usage fixtures: %v", createError)
+	}
+	finiteRecords, finiteError := database.usageEventsByUserIDBetween("owner", periodStart, periodEnd)
+	if finiteError != nil || len(finiteRecords) != 2 || finiteRecords[0].ProviderID != "start" || finiteRecords[1].ProviderID != "end" {
+		t.Fatalf("finite records=%+v error=%v", finiteRecords, finiteError)
+	}
+	allRecords, allError := database.usageEventsByUserIDThrough("owner", periodEnd)
+	if allError != nil || len(allRecords) != 3 || allRecords[0].ProviderID != "old" || allRecords[2].ProviderID != "end" {
+		t.Fatalf("all records=%+v error=%v", allRecords, allError)
+	}
 }
 
 func TestManagementHandlerStoreErrorEdges(t *testing.T) {
@@ -1399,6 +1501,8 @@ type fakeManagedTenantDatabase struct {
 	createUsageEventError          error
 	usageEventsQueryError          error
 	usageEventsQueryPeriodStart    time.Time
+	usageEventsQueryPeriodEnd      time.Time
+	usageEventsQueryMode           string
 	routingDefaultsMigrationRecord *managedRoutingDefaultsMigrationRecord
 	routingDefaultsMigrationErr    error
 	migrateRoutingDefaultsErr      error
@@ -1536,14 +1640,31 @@ func (database *fakeManagedTenantDatabase) createUsageEvent(record managedUsageE
 	return nil
 }
 
-func (database *fakeManagedTenantDatabase) usageEventsByUserIDSince(userID string, periodStart time.Time) ([]managedUsageEventRecord, error) {
+func (database *fakeManagedTenantDatabase) usageEventsByUserIDBetween(userID string, periodStart time.Time, periodEnd time.Time) ([]managedUsageEventRecord, error) {
 	if database.usageEventsQueryError != nil {
 		return nil, database.usageEventsQueryError
 	}
 	database.usageEventsQueryPeriodStart = periodStart
+	database.usageEventsQueryPeriodEnd = periodEnd
+	database.usageEventsQueryMode = "finite"
 	records := make([]managedUsageEventRecord, 0, len(database.usageEvents))
 	for _, record := range database.usageEvents {
-		if record.UserID == userID && !record.CreatedAt.Before(periodStart) {
+		if record.UserID == userID && !record.CreatedAt.Before(periodStart) && !record.CreatedAt.After(periodEnd) {
+			records = append(records, record)
+		}
+	}
+	return records, nil
+}
+
+func (database *fakeManagedTenantDatabase) usageEventsByUserIDThrough(userID string, periodEnd time.Time) ([]managedUsageEventRecord, error) {
+	if database.usageEventsQueryError != nil {
+		return nil, database.usageEventsQueryError
+	}
+	database.usageEventsQueryPeriodEnd = periodEnd
+	database.usageEventsQueryMode = "all"
+	records := make([]managedUsageEventRecord, 0, len(database.usageEvents))
+	for _, record := range database.usageEvents {
+		if record.UserID == userID && !record.CreatedAt.After(periodEnd) {
 			records = append(records, record)
 		}
 	}
@@ -1679,6 +1800,7 @@ func newInternalManagementService(t *testing.T, database *fakeManagedTenantDatab
 		LoginPath:                "/auth/google",
 		LogoutPath:               "/auth/logout",
 		NoncePath:                "/auth/nonce",
+		SessionPath:              "/auth/session",
 		JWTSigningKey:            "management-signing-key",
 		JWTIssuer:                DefaultManagementJWTIssuer,
 		SessionCookieName:        "llm_proxy_test_session",
@@ -1732,6 +1854,7 @@ func internalManagementRouterConfiguration() Configuration {
 			LoginPath:                "/auth/google",
 			LogoutPath:               "/auth/logout",
 			NoncePath:                "/auth/nonce",
+			SessionPath:              "/auth/session",
 			JWTSigningKey:            "management-signing-key",
 			JWTIssuer:                DefaultManagementJWTIssuer,
 			SessionCookieName:        "llm_proxy_test_session",

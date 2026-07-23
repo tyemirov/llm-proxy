@@ -104,8 +104,9 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 	}
 	indexHTML := string(indexBytes)
 	requiredFragments := []string{
-		"mpr-ui-config.js",
-		`data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.js"`,
+		`href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css"`,
+		`src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"`,
+		`data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"`,
 		`src="/assets/llm-proxy/js/app.js"`,
 		`data-config-url="/config-ui.yaml"`,
 		`<mpr-user`,
@@ -116,7 +117,7 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 			t.Fatalf("static index missing %q", requiredFragment)
 		}
 	}
-	forbiddenFragments := []string{"tauth.js", "tauth-login-path", "tauth-logout-path", "tauth-nonce-path", "{{MPR_UI_VERSION}}"}
+	forbiddenFragments := []string{"MarcoPoloResearchLab/mpr-ui@v", "tauth.js", "tauth-login-path", "tauth-logout-path", "tauth-nonce-path", "{{MPR_UI_VERSION}}"}
 	for _, forbiddenFragment := range forbiddenFragments {
 		if strings.Contains(indexHTML, forbiddenFragment) {
 			t.Fatalf("static index must not include %q", forbiddenFragment)
@@ -150,10 +151,14 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		`googleClientId: "google-client-id"`,
 		`tenantId: "llm-proxy-test"`,
 		`loginPath: "/auth/google"`,
+		`sessionPath: "/auth/session"`,
 	} {
 		if !strings.Contains(configBody, requiredFragment) {
 			t.Fatalf("%s missing %q in %s", proxy.ManagementConfigUIFileName, requiredFragment, configBody)
 		}
+	}
+	if strings.Contains(configBody, "authButton") {
+		t.Fatalf("%s must keep login-button presentation in static markup: %s", proxy.ManagementConfigUIFileName, configBody)
 	}
 	if configResponse.Header().Get("Access-Control-Allow-Origin") != "http://localhost:8080" || configResponse.Header().Get("Access-Control-Allow-Credentials") != "true" {
 		t.Fatalf("config headers=%v", configResponse.Header())
@@ -1270,7 +1275,7 @@ func TestManagementClaimsLegacyTokenForConfiguredAccount(t *testing.T) {
 	}
 
 	otherUserCookie := managementSessionCookieWithEmail(t, "other-user", "other@example.com")
-	otherUsage := requestManagementUsage(t, router, otherUserCookie)
+	otherUsage := requestManagementUsage(t, router, otherUserCookie, "30d")
 	if otherUsage.Totals.Requests != 0 {
 		t.Fatalf("other user usage=%+v", otherUsage.Totals)
 	}
@@ -1300,7 +1305,7 @@ func TestManagementClaimsLegacyTokenForConfiguredAccount(t *testing.T) {
 		t.Fatalf("owner profile tenant=%+v", profilePayload.Tenant)
 	}
 
-	historicalUsage := requestManagementUsage(t, router, ownerCookie)
+	historicalUsage := requestManagementUsage(t, router, ownerCookie, "all")
 	if historicalUsage.Totals.Requests != 1 || historicalUsage.Totals.TotalTokens != 7 {
 		t.Fatalf("historical usage=%+v", historicalUsage.Totals)
 	}
@@ -1309,7 +1314,7 @@ func TestManagementClaimsLegacyTokenForConfiguredAccount(t *testing.T) {
 	if legacyResponse.Code != http.StatusOK || strings.TrimSpace(legacyResponse.Body.String()) != "legacy migrated ok" {
 		t.Fatalf("claimed status=%d body=%s", legacyResponse.Code, legacyResponse.Body.String())
 	}
-	updatedUsage := requestManagementUsage(t, router, ownerCookie)
+	updatedUsage := requestManagementUsage(t, router, ownerCookie, "all")
 	if updatedUsage.Totals.Requests != 2 || updatedUsage.Totals.TotalTokens != 7 {
 		t.Fatalf("updated usage=%+v", updatedUsage.Totals)
 	}
@@ -1318,7 +1323,7 @@ func TestManagementClaimsLegacyTokenForConfiguredAccount(t *testing.T) {
 	if reloadError != nil {
 		t.Fatalf("reload router: %v", reloadError)
 	}
-	reloadedUsage := requestManagementUsage(t, reloadedRouter, ownerCookie)
+	reloadedUsage := requestManagementUsage(t, reloadedRouter, ownerCookie, "all")
 	if reloadedUsage.Totals.Requests != 2 {
 		t.Fatalf("reloaded usage=%+v", reloadedUsage.Totals)
 	}
@@ -1469,6 +1474,13 @@ func TestManagementConfigurationValidationRequiresBackendAuthFields(t *testing.T
 				configuration.SessionCookieName = " "
 			},
 			expectedError: "management.session_cookie_name",
+		},
+		{
+			name: "session path",
+			clearField: func(configuration *proxy.ManagementConfiguration) {
+				configuration.SessionPath = " "
+			},
+			expectedError: "management.session_path",
 		},
 	}
 	for _, testCase := range authFieldTestCases {
@@ -1757,9 +1769,9 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 	userOneCookie := managementSessionCookie(t, "usage-user-one")
 	userTwoCookie := managementSessionCookie(t, "usage-user-two")
 
-	emptyUsage := requestManagementUsage(t, router, userOneCookie)
-	if emptyUsage.PeriodDays != 30 || len(emptyUsage.Daily) != 30 || emptyUsage.Totals.Requests != 0 {
-		t.Fatalf("empty usage=%+v daily=%d", emptyUsage.Totals, len(emptyUsage.Daily))
+	emptyUsage := requestManagementUsage(t, router, userOneCookie, "30d")
+	if emptyUsage.Interval != "30d" || emptyUsage.BucketUnit != "day" || len(emptyUsage.Buckets) != 30 || emptyUsage.Totals.Requests != 0 {
+		t.Fatalf("empty usage=%+v buckets=%d", emptyUsage, len(emptyUsage.Buckets))
 	}
 
 	saveDeepSeekKeyRequest := authenticatedJSONRequest(http.MethodPut, "/api/management/provider-keys/deepseek", managementProviderKeyRequestBody(t, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""), userOneCookie)
@@ -1849,7 +1861,7 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 		t.Fatalf("invalid dictation status=%d body=%s", invalidDictationResponse.Code, invalidDictationResponse.Body.String())
 	}
 
-	usage := requestManagementUsage(t, router, userOneCookie)
+	usage := requestManagementUsage(t, router, userOneCookie, "30d")
 	if usage.Totals.Requests != 5 || usage.Totals.SuccessfulRequests != 1 || usage.Totals.FailedRequests != 4 {
 		t.Fatalf("usage totals=%+v", usage.Totals)
 	}
@@ -1862,8 +1874,34 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 	if len(usage.StatusCodes) != 3 || usage.StatusCodes[0].StatusCode != http.StatusOK || usage.StatusCodes[0].Requests != 1 || usage.StatusCodes[1].StatusCode != http.StatusBadRequest || usage.StatusCodes[1].Requests != 3 || usage.StatusCodes[2].StatusCode != http.StatusBadGateway || usage.StatusCodes[2].Requests != 1 {
 		t.Fatalf("status codes=%+v", usage.StatusCodes)
 	}
-	if isolatedUsage := requestManagementUsage(t, router, userTwoCookie); isolatedUsage.Totals.Requests != 0 {
+	if isolatedUsage := requestManagementUsage(t, router, userTwoCookie, "all"); isolatedUsage.Totals.Requests != 0 || len(isolatedUsage.Buckets) != 0 {
 		t.Fatalf("user two usage leaked: %+v", isolatedUsage.Totals)
+	}
+
+	for _, intervalExpectation := range []struct {
+		interval    string
+		bucketUnit  string
+		bucketCount int
+	}{
+		{interval: "all", bucketUnit: "day", bucketCount: 1},
+		{interval: "30d", bucketUnit: "day", bucketCount: 30},
+		{interval: "7d", bucketUnit: "day", bucketCount: 7},
+		{interval: "1d", bucketUnit: "hour", bucketCount: 24},
+	} {
+		intervalUsage := requestManagementUsage(t, router, userOneCookie, intervalExpectation.interval)
+		if intervalUsage.Interval != intervalExpectation.interval || intervalUsage.BucketUnit != intervalExpectation.bucketUnit || len(intervalUsage.Buckets) != intervalExpectation.bucketCount || intervalUsage.Totals.Requests != usage.Totals.Requests {
+			t.Fatalf("interval=%s usage=%+v buckets=%d", intervalExpectation.interval, intervalUsage, len(intervalUsage.Buckets))
+		}
+	}
+
+	for _, invalidPath := range []string{"/api/management/usage", "/api/management/usage?interval=unknown", "/api/management/usage?interval=1d&interval=7d"} {
+		invalidRequest := httptest.NewRequest(http.MethodGet, invalidPath, nil)
+		invalidRequest.AddCookie(userOneCookie)
+		invalidResponse := httptest.NewRecorder()
+		router.ServeHTTP(invalidResponse, invalidRequest)
+		if invalidResponse.Code != http.StatusBadRequest {
+			t.Fatalf("usage path=%s status=%d body=%s", invalidPath, invalidResponse.Code, invalidResponse.Body.String())
+		}
 	}
 }
 
@@ -2277,6 +2315,7 @@ func managementConfigurationWithDatabasePath(configuration proxy.Configuration, 
 		LoginPath:                "/auth/google",
 		LogoutPath:               "/auth/logout",
 		NoncePath:                "/auth/nonce",
+		SessionPath:              "/auth/session",
 		JWTSigningKey:            testManagementSigningKey,
 		SessionCookieName:        testManagementCookieName,
 		DatabaseDialect:          proxy.ManagementDatabaseDialectSQLite,
@@ -2364,7 +2403,8 @@ func providerKeyRevealRequestWithoutContentType(method string, path string, sess
 }
 
 type managementUsageTestResponse struct {
-	PeriodDays int `json:"period_days"`
+	Interval   string `json:"interval"`
+	BucketUnit string `json:"bucket_unit"`
 	Totals     struct {
 		Requests           int `json:"requests"`
 		SuccessfulRequests int `json:"successful_requests"`
@@ -2375,12 +2415,12 @@ type managementUsageTestResponse struct {
 		ResponseTokens     int `json:"response_tokens"`
 		TotalTokens        int `json:"total_tokens"`
 	} `json:"totals"`
-	Daily []struct {
-		Date string `json:"date"`
-		Data struct {
+	Buckets []struct {
+		Start string `json:"start"`
+		Data  struct {
 			Requests int `json:"requests"`
 		} `json:"data"`
-	} `json:"daily"`
+	} `json:"buckets"`
 	Providers []struct {
 		Provider string `json:"provider"`
 		Data     struct {
@@ -2391,6 +2431,21 @@ type managementUsageTestResponse struct {
 		StatusCode int `json:"status_code"`
 		Requests   int `json:"requests"`
 	} `json:"status_codes"`
+}
+
+type managementAdminUsageTestResponse struct {
+	PeriodDays int `json:"period_days"`
+	Totals     struct {
+		Requests           int `json:"requests"`
+		SuccessfulRequests int `json:"successful_requests"`
+		TotalTokens        int `json:"total_tokens"`
+	} `json:"totals"`
+	Daily []struct {
+		Date string `json:"date"`
+		Data struct {
+			Requests int `json:"requests"`
+		} `json:"data"`
+	} `json:"daily"`
 }
 
 type managementAdminUsersTestResponse struct {
@@ -2406,18 +2461,27 @@ type managementAdminUsersTestResponse struct {
 			ID        string `json:"id"`
 			HasSecret bool   `json:"has_secret"`
 		} `json:"tenant"`
-		Usage managementUsageTestResponse `json:"usage"`
+		Usage managementAdminUsageTestResponse `json:"usage"`
 	} `json:"users"`
 }
 
-func requestManagementUsage(t *testing.T, router http.Handler, sessionCookie *http.Cookie) managementUsageTestResponse {
+func requestManagementUsage(t *testing.T, router http.Handler, sessionCookie *http.Cookie, interval string) managementUsageTestResponse {
 	t.Helper()
-	request := httptest.NewRequest(http.MethodGet, "/api/management/usage", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/management/usage?interval="+url.QueryEscape(interval), nil)
 	request.AddCookie(sessionCookie)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("usage status=%d body=%s", response.Code, response.Body.String())
+	}
+	var contractFields map[string]json.RawMessage
+	if decodeError := json.Unmarshal(response.Body.Bytes(), &contractFields); decodeError != nil {
+		t.Fatalf("decode usage contract: %v", decodeError)
+	}
+	for _, obsoleteField := range []string{"period_days", "daily"} {
+		if _, exists := contractFields[obsoleteField]; exists {
+			t.Fatalf("usage response retained obsolete field %q: %s", obsoleteField, response.Body.String())
+		}
 	}
 	var usage managementUsageTestResponse
 	if decodeError := json.Unmarshal(response.Body.Bytes(), &usage); decodeError != nil {
