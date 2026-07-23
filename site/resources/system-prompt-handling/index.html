@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"System prompt handling without ambiguous inputs","description":"Keep system instructions explicit across prompt bodies, v2 messages, tenant defaults, and provider settings.","url":"https://llm-proxy.mprlab.com/resources/system-prompt-handling/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/system-prompt-handling/","about":["LLM Proxy","API contract","LLM system prompt handling"]}</script>
@@ -83,27 +83,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Ambiguity rejection</td>
                           <td>Bodies that combine system_prompt with system messages return 400.</td>
                           <td>The proxy avoids guessing instruction precedence.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Tenant default prompt</td>
                           <td>A tenant default system prompt can be prepended when submitted messages lack a system message.</td>
                           <td>Default behavior is server-owned.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Provider-specific prompt</td>
                           <td>Managed provider settings can store a system prompt for provider-selected requests.</td>
                           <td>Provider context travels with the saved provider.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -112,24 +112,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Canonical /v2</h3>
                       <p>A chat app sends a system role message and no body system_prompt.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Managed provider route</h3>
                       <p>A request selects provider=deepseek and omits system instructions, so the saved provider prompt can apply.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Conflict cleanup</h3>
                       <p>A migration removes duplicate system_prompt from bodies that already contain system messages.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -145,66 +145,66 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of LLM system prompt handling?</summary>
                       <p>LLM Proxy validates ambiguous system prompt inputs and applies tenant or provider system prompts only when request-level instructions are absent.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this api contract resource?</summary>
                       <p>Developers who need predictable system-instruction behavior across providers.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Canonical /v2 chat messages API for LLM calls, which covers v2 chat messages API.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/canonical-v2-chat-messages-api/">
                       <span>API contract</span>
                       <strong>Canonical /v2 chat messages API for LLM calls</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/large-prompt-json-post/">
                       <span>API contract</span>
                       <strong>Large prompt JSON POST for LLM requests</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/max-tokens-provider-limit-validation/">
                       <span>API contract</span>
                       <strong>max_tokens validation across LLM providers</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/per-request-provider-model-selection/">
                       <span>API contract</span>
                       <strong>Per-request provider and model selection</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -220,6 +220,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

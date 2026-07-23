@@ -207,6 +207,23 @@ dashboard-actions {
   gap: 0.4rem;
 }
 
+.usage-interval-control {
+  display: inline-flex;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+llm-proxy-key-management .usage-interval-button {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+llm-proxy-key-management .usage-interval-button.is-active {
+  border-color: var(--llm-accent);
+  background: var(--llm-accent);
+  color: var(--llm-bg);
+}
+
 usage-dashboard {
   display: grid;
   gap: 0.5rem;
@@ -1019,6 +1036,15 @@ settings-section,
 
   .provider-selector select {
     width: 100%;
+  }
+
+  .usage-interval-control {
+    width: 100%;
+  }
+
+  llm-proxy-key-management .usage-interval-button {
+    flex: 1 1 0;
+    padding-inline: 0.35rem;
   }
 
   h1 {

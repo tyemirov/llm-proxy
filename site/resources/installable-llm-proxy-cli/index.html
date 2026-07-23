@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Installable LLM Proxy CLI for prompt workflows","description":"Use llm-proxy-client to send prompt text as canonical /v2 messages from the command line.","url":"https://llm-proxy.mprlab.com/resources/installable-llm-proxy-cli/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/installable-llm-proxy-cli/","about":["LLM Proxy","Clients","installable LLM proxy CLI"]}</script>
@@ -83,27 +83,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Canonical POST /v2</td>
                           <td>The CLI sends prompt input as v2 messages.</td>
                           <td>CLI behavior matches reusable client behavior.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Environment support</td>
                           <td>Base URL and secret can come from env for shell workflows.</td>
                           <td>Prompt content can flow from stdin.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Payload/query cleanup</td>
                           <td>The client strips body-owned query fields and preserves non-payload query parameters.</td>
                           <td>Provider selection can stay in the base URL.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -112,24 +112,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Quick summary</h3>
                       <p>Pipe text into llm-proxy-client with a configured base URL and secret.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Provider route</h3>
                       <p>Use a base URL with ?provider=gemini to test Gemini without changing the body.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>System instruction</h3>
                       <p>Pass --system-prompt so the CLI sends a v2 system message.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -145,60 +145,60 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of installable LLM proxy CLI?</summary>
                       <p>The installable Go CLI reads prompt text from flags, files, or stdin, maps it into a v2 user message, and sends POST /v2 through the reusable Go client.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this clients resource?</summary>
                       <p>Developers who want a simple shell client for tenant-secret authenticated LLM calls.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Go LLM Proxy client with a v2-only transport, which covers Go LLM proxy client v2.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/go-client-v2-only-llm-proxy/">
                       <span>Clients</span>
                       <strong>Go LLM Proxy client with a v2-only transport</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/python-client-v2-only-llm-proxy/">
                       <span>Clients</span>
                       <strong>Python LLM Proxy client with v2 messages</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/llm-response-formats-json-xml-csv-text/">
                       <span>API contract</span>
                       <strong>LLM response formats: JSON, XML, CSV, and text</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -214,6 +214,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

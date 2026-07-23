@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"LLM model catalog configuration in config.yml","description":"Keep provider model IDs, defaults, web-search flags, and token limits in runtime config.","url":"https://llm-proxy.mprlab.com/resources/model-catalog-configuration/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/model-catalog-configuration/","about":["LLM Proxy","Configuration","LLM model catalog configuration"]}</script>
@@ -83,27 +83,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Config-owned models</td>
                           <td>Model IDs and defaults live in config instead of client code.</td>
                           <td>A new provider model can be added without releasing every app.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Startup validation</td>
                           <td>Blank, duplicate, and missing default model entries fail startup.</td>
                           <td>Bad catalogs are caught before serving traffic.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Provider metadata</td>
                           <td>Output token limits and OpenAI request profiles are explicit.</td>
                           <td>Known ceilings can be rejected before upstream calls.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -112,24 +112,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Gemini catalog update</h3>
                       <p>An operator adds a Gemini model ID and its output token limit to config.yml.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Claude default change</h3>
                       <p>A tenant selects a configured Claude default without changing client calls.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>OpenAI web-search gate</h3>
                       <p>Only OpenAI model entries marked with web_search expose that request option.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -145,60 +145,60 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of LLM model catalog configuration?</summary>
                       <p>LLM Proxy treats provider model catalogs as runtime configuration while provider transports stay code-owned.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this configuration resource?</summary>
                       <p>Operators maintaining provider model availability without changing application code.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Provider default model selection for omitted models, which covers provider default model selection.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/provider-default-model-selection/">
                       <span>Configuration</span>
                       <strong>Provider default model selection for omitted models</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/strict-yaml-config-placeholders/">
                       <span>Configuration</span>
                       <strong>Strict YAML config placeholders for LLM Proxy</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/upstream-worker-queue-limits/">
                       <span>Reliability</span>
                       <strong>Upstream worker and queue limits for LLM traffic</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -214,6 +214,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

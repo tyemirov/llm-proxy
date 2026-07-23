@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"GORM-managed tenant persistence for LLM Proxy","description":"Persist signups, provider settings, generated secret digests, defaults, and usage through GORM.","url":"https://llm-proxy.mprlab.com/resources/gorm-managed-tenant-persistence/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/gorm-managed-tenant-persistence/","about":["LLM Proxy","Configuration","GORM managed tenant persistence"]}</script>
@@ -83,27 +83,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Postgres or SQLite</td>
                           <td>Hosted and local management profiles can use supported GORM dialects.</td>
                           <td>SQLite uses a pure-Go driver for CGO_DISABLED builds.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>No runtime config mutation</td>
                           <td>User signup and provider enablement update database state, not config.yml.</td>
                           <td>Configuration stays operator-owned.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Usage event persistence</td>
                           <td>Managed request metadata is stored with tenant isolation.</td>
                           <td>Dashboards survive restarts.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -112,24 +112,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Local development</h3>
                       <p>A developer uses sqlite with a local ignored database file.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Hosted deployment</h3>
                       <p>Production uses a Postgres DSN supplied through deployment secrets.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Usage dashboard</h3>
                       <p>The dashboard reads aggregate usage from persisted events.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -145,66 +145,66 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of GORM managed tenant persistence?</summary>
                       <p>LLM Proxy stores managed tenants, provider keys, defaults, generated secret digests, and usage events in a GORM-managed database.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this configuration resource?</summary>
                       <p>Backend operators deciding how management-mode state is stored.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is LLM model catalog configuration in config.yml, which covers LLM model catalog configuration.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/model-catalog-configuration/">
                       <span>Configuration</span>
                       <strong>LLM model catalog configuration in config.yml</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/provider-default-model-selection/">
                       <span>Configuration</span>
                       <strong>Provider default model selection for omitted models</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/go-client-v2-only-llm-proxy/">
                       <span>Clients</span>
                       <strong>Go LLM Proxy client with a v2-only transport</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/static-to-managed-tenant-migration/">
                       <span>Configuration</span>
                       <strong>Legacy token ownership migration in management mode</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -220,6 +220,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

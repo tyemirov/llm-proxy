@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Admin usage visibility without exposing secrets","description":"Let configured administrators inspect managed users and 30-day usage without raw keys or prompts.","url":"https://llm-proxy.mprlab.com/resources/admin-usage-visibility-without-secrets/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/admin-usage-visibility-without-secrets/","about":["LLM Proxy","Usage","admin usage visibility without secrets"]}</script>
@@ -83,27 +83,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Config-owned admins</td>
                           <td>Admin status comes from validated TAuth email and config.</td>
                           <td>There is no hidden browser-only admin toggle.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Admin API</td>
                           <td>GET /api/management/admin/users returns managed user and usage facts.</td>
                           <td>Non-admin sessions receive 403.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>No secret leakage</td>
                           <td>Admin responses omit raw and masked provider keys plus generated secrets.</td>
                           <td>Oversight stays operational.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -112,24 +112,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Support triage</h3>
                       <p>An admin checks whether a user has a tenant secret and recent usage before asking for logs.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Traffic review</h3>
                       <p>An operator reviews user-level request counts and token totals.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Access check</h3>
                       <p>A non-admin user cannot call the admin endpoint successfully.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -145,60 +145,60 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of admin usage visibility without secrets?</summary>
                       <p>LLM Proxy exposes admin-only user and usage summaries while explicitly excluding provider API keys, masked key strings, generated secrets, secret digests, prompts, responses, audio names, and transcripts.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this usage resource?</summary>
                       <p>Operators who need oversight of managed AI access without turning dashboards into sensitive data exports.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Normalized token usage metadata across providers, which covers normalized token usage metadata.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/normalized-token-usage-metadata/">
                       <span>Usage</span>
                       <strong>Normalized token usage metadata across providers</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/managed-tenant-usage-dashboard/">
                       <span>Usage</span>
                       <strong>Managed tenant usage dashboard for LLM requests</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/api-served-runtime-config-for-static-ui/">
                       <span>Deployment</span>
                       <strong>API-served runtime config for a static LLM UI</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -214,6 +214,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

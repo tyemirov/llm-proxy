@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"OpenAI-compatible provider gateway","description":"Route Meta Muse Spark, DeepSeek, DashScope Qwen, Qwen Cloud, Kimi, MiniMax, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.","url":"https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/","about":["LLM Proxy","Provider routing","OpenAI-compatible provider gateway"]}</script>
@@ -89,21 +89,21 @@
                           <td>Compatible chat providers use one proxy integration pattern.</td>
                           <td>Provider-specific logic stays centralized.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Provider aliases</td>
                           <td>Some providers expose aliases such as qwen, kimi, glm, or xai.</td>
                           <td>Callers can use documented selectors.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Disabled-provider behavior</td>
                           <td>Blank non-default provider keys keep startup working and return 503 when selected.</td>
                           <td>Operators can stage provider support before credentials exist.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -112,7 +112,7 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Meta Muse route</h3>
                       <p>A caller sends provider=meta and model=muse-spark-1.1 through Chat Completions.</p>
@@ -123,7 +123,7 @@
                       <h3>Qwen alias</h3>
                       <p>A caller uses provider=qwen for DashScope routing.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Qwen Cloud route</h3>
@@ -141,7 +141,7 @@
                       <h3>xAI route</h3>
                       <p>A Grok text request uses the OpenAI-compatible chat adapter behind provider=grok.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -157,66 +157,66 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of OpenAI-compatible provider gateway?</summary>
                       <p>LLM Proxy uses a shared compatible chat adapter for configured providers while keeping provider URLs, keys, and model catalogs in config.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this provider routing resource?</summary>
                       <p>Teams adopting OpenAI-compatible chat providers without rewriting every caller.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Multi-provider LLM proxy for internal tools, which covers multi-provider LLM proxy.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/multi-provider-llm-proxy/">
                       <span>Provider routing</span>
                       <strong>Multi-provider LLM proxy for internal tools</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/openai-claude-gemini-one-endpoint/">
                       <span>Provider routing</span>
                       <strong>OpenAI, Claude, and Gemini through one endpoint</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/gemini-generatecontent-proxy/">
                       <span>Provider routing</span>
                       <strong>Gemini generateContent proxy for shared LLM calls</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/dictation-provider-routing/">
                       <span>Dictation</span>
                       <strong>Dictation provider routing for OpenAI, Zhipu, Grok, and SiliconFlow</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -232,6 +232,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

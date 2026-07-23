@@ -33,6 +33,15 @@ export const DASHBOARD_VIEWS = Object.freeze({
   ADMIN: "admin",
 });
 
+export const USAGE_INTERVALS = Object.freeze([
+  Object.freeze({ id: "all", label: "ALL", bucketUnit: "day" }),
+  Object.freeze({ id: "30d", label: "30 days", bucketUnit: "day" }),
+  Object.freeze({ id: "7d", label: "7 days", bucketUnit: "day" }),
+  Object.freeze({ id: "1d", label: "1 day", bucketUnit: "hour" }),
+]);
+
+export const DEFAULT_USAGE_INTERVAL = "30d";
+
 export const WORKSPACE_INTEGRITY_ERROR = "workspace_integrity_error";
 export const ROUTING_DEFAULTS_INVALID_ERROR = "managed_routing_defaults_invalid";
 
@@ -85,6 +94,7 @@ export const COPY = Object.freeze({
   usageTokenTrend: "Tokens",
   usageByProvider: "Provider usage",
   usageByModel: "Model usage",
+  usageInterval: "Usage interval",
   usageEmpty: "No usage recorded",
   adminEmpty: "No managed users",
   adminTenant: "Tenant",

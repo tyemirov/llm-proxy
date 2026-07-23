@@ -1,5 +1,7 @@
 // @ts-check
 
+import { DEFAULT_USAGE_INTERVAL, USAGE_INTERVALS } from "../constants.js";
+
 const EMPTY_STRING = "";
 const CHART_WIDTH = 640;
 const CHART_HEIGHT = 168;
@@ -17,13 +19,19 @@ export const USAGE_METRICS = Object.freeze({
 });
 
 /**
+ * @param {import("../types.d.js").UsageInterval} [interval]
  * @returns {import("../types.d.js").ManagementUsageSummary}
  */
-export function emptyUsageSummary() {
+export function emptyUsageSummary(interval = DEFAULT_USAGE_INTERVAL) {
+  const intervalDefinition = USAGE_INTERVALS.find((candidate) => candidate.id === interval);
+  if (!intervalDefinition) {
+    throw new Error(`usage_interval_invalid:${interval}`);
+  }
   return {
-    period_days: 30,
+    interval,
+    bucket_unit: intervalDefinition.bucketUnit,
     totals: emptyUsageAggregate(),
-    daily: [],
+    buckets: [],
     providers: [],
     models: [],
     status_codes: [],
@@ -53,13 +61,13 @@ function emptyUsageAggregate() {
  * @returns {string}
  */
 export function usagePolyline(usage, metric) {
-  const dailyBuckets = usage ? usage.daily : [];
-  if (dailyBuckets.length === 0) {
+  const buckets = usage ? usage.buckets : [];
+  if (buckets.length === 0) {
     return EMPTY_STRING;
   }
-  const maxValue = Math.max(1, ...dailyBuckets.map((bucket) => usageMetric(bucket.data, metric)));
-  const pointSpacing = dailyBuckets.length > 1 ? (CHART_WIDTH - CHART_PADDING * 2) / (dailyBuckets.length - 1) : 0;
-  return dailyBuckets
+  const maxValue = Math.max(1, ...buckets.map((bucket) => usageMetric(bucket.data, metric)));
+  const pointSpacing = buckets.length > 1 ? (CHART_WIDTH - CHART_PADDING * 2) / (buckets.length - 1) : 0;
+  return buckets
     .map((bucket, bucketIndex) => {
       const x = CHART_PADDING + bucketIndex * pointSpacing;
       const valueRatio = usageMetric(bucket.data, metric) / maxValue;
