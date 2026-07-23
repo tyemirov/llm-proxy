@@ -20,7 +20,7 @@ client.
 - Optional per-request web search via `web_search=1|true|yes` when the selected provider/model is configured to support it
 - Optional logging at `debug` or `info` levels
 - Forwards requests using server-side provider API keys, loaded from the database in management mode
-- Optional TAuth-protected self-service UI where signed-in users automatically receive an llm-proxy client key and save their own provider API keys
+- Optional TAuth-protected self-service UI where signed-in users automatically receive an llm-proxy client key and their provider settings plus routing defaults autosave
 - Supports plain text, JSON, XML, or CSV responses
 
 ## REST Contract
@@ -113,7 +113,10 @@ providers:
           request_profile: "openai_responses_temperature_tools"
           web_search: true
         - id: "gpt-5-mini"
-          request_profile: "openai_responses_base"
+          request_profile: "openai_responses_reasoning_tools"
+          reasoning_effort:
+            adapter: "openai_responses"
+            efforts: ["minimal", "low", "medium", "high"]
         - id: "gpt-5"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
@@ -432,7 +435,6 @@ the stable proxy payload shape for that OpenAI model and must be one of:
 
 | Request profile | Payload behavior |
 |-----------------|------------------|
-| `openai_responses_base` | Sends `model` and `input`; omits temperature, tools, and reasoning controls. |
 | `openai_responses_temperature` | Adds `temperature`. |
 | `openai_responses_temperature_tools` | Adds `temperature`; includes web-search tools only when both the request and model catalog enable web search. |
 | `openai_responses_reasoning_tools` | Adds reasoning/text controls; includes web-search tools only when both the request and model catalog enable web search. A saved tenant reasoning effort is sent only when this route declares the capability. |
@@ -596,8 +598,14 @@ Settings opens automatically and cannot be dismissed until the profile has both
 that client key and at least one persisted managed provider key. Only
 `tenant.has_secret` and `providers[].has_key` satisfy this setup gate; a typed
 provider-key draft or a credential in local dotenv configuration does not.
-Saving any supported provider key unlocks Settings without changing routing
-defaults, and Settings remains open until the user closes it explicitly.
+The selected provider's API key, default model, and system prompt autosave when
+the user leaves a changed field, switches providers, or closes Settings. A
+successful first provider-key autosave unlocks Settings without changing
+routing defaults, and Settings remains open until the user closes it explicitly.
+Text and dictation provider/model defaults plus reasoning effort autosave on
+selection, while the tenant system prompt autosaves when the user leaves the
+changed field. Settings waits for both provider and routing-default autosaves;
+a failed save retains the edited values and keeps Settings open for retry.
 Revoking the client key or removing the last managed provider key makes Settings
 mandatory again, while a failed automatic client-key request remains retryable
 through Create key.
@@ -647,8 +655,9 @@ The profile exposes capability data only as
 `providers[].text_models[].reasoning_effort`; it has no global option list or
 provider-level capability. The Settings form keeps Text provider, Text model,
 and Reasoning effort in one desktop row, clears an incompatible saved value on
-a model change, and reports `Not supported` for routes without a declaration.
-The browser rejects malformed profile data instead of repairing it. Public
+a model change, reports `Not supported` for routes without a declaration, and
+autosaves every routing-default change without a separate action. The browser
+rejects malformed profile data instead of repairing it. Public
 `GET /`, `POST /`, and `POST /v2` contracts do not accept caller-supplied
 reasoning effort.
 
@@ -676,8 +685,9 @@ request examples, and one selected-provider editor for API key, provider text
 model, and provider system prompt settings. The routing-default form exposes
 Reasoning effort only for the exact selected text route, clears an incompatible
 value when that route changes, and shows `Not supported` when the route has no
-declaration. Default examples omit `provider`; selected-provider examples include
-the current provider selector and text model.
+declaration. Its provider/model/effort selections autosave immediately and its
+system prompt autosaves on field exit. Default examples omit `provider`;
+selected-provider examples include the current provider selector and text model.
 
 Administrators are configured only through `management.admin_emails`; use the
 plural `${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` placeholder in public config files
@@ -1553,16 +1563,22 @@ positive and lets the upstream provider enforce any provider-side model limit.
 ### OpenAI reasoning-effort capabilities
 
 The checked-in OpenAI catalog follows the current model documentation and keeps
-each model's list separate:
+each model's list separate. GPT-4.1 is explicitly a non-reasoning model and
+does not accept a configurable effort; GPT-5 mini is part of the reasoning GPT-5
+API family and accepts the same four original GPT-5 effort values:
 
 | Model | Allowed `reasoning_effort` values |
 |-------|-----------------------------------|
+| `gpt-4.1` | Not supported |
+| `gpt-5-mini` | `minimal`, `low`, `medium`, `high` |
 | `gpt-5` | `minimal`, `low`, `medium`, `high` |
 | `gpt-5.5` | `none`, `low`, `medium`, `high`, `xhigh` |
 | `gpt-5.5-pro` | `medium`, `high`, `xhigh` |
 | `gpt-5.6`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` | `none`, `low`, `medium`, `high`, `xhigh`, `max` |
 
-See OpenAI's [GPT-5 model reference](https://developers.openai.com/api/docs/models/gpt-5),
+See OpenAI's [GPT-4.1 model reference](https://developers.openai.com/api/docs/models/gpt-4.1),
+[GPT-5 API launch contract](https://openai.com/index/introducing-gpt-5-for-developers/),
+[GPT-5 model reference](https://developers.openai.com/api/docs/models/gpt-5),
 [GPT-5.5 model reference](https://developers.openai.com/api/docs/models/gpt-5.5),
 [GPT-5.5 Pro model reference](https://developers.openai.com/api/docs/models/gpt-5.5-pro),
 and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-model).
@@ -1651,7 +1667,7 @@ and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-mo
 * All requests must include a configured tenant secret via `key=...`.
 * Client requests must not include upstream provider API keys; public proxy endpoints reject provider-key-like query, JSON, and multipart form fields.
 * Request logs record only the query-free path plus method, status, latency, client IP, and tenant metadata; they do not record query strings, request bodies, cookies, or authorization headers.
-* Self-service provider API keys are accepted only through TAuth-protected management endpoints and are not returned raw after save.
+* Self-service provider API keys are accepted only through TAuth-protected management endpoints. Autosave responses return masked status; raw retrieval requires the explicit owner-authenticated reveal action.
 * Do not expose this service to the public internet without appropriate network controls.
 
 ## Implementation Plans
