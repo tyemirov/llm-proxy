@@ -100,7 +100,7 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   const providerSelectorOffset = html.indexOf('<label class="provider-selector">');
   const providerKeyFieldOffset = html.indexOf("<provider-key-field>");
   const providerVisibilityOffset = html.indexOf('class="icon-only provider-key-visibility-toggle"');
-  const textModelOffset = html.indexOf('x-model="selectedProvider.text_model"');
+  const textModelOffset = html.indexOf('x-on:change="handleSelectedProviderTextModelChange($event)"');
   const providerRemovalOffset = html.indexOf('class="icon-only danger provider-key-remove"');
   expect(providerSelectorOffset).toBeGreaterThan(-1);
   expect(providerSelectorOffset).toBeLessThan(providerKeyFieldOffset);
@@ -111,6 +111,10 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).not.toContain('x-text="copy.providersTitle"');
   expect(html).toContain('role="alertdialog"');
   expect(html).toContain('x-on:click="requestSelectedProviderKeyRemoval()"');
+  expect(html).toContain('x-show="selectedProvider.has_key || selectedProviderKeyHasInput"');
+  expect(html).toContain('x-on:change="autosaveSelectedProvider()"');
+  expect(html).not.toContain("provider-settings-form");
+  expect(html).not.toContain("saveSelectedProviderKey");
   expect(html).not.toContain('x-on:click="removeSelectedProviderKey()"');
   expect(html).toContain('<p id="settings-title" class="eyebrow" x-text="copy.settingsEyebrow"></p>');
   expect(html).toContain('class="icon-only settings-close"');
@@ -157,7 +161,14 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).not.toContain("Generated secret");
   expect(html).toContain('x-model="defaults.reasoning_effort"');
   expect(html).toContain('class="text-routing-controls"');
-  expect(html).toContain('x-on:change="normalizeReasoningEffortDefault()"');
+  expect(html).toContain('x-on:change="handleTextProviderDefaultChange($event)"');
+  expect(html).toContain('x-on:change="handleTextModelDefaultChange($event)"');
+  expect(html).toContain('x-on:change="handleReasoningEffortDefaultChange($event)"');
+  expect(html).toContain('x-on:change="handleDictationProviderDefaultChange($event)"');
+  expect(html).toContain('x-on:change="handleDictationModelDefaultChange($event)"');
+  expect(html).toContain('x-on:change="autosaveRoutingDefaults()"');
+  expect(html).not.toContain("saveDefaults()");
+  expect(html).not.toContain('copy.saveDefaults');
   expect(html).toContain('copy.reasoningEffortUnsupported');
   expect(html).not.toContain("reasoning_effort_options");
 
@@ -182,6 +193,10 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(keyManagementJavaScript).not.toContain("NOTIFICATION_HEADER_BOTTOM_PROPERTY");
   expect(keyManagementJavaScript).not.toContain("bindNotificationRegion");
   expect(keyManagementJavaScript).toContain("providerEditorSession");
+  expect(keyManagementJavaScript).toContain("autosaveSelectedProvider");
+  expect(keyManagementJavaScript).toContain("autosaveRoutingDefaults");
+  expect(keyManagementJavaScript).not.toContain("saveSelectedProviderKey");
+  expect(keyManagementJavaScript).not.toContain("saveDefaults");
   expect(keyManagementJavaScript).toContain("requestAndApplyGeneratedSecret");
   expect(keyManagementJavaScript).toContain("settingsRequired");
   expect(keyManagementJavaScript).toContain("hasSavedProviderKey");
@@ -192,7 +207,12 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
 
   const constantsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/constants.js`);
   expect(constantsResponse.status()).toBe(httpOK);
-  expect(await constantsResponse.text()).toContain("export const NOTICE_AUTO_DISMISS_MILLISECONDS = 10_000;");
+  const constantsJavaScript = await constantsResponse.text();
+  expect(constantsJavaScript).toContain("export const NOTICE_AUTO_DISMISS_MILLISECONDS = 10_000;");
+  expect(constantsJavaScript).toContain("Provider settings saved");
+  expect(constantsJavaScript).not.toContain('saveProviderKey: "Save key"');
+  expect(constantsJavaScript).not.toContain('updateProviderKey: "Update key"');
+  expect(constantsJavaScript).not.toContain('saveDefaults: "Save defaults"');
 
   const stylesheetResponse = await request.get(`${baseURL}/assets/llm-proxy/styles.css`);
   expect(stylesheetResponse.status()).toBe(httpOK);
@@ -200,6 +220,7 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(stylesheet).toContain("#llm-proxy-header notification-region[slot=\"aux\"]");
   expect(stylesheet).toContain("order: -1;");
   expect(stylesheet).not.toContain("shadowRoot");
+  expect(stylesheet).not.toContain('.settings-grid-form button[type="submit"]');
 
   const faviconResponse = await request.get(`${baseURL}${faviconPath}`);
   expect(faviconResponse.status()).toBe(httpOK);
@@ -257,7 +278,7 @@ test("SEO management resources document required onboarding and secret-safe exam
     {
       slug: "self-service-llm-key-management",
       title: "Self-service LLM key management for internal teams",
-      copy: "creates a missing client key after authentication and keeps Settings open",
+      copy: "creates a missing client key after authentication, autosaves provider settings, and keeps Settings open",
       faqQuestion: "What lets a user leave Settings?",
     },
     {
@@ -367,7 +388,9 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(clientAccessRow.locator("client-access-tenant")).toHaveCount(0);
   await expect(clientAccessRow).not.toContainText("Tenant");
   await expect(clientAccessRow).not.toContainText("Default");
-  await expect(clientAccessRow).toContainText("Key retained");
+  await expect(clientAccessRow).toContainText(
+    "This key is saved and can’t be shown again. Replace it to create and copy a new key.",
+  );
   const replaceKeyButton = clientAccessRow.getByRole("button", { name: "Replace key" });
   await expect(replaceKeyButton).toHaveText("");
   await expect(replaceKeyButton.locator("svg.recycle-icon")).toHaveCount(1);
@@ -464,9 +487,9 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
 });
 
-test("provider selection owns transient key editor state", async ({ page }) => {
-  const firstGrokDraft = "xai-provider-draft-visible";
-  const secondGrokDraft = "xai-provider-draft-hidden";
+test("provider selection autosaves its exact editor while transient removal stays local", async ({ page }) => {
+  const firstGrokKey = "xai-provider-first-1111";
+  const secondGrokKey = "xai-provider-second-2222";
   const deepSeekProviderKey = "sk-owner-deepseek-revealed";
   const providerMutations = [];
   page.on("request", (request) => {
@@ -491,53 +514,64 @@ test("provider selection owns transient key editor state", async ({ page }) => {
   const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
 
   await providerSelector.selectOption("grok");
-  await providerEditor.getByRole("textbox", { name: "Grok API key" }).fill(firstGrokDraft);
+  const grokKeyInput = providerEditor.getByRole("textbox", { name: "Grok API key" });
+  await grokKeyInput.fill(firstGrokKey);
+  const providerRemovalButton = providerEditor.getByRole("button", { name: "Remove provider key and settings" });
+  await expect(providerRemovalButton).toBeVisible();
+  await providerRemovalButton.click();
+  await expect(grokKeyInput).toHaveValue("");
+  await expect(grokKeyInput).toBeFocused();
+  await expect(page.getByRole("alertdialog", { name: "Remove provider key?" })).toBeHidden();
+  expect(providerMutations).toHaveLength(0);
+
+  await grokKeyInput.fill(firstGrokKey);
+  await expect(providerEditor.getByRole("button", { name: /^(Save|Update) key$/ })).toHaveCount(0);
   await providerSelector.selectOption("meta");
+  await expect.poll(() => providerMutations.length).toBe(1);
+  expect(providerMutations.at(-1)).toMatchObject({
+    method: "PUT",
+    url: providerKeyEndpointURL("grok"),
+    payload: { api_key: firstGrokKey, text_model: "grok-4.3", system_prompt: "" },
+  });
   const metaKeyInput = providerEditor.getByRole("textbox", { name: "Meta API key" });
   await expect(metaKeyInput).toHaveValue("****meta");
   await expect(metaKeyInput).toHaveAttribute("readonly", "readonly");
   await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toHaveValue("muse-spark-1.1");
-  await providerEditor.getByRole("button", { name: "Update key" }).click();
-  expect(providerMutations.at(-1)).toMatchObject({
-    method: "PUT",
-    url: providerKeyEndpointURL("meta"),
-    payload: { api_key: "", text_model: "muse-spark-1.1" },
-  });
 
   await providerSelector.selectOption("grok");
-  const grokKeyInput = providerEditor.getByRole("textbox", { name: "Grok API key" });
-  await expect(grokKeyInput).toHaveValue("");
-  await expect(grokKeyInput).not.toHaveAttribute("readonly", "readonly");
-
-  await grokKeyInput.fill(secondGrokDraft);
+  await expect(grokKeyInput).toHaveValue("****aved");
+  await expect(grokKeyInput).toHaveAttribute("readonly", "readonly");
+  await providerEditor.getByRole("button", { name: "Show key" }).click();
+  await expect(grokKeyInput).toHaveValue(firstGrokKey);
+  await grokKeyInput.fill(secondGrokKey);
   await providerEditor.getByRole("button", { name: "Hide key" }).click();
-  await expect(grokKeyInput).toHaveValue("****dden");
+  await expect(grokKeyInput).toHaveValue("****2222");
   await providerSelector.selectOption("deepseek");
+  await expect.poll(() => providerMutations.length).toBe(2);
+  expect(providerMutations.at(-1)).toMatchObject({
+    method: "PUT",
+    url: providerKeyEndpointURL("grok"),
+    payload: { api_key: secondGrokKey, text_model: "grok-4.3", system_prompt: "" },
+  });
   const deepSeekKeyInput = providerEditor.getByRole("textbox", { name: "DeepSeek API key" });
   await expect(deepSeekKeyInput).toHaveValue("****5678");
   await providerEditor.getByRole("button", { name: "Show key" }).click();
   await expect(deepSeekKeyInput).toHaveValue(deepSeekProviderKey);
 
   await providerSelector.selectOption("grok");
-  await expect(grokKeyInput).toHaveValue("");
+  await expect(grokKeyInput).toHaveValue("****aved");
+  await providerEditor.getByRole("button", { name: "Show key" }).click();
+  await expect(grokKeyInput).toHaveValue(secondGrokKey);
   await providerSelector.selectOption("deepseek");
   await expect(deepSeekKeyInput).toHaveValue("****5678");
   await expect(deepSeekKeyInput).not.toHaveValue(deepSeekProviderKey);
   await expect(deepSeekKeyInput).toHaveAttribute("readonly", "readonly");
 
   await providerSelector.selectOption("grok");
-  await grokKeyInput.fill(secondGrokDraft);
-  await providerEditor.getByRole("button", { name: "Save key" }).click();
-  expect(providerMutations.at(-1)).toMatchObject({
-    method: "PUT",
-    url: providerKeyEndpointURL("grok"),
-    payload: { api_key: secondGrokDraft, text_model: "grok-4.3" },
-  });
-  await expect(grokKeyInput).not.toHaveValue(secondGrokDraft);
-  expect(await browserStorageContains(page, firstGrokDraft)).toBe(false);
-  expect(await browserStorageContains(page, secondGrokDraft)).toBe(false);
+  await expect(grokKeyInput).not.toHaveValue(secondGrokKey);
+  expect(await browserStorageContains(page, firstGrokKey)).toBe(false);
+  expect(await browserStorageContains(page, secondGrokKey)).toBe(false);
 
-  const providerRemovalButton = providerEditor.getByRole("button", { name: "Remove provider key and settings" });
   await providerRemovalButton.click();
   const removalConfirmation = page.getByRole("alertdialog", { name: "Remove provider key?" });
   await expect(removalConfirmation).toBeVisible();
@@ -566,17 +600,132 @@ test("provider selection owns transient key editor state", async ({ page }) => {
   await expect(grokKeyInput).toHaveValue("");
 });
 
+test("Settings close waits for the current provider autosave", async ({ page }) => {
+  let releaseProviderSave;
+  const providerSaveReleased = new Promise((resolve) => {
+    releaseProviderSave = resolve;
+  });
+  let providerSaveStarted;
+  const providerSaveRequested = new Promise((resolve) => {
+    providerSaveStarted = resolve;
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { savedProviderIDs: [] });
+  await page.route(providerKeyEndpointURL("openai"), async (route) => {
+    providerSaveStarted();
+    await providerSaveReleased;
+    await route.fallback();
+  });
+
+  await page.goto(baseURL);
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const providerEditor = settingsDialog.locator("provider-editor");
+  await providerEditor.getByRole("textbox", { name: "OpenAI API key" }).fill("sk-close-autosave");
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
+  await providerSaveRequested;
+  await expect(settingsDialog).toBeVisible();
+  await expect(page.locator("#llm-proxy-header .notice")).not.toHaveText(
+    "Add at least one provider API key before leaving Settings.",
+  );
+
+  releaseProviderSave();
+  await expect(settingsDialog).toBeHidden();
+});
+
+test("failed provider autosave preserves its editor and blocks provider switching", async ({ page }) => {
+  const editedProviderKey = "sk-openai-autosave-failure";
+  let providerSaveRequestCount = 0;
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await page.route(providerKeyEndpointURL("openai"), async (route) => {
+    providerSaveRequestCount += 1;
+    await route.fulfill({ status: httpInternalServerError, body: "request_failed" });
+  });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const providerEditor = settingsDialog.locator("provider-editor");
+  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
+  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
+  await providerEditor.getByRole("button", { name: "Show key" }).click();
+  await providerKeyInput.fill(editedProviderKey);
+  await page.keyboard.press("Tab");
+
+  await expect.poll(() => providerSaveRequestCount).toBe(1);
+  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Request failed");
+  await expect(providerKeyInput).toHaveValue(editedProviderKey);
+  await expect(settingsDialog).toBeVisible();
+
+  await providerSelector.selectOption("deepseek");
+  await expect.poll(() => providerSaveRequestCount).toBe(2);
+  await expect(providerSelector).toHaveValue("openai");
+  await expect(providerKeyInput).toHaveValue(editedProviderKey);
+});
+
+test("late provider autosave responses cannot repopulate a cleared session", async ({ page }) => {
+  const lateProviderKey = "sk-anthropic-late-autosave";
+  let releaseProviderSave;
+  const providerSaveReleased = new Promise((resolve) => {
+    releaseProviderSave = resolve;
+  });
+  let providerSaveStarted;
+  const providerSaveRequested = new Promise((resolve) => {
+    providerSaveStarted = resolve;
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await page.route(providerKeyEndpointURL("anthropic"), async (route) => {
+    providerSaveStarted();
+    await providerSaveReleased;
+    await route.fallback();
+  });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const providerEditor = settingsDialog.locator("provider-editor");
+  const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
+  await providerSelector.selectOption("anthropic");
+  await providerEditor.getByRole("textbox", { name: "Anthropic API key" }).fill(lateProviderKey);
+  await page.keyboard.press("Tab");
+  await providerSaveRequested;
+
+  await page.evaluate(() => {
+    document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
+  });
+  await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
+  const providerSaveResponse = page.waitForResponse(
+    (response) => response.url() === providerKeyEndpointURL("anthropic") && response.request().method() === "PUT",
+  );
+  releaseProviderSave();
+  await providerSaveResponse;
+  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Authentication required");
+  await expect(page.locator("body")).not.toContainText(lateProviderKey);
+  expect(await browserStorageContains(page, lateProviderKey)).toBe(false);
+
+  await page.evaluate(() => window.__llmProxyMprAuthenticate());
+  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+  await providerSelector.selectOption("anthropic");
+  await expect(providerEditor.getByRole("textbox", { name: "Anthropic API key" })).toHaveValue("****aved");
+  await expect(providerEditor).not.toContainText(lateProviderKey);
+});
+
 test("saved provider keys reveal, edit, and clear without browser persistence", async ({ page }) => {
   const revealedProviderKey = "sk-owner-openai-revealed";
   const editedProviderKey = "sk-owner-openai-edited";
   let revealRequestCount = 0;
-  let savedProviderKeyPayload = null;
+  const savedProviderSettingsPayloads = [];
   page.on("request", (request) => {
     if (request.url() === providerKeyEndpointURL("openai", "reveal")) {
       revealRequestCount += 1;
     }
     if (request.url() === providerKeyEndpointURL("openai") && request.method() === "PUT") {
-      savedProviderKeyPayload = JSON.parse(request.postData() || "{}");
+      savedProviderSettingsPayloads.push(JSON.parse(request.postData() || "{}"));
     }
   });
   await installAssetRoutes(page);
@@ -637,11 +786,35 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
   expect(revealRequestCount).toBe(1);
 
   await providerKeyInput.fill(editedProviderKey);
-  await providerEditor.getByRole("button", { name: "Update key" }).click();
+  await page.keyboard.press("Tab");
+  await expect.poll(() => savedProviderSettingsPayloads.length).toBe(1);
   await expect(providerKeyInput).not.toHaveValue(editedProviderKey);
   await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
   await expect(providerEditor.getByRole("button", { name: "Show key" })).toBeVisible();
-  expect(savedProviderKeyPayload).toMatchObject({ api_key: editedProviderKey });
+  expect(savedProviderSettingsPayloads.at(-1)).toEqual({
+    api_key: editedProviderKey,
+    text_model: "gpt-4.1",
+    system_prompt: "Use concise answers.",
+  });
+
+  const providerModelSelector = providerEditor.getByRole("combobox", { name: "Provider default model" });
+  await providerModelSelector.selectOption("gpt-4o-mini");
+  await expect.poll(() => savedProviderSettingsPayloads.length).toBe(2);
+  expect(savedProviderSettingsPayloads.at(-1)).toEqual({
+    api_key: "",
+    text_model: "gpt-4o-mini",
+    system_prompt: "Use concise answers.",
+  });
+  const providerSystemPrompt = providerEditor.getByRole("textbox", { name: "System prompt" });
+  await providerSystemPrompt.fill("Use autosaved provider guidance.");
+  await page.keyboard.press("Tab");
+  await expect.poll(() => savedProviderSettingsPayloads.length).toBe(3);
+  expect(savedProviderSettingsPayloads.at(-1)).toEqual({
+    api_key: "",
+    text_model: "gpt-4o-mini",
+    system_prompt: "Use autosaved provider guidance.",
+  });
+  await expect(providerEditor.getByRole("button", { name: /^(Save|Update) key$/ })).toHaveCount(0);
   await expect(settingsDialog.locator("example-list")).not.toContainText(editedProviderKey);
   expect(await browserStorageContains(page, revealedProviderKey)).toBe(false);
   expect(await browserStorageContains(page, editedProviderKey)).toBe(false);
@@ -722,7 +895,7 @@ test("removing a revealed provider key clears the selected editor", async ({ pag
   await expect(providerKeyInput).not.toHaveAttribute("readonly", "readonly");
   await expect(providerEditor.getByRole("button", { name: "Show key" })).toBeHidden();
   await expect(settingsDialog.getByRole("alert")).toHaveText(
-    "Save at least one provider API key before leaving Settings.",
+    "Add at least one provider API key before leaving Settings.",
   );
   await expect(settingsDialog.getByRole("alert")).toBeFocused();
   await settingsDialog.getByRole("button", { name: "Close" }).click();
@@ -760,7 +933,7 @@ test("late provider-key reveals cannot populate a reopened editor", async ({ pag
   await revealRequested;
   await expect(providerSelector).toBeDisabled();
   await expect(providerEditor.getByRole("button", { name: "Show key" })).toBeDisabled();
-  await expect(providerEditor.getByRole("button", { name: "Update key" })).toBeDisabled();
+  await expect(providerEditor.getByRole("button", { name: /^(Save|Update) key$/ })).toHaveCount(0);
   await expect(providerEditor.getByRole("button", { name: "Remove provider key and settings" })).toBeDisabled();
 
   await settingsDialog.getByRole("button", { name: "Close" }).click();
@@ -794,7 +967,13 @@ test("short saved provider keys use a generic mask", async ({ page }) => {
   await expect(providerKeyInput).not.toHaveValue("****saved");
 });
 
-test("routing defaults save only complete provider and model pairs", async ({ page }) => {
+test("routing defaults autosave complete provider and model pairs without a manual action", async ({ page }) => {
+  const defaultsMutations = [];
+  page.on("request", (request) => {
+    if (request.url() === `${baseURL}/api/management/defaults`) {
+      defaultsMutations.push(request.postDataJSON());
+    }
+  });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
 
@@ -803,28 +982,36 @@ test("routing defaults save only complete provider and model pairs", async ({ pa
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const textProvider = settingsDialog.getByRole("combobox", { name: "Text provider" });
-  const textModel = settingsDialog.getByRole("combobox", { name: "Text model" }).first();
-  const dictationProvider = settingsDialog.getByRole("combobox", { name: "Dictation provider" });
-  const dictationModel = settingsDialog.getByRole("combobox", { name: "Dictation model" });
+  const defaultsForm = settingsDialog.locator(".settings-grid-form");
+  const textProvider = defaultsForm.getByRole("combobox", { name: "Text provider" });
+  const textModel = defaultsForm.getByRole("combobox", { name: "Text model" });
+  const dictationProvider = defaultsForm.getByRole("combobox", { name: "Dictation provider" });
+  const dictationModel = defaultsForm.getByRole("combobox", { name: "Dictation model" });
+  const systemPrompt = defaultsForm.getByRole("textbox", { name: "System prompt" });
 
   await expect(textProvider).toHaveValue("openai");
   await expect(textModel).toHaveValue("gpt-4.1");
   await expect(dictationProvider).toHaveValue("openai");
   await expect(dictationModel).toHaveValue("gpt-4o-mini-transcribe");
   await expect(dictationModel.locator('option[value=""]')).toHaveCount(0);
+  await expect(defaultsForm.getByRole("button", { name: "Save defaults" })).toHaveCount(0);
 
   await textProvider.selectOption("deepseek");
   await expect(textModel).toHaveValue("deepseek-chat");
+  await expect.poll(() => defaultsMutations.length).toBe(1);
+  expect(defaultsMutations.at(-1)).toEqual({
+    provider: "deepseek",
+    model: "deepseek-chat",
+    dictation_provider: "openai",
+    dictation_model: "gpt-4o-mini-transcribe",
+    system_prompt: "",
+    reasoning_effort: "",
+  });
+
   await dictationProvider.selectOption("grok");
   await expect(dictationModel).toHaveValue("xai-stt");
-
-  const defaultsRequest = page.waitForRequest(`${baseURL}/api/management/defaults`);
-  const defaultsResponse = page.waitForResponse(`${baseURL}/api/management/defaults`);
-  await settingsDialog.getByRole("button", { name: "Save defaults" }).click();
-  const submittedRequest = await defaultsRequest;
-  const savedDefaultsResponse = await defaultsResponse;
-  expect(submittedRequest.postDataJSON()).toEqual({
+  await expect.poll(() => defaultsMutations.length).toBe(2);
+  expect(defaultsMutations.at(-1)).toEqual({
     provider: "deepseek",
     model: "deepseek-chat",
     dictation_provider: "grok",
@@ -832,15 +1019,21 @@ test("routing defaults save only complete provider and model pairs", async ({ pa
     system_prompt: "",
     reasoning_effort: "",
   });
-  expect((await savedDefaultsResponse.json()).tenant.defaults).toEqual({
+
+  await systemPrompt.fill("Use tenant-wide autosaved guidance.");
+  expect(defaultsMutations).toHaveLength(2);
+  await page.keyboard.press("Tab");
+  await expect.poll(() => defaultsMutations.length).toBe(3);
+  expect(defaultsMutations.at(-1)).toEqual({
     provider: "deepseek",
     model: "deepseek-chat",
     dictation_provider: "grok",
     dictation_model: "xai-stt",
-    system_prompt: "",
+    system_prompt: "Use tenant-wide autosaved guidance.",
     reasoning_effort: "",
   });
   await expect(page.locator("notification-region")).toHaveText("Defaults saved");
+  await expect(defaultsForm).not.toHaveAttribute("aria-busy", "true");
 
   const reloadedProfileResponse = page.waitForResponse(`${baseURL}/api/management/profile`);
   await page.reload();
@@ -855,9 +1048,166 @@ test("routing defaults save only complete provider and model pairs", async ({ pa
   await expect(settingsDialog.getByRole("combobox", { name: "Text model" }).first()).toHaveValue("deepseek-chat");
   await expect(settingsDialog.getByRole("combobox", { name: "Dictation provider" })).toHaveValue("grok");
   await expect(settingsDialog.getByRole("combobox", { name: "Dictation model" })).toHaveValue("xai-stt");
+  await expect(settingsDialog.locator(".settings-grid-form").getByRole("textbox", { name: "System prompt" })).toHaveValue(
+    "Use tenant-wide autosaved guidance.",
+  );
+});
+
+test("routing-default autosave queues newer edits without resetting the provider editor", async ({ page }) => {
+  const revealedProviderKey = "sk-routing-autosave-owner";
+  const defaultsMutations = [];
+  let releaseFirstDefaultsSave;
+  const firstDefaultsSaveReleased = new Promise((resolve) => {
+    releaseFirstDefaultsSave = resolve;
+  });
+  let firstDefaultsSaveStarted;
+  const firstDefaultsSaveRequested = new Promise((resolve) => {
+    firstDefaultsSaveStarted = resolve;
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { providerKeys: { openai: revealedProviderKey } });
+  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+    defaultsMutations.push(route.request().postDataJSON());
+    if (defaultsMutations.length === 1) {
+      firstDefaultsSaveStarted();
+      await firstDefaultsSaveReleased;
+    }
+    await route.fallback();
+  });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const providerEditor = settingsDialog.locator("provider-editor");
+  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
+  await providerEditor.getByRole("button", { name: "Show key" }).click();
+  await expect(providerKeyInput).toHaveValue(revealedProviderKey);
+
+  const defaultsForm = settingsDialog.locator(".settings-grid-form");
+  await defaultsForm.getByRole("combobox", { name: "Text provider" }).selectOption("deepseek");
+  await firstDefaultsSaveRequested;
+  await defaultsForm.getByRole("combobox", { name: "Dictation provider" }).selectOption("grok");
+  await defaultsForm.getByRole("textbox", { name: "System prompt" }).fill("Keep the latest defaults only.");
+  await page.keyboard.press("Tab");
+
+  releaseFirstDefaultsSave();
+  await expect.poll(() => defaultsMutations.length).toBe(2);
+  expect(defaultsMutations.at(-1)).toEqual({
+    provider: "deepseek",
+    model: "deepseek-chat",
+    dictation_provider: "grok",
+    dictation_model: "xai-stt",
+    system_prompt: "Keep the latest defaults only.",
+    reasoning_effort: "",
+  });
+  await expect(providerKeyInput).toHaveValue(revealedProviderKey);
+  await expect(page.locator("notification-region")).toHaveText("Defaults saved");
+  await expect(defaultsForm).not.toHaveAttribute("aria-busy", "true");
+});
+
+test("Settings close waits for the current routing-default autosave", async ({ page }) => {
+  let releaseDefaultsSave;
+  const defaultsSaveReleased = new Promise((resolve) => {
+    releaseDefaultsSave = resolve;
+  });
+  let defaultsSaveStarted;
+  const defaultsSaveRequested = new Promise((resolve) => {
+    defaultsSaveStarted = resolve;
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+    defaultsSaveStarted();
+    await defaultsSaveReleased;
+    await route.fallback();
+  });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await settingsDialog.getByRole("combobox", { name: "Text provider" }).selectOption("deepseek");
+  await defaultsSaveRequested;
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
+  await expect(settingsDialog).toBeVisible();
+
+  releaseDefaultsSave();
+  await expect(settingsDialog).toBeHidden();
+});
+
+test("failed routing-default autosave retains edits and blocks Settings close", async ({ page }) => {
+  let defaultsSaveRequestCount = 0;
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+    defaultsSaveRequestCount += 1;
+    await route.fulfill({ status: httpInternalServerError, body: "request_failed" });
+  });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const textProvider = settingsDialog.getByRole("combobox", { name: "Text provider" });
+  const textModel = settingsDialog.getByRole("combobox", { name: "Text model" }).first();
+  await textProvider.selectOption("deepseek");
+  await expect.poll(() => defaultsSaveRequestCount).toBe(1);
+  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Request failed");
+  await expect(textProvider).toHaveValue("deepseek");
+  await expect(textModel).toHaveValue("deepseek-chat");
+
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
+  await expect.poll(() => defaultsSaveRequestCount).toBe(2);
+  await expect(settingsDialog).toBeVisible();
+  await expect(textProvider).toHaveValue("deepseek");
+  await expect(textModel).toHaveValue("deepseek-chat");
+});
+
+test("late routing-default autosave responses cannot repopulate a cleared session", async ({ page }) => {
+  let releaseDefaultsSave;
+  const defaultsSaveReleased = new Promise((resolve) => {
+    releaseDefaultsSave = resolve;
+  });
+  let defaultsSaveStarted;
+  const defaultsSaveRequested = new Promise((resolve) => {
+    defaultsSaveStarted = resolve;
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+    defaultsSaveStarted();
+    await defaultsSaveReleased;
+    await route.fallback();
+  });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+  await page.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Text provider" }).selectOption("deepseek");
+  await defaultsSaveRequested;
+
+  await page.evaluate(() => {
+    document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
+  });
+  await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
+  const defaultsSaveResponse = page.waitForResponse(`${baseURL}/api/management/defaults`);
+  releaseDefaultsSave();
+  await defaultsSaveResponse;
+  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Authentication required");
+  await expect(page.locator('option[value="deepseek"]')).toHaveCount(0);
 });
 
 test("reasoning effort is exact to the selected text route and the controls remain responsive", async ({ page }) => {
+  const defaultsMutations = [];
+  page.on("request", (request) => {
+    if (request.url() === `${baseURL}/api/management/defaults`) {
+      defaultsMutations.push(request.postDataJSON());
+    }
+  });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
 
@@ -874,6 +1224,16 @@ test("reasoning effort is exact to the selected text route and the controls rema
 
   await expect(unsupportedEffort).toBeVisible();
   await expect(unsupportedEffort).toContainText("Not supported");
+  await expect(reasoningEffort).toBeHidden();
+  await textModel.selectOption("gpt-5-mini");
+  await expect(unsupportedEffort).toBeHidden();
+  await expect(reasoningEffort).toBeVisible();
+  await expect(reasoningEffort).toHaveValue("");
+  await expect(reasoningEffort.locator("option")).toHaveText(["Not set", "minimal", "low", "medium", "high"]);
+  await reasoningEffort.selectOption("high");
+  await textModel.selectOption("gpt-4.1");
+  await expect(reasoningEffort).toBeHidden();
+  await expect(unsupportedEffort).toBeVisible();
   await textModel.selectOption("gpt-5");
   await expect(reasoningEffort).toHaveValue("");
   await expect(reasoningEffort.locator("option")).toHaveText(["Not set", "minimal", "low", "medium", "high"]);
@@ -906,13 +1266,11 @@ test("reasoning effort is exact to the selected text route and the controls rema
   await textModel.selectOption("gpt-5.6");
   await reasoningEffort.selectOption("max");
 
-  const defaultsRequest = page.waitForRequest(`${baseURL}/api/management/defaults`);
-  await settingsDialog.getByRole("button", { name: "Save defaults" }).click();
-  expect((await defaultsRequest).postDataJSON()).toMatchObject({
-    provider: "openai",
-    model: "gpt-5.6",
-    reasoning_effort: "max",
-  });
+  await expect.poll(() => defaultsMutations.some((defaults) => (
+    defaults.provider === "openai" && defaults.model === "gpt-5.6" && defaults.reasoning_effort === "max"
+  ))).toBe(true);
+  expect(defaultsMutations.at(-1)).toMatchObject({ provider: "openai", model: "gpt-5.6", reasoning_effort: "max" });
+  await expect(settingsDialog.locator(".settings-grid-form")).not.toHaveAttribute("aria-busy", "true");
 
   await page.setViewportSize({ width: 390, height: 780 });
   await expect(reasoningEffort).toBeVisible();
@@ -1025,7 +1383,7 @@ test("signed-out panel presents a direct sign-in prompt without auth instruction
   await expect(signedOutPanel.locator("p:not(.eyebrow)")).toHaveCount(0);
 });
 
-test("fresh authenticated users receive one client key and must save a provider key before closing Settings", async ({ page }) => {
+test("fresh authenticated users receive one client key and must add a provider key before closing Settings", async ({ page }) => {
   const generatedSecret = "llmp_test_fresh_user_secret";
   let secretRequestCount = 0;
   let defaultsRequestCount = 0;
@@ -1058,7 +1416,7 @@ test("fresh authenticated users receive one client key and must save a provider 
   expect(secretRequestCount).toBe(1);
 
   const setupRequirement = settingsDialog.getByRole("alert");
-  await expect(setupRequirement).toHaveText("Save at least one provider API key before leaving Settings.");
+  await expect(setupRequirement).toHaveText("Add at least one provider API key before leaving Settings.");
   const clientKeyInput = settingsDialog.getByRole("textbox", { name: "Key", exact: true });
   await expect(clientKeyInput).toHaveValue("••••••••••••");
   await expect(clientKeyInput).toHaveAttribute("readonly", "");
@@ -1075,7 +1433,7 @@ test("fresh authenticated users receive one client key and must save a provider 
   await expect(settingsDialog).toBeVisible();
   await expect(setupRequirement).toBeFocused();
   await expect(page.locator("#llm-proxy-header .notice")).toHaveText(
-    "Save at least one provider API key before leaving Settings.",
+    "Add at least one provider API key before leaving Settings.",
   );
   await page.keyboard.press("Escape");
   await expect(settingsDialog).toBeVisible();
@@ -1085,17 +1443,20 @@ test("fresh authenticated users receive one client key and must save a provider 
   await expect(setupRequirement).toBeFocused();
 
   const providerEditor = settingsDialog.locator("provider-editor");
-  const saveProviderKeyButton = providerEditor.getByRole("button", { name: "Save key" });
-  await saveProviderKeyButton.focus();
+  const providerSystemPrompt = providerEditor.getByRole("textbox", { name: "System prompt" });
+  await providerSystemPrompt.focus();
   await page.keyboard.press("Tab");
   await expect(closeButton).toBeFocused();
   await page.keyboard.press("Shift+Tab");
-  await expect(saveProviderKeyButton).toBeFocused();
+  await expect(providerSystemPrompt).toBeFocused();
 
-  await providerEditor.getByRole("textbox", { name: "OpenAI API key" }).fill("sk-fresh-openai");
-  await saveProviderKeyButton.click();
+  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
+  await providerKeyInput.fill("sk-fresh-openai");
+  await page.keyboard.press("Tab");
+  await expect.poll(() => providerMutations.length).toBe(1);
   await expect(setupRequirement).toBeHidden();
   await expect(settingsDialog).toBeVisible();
+  await expect(providerEditor.getByRole("button", { name: /^(Save|Update) key$/ })).toHaveCount(0);
   expect(providerMutations).toEqual([
     {
       api_key: "sk-fresh-openai",
@@ -1414,7 +1775,9 @@ test("new client keys stay left-aligned and read-only while supporting key actio
 
     await page.getByTestId("avatar-menu").click();
     await page.getByTestId("avatar-menu-item").nth(0).click();
-    await expect(clientAccessRow.getByText("Key retained — create a replacement to copy a new value")).toBeVisible();
+    await expect(
+      clientAccessRow.getByText("This key is saved and can’t be shown again. Replace it to create and copy a new key."),
+    ).toBeVisible();
     await expect(clientKeyInput).toBeHidden();
     await expect(clientAccessRow.getByRole("button", { name: "Show key", exact: true })).toBeHidden();
     await expect(clientAccessRow.getByRole("button", { name: "Copy key", exact: true })).toBeHidden();
@@ -2275,6 +2638,13 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         text_models: [
           { id: "gpt-4.1" },
           { id: "gpt-4o-mini" },
+          {
+            id: "gpt-5-mini",
+            reasoning_effort: {
+              adapter: "openai_responses",
+              efforts: ["minimal", "low", "medium", "high"],
+            },
+          },
           {
             id: "gpt-5",
             reasoning_effort: {

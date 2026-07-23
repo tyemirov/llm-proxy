@@ -166,7 +166,7 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await expect(settingsDialog).toBeVisible();
   await expect(settingsDialog.getByRole("alert")).toHaveText(
-    "Save at least one provider API key before leaving Settings.",
+    "Add at least one provider API key before leaving Settings.",
   );
   const clientKeyInput = settingsDialog.getByRole("textbox", { name: "Key", exact: true });
   await expect(clientKeyInput).toHaveValue("••••••••••••");
@@ -181,8 +181,9 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
       response.url() === `${stack.llmProxyOrigin}/api/management/provider-keys/openai` &&
       response.request().method() === "PUT",
   );
-  await providerEditor.getByRole("button", { name: "Save key" }).click();
+  await page.keyboard.press("Tab");
   expect((await providerSaveResponsePromise).status()).toBe(httpOK);
+  await expect(providerEditor.getByRole("button", { name: /^(Save|Update) key$/ })).toHaveCount(0);
   await expect(settingsDialog.getByRole("alert")).toBeHidden();
   await expect(settingsDialog).toBeVisible();
   await settingsDialog.getByRole("button", { name: "Close" }).click();
