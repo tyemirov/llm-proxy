@@ -15,7 +15,7 @@
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=delete,visibility,visibility_off&amp;display=block">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=delete,key,visibility,visibility_off&amp;display=block">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
@@ -288,13 +288,9 @@
                       <span aria-hidden="true">+</span>
                       <span x-text="copy.createKey"></span>
                     </button>
-                    <button type="button" class="icon-only client-key-replace" x-cloak x-show="hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.replaceKey" x-bind:aria-label="copy.replaceKey">
-                      <svg class="utility-icon recycle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
-                        <path d="M20 7v5h-5"></path>
-                        <path d="M4 17v-5h5"></path>
-                        <path d="M6.1 9a7 7 0 0 1 11.5-2.6L20 9"></path>
-                        <path d="M17.9 15a7 7 0 0 1-11.5 2.6L4 15"></path>
-                      </svg>
+                    <button type="button" class="icon-button client-key-replace" x-cloak x-show="hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.replaceKey" x-bind:aria-label="copy.replaceKey">
+                      <span class="material-symbols-outlined" aria-hidden="true">key</span>
+                      <span class="client-key-replace-label" x-text="copy.replaceKey"></span>
                     </button>
                   </client-access-row>
 
