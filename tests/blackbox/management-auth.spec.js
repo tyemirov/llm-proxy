@@ -25,6 +25,7 @@ const contrastLuminanceOffset = 0.05;
 const redLuminanceWeight = 0.2126;
 const greenLuminanceWeight = 0.7152;
 const blueLuminanceWeight = 0.0722;
+const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
 
 let stack;
 
@@ -58,6 +59,8 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   expect(browserConfig).toContain(`managementApiOrigin: "${stack.llmProxyOrigin}"`);
   expect(browserConfig).toContain(`tauthUrl: "${stack.tAuthOrigin}"`);
   expect(browserConfig).toContain(`tenantId: "${localManagementProfile.tenantID}"`);
+  expect(browserConfig).toContain('sessionPath: "/auth/session"');
+  expect(browserConfig).not.toContain("authButton");
 
   const anonymousProfileResponse = await context.request.get(`${stack.llmProxyOrigin}/api/management/profile`, {
     headers: { Origin: stack.frontendOrigin },
@@ -65,6 +68,8 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   expect(anonymousProfileResponse.status()).toBe(httpUnauthorized);
 
   await page.goto(stack.frontendOrigin);
+  await expect(page.locator("#mpr-ui-bundle")).toHaveAttribute("data-mpr-ui-bundle-src", mprUIBundleURL);
+  await expect.poll(() => page.evaluate(() => Boolean(customElements.get("mpr-legal-document")))).toBe(true);
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
   await expect(page.locator("llm-proxy-key-management")).toHaveAttribute("data-auth-state", "unauthenticated");
   await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "unauthenticated");
@@ -358,15 +363,6 @@ async function installLocalAssetRoutes(page) {
   );
   await page.route("**/js-yaml@4.3.0/dist/js-yaml.min.js", async (route) =>
     fulfillLocalFile(route, "node_modules/js-yaml/dist/js-yaml.min.js", "application/javascript"),
-  );
-  await page.route("**/mpr-ui@v3.11.1/mpr-ui.css", async (route) =>
-    fulfillLocalFile(route, "node_modules/mpr-ui/mpr-ui.css", "text/css"),
-  );
-  await page.route("**/mpr-ui@v3.11.1/mpr-ui-config.js", async (route) =>
-    fulfillLocalFile(route, "node_modules/mpr-ui/mpr-ui-config.js", "application/javascript"),
-  );
-  await page.route("**/mpr-ui@v3.11.1/mpr-ui.js", async (route) =>
-    fulfillLocalFile(route, "node_modules/mpr-ui/mpr-ui.js", "application/javascript"),
   );
 }
 

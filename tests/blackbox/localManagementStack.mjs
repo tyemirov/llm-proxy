@@ -323,6 +323,7 @@ function llmProxyEnvironment(frontendOrigin, tAuthOrigin, llmProxyOrigin, tempor
     LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH: "/auth/google",
     LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH: "/auth/logout",
     LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH: "/auth/nonce",
+    LLM_PROXY_MANAGEMENT_TAUTH_SESSION_PATH: "/auth/session",
     LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY: jwtSigningKey,
     LLM_PROXY_MANAGEMENT_JWT_ISSUER: "tauth",
     LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME: sessionCookieName,
