@@ -78,6 +78,15 @@ export function createKeyManagement() {
     /** @type {import("../types.d.js").ProviderProfile[]} */
     providers: [],
     providerEditorSession: createProviderEditorSession(EMPTY_STRING, 0),
+    providerAutosavePending: false,
+    /** @type {Promise<boolean> | null} */
+    providerAutosavePromise: null,
+    routingDefaultsDirty: false,
+    routingDefaultsEditVersion: 0,
+    routingDefaultsAutosavePending: false,
+    /** @type {Promise<boolean> | null} */
+    routingDefaultsAutosavePromise: null,
+    profileApplicationVersion: 0,
     providerRemovalConfirmationProviderID: EMPTY_STRING,
     /** @type {import("../types.d.js").TenantDefaults} */
     defaults: emptyDefaults(),
@@ -597,7 +606,13 @@ export function createKeyManagement() {
       });
     },
 
-    closeSettings() {
+    async closeSettings() {
+      if (!(await this.autosaveSelectedProvider())) {
+        return;
+      }
+      if (!(await this.autosaveRoutingDefaults())) {
+        return;
+      }
       if (this.settingsRequired) {
         this.setNotice(NOTICE_KINDS.ERROR, this.settingsRequirementCopy);
         this.focusSettingsRequirement();
@@ -643,10 +658,29 @@ export function createKeyManagement() {
     /**
      * @param {string} providerID
      */
-    selectProvider(providerID) {
+    async selectProvider(providerID) {
       profileProvider(this.providers, providerID);
+      if (providerID === this.selectedProviderID) {
+        return;
+      }
+      this.restoreSelectedProviderControl();
+      if (!(await this.autosaveSelectedProvider())) {
+        this.restoreSelectedProviderControl();
+        return;
+      }
+      if (!this.settingsOpen || this.authState !== AUTH_STATES.AUTHENTICATED) {
+        return;
+      }
       this.dismissProviderKeyRemovalConfirmation();
       this.replaceProviderEditorSession(providerID);
+    },
+
+    restoreSelectedProviderControl() {
+      this.$nextTick(() => {
+        if (this.settingsOpen && this.$refs.providerSelector) {
+          this.$refs.providerSelector.value = this.selectedProviderID;
+        }
+      });
     },
 
     async handleSelectedProviderKeyAction() {
@@ -674,6 +708,32 @@ export function createKeyManagement() {
       const keyInput = /** @type {HTMLInputElement} */ (event.target);
       this.providerEditorSession.keyInput = keyInput.value;
       this.providerEditorSession.keyVisible = true;
+      this.providerEditorSession.keyDirty = true;
+      this.markSelectedProviderDirty();
+    },
+
+    /**
+     * @param {Event} event
+     */
+    handleSelectedProviderTextModelChange(event) {
+      const modelSelect = /** @type {HTMLSelectElement} */ (event.target);
+      this.providerEditorSession.textModel = modelSelect.value;
+      this.markSelectedProviderDirty();
+      void this.autosaveSelectedProvider();
+    },
+
+    /**
+     * @param {Event} event
+     */
+    handleSelectedProviderSystemPromptInput(event) {
+      const systemPromptInput = /** @type {HTMLTextAreaElement} */ (event.target);
+      this.providerEditorSession.systemPrompt = systemPromptInput.value;
+      this.markSelectedProviderDirty();
+    },
+
+    markSelectedProviderDirty() {
+      this.providerEditorSession.dirty = true;
+      this.providerEditorSession.editVersion += 1;
     },
 
     async revealSelectedProviderKey() {
@@ -723,9 +783,12 @@ export function createKeyManagement() {
      * @param {string} providerID
      */
     replaceProviderEditorSession(providerID) {
+      const provider = providerID === EMPTY_STRING ? null : profileProvider(this.providers, providerID);
       this.providerEditorSession = createProviderEditorSession(
         providerID,
         this.providerEditorSession.revealVersion + 1,
+        provider ? provider.text_model : EMPTY_STRING,
+        provider ? provider.system_prompt : EMPTY_STRING,
       );
     },
 
@@ -747,16 +810,16 @@ export function createKeyManagement() {
       );
     },
 
-    async saveSelectedProviderKey() {
-      if (!this.selectedProvider) {
-        return;
-      }
-      await this.saveProviderKey(this.selectedProvider);
-    },
-
     requestSelectedProviderKeyRemoval() {
       const provider = this.selectedProvider;
       if (!provider) {
+        return;
+      }
+      if (!provider.has_key) {
+        this.clearProviderKeyMaterial();
+        this.$nextTick(() => {
+          this.$refs.providerKeyInput.focus();
+        });
         return;
       }
       this.providerRemovalConfirmationProviderID = provider.id;
@@ -806,23 +869,84 @@ export function createKeyManagement() {
       }
     },
 
-    /**
-     * @param {import("../types.d.js").ProviderProfile} provider
-     */
-    async saveProviderKey(provider) {
-      const apiKey = this.providerEditorSession.keyInput.trim();
-      if (!apiKey && !provider.has_key) {
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.providerMissing);
-        return;
+    async autosaveSelectedProvider() {
+      if (this.providerAutosavePromise) {
+        return this.providerAutosavePromise;
       }
+      if (!this.providerEditorSession.dirty) {
+        return true;
+      }
+      const autosavePromise = this.persistSelectedProviderChanges();
+      this.providerAutosavePromise = autosavePromise;
+      this.providerAutosavePending = true;
       try {
-        await this.runProfileMutation(
-          async () => requestSaveProviderKey(provider.id, apiKey, provider.text_model, provider.system_prompt),
-          COPY.providerKeySaved,
-        );
+        return await autosavePromise;
       } finally {
-        this.clearProviderKeyMaterial();
+        if (this.providerAutosavePromise === autosavePromise) {
+          this.providerAutosavePromise = null;
+          this.providerAutosavePending = false;
+        }
       }
+    },
+
+    async persistSelectedProviderChanges() {
+      while (this.providerEditorSession.dirty) {
+        const provider = this.selectedProvider;
+        if (!provider) {
+          return false;
+        }
+        const editorSession = this.providerEditorSession;
+        const apiKey = editorSession.keyDirty ? editorSession.keyInput.trim() : EMPTY_STRING;
+        if (!provider.has_key && !apiKey) {
+          editorSession.dirty = false;
+          return true;
+        }
+        const providerID = provider.id;
+        const revealVersion = editorSession.revealVersion;
+        const editVersion = editorSession.editVersion;
+        const workspaceVersion = this.workspaceVersion;
+        editorSession.dirty = false;
+        try {
+          const updatedProfile = await requestSaveProviderKey(
+            providerID,
+            apiKey,
+            editorSession.textModel,
+            editorSession.systemPrompt,
+          );
+          if (!this.canApplyProviderAutosave(providerID, revealVersion, workspaceVersion)) {
+            return false;
+          }
+          if (this.providerEditorSession.editVersion !== editVersion) {
+            this.applyProfile(updatedProfile, true, this.routingDefaultsDirty || this.routingDefaultsAutosavePending);
+            continue;
+          }
+          this.applyProfile(updatedProfile, false, this.routingDefaultsDirty || this.routingDefaultsAutosavePending);
+          this.setNotice(NOTICE_KINDS.SUCCESS, COPY.providerSettingsSaved);
+        } catch (requestError) {
+          if (this.canApplyProviderAutosave(providerID, revealVersion, workspaceVersion)) {
+            this.providerEditorSession.dirty = true;
+            this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+          }
+          return false;
+        }
+      }
+      return true;
+    },
+
+    /**
+     * @param {string} providerID
+     * @param {number} revealVersion
+     * @param {number} workspaceVersion
+     * @returns {boolean}
+     */
+    canApplyProviderAutosave(providerID, revealVersion, workspaceVersion) {
+      return (
+        this.settingsOpen &&
+        this.authState === AUTH_STATES.AUTHENTICATED &&
+        this.workspaceVersion === workspaceVersion &&
+        this.selectedProviderID === providerID &&
+        this.providerEditorSession.revealVersion === revealVersion
+      );
     },
 
     /**
@@ -836,8 +960,63 @@ export function createKeyManagement() {
       }
     },
 
-    async saveDefaults() {
-      await this.runProfileMutation(async () => requestUpdateDefaults(this.defaults), COPY.defaultsSaved);
+    async autosaveRoutingDefaults() {
+      if (this.routingDefaultsAutosavePromise) {
+        return this.routingDefaultsAutosavePromise;
+      }
+      if (!this.routingDefaultsDirty) {
+        return true;
+      }
+      const autosavePromise = this.persistRoutingDefaultsChanges();
+      this.routingDefaultsAutosavePromise = autosavePromise;
+      this.routingDefaultsAutosavePending = true;
+      try {
+        return await autosavePromise;
+      } finally {
+        if (this.routingDefaultsAutosavePromise === autosavePromise) {
+          this.routingDefaultsAutosavePromise = null;
+          this.routingDefaultsAutosavePending = false;
+        }
+      }
+    },
+
+    async persistRoutingDefaultsChanges() {
+      while (this.routingDefaultsDirty) {
+        const defaults = { ...this.defaults };
+        const editVersion = this.routingDefaultsEditVersion;
+        const workspaceVersion = this.workspaceVersion;
+        this.routingDefaultsDirty = false;
+        try {
+          const updatedProfile = await requestUpdateDefaults(defaults);
+          if (!this.canApplyRoutingDefaultsAutosave(workspaceVersion)) {
+            return false;
+          }
+          if (this.routingDefaultsEditVersion !== editVersion) {
+            continue;
+          }
+          this.applyProfile(updatedProfile, true);
+          this.setNotice(NOTICE_KINDS.SUCCESS, COPY.defaultsSaved);
+        } catch (requestError) {
+          if (this.canApplyRoutingDefaultsAutosave(workspaceVersion)) {
+            this.routingDefaultsDirty = true;
+            this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+          }
+          return false;
+        }
+      }
+      return true;
+    },
+
+    /**
+     * @param {number} workspaceVersion
+     * @returns {boolean}
+     */
+    canApplyRoutingDefaultsAutosave(workspaceVersion) {
+      return (
+        this.settingsOpen &&
+        this.authState === AUTH_STATES.AUTHENTICATED &&
+        this.workspaceVersion === workspaceVersion
+      );
     },
 
     async requestAndApplyGeneratedSecret() {
@@ -903,10 +1082,24 @@ export function createKeyManagement() {
       this.setNotice(NOTICE_KINDS.SUCCESS, COPY.exampleCopied);
     },
 
-    selectTextProviderDefaultModel() {
-      const provider = profileProvider(this.providers, this.defaults.provider);
+    /** @param {Event} event */
+    handleTextProviderDefaultChange(event) {
+      const providerSelect = /** @type {HTMLSelectElement} */ (event.target);
+      this.defaults.provider = providerSelect.value;
+      const provider = profileProvider(this.providers, providerSelect.value);
       this.defaults.model = provider.text_default_model;
       this.normalizeReasoningEffortDefault();
+      this.markRoutingDefaultsDirty();
+      void this.autosaveRoutingDefaults();
+    },
+
+    /** @param {Event} event */
+    handleTextModelDefaultChange(event) {
+      const modelSelect = /** @type {HTMLSelectElement} */ (event.target);
+      this.defaults.model = modelSelect.value;
+      this.normalizeReasoningEffortDefault();
+      this.markRoutingDefaultsDirty();
+      void this.autosaveRoutingDefaults();
     },
 
     normalizeReasoningEffortDefault() {
@@ -915,12 +1108,45 @@ export function createKeyManagement() {
       }
     },
 
-    selectDictationProviderDefaultModel() {
-      const provider = profileProvider(this.providers, this.defaults.dictation_provider);
+    /** @param {Event} event */
+    handleReasoningEffortDefaultChange(event) {
+      const effortSelect = /** @type {HTMLSelectElement} */ (event.target);
+      this.defaults.reasoning_effort = effortSelect.value;
+      this.markRoutingDefaultsDirty();
+      void this.autosaveRoutingDefaults();
+    },
+
+    /** @param {Event} event */
+    handleDictationProviderDefaultChange(event) {
+      const providerSelect = /** @type {HTMLSelectElement} */ (event.target);
+      this.defaults.dictation_provider = providerSelect.value;
+      const provider = profileProvider(this.providers, providerSelect.value);
       if (!provider.supports_dictation || !provider.dictation_default_model) {
         throw new Error(WORKSPACE_INTEGRITY_ERROR);
       }
       this.defaults.dictation_model = provider.dictation_default_model;
+      this.markRoutingDefaultsDirty();
+      void this.autosaveRoutingDefaults();
+    },
+
+    /** @param {Event} event */
+    handleDictationModelDefaultChange(event) {
+      const modelSelect = /** @type {HTMLSelectElement} */ (event.target);
+      this.defaults.dictation_model = modelSelect.value;
+      this.markRoutingDefaultsDirty();
+      void this.autosaveRoutingDefaults();
+    },
+
+    /** @param {Event} event */
+    handleRoutingSystemPromptInput(event) {
+      const systemPromptInput = /** @type {HTMLTextAreaElement} */ (event.target);
+      this.defaults.system_prompt = systemPromptInput.value;
+      this.markRoutingDefaultsDirty();
+    },
+
+    markRoutingDefaultsDirty() {
+      this.routingDefaultsDirty = true;
+      this.routingDefaultsEditVersion += 1;
     },
 
     /**
@@ -932,7 +1158,7 @@ export function createKeyManagement() {
       this.busy = true;
       try {
         const updatedProfile = await mutation();
-        this.applyProfile(updatedProfile);
+        this.applyProfile(updatedProfile, false, this.routingDefaultsDirty || this.routingDefaultsAutosavePending);
         this.setNotice(NOTICE_KINDS.SUCCESS, successMessage);
         return true;
       } catch (requestError) {
@@ -945,31 +1171,59 @@ export function createKeyManagement() {
 
     /**
      * @param {import("../types.d.js").ManagementProfile} nextProfile
+     * @param {boolean} [preserveProviderEditor]
+     * @param {boolean} [preserveRoutingDefaults]
      */
-    applyProfile(nextProfile) {
+    applyProfile(nextProfile, preserveProviderEditor = false, preserveRoutingDefaults = false) {
       const defaults = createWorkspaceRoutingDefaults(nextProfile);
+      const profileApplicationVersion = this.profileApplicationVersion + 1;
+      this.profileApplicationVersion = profileApplicationVersion;
       const selectedProviderID = this.selectedProviderID;
+      if (preserveProviderEditor) {
+        profileProvider(nextProfile.providers, selectedProviderID);
+      }
       this.dismissProviderKeyRemovalConfirmation();
       this.profile = nextProfile;
       applyUserMenuItems(Boolean(nextProfile.user.is_admin));
       this.providers = nextProfile.providers;
-      this.defaults.provider = defaults.provider;
-      this.defaults.model = defaults.model;
-      this.defaults.dictation_provider = defaults.dictation_provider;
-      this.defaults.dictation_model = defaults.dictation_model;
-      this.defaults.system_prompt = defaults.system_prompt;
-      this.defaults.reasoning_effort = defaults.reasoning_effort;
+      if (!preserveRoutingDefaults) {
+        this.defaults.provider = defaults.provider;
+        this.defaults.model = defaults.model;
+        this.defaults.dictation_provider = defaults.dictation_provider;
+        this.defaults.dictation_model = defaults.dictation_model;
+        this.defaults.system_prompt = defaults.system_prompt;
+        this.defaults.reasoning_effort = defaults.reasoning_effort;
+      }
       const nextProviderID = this.providers.some((provider) => provider.id === selectedProviderID)
         ? selectedProviderID
         : defaults.provider;
-      this.replaceProviderEditorSession(nextProviderID);
-      this.$nextTick(() => {
-        this.defaults = { ...defaults };
-      });
+      if (!preserveProviderEditor) {
+        this.replaceProviderEditorSession(nextProviderID);
+      }
+      if (!preserveRoutingDefaults) {
+        const workspaceVersion = this.workspaceVersion;
+        const routingDefaultsEditVersion = this.routingDefaultsEditVersion;
+        this.$nextTick(() => {
+          if (
+            this.workspaceVersion === workspaceVersion &&
+            this.profileApplicationVersion === profileApplicationVersion &&
+            this.routingDefaultsEditVersion === routingDefaultsEditVersion
+          ) {
+            this.defaults = { ...defaults };
+          }
+        });
+      }
     },
 
     clearAuthenticatedState() {
       this.workspaceVersion += 1;
+      this.profileApplicationVersion += 1;
+      this.providerAutosavePromise = null;
+      this.providerAutosavePending = false;
+      this.routingDefaultsAutosavePromise = null;
+      this.routingDefaultsAutosavePending = false;
+      this.routingDefaultsDirty = false;
+      this.routingDefaultsEditVersion += 1;
       this.clearNotice();
       this.dismissProviderKeyRemovalConfirmation();
       this.profile = null;
@@ -1050,13 +1304,20 @@ export function createKeyManagement() {
 /**
  * @param {string} providerID
  * @param {number} revealVersion
- * @returns {{ providerID: string, keyInput: string, keyVisible: boolean, revealPending: boolean, revealVersion: number }}
+ * @param {string} [textModel]
+ * @param {string} [systemPrompt]
+ * @returns {{ providerID: string, keyInput: string, keyVisible: boolean, keyDirty: boolean, textModel: string, systemPrompt: string, dirty: boolean, editVersion: number, revealPending: boolean, revealVersion: number }}
  */
-function createProviderEditorSession(providerID, revealVersion) {
+function createProviderEditorSession(providerID, revealVersion, textModel = EMPTY_STRING, systemPrompt = EMPTY_STRING) {
   return {
     providerID,
     keyInput: EMPTY_STRING,
     keyVisible: false,
+    keyDirty: false,
+    textModel,
+    systemPrompt,
+    dirty: false,
+    editVersion: 0,
     revealPending: false,
     revealVersion,
   };

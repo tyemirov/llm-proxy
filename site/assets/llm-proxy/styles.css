@@ -691,11 +691,6 @@ request-example + request-example {
   white-space: nowrap;
 }
 
-.provider-settings-form {
-  display: grid;
-  gap: 0.55rem;
-}
-
 .provider-selector {
   display: block;
   min-width: 0;
@@ -953,16 +948,8 @@ settings-section,
   color: var(--llm-text);
 }
 
-.settings-grid-form button[type="submit"] {
-  justify-self: start;
-}
-
 .provider-system-prompt {
   grid-column: 1 / -1;
-}
-
-provider-settings-fields button[type="submit"] {
-  justify-self: start;
 }
 
 #llm-proxy-header notification-region[slot="aux"] .notice {

@@ -67,7 +67,7 @@
               <li>Open the selected-provider editor in Settings.</li>
 <li>Choose the provider to configure.</li>
 <li>Set the provider text model and provider system prompt.</li>
-<li>Save the provider settings with or without updating the API key as allowed by the current state.</li>
+<li>Leave the changed field or switch providers; the selected provider settings autosave without a separate save action.</li>
             </ol>
           </section>
 
@@ -138,7 +138,7 @@
             <ul class="resource-list">
               <li>Request-level system instructions take precedence over server-injected defaults.</li>
 <li>Provider settings are scoped to the authenticated managed tenant.</li>
-<li>Raw provider keys are not returned after save.</li>
+<li>Autosave responses return masked key status; raw retrieval requires the separate owner-authenticated reveal action.</li>
             </ul>
           </section>
 
