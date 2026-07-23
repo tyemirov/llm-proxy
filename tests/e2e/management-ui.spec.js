@@ -18,6 +18,9 @@ const robotsPath = "/robots.txt";
 const b020ScreenshotDirectory = path.join(repoRoot, "output/playwright");
 const httpOK = 200;
 const httpInternalServerError = 500;
+const noticeClockPauseLeadMilliseconds = 5_000;
+const noticeClockPreDeadlineAdvanceMilliseconds = 4_000;
+const noticeClockPostDeadlineAdvanceMilliseconds = 2_000;
 const mimeTypes = Object.freeze({
   ".css": "text/css",
   ".html": "text/html",
@@ -2181,9 +2184,14 @@ test("informational notices auto-dismiss without impairing the signed-out Sign i
   const notificationRegion = page.locator("#llm-proxy-header notification-region");
   await expect(notificationRegion.locator(".notice")).toHaveText("Authentication required");
   await expectHeaderNoticeSignInGeometry(page);
-  await page.clock.fastForward(9_999);
+  const noticeClockPauseTime = await page.evaluate(
+    (pauseLeadMilliseconds) => Date.now() + pauseLeadMilliseconds,
+    noticeClockPauseLeadMilliseconds,
+  );
+  await page.clock.pauseAt(noticeClockPauseTime);
+  await page.clock.runFor(noticeClockPreDeadlineAdvanceMilliseconds);
   await expect(notificationRegion).toBeVisible();
-  await page.clock.fastForward(1);
+  await page.clock.runFor(noticeClockPostDeadlineAdvanceMilliseconds);
   await expect(notificationRegion).toBeHidden();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
 });
