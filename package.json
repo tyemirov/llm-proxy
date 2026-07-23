@@ -10,7 +10,6 @@
   "devDependencies": {
     "@playwright/test": "1.61.1",
     "alpinejs": "3.13.5",
-    "js-yaml": "4.3.0",
-    "mpr-ui": "https://github.com/MarcoPoloResearchLab/mpr-ui/archive/b64fd7c6daaac42ecc5289e2181b8567689bf378.tar.gz"
+    "js-yaml": "4.3.0"
   }
 }
