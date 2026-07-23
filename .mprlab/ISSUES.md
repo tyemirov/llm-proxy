@@ -1439,6 +1439,154 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   stack, while preserving key reveal, copy, revoke, and replacement behavior.
   Baseline and final `make ci` runs passed.
 
+- [x] [B055] (P2) Simplify the Settings key surface.
+  Goal:
+  Present client-key management as one compact, direct Settings surface without
+  duplicate headings, tenant terminology, or labeled utility buttons.
+
+  Requirements:
+  - Render `Settings` once in the existing blue uppercase metadata style;
+    remove the `Workspace` label and duplicate white Settings heading.
+  - Replace the text Close button with an icon-only X control that remains
+    accessibly named and keyboard operable.
+  - Remove the visible and accessibility-facing tenant label/value from the
+    Settings client-key surface.
+  - Start the Key label and read-only key value/status at the left edge of the
+    compact row.
+  - Replace the labeled `+ Replace key` action with an icon-only recycle
+    control while retaining an exact accessible action name.
+  - Preserve create/replace, reveal, copy, revoke, cleanup, focus, and
+    responsive behavior.
+
+  Validation:
+  - Add Playwright coverage for the single Settings label, icon-only close and
+    replace controls, absence of tenant copy, read-only key field, and left-edge
+    key geometry at desktop, compact, and mobile widths.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  Settings now renders one blue metadata-style title and an accessible
+  icon-only X close control. The client-key surface is a direct compact row
+  with all tenant terminology and values removed, its read-only key field or
+  status starts at the left edge, and replacement uses an accessible recycle
+  icon instead of labeled button copy. Explicit provider-option selection
+  keeps the configured provider stable after the flattened Settings content
+  renders. Browser coverage verifies semantics, lifecycle actions, and row
+  geometry across desktop, compact, and mobile widths. The baseline and final
+  `make ci` runs passed.
+
+- [x] [B056] (P1) Scope provider-key editor state to the selected provider.
+  Goal:
+  Make the selected-provider editor display only the saved or transient key
+  state owned by that exact provider. A pasted, hidden, or revealed key must
+  never remain visible after selecting a different provider.
+
+  Requirements:
+  - Represent transient provider-key editor state with an explicit owning
+    provider id instead of combining a provider-indexed raw-key map with
+    global reveal and visibility flags.
+  - Changing providers must invalidate all raw key material before the newly
+    selected provider editor is rendered. Returning to the prior provider must
+    show its profile mask or empty state and require a new reveal or paste.
+  - Keep provider label, API-key state, model, system prompt, save/update
+    action, and remove action aligned to one selected provider profile.
+  - Render only the blue Providers section label; remove the duplicate white
+    Provider settings heading.
+  - Give the provider selector, API-key input, and provider-model selector the
+    same height and horizontal baseline, with the reveal and remove controls
+    fixed at the end of the API-key field.
+  - Keep the reveal control stationary while it toggles only the selected
+    provider key between masked and visible states.
+  - Require an accessible modal confirmation before removing the captured
+    provider key and settings; cancel must not issue a deletion request.
+  - Preserve saved-provider mask/reveal/edit behavior, new-provider key entry,
+    profile mutations, Settings close/reopen cleanup, authentication cleanup,
+    and late-reveal invalidation without browser persistence.
+
+  Validation:
+  - Add browser coverage for switching away from visible and hidden drafts,
+    revealed saved keys, providers with their own saved masks, and providers
+    with no saved key, including switching back to the original provider.
+  - Verify save and remove requests target the selected provider and never
+    submit key material originating from another provider editor session.
+  - Verify aligned control geometry, stationary reveal-toggle geometry, and
+    confirmation focus/keyboard behavior in the rendered browser UI.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  Provider editing now uses one versioned session that atomically owns the
+  selected provider id, raw key, reveal state, and pending request. Dynamic
+  options render the configured selection explicitly, and every provider
+  change replaces the sensitive session before the next profile is shown.
+  The compact Providers section has one blue heading, aligned 30-pixel
+  provider/key/model controls, fixed reveal and removal actions at the key
+  field end, and a stationary reveal toggle. Removal now requires a focused,
+  keyboard-contained confirmation dialog and targets the captured provider
+  only after confirmation. Browser coverage verifies provider isolation,
+  mutation ownership, cleanup, modal behavior, and control geometry. The
+  baseline and final `make ci` runs passed.
+
+- [x] [B057] (P1) Require complete client and provider key setup after authentication.
+  Goal:
+  Give every authenticated user a usable proxy client key automatically and
+  keep Settings mandatory until the account also has at least one persisted
+  managed provider key.
+
+  Requirements:
+  - Treat the generated `llmp_...` proxy client key as the session key in this
+    onboarding flow; do not create, expose, or modify TAuth session material.
+  - After `mpr-ui` reports an authenticated profile, load the management
+    profile and create a client key through the existing management secret API
+    exactly once when `tenant.has_secret` is false. Apply the same rule to new
+    and existing users, including authenticated reloads with a missing key.
+  - Present a newly generated client key transiently in the existing masked,
+    read-only field with Show and Copy actions. Never persist or log its raw
+    value in browser storage, profile data, documentation, or request examples.
+  - Derive setup completion only from `tenant.has_secret` and at least one
+    `providers[].has_key`. Typed provider drafts and local dotenv credentials
+    do not satisfy the managed-provider requirement.
+  - Open Settings automatically while setup is incomplete. X, Escape, backdrop,
+    and keyboard focus must remain contained by the required Settings flow and
+    explain the missing requirement instead of closing it.
+  - Keep Settings open after provider save until the user closes it explicitly.
+    Allow client-key revocation and removal of the last provider key, then make
+    Settings mandatory again. Failed generation must stay retryable through the
+    existing Create action.
+  - Reuse the current management profile, secret, and provider-key endpoints.
+    Add no backend route, schema, migration, authentication owner, or default
+    provider/model mutation.
+
+  Validation:
+  - Add browser coverage for fresh-user automatic generation and presentation,
+    close blocking and focus containment, provider-save unlock, configured-user
+    pass-through, generation failure/retry, revoke/recreate, last-provider
+    removal, repeated authentication events, logout, and stale responses.
+  - Extend the real local TAuth black-box flow through mandatory onboarding,
+    provider-key save, explicit close, reload/session recovery, and sign-out.
+  - Update the README and generated resource copy to describe automatic client
+    key creation and mandatory managed provider setup.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  The frontend now derives onboarding solely from the authenticated profile's
+  client-key and persisted provider-key status. It creates one missing client
+  key after `mpr-ui` authentication, presents the raw value only in the masked
+  read-only key control, and keeps Settings focus-contained with an explicit
+  requirement until a managed provider key has been saved. Revoke, last-key
+  removal, retry, logout, and stale-response paths preserve the same gate
+  without changing TAuth ownership, backend endpoints, schema, or routing
+  defaults. Browser coverage exercises the full state matrix, the real local
+  TAuth black-box validates first-run setup through recovery and sign-out, and
+  the README plus generated resource pages describe the canonical behavior.
+  The required baseline and final `make ci` runs passed; the final browser suite
+  ran 36 scenarios and the real TAuth black-box passed.
+
 
 ## Improvements
 
