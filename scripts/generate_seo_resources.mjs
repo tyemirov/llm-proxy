@@ -137,7 +137,7 @@ const pages = Object.freeze([
     examples: [
       ["New team onboarding", "A user signs in, copies the automatically created client key, enters an OpenAI key, and closes Settings after autosave completes."],
       ["Provider update", "A user switches the selected provider editor to DeepSeek and its changed model autosaves."],
-      ["Usage review", "The user returns to the dashboard to see 30-day request and token summaries."],
+      ["Usage review", "The user returns to the dashboard and selects all-time, 30-day, 7-day, or 1-day request and token summaries."],
     ],
     limitations: [
       "Management mode requires configured TAuth, CORS origins, database settings, and provider-key encryption key.",
@@ -503,7 +503,7 @@ if (!this.hasSecret) {
     features: [
       ["Common headers", "Token counts stay available for plain text, CSV, and XML bodies.", "The body format does not erase usage metadata."],
       ["JSON usage object", "JSON responses include normalized request, response, and total counts.", "Callers can store one shape."],
-      ["Managed usage aggregation", "Usage events record normalized token counts without storing prompts or responses.", "Dashboards can show 30-day token totals."],
+      ["Managed usage aggregation", "Usage events record normalized token counts without storing prompts or responses.", "Dashboards can show token totals for the selected all-time, 30-day, 7-day, or 1-day interval."],
     ],
     examples: [
       ["Plain text caller", "A CLI reads the text body and token headers separately."],
@@ -518,10 +518,11 @@ if (!this.hasSecret) {
   }),
   page({
     slug: "managed-tenant-usage-dashboard",
+    modifiedDate: "2026-07-23",
     category: "Usage",
     primaryKeyword: "managed tenant usage dashboard",
     title: "Managed tenant usage dashboard for LLM requests",
-    description: "Show signed-in users 30-day request, token, provider, model, and status summaries.",
+    description: "Show signed-in users selectable all-time, 30-day, 7-day, and 1-day LLM usage summaries.",
     audience: "Teams giving users self-service AI access while keeping usage visible.",
     problem: "A key-management portal is incomplete if users cannot see whether their managed proxy traffic is succeeding or which providers and models they use.",
     solution: "LLM Proxy's authenticated landing screen is a usage dashboard for the signed-in user's managed tenant.",
@@ -529,11 +530,11 @@ if (!this.hasSecret) {
       "Enable management mode and generated-secret routing.",
       "Send proxy requests with the generated tenant secret.",
       "Record usage metadata for managed-tenant requests.",
-      "View 30-day summaries through GET /api/management/usage and the dashboard UI.",
+      "Select all, 30d, 7d, or 1d through GET /api/management/usage?interval=<interval> and the dashboard UI.",
     ],
     features: [
-      ["30-day totals", "Requests, tokens, success rate, providers, and models are visible after sign-in.", "Users can spot usage and error trends."],
-      ["Daily buckets", "The dashboard renders request and token trend charts.", "Traffic changes are easier to inspect."],
+      ["Selectable totals", "ALL, 30 days, 7 days, and 1 day replace requests, tokens, success rate, providers, and models together.", "Users can compare the same surfaces at useful time scales."],
+      ["Interval buckets", "One day renders hourly buckets; longer and all-time views render daily buckets.", "Traffic changes stay legible at each selected scale."],
       ["Sensitive-data exclusion", "Stored usage excludes prompts, audio, transcripts, responses, tenant secrets, and provider keys.", "Operational metrics do not become a content database."],
     ],
     examples: [
@@ -1896,7 +1897,7 @@ function renderHub() {
  * @returns {string}
  */
 function htmlDocument(input) {
-  return `<!doctype html>
+  const document = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -1912,7 +1913,7 @@ function htmlDocument(input) {
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     ${input.jsonLd.map((schema) => `<script type="application/ld+json">${JSON.stringify(schema)}</script>`).join("\n    ")}
@@ -1923,6 +1924,7 @@ ${input.body}
   </body>
 </html>
 `;
+  return document.replace(/[ \t]+$/gm, "");
 }
 
 /**
@@ -2083,7 +2085,7 @@ Generated: ${currentResourceModifiedDate}
 | Server-side provider credentials | Public requests must not send upstream provider keys; credentials stay server-side. | README security, provider routing notes | High | Current | Yes |
 | TAuth management UI | Optional static Pages UI with authenticated profile, provider key, generated secret, settings, usage, and admin views. | README management UI section | High | Current | Yes |
 | Encrypted-at-rest managed provider keys | AES-GCM storage with base64 32-byte key and honest non-zero-knowledge wording. | README management UI section | High | Current | Yes, with caution wording |
-| Usage dashboard | 30-day usage summaries by request, token, provider, model, status, and daily bucket. | README management UI section | High | Current | Yes |
+| Usage dashboard | Selectable all-time, 30-day, 7-day, and 1-day usage summaries by request, token, provider, model, status, and time bucket. | README management UI section | High | Current | Yes |
 | API-served runtime config | Browser config comes from backend /config-ui.yaml, not a static Pages config artifact. | README hosted split-origin section | High | Current | Yes |
 | Bundled v2-only clients | Go package, Go CLI, and Python package send canonical /v2 messages for text. | README clients section | High | Current | Yes |
 | Worker/queue controls | server.workers limits upstream HTTP operations and queue_size limits pending operations. | README REST contract and config section | High | Current | Yes |
