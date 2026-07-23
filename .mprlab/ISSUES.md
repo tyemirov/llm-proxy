@@ -1724,6 +1724,61 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   passed; final validation included 43 rendered-browser scenarios, the real
   TAuth black-box, and 100% aggregate Go coverage.
 
+- [x] [B061] (P1) Serialize Settings mutations and isolate local orchestration secrets.
+  Goal:
+  Close the review-discovered credential and startup races by making every
+  full-profile Settings mutation one ordered workflow and by giving each local
+  container only its owned environment values after Compose has actually
+  started the stack.
+
+  Requirements:
+  - Project the ignored local environment into one service-scoped env file for
+    ghttp, llm-proxy, and TAuth. Never inject `configs/.env` or the aggregate
+    `.env.local` into an auxiliary container; ghttp receives only `GHTTP_*`,
+    TAuth receives only its server/tenant contract including the shared signing
+    key, and llm-proxy alone receives provider-key encryption configuration.
+  - Make `make up` wait for `docker compose up --build --wait` to complete before
+    starting HTTP probes. Preserve owned cleanup and interactive foreground
+    behavior without spending the readiness budget on image pulls or builds.
+  - Serialize provider autosave, routing-default autosave, provider removal,
+    and client-key generation/revocation before sending requests that return
+    whole management-profile snapshots. Reject queued or returned work after
+    authenticated workspace cleanup; never let an older snapshot overwrite a
+    newer provider, default, or setup state.
+  - Keep Settings open while any profile mutation present at the close attempt
+    is pending. A completed key generation or replacement must remain visible
+    for an explicit later close so its one-time value can be copied; revocation
+    and last-provider removal must re-evaluate and enforce mandatory setup.
+  - Make operational command output safe for concurrent process writes and test
+    polling; no goroutine may read and write an unsynchronized `bytes.Buffer`.
+  - Update local-startup and management documentation to describe the scoped
+    environment, Compose-start boundary, and all-profile-mutation close rule.
+
+  Validation:
+  - Add operational black-box coverage proving no readiness request occurs
+    before Compose reports the services started, each generated service env
+    contains only its allowlisted values, failed Compose startup cannot accept
+    another listener, cleanup still owns the stack, and output polling is
+    race-safe.
+  - Add rendered-browser coverage for Replace-key plus close/Escape, pending
+    revoke, pending last-provider removal, both provider/default autosave
+    orderings, final profile persistence, failure, and authenticated cleanup.
+  - Run the focused operational test with Go's race detector and the required
+    baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair, with the
+    final run after the last code edit.
+
+  Resolution:
+  `make up` now projects one allowlisted environment per service, waits for
+  Compose startup before HTTP probes, verifies the owned services, and follows
+  logs in the foreground. Settings sends every full-profile mutation through
+  one ordered lane, locks controls during close, preserves one-time replacement
+  keys for an explicit later close, and rechecks mandatory setup after deletes.
+  Operational output polling is synchronized. Focused Playwright interleaving
+  coverage and the operational test under `go test -race` passed; the required
+  baseline and final `make ci` runs passed, with the final run covering 46
+  browser scenarios, the real TAuth black-box, 100% aggregate Go coverage, 30
+  Python tests, 47 release tests, and the live-provider preflight.
+
 
 ## Improvements
 
