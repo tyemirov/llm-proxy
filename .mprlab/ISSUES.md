@@ -1850,6 +1850,37 @@ work and Planning entries remain deferred by the repository workflow.
   46 browser scenarios, the TAuth black-box, 100% aggregate Go coverage, 30
   Python tests, 47 release tests, and the live-provider preflight.
 
+- [x] [B064] (P1) Make live-harness proxy ownership coverage deterministic.
+  Goal:
+  Make the release-time operational harness prove that its owned proxy child
+  started and was reaped, without allowing a fake readiness response to race
+  ahead of that child.
+
+  Requirements:
+  - Model the actual readiness boundary in the fixture: the fake HTTP client
+    may report the proxy response only after the fake proxy has recorded its
+    owned PID.
+  - Preserve the harness's production startup and cleanup contract; do not add
+    a runtime delay, fallback, or a test-only cleanup path.
+  - Keep normal and termination coverage proving the harness reaps only its
+    owned proxy child.
+
+  Validation:
+  - Reproduce the preflight ownership path through the repository Go-test
+    target, then run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair with the final run after the
+    last code edit.
+
+  Resolution:
+  The fixture's fake HTTP client previously returned the expected readiness
+  status before the fake proxy process had scheduled its PID capture, allowing
+  cleanup to finish before the ownership assertion had an observable child.
+  The fake client now reports readiness only after that owned PID file exists;
+  the production harness and cleanup flow are unchanged. The required baseline
+  and final `make ci` runs passed. The final gate covered 100% aggregate Go
+  coverage, 30 Python tests, 46 browser scenarios, the TAuth black-box, 47
+  release tests, and the non-paid live-provider preflight.
+
 
 ## Improvements
 
