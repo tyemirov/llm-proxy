@@ -9,12 +9,14 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 - `[ ]` open, `[-]` taken, `[!]` blocked, `[x]` closed.
 - Blocked issues (`[!]`) must include a `Blocked:` line in the body.
 
-Triage, 2026-07-23: execute M018 first, then B062, then F013. F014 follows
+Triage, 2026-07-23: execute M018 first, then M020, then F013. M020 consumes the
+activated MPR UI v3.11.3 surface through the canonical `@latest` integration
+contract and clears P005's remaining shared-library dependency. F014 follows
 F013, and I027 follows F014 because F014 replaces the singleton management
 profile and usage contracts it would otherwise consume. M019 follows M018, and
-M013 then M012 resolve the remaining governance path. B063 is an
-operator-owned deployment blocker; recurring maintenance remains scheduled
-work and Planning entries remain deferred by the repository workflow.
+M013 then M012 resolve the remaining governance path. P005 still waits for
+P002 and P004 and remains a deferred Planning item; recurring maintenance
+remains scheduled work.
 
 ## BugFixes
 
@@ -121,7 +123,7 @@ work and Planning entries remain deferred by the repository workflow.
   historical parser failure is no longer reproducible. No compatibility parser
   path was added.
 
-- [!] [B063] (P1) Activate the released v0.2.39 Pages artifact.
+- [x] [B063] (P1) Activate the released v0.2.39 Pages artifact.
   Goal:
   Bring the public static management surface to the already published release
   so its visible behavior and release marker match the current source contract.
@@ -145,9 +147,13 @@ work and Planning entries remain deferred by the repository workflow.
   - Confirm the live API management boundaries remain `403` for anonymous
     proxy access and `401` for anonymous management-profile access.
 
-  Blocked: Production deployment is operator-owned. An operator or the
-  execution chain must run the gateway-backed canonical deployment flow for the
-  already published release; this triage run did not deploy or alter production.
+  Resolution:
+  Rechecked on 2026-07-23 after the canonical release flow advanced production.
+  The public cache-distinct marker now reports `v0.2.40` from source commit
+  `3e9126eafaf493c22e4ebb825c7d546be403befd`, superseding the stale v0.2.39
+  Pages artifact without a backward deployment. The live API still returns
+  `403` for anonymous proxy access, `401` for anonymous management-profile
+  access, and `200` for `/config-ui.yaml`.
 - [x] [B009] (P2) Validate management migration seed tenant defaults at startup.
   ### Summary
   Management mode allows an empty static `tenants` list because runtime authentication is DB-authoritative, but configured legacy tenants are still first-run migration seed data. Startup skipped tenant default provider/model validation whenever management mode was enabled, so a typoed seed default could be persisted and fail later at request time.
@@ -2743,7 +2749,7 @@ work and Planning entries remain deferred by the repository workflow.
   Resolved:
   Raised Viper to its supported v1.21.0 release, which canonically selects `github.com/go-viper/mapstructure/v2` v2.4.0 without an independent decoder override. The existing strict `UnmarshalExact` parsing and missing-placeholder failure coverage remains unchanged. `go mod verify` passed, the Go 1.25.12 reachability scan reports no vulnerabilities, and the separately queued M018 retains the non-reachable module-advisory review. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
-- [ ] [M018] (P0) {M017} Remediate the reachable Go security graph and remaining reported advisories.
+- [x] [M018] (P0) {M017} Remediate the reachable Go security graph and remaining reported advisories.
   Goal:
   Remove the reachable `golang.org/x/text` vulnerability and the remaining
   reported `golang.org/x/net`, `golang.org/x/crypto`, and platform advisories
@@ -2773,6 +2779,20 @@ work and Planning entries remain deferred by the repository workflow.
   Triage evidence: `go mod verify` passed on 2026-07-23. The pinned-toolchain
   `govulncheck` scan exited nonzero with one reachable GO-2026-5970 finding;
   M018 is therefore P0 rather than a deferred advisory cleanup.
+  Resolution:
+  Raised the canonical Go graph to `golang.org/x/text` v0.40.0,
+  `golang.org/x/net` v0.57.0, `golang.org/x/crypto` v0.54.0, and
+  `golang.org/x/sys` v0.47.0 under Go 1.25.12; `x/sync` advanced to v0.22.0 as
+  required by that graph. `go mod verify` passed and the authoritative verbose
+  `govulncheck` scan reports zero reachable vulnerabilities and zero vulnerable
+  imported packages. Its sole remaining module-only database entry is
+  GO-2026-5932 for the unmaintained `x/crypto/openpgp` package, which this
+  repository neither imports nor calls and for which no fixed module release
+  exists. The pre-change scan reproduced reachable GO-2026-5970; the required
+  final `timeout -k 350s -s SIGKILL 350s make ci` passed with 100% aggregate Go
+  coverage, 30 Python tests, 46 frontend Playwright scenarios, the real-stack
+  MPR UI/TAuth browser scenario, 47 release-contract tests, and the live-provider
+  harness preflight.
 
 - [ ] [M019] (P2) {M018} Refresh non-security direct dependency pins.
   Goal:
@@ -2786,6 +2806,49 @@ work and Planning entries remain deferred by the repository workflow.
   - A concise compatibility note for any package intentionally left at its current supported version.
   Validation:
   - Run `go mod verify`, `npm audit --json`, the locked Python audit, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [x] [M020] (P1) Adopt the activated canonical MPR UI integration contract.
+  Goal:
+  Consume the current shared MPR UI surface now that the canonical `@latest`
+  asset resolves to v3.11.3, including the verified `mpr-legal-document`
+  component needed by P005.
+  Requirements:
+  - Replace every LLM Proxy MPR UI v3.11.1 CDN reference with the literal
+    `@latest` contract in the site source, deterministic resource generator,
+    rendered pages, management-auth harness, and contract assertions.
+  - Apply the forward-only v3.11.3 configuration surface, including the
+    documented session path and static login-button presentation ownership;
+    reject obsolete configuration instead of retaining a compatibility path.
+  - Preserve MPR UI as the sole browser authentication authority and keep the
+    current authenticated, reload-restoration, refresh-cookie, sign-out, and
+    public resource-shell behavior.
+  - Verify `mpr-legal-document` is available through the consumed bundle, but
+    do not introduce legal pages before P005 or duplicate its renderer.
+  Deliverables:
+  - One canonical `@latest` MPR UI asset/config contract across generated and
+    hand-maintained site surfaces.
+  - Updated black-box fixtures and assertions that exercise the current shared
+    bundle without a parallel pinned integration.
+  - Regenerated resource pages produced from the updated source contract.
+  Validation:
+  - Add or update browser coverage for shared-shell bootstrap, authentication
+    lifecycle, sign-in presentation, and `mpr-legal-document` availability.
+  - Run the focused real-stack management-auth target and the required baseline
+    and final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  Replaced every MPR UI source, generated-page, harness, and assertion pin with
+  literal `mpr-ui@latest`, removed the commit-archive npm dependency, and made
+  generated resource HTML whitespace-stable. Added the required
+  `management.session_path` config field and `/auth/session` browser projection
+  while keeping login-button presentation out of YAML and owned by static MPR
+  UI markup. The real-stack browser scenario proves the current shared bundle
+  registers `mpr-legal-document` without adding P005's legal routes, and
+  preserves anonymous gating, authenticated hydration, reload restoration,
+  refresh-cookie recovery, and explicit sign-out. Focused Go tests, all 46 fast
+  Playwright scenarios, and the real-stack authentication scenario passed.
+  Required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs
+  passed with 100% Go aggregate coverage, 30 Python tests, 46 frontend tests,
+  one real-stack browser test, 47 release tests, and the live harness preflight.
 
 
 ## Features
@@ -2983,7 +3046,7 @@ work and Planning entries remain deferred by the repository workflow.
   `max` effort lists. The README model matrix links the current OpenAI model
   references, and integration coverage proves a saved `max` reaches the
   Responses payload. Baseline and final `make ci` runs passed.
-- [ ] [F013] (P1) Add selectable usage-dashboard time intervals.
+- [x] [F013] (P1) Add selectable usage-dashboard time intervals.
   Goal:
   Let signed-in users filter the complete usage dashboard through one compact interval control offering `ALL`, `30 days`, `7 days`, and `1 day`.
   Execution order:
@@ -3010,6 +3073,8 @@ work and Planning entries remain deferred by the repository workflow.
   - Add database-boundary coverage proving finite intervals do not load older rows and `all` reads the authenticated tenant's complete retained history.
   - Add Playwright coverage proving each option requests the canonical interval, becomes visibly active, updates every dashboard surface from one response, keeps its selection on Refresh, clears stale data on failure, prevents response-order races, and remains usable at desktop and mobile widths.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
+  ### Resolution
+  Added the validated `all`, `30d`, `7d`, and `1d` usage-interval domain, tenant-isolated finite/all GORM queries, one-timestamp aggregation, and the forward-only user response with `interval`, `bucket_unit`, and ordered `buckets`; missing, repeated, and unknown intervals now return `400`, while the administrator response remains a separate fixed 30-day contract. Added the ordered accessible interval control with a `30 days` default, selected-snapshot rendering across every dashboard surface, selection-preserving refresh, loading locks, failure clearing, and response-version protection against stale requests. Updated frontend types, generic chart presentation, README, provider-routing documentation, and the generated usage resource. Tests were written first and captured the missing interval domain/UI before implementation. Focused validation passed with `make go-test` at 100% aggregate coverage, `make frontend-lint`, `make frontend-test` (49 tests), and `make test-management-auth-blackbox` (1 real-stack test). The required pre-change and post-change `make ci` runs passed; the final gate also passed 30 Python tests, 47 release tests, and live-provider harness preflight.
 
 - [ ] [F014] (P1) {B036,I025,F011,F013} Support multiple isolated tenants per managed user.
   Goal:
@@ -3442,7 +3507,7 @@ work and Planning entries remain deferred by the repository workflow.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
 
-- [ ] [P005] (P1) {P002,P004} Normalize public Privacy and Terms pages using PoodleScanner's legal-page contract as the structural reference.
+- [ ] [P005] (P1) {P002,P004,M020} Normalize public Privacy and Terms pages using PoodleScanner's legal-page contract as the structural reference.
   Goal:
   Give LLM Proxy one coherent, public legal-page experience: canonical Privacy
   and Terms pages with LLM Proxy-specific, evidence-backed content, a readable
@@ -3465,9 +3530,10 @@ work and Planning entries remain deferred by the repository workflow.
     resource hub, every resource page, and both legal pages themselves.
   - Follow the PoodleScanner pattern of a semantic `mpr-legal-document` for
     `privacy` and `terms`, with a fully readable static fallback inside the
-    document when the component cannot render. First verify support in the
-    pinned MPR UI version; any upgrade must be explicit and pinned, never a
-    switch to a floating `latest` asset or a second legal renderer.
+    document when the component cannot render. M020 records the verified
+    v3.11.3 component surface and moves the app to the canonical literal
+    `@latest` integration contract. Do not add another version pin, a second
+    legal renderer, or a compatibility path.
   - Source policy statements only from verified LLM Proxy behavior and an
     approved legal-content input. Privacy content must accurately distinguish
     MPR UI/TAuth session handling from LLM Proxy persistence; describe
@@ -3490,8 +3556,8 @@ work and Planning entries remain deferred by the repository workflow.
 
   Deliverables:
   - Add a deterministic, canonical legal-page source/template and render the
-    public `/privacy/` and `/terms/` pages from it with the current pinned MPR
-    UI legal-document component and accessible static fallback content.
+    public `/privacy/` and `/terms/` pages from it with the current MPR UI
+    legal-document component and accessible static fallback content.
   - Extend the shared footer contract with the canonical Privacy and Terms
     anchors across public and management surfaces, alongside P004's Resources
     navigation.
