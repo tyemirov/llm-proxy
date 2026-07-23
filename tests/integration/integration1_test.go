@@ -25,7 +25,7 @@ const (
 	typeField = "type"
 	// toolChoiceAutoValue is the expected value of the tool_choice field when web search is enabled.
 	toolChoiceAutoValue = "auto"
-	// reasoningEffortHighValue is the saved tenant reasoning effort for GPT-5.
+	// reasoningEffortHighValue is the saved tenant reasoning effort for the GPT-5 family.
 	reasoningEffortHighValue = "high"
 	// toolTypeWebSearchValue is the expected tool type when web search is requested.
 	toolTypeWebSearchValue = "web_search"
@@ -179,6 +179,47 @@ func TestProxyGPT5SavedReasoningEffortFollowsTheResolvedRoute(testingInstance *t
 				subTest.Fatalf(reasoningEffortMismatchFormat, reasoningValue[effortField], reasoningEffortHighValue)
 			}
 		})
+	}
+}
+
+func TestProxyGPT5MiniSavedReasoningEffortFollowsTheResolvedRoute(testingInstance *testing.T) {
+	var capturedPayload any
+	openAIServer := newOpenAIServer(testingInstance, integrationOKBody, &capturedPayload)
+	testingInstance.Cleanup(openAIServer.Close)
+	applicationServer := newIntegrationServerWithDefaults(testingInstance, openAIServer, proxy.TenantDefaults{
+		Provider:          proxy.ProviderNameOpenAI,
+		Model:             proxy.ModelNameGPT5Mini,
+		DictationProvider: proxy.ProviderNameOpenAI,
+		DictationModel:    proxy.DefaultDictationModel,
+		ReasoningEffort:   reasoningEffortHighValue,
+	})
+
+	httpResponse, requestError := http.Get(applicationServer.URL + "?prompt=" + url.QueryEscape(promptValue) + "&key=" + integrationServiceSecret)
+	if requestError != nil {
+		testingInstance.Fatalf(requestErrorFormat, requestError)
+	}
+	defer httpResponse.Body.Close()
+	if httpResponse.StatusCode != http.StatusOK {
+		responseBody, _ := io.ReadAll(httpResponse.Body)
+		testingInstance.Fatalf(unexpectedStatusFormat, httpResponse.StatusCode, string(responseBody))
+	}
+	_, _ = io.ReadAll(httpResponse.Body)
+	payloadMap, _ := capturedPayload.(map[string]any)
+	if payloadMap["model"] != proxy.ModelNameGPT5Mini {
+		testingInstance.Fatalf("model=%v want=%s", payloadMap["model"], proxy.ModelNameGPT5Mini)
+	}
+	if _, hasTemperature := payloadMap["temperature"]; hasTemperature {
+		testingInstance.Fatalf(temperatureOmittedFormat, proxy.ModelNameGPT5Mini, payloadMap["temperature"])
+	}
+	if _, hasTools := payloadMap[toolsField]; hasTools {
+		testingInstance.Fatalf("unexpected tools in GPT-5 mini payload: %v", payloadMap)
+	}
+	reasoningValue, ok := payloadMap[reasoningField].(map[string]any)
+	if !ok {
+		testingInstance.Fatalf(reasoningMissingFormat, payloadMap)
+	}
+	if reasoningValue[effortField] != reasoningEffortHighValue {
+		testingInstance.Fatalf(reasoningEffortMismatchFormat, reasoningValue[effortField], reasoningEffortHighValue)
 	}
 }
 

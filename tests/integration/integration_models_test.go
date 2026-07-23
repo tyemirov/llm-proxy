@@ -60,6 +60,9 @@ func TestIntegrationModelSpecSuppression(testingInstance *testing.T) {
 			if _, ok := payload["tools"]; ok {
 				subTest.Fatalf(toolsOmittedFormat, testCase.model, payload["tools"])
 			}
+			if _, ok := payload[reasoningField]; ok {
+				subTest.Fatalf("reasoning must be omitted without a saved effort for %s, got: %v", testCase.model, payload[reasoningField])
+			}
 			if _, hasInput := payload["input"]; !hasInput {
 				subTest.Fatalf("input must be present for responses API")
 			}

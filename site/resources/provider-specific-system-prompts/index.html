@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Provider-specific system prompts in LLM Proxy Settings","description":"Store each provider's text model and system prompt with its managed provider configuration.","url":"https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/","about":["LLM Proxy","Management UI","provider-specific system prompts"]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Provider-specific system prompts in LLM Proxy Settings","item":"https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of provider-specific system prompts?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy stores text model and provider-specific system prompt settings with each managed provider profile."}},{"@type":"Question","name":"Who should read this management ui resource?","acceptedAnswer":{"@type":"Answer","text":"Users who need different instructions for different upstream providers."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Self-service LLM key management for teams, which covers self-service LLM key management."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of provider-specific system prompts?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy stores text model and provider-specific system prompt settings with each managed provider profile."}},{"@type":"Question","name":"Who should read this management ui resource?","acceptedAnswer":{"@type":"Answer","text":"Users who need different instructions for different upstream providers."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Self-service LLM key management for internal teams, which covers self-service LLM key management."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="resource-page">
@@ -67,7 +67,7 @@
               <li>Open the selected-provider editor in Settings.</li>
 <li>Choose the provider to configure.</li>
 <li>Set the provider text model and provider system prompt.</li>
-<li>Save the provider settings with or without updating the API key as allowed by the current state.</li>
+<li>Leave the changed field or switch providers; the selected provider settings autosave without a separate save action.</li>
             </ol>
           </section>
 
@@ -138,7 +138,7 @@
             <ul class="resource-list">
               <li>Request-level system instructions take precedence over server-injected defaults.</li>
 <li>Provider settings are scoped to the authenticated managed tenant.</li>
-<li>Raw provider keys are not returned after save.</li>
+<li>Autosave responses return masked key status; raw retrieval requires the separate owner-authenticated reveal action.</li>
             </ul>
           </section>
 
@@ -172,7 +172,7 @@
 
                     <details>
                       <summary>What should I read next?</summary>
-                      <p>A closely related resource is Self-service LLM key management for teams, which covers self-service LLM key management.</p>
+                      <p>A closely related resource is Self-service LLM key management for internal teams, which covers self-service LLM key management.</p>
                     </details>
                   
             </div>
@@ -184,7 +184,7 @@
               
                     <a class="resource-related" href="/resources/self-service-llm-key-management/">
                       <span>Management UI</span>
-                      <strong>Self-service LLM key management for teams</strong>
+                      <strong>Self-service LLM key management for internal teams</strong>
                     </a>
                   
 
@@ -202,7 +202,7 @@
 
                     <a class="resource-related" href="/resources/copyable-llm-curl-examples/">
                       <span>Management UI</span>
-                      <strong>Copyable LLM curl examples from live profile data</strong>
+                      <strong>Copyable LLM curl examples from current profile data</strong>
                     </a>
                   
             </div>

@@ -1645,9 +1645,14 @@ providers:
 			expectedError: "invalid_model_catalog: provider=openai endpoint=text profile=future_profile",
 		},
 		{
+			name:          "retired openai base request profile",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "request_profile: \"openai_responses_temperature\"", "request_profile: \"openai_responses_base\"", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=text profile=openai_responses_base",
+		},
+		{
 			name:          "non openai request profile",
-			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "id: \"deepseek-v4-flash\"", "id: \"deepseek-v4-flash\"\n          request_profile: \"openai_responses_base\"", 1),
-			expectedError: "invalid_model_catalog: provider=deepseek endpoint=text profile=openai_responses_base",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "id: \"deepseek-v4-flash\"", "id: \"deepseek-v4-flash\"\n          request_profile: \"openai_responses_temperature\"", 1),
+			expectedError: "invalid_model_catalog: provider=deepseek endpoint=text profile=openai_responses_temperature",
 		},
 		{
 			name:          "non openai web search",
@@ -1893,7 +1898,10 @@ providers:
           request_profile: "openai_responses_temperature_tools"
           web_search: true
         - id: "gpt-5-mini"
-          request_profile: "openai_responses_base"
+          request_profile: "openai_responses_reasoning_tools"
+          reasoning_effort:
+            adapter: "openai_responses"
+            efforts: ["minimal", "low", "medium", "high"]
         - id: "gpt-5"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true

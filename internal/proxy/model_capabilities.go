@@ -91,8 +91,6 @@ func BuildRequestPayload(modelIdentifier string, rawRequestProfile string, combi
 		temperature := defaultTemperature
 		payload.Temperature = &temperature
 		return payload
-	case requestProfileOpenAIResponsesBase:
-		return base
 	default:
 		return base
 	}
@@ -132,8 +130,6 @@ var (
 	SchemaGPT4o = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens, keyBackground, keyStore, keyTemperature, keyTools, keyToolChoice}}
 	// SchemaGPT41 defines allowed payload fields for the GPT-4.1 model.
 	SchemaGPT41 = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens, keyBackground, keyStore, keyTemperature, keyTools, keyToolChoice}}
-	// SchemaGPT5Mini defines allowed payload fields for the GPT-5-mini model.
-	SchemaGPT5Mini = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens, keyBackground, keyStore}}
 	// SchemaGPT5 defines allowed payload fields for the GPT-5 model.
 	SchemaGPT5 = ModelPayloadSchema{AllowedRequestFields: []string{keyModel, keyInput, keyMaxOutputTokens, keyBackground, keyStore, keyTools, keyToolChoice, keyReasoning}}
 	// SchemaGPT55 defines allowed payload fields for GPT-5.5 family models.
@@ -144,7 +140,6 @@ var (
 var modelPayloadSchemas = map[modelRequestProfile]ModelPayloadSchema{
 	requestProfileOpenAIResponsesTemperature:      SchemaGPT4oMini,
 	requestProfileOpenAIResponsesTemperatureTools: SchemaGPT41,
-	requestProfileOpenAIResponsesBase:             SchemaGPT5Mini,
 	requestProfileOpenAIResponsesReasoningTools:   SchemaGPT5,
 }
 

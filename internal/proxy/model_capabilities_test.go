@@ -28,7 +28,6 @@ func TestResolveModelPayloadSchema(testFramework *testing.T) {
 	}{
 		{"openai_responses_temperature", []string{"model", "input", "max_output_tokens", "background", "store", "temperature"}},
 		{"openai_responses_temperature_tools", []string{"model", "input", "max_output_tokens", "background", "store", "temperature", "tools", "tool_choice"}},
-		{"openai_responses_base", []string{"model", "input", "max_output_tokens", "background", "store"}},
 		{"openai_responses_reasoning_tools", []string{"model", "input", "max_output_tokens", "background", "store", "tools", "tool_choice", "reasoning"}},
 	}
 	for _, testCase := range testCases {
@@ -110,13 +109,14 @@ func TestBuildRequestPayload(testFramework *testing.T) {
 			expectReasoning:   false,
 		},
 		{
-			name:              "GPT-5-mini (base only)",
+			name:              "GPT-5-mini with saved reasoning effort",
 			modelIdentifier:   proxy.ModelNameGPT5Mini,
-			requestProfile:    "openai_responses_base",
-			webSearchEnabled:  true,
+			requestProfile:    "openai_responses_reasoning_tools",
+			webSearchEnabled:  false,
+			reasoningEffort:   "high",
 			expectTemperature: false,
 			expectTools:       false,
-			expectReasoning:   false,
+			expectReasoning:   true,
 		},
 		{
 			name:              "unknown profile without web search",

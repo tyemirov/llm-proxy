@@ -1,0 +1,44 @@
+services:
+  frontend:
+    image: ghcr.io/tyemirov/ghttp:latest
+    pull_policy: always
+    depends_on:
+      api:
+        condition: service_started
+      tauth:
+        condition: service_started
+    env_file:
+      - ./configs/.env.frontend.local
+    ports:
+      - "127.0.0.1:4179:4179"
+    volumes:
+      - ./site:/app/site:ro
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: llm-proxy-local:latest
+    command: ["/usr/local/bin/llm-proxy", "--config", "/app/configs/config.yml"]
+    env_file:
+      - ./configs/.env.api.local
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./configs/config.yml:/app/configs/config.yml:ro
+      - llm_proxy_local_data:/data
+
+  tauth:
+    image: ghcr.io/tyemirov/tauth:latest
+    pull_policy: always
+    env_file:
+      - ./configs/.env.tauth.local
+    ports:
+      - "127.0.0.1:8082:8080"
+    volumes:
+      - ./configs/tauth.local.yml:/config/tauth.local.yml:ro
+      - tauth_local_data:/data
+
+volumes:
+  llm_proxy_local_data:
+  tauth_local_data:

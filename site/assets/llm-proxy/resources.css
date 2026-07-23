@@ -105,6 +105,29 @@
   font-size: 0.82rem;
 }
 
+.resource-verdict {
+  display: grid;
+  max-width: 780px;
+  gap: 0.2rem;
+  margin-top: 0.65rem;
+  border-left: 3px solid var(--llm-accent);
+  background: var(--llm-panel);
+  padding: 0.55rem 0.65rem;
+}
+
+.resource-verdict strong {
+  color: var(--llm-accent);
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.resource-verdict p {
+  margin: 0;
+  color: var(--llm-subtle);
+  font-size: 0.84rem;
+}
+
 .resource-actions {
   display: flex;
   flex-wrap: wrap;

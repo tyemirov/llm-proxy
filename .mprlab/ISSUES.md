@@ -1235,8 +1235,632 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   separate listener held 18080. Baseline and final `make ci` runs passed with
   100.0% Go coverage.
 
+- [x] [B050] (P2) Compact selected-provider settings and inline key visibility.
+  Goal:
+  Make the selected-provider editor denser without changing its provider-key
+  ownership, reveal, save, removal, or cleanup contract.
+
+  Requirements:
+  - Put the provider selector first on the same desktop row as the API-key and
+    text-model controls. Keep its accessible name, but remove the redundant
+    visible `Provider` label.
+  - Remove the selected-provider status row that repeats the selected provider
+    name and its separate masked-key status. Keep the existing removal action
+    available without recreating that duplicated metadata.
+  - Replace the textual Show key/Hide key action with one accessible eye icon
+    at the end of the API-key input. A hidden saved key shows only asterisks and
+    its final four characters; an explicit owner reveal shows the complete key,
+    and the same eye returns it to the masked presentation.
+  - Use a standard icon font or icon library for the eye affordance; do not
+    hand-author SVG eye artwork.
+  - Put the accessible provider selector first in the API-key and text-model
+    row. Move removal to the row's trailing control and use the standard
+    Material Symbols trash glyph instead of a literal `x`.
+  - Label the provider-scoped model control `Provider default model` so it is
+    distinct from the tenant-level `Text model` routing default.
+  - Keep raw key material out of profile data, notices, URLs, browser storage,
+    and unrelated UI. Preserve the existing on-demand owner-only reveal,
+    in-flight disabling, stale-response protection, save/remove clearing, and
+    close/provider-change/sign-out cleanup behavior.
+
+  Validation:
+  - Add Playwright coverage for the compact header row, hidden last-four mask,
+    inline eye reveal/hide behavior, editing/saving, and existing lifecycle
+    cleanup guarantees.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+  ### Resolution
+  Provider settings uses one desktop row: the accessible selector, API-key
+  field, text-model selector, and trailing removal action, with no duplicated
+  selected-provider status row. The API-key field renders `****` plus the
+  final four key characters while hidden; inline Material Symbols
+  `visibility` / `visibility_off` glyphs reveal and remask it, and a trailing
+  Material Symbols `delete` glyph replaces the literal removal control. No
+  hand-authored eye SVG remains. Existing owner-only reveal, update/remove,
+  in-flight, and lifecycle clearing behavior remains unchanged. Browser
+  coverage verifies the compact layout, standard icon-font controls, editing,
+  and cleanup flow. The provider-scoped model control now reads `Provider
+  default model`, while the tenant-level routing-default control remains `Text
+  model`; exact accessible-name assertions keep the two controls distinct.
+  Post-review, the backend `masked_key: "saved"` sentinel renders as a generic
+  `****` mask rather than a misleading suffix, with browser coverage for the
+  short-key contract. Baseline and final `make ci` runs passed.
+
+- [x] [B051] (P2) Present Client access as a compact tenant/key row.
+  Goal:
+  Replace opaque tenant-id and secret-status tiles with the human-readable
+  tenant and client-key workflow users actually operate.
+
+  Requirements:
+  - Present the current singular managed tenant as `Default`; do not expose its
+    opaque internal id in Client access.
+  - Render the key in the same compact row as the tenant. A newly created key
+    starts masked, has inline accessible eye and copy controls, and has a
+    trailing trash action that revokes that key.
+  - Keep the generated client key one-time: raw material remains only in
+    in-memory UI state, is cleared when Settings closes or the session ends,
+    and is never added to profile responses, URLs, notices, or browser storage.
+    A retained key that was not created in the current Settings session remains
+    revocable but is explicitly not revealable or copyable.
+  - Use key-oriented copy (`Key created`, `Copy key`, `Key copied`, and
+    `Revoke key`), not the previous ambiguous Secret status wording.
+
+  Validation:
+  - Add Playwright coverage for the Default tenant row, masked/reveal/copy
+    controls, per-row revoke, cleanup after closing Settings, and narrow-layout
+    usability.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  Client access now renders `Default` with a compact same-row key control. New
+  keys are masked first, revealable and copyable only while Settings remains
+  open, and have a trailing per-key trash action. Retained keys are revocable
+  but cannot be recovered. Request examples retain their placeholder rather
+  than echoing raw key material. Post-review, a generated-key response must
+  match the current Settings/session version before it can restore raw material
+  or profile state; browser coverage proves both close/reopen and sign-out
+  cleanup discard late responses. Baseline and final `make ci` runs passed.
+
+- [x] [B052] (P2) Add the standard `make up` local service command.
+  Goal:
+  Give LLM Proxy the same single-command local startup contract used by the
+  neighboring application repositories.
+
+  Requirements:
+  - `make up` builds and starts the current service against the canonical
+    `configs/config.yml` local configuration.
+  - Prove startup with a safe local HTTP readiness request that does not call a
+    paid upstream provider or require a tenant secret.
+  - Keep the process foreground-owned by the command and clean up its child on
+    an intentional interrupt after readiness.
+  - Document the command, local URL, and readiness response as the canonical
+    local verification path.
+
+  Validation:
+  - Add a black-box operational test that invokes `make up` in an isolated
+    fixture, proves the canonical configuration and readiness contract, and
+    confirms the started child is stopped on interruption.
+  - Run the required baseline and final `make ci` pair, with the final run
+    after the last code edit.
+
+  Resolution:
+  `make up` now builds the current CLI and runs the canonical
+  `configs/config.yml` service through `scripts/up.sh`. The script waits for
+  the unauthenticated `GET /?prompt=ready` response to return `403`, announces
+  the local proxy URL, and stops its owned process on interruption. The
+  black-box operational test invokes the Make target in an isolated fixture,
+  verifies the canonical config and readiness route, and proves the child is
+  reaped. Post-review, the readiness response is accepted only after the
+  spawned proxy child is still live; an isolated fixture proves another
+  process's `403` cannot yield a ready message. Baseline and final `make ci`
+  runs passed; a real local run reached the ready message on
+  `http://localhost:8080/` and released port 8080 after interruption.
+
+- [x] [B053] (P1) Make `make up` run the complete local browser orchestration.
+  Goal:
+  Replace the single-process localhost proxy command with the actual local
+  browser topology: static content through ghttp, the versioned backend API,
+  and the shared TAuth tenant.
+
+  Requirements:
+  - Serve the tracked `site/` content through ghttp at one canonical localhost
+    UI origin and proxy only the API-served `/config-ui.yaml` runtime contract.
+  - Expose the current-source API backend on a direct localhost API origin;
+    preserve the unauthenticated proxy and management API boundaries rather
+    than embedding a second backend configuration in the static app.
+  - Start TAuth locally with the same tenant id, session cookie name, issuer,
+    and JWT signing key that the backend validates. Local HTTP cookies must use
+    the single `localhost` host, with explicit credentialed CORS origins.
+  - Keep `make up` foreground-owned, seed only ignored local environment
+    files, generate local-only secret material once, and stop all owned
+    containers on interruption without deleting persisted local volumes.
+  - Exclude local environment files and private config from the Docker build
+    context.
+
+  Validation:
+  - Add black-box operational coverage for the Make entrypoint, Compose
+    lifecycle, ghttp/static/runtime-config API boundaries, TAuth session
+    boundary, and cleanup after interruption.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  `make up` now starts a foreground-owned Compose project with ghttp serving
+  the tracked static UI at `http://localhost:4179`, the current-source API at
+  `http://localhost:8080`, and TAuth at `http://localhost:8082`. The ignored
+  local profile is seeded once from the tracked example, generates local JWT
+  and provider-key encryption material, shares the `llm-proxy` tenant and
+  `app_session_llm_proxy` contract between TAuth and the API, and keeps local
+  data volumes across clean interruption shutdowns. ghttp proxies only
+  `/config-ui.yaml` to the API, so the browser consumes the same API/TAuth
+  runtime configuration shape as the split production topology. The new
+  black-box operational test proves the Compose lifecycle, static/config/API/
+  TAuth readiness boundaries, generated local profile, Docker secret
+  exclusions, and cleanup; it also rejects a readiness response after the
+  owned Compose process has exited. A real local run reached all five
+  readiness contracts and stopped its containers and network on Ctrl-C.
+  The baseline `make ci` had one transient browser-test failure after 31
+  browser tests passed; the required final `make ci` passed all lint, 100%
+  Go coverage, 30 Python tests, 32 browser tests, the TAuth black-box test,
+  release tests, and the provider preflight.
+
+- [x] [B054] (P2) Compact and align the Settings controls.
+  Goal:
+  Keep the Provider selector, API-key field, and Provider default model field
+  aligned on one input baseline, and present Client access as one compact
+  tenant/key/action row on desktop.
+
+  Requirements:
+  - Preserve the selector's accessible name and compact desktop form layout.
+  - Align the desktop controls even though the selector's label is intentionally
+    visually hidden.
+  - Preserve the narrow single-column layout.
+  - Keep Default tenant, client key controls, and Create/Replace key action in
+    one desktop row without changing their accessible names or key lifecycle.
+
+  Validation:
+  - Add Playwright coverage that checks the desktop provider and client-control
+    geometry, plus the narrow stacked layout.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  Provider settings now aligns its selector, API-key input, and Provider
+  default model input on one desktop input baseline. Client access now targets
+  its semantic `client-access-row` element rather than an unused class,
+  placing Default tenant, key controls, and Create/Replace key in one compact
+  row through a 480px viewport; it stacks only at 460px and below. Browser
+  coverage verifies both desktop and compact-row geometry plus the mobile
+  stack, while preserving key reveal, copy, revoke, and replacement behavior.
+  Baseline and final `make ci` runs passed.
+
+- [x] [B055] (P2) Simplify the Settings key surface.
+  Goal:
+  Present client-key management as one compact, direct Settings surface without
+  duplicate headings, tenant terminology, or labeled utility buttons.
+
+  Requirements:
+  - Render `Settings` once in the existing blue uppercase metadata style;
+    remove the `Workspace` label and duplicate white Settings heading.
+  - Replace the text Close button with an icon-only X control that remains
+    accessibly named and keyboard operable.
+  - Remove the visible and accessibility-facing tenant label/value from the
+    Settings client-key surface.
+  - Start the Key label and read-only key value/status at the left edge of the
+    compact row.
+  - Replace the labeled `+ Replace key` action with an icon-only recycle
+    control while retaining an exact accessible action name.
+  - Preserve create/replace, reveal, copy, revoke, cleanup, focus, and
+    responsive behavior.
+
+  Validation:
+  - Add Playwright coverage for the single Settings label, icon-only close and
+    replace controls, absence of tenant copy, read-only key field, and left-edge
+    key geometry at desktop, compact, and mobile widths.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  Settings now renders one blue metadata-style title and an accessible
+  icon-only X close control. The client-key surface is a direct compact row
+  with all tenant terminology and values removed, its read-only key field or
+  status starts at the left edge, and replacement uses an accessible recycle
+  icon instead of labeled button copy. Explicit provider-option selection
+  keeps the configured provider stable after the flattened Settings content
+  renders. Browser coverage verifies semantics, lifecycle actions, and row
+  geometry across desktop, compact, and mobile widths. The baseline and final
+  `make ci` runs passed.
+
+- [x] [B056] (P1) Scope provider-key editor state to the selected provider.
+  Goal:
+  Make the selected-provider editor display only the saved or transient key
+  state owned by that exact provider. A pasted, hidden, or revealed key must
+  never remain visible after selecting a different provider.
+
+  Requirements:
+  - Represent transient provider-key editor state with an explicit owning
+    provider id instead of combining a provider-indexed raw-key map with
+    global reveal and visibility flags.
+  - Changing providers must invalidate all raw key material before the newly
+    selected provider editor is rendered. Returning to the prior provider must
+    show its profile mask or empty state and require a new reveal or paste.
+  - Keep provider label, API-key state, model, system prompt, save/update
+    action, and remove action aligned to one selected provider profile.
+  - Render only the blue Providers section label; remove the duplicate white
+    Provider settings heading.
+  - Give the provider selector, API-key input, and provider-model selector the
+    same height and horizontal baseline, with the reveal and remove controls
+    fixed at the end of the API-key field.
+  - Keep the reveal control stationary while it toggles only the selected
+    provider key between masked and visible states.
+  - Require an accessible modal confirmation before removing the captured
+    provider key and settings; cancel must not issue a deletion request.
+  - Preserve saved-provider mask/reveal/edit behavior, new-provider key entry,
+    profile mutations, Settings close/reopen cleanup, authentication cleanup,
+    and late-reveal invalidation without browser persistence.
+
+  Validation:
+  - Add browser coverage for switching away from visible and hidden drafts,
+    revealed saved keys, providers with their own saved masks, and providers
+    with no saved key, including switching back to the original provider.
+  - Verify save and remove requests target the selected provider and never
+    submit key material originating from another provider editor session.
+  - Verify aligned control geometry, stationary reveal-toggle geometry, and
+    confirmation focus/keyboard behavior in the rendered browser UI.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  Provider editing now uses one versioned session that atomically owns the
+  selected provider id, raw key, reveal state, and pending request. Dynamic
+  options render the configured selection explicitly, and every provider
+  change replaces the sensitive session before the next profile is shown.
+  The compact Providers section has one blue heading, aligned 30-pixel
+  provider/key/model controls, fixed reveal and removal actions at the key
+  field end, and a stationary reveal toggle. Removal now requires a focused,
+  keyboard-contained confirmation dialog and targets the captured provider
+  only after confirmation. Browser coverage verifies provider isolation,
+  mutation ownership, cleanup, modal behavior, and control geometry. The
+  baseline and final `make ci` runs passed.
+
+- [x] [B057] (P1) Require complete client and provider key setup after authentication.
+  Goal:
+  Give every authenticated user a usable proxy client key automatically and
+  keep Settings mandatory until the account also has at least one persisted
+  managed provider key.
+
+  Requirements:
+  - Treat the generated `llmp_...` proxy client key as the session key in this
+    onboarding flow; do not create, expose, or modify TAuth session material.
+  - After `mpr-ui` reports an authenticated profile, load the management
+    profile and create a client key through the existing management secret API
+    exactly once when `tenant.has_secret` is false. Apply the same rule to new
+    and existing users, including authenticated reloads with a missing key.
+  - Present a newly generated client key transiently in the existing masked,
+    read-only field with Show and Copy actions. Never persist or log its raw
+    value in browser storage, profile data, documentation, or request examples.
+  - Derive setup completion only from `tenant.has_secret` and at least one
+    `providers[].has_key`. Typed provider drafts and local dotenv credentials
+    do not satisfy the managed-provider requirement.
+  - Open Settings automatically while setup is incomplete. X, Escape, backdrop,
+    and keyboard focus must remain contained by the required Settings flow and
+    explain the missing requirement instead of closing it.
+  - Keep Settings open after provider save until the user closes it explicitly.
+    Allow client-key revocation and removal of the last provider key, then make
+    Settings mandatory again. Failed generation must stay retryable through the
+    existing Create action.
+  - Reuse the current management profile, secret, and provider-key endpoints.
+    Add no backend route, schema, migration, authentication owner, or default
+    provider/model mutation.
+
+  Validation:
+  - Add browser coverage for fresh-user automatic generation and presentation,
+    close blocking and focus containment, provider-save unlock, configured-user
+    pass-through, generation failure/retry, revoke/recreate, last-provider
+    removal, repeated authentication events, logout, and stale responses.
+  - Extend the real local TAuth black-box flow through mandatory onboarding,
+    provider-key save, explicit close, reload/session recovery, and sign-out.
+  - Update the README and generated resource copy to describe automatic client
+    key creation and mandatory managed provider setup.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  The frontend now derives onboarding solely from the authenticated profile's
+  client-key and persisted provider-key status. It creates one missing client
+  key after `mpr-ui` authentication, presents the raw value only in the masked
+  read-only key control, and keeps Settings focus-contained with an explicit
+  requirement until a managed provider key has been saved. Revoke, last-key
+  removal, retry, logout, and stale-response paths preserve the same gate
+  without changing TAuth ownership, backend endpoints, schema, or routing
+  defaults. Browser coverage exercises the full state matrix, the real local
+  TAuth black-box validates first-run setup through recovery and sign-out, and
+  the README plus generated resource pages describe the canonical behavior.
+  The required baseline and final `make ci` runs passed; the final browser suite
+  ran 36 scenarios and the real TAuth black-box passed.
+
+- [x] [B058] (P1) Autosave selected-provider settings and clarify retained client-key state.
+  Goal:
+  Remove the hidden draft-versus-persisted boundary from Settings so provider
+  credentials and their provider-owned settings save through ordinary field
+  interactions, while every visible key action accurately describes the state
+  it controls.
+
+  Requirements:
+  - Autosave the selected provider's API key, default model, and system prompt
+    through the current authenticated provider-key endpoint. Remove the
+    explicit Save key and Update key controls and their dead frontend paths.
+  - Complete or reject the current provider autosave before changing provider
+    editors or closing Settings. Never submit raw key material to a provider
+    other than the editor session that owns it, and never restore a late result
+    after authentication or Settings cleanup.
+  - Keep mandatory setup derived from persisted `providers[].has_key`, but make
+    close wait for an in-flight autosave so a newly entered valid key unlocks
+    Settings without a misleading save instruction or transient error.
+  - Show the key removal control whenever the selected editor contains either
+    a persisted key or a newly entered key. Discard a transient key locally;
+    retain confirmation and authenticated deletion for a persisted key.
+  - Replace retained client-key copy with: `This key is saved and can’t be shown
+    again. Replace it to create and copy a new key.`
+  - Keep provider controls aligned, the reveal action stationary, raw values
+    transient, and the forward-only managed-profile contract unchanged.
+
+  Validation:
+  - Add rendered-browser coverage for automatic key/model/prompt persistence,
+    provider-switch and Settings-close ordering, mutation failure, transient
+    removal, persisted removal confirmation, absence of save/update controls,
+    session cleanup, and exact retained-key copy.
+  - Extend the real local TAuth black-box onboarding flow to complete through
+    provider autosave without an explicit save/update action.
+  - Update README and generated resource guidance through the canonical
+    resource generator, then run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+  Resolution:
+  The provider editor now owns API key, model, and prompt edits in one
+  versioned session and autosaves them through the selected provider's existing
+  endpoint. Provider changes and Settings close wait for that transaction;
+  failures retain the editor, and authentication or Settings cleanup rejects
+  late responses. Transient keys expose immediate local removal, persisted keys
+  retain confirmed deletion, and the explicit Save/Update controls are gone.
+  Mandatory setup copy now asks users to add a key, while retained client-key
+  copy explains that replacement creates the next copyable value. README and
+  generated resource guidance describe the same contract. The required
+  baseline and final `make ci` runs passed; final validation included 39
+  rendered-browser scenarios and the real local TAuth black-box flow.
+
+- [x] [B059] (P1) Expose GPT-5 mini reasoning effort from the current OpenAI contract.
+  Goal:
+  Keep the Settings reasoning-effort control exact to OpenAI's model-specific
+  API contract: GPT-4.1 remains explicitly non-reasoning, while GPT-5 mini
+  exposes the effort values it accepts.
+
+  Requirements:
+  - Keep `gpt-4.1` on the non-reasoning Responses payload and do not send a
+    `reasoning` object for it. OpenAI documents GPT-4.1 as a non-reasoning
+    model without a reasoning step.
+  - Declare `gpt-5-mini` reasoning support as `minimal`, `low`, `medium`, and
+    `high`, and route it through the canonical OpenAI Responses reasoning
+    payload so the selected tenant default reaches the upstream API.
+  - Remove the now-unused `openai_responses_base` request-profile contract;
+    do not retain an alias or compatibility path after GPT-5 mini advances to
+    its current profile.
+  - Keep the management profile and Settings control model-owned. Selecting
+    GPT-5 mini must expose only its exact effort list, while selecting GPT-4.1
+    must continue to show the unsupported state and clear an incompatible
+    saved selection.
+  - Update the checked-in config example and model-capability documentation to
+    match the current OpenAI sources.
+
+  Validation:
+  - Add rendered-browser coverage for the GPT-4.1 and GPT-5 mini capability
+    boundary and integration coverage proving GPT-5 mini sends the selected
+    `reasoning.effort` without temperature.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  The OpenAI model catalog now keeps GPT-4.1 explicitly non-reasoning and
+  exposes GPT-5 mini's exact `minimal`, `low`, `medium`, and `high` effort
+  values. GPT-5 mini uses the Responses reasoning payload, while the retired
+  base request profile is rejected and removed from the current contract.
+  Management-profile, rendered-browser, CLI-validation, and public HTTP
+  integration coverage prove the model boundary and upstream payload. The
+  required baseline and final `make ci` runs passed; final validation included
+  39 rendered-browser scenarios, the real TAuth black-box, and 100% aggregate
+  Go coverage.
+
+- [x] [B060] (P1) Autosave routing defaults and remove their manual save action.
+  Goal:
+  Make every editable Settings value persist through its ordinary interaction,
+  so routing defaults require no separate Save defaults action.
+
+  Requirements:
+  - Autosave text provider/model, reasoning effort, dictation provider/model,
+    and the tenant system prompt through the canonical management-defaults
+    endpoint. Select changes save immediately; the text prompt saves when the
+    user leaves the changed field.
+  - Persist dependent provider/model values together. A provider change must
+    submit its catalog-owned default model and any normalized reasoning effort
+    as one valid routing-default payload.
+  - Queue edits made while a defaults request is pending and apply only the
+    latest successful profile. Never let a response overwrite newer defaults,
+    the selected-provider editor, or authenticated-state cleanup.
+  - Complete or reject provider and routing-default autosaves before Settings
+    closes. A failed defaults save must keep Settings open, retain the edited
+    values, and remain retryable.
+  - Remove the Save defaults button, submit handler, dead copy, and dead styling.
+    Keep the current management endpoint and forward-only profile contract.
+  - Update current management documentation to state that both provider-owned
+    settings and tenant routing defaults autosave.
+
+  Validation:
+  - Add rendered-browser coverage for the absence of the manual action,
+    complete provider/model payloads, model-owned reasoning effort, prompt
+    blur, queued edits, Settings-close ordering, mutation failure, and late
+    session cleanup.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  Every routing-default selection now autosaves a complete canonical payload,
+  and the tenant system prompt autosaves when its changed field loses focus.
+  Versioned requests queue newer edits, preserve the selected-provider editor,
+  and reject late responses after authenticated cleanup. Settings waits for
+  provider and routing-default autosaves; failures retain the edited values and
+  keep the modal open for retry. The Save defaults control, submit handler,
+  copy, and styling are removed, and current management documentation describes
+  the automatic contract. The required baseline and final `make ci` runs
+  passed; final validation included 43 rendered-browser scenarios, the real
+  TAuth black-box, and 100% aggregate Go coverage.
+
+- [x] [B061] (P1) Serialize Settings mutations and isolate local orchestration secrets.
+  Goal:
+  Close the review-discovered credential and startup races by making every
+  full-profile Settings mutation one ordered workflow and by giving each local
+  container only its owned environment values after Compose has actually
+  started the stack.
+
+  Requirements:
+  - Project the ignored local environment into one service-scoped env file for
+    ghttp, llm-proxy, and TAuth. Never inject `configs/.env` or the aggregate
+    `.env.local` into an auxiliary container; ghttp receives only `GHTTP_*`,
+    TAuth receives only its server/tenant contract including the shared signing
+    key, and llm-proxy alone receives provider-key encryption configuration.
+  - Make `make up` wait for `docker compose up --build --wait` to complete before
+    starting HTTP probes. Preserve owned cleanup and interactive foreground
+    behavior without spending the readiness budget on image pulls or builds.
+  - Serialize provider autosave, routing-default autosave, provider removal,
+    and client-key generation/revocation before sending requests that return
+    whole management-profile snapshots. Reject queued or returned work after
+    authenticated workspace cleanup; never let an older snapshot overwrite a
+    newer provider, default, or setup state.
+  - Keep Settings open while any profile mutation present at the close attempt
+    is pending. A completed key generation or replacement must remain visible
+    for an explicit later close so its one-time value can be copied; revocation
+    and last-provider removal must re-evaluate and enforce mandatory setup.
+  - Make operational command output safe for concurrent process writes and test
+    polling; no goroutine may read and write an unsynchronized `bytes.Buffer`.
+  - Update local-startup and management documentation to describe the scoped
+    environment, Compose-start boundary, and all-profile-mutation close rule.
+
+  Validation:
+  - Add operational black-box coverage proving no readiness request occurs
+    before Compose reports the services started, each generated service env
+    contains only its allowlisted values, failed Compose startup cannot accept
+    another listener, cleanup still owns the stack, and output polling is
+    race-safe.
+  - Add rendered-browser coverage for Replace-key plus close/Escape, pending
+    revoke, pending last-provider removal, both provider/default autosave
+    orderings, final profile persistence, failure, and authenticated cleanup.
+  - Run the focused operational test with Go's race detector and the required
+    baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair, with the
+    final run after the last code edit.
+
+  Resolution:
+  `make up` now projects one allowlisted environment per service, waits for
+  Compose startup before HTTP probes, verifies the owned services, and follows
+  logs in the foreground. Settings sends every full-profile mutation through
+  one ordered lane, locks controls during close, preserves one-time replacement
+  keys for an explicit later close, and rechecks mandatory setup after deletes.
+  Operational output polling is synchronized. Focused Playwright interleaving
+  coverage and the operational test under `go test -race` passed; the required
+  baseline and final `make ci` runs passed, with the final run covering 46
+  browser scenarios, the real TAuth black-box, 100% aggregate Go coverage, 30
+  Python tests, 47 release tests, and the live-provider preflight.
+
 
 ## Improvements
+
+- [ ] [I027] (P1) Redesign the user dashboard around connected-provider widgets.
+  Goal:
+  Make the authenticated dashboard answer, at a glance, which upstream
+  providers the current tenant has connected. Preserve usage reporting as a
+  separate measure of activity so an unused connected provider remains visible
+  and historical traffic never implies that a provider is still connected.
+
+  Requirements:
+  - Define a connected provider solely as an entry in the current authenticated
+    management profile whose canonical `has_key` value is `true`. Do not infer
+    connection from catalog membership, aliases, routing defaults, local
+    environment credentials, or a provider's presence in historical usage.
+  - Add a prominent `Connected providers` section to the user usage dashboard
+    and render exactly one widget for each connected provider, in the
+    deterministic order returned by the management profile. Do not hard-code
+    provider names or duplicate provider-registration state in the browser.
+  - Give each widget a concise, consistent summary: the profile label,
+    `Connected` status, saved text model, declared text/dictation capabilities,
+    and current-period request and token totals matched by exact canonical
+    provider ID. A connected provider with no usage in the period must still
+    render with zero activity; a usage-load failure must render as unavailable,
+    not as a false zero or a disconnected provider.
+  - Add a provider-specific `Manage` action that opens Settings with that exact
+    provider selected. It must not reveal a key, invoke the key-reveal endpoint,
+    or alter provider/default settings merely by opening the editor.
+  - Replace the ambiguous usage-derived `Providers` summary metric with a
+    `Connected providers` count derived from the same `has_key` projection.
+    Keep provider/model usage breakdowns explicitly labeled as activity for the
+    selected reporting period, including historical rows for providers that are
+    no longer connected.
+  - Render a purposeful empty state when no providers are connected, with one
+    action that opens Settings. The state must coexist with mandatory onboarding
+    and must not create a path around its persisted-key requirements.
+  - Keep the widgets synchronized with the profile: a successful provider-key
+    autosave adds its widget, a successful removal removes it, failed mutations
+    leave the current projection unchanged, and dashboard refresh reloads both
+    current profile state and usage. Never let an out-of-order response restore
+    stale connection state.
+  - Treat widgets as non-secret metadata. Never render provider API keys,
+    masked-key suffixes, client keys, system prompts, or credential-bearing
+    values in widget text, attributes, accessible names, or browser storage.
+  - Use semantic headings and per-provider articles, unique accessible action
+    names such as `Manage OpenAI`, full keyboard operation, and a responsive
+    grid that remains aligned without horizontal overflow on narrow screens.
+    Keep the provider widgets confined to the current user's dashboard; the
+    admin dashboard must not project another tenant's provider credentials or
+    connection state.
+  - Consume the existing management-profile and usage contracts unless a
+    demonstrated missing field requires one canonical contract change. Do not
+    add a parallel provider-registration endpoint, cached shadow state,
+    compatibility aliases, or fallback matching.
+  - Update dashboard and self-service documentation so `connected provider` and
+    `active provider` have explicit, non-overlapping meanings.
+
+  Deliverables:
+  - Add the connected-provider widget grid, connected count, provider-specific
+    Settings navigation, empty/error states, and responsive styling to the user
+    dashboard.
+  - Add one derived presentation model that joins profile providers to usage by
+    exact canonical ID while keeping registration authoritative to `has_key`.
+  - Update first-party frontend types, copy, documentation, and rendered-browser
+    coverage for the final dashboard contract.
+
+  Validation:
+  - Add Playwright scenarios for zero, one, and multiple connected providers;
+    deterministic widget order; a connected provider with zero activity; an
+    unconnected provider with historical activity; exact model/capability and
+    usage rendering; and the connected-provider count.
+  - Prove successful key autosave/removal and dashboard refresh update the
+    widgets, while rejected or out-of-order requests do not mutate the visible
+    projection and usage failure leaves connection state intact with activity
+    marked unavailable.
+  - Prove each `Manage` action selects the intended provider without a reveal or
+    mutation request, no secret-bearing value reaches the rendered dashboard or
+    browser storage, and admin/user dashboard switching preserves isolation.
+  - Cover keyboard navigation, accessible names, and desktop/narrow viewport
+    layout without overlap or horizontal overflow.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
 
 - [x] [I026] (P1) {B036} Add provider/model-capability-driven reasoning-effort to tenant routing defaults.
   Goal:

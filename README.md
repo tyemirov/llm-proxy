@@ -20,7 +20,7 @@ client.
 - Optional per-request web search via `web_search=1|true|yes` when the selected provider/model is configured to support it
 - Optional logging at `debug` or `info` levels
 - Forwards requests using server-side provider API keys, loaded from the database in management mode
-- Optional TAuth-protected self-service UI where signed-in users save their own provider API keys and generate llm-proxy tenant secrets
+- Optional TAuth-protected self-service UI where signed-in users automatically receive an llm-proxy client key and their provider settings plus routing defaults autosave
 - Supports plain text, JSON, XML, or CSV responses
 
 ## REST Contract
@@ -113,7 +113,10 @@ providers:
           request_profile: "openai_responses_temperature_tools"
           web_search: true
         - id: "gpt-5-mini"
-          request_profile: "openai_responses_base"
+          request_profile: "openai_responses_reasoning_tools"
+          reasoning_effort:
+            adapter: "openai_responses"
+            efforts: ["minimal", "low", "medium", "high"]
         - id: "gpt-5"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
@@ -432,7 +435,6 @@ the stable proxy payload shape for that OpenAI model and must be one of:
 
 | Request profile | Payload behavior |
 |-----------------|------------------|
-| `openai_responses_base` | Sends `model` and `input`; omits temperature, tools, and reasoning controls. |
 | `openai_responses_temperature` | Adds `temperature`. |
 | `openai_responses_temperature_tools` | Adds `temperature`; includes web-search tools only when both the request and model catalog enable web search. |
 | `openai_responses_reasoning_tools` | Adds reasoning/text controls; includes web-search tools only when both the request and model catalog enable web search. A saved tenant reasoning effort is sent only when this route declares the capability. |
@@ -588,19 +590,44 @@ Required hosted values are profile-specific:
 | `management.legacy_token_migration.tenant_id` | Optional one-off source tenant id; must be provided together with `owner_email`. |
 | `management.legacy_token_migration.owner_email` | Optional normalized email that alone may claim the configured legacy tenant through a verified TAuth session. Keep the real value in deployment secrets. |
 
-Signed-in users save provider API keys for any supported provider, choose each
-provider's text model and provider-specific system prompt, choose routing
-defaults, and generate llm-proxy secrets. Management mode requires
+After the shared `mpr-ui` shell reports authentication, the frontend loads the
+management profile. If that profile has no llm-proxy client key, the frontend
+creates one through `POST /api/management/secrets` and presents the one-time
+value masked in the read-only Key field with explicit Show and Copy actions.
+Settings opens automatically and cannot be dismissed until the profile has both
+that client key and at least one persisted managed provider key. Only
+`tenant.has_secret` and `providers[].has_key` satisfy this setup gate; a typed
+provider-key draft or a credential in local dotenv configuration does not.
+The selected provider's API key, default model, and system prompt autosave when
+the user leaves a changed field, switches providers, or closes Settings. A
+successful first provider-key autosave unlocks Settings without changing
+routing defaults, and Settings remains open until the user closes it explicitly.
+Text and dictation provider/model defaults plus reasoning effort autosave on
+selection, while the tenant system prompt autosaves when the user leaves the
+changed field. Settings serializes every mutation that returns a complete
+management profile, including provider and routing-default autosaves, provider
+removal, and client-key creation, replacement, or revocation. A close request
+locks the controls and waits for the mutations already in progress. If a client
+key is created or replaced during that wait, Settings stays open so the one-time
+value can be copied before a second explicit close. A failed save retains the
+edited values for retry. Revoking the client key or removing the last managed
+provider key makes Settings mandatory again, while a failed automatic
+client-key request remains retryable through Create key.
+
+Signed-in users also choose each provider's text model and provider-specific
+system prompt, choose routing defaults, and replace or revoke llm-proxy client
+keys. Management mode requires
 `management.database_dialect` and `management.database_dsn` so signups, enabled
 providers, defaults, generated secret digests, and usage events survive restarts
 in a GORM-managed database. `postgres` uses a Postgres DSN, while `sqlite` uses
 a SQLite database path or SQLite DSN. The packaged management config uses
 strict expandable placeholders for the hosted profile values; define every
-`LLM_PROXY_MANAGEMENT_*` key in the runtime environment or local `configs/.env`.
-Placeholders without matching values fail startup. The runtime config file is
-never mutated for user signup, provider enablement, or usage tracking, and
-database access must stay on GORM model APIs without raw SQL. Generated secrets
-continue to authenticate the public proxy endpoints with the same
+`LLM_PROXY_MANAGEMENT_*` key in the API runtime environment. Local `make up`
+projects those values from `configs/.env.local` into the ignored, API-scoped
+`configs/.env.api.local`. Placeholders without matching values fail startup.
+The runtime config file is never mutated for user signup, provider enablement,
+or usage tracking, and database access must stay on GORM model APIs without raw
+SQL. Generated secrets continue to authenticate the public proxy endpoints with the same
 `key=<tenant secret>` query parameter. Provider API keys are accepted only
 through authenticated management endpoints and are encrypted at rest with AES-GCM
 before database persistence. Normal save, profile, and administrator responses
@@ -633,8 +660,9 @@ The profile exposes capability data only as
 `providers[].text_models[].reasoning_effort`; it has no global option list or
 provider-level capability. The Settings form keeps Text provider, Text model,
 and Reasoning effort in one desktop row, clears an incompatible saved value on
-a model change, and reports `Not supported` for routes without a declaration.
-The browser rejects malformed profile data instead of repairing it. Public
+a model change, reports `Not supported` for routes without a declaration, and
+autosaves every routing-default change without a separate action. The browser
+rejects malformed profile data instead of repairing it. Public
 `GET /`, `POST /`, and `POST /v2` contracts do not accept caller-supplied
 reasoning effort.
 
@@ -650,19 +678,21 @@ error. Once the marker exists, every stored field must already be canonical and
 catalog-valid; startup rejects invalid data rather than selecting a replacement
 at runtime.
 
-The authenticated landing screen is a usage dashboard. It shows 30-day request
-and token graphs, total request and token counts, success rate, and provider and
-model breakdowns for the signed-in user's managed tenant. The prior dashboard
-controls now live in a large Settings modal opened from the avatar dropdown;
-the `Settings` menu item is inserted before `Sign out` through the shared
+Configured authenticated users land on a usage dashboard. It shows 30-day
+request and token graphs, total request and token counts, success rate, and
+provider and model breakdowns for the signed-in user's managed tenant. Users
+whose client/provider setup is incomplete enter the mandatory Settings modal
+instead; after setup, the modal remains available from the avatar dropdown. The
+`Settings` menu item is inserted before `Sign out` through the shared
 `<mpr-user>` menu contract. The modal contains client access, generated secret,
 routing defaults, copyable default request examples, copyable selected-provider
 request examples, and one selected-provider editor for API key, provider text
 model, and provider system prompt settings. The routing-default form exposes
 Reasoning effort only for the exact selected text route, clears an incompatible
 value when that route changes, and shows `Not supported` when the route has no
-declaration. Default examples omit `provider`; selected-provider examples include
-the current provider selector and text model.
+declaration. Its provider/model/effort selections autosave immediately and its
+system prompt autosaves on field exit. Default examples omit `provider`;
+selected-provider examples include the current provider selector and text model.
 
 Administrators are configured only through `management.admin_emails`; use the
 plural `${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` placeholder in public config files
@@ -815,11 +845,44 @@ Generate a secret:
 openssl rand -hex 32
 ```
 
-Run the service with OpenAI defaults:
+Run the canonical local browser stack:
 
 ```shell
-./llm-proxy --config config.yml
+make up
 ```
+
+`make up` creates the ignored local profile from
+`configs/.env.local.example` when needed, generates its local TAuth signing
+key and provider-key encryption key once, and writes ignored, service-scoped
+environment projections for ghttp, llm-proxy, and TAuth. ghttp receives only
+its `GHTTP_*` inputs. TAuth receives only its server and tenant inputs, including
+the signing key it shares with the API. Only llm-proxy receives the provider-key
+encryption configuration; aggregate dotenv files and live provider smoke-test
+credentials are not injected into auxiliary containers. The API image is built
+from the current source and runs the canonical `configs/config.yml`
+configuration. The stack has three explicit browser-facing endpoints:
+
+- Static UI: `http://localhost:4179/`, served from `site/` by ghttp.
+- Backend API: `http://localhost:8080/`, including the proxy and
+  `/api/management/*` endpoints.
+- TAuth: `http://localhost:8082/`, configured for the `llm-proxy` tenant and
+  the backend's `app_session_llm_proxy` cookie contract.
+
+ghttp proxies only `http://localhost:4179/config-ui.yaml` to the API. The
+browser then receives the direct API and TAuth origins from that one runtime
+configuration, matching the production split-origin contract. Use the
+`localhost` UI URL rather than `127.0.0.1`: TAuth's insecure local HTTP cookie
+profile is intentionally scoped to the single `localhost` host.
+
+Compose first completes image pulls/builds and reports all three services
+running through `docker compose up --wait`; only then does the bounded HTTP
+readiness budget begin. Readiness proves static content (`200`), the
+ghttp-served runtime config (`200`), the unauthenticated API boundary (`403`),
+the anonymous TAuth session boundary (`204`), and the unauthenticated management
+API boundary (`401`). It does not call a paid provider. After readiness, Compose
+logs remain attached in the foreground. Use `Ctrl-C` to stop the containers and
+network; the named local data volumes keep local TAuth and management state for
+the next run.
 
 With `management.enabled: false`, set a static tenant's default text
 provider/model to route omitted-provider requests to DeepSeek. Static tenant
@@ -905,6 +968,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | Command | Purpose |
 |---------|---------|
 | `npm ci` | Install pinned frontend validation dependencies before running local frontend checks. |
+| `make up` | Build and run the complete local browser orchestration: ghttp static UI on `localhost:4179`, API on `localhost:8080`, and TAuth on `localhost:8082`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
 | `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, repository-owned release integration tests, and the non-paid live-harness preflight. |
 | `make test-live-provider-harness` | Generate the temporary static-mode live-test config and verify authenticated routing without an upstream call. |
 | `make test-live-providers` | Generate a complete temporary static-mode config and run live text smoke tests for every provider whose API key is present; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
@@ -1511,16 +1575,22 @@ positive and lets the upstream provider enforce any provider-side model limit.
 ### OpenAI reasoning-effort capabilities
 
 The checked-in OpenAI catalog follows the current model documentation and keeps
-each model's list separate:
+each model's list separate. GPT-4.1 is explicitly a non-reasoning model and
+does not accept a configurable effort; GPT-5 mini is part of the reasoning GPT-5
+API family and accepts the same four original GPT-5 effort values:
 
 | Model | Allowed `reasoning_effort` values |
 |-------|-----------------------------------|
+| `gpt-4.1` | Not supported |
+| `gpt-5-mini` | `minimal`, `low`, `medium`, `high` |
 | `gpt-5` | `minimal`, `low`, `medium`, `high` |
 | `gpt-5.5` | `none`, `low`, `medium`, `high`, `xhigh` |
 | `gpt-5.5-pro` | `medium`, `high`, `xhigh` |
 | `gpt-5.6`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` | `none`, `low`, `medium`, `high`, `xhigh`, `max` |
 
-See OpenAI's [GPT-5 model reference](https://developers.openai.com/api/docs/models/gpt-5),
+See OpenAI's [GPT-4.1 model reference](https://developers.openai.com/api/docs/models/gpt-4.1),
+[GPT-5 API launch contract](https://openai.com/index/introducing-gpt-5-for-developers/),
+[GPT-5 model reference](https://developers.openai.com/api/docs/models/gpt-5),
 [GPT-5.5 model reference](https://developers.openai.com/api/docs/models/gpt-5.5),
 [GPT-5.5 Pro model reference](https://developers.openai.com/api/docs/models/gpt-5.5-pro),
 and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-model).
@@ -1609,7 +1679,7 @@ and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-mo
 * All requests must include a configured tenant secret via `key=...`.
 * Client requests must not include upstream provider API keys; public proxy endpoints reject provider-key-like query, JSON, and multipart form fields.
 * Request logs record only the query-free path plus method, status, latency, client IP, and tenant metadata; they do not record query strings, request bodies, cookies, or authorization headers.
-* Self-service provider API keys are accepted only through TAuth-protected management endpoints and are not returned raw after save.
+* Self-service provider API keys are accepted only through TAuth-protected management endpoints. Autosave responses return masked status; raw retrieval requires the explicit owner-authenticated reveal action.
 * Do not expose this service to the public internet without appropriate network controls.
 
 ## Implementation Plans
