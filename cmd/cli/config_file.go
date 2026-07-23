@@ -87,6 +87,7 @@ type managementConfiguration struct {
 	LoginPath                string                            `mapstructure:"login_path"`
 	LogoutPath               string                            `mapstructure:"logout_path"`
 	NoncePath                string                            `mapstructure:"nonce_path"`
+	SessionPath              string                            `mapstructure:"session_path"`
 	JWTSigningKey            string                            `mapstructure:"jwt_signing_key"`
 	JWTIssuer                string                            `mapstructure:"jwt_issuer"`
 	SessionCookieName        string                            `mapstructure:"session_cookie_name"`
@@ -339,6 +340,7 @@ func managementProxyConfiguration(configuration managementConfiguration) proxy.M
 		LoginPath:                configuration.LoginPath,
 		LogoutPath:               configuration.LogoutPath,
 		NoncePath:                configuration.NoncePath,
+		SessionPath:              configuration.SessionPath,
 		JWTSigningKey:            configuration.JWTSigningKey,
 		JWTIssuer:                configuration.JWTIssuer,
 		SessionCookieName:        configuration.SessionCookieName,

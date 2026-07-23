@@ -76,6 +76,7 @@ management:
   login_path: "/auth/google"
   logout_path: "/auth/logout"
   nonce_path: "/auth/nonce"
+  session_path: "/auth/session"
   jwt_signing_key: "${P411_TAUTH_JWT_SIGNING_KEY}"
   jwt_issuer: "tauth"
   session_cookie_name: "llm_proxy_session"
@@ -148,8 +149,8 @@ P411_LEGACY_TOKEN_OWNER_EMAIL=Legacy.Owner@Example.com
 	if capturedConfiguration.Management.GoogleClientID != "google-client-id" {
 		t.Fatalf("management google client id=%q", capturedConfiguration.Management.GoogleClientID)
 	}
-	if capturedConfiguration.Management.LoginPath != "/auth/google" || capturedConfiguration.Management.LogoutPath != "/auth/logout" || capturedConfiguration.Management.NoncePath != "/auth/nonce" {
-		t.Fatalf("management auth paths=%q %q %q", capturedConfiguration.Management.LoginPath, capturedConfiguration.Management.LogoutPath, capturedConfiguration.Management.NoncePath)
+	if capturedConfiguration.Management.LoginPath != "/auth/google" || capturedConfiguration.Management.LogoutPath != "/auth/logout" || capturedConfiguration.Management.NoncePath != "/auth/nonce" || capturedConfiguration.Management.SessionPath != "/auth/session" {
+		t.Fatalf("management auth paths=%q %q %q %q", capturedConfiguration.Management.LoginPath, capturedConfiguration.Management.LogoutPath, capturedConfiguration.Management.NoncePath, capturedConfiguration.Management.SessionPath)
 	}
 	if capturedConfiguration.Management.JWTSigningKey != "tauth-signing-key" {
 		t.Fatalf("management signing key=%q", capturedConfiguration.Management.JWTSigningKey)
@@ -263,6 +264,7 @@ management:
   login_path: "/auth/google"
   logout_path: "/auth/logout"
   nonce_path: "/auth/nonce"
+  session_path: "/auth/session"
   jwt_signing_key: "tauth-signing-key"
   jwt_issuer: "tauth"
   session_cookie_name: "llm_proxy_session"
@@ -404,6 +406,7 @@ LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID=925457785190-3frk7j3bsr3ucidtkcohrp2sl07e0
 LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH=/auth/google
 LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH=/auth/logout
 LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH=/auth/nonce
+LLM_PROXY_MANAGEMENT_TAUTH_SESSION_PATH=/auth/session
 LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY=packaged-tauth-signing-key
 LLM_PROXY_MANAGEMENT_JWT_ISSUER=tauth
 LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME=app_session_llm_proxy
@@ -575,6 +578,7 @@ management:
   login_path: "/auth/google"
   logout_path: "/auth/logout"
   nonce_path: "/auth/nonce"
+  session_path: "/auth/session"
   jwt_signing_key: "tauth-signing-key"
   jwt_issuer: "tauth"
   session_cookie_name: "llm_proxy_session"
