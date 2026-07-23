@@ -20,7 +20,7 @@ client.
 - Optional per-request web search via `web_search=1|true|yes` when the selected provider/model is configured to support it
 - Optional logging at `debug` or `info` levels
 - Forwards requests using server-side provider API keys, loaded from the database in management mode
-- Optional TAuth-protected self-service UI where signed-in users save their own provider API keys and generate llm-proxy tenant secrets
+- Optional TAuth-protected self-service UI where signed-in users automatically receive an llm-proxy client key and save their own provider API keys
 - Supports plain text, JSON, XML, or CSV responses
 
 ## REST Contract
@@ -588,9 +588,23 @@ Required hosted values are profile-specific:
 | `management.legacy_token_migration.tenant_id` | Optional one-off source tenant id; must be provided together with `owner_email`. |
 | `management.legacy_token_migration.owner_email` | Optional normalized email that alone may claim the configured legacy tenant through a verified TAuth session. Keep the real value in deployment secrets. |
 
-Signed-in users save provider API keys for any supported provider, choose each
-provider's text model and provider-specific system prompt, choose routing
-defaults, and generate llm-proxy secrets. Management mode requires
+After the shared `mpr-ui` shell reports authentication, the frontend loads the
+management profile. If that profile has no llm-proxy client key, the frontend
+creates one through `POST /api/management/secrets` and presents the one-time
+value masked in the read-only Key field with explicit Show and Copy actions.
+Settings opens automatically and cannot be dismissed until the profile has both
+that client key and at least one persisted managed provider key. Only
+`tenant.has_secret` and `providers[].has_key` satisfy this setup gate; a typed
+provider-key draft or a credential in local dotenv configuration does not.
+Saving any supported provider key unlocks Settings without changing routing
+defaults, and Settings remains open until the user closes it explicitly.
+Revoking the client key or removing the last managed provider key makes Settings
+mandatory again, while a failed automatic client-key request remains retryable
+through Create key.
+
+Signed-in users also choose each provider's text model and provider-specific
+system prompt, choose routing defaults, and replace or revoke llm-proxy client
+keys. Management mode requires
 `management.database_dialect` and `management.database_dsn` so signups, enabled
 providers, defaults, generated secret digests, and usage events survive restarts
 in a GORM-managed database. `postgres` uses a Postgres DSN, while `sqlite` uses
@@ -650,11 +664,12 @@ error. Once the marker exists, every stored field must already be canonical and
 catalog-valid; startup rejects invalid data rather than selecting a replacement
 at runtime.
 
-The authenticated landing screen is a usage dashboard. It shows 30-day request
-and token graphs, total request and token counts, success rate, and provider and
-model breakdowns for the signed-in user's managed tenant. The prior dashboard
-controls now live in a large Settings modal opened from the avatar dropdown;
-the `Settings` menu item is inserted before `Sign out` through the shared
+Configured authenticated users land on a usage dashboard. It shows 30-day
+request and token graphs, total request and token counts, success rate, and
+provider and model breakdowns for the signed-in user's managed tenant. Users
+whose client/provider setup is incomplete enter the mandatory Settings modal
+instead; after setup, the modal remains available from the avatar dropdown. The
+`Settings` menu item is inserted before `Sign out` through the shared
 `<mpr-user>` menu contract. The modal contains client access, generated secret,
 routing defaults, copyable default request examples, copyable selected-provider
 request examples, and one selected-provider editor for API key, provider text
