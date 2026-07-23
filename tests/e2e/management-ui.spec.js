@@ -133,19 +133,19 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).not.toContain("copy.tenantTitle");
   expect(html).not.toContain("copy.tenantName");
   expect(html).toContain(
-    '<button type="button" class="icon-button client-key-create" x-cloak x-show="!hasSecret" x-on:click="generateSecret()" x-bind:disabled="busy" x-bind:title="copy.createKey">',
+    '<button type="button" class="icon-button client-key-create" x-cloak x-show="!hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.createKey">',
   );
   expect(html).toContain(
-    '<button type="button" class="icon-only client-key-replace" x-cloak x-show="hasSecret" x-on:click="generateSecret()" x-bind:disabled="busy" x-bind:title="copy.replaceKey" x-bind:aria-label="copy.replaceKey">',
+    '<button type="button" class="icon-only client-key-replace" x-cloak x-show="hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.replaceKey" x-bind:aria-label="copy.replaceKey">',
   );
   expect(html).toContain(
     '<svg class="utility-icon recycle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">',
   );
   expect(html).toContain(
-    '<button type="button" class="icon-only client-key-copy" x-cloak x-show="hasGeneratedSecret" x-on:click="copyGeneratedSecret()" x-bind:disabled="busy" x-bind:title="copy.copyClientKey" x-bind:aria-label="copy.copyClientKey">',
+    '<button type="button" class="icon-only client-key-copy" x-cloak x-show="hasGeneratedSecret" x-on:click="copyGeneratedSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.copyClientKey" x-bind:aria-label="copy.copyClientKey">',
   );
   expect(html).toContain(
-    '<button type="button" class="icon-only danger client-key-revoke" x-cloak x-show="hasSecret" x-on:click="revokeSecret()" x-bind:disabled="busy" x-bind:title="copy.revokeKey" x-bind:aria-label="copy.revokeKey">',
+    '<button type="button" class="icon-only danger client-key-revoke" x-cloak x-show="hasSecret" x-on:click="revokeSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.revokeKey" x-bind:aria-label="copy.revokeKey">',
   );
   expect(html).toContain('<span class="material-symbols-outlined" x-show="!generatedSecretVisible" aria-hidden="true">visibility</span>');
   expect(html).toContain('<span class="material-symbols-outlined" x-show="generatedSecretVisible" aria-hidden="true">visibility_off</span>');
@@ -195,6 +195,8 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(keyManagementJavaScript).toContain("providerEditorSession");
   expect(keyManagementJavaScript).toContain("autosaveSelectedProvider");
   expect(keyManagementJavaScript).toContain("autosaveRoutingDefaults");
+  expect(keyManagementJavaScript).toContain("enqueueProfileMutation");
+  expect(keyManagementJavaScript).toContain("waitForProfileMutations");
   expect(keyManagementJavaScript).not.toContain("saveSelectedProviderKey");
   expect(keyManagementJavaScript).not.toContain("saveDefaults");
   expect(keyManagementJavaScript).toContain("requestAndApplyGeneratedSecret");
@@ -1107,6 +1109,94 @@ test("routing-default autosave queues newer edits without resetting the provider
   await expect(defaultsForm).not.toHaveAttribute("aria-busy", "true");
 });
 
+test("provider and routing autosaves serialize whole-profile mutations in both directions", async ({ page }) => {
+  const providerMutations = [];
+  const defaultsMutations = [];
+  let releaseFirstProviderSave;
+  const firstProviderSaveReleased = new Promise((resolve) => {
+    releaseFirstProviderSave = resolve;
+  });
+  let firstProviderSaveStarted;
+  const firstProviderSaveRequested = new Promise((resolve) => {
+    firstProviderSaveStarted = resolve;
+  });
+  let releaseSecondDefaultsSave;
+  const secondDefaultsSaveReleased = new Promise((resolve) => {
+    releaseSecondDefaultsSave = resolve;
+  });
+  let secondDefaultsSaveStarted;
+  const secondDefaultsSaveRequested = new Promise((resolve) => {
+    secondDefaultsSaveStarted = resolve;
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await page.route(providerKeyEndpointURL("openai"), async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.fallback();
+      return;
+    }
+    providerMutations.push(route.request().postDataJSON());
+    if (providerMutations.length === 1) {
+      firstProviderSaveStarted();
+      await firstProviderSaveReleased;
+    }
+    await route.fallback();
+  });
+  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+    defaultsMutations.push(route.request().postDataJSON());
+    if (defaultsMutations.length === 2) {
+      secondDefaultsSaveStarted();
+      await secondDefaultsSaveReleased;
+    }
+    await route.fallback();
+  });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const providerEditor = settingsDialog.locator("provider-editor");
+  const providerModel = providerEditor.getByRole("combobox", { name: "Provider default model" });
+  const providerPrompt = providerEditor.getByRole("textbox", { name: "System prompt" });
+  const defaultsForm = settingsDialog.locator(".settings-grid-form");
+  const defaultTextProvider = defaultsForm.getByRole("combobox", { name: "Text provider" });
+
+  await providerModel.selectOption("gpt-5-mini");
+  await firstProviderSaveRequested;
+  await defaultTextProvider.selectOption("deepseek");
+  await page.waitForTimeout(50);
+  expect(defaultsMutations).toHaveLength(0);
+
+  releaseFirstProviderSave();
+  await expect.poll(() => defaultsMutations.length).toBe(1);
+  await expect(providerModel).toHaveValue("gpt-5-mini");
+  await expect(defaultTextProvider).toHaveValue("deepseek");
+
+  await defaultTextProvider.selectOption("openai");
+  await secondDefaultsSaveRequested;
+  await providerPrompt.fill("Keep both serialized changes.");
+  await page.keyboard.press("Tab");
+  await page.waitForTimeout(50);
+  expect(providerMutations).toHaveLength(1);
+
+  releaseSecondDefaultsSave();
+  await expect.poll(() => providerMutations.length).toBe(2);
+  await expect(providerModel).toHaveValue("gpt-5-mini");
+  await expect(providerPrompt).toHaveValue("Keep both serialized changes.");
+  await expect(defaultTextProvider).toHaveValue("openai");
+  await expect(page.locator("notification-region")).toHaveText("Provider settings saved");
+
+  const reloadedProfileResponse = page.waitForResponse(`${baseURL}/api/management/profile`);
+  await page.reload();
+  const reloadedProfile = await (await reloadedProfileResponse).json();
+  expect(reloadedProfile.tenant.defaults).toMatchObject({ provider: "openai", model: "gpt-4.1" });
+  expect(reloadedProfile.providers.find((provider) => provider.id === "openai")).toMatchObject({
+    text_model: "gpt-5-mini",
+    system_prompt: "Keep both serialized changes.",
+  });
+});
+
 test("Settings close waits for the current routing-default autosave", async ({ page }) => {
   let releaseDefaultsSave;
   const defaultsSaveReleased = new Promise((resolve) => {
@@ -1595,6 +1685,123 @@ test("Settings remains locked while automatic client-key creation is pending", a
   await expect(settingsDialog.getByRole("textbox", { name: "Key", exact: true })).toHaveValue("••••••••••••");
   await settingsDialog.getByRole("button", { name: "Close" }).click();
   await expect(settingsDialog).toBeHidden();
+});
+
+test("Settings keeps a replacement client key available when close is requested during rotation", async ({ page }) => {
+  const replacementSecret = "llmp_test_pending_replacement";
+  let releaseSecretReplacement;
+  const secretReplacementReleased = new Promise((resolve) => {
+    releaseSecretReplacement = resolve;
+  });
+  let secretReplacementStarted;
+  const secretReplacementRequested = new Promise((resolve) => {
+    secretReplacementStarted = resolve;
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { generatedSecret: replacementSecret });
+  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    secretReplacementStarted();
+    await secretReplacementReleased;
+    await route.fallback();
+  });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const clientAccessRow = settingsDialog.locator("client-access-row");
+
+  await clientAccessRow.getByRole("button", { name: "Replace key" }).click();
+  await secretReplacementRequested;
+  await page.keyboard.press("Escape");
+  await expect(settingsDialog).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeDisabled();
+
+  const replacementResponse = page.waitForResponse(
+    (response) => response.url() === `${baseURL}/api/management/secrets` && response.request().method() === "POST",
+  );
+  releaseSecretReplacement();
+  await replacementResponse;
+  await expect(settingsDialog).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeEnabled();
+  const clientKeyInput = clientAccessRow.getByRole("textbox", { name: "Key", exact: true });
+  await expect(clientKeyInput).toHaveValue("••••••••••••");
+  await clientAccessRow.getByRole("button", { name: "Show key", exact: true }).click();
+  await expect(clientKeyInput).toHaveValue(replacementSecret);
+  expect(await browserStorageContains(page, replacementSecret)).toBe(false);
+
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
+  await expect(settingsDialog).toBeHidden();
+});
+
+test("pending revocation and last-provider removal enforce mandatory Settings before close", async ({ page }) => {
+  let releaseRevocation;
+  const revocationReleased = new Promise((resolve) => {
+    releaseRevocation = resolve;
+  });
+  let revocationStarted;
+  const revocationRequested = new Promise((resolve) => {
+    revocationStarted = resolve;
+  });
+  let releaseProviderRemoval;
+  const providerRemovalReleased = new Promise((resolve) => {
+    releaseProviderRemoval = resolve;
+  });
+  let providerRemovalStarted;
+  const providerRemovalRequested = new Promise((resolve) => {
+    providerRemovalStarted = resolve;
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { savedProviderIDs: ["openai"] });
+  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+    if (route.request().method() !== "DELETE") {
+      await route.fallback();
+      return;
+    }
+    revocationStarted();
+    await revocationReleased;
+    await route.fallback();
+  });
+  await page.route(providerKeyEndpointURL("openai"), async (route) => {
+    if (route.request().method() !== "DELETE") {
+      await route.fallback();
+      return;
+    }
+    providerRemovalStarted();
+    await providerRemovalReleased;
+    await route.fallback();
+  });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const closeSettings = settingsDialog.getByRole("button", { name: "Close" });
+  const clientAccessRow = settingsDialog.locator("client-access-row");
+
+  await clientAccessRow.getByRole("button", { name: "Revoke key" }).click();
+  await revocationRequested;
+  await closeSettings.click();
+  await expect(settingsDialog).toBeVisible();
+  releaseRevocation();
+  await expect(settingsDialog.getByRole("alert")).toHaveText("Create a client key before leaving Settings.");
+  await expect(settingsDialog).toBeVisible();
+
+  await settingsDialog.getByRole("button", { name: "Create key" }).click();
+  await expect(settingsDialog.getByRole("alert")).toBeHidden();
+  const providerEditor = settingsDialog.locator("provider-editor");
+  await providerEditor.getByRole("button", { name: "Remove provider key and settings" }).click();
+  await page.getByRole("alertdialog", { name: "Remove provider key?" }).getByRole("button", { name: "Remove key" }).click();
+  await providerRemovalRequested;
+  await closeSettings.click();
+  await expect(settingsDialog).toBeVisible();
+  releaseProviderRemoval();
+  await expect(settingsDialog.getByRole("alert")).toHaveText("Add at least one provider API key before leaving Settings.");
+  await expect(settingsDialog).toBeVisible();
 });
 
 test("late generated client keys cannot restore after session cleanup", async ({ page }) => {
