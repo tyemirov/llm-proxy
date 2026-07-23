@@ -4,16 +4,17 @@ set -euo pipefail
 
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd "${script_directory}/.." && pwd)"
-base_environment_path="${repository_root}/configs/.env"
-base_environment_example_path="${repository_root}/configs/.env.sample"
 local_environment_path="${repository_root}/configs/.env.local"
 local_environment_example_path="${repository_root}/configs/.env.local.example"
+frontend_environment_path="${repository_root}/configs/.env.frontend.local"
+api_environment_path="${repository_root}/configs/.env.api.local"
+tauth_environment_path="${repository_root}/configs/.env.tauth.local"
 compose_file="${repository_root}/docker-compose.local.yml"
 compose_project="llm-proxy-local"
-compose_pid=""
 local_stack_started="0"
 local_stack_ready="0"
 local_frontend_origin="http://localhost:4179"
+expected_running_services=$'api\nfrontend\ntauth'
 
 fail() {
   echo "error: $*" >&2
@@ -63,13 +64,24 @@ ensure_generated_local_value() {
   echo "Generated ${variable_name} for the local profile."
 }
 
+write_scoped_local_environment() {
+  local destination_path="$1"
+  local variable_name
+  local variable_value
+  local temporary_environment_path
+  shift
+
+  temporary_environment_path="$(mktemp "${destination_path}.XXXXXX")"
+  for variable_name in "$@"; do
+    variable_value="$(local_environment_value "${variable_name}")"
+    [[ -n "${variable_value}" ]] || fail "${local_environment_path} must define ${variable_name}"
+    printf '%s=%s\n' "${variable_name}" "${variable_value}" >>"${temporary_environment_path}"
+  done
+  mv "${temporary_environment_path}" "${destination_path}"
+  chmod 600 "${destination_path}"
+}
+
 prepare_local_environment() {
-  if [[ ! -f "${base_environment_path}" ]]; then
-    [[ -f "${base_environment_example_path}" ]] || fail "missing base environment example: ${base_environment_example_path}"
-    cp "${base_environment_example_path}" "${base_environment_path}"
-    chmod 600 "${base_environment_path}"
-    echo "Created ${base_environment_path} from the tracked example."
-  fi
   if [[ ! -f "${local_environment_path}" ]]; then
     [[ -f "${local_environment_example_path}" ]] || fail "missing local environment example: ${local_environment_example_path}"
     cp "${local_environment_example_path}" "${local_environment_path}"
@@ -78,6 +90,47 @@ prepare_local_environment() {
   fi
   ensure_generated_local_value "LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY" "__GENERATE_ON_FIRST_MAKE_UP__" "48"
   ensure_generated_local_value "LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY" "__GENERATE_ON_FIRST_MAKE_UP__" "32"
+
+  write_scoped_local_environment "${frontend_environment_path}" \
+    "GHTTP_SERVE_PORT" \
+    "GHTTP_SERVE_DIRECTORY" \
+    "GHTTP_SERVE_NO_MARKDOWN" \
+    "GHTTP_SERVE_PROXIES"
+  write_scoped_local_environment "${api_environment_path}" \
+    "LLM_PROXY_MANAGEMENT_ENABLED" \
+    "LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN" \
+    "LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN" \
+    "LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN" \
+    "LLM_PROXY_MANAGEMENT_UI_DESCRIPTION" \
+    "LLM_PROXY_MANAGEMENT_ADMIN_EMAILS" \
+    "LLM_PROXY_MANAGEMENT_TAUTH_URL" \
+    "LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID" \
+    "LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID" \
+    "LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH" \
+    "LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH" \
+    "LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH" \
+    "LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY" \
+    "LLM_PROXY_MANAGEMENT_JWT_ISSUER" \
+    "LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME" \
+    "LLM_PROXY_MANAGEMENT_DATABASE_DIALECT" \
+    "LLM_PROXY_MANAGEMENT_DATABASE_DSN" \
+    "LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY" \
+    "LLM_PROXY_MANAGEMENT_API_ORIGIN" \
+    "LLM_PROXY_MANAGEMENT_PROXY_ORIGIN" \
+    "LLM_PROXY_MANAGEMENT_LEGACY_TOKEN_OWNER_EMAIL"
+  write_scoped_local_environment "${tauth_environment_path}" \
+    "TAUTH_CONFIG_FILE" \
+    "TAUTH_LISTEN_ADDR" \
+    "TAUTH_DATABASE_URL" \
+    "TAUTH_ENABLE_CORS" \
+    "TAUTH_CORS_EXCEPTION_1" \
+    "TAUTH_ALLOW_INSECURE_HTTP" \
+    "LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN" \
+    "LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID" \
+    "LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID" \
+    "LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY" \
+    "LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME" \
+    "LLM_PROXY_LOCAL_TAUTH_REFRESH_COOKIE_NAME"
 }
 
 stop_local_stack() {
@@ -88,13 +141,6 @@ stop_local_stack() {
   if ! compose down --remove-orphans; then
     stop_status="1"
   fi
-  if [[ -n "${compose_pid}" ]] && kill -0 "${compose_pid}" >/dev/null 2>&1; then
-    kill -TERM "${compose_pid}" >/dev/null 2>&1 || true
-  fi
-  if [[ -n "${compose_pid}" ]]; then
-    wait "${compose_pid}" >/dev/null 2>&1 || true
-  fi
-  compose_pid=""
   local_stack_started="0"
   return "${stop_status}"
 }
@@ -120,18 +166,10 @@ handle_operator_interrupt() {
   exit 130
 }
 
-ensure_compose_running() {
-  local compose_exit_status
-  if [[ -n "${compose_pid}" ]] && kill -0 "${compose_pid}" >/dev/null 2>&1; then
-    return
-  fi
-  if [[ -n "${compose_pid}" ]] && wait "${compose_pid}"; then
-    compose_exit_status="0"
-  else
-    compose_exit_status=$?
-  fi
-  compose_pid=""
-  fail "local orchestration exited before readiness with status ${compose_exit_status}"
+ensure_compose_services_running() {
+  local running_services
+  running_services="$(compose ps --status running --services | LC_ALL=C sort)"
+  [[ "${running_services}" == "${expected_running_services}" ]] || fail "local orchestration services are not running; expected api, frontend, tauth; got ${running_services:-none}"
 }
 
 wait_for_http_status() {
@@ -145,10 +183,10 @@ wait_for_http_status() {
   for attempt in {1..150}; do
     readiness_status="$(curl --silent --show-error --max-time 1 --output /dev/null --write-out '%{http_code}' "$@" "${readiness_url}" 2>/dev/null || true)"
     if [[ "${readiness_status}" == "${expected_status}" ]]; then
-      ensure_compose_running
+      ensure_compose_services_running
       return
     fi
-    ensure_compose_running
+    ensure_compose_services_running
     sleep 0.2
   done
   fail "${boundary_name} did not become ready at ${readiness_url}; expected HTTP ${expected_status}, got ${readiness_status:-connection_failure}"
@@ -167,9 +205,13 @@ command -v openssl >/dev/null 2>&1 || fail "openssl is required to generate loca
 prepare_local_environment
 
 cd "${repository_root}"
-docker compose --project-name "${compose_project}" --file "${compose_file}" up --build --remove-orphans &
-compose_pid="$!"
 local_stack_started="1"
+if compose up --build --remove-orphans --wait; then
+  ensure_compose_services_running
+else
+  compose_exit_status=$?
+  fail "local orchestration failed to start with status ${compose_exit_status}"
+fi
 
 wait_for_http_status "ghttp static frontend" "200" "http://127.0.0.1:4179/"
 wait_for_http_status "ghttp runtime configuration" "200" "http://127.0.0.1:4179/config-ui.yaml"
@@ -186,5 +228,4 @@ echo "TAuth: http://localhost:8082/"
 echo "Runtime config: ${local_frontend_origin}/config-ui.yaml (ghttp to API)"
 echo "Readiness contracts: static=200, config=200, API=403 without a key, TAuth session=204, management API=401 without a session."
 
-wait "${compose_pid}"
-compose_pid=""
+compose logs --follow --no-color
