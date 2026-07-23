@@ -77,13 +77,8 @@ export function createKeyManagement() {
     runtimeConfig: null,
     /** @type {import("../types.d.js").ProviderProfile[]} */
     providers: [],
-    selectedProviderID: EMPTY_STRING,
-    /** @type {Record<string, string>} */
-    providerInputs: {},
-    revealedProviderID: EMPTY_STRING,
-    providerKeyVisible: false,
-    providerKeyRevealPending: false,
-    providerKeyRevealVersion: 0,
+    providerEditorSession: createProviderEditorSession(EMPTY_STRING, 0),
+    providerRemovalConfirmationProviderID: EMPTY_STRING,
     /** @type {import("../types.d.js").TenantDefaults} */
     defaults: emptyDefaults(),
     /** @type {import("../types.d.js").ManagementUsageSummary} */
@@ -92,6 +87,7 @@ export function createKeyManagement() {
     adminUsers: [],
     /** @type {Promise<void> | null} */
     profileLoadPromise: null,
+    workspaceVersion: 0,
     generatedSecret: EMPTY_STRING,
     generatedSecretVisible: false,
     generatedSecretVersion: 0,
@@ -129,6 +125,28 @@ export function createKeyManagement() {
       return Boolean(this.profile && this.profile.tenant.has_secret);
     },
 
+    get hasSavedProviderKey() {
+      return this.providers.some((provider) => provider.has_key);
+    },
+
+    get settingsRequired() {
+      return (
+        this.authState === AUTH_STATES.AUTHENTICATED &&
+        Boolean(this.profile) &&
+        (!this.hasSecret || !this.hasSavedProviderKey)
+      );
+    },
+
+    get settingsRequirementCopy() {
+      if (!this.hasSecret && !this.hasSavedProviderKey) {
+        return COPY.settingsRequiresClientAndProviderKey;
+      }
+      if (!this.hasSecret) {
+        return COPY.settingsRequiresClientKey;
+      }
+      return COPY.settingsRequiresProviderKey;
+    },
+
     get isAdmin() {
       return Boolean(this.profile && this.profile.user.is_admin);
     },
@@ -149,10 +167,6 @@ export function createKeyManagement() {
       return this.adminUsers.length > 0;
     },
 
-    get tenantName() {
-      return COPY.defaultTenantName;
-    },
-
     get hasGeneratedSecret() {
       return Boolean(this.generatedSecret);
     },
@@ -163,10 +177,6 @@ export function createKeyManagement() {
 
     get generatedSecretVisibilityActionCopy() {
       return this.generatedSecretVisible ? COPY.hideClientKey : COPY.showClientKey;
-    },
-
-    get clientKeyCreateCopy() {
-      return this.hasSecret ? COPY.replaceKey : COPY.createKey;
     },
 
     get selectedTextModels() {
@@ -209,13 +219,24 @@ export function createKeyManagement() {
       return this.providers.find((candidateProvider) => candidateProvider.id === this.selectedProviderID) || null;
     },
 
-    get selectedProviderKeyRevealed() {
-      return this.selectedProviderID !== EMPTY_STRING && this.revealedProviderID === this.selectedProviderID;
+    get selectedProviderID() {
+      return this.providerEditorSession.providerID;
+    },
+
+    get providerKeyVisible() {
+      return this.providerEditorSession.keyVisible;
+    },
+
+    get providerKeyRevealPending() {
+      return this.providerEditorSession.revealPending;
+    },
+
+    get providerRemovalConfirmationOpen() {
+      return this.providerRemovalConfirmationProviderID !== EMPTY_STRING;
     },
 
     get selectedProviderKeyHasInput() {
-      const provider = this.selectedProvider;
-      return Boolean(provider && this.providerInputs[provider.id]);
+      return this.providerEditorSession.keyInput !== EMPTY_STRING;
     },
 
     get selectedProviderKeyInputValue() {
@@ -223,7 +244,7 @@ export function createKeyManagement() {
       if (!provider) {
         return EMPTY_STRING;
       }
-      const providerKeyInput = String(this.providerInputs[provider.id] || EMPTY_STRING);
+      const providerKeyInput = this.providerEditorSession.keyInput;
       if (this.providerKeyVisible || (!provider.has_key && !providerKeyInput)) {
         return providerKeyInput;
       }
@@ -239,7 +260,7 @@ export function createKeyManagement() {
       if (!provider) {
         return false;
       }
-      return Boolean(!this.providerKeyVisible && (provider.has_key || this.providerInputs[provider.id]));
+      return Boolean(!this.providerKeyVisible && (provider.has_key || this.selectedProviderKeyHasInput));
     },
 
     get selectedProviderKeyActionCopy() {
@@ -432,21 +453,34 @@ export function createKeyManagement() {
       }
       this.authState = AUTH_STATES.LOADING;
       await this.loadProfile();
+      if (this.authState === AUTH_STATES.LOADING && readMprUIAuthStatus() === AUTH_STATES.AUTHENTICATED) {
+        await this.loadProfile();
+      }
     },
 
     async loadProfileOnce() {
+      const workspaceVersion = this.workspaceVersion;
       this.busy = true;
       try {
         const loadedProfile = await fetchProfile();
-        if (readMprUIAuthStatus() !== AUTH_STATES.AUTHENTICATED) {
+        if (!this.canApplyAuthenticatedWorkspace(workspaceVersion)) {
           return;
         }
         this.applyProfile(loadedProfile);
         this.authState = AUTH_STATES.AUTHENTICATED;
         this.setNotice(NOTICE_KINDS.SUCCESS, COPY.profileLoaded);
+        if (this.settingsRequired) {
+          this.openSettings();
+        }
+        if (!this.hasSecret) {
+          await this.requestAndApplyGeneratedSecret();
+        }
+        if (!this.canApplyAuthenticatedWorkspace(workspaceVersion) || this.authState !== AUTH_STATES.AUTHENTICATED) {
+          return;
+        }
         await this.loadUsageForAuthenticatedProfile();
       } catch (requestError) {
-        if (readMprUIAuthStatus() === AUTH_STATES.AUTHENTICATED) {
+        if (this.canApplyAuthenticatedWorkspace(workspaceVersion)) {
           this.clearAuthenticatedState();
           this.authState = AUTH_STATES.ERROR;
           this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
@@ -455,6 +489,17 @@ export function createKeyManagement() {
         this.busy = false;
         dispatchManagementReady();
       }
+    },
+
+    /**
+     * @param {number} workspaceVersion
+     * @returns {boolean}
+     */
+    canApplyAuthenticatedWorkspace(workspaceVersion) {
+      return (
+        this.workspaceVersion === workspaceVersion &&
+        readMprUIAuthStatus() === AUTH_STATES.AUTHENTICATED
+      );
     },
 
     setUnauthenticated() {
@@ -544,29 +589,64 @@ export function createKeyManagement() {
 
     openSettings() {
       this.usageExamplesOpen = false;
+      this.dismissProviderKeyRemovalConfirmation();
       this.settingsOpen = true;
       requestAnimationFrame(() => {
-        if (this.$refs.settingsClose) {
-          this.$refs.settingsClose.focus();
-        }
+        const entryControl = this.settingsRequired ? this.$refs.settingsRequirement : this.$refs.settingsClose;
+        entryControl.focus();
       });
     },
 
     closeSettings() {
+      if (this.settingsRequired) {
+        this.setNotice(NOTICE_KINDS.ERROR, this.settingsRequirementCopy);
+        this.focusSettingsRequirement();
+        return;
+      }
+      this.dismissProviderKeyRemovalConfirmation();
       this.clearProviderKeyMaterial();
       this.clearGeneratedSecret();
       this.settingsOpen = false;
+    },
+
+    focusSettingsRequirement() {
+      this.$nextTick(() => {
+        requestAnimationFrame(() => {
+          this.$refs.settingsRequirement.focus();
+        });
+      });
+    },
+
+    /**
+     * @param {KeyboardEvent} event
+     */
+    trapSettingsFocus(event) {
+      if (!this.settingsRequired) {
+        return;
+      }
+      const focusableControls = [...this.$refs.settingsModal.querySelectorAll(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
+      )].filter((control) => control.getClientRects().length > 0);
+      const firstControl = focusableControls[0];
+      const lastControl = focusableControls[focusableControls.length - 1];
+      if (event.shiftKey && document.activeElement === firstControl) {
+        event.preventDefault();
+        lastControl.focus();
+        return;
+      }
+      if (!event.shiftKey && document.activeElement === lastControl) {
+        event.preventDefault();
+        firstControl.focus();
+      }
     },
 
     /**
      * @param {string} providerID
      */
     selectProvider(providerID) {
-      if (providerID === this.selectedProviderID) {
-        return;
-      }
-      this.clearProviderKeyMaterial();
-      this.selectedProviderID = providerID;
+      profileProvider(this.providers, providerID);
+      this.dismissProviderKeyRemovalConfirmation();
+      this.replaceProviderEditorSession(providerID);
     },
 
     async handleSelectedProviderKeyAction() {
@@ -574,8 +654,8 @@ export function createKeyManagement() {
       if (!provider) {
         return;
       }
-      if (this.selectedProviderKeyRevealed || this.selectedProviderKeyHasInput) {
-        this.providerKeyVisible = !this.providerKeyVisible;
+      if (this.selectedProviderKeyHasInput) {
+        this.providerEditorSession.keyVisible = !this.providerKeyVisible;
         return;
       }
       if (provider.has_key) {
@@ -592,8 +672,8 @@ export function createKeyManagement() {
         return;
       }
       const keyInput = /** @type {HTMLInputElement} */ (event.target);
-      this.providerInputs[provider.id] = keyInput.value;
-      this.providerKeyVisible = true;
+      this.providerEditorSession.keyInput = keyInput.value;
+      this.providerEditorSession.keyVisible = true;
     },
 
     async revealSelectedProviderKey() {
@@ -602,24 +682,23 @@ export function createKeyManagement() {
         return;
       }
       const revealProviderID = provider.id;
-      const revealVersion = this.providerKeyRevealVersion + 1;
-      this.providerKeyRevealVersion = revealVersion;
-      this.providerKeyRevealPending = true;
+      const revealVersion = this.providerEditorSession.revealVersion + 1;
+      this.providerEditorSession.revealVersion = revealVersion;
+      this.providerEditorSession.revealPending = true;
       try {
         const revealResponse = await requestRevealProviderKey(revealProviderID);
         if (!this.canApplyProviderKeyReveal(revealProviderID, revealVersion)) {
           return;
         }
-        this.providerInputs[revealProviderID] = revealResponse.api_key;
-        this.revealedProviderID = revealProviderID;
-        this.providerKeyVisible = true;
+        this.providerEditorSession.keyInput = revealResponse.api_key;
+        this.providerEditorSession.keyVisible = true;
       } catch (requestError) {
         if (this.canApplyProviderKeyReveal(revealProviderID, revealVersion)) {
           this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
         }
       } finally {
-        if (revealVersion === this.providerKeyRevealVersion) {
-          this.providerKeyRevealPending = false;
+        if (revealVersion === this.providerEditorSession.revealVersion) {
+          this.providerEditorSession.revealPending = false;
         }
       }
     },
@@ -632,20 +711,22 @@ export function createKeyManagement() {
       return (
         this.settingsOpen &&
         this.selectedProviderID === providerID &&
-        this.providerKeyRevealVersion === revealVersion
+        this.providerEditorSession.revealVersion === revealVersion
       );
     },
 
     clearProviderKeyMaterial() {
-      for (const providerID of [this.selectedProviderID, this.revealedProviderID]) {
-        if (providerID) {
-          this.providerInputs[providerID] = EMPTY_STRING;
-        }
-      }
-      this.revealedProviderID = EMPTY_STRING;
-      this.providerKeyVisible = false;
-      this.providerKeyRevealPending = false;
-      this.providerKeyRevealVersion += 1;
+      this.replaceProviderEditorSession(this.selectedProviderID);
+    },
+
+    /**
+     * @param {string} providerID
+     */
+    replaceProviderEditorSession(providerID) {
+      this.providerEditorSession = createProviderEditorSession(
+        providerID,
+        this.providerEditorSession.revealVersion + 1,
+      );
     },
 
     clearGeneratedSecret() {
@@ -673,18 +754,63 @@ export function createKeyManagement() {
       await this.saveProviderKey(this.selectedProvider);
     },
 
-    async removeSelectedProviderKey() {
-      if (!this.selectedProvider) {
+    requestSelectedProviderKeyRemoval() {
+      const provider = this.selectedProvider;
+      if (!provider) {
         return;
       }
-      await this.removeProviderKey(this.selectedProvider);
+      this.providerRemovalConfirmationProviderID = provider.id;
+      this.$nextTick(() => {
+        this.$refs.providerRemovalCancel.focus();
+      });
+    },
+
+    dismissProviderKeyRemovalConfirmation() {
+      this.providerRemovalConfirmationProviderID = EMPTY_STRING;
+    },
+
+    cancelProviderKeyRemoval() {
+      this.dismissProviderKeyRemovalConfirmation();
+      this.$nextTick(() => {
+        this.$refs.providerKeyRemove.focus();
+      });
+    },
+
+    async confirmProviderKeyRemoval() {
+      const provider = profileProvider(this.providers, this.providerRemovalConfirmationProviderID);
+      this.dismissProviderKeyRemovalConfirmation();
+      await this.removeProviderKey(provider);
+      if (this.settingsRequired) {
+        this.focusSettingsRequirement();
+        return;
+      }
+      this.$nextTick(() => {
+        this.$refs.providerSelector.focus();
+      });
+    },
+
+    /**
+     * @param {KeyboardEvent} event
+     */
+    trapProviderKeyRemovalFocus(event) {
+      const cancelButton = this.$refs.providerRemovalCancel;
+      const confirmButton = this.$refs.providerRemovalConfirm;
+      if (event.shiftKey && document.activeElement === cancelButton) {
+        event.preventDefault();
+        confirmButton.focus();
+        return;
+      }
+      if (!event.shiftKey && document.activeElement === confirmButton) {
+        event.preventDefault();
+        cancelButton.focus();
+      }
     },
 
     /**
      * @param {import("../types.d.js").ProviderProfile} provider
      */
     async saveProviderKey(provider) {
-      const apiKey = String(this.providerInputs[provider.id] || EMPTY_STRING).trim();
+      const apiKey = this.providerEditorSession.keyInput.trim();
       if (!apiKey && !provider.has_key) {
         this.setNotice(NOTICE_KINDS.ERROR, COPY.providerMissing);
         return;
@@ -714,9 +840,8 @@ export function createKeyManagement() {
       await this.runProfileMutation(async () => requestUpdateDefaults(this.defaults), COPY.defaultsSaved);
     },
 
-    async generateSecret() {
+    async requestAndApplyGeneratedSecret() {
       const generatedSecretVersion = this.generatedSecretVersion;
-      this.busy = true;
       try {
         const secretResponse = await requestGeneratedSecret();
         if (!this.canApplyGeneratedSecret(generatedSecretVersion)) {
@@ -730,6 +855,13 @@ export function createKeyManagement() {
         if (this.canApplyGeneratedSecret(generatedSecretVersion)) {
           this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
         }
+      }
+    },
+
+    async generateSecret() {
+      this.busy = true;
+      try {
+        await this.requestAndApplyGeneratedSecret();
       } finally {
         this.busy = false;
       }
@@ -739,6 +871,7 @@ export function createKeyManagement() {
       const keyRevoked = await this.runProfileMutation(async () => requestRevokeSecret(), COPY.keyRevoked);
       if (keyRevoked) {
         this.clearGeneratedSecret();
+        this.focusSettingsRequirement();
       }
     },
 
@@ -815,7 +948,8 @@ export function createKeyManagement() {
      */
     applyProfile(nextProfile) {
       const defaults = createWorkspaceRoutingDefaults(nextProfile);
-      this.clearProviderKeyMaterial();
+      const selectedProviderID = this.selectedProviderID;
+      this.dismissProviderKeyRemovalConfirmation();
       this.profile = nextProfile;
       applyUserMenuItems(Boolean(nextProfile.user.is_admin));
       this.providers = nextProfile.providers;
@@ -825,26 +959,22 @@ export function createKeyManagement() {
       this.defaults.dictation_model = defaults.dictation_model;
       this.defaults.system_prompt = defaults.system_prompt;
       this.defaults.reasoning_effort = defaults.reasoning_effort;
-      for (const provider of this.providers) {
-        if (this.providerInputs[provider.id] === undefined) {
-          this.providerInputs[provider.id] = EMPTY_STRING;
-        }
-      }
-      if (!this.providers.find((provider) => provider.id === this.selectedProviderID)) {
-        this.selectedProviderID = defaults.provider;
-      }
+      const nextProviderID = this.providers.some((provider) => provider.id === selectedProviderID)
+        ? selectedProviderID
+        : defaults.provider;
+      this.replaceProviderEditorSession(nextProviderID);
       this.$nextTick(() => {
         this.defaults = { ...defaults };
       });
     },
 
     clearAuthenticatedState() {
+      this.workspaceVersion += 1;
       this.clearNotice();
-      this.clearProviderKeyMaterial();
+      this.dismissProviderKeyRemovalConfirmation();
       this.profile = null;
       this.providers = [];
-      this.selectedProviderID = EMPTY_STRING;
-      this.providerInputs = {};
+      this.replaceProviderEditorSession(EMPTY_STRING);
       this.defaults = emptyDefaults();
       this.usage = emptyUsageSummary();
       this.adminUsers = [];
@@ -914,6 +1044,21 @@ export function createKeyManagement() {
       }
       this.notice = { kind: NOTICE_KINDS.INFO, message: EMPTY_STRING };
     },
+  };
+}
+
+/**
+ * @param {string} providerID
+ * @param {number} revealVersion
+ * @returns {{ providerID: string, keyInput: string, keyVisible: boolean, revealPending: boolean, revealVersion: number }}
+ */
+function createProviderEditorSession(providerID, revealVersion) {
+  return {
+    providerID,
+    keyInput: EMPTY_STRING,
+    keyVisible: false,
+    revealPending: false,
+    revealVersion,
   };
 }
 

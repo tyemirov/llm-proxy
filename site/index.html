@@ -215,59 +215,75 @@
               x-cloak
               x-show="settingsOpen"
               x-on:click.self="closeSettings()"
-              x-on:keydown.escape.window="closeSettings()"
+              x-on:keydown.escape.window="providerRemovalConfirmationOpen ? cancelProviderKeyRemoval() : closeSettings()"
               role="presentation"
             >
-              <settings-modal role="dialog" aria-modal="true" aria-labelledby="settings-title">
+              <settings-modal
+                x-ref="settingsModal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="settings-title"
+                x-bind:aria-describedby="settingsRequired ? 'settings-requirement' : null"
+                x-bind:inert="providerRemovalConfirmationOpen"
+                x-on:keydown.tab="trapSettingsFocus($event)"
+              >
                 <header class="settings-header">
-                  <div>
-                    <p class="eyebrow" x-text="copy.settingsEyebrow"></p>
-                    <h2 id="settings-title" x-text="copy.settingsTitle"></h2>
-                  </div>
-                  <button type="button" x-ref="settingsClose" x-on:click="closeSettings()" x-text="copy.closeSettings"></button>
+                  <p id="settings-title" class="eyebrow" x-text="copy.settingsEyebrow"></p>
+                  <button type="button" class="icon-only settings-close" x-ref="settingsClose" x-on:click="closeSettings()" x-bind:title="copy.closeSettings" x-bind:aria-label="copy.closeSettings">
+                    <svg class="utility-icon close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
+                      <path d="M6 6l12 12"></path>
+                      <path d="M18 6L6 18"></path>
+                    </svg>
+                  </button>
                 </header>
 
-                <settings-body>
-                  <settings-section>
-                    <header class="section-header compact">
-                      <div>
-                        <p class="eyebrow" x-text="copy.tenantEyebrow"></p>
-                        <h2 x-text="copy.tenantTitle"></h2>
-                      </div>
-                    </header>
+                <p
+                  id="settings-requirement"
+                  class="settings-requirement"
+                  x-ref="settingsRequirement"
+                  x-cloak
+                  x-show="settingsRequired"
+                  x-text="settingsRequirementCopy"
+                  role="alert"
+                  tabindex="-1"
+                ></p>
 
-                    <client-access-row>
-                      <client-access-tenant>
-                        <p class="eyebrow" x-text="copy.tenantName"></p>
-                        <strong x-text="tenantName"></strong>
-                      </client-access-tenant>
-                      <client-access-key>
-                        <p class="eyebrow" x-text="copy.clientKey"></p>
-                        <client-key-row>
-                          <input id="generated-client-key" type="text" readonly x-cloak x-show="hasGeneratedSecret" x-bind:value="generatedSecretValue" x-bind:aria-label="copy.clientKey">
-                          <p class="client-key-state" x-cloak x-show="hasSecret && !hasGeneratedSecret" x-text="copy.clientKeyRetained"></p>
-                          <p class="client-key-state" x-cloak x-show="!hasSecret" x-text="copy.clientKeyMissing"></p>
-                          <button type="button" class="icon-only client-key-visibility-toggle" x-cloak x-show="hasGeneratedSecret" x-on:click="toggleGeneratedSecretVisibility()" x-bind:disabled="busy" x-bind:title="generatedSecretVisibilityActionCopy" x-bind:aria-label="generatedSecretVisibilityActionCopy" x-bind:aria-pressed="generatedSecretVisible">
-                            <span class="material-symbols-outlined" x-show="!generatedSecretVisible" aria-hidden="true">visibility</span>
-                            <span class="material-symbols-outlined" x-show="generatedSecretVisible" aria-hidden="true">visibility_off</span>
-                          </button>
-                          <button type="button" class="icon-only client-key-copy" x-cloak x-show="hasGeneratedSecret" x-on:click="copyGeneratedSecret()" x-bind:disabled="busy" x-bind:title="copy.copyClientKey" x-bind:aria-label="copy.copyClientKey">
-                          <svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
-                            <rect x="6" y="5" width="10" height="12" rx="1.5"></rect>
-                            <rect x="8" y="7" width="10" height="12" rx="1.5"></rect>
-                          </svg>
-                          </button>
-                          <button type="button" class="icon-only danger client-key-revoke" x-cloak x-show="hasSecret" x-on:click="revokeSecret()" x-bind:disabled="busy" x-bind:title="copy.revokeKey" x-bind:aria-label="copy.revokeKey">
-                            <span class="material-symbols-outlined" aria-hidden="true">delete</span>
-                          </button>
-                        </client-key-row>
-                      </client-access-key>
-                      <button type="button" class="icon-button client-key-create" x-on:click="generateSecret()" x-bind:disabled="busy" x-bind:title="clientKeyCreateCopy">
-                        <span aria-hidden="true">+</span>
-                        <span x-text="clientKeyCreateCopy"></span>
-                      </button>
-                    </client-access-row>
-                  </settings-section>
+                <settings-body>
+                  <client-access-row role="group" x-bind:aria-label="copy.clientKey">
+                    <client-access-key>
+                      <span class="eyebrow" x-text="copy.clientKey"></span>
+                      <client-key-row>
+                        <input id="generated-client-key" type="text" readonly x-cloak x-show="hasGeneratedSecret" x-bind:value="generatedSecretValue" x-bind:aria-label="copy.clientKey">
+                        <p class="client-key-state" x-cloak x-show="hasSecret && !hasGeneratedSecret" x-text="copy.clientKeyRetained"></p>
+                        <p class="client-key-state" x-cloak x-show="!hasSecret" x-text="copy.clientKeyMissing"></p>
+                        <button type="button" class="icon-only client-key-visibility-toggle" x-cloak x-show="hasGeneratedSecret" x-on:click="toggleGeneratedSecretVisibility()" x-bind:disabled="busy" x-bind:title="generatedSecretVisibilityActionCopy" x-bind:aria-label="generatedSecretVisibilityActionCopy" x-bind:aria-pressed="generatedSecretVisible">
+                          <span class="material-symbols-outlined" x-show="!generatedSecretVisible" aria-hidden="true">visibility</span>
+                          <span class="material-symbols-outlined" x-show="generatedSecretVisible" aria-hidden="true">visibility_off</span>
+                        </button>
+                        <button type="button" class="icon-only client-key-copy" x-cloak x-show="hasGeneratedSecret" x-on:click="copyGeneratedSecret()" x-bind:disabled="busy" x-bind:title="copy.copyClientKey" x-bind:aria-label="copy.copyClientKey">
+                        <svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
+                          <rect x="6" y="5" width="10" height="12" rx="1.5"></rect>
+                          <rect x="8" y="7" width="10" height="12" rx="1.5"></rect>
+                        </svg>
+                        </button>
+                        <button type="button" class="icon-only danger client-key-revoke" x-cloak x-show="hasSecret" x-on:click="revokeSecret()" x-bind:disabled="busy" x-bind:title="copy.revokeKey" x-bind:aria-label="copy.revokeKey">
+                          <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                        </button>
+                      </client-key-row>
+                    </client-access-key>
+                    <button type="button" class="icon-button client-key-create" x-cloak x-show="!hasSecret" x-on:click="generateSecret()" x-bind:disabled="busy" x-bind:title="copy.createKey">
+                      <span aria-hidden="true">+</span>
+                      <span x-text="copy.createKey"></span>
+                    </button>
+                    <button type="button" class="icon-only client-key-replace" x-cloak x-show="hasSecret" x-on:click="generateSecret()" x-bind:disabled="busy" x-bind:title="copy.replaceKey" x-bind:aria-label="copy.replaceKey">
+                      <svg class="utility-icon recycle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
+                        <path d="M20 7v5h-5"></path>
+                        <path d="M4 17v-5h5"></path>
+                        <path d="M6.1 9a7 7 0 0 1 11.5-2.6L20 9"></path>
+                        <path d="M17.9 15a7 7 0 0 1-11.5 2.6L4 15"></path>
+                      </svg>
+                    </button>
+                  </client-access-row>
 
                   <settings-section>
                     <header class="section-header compact">
@@ -362,12 +378,9 @@
                     </example-list>
                   </details>
 
-                  <settings-section>
-                    <header class="section-header compact">
-                      <div>
-                        <p class="eyebrow" x-text="copy.providersEyebrow"></p>
-                        <h2 x-text="copy.providersTitle"></h2>
-                      </div>
+                  <settings-section aria-labelledby="provider-settings-title">
+                    <header class="section-header compact provider-section-header">
+                      <h2 id="provider-settings-title" class="eyebrow" x-text="copy.providersEyebrow"></h2>
                     </header>
                     <provider-editor>
                       <form class="provider-settings-form" x-on:submit.prevent="saveSelectedProviderKey()">
@@ -375,9 +388,9 @@
                           <provider-settings-fields>
                             <label class="provider-selector">
                               <span class="visually-hidden" x-text="copy.providerSelector"></span>
-                              <select x-bind:value="selectedProviderID" x-on:change="selectProvider($event.target.value)" x-bind:disabled="busy || providerKeyRevealPending">
+                              <select x-ref="providerSelector" x-on:change="selectProvider($event.target.value)" x-bind:disabled="busy || providerKeyRevealPending">
                                 <template x-for="provider in providers" x-bind:key="provider.id">
-                                  <option x-bind:value="provider.id" x-text="provider.label"></option>
+                                  <option x-bind:value="provider.id" x-bind:selected="provider.id === selectedProviderID" x-text="provider.label"></option>
                                 </template>
                               </select>
                             </label>
@@ -391,6 +404,9 @@
                                   <span class="material-symbols-outlined" x-show="!providerKeyVisible" aria-hidden="true">visibility</span>
                                   <span class="material-symbols-outlined" x-show="providerKeyVisible" aria-hidden="true">visibility_off</span>
                                 </button>
+                                <button type="button" class="icon-only danger provider-key-remove" x-ref="providerKeyRemove" x-show="selectedProvider.has_key" x-on:click="requestSelectedProviderKeyRemoval()" x-bind:disabled="busy || providerKeyRevealPending" x-bind:title="copy.removeProviderKey" x-bind:aria-label="copy.removeProviderKey">
+                                  <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                </button>
                               </provider-key-input>
                             </provider-key-field>
                             <label>
@@ -401,9 +417,6 @@
                                 </template>
                               </select>
                             </label>
-                            <button type="button" class="icon-only danger provider-key-remove" x-show="selectedProvider.has_key" x-on:click="removeSelectedProviderKey()" x-bind:disabled="busy || providerKeyRevealPending" x-bind:title="copy.removeProviderKey" x-bind:aria-label="copy.removeProviderKey">
-                              <span class="material-symbols-outlined" aria-hidden="true">delete</span>
-                            </button>
                             <label class="provider-system-prompt">
                               <span x-text="copy.providerSystemPrompt"></span>
                               <textarea rows="3" x-model="selectedProvider.system_prompt" x-bind:disabled="busy || providerKeyRevealPending"></textarea>
@@ -416,6 +429,27 @@
                   </settings-section>
                 </settings-body>
               </settings-modal>
+              <provider-removal-overlay
+                x-cloak
+                x-show="providerRemovalConfirmationOpen"
+                x-on:click.self="cancelProviderKeyRemoval()"
+                role="presentation"
+              >
+                <provider-removal-dialog
+                  role="alertdialog"
+                  aria-modal="true"
+                  aria-labelledby="provider-removal-title"
+                  aria-describedby="provider-removal-description"
+                  x-on:keydown.tab="trapProviderKeyRemovalFocus($event)"
+                >
+                  <h3 id="provider-removal-title" x-text="copy.removeProviderKeyConfirmationTitle"></h3>
+                  <p id="provider-removal-description" x-text="copy.removeProviderKeyConfirmationMessage"></p>
+                  <footer class="provider-removal-actions">
+                    <button type="button" x-ref="providerRemovalCancel" x-on:click="cancelProviderKeyRemoval()" x-text="copy.cancelProviderKeyRemoval"></button>
+                    <button type="button" class="danger provider-removal-confirm" x-ref="providerRemovalConfirm" x-on:click="confirmProviderKeyRemoval()" x-text="copy.confirmProviderKeyRemoval"></button>
+                  </footer>
+                </provider-removal-dialog>
+              </provider-removal-overlay>
             </settings-overlay>
 
           </workspace-surface>

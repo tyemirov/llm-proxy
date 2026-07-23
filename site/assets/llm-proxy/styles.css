@@ -43,7 +43,6 @@ llm-proxy-key-management textarea {
 llm-proxy-key-management,
 workspace-surface,
 client-access-row,
-client-access-tenant,
 client-access-key,
 client-key-row,
 defaults-editor,
@@ -66,6 +65,8 @@ provider-editor,
 provider-settings-fields,
 provider-key-field,
 provider-key-input,
+provider-removal-overlay,
+provider-removal-dialog,
 settings-overlay,
 settings-modal,
 settings-body,
@@ -468,8 +469,8 @@ h3 {
 
 client-access-row {
   display: grid;
-  grid-template-columns: minmax(4.5rem, 0.55fr) minmax(0, 1.5fr) auto;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 0.55rem;
   border: 1px solid var(--llm-border);
   border-radius: 6px;
@@ -477,25 +478,16 @@ client-access-row {
   padding: 0.55rem 0.65rem;
 }
 
-client-access-tenant,
 client-access-key {
+  display: grid;
   min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.4rem;
 }
 
-client-access-tenant {
-  display: grid;
-  align-content: end;
-  gap: 0.1rem;
-}
-
-client-access-tenant strong {
-  overflow-wrap: anywhere;
-  font-size: 0.82rem;
-}
-
-client-access-key {
-  display: grid;
-  gap: 0.2rem;
+client-access-key > .eyebrow {
+  margin: 0;
 }
 
 client-key-row {
@@ -544,9 +536,25 @@ client-key-row input {
   grid-column: -2;
 }
 
-.client-key-create {
-  align-self: end;
+.client-key-create,
+.client-key-replace {
+  align-self: center;
   white-space: nowrap;
+}
+
+.settings-close,
+.client-key-replace {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.utility-icon {
+  display: block;
+  inline-size: 1rem;
+  block-size: 1rem;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 dt {
@@ -699,14 +707,15 @@ request-example + request-example {
 
 provider-settings-fields {
   display: grid;
-  grid-template-columns: minmax(8.5rem, 0.8fr) minmax(12rem, 1.45fr) minmax(10rem, 1.2fr) 30px;
+  grid-template-columns: minmax(8.5rem, 0.8fr) minmax(14rem, 1.55fr) minmax(10rem, 1.2fr);
   align-items: end;
   gap: 0.55rem;
 }
 
 provider-key-field {
-  display: block;
+  display: grid;
   min-width: 0;
+  gap: 0.25rem;
 }
 
 provider-settings-fields > label {
@@ -714,13 +723,15 @@ provider-settings-fields > label {
 }
 
 provider-key-input {
-  position: relative;
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(2, 30px);
+  align-items: center;
+  gap: 0.35rem;
 }
 
 provider-key-input input {
+  min-width: 0;
   width: 100%;
-  padding-right: 2.4rem;
 }
 
 provider-key-input input[readonly] {
@@ -728,12 +739,24 @@ provider-key-input input[readonly] {
 }
 
 .provider-key-visibility-toggle {
-  position: absolute;
-  top: 50%;
-  right: 0.2rem;
-  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-color: transparent;
   background: transparent;
+}
+
+.provider-selector select,
+provider-key-input input,
+provider-settings-fields > label select,
+.provider-key-visibility-toggle,
+.provider-key-remove {
+  min-height: 30px;
+  block-size: 30px;
+}
+
+.provider-key-visibility-toggle:active:not(:disabled) {
+  transform: none;
 }
 
 .provider-key-visibility-toggle:hover {
@@ -748,13 +771,20 @@ provider-key-input input[readonly] {
 }
 
 .provider-key-remove {
-  align-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .provider-key-remove .material-symbols-outlined {
   display: block;
   font-size: 1.125rem;
   line-height: 1;
+}
+
+.provider-section-header h2.eyebrow {
+  margin: 0;
+  font-size: 0.65rem;
 }
 
 settings-overlay {
@@ -781,17 +811,76 @@ settings-modal {
   box-shadow: var(--llm-shadow);
 }
 
+provider-removal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--llm-z-settings-overlay) + 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: rgba(8, 10, 12, 0.84);
+  padding: 0.75rem;
+}
+
+provider-removal-dialog {
+  display: grid;
+  width: min(420px, calc(100vw - 24px));
+  gap: 0.65rem;
+  border: 1px solid var(--llm-border-strong);
+  border-radius: 8px;
+  background: var(--llm-panel-strong);
+  box-shadow: var(--llm-shadow);
+  padding: 0.85rem;
+}
+
+provider-removal-dialog h3,
+provider-removal-dialog p {
+  margin-bottom: 0;
+}
+
+provider-removal-dialog p {
+  color: var(--llm-muted);
+  font-size: 0.78rem;
+}
+
+.provider-removal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.provider-removal-confirm {
+  border-color: rgba(204, 75, 75, 0.65);
+}
+
 .settings-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   border-bottom: 1px solid var(--llm-border);
   padding: 0.75rem 0.9rem;
 }
 
-.settings-header h2 {
-  font-size: 0.95rem;
+.settings-header .eyebrow {
+  margin: 0;
+}
+
+.settings-requirement {
+  margin: 0.65rem 0.65rem 0;
+  border: 1px solid rgba(255, 129, 119, 0.75);
+  border-radius: 6px;
+  background: rgba(255, 129, 119, 0.08);
+  color: var(--llm-text);
+  padding: 0.55rem 0.65rem;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.settings-requirement:focus-visible {
+  outline: 2px solid var(--llm-accent);
+  outline-offset: 2px;
 }
 
 settings-body {
@@ -931,7 +1020,6 @@ provider-settings-fields button[type="submit"] {
   }
 
   .section-header,
-  .settings-header,
   dashboard-actions,
   .public-resource-link {
     align-items: stretch;
@@ -970,15 +1058,5 @@ provider-settings-fields button[type="submit"] {
 
   usage-card {
     min-height: 58px;
-  }
-}
-
-@media (max-width: 460px) {
-  client-access-row {
-    grid-template-columns: 1fr;
-  }
-
-  .client-key-create {
-    justify-self: start;
   }
 }
