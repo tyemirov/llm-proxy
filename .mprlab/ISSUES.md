@@ -9,6 +9,13 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 - `[ ]` open, `[-]` taken, `[!]` blocked, `[x]` closed.
 - Blocked issues (`[!]`) must include a `Blocked:` line in the body.
 
+Triage, 2026-07-23: execute M018 first, then B062, then F013. F014 follows
+F013, and I027 follows F014 because F014 replaces the singleton management
+profile and usage contracts it would otherwise consume. M019 follows M018, and
+M013 then M012 resolve the remaining governance path. B063 is an
+operator-owned deployment blocker; recurring maintenance remains scheduled
+work and Planning entries remain deferred by the repository workflow.
+
 ## BugFixes
 
 - [x] [B001] (P2) Make management request examples copyable and provider-specific.
@@ -86,15 +93,18 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   3. Focused `llm-proxy-client` tests pass when the process has ambient `LLM_PROXY_SECRET` and `LLM_PROXY_BASE_URL`.
   ### Resolution
   `TestCommandRejectsInvalidInputs` now clears `LLM_PROXY_BASE_URL` and `LLM_PROXY_SECRET` at the test boundary, so every invalid-input scenario owns the external CLI configuration it is asserting. `TestCommandReadsEnvironmentAndStdin` still sets the same environment names explicitly and continues to prove env-backed client configuration. Validation passed with `env LLM_PROXY_SECRET=ambient-secret LLM_PROXY_BASE_URL=http://ambient.example timeout -k 120s -s SIGKILL 120s go test -count=1 ./llm-proxy-client -run TestCommandRejectsInvalidInputs`, `env LLM_PROXY_SECRET=ambient-secret LLM_PROXY_BASE_URL=http://ambient.example timeout -k 350s -s SIGKILL 350s make go-test`, and `env LLM_PROXY_SECRET=ambient-secret LLM_PROXY_BASE_URL=http://ambient.example timeout -k 350s -s SIGKILL 350s make ci`.
-- [!] [B008] (P1) Published production image rejects current management config.
+- [x] [B008] (P1) Published production image accepts the current management config.
   ### Summary
-  Production startup fails while parsing the mounted current `config.yml`:
+  A previously published production image failed while parsing the mounted
+  current `config.yml`:
   ```text
   config_file_parse_failed: path=config.yml: decoding failed due to the following error(s):
   '' has invalid keys: management
   ```
-  The current repository source and CLI config tests accept the top-level `management` block, but the published `ghcr.io/tyemirov/llm-proxy:latest` image still rejects it. This indicates the deployed image is stale relative to the current config contract.
-  ### Evidence
+  The current repository source and CLI config tests accepted the top-level
+  `management` block while the then-published
+  `ghcr.io/tyemirov/llm-proxy:latest` image rejected it.
+  ### Historical Evidence
   1. Current source passes the packaged management config loader test:
   ```bash
   timeout -k 120s -s SIGKILL 120s go test -count=1 ./cmd/cli -run TestRootCommandLoadsPackagedConfigWithManagementEnvironment
@@ -103,10 +113,41 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   ```bash
   docker run --rm -v "$(pwd)/configs/config.yml:/app/config.yml:ro" ghcr.io/tyemirov/llm-proxy:latest /usr/local/bin/llm-proxy --config /app/config.yml
   ```
-  ### Expected
-  The production image and mounted config must be advanced together. Do not remove `management` from config and do not add a compatibility parser path; `management` is part of the current canonical config contract.
-  ### Blocked
-  Blocked: Requires publishing an image built from the current management-aware source and redeploying the backend through the gateway-owned `deploy-llm-proxy-backend` path. Agent runs must stop before production deployment unless the execution chain or operator performs the publish/deploy step.
+  ### Resolution
+  Rechecked on 2026-07-23. GHCR `latest` now has the published `v0.2.39` tag,
+  and the live API proves the management configuration is active: `GET /`
+  returns the expected unauthenticated `403`, `GET /config-ui.yaml` returns
+  `200`, and anonymous `GET /api/management/profile` returns `401`. The
+  historical parser failure is no longer reproducible. No compatibility parser
+  path was added.
+
+- [!] [B063] (P1) Activate the released v0.2.39 Pages artifact.
+  Goal:
+  Bring the public static management surface to the already published release
+  so its visible behavior and release marker match the current source contract.
+
+  Evidence:
+  - GitHub Release `v0.2.39` and GHCR `latest` were published on 2026-07-23.
+  - GitHub Pages reports `built`, but the public `/.mprlab-release.json` marker
+    still identifies `v0.2.38` and source commit
+    `443acc0139c44523c16922918fdfbdd9770c089f`.
+
+  Requirements:
+  - Activate the exact prepared `v0.2.39` Pages archive through the canonical
+    release deployment flow; do not hand-edit `gh-pages`, rebuild a different
+    artifact, or alter source merely to mask the drift.
+  - Preserve the split-origin management contract and verify the cache-distinct
+    public marker after the matching Pages build completes.
+
+  Validation:
+  - Confirm the public marker reports `release_version: v0.2.39` and the
+    release artifact's source provenance after deployment.
+  - Confirm the live API management boundaries remain `403` for anonymous
+    proxy access and `401` for anonymous management-profile access.
+
+  Blocked: Production deployment is operator-owned. An operator or the
+  execution chain must run the gateway-backed canonical deployment flow for the
+  already published release; this triage run did not deploy or alter production.
 - [x] [B009] (P2) Validate management migration seed tenant defaults at startup.
   ### Summary
   Management mode allows an empty static `tenants` list because runtime authentication is DB-authoritative, but configured legacy tenants are still first-run migration seed data. Startup skipped tenant default provider/model validation whenever management mode was enabled, so a typoed seed default could be persisted and fail later at request time.
@@ -1779,15 +1820,50 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   browser scenarios, the real TAuth black-box, 100% aggregate Go coverage, 30
   Python tests, 47 release tests, and the live-provider preflight.
 
+- [x] [B062] (P1) Make signed-out notice expiry coverage deterministic.
+  Goal:
+  Keep the deployment browser suite deterministic while preserving the visible
+  ten-second lifetime and Sign in control contract for signed-out notices.
+
+  Requirements:
+  - Stop measuring a notice deadline against Playwright clock time that is
+    still advancing in real time after page initialization.
+  - Freeze the test clock only after the signed-out notice has rendered, then
+    assert an observable pre-deadline visible state and a post-deadline hidden
+    state without inflating a timeout or changing product behavior.
+  - Preserve the header geometry and Sign in visibility assertions throughout
+    the notice lifecycle.
+
+  Validation:
+  - Run the signed-out browser scenario through the normal frontend suite and
+    the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair, with the final run after the last code edit.
+
+  Resolution:
+  Playwright resumes its installed clock during page setup, so the prior
+  9,999ms `fastForward` assertion could cross the notice deadline after a
+  small amount of real elapsed time. The signed-out flow now pauses the clock
+  five virtual seconds after the rendered notice and uses chronological
+  `runFor` advances to prove the notice remains visible before expiry and is
+  hidden after expiry. This changes no product behavior or timeout. The
+  required baseline and final `make ci` runs passed; the final gate covered
+  46 browser scenarios, the TAuth black-box, 100% aggregate Go coverage, 30
+  Python tests, 47 release tests, and the live-provider preflight.
+
 
 ## Improvements
 
-- [ ] [I027] (P1) Redesign the user dashboard around connected-provider widgets.
+- [ ] [I027] (P1) {F014} Redesign the user dashboard around connected-provider widgets.
   Goal:
   Make the authenticated dashboard answer, at a glance, which upstream
   providers the current tenant has connected. Preserve usage reporting as a
   separate measure of activity so an unused connected provider remains visible
   and historical traffic never implies that a provider is still connected.
+
+  Dependencies:
+  - F014 replaces the singular profile and usage contracts with selected-tenant
+    APIs. Build the widgets against that canonical tenant-scoped boundary rather
+    than implementing and immediately replacing a singleton-profile join.
 
   Requirements:
   - Define a connected provider solely as an entry in the current authenticated
@@ -2382,7 +2458,11 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Re-read `ISSUES.md` after edits and confirm every issue is under the right section with a unique section-aware ID.
   - Confirm recurring entries remain open and keep the `R` suffix.
   - Confirm no active, blocked, recurring, or planning work was archived.
-  Last run: 2026-07-20. Removed the stale duplicate open F010 and F011 entries because the current provider catalog already includes Grok and GLM 5.2, reassigned the provider-key reveal work to I025, and updated F014 to reference I025. No active, blocked, recurring, or planning issue was archived.
+  Last run: 2026-07-23. Resolved the historical B008 parser finding after
+  direct live management-boundary verification, filed blocked B063 for the
+  stale Pages artifact, and normalized the M018 -> F013 -> F014 -> I027 and
+  M013 -> M012 dependency order. No active, blocked, recurring, or planning
+  issue was archived.
 - [ ] [M002R] (P2) Polish open issues.
   Goal:
   Keep unresolved work executable by making each open issue concrete, ordered, and testable.
@@ -2400,6 +2480,11 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Sample the open entries after the pass and confirm each has clear next actions and validation expectations.
   - Confirm no recurring runbook was marked complete.
   - Confirm duplicates were merged or explicitly cross-referenced.
+  Last run: 2026-07-23. Polished 14 non-recurring unresolved entries. B063 is
+  explicitly blocked on an operator-owned deployment; M018 is P0 after a
+  pinned-toolchain scan found reachable GO-2026-5970; F013, F014, and I027 now
+  have their implementation order recorded. Planning entries remain open but
+  deferred under the repository workflow.
 - [ ] [M003R] (P2) Architecture and policy review.
   Goal:
   Catch architecture, policy, and workflow drift before it becomes hidden maintenance debt.
@@ -2452,6 +2537,10 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Use repository-native `make` targets or documented release helpers for checks.
   - Confirm release and deployment ownership boundaries remain separate.
   - Confirm public or published artifacts match the intended source revision when that surface is inspected.
+  Last run: 2026-07-23 triage follow-up. Release `v0.2.39` and GHCR `latest`
+  are current, while the public Pages marker remains at `v0.2.38`; B063 records
+  the exact activation boundary. The live API management boundaries responded
+  as expected, but no production deployment was performed.
 - [ ] [M006R] (P1) Code contract and static hygiene.
   Goal:
   Keep source contracts explicit, current, and statically guarded against policy drift.
@@ -2486,6 +2575,10 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Verify inspected production or public surfaces directly where access is available.
   - Confirm any deploy-required finding is filed with the exact publish/deploy boundary and owner.
   - Confirm no production state was changed by the audit unless explicitly requested.
+  Last run: 2026-07-23 triage follow-up. The live API returned the expected
+  anonymous proxy (`403`), configuration (`200`), and management (`401`)
+  boundaries. The public Pages marker is still `v0.2.38` while release `v0.2.39`
+  is published; B063 is blocked on the operator-owned deployment flow.
 - [ ] [M008R] (P2) Documentation and runbook hygiene.
   Goal:
   Keep durable documentation and runbooks aligned with the current behavior users and operators actually rely on.
@@ -2503,6 +2596,10 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Check links, command names, paths, and public contract descriptions touched by the pass.
   - Confirm docs describe the current canonical path only.
   - Confirm issue archive and active tracker references remain consistent.
+  Last run: 2026-07-23 triage follow-up. README and the active implementation
+  and marketing documents were reviewed; root `AGENTS.md` still references
+  absent `PRD.md` and `ARCHITECTURE.md`, so M013 remains the canonical
+  documentation follow-up.
 - [x] [M009R] (P1) Consolidate repository runbook documents under `.mprlab/`.
   ### Summary
   The repository had duplicate runbook and issue-tracker documents under `issues.md/`, `.mprl/`, and `.mprlab/`. Keep the active tracker and relevant recurring procedures under `.mprlab/`, then remove the old duplicate locations.
@@ -2531,10 +2628,12 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Inspect the final governance diff and run documentation whitespace checks.
   Resolution:
   Root `AGENTS.md` now requires an agent-owned `make ci` baseline immediately before the first code edit and a passing `make ci` run immediately after the final code edit for every code-changing task. Later code edits invalidate the final run, partial targets cannot replace either run, baseline failures must be reported with concrete output, and execution-chain completion checks do not replace the pair. The workflow, completion gate, testing guidance, and pre-finish checklist now carry the same canonical requirement without contradictory command restrictions. No code changed, so the new CI pair did not apply to this governance-only edit. `git diff --check` passed. The MPR Lab normalizer check still reports broad governance drift that was already present in the pre-edit dry run; follow-up is tracked in M012.
-- [ ] [M012] (P2) Reconcile repository governance with the MPR Lab normalizer.
+- [ ] [M012] (P2) {M013} Reconcile repository governance with the MPR Lab normalizer.
   Goal:
   Make the governance normalizer check pass without deleting repository-owned binding contracts.
   Requirements:
+  - Resolve M013's product-context document decision first so the normalizer
+    works from the final repository-owned root guidance.
   - Inspect the normalizer differences reported for root `AGENTS.md` and every managed `.mprlab/` guide.
   - Preserve the M011 pre-change and post-change CI requirement and all other current repository-owned rules.
   - Update the appropriate managed templates, boundaries, or repository documents as one canonical forward-only contract rather than applying a destructive bulk rewrite.
@@ -2613,18 +2712,36 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   Resolved:
   Raised Viper to its supported v1.21.0 release, which canonically selects `github.com/go-viper/mapstructure/v2` v2.4.0 without an independent decoder override. The existing strict `UnmarshalExact` parsing and missing-placeholder failure coverage remains unchanged. `go mod verify` passed, the Go 1.25.12 reachability scan reports no vulnerabilities, and the separately queued M018 retains the non-reachable module-advisory review. Baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed.
 
-- [ ] [M018] (P2) {M017} Refresh the remaining indirectly reported Go security graph.
+- [ ] [M018] (P0) {M017} Remediate the reachable Go security graph and remaining reported advisories.
   Goal:
-  Remove the non-reachable but reported `golang.org/x/net`, `golang.org/x/crypto`, and platform dependency advisories from the resolved module graph after the reachable fixes land.
+  Remove the reachable `golang.org/x/text` vulnerability and the remaining
+  reported `golang.org/x/net`, `golang.org/x/crypto`, and platform advisories
+  from the resolved graph using the repository's pinned Go toolchain.
   Requirements:
-  - Raise the graph to fixed supported versions, including `x/net` at or above v0.55.0, `x/crypto` at or above v0.52.0, and the fixed `x/sys` platform release where it remains selected.
-  - Re-evaluate the graph after M014 through M017 rather than carrying stale findings forward or adding direct pins that fight supported dependency owners.
+  - Run the authoritative scan with `GOTOOLCHAIN=go1.25.12`, the same Go
+    release used by CI and the container builder. On 2026-07-23, that scan
+    found reachable GO-2026-5970 in `golang.org/x/text` v0.32.0 through the
+    GORM path; its fixed release is v0.39.0.
+  - Raise the graph through supported dependency owners to fixed versions:
+    `x/text` at or above v0.39.0, `x/net` at or above v0.56.0, `x/crypto` at or
+    above v0.52.0, and `x/sys` at or above v0.44.0 where selected.
+  - Re-evaluate the graph after M014 through M017 rather than carrying stale
+    findings forward or adding direct pins that fight supported dependency
+    owners.
   - Record any advisory that remains not applicable only with command evidence and no compatibility exemption.
   Deliverables:
-  - A verified Go module graph with the remaining fixed transitive security versions.
-  - Updated vulnerability-scan evidence distinguishing no-call findings from resolved findings.
+  - A verified Go module graph with the fixed transitive security versions and
+    no reachable `govulncheck` findings under Go 1.25.12.
+  - Updated vulnerability-scan evidence distinguishing resolved, package-only,
+    and module-only findings.
   Validation:
-  - Run `go mod verify`, `go run golang.org/x/vuln/cmd/govulncheck@latest -show verbose ./...`, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  - Run `go mod verify`,
+    `GOTOOLCHAIN=go1.25.12 go run golang.org/x/vuln/cmd/govulncheck@latest -show verbose ./...`,
+    and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair.
+  Triage evidence: `go mod verify` passed on 2026-07-23. The pinned-toolchain
+  `govulncheck` scan exited nonzero with one reachable GO-2026-5970 finding;
+  M018 is therefore P0 rather than a deferred advisory cleanup.
 
 - [ ] [M019] (P2) {M018} Refresh non-security direct dependency pins.
   Goal:
@@ -2835,9 +2952,13 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   `max` effort lists. The README model matrix links the current OpenAI model
   references, and integration coverage proves a saved `max` reaches the
   Responses payload. Baseline and final `make ci` runs passed.
-- [ ] [F013] (P2) Add selectable usage-dashboard time intervals.
+- [ ] [F013] (P1) Add selectable usage-dashboard time intervals.
   Goal:
   Let signed-in users filter the complete usage dashboard through one compact interval control offering `ALL`, `30 days`, `7 days`, and `1 day`.
+  Execution order:
+  - F013 establishes the canonical interval-aware usage semantics that F014
+    must carry into its selected-tenant endpoint. F014, and then I027, must
+    build on that contract rather than retain a fixed 30-day variant.
   Requirements:
   - Present the options in the exact order `ALL`, `30 days`, `7 days`, and `1 day`, with `30 days` selected when the authenticated dashboard first loads.
   - Add one canonical management API query contract: `GET /api/management/usage?interval=all|30d|7d|1d`. The browser must always send the selected interval, and the HTTP edge must reject a missing or unknown interval with `400 Bad Request`; do not preserve a second fixed-30-day request path.
@@ -2859,7 +2980,7 @@ Format: `- [ ] [B042] (P1) {I007} Title`
   - Add Playwright coverage proving each option requests the canonical interval, becomes visibly active, updates every dashboard surface from one response, keeps its selection on Refresh, clears stale data on failure, prevents response-order races, and remains usable at desktop and mobile widths.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
 
-- [ ] [F014] (P1) {B036,I025,F013} Support multiple isolated tenants per managed user.
+- [ ] [F014] (P1) {B036,I025,F011,F013} Support multiple isolated tenants per managed user.
   Goal:
   Let one authenticated TAuth user create, select, rename, and delete multiple independently configured LLM Proxy tenants. Each tenant owns its own generated client secret, provider credentials and settings, routing defaults, request examples, and usage history. This feature is one-user-to-many-tenants; shared tenants, invitations, memberships, and team roles are outside scope.
   Current contract:
