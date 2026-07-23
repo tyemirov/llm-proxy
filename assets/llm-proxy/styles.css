@@ -42,7 +42,9 @@ llm-proxy-key-management textarea {
 
 llm-proxy-key-management,
 workspace-surface,
-tenant-actions,
+client-access-row,
+client-access-key,
+client-key-row,
 defaults-editor,
 dashboard-actions,
 usage-dashboard,
@@ -61,8 +63,10 @@ example-list,
 request-example,
 provider-editor,
 provider-settings-fields,
-provider-status,
-secret-output,
+provider-key-field,
+provider-key-input,
+provider-removal-overlay,
+provider-removal-dialog,
 settings-overlay,
 settings-modal,
 settings-body,
@@ -417,6 +421,18 @@ admin-user-card header span {
   font-size: 0.86rem;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .eyebrow {
   margin: 0 0 0.2rem;
   color: var(--llm-accent);
@@ -451,19 +467,94 @@ h3 {
   font-weight: 600;
 }
 
-.tenant-facts {
+client-access-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.45rem;
-  margin: 0 0 0.65rem;
-}
-
-.tenant-facts div {
-  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
   border: 1px solid var(--llm-border);
   border-radius: 6px;
-  padding: 0.45rem 0.55rem;
   background: var(--llm-panel-strong);
+  padding: 0.55rem 0.65rem;
+}
+
+client-access-key {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.4rem;
+}
+
+client-access-key > .eyebrow {
+  margin: 0;
+}
+
+client-key-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 30px);
+  align-items: center;
+  gap: 0.35rem;
+}
+
+client-key-row input {
+  min-width: 0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.client-key-state {
+  margin: 0;
+  color: var(--llm-muted);
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+.client-key-visibility-toggle,
+.client-key-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.client-key-visibility-toggle .material-symbols-outlined,
+.client-key-revoke .material-symbols-outlined {
+  display: block;
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+.client-key-copy .copy-icon {
+  display: block;
+  inline-size: 1rem;
+  block-size: 1rem;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.client-key-revoke {
+  grid-column: -2;
+}
+
+.client-key-create,
+.client-key-replace {
+  align-self: center;
+  white-space: nowrap;
+}
+
+.settings-close,
+.client-key-replace {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.utility-icon {
+  display: block;
+  inline-size: 1rem;
+  block-size: 1rem;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 dt {
@@ -478,13 +569,6 @@ dd {
   margin: 0.15rem 0 0;
   overflow-wrap: anywhere;
   font-size: 0.78rem;
-}
-
-tenant-actions,
-.secret-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
 }
 
 .stack {
@@ -564,28 +648,6 @@ llm-proxy-key-management button:disabled {
   color: var(--llm-danger);
 }
 
-secret-output {
-  margin-top: 0.35rem;
-}
-
-secret-output .copy-secret-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-secret-output .copy-icon {
-  display: block;
-  inline-size: 1rem;
-  block-size: 1rem;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.secret-row input {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-}
-
 .usage-snippet {
   margin: 0;
   overflow: auto;
@@ -629,29 +691,95 @@ request-example + request-example {
   white-space: nowrap;
 }
 
-.provider-settings-form {
-  display: grid;
-  gap: 0.55rem;
+.provider-selector {
+  display: block;
+  min-width: 0;
+}
+
+.provider-selector select {
+  margin: 0;
 }
 
 provider-settings-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(8.5rem, 0.8fr) minmax(14rem, 1.55fr) minmax(10rem, 1.2fr);
+  align-items: end;
   gap: 0.55rem;
 }
 
-provider-status {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.5rem;
-  grid-column: 1 / -1;
+provider-key-field {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
 }
 
-provider-status p {
-  margin-bottom: 0;
+provider-settings-fields > label {
+  min-width: 0;
+}
+
+provider-key-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(2, 30px);
+  align-items: center;
+  gap: 0.35rem;
+}
+
+provider-key-input input {
+  min-width: 0;
+  width: 100%;
+}
+
+provider-key-input input[readonly] {
   color: var(--llm-muted);
-  font-size: 0.72rem;
+}
+
+.provider-key-visibility-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-color: transparent;
+  background: transparent;
+}
+
+.provider-selector select,
+provider-key-input input,
+provider-settings-fields > label select,
+.provider-key-visibility-toggle,
+.provider-key-remove {
+  min-height: 30px;
+  block-size: 30px;
+}
+
+.provider-key-visibility-toggle:active:not(:disabled) {
+  transform: none;
+}
+
+.provider-key-visibility-toggle:hover {
+  border-color: var(--llm-border);
+  background: var(--llm-panel-strong);
+}
+
+.provider-key-visibility-toggle .material-symbols-outlined {
+  display: block;
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+.provider-key-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.provider-key-remove .material-symbols-outlined {
+  display: block;
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+.provider-section-header h2.eyebrow {
+  margin: 0;
+  font-size: 0.65rem;
 }
 
 settings-overlay {
@@ -678,17 +806,76 @@ settings-modal {
   box-shadow: var(--llm-shadow);
 }
 
+provider-removal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--llm-z-settings-overlay) + 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: rgba(8, 10, 12, 0.84);
+  padding: 0.75rem;
+}
+
+provider-removal-dialog {
+  display: grid;
+  width: min(420px, calc(100vw - 24px));
+  gap: 0.65rem;
+  border: 1px solid var(--llm-border-strong);
+  border-radius: 8px;
+  background: var(--llm-panel-strong);
+  box-shadow: var(--llm-shadow);
+  padding: 0.85rem;
+}
+
+provider-removal-dialog h3,
+provider-removal-dialog p {
+  margin-bottom: 0;
+}
+
+provider-removal-dialog p {
+  color: var(--llm-muted);
+  font-size: 0.78rem;
+}
+
+.provider-removal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.provider-removal-confirm {
+  border-color: rgba(204, 75, 75, 0.65);
+}
+
 .settings-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   border-bottom: 1px solid var(--llm-border);
   padding: 0.75rem 0.9rem;
 }
 
-.settings-header h2 {
-  font-size: 0.95rem;
+.settings-header .eyebrow {
+  margin: 0;
+}
+
+.settings-requirement {
+  margin: 0.65rem 0.65rem 0;
+  border: 1px solid rgba(255, 129, 119, 0.75);
+  border-radius: 6px;
+  background: rgba(255, 129, 119, 0.08);
+  color: var(--llm-text);
+  padding: 0.55rem 0.65rem;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.settings-requirement:focus-visible {
+  outline: 2px solid var(--llm-accent);
+  outline-offset: 2px;
 }
 
 settings-body {
@@ -761,16 +948,8 @@ settings-section,
   color: var(--llm-text);
 }
 
-.settings-grid-form button[type="submit"] {
-  justify-self: start;
-}
-
 .provider-system-prompt {
   grid-column: 1 / -1;
-}
-
-provider-settings-fields button[type="submit"] {
-  justify-self: start;
 }
 
 #llm-proxy-header notification-region[slot="aux"] .notice {
@@ -819,7 +998,6 @@ provider-settings-fields button[type="submit"] {
   }
 
   .llm-grid,
-  .tenant-facts,
   usage-metrics,
   .dashboard-grid,
   .settings-grid-form,
@@ -829,12 +1007,18 @@ provider-settings-fields button[type="submit"] {
   }
 
   .section-header,
-  .settings-header,
   dashboard-actions,
-  tenant-actions,
   .public-resource-link {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .provider-selector {
+    min-width: 0;
+  }
+
+  .provider-selector select {
+    width: 100%;
   }
 
   h1 {

@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Self-service LLM key management for teams</title>
-    <meta name="description" content="Let signed-in users save provider keys, choose defaults, and generate llm-proxy secrets in one UI.">
+    <title>Self-service LLM key management for internal teams</title>
+    <meta name="description" content="Automatically create a signed-in user's LLM Proxy client key, then autosave one provider API key before they leave Settings.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/">
-    <meta property="og:title" content="Self-service LLM key management for teams">
-    <meta property="og:description" content="Let signed-in users save provider keys, choose defaults, and generate llm-proxy secrets in one UI.">
+    <meta property="og:title" content="Self-service LLM key management for internal teams">
+    <meta property="og:description" content="Automatically create a signed-in user's LLM Proxy client key, then autosave one provider API key before they leave Settings.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/">
     <meta name="twitter:card" content="summary">
@@ -17,9 +17,9 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Self-service LLM key management for teams","description":"Let signed-in users save provider keys, choose defaults, and generate llm-proxy secrets in one UI.","url":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/","about":["LLM Proxy","Management UI","self-service LLM key management"]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Self-service LLM key management for teams","item":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of self-service LLM key management?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy includes an optional TAuth-protected management UI where authenticated users manage provider credentials, defaults, generated secrets, and usage examples."}},{"@type":"Question","name":"Who should read this management ui resource?","acceptedAnswer":{"@type":"Answer","text":"Teams that want user-owned AI access without asking operators to edit YAML for every change."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Bring-your-own provider key portal for AI access, which covers bring your own provider key portal."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Self-service LLM key management for internal teams","description":"Automatically create a signed-in user's LLM Proxy client key, then autosave one provider API key before they leave Settings.","url":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/","datePublished":"2026-07-06","dateModified":"2026-07-22","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/","about":["LLM Proxy","Management UI","self-service LLM key management"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Self-service LLM key management for internal teams","item":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How does first-run LLM Proxy setup begin?","acceptedAnswer":{"@type":"Answer","text":"After MPR UI reports an authenticated session, the management profile loads and the UI automatically creates a client key when the profile has none."}},{"@type":"Question","name":"What lets a user leave Settings?","acceptedAnswer":{"@type":"Answer","text":"The loaded profile must report a client key and at least one persisted managed provider key. Until both conditions are true, close actions explain what is missing and keep Settings open."}},{"@type":"Question","name":"Does typing a provider key unlock Settings?","acceptedAnswer":{"@type":"Answer","text":"No. Only a provider record returned with has_key after a successful autosave counts; drafts and local dotenv credentials do not satisfy managed onboarding."}},{"@type":"Question","name":"Does onboarding change provider or model defaults?","acceptedAnswer":{"@type":"Answer","text":"No. Automatic client-key creation and provider-key validation leave the user's existing provider and model defaults unchanged."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Bring-your-own provider key portal for AI access, which covers bring your own provider key portal."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="resource-page">
@@ -37,14 +37,18 @@
           <span>/</span>
           <a href="/resources/">Resources</a>
           <span>/</span>
-          <span>Self-service LLM key management for teams</span>
+          <span>Self-service LLM key management for internal teams</span>
         </nav>
         <article>
           <header class="resource-hero">
             <p class="eyebrow">Management UI</p>
-            <h1>Self-service LLM key management for teams</h1>
-            <p class="resource-deck">Let signed-in users save provider keys, choose defaults, and generate llm-proxy secrets in one UI.</p>
+            <h1>Self-service LLM key management for internal teams</h1>
+            <p class="resource-deck">Automatically create a signed-in user's LLM Proxy client key, then autosave one provider API key before they leave Settings.</p>
             <p class="resource-audience">Teams that want user-owned AI access without asking operators to edit YAML for every change.</p>
+            <aside class="resource-verdict" aria-label="Quick verdict">
+              <strong>Quick verdict</strong>
+              <p>Use this flow when every authenticated user must leave first-run Settings with a client key and at least one server-stored provider credential.</p>
+            </aside>
             <div class="resource-actions">
               <a class="resource-button" href="/">Open LLM Proxy</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
@@ -58,7 +62,7 @@
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy includes an optional TAuth-protected management UI where authenticated users manage provider credentials, defaults, generated secrets, and usage examples.</p>
+            <p>LLM Proxy includes an optional TAuth-protected management UI that creates a missing client key after authentication, autosaves provider settings, and keeps Settings open until at least one managed provider key persists.</p>
           </section>
 
           <section>
@@ -66,8 +70,8 @@
             <ol class="resource-steps">
               <li>Enable management mode with TAuth and database configuration.</li>
 <li>Publish the static Pages UI and serve runtime config from the API backend.</li>
-<li>Users sign in and save provider keys through Settings.</li>
-<li>Users generate tenant secrets and copy request examples from current profile data.</li>
+<li>Users sign in; the UI creates and presents a missing client key once.</li>
+<li>Users enter at least one provider key; the selected provider settings autosave before they leave Settings.</li>
             </ol>
           </section>
 
@@ -89,12 +93,19 @@
                           <td>Management controls appear only after login.</td>
                           <td>Unauthenticated users see the sign-in state, not tenant controls.</td>
                         </tr>
-                      
+
+
+                        <tr>
+                          <td>Required first-run setup</td>
+                          <td>Settings stays open until a client key and one persisted provider key exist.</td>
+                          <td>Typed drafts and local dotenv credentials do not bypass onboarding.</td>
+                        </tr>
+
 
                         <tr>
                           <td>Selected-provider editor</td>
-                          <td>Provider key, text model, and system prompt live together.</td>
-                          <td>A user can update one provider without scanning every provider card.</td>
+                          <td>Provider key, text model, and system prompt live together and autosave.</td>
+                          <td>A user can update one provider without scanning every provider card or pressing a save button.</td>
                         </tr>
                       
 
@@ -115,13 +126,13 @@
               
                     <section class="resource-card">
                       <h3>New team onboarding</h3>
-                      <p>A user signs in, saves an OpenAI key, generates an llm-proxy secret, and copies the /v2 example.</p>
+                      <p>A user signs in, copies the automatically created client key, enters an OpenAI key, and closes Settings after autosave completes.</p>
                     </section>
                   
 
                     <section class="resource-card">
                       <h3>Provider update</h3>
-                      <p>A user switches the selected provider editor to DeepSeek and saves the model for that provider.</p>
+                      <p>A user switches the selected provider editor to DeepSeek and its changed model autosaves.</p>
                     </section>
                   
 
@@ -138,8 +149,19 @@
             <ul class="resource-list">
               <li>Management mode requires configured TAuth, CORS origins, database settings, and provider-key encryption key.</li>
 <li>The backend serves management APIs and runtime config; the static Pages app is only the shell.</li>
-<li>Raw provider keys are not returned after save.</li>
+<li>Autosave responses return masked key status; raw retrieval requires the separate owner-authenticated reveal action.</li>
             </ul>
+          </section>
+
+          <section>
+            <h2>Repository evidence</h2>
+            <pre class="usage-snippet"><code>if (this.settingsRequired) {
+  this.openSettings();
+}
+if (!this.hasSecret) {
+  await this.requestAndApplyGeneratedSecret();
+}</code></pre>
+            <p>Verified 2026-07-22 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>site/assets/llm-proxy/js/ui/keyManagement.js</code>.</p>
           </section>
 
           <section>
@@ -147,26 +169,26 @@
             <div class="resource-faq">
               
                     <details>
-                      <summary>What is the main job of self-service LLM key management?</summary>
-                      <p>LLM Proxy includes an optional TAuth-protected management UI where authenticated users manage provider credentials, defaults, generated secrets, and usage examples.</p>
+                      <summary>How does first-run LLM Proxy setup begin?</summary>
+                      <p>After MPR UI reports an authenticated session, the management profile loads and the UI automatically creates a client key when the profile has none.</p>
                     </details>
                   
 
                     <details>
-                      <summary>Who should read this management ui resource?</summary>
-                      <p>Teams that want user-owned AI access without asking operators to edit YAML for every change.</p>
+                      <summary>What lets a user leave Settings?</summary>
+                      <p>The loaded profile must report a client key and at least one persisted managed provider key. Until both conditions are true, close actions explain what is missing and keep Settings open.</p>
                     </details>
                   
 
                     <details>
-                      <summary>Does this page claim provider performance or pricing advantages?</summary>
-                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                      <summary>Does typing a provider key unlock Settings?</summary>
+                      <p>No. Only a provider record returned with has_key after a successful autosave counts; drafts and local dotenv credentials do not satisfy managed onboarding.</p>
                     </details>
                   
 
                     <details>
-                      <summary>Where should setup details come from?</summary>
-                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                      <summary>Does onboarding change provider or model defaults?</summary>
+                      <p>No. Automatic client-key creation and provider-key validation leave the user's existing provider and model defaults unchanged.</p>
                     </details>
                   
 

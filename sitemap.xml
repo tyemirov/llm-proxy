@@ -6,7 +6,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/</loc>
-    <lastmod>2026-07-11</lastmod>
+    <lastmod>2026-07-22</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/</loc>
@@ -22,7 +22,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/</loc>
-    <lastmod>2026-07-11</lastmod>
+    <lastmod>2026-07-22</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/</loc>
@@ -86,7 +86,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/generated-secret-rotation-and-revocation/</loc>
-    <lastmod>2026-07-11</lastmod>
+    <lastmod>2026-07-22</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/encrypted-provider-key-storage/</loc>
@@ -162,7 +162,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/</loc>
-    <lastmod>2026-07-11</lastmod>
+    <lastmod>2026-07-22</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/</loc>
