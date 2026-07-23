@@ -56,7 +56,7 @@ Generated: 2026-07-22
 - It routes text to OpenAI, Meta Muse Spark 1.1 and other OpenAI-compatible providers, Anthropic, Gemini, and Grok/xAI as documented in the provider matrix.
 - It routes dictation through /dictate for OpenAI, SiliconFlow, Zhipu, and Grok/xAI as documented.
 - It keeps upstream provider API keys server-side and rejects provider-key-like fields on public proxy requests.
-- It can run a TAuth-protected self-service management UI that automatically creates a missing client key and requires one saved provider key before Settings can close.
+- It can run a TAuth-protected self-service management UI that automatically creates a missing client key, autosaves selected-provider settings, and requires one persisted provider key before Settings can close.
 - Managed provider keys are encrypted at rest with AES-GCM; this protects storage/backups/dumps and is not a zero-knowledge guarantee.
 - Browser runtime config is served by the backend /config-ui.yaml endpoint.
 
