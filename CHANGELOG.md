@@ -6,6 +6,50 @@ All notable changes to this project will be documented in this file.
 
 - Declare the llm-proxy TAuth tenant requirements in the app-owned deployment manifest for gateway assembly.
 
+## [v0.2.39] - 2026-07-23
+
+- Merge pull request #218 from tyemirov/gix/compact-provider-settings-and-client-key-rows-with
+- test: add Settings race condition, enforcement, and orchestration startup tests
+- fix(ui): improve concurrency, state handling for key management settings
+- refactor(scripts): split local .env into per-service files in up.sh
+- docs: clarify management Settings mutation serialization and retry behavior
+- chore: update docker-compose.local.yml to use service-specific env files
+- chore(config): add GOOGLE_CLIENT_ID to .env.local.example
+- docs: clarify local management env projections and compose up readiness
+- docs(issues): describe serialized Settings mutations and isolated orchestration secrets
+- test: update management tests to expect autosave provider settings
+- feat(ui): autosave provider and routing defaults in settings
+- docs: update SEO resource generation for autosave and key masking semantics
+- refactor(proxy): remove openai_responses_base profile and update GPT-5-mini handling
+- docs: update management UI docs for autosave and settings persistence
+- feat(config): add reasoning_effort config for gpt-5-mini model
+- test(cli): update provider profile validation and test cases for retired profiles
+- docs: update README for OpenAI model catalog, UI autosave, and security
+- docs(issues): document provider autosave, GPT-5 mini effort, and routing-default autosave
+- test: verify client key UI, provider editor, and SEO resource content refactor
+- feat(ui): require provider and client key before leaving Settings
+- feat(seo): add repo-evidenced onboarding, rotation, and example resource info
+- docs(seo): update cluster report for client key, section titles, and copyable curl
+- docs: clarify automatic client key creation and setup flow in README
+- docs(ISSUES): document onboarding, settings, and provider-key UX flows
+- feat: add docker-compose.local.yml for local development environment
+- chore(config): add local .env and tauth config examples for dev setup
+- chore: add .dockerignore to exclude sensitive and build files from images
+- test: expand management UI and operational contract for local orchestration
+- fix(ui): move client key create button and improve row layout responsiveness
+- refactor(scripts): migrate up.sh to Docker Compose local orchestration
+- docs: clarify local stack orchestration and readiness in README
+- chore(makefile): decouple build step from up command
+- docs(issues): document full local browser orchestration and UI alignment work
+- chore(scripts): add up.sh for local proxy startup with readiness checks
+- test: verify `make up` launches and checks local proxy with canonical config
+- docs: document `make up` as canonical local service entrypoint in README
+- feat(makefile): add 'up' target to run scripts/up.sh after build
+- docs(issues): record standard `make up` local service command addition
+- test: update management UI tests for new provider key field and visibility logic
+- refactor(ui): redesign client key management UI and update constants
+- docs(issues): record compact provider settings and client access UX changes
+
 ## [v0.2.38] - 2026-07-22
 
 - Merge pull request #217 from tyemirov/gix/isolate-live-harness-from-unrelated-listeners-and-add
