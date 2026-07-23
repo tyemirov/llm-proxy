@@ -1082,6 +1082,10 @@ chmod +x "${output_path}"
 	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env bash
 set -euo pipefail
 
+if [[ ! -f "${PROXY_PID_CAPTURE:?}" ]]; then
+  exit 1
+fi
+
 for argument in "$@"; do
   case "${argument}" in
     *provider=unsupported-live-preflight*)
