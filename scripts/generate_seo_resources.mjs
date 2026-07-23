@@ -7,7 +7,7 @@ const PUBLIC_ORIGIN = "https://llm-proxy.mprlab.com";
 const RESOURCE_ROOT = "site/resources";
 const REPORT_PATH = "docs/marketing/seo-resource-cluster-report.md";
 const RESOURCE_PUBLISHED_DATE = "2026-07-06";
-const RESOURCE_MODIFIED_DATE = "2026-07-11";
+const RESOURCE_DEFAULT_MODIFIED_DATE = "2026-07-11";
 const PRODUCT_NAME = "LLM Proxy";
 const MIN_PAGE_COUNT = 40;
 const MAX_PAGE_COUNT = 50;
@@ -113,28 +113,29 @@ const pages = Object.freeze([
       "This is not a full identity provider; it is the proxy authentication boundary.",
     ],
   }),
-  page({
+  evidencedPage({
     slug: "self-service-llm-key-management",
     category: "Management UI",
     primaryKeyword: "self-service LLM key management",
-    title: "Self-service LLM key management for teams",
-    description: "Let signed-in users save provider keys, choose defaults, and generate llm-proxy secrets in one UI.",
+    title: "Self-service LLM key management for internal teams",
+    description: "Automatically create a signed-in user's LLM Proxy client key, then require one saved provider API key before they leave Settings.",
     audience: "Teams that want user-owned AI access without asking operators to edit YAML for every change.",
     problem: "Operator-provisioned AI access does not scale when each user or team needs provider keys, defaults, generated secrets, and examples updated separately.",
-    solution: "LLM Proxy includes an optional TAuth-protected management UI where authenticated users manage provider credentials, defaults, generated secrets, and usage examples.",
+    solution: "LLM Proxy includes an optional TAuth-protected management UI that creates a missing client key after authentication and keeps Settings open until the user saves at least one managed provider key.",
     steps: [
       "Enable management mode with TAuth and database configuration.",
       "Publish the static Pages UI and serve runtime config from the API backend.",
-      "Users sign in and save provider keys through Settings.",
-      "Users generate tenant secrets and copy request examples from current profile data.",
+      "Users sign in; the UI creates and presents a missing client key once.",
+      "Users save at least one provider key before leaving Settings, then copy request examples from current profile data.",
     ],
     features: [
       ["TAuth-gated UI", "Management controls appear only after login.", "Unauthenticated users see the sign-in state, not tenant controls."],
+      ["Required first-run setup", "Settings stays open until a client key and one persisted provider key exist.", "Typed drafts and local dotenv credentials do not bypass onboarding."],
       ["Selected-provider editor", "Provider key, text model, and system prompt live together.", "A user can update one provider without scanning every provider card."],
       ["Copyable examples", "Default and provider-specific curl examples use the current proxy origin and generated-secret placeholder.", "Users can start with the exact request shape shown in Settings."],
     ],
     examples: [
-      ["New team onboarding", "A user signs in, saves an OpenAI key, generates an llm-proxy secret, and copies the /v2 example."],
+      ["New team onboarding", "A user signs in, copies the automatically created client key, saves an OpenAI key, and then closes Settings."],
       ["Provider update", "A user switches the selected provider editor to DeepSeek and saves the model for that provider."],
       ["Usage review", "The user returns to the dashboard to see 30-day request and token summaries."],
     ],
@@ -142,6 +143,35 @@ const pages = Object.freeze([
       "Management mode requires configured TAuth, CORS origins, database settings, and provider-key encryption key.",
       "The backend serves management APIs and runtime config; the static Pages app is only the shell.",
       "Raw provider keys are not returned after save.",
+    ],
+    repoExample: {
+      source: "site/assets/llm-proxy/js/ui/keyManagement.js",
+      verifiedOn: "2026-07-22",
+      code: `if (this.settingsRequired) {
+  this.openSettings();
+}
+if (!this.hasSecret) {
+  await this.requestAndApplyGeneratedSecret();
+}`,
+    },
+    quickVerdict: "Use this flow when every authenticated user must leave first-run Settings with a client key and at least one server-stored provider credential.",
+    faq: [
+      {
+        question: "How does first-run LLM Proxy setup begin?",
+        answer: "After MPR UI reports an authenticated session, the management profile loads and the UI automatically creates a client key when the profile has none.",
+      },
+      {
+        question: "What lets a user leave Settings?",
+        answer: "The loaded profile must report a client key and at least one persisted managed provider key. Until both conditions are true, close actions explain what is missing and keep Settings open.",
+      },
+      {
+        question: "Does typing a provider key unlock Settings?",
+        answer: "No. Only a provider record returned with has_key after a successful save counts; drafts and local dotenv credentials do not satisfy managed onboarding.",
+      },
+      {
+        question: "Does onboarding change provider or model defaults?",
+        answer: "No. Automatic client-key creation and provider-key validation leave the user's existing provider and model defaults unchanged.",
+      },
     ],
   }),
   page({
@@ -610,28 +640,28 @@ const pages = Object.freeze([
       "The static UI should not load tauth.js directly; it uses the MPR shell contract.",
     ],
   }),
-  page({
+  evidencedPage({
     slug: "generated-secret-rotation-and-revocation",
     category: "Security",
     primaryKeyword: "generated LLM proxy secret rotation",
-    title: "Generated secret rotation and revocation",
-    description: "Create, show once, revoke, and regenerate llm-proxy tenant secrets for managed users.",
+    title: "Generated LLM Proxy secret rotation and revocation",
+    description: "Automatically create a missing LLM Proxy client key, show it once, store only its digest, and support explicit rotation and revocation.",
     audience: "Teams that want self-service client access without permanent retrievable secrets.",
     problem: "Long-lived client secrets become harder to control when users can retrieve old raw values or when revocation requires operator edits.",
     solution: "LLM Proxy generates tenant secrets, returns them once, stores only SHA-256 digests, and supports revocation through authenticated management APIs.",
     steps: [
       "Open Settings after signing in.",
-      "Create a key and copy the one-time generated secret.",
+      "Copy the one-time client key created automatically for a profile that does not have one.",
       "Use the generated secret in public proxy request examples.",
       "Revoke or regenerate the secret when access should change.",
     ],
     features: [
       ["One-time display", "Generated secrets are shown once after creation.", "The database stores only their digest."],
       ["Immediate revocation", "Revoked secrets stop authenticating future public proxy requests.", "Access can be cut without provider-key rotation."],
-      ["Example refresh", "Request examples update from placeholder to generated secret after creation.", "Users copy current commands."],
+      ["Secret-safe examples", "Request examples retain the <generated-secret> placeholder after creation.", "Raw client keys remain confined to the one-time Key field."],
     ],
     examples: [
-      ["New app secret", "A developer creates a secret for a service and copies the /v2 example."],
+      ["New app secret", "A developer copies the automatically created client key and substitutes it for the /v2 example placeholder."],
       ["Compromised client", "A user revokes the generated secret and creates a replacement."],
       ["Provider key unchanged", "Rotating the tenant secret does not require changing the saved provider API key."],
     ],
@@ -639,6 +669,36 @@ const pages = Object.freeze([
       "If the one-time value is lost, the user must generate a new secret.",
       "Tenant secrets remain application credentials and need normal secret handling.",
       "Revocation affects proxy authentication; it does not revoke upstream provider keys.",
+    ],
+    repoExample: {
+      source: "site/assets/llm-proxy/js/core/backendClient.js",
+      verifiedOn: "2026-07-22",
+      code: `export function generateSecret() {
+  return requestJSON(\`\${MANAGEMENT_BASE_PATH}/secrets\`, { method: "POST" });
+}
+
+export function revokeSecret() {
+  return requestJSON(\`\${MANAGEMENT_BASE_PATH}/secrets\`, { method: "DELETE" });
+}`,
+    },
+    quickVerdict: "Use the automatically created client key once, then replace or revoke it without rotating the separate upstream provider credentials.",
+    faq: [
+      {
+        question: "When does LLM Proxy create a client key?",
+        answer: "The management UI creates one after authentication when the current profile reports that no client key exists. A configured profile does not trigger another creation request.",
+      },
+      {
+        question: "Can the raw generated client key be retrieved later?",
+        answer: "No. The raw value is presented once in a masked, read-only field, while the backend stores only the digest used to authenticate proxy requests.",
+      },
+      {
+        question: "What does revoking the client key affect?",
+        answer: "Revocation stops that client key from authenticating public proxy requests. It does not remove or rotate separately stored upstream provider credentials.",
+      },
+      {
+        question: "Do request examples embed the generated key?",
+        answer: "No. Examples retain the <generated-secret> placeholder so the one-time raw value does not enter page markup or copied example commands.",
+      },
     ],
   }),
   page({
@@ -1201,15 +1261,15 @@ const pages = Object.freeze([
       "Usage recording applies to managed tenants using generated-secret routing.",
     ],
   }),
-  page({
+  evidencedPage({
     slug: "copyable-llm-curl-examples",
     category: "Management UI",
     primaryKeyword: "copyable LLM curl examples",
-    title: "Copyable LLM curl examples from live profile data",
-    description: "Show default and selected-provider request examples that use the current proxy origin and generated secret state.",
+    title: "Copyable LLM curl examples from current profile data",
+    description: "Render copyable LLM curl examples from live profile data while keeping the one-time raw client key out of page markup and copied commands.",
     audience: "Users onboarding themselves to LLM Proxy through the management UI.",
     problem: "Docs and examples drift when they hardcode hosts, provider choices, or secret placeholders that do not match the signed-in user's state.",
-    solution: "LLM Proxy Settings renders copyable examples from profile data, including proxy origin, provider selectors, model choices, dictation support, and generated-secret status.",
+    solution: "LLM Proxy Settings renders copyable examples from profile data while keeping raw client keys out of example markup and clipboard actions.",
     steps: [
       "Open Settings after signing in.",
       "Expand Usage / Request examples.",
@@ -1217,19 +1277,45 @@ const pages = Object.freeze([
       "Select a provider to copy provider-specific text, /v2, and dictation examples when supported.",
     ],
     features: [
-      ["Generated-secret placeholder", "Examples are populated before a secret exists by using <generated-secret>.", "Users see the complete shape immediately."],
-      ["Fresh secret replacement", "After key generation, examples update to the real generated secret.", "Copy actions use current data."],
+      ["Generated-secret placeholder", "Examples always use <generated-secret>, including after automatic client-key creation.", "Raw client keys never enter example markup."],
+      ["Separate one-time key", "The newly created key appears masked in a read-only field with Show and Copy actions.", "Users substitute it for the placeholder outside the page."],
       ["Provider-specific variants", "Selected-provider examples include provider and model context.", "Dictation examples appear only for dictation-capable providers."],
     ],
     examples: [
-      ["First run", "A new user copies the default /v2 example with the placeholder before generating a secret."],
-      ["After creation", "The same example updates to include the newly generated tenant secret."],
+      ["First run", "A new user copies the automatically created client key, saves a provider key, and then copies the default /v2 example."],
+      ["After creation", "The example still contains <generated-secret> so the raw client key is not copied implicitly."],
       ["Provider switch", "Selecting DeepSeek updates provider-specific examples and hides dictation when unsupported."],
     ],
     limitations: [
       "Examples are for proxy calls, not direct provider API calls.",
       "The generated secret is shown once; copy it when created.",
       "Examples depend on the API-served profile and config payloads.",
+    ],
+    repoExample: {
+      source: "site/assets/llm-proxy/js/ui/keyManagement.js",
+      verifiedOn: "2026-07-22",
+      code: `get exampleSecret() {
+  return EMPTY_SECRET_PLACEHOLDER;
+}`,
+    },
+    quickVerdict: "Copy the request shape with its placeholder, then supply the one-time client key separately so raw access material never enters example markup.",
+    faq: [
+      {
+        question: "What do copied curl examples use for the client key?",
+        answer: "Every example uses the <generated-secret> placeholder. The user supplies the separately copied one-time client key when preparing the real request.",
+      },
+      {
+        question: "Where do example hosts and provider choices come from?",
+        answer: "The Settings UI builds examples from the API-served runtime configuration and the current authenticated management profile instead of hardcoding deployment-specific values.",
+      },
+      {
+        question: "Can copying an example expose the raw generated key?",
+        answer: "No. The generated value stays in its dedicated read-only field, while example markup and clipboard actions use only the placeholder.",
+      },
+      {
+        question: "When does a provider-specific dictation example appear?",
+        answer: "It appears only when the selected provider supports dictation; text and /v2 examples remain available for configured text providers.",
+      },
     ],
   }),
   page({
@@ -1452,6 +1538,7 @@ console.log(`generated ${pages.length} SEO resource pages`);
 /**
  * @param {{
  *   slug: string,
+ *   modifiedDate?: string,
  *   category: string,
  *   primaryKeyword: string,
  *   title: string,
@@ -1463,13 +1550,48 @@ console.log(`generated ${pages.length} SEO resource pages`);
  *   features: [string, string, string][],
  *   examples: [string, string][],
  *   limitations: string[],
+ *   repoExample?: { source: string, code: string, verifiedOn: string },
+ *   quickVerdict?: string,
+ *   faq?: { question: string, answer: string }[],
  * }} input
  */
 function page(input) {
   return Object.freeze({
     ...input,
+    modifiedDate: input.modifiedDate || RESOURCE_DEFAULT_MODIFIED_DATE,
     path: `/resources/${input.slug}/`,
     canonical: `${PUBLIC_ORIGIN}/resources/${input.slug}/`,
+  });
+}
+
+/**
+ * Generates a resource whose current claims have direct, dated repository evidence.
+ *
+ * @param {Parameters<typeof page>[0] & {
+ *   repoExample: { source: string, code: string, verifiedOn: string },
+ *   quickVerdict: string,
+ *   faq: { question: string, answer: string }[],
+ * }} input
+ */
+function evidencedPage(input) {
+  if (input.title.length < 50 || input.title.length > 60) {
+    throw new Error(`seo_resource_title_length_out_of_range: slug=${input.slug} length=${input.title.length}`);
+  }
+  if (!input.quickVerdict.trim()) {
+    throw new Error(`seo_resource_quick_verdict_missing: slug=${input.slug}`);
+  }
+  if (!input.repoExample.source.trim() || !input.repoExample.code.trim()) {
+    throw new Error(`seo_resource_repository_evidence_missing: slug=${input.slug}`);
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.repoExample.verifiedOn)) {
+    throw new Error(`seo_resource_evidence_date_invalid: slug=${input.slug}`);
+  }
+  if (input.faq.length < 4 || input.faq.some((item) => !item.question.trim() || !item.answer.trim())) {
+    throw new Error(`seo_resource_faq_count_too_small: slug=${input.slug}`);
+  }
+  return page({
+    ...input,
+    modifiedDate: input.repoExample.verifiedOn,
   });
 }
 
@@ -1487,7 +1609,7 @@ function renderResourcePage(resourcePage) {
     description: resourcePage.description,
     url: resourcePage.canonical,
     datePublished: RESOURCE_PUBLISHED_DATE,
-    dateModified: RESOURCE_MODIFIED_DATE,
+    dateModified: resourcePage.modifiedDate,
     mainEntityOfPage: resourcePage.canonical,
     about: [PRODUCT_NAME, resourcePage.category, resourcePage.primaryKeyword],
   };
@@ -1540,7 +1662,11 @@ function renderResourcePage(resourcePage) {
             <p class="eyebrow">${escapeHTML(resourcePage.category)}</p>
             <h1>${escapeHTML(resourcePage.title)}</h1>
             <p class="resource-deck">${escapeHTML(resourcePage.description)}</p>
-            <p class="resource-audience">${escapeHTML(resourcePage.audience)}</p>
+            <p class="resource-audience">${escapeHTML(resourcePage.audience)}</p>${resourcePage.quickVerdict ? `
+            <aside class="resource-verdict" aria-label="Quick verdict">
+              <strong>Quick verdict</strong>
+              <p>${escapeHTML(resourcePage.quickVerdict)}</p>
+            </aside>` : ""}
             <div class="resource-actions">
               <a class="resource-button" href="/">Open LLM Proxy</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
@@ -1613,7 +1739,13 @@ function renderResourcePage(resourcePage) {
             <ul class="resource-list">
               ${resourcePage.limitations.map((limitation) => `<li>${escapeHTML(limitation)}</li>`).join("\n")}
             </ul>
-          </section>
+          </section>${resourcePage.repoExample ? `
+
+          <section>
+            <h2>Repository evidence</h2>
+            <pre class="usage-snippet"><code>${escapeHTML(resourcePage.repoExample.code)}</code></pre>
+            <p>Verified ${resourcePage.repoExample.verifiedOn} by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>${escapeHTML(resourcePage.repoExample.source)}</code>.</p>
+          </section>` : ""}
 
           <section>
             <h2>FAQ</h2>
@@ -1828,7 +1960,7 @@ function uniquePages(resourcePages) {
  * @returns {{ question: string, answer: string }[]}
  */
 function faqFor(resourcePage, relatedPage) {
-  return [
+  const pageSpecificFAQ = resourcePage.faq || [
     {
       question: `What is the main job of ${resourcePage.primaryKeyword}?`,
       answer: resourcePage.solution,
@@ -1845,6 +1977,9 @@ function faqFor(resourcePage, relatedPage) {
       question: "Where should setup details come from?",
       answer: `Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing ${PRODUCT_NAME} documentation.`,
     },
+  ];
+  return [
+    ...pageSpecificFAQ,
     {
       question: "What should I read next?",
       answer: `A closely related resource is ${relatedPage.title}, which covers ${relatedPage.primaryKeyword}.`,
@@ -1855,11 +1990,22 @@ function faqFor(resourcePage, relatedPage) {
 /**
  * @returns {string}
  */
+function latestResourceModifiedDate() {
+  return pages.reduce(
+    (latestDate, resourcePage) => resourcePage.modifiedDate > latestDate ? resourcePage.modifiedDate : latestDate,
+    RESOURCE_DEFAULT_MODIFIED_DATE,
+  );
+}
+
+/**
+ * @returns {string}
+ */
 function renderSitemap() {
+  const currentResourceModifiedDate = latestResourceModifiedDate();
   const urls = [
-    { loc: `${PUBLIC_ORIGIN}/`, lastmod: RESOURCE_MODIFIED_DATE },
-    { loc: `${PUBLIC_ORIGIN}/resources/`, lastmod: RESOURCE_MODIFIED_DATE },
-    ...pages.map((resourcePage) => ({ loc: resourcePage.canonical, lastmod: RESOURCE_MODIFIED_DATE })),
+    { loc: `${PUBLIC_ORIGIN}/`, lastmod: RESOURCE_DEFAULT_MODIFIED_DATE },
+    { loc: `${PUBLIC_ORIGIN}/resources/`, lastmod: currentResourceModifiedDate },
+    ...pages.map((resourcePage) => ({ loc: resourcePage.canonical, lastmod: resourcePage.modifiedDate })),
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -1890,6 +2036,7 @@ Sitemap: ${PUBLIC_ORIGIN}/sitemap.xml
  * @returns {string}
  */
 function renderReport() {
+  const currentResourceModifiedDate = latestResourceModifiedDate();
   const pageRows = pages
     .map(
       (resourcePage, index) =>
@@ -1902,7 +2049,7 @@ function renderReport() {
 
   return `# LLM Proxy SEO Resource Cluster Report
 
-Generated: ${RESOURCE_MODIFIED_DATE}
+Generated: ${currentResourceModifiedDate}
 
 ## Repo Analysis Report
 
@@ -1921,7 +2068,7 @@ Generated: ${RESOURCE_MODIFIED_DATE}
 - Product category: Multi-provider LLM and dictation HTTP proxy with optional self-service management UI.
 - One-sentence description: LLM Proxy forwards authenticated text and audio requests to configured upstream providers while keeping provider credentials server-side and giving callers one tenant-secret HTTP contract.
 - Primary users: Developers, platform engineers, technical founders, AI platform operators, and internal-tool teams.
-- Secondary users: Managed end users who sign in to save provider keys, generate tenant secrets, copy request examples, and inspect usage.
+- Secondary users: Managed end users who sign in, receive a client key, save provider keys, copy request examples, and inspect usage.
 - Primary job-to-be-done: Centralize provider routing, credentials, request validation, response formatting, dictation, usage metadata, and management workflows behind one service boundary.
 - Installation or usage model: Run the Go backend from config.yml; publish the static management UI from site/ to GitHub Pages; call GET /, POST /, POST /v2, or POST /dictate with key=<tenant secret>.
 - Current maturity: Implemented repo contract with Go/Python/frontend validation and documented release/deploy workflows.
@@ -1958,7 +2105,7 @@ Generated: ${RESOURCE_MODIFIED_DATE}
 - It routes text to OpenAI, Meta Muse Spark 1.1 and other OpenAI-compatible providers, Anthropic, Gemini, and Grok/xAI as documented in the provider matrix.
 - It routes dictation through /dictate for OpenAI, SiliconFlow, Zhipu, and Grok/xAI as documented.
 - It keeps upstream provider API keys server-side and rejects provider-key-like fields on public proxy requests.
-- It can run a TAuth-protected self-service management UI where users save provider keys, generate tenant secrets, set defaults, and inspect usage.
+- It can run a TAuth-protected self-service management UI that automatically creates a missing client key and requires one saved provider key before Settings can close.
 - Managed provider keys are encrypted at rest with AES-GCM; this protects storage/backups/dumps and is not a zero-knowledge guarantee.
 - Browser runtime config is served by the backend /config-ui.yaml endpoint.
 
