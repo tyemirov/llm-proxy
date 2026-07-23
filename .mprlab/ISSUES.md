@@ -1949,6 +1949,8 @@ remains scheduled work.
 
 ## Improvements
 
+- [x] [I028] (P1) Emit LLM Proxy page views to its dedicated GA4 property.
+  Resolved: added a first-party GA4 loader for `G-Z780618FPW`, included it in the main site and all generated resource pages, extended the generator and browser contract coverage, and passed the full `make ci` gate.
 - [ ] [I027] (P1) {F014} Redesign the user dashboard around connected-provider widgets.
   Goal:
   Make the authenticated dashboard answer, at a glance, which upstream
