@@ -37,6 +37,7 @@ Generated: 2026-07-24
 | Usage dashboard | Selectable all-time, 30-day, 7-day, and 1-day usage summaries by request, token, provider, model, status, and time bucket. | README management UI section | High | Current | Yes |
 | API-served runtime config | Browser config comes from backend /config-ui.yaml, not a static Pages config artifact. | README hosted split-origin section | High | Current | Yes |
 | Bundled v2-only clients | Go package, Go CLI, and Python package send canonical /v2 messages for text. | README clients section | High | Current | Yes |
+| Public-page telemetry | Public static pages load Google Analytics and LoopAware page-view scripts. | site/index.html, resource generator | High | Current | Yes, with privacy caveat |
 | Worker/queue controls | server.workers limits upstream HTTP operations and queue_size limits pending operations. | README REST contract and config section | High | Current | Yes |
 
 ### Non-Capabilities, Limits, and Cautions
@@ -47,6 +48,7 @@ Generated: 2026-07-24
 | Not every upstream feature is exposed | Provider adapters define current capabilities. | README provider and dictation matrices | Do not claim universal provider feature parity. |
 | Meta support is text-only | Muse Spark 1.1 uses the shared Chat Completions adapter. | README provider-specific details | Do not imply Meta dictation, web search, tools, multimodal inputs, or Responses fallback. |
 | Web search limited to configured OpenAI models | Other providers are marked unsupported. | README provider-specific details | Do not imply search across all providers. |
+| Third-party static-page telemetry | Public static pages load Google Analytics and LoopAware scripts. | site/index.html, resource generator | Do not claim collection, retention, consent, or opt-out behavior without approved legal or provider documentation. |
 | Live provider tests can spend money | Live smoke tests are not part of CI. | README local automation | Do not present live tests as routine CI. |
 | Management requires TAuth/database config | Self-service UI needs several hosted values. | README management UI and split-origin setup | Do not imply zero-config hosted management. |
 

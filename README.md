@@ -670,8 +670,11 @@ and Reasoning effort in one desktop row, clears an incompatible saved value on
 a model change, reports `Not supported` for routes without a declaration, and
 autosaves every routing-default change without a separate action. The browser
 rejects malformed profile data instead of repairing it. Public
-`GET /`, `POST /`, and `POST /v2` contracts do not accept caller-supplied
-reasoning effort.
+`GET /` accepts optional query `reasoning_effort`; JSON `POST /` and `POST /v2`
+accept the same optional field in their bodies. When omitted, the saved tenant
+default remains authoritative. An explicit value must be nonblank and exactly
+supported by the resolved provider/model route, otherwise the proxy returns
+`400` before an upstream call.
 
 Management startup performs a bounded, transactional version-3 routing-defaults
 migration. It retains a stored effort only when it is valid for the stored text
@@ -1120,17 +1123,31 @@ export LLM_PROXY_SECRET="$SERVICE_SECRET"
 printf 'large prompt...\n' | llm-proxy-client --max-tokens 4096
 ```
 
+For a route whose catalog declares the value, override the tenant default for
+one request with `--reasoning-effort`:
+
+```shell
+llm-proxy-client \
+  --base-url "http://localhost:8080/?provider=openai" \
+  --secret "$SERVICE_SECRET" \
+  --model gpt-5.5 \
+  --reasoning-effort high \
+  --prompt "Summarize this"
+```
+
 The client always uses canonical `POST /v2?key=...` with a JSON body. It keeps
 non-payload query parameters such as `provider`, strips body-owned query fields
 such as `prompt` and `model`, and sends the prompt as a v2 `user` message.
 `--system-prompt` becomes a v2 `system` message. Optional `model`,
-`web_search`, and `max_tokens` values remain body fields. When `--model` is
-omitted, the body omits `model` so llm-proxy uses the selected provider's
-configured default model.
+`web_search`, `max_tokens`, and `reasoning_effort` values remain body fields.
+When `--model` is omitted, the body omits `model` so llm-proxy uses the selected
+provider's configured default model.
 
 The reusable Go package under `pkg/llmproxyclient` is v2-only: construct a
 `MessagesRequest` with `NewMessagesRequest` and send it with
-`Client.PostMessages`.
+`Client.PostMessages`. `MessagesRequestInput.ReasoningEffort` is an optional
+nonblank request override; the proxy validates it against the exact resolved
+provider/model capability before it calls upstream.
 
 #### Model selection without application redeployment
 
@@ -1235,6 +1252,10 @@ text = client.post_messages(
     )
 )
 ```
+
+`ClientMessagesRequest.reasoning_effort` is the same optional per-request
+override. Supply a nonblank value only for a resolved provider/model route that
+declares it; omit the field to retain the tenant default.
 
 The Python package is v2-only. For chat-transcript callers, send the same
 `post_messages` request with multiple messages:
@@ -1372,7 +1393,7 @@ configuration. The JSON body is capped by `server.max_prompt_bytes`.
 ```shell
 curl -X POST \
   -H "Content-Type: application/json" \
-  --data '{"prompt":"large text...","model":"gpt-5.5","web_search":false,"system_prompt":"optional","max_tokens":4096}' \
+  --data '{"prompt":"large text...","model":"gpt-5.5","web_search":false,"system_prompt":"optional","max_tokens":4096,"reasoning_effort":"high"}' \
   "http://localhost:8080/?key=mysecret"
 ```
 
@@ -1404,6 +1425,7 @@ JSON body fields:
 | `web_search` | No | `false` | Enables OpenAI web search when the selected provider/model supports it. |
 | `system_prompt` | No | authenticated tenant default | Per-request system prompt override. With `messages`, it is prepended as a system message only when the body does not already contain a system message. |
 | `max_tokens` | No | provider default | Positive integer output-token cap for this request. The proxy maps it to OpenAI `max_output_tokens`, Meta, Moonshot, and MiniMax `max_completion_tokens`, other OpenAI-compatible providers' `max_tokens`, Anthropic `max_tokens`, or Gemini `generationConfig.maxOutputTokens`. |
+| `reasoning_effort` | No | resolved tenant default | Nonblank capability-supported override for the exact resolved text provider/model. Omit it to retain the default; a blank, `null`, or unsupported value returns `400` before an upstream call. |
 
 For `POST /`, `provider` remains a query parameter. Query `model` may override
 the JSON body only when the body omits `model` or provides the same value;
@@ -1417,10 +1439,10 @@ Anthropic values above the configured Claude model output limit return `400 Bad
 Request` before the proxy calls the selected provider.
 
 `POST /v2` is the canonical chat endpoint. It accepts the same `messages`,
-`model`, `web_search`, and `max_tokens` body fields, but rejects `prompt` and
-body `system_prompt`; send a `system` role message instead. The tenant default
-system prompt is still prepended when the submitted messages do not include a
-system message.
+`model`, `web_search`, `max_tokens`, and `reasoning_effort` body fields, but
+rejects `prompt` and body `system_prompt`; send a `system` role message instead.
+The tenant default system prompt is still prepended when the submitted messages
+do not include a system message.
 
 ### Choose an OpenAI model
 
@@ -1547,6 +1569,7 @@ GET /
   &model=MODEL_NAME         # optional; tenant or configured provider default
   &web_search=1|true|yes    # optional; requires configured model support
   &max_tokens=N             # optional positive integer per-request cap
+  &reasoning_effort=VALUE   # optional; exact resolved-route capability
   &format=CONTENT_TYPE      # optional; or use Accept header
 ```
 
@@ -1565,7 +1588,8 @@ Content-Type: application/json
   "model": "MODEL_NAME",    # optional; tenant or configured provider default
   "web_search": false,      # optional; defaults to false
   "system_prompt": "STRING",# optional; tenant default
-  "max_tokens": 512         # optional positive integer per-request cap
+  "max_tokens": 512,        # optional positive integer per-request cap
+  "reasoning_effort": "high" # optional; exact resolved-route capability
 }
 ```
 
@@ -1582,7 +1606,8 @@ Content-Type: application/json
   ],
   "model": "MODEL_NAME",    # optional; tenant or configured provider default
   "web_search": false,      # optional; defaults to false
-  "max_tokens": 512         # optional positive integer per-request cap
+  "max_tokens": 512,        # optional positive integer per-request cap
+  "reasoning_effort": "high" # optional; exact resolved-route capability
 }
 ```
 
@@ -1723,6 +1748,7 @@ and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-mo
 * Client requests must not include upstream provider API keys; public proxy endpoints reject provider-key-like query, JSON, and multipart form fields.
 * Request logs record only the query-free path plus method, status, latency, client IP, and tenant metadata; they do not record query strings, request bodies, cookies, or authorization headers.
 * Self-service provider API keys are accepted only through TAuth-protected management endpoints. Autosave responses return masked status; raw retrieval requires the explicit owner-authenticated reveal action.
+* Public static pages load Google Analytics and LoopAware page-view scripts. This repository makes no claim about their collection, retention, consent, or opt-out behavior; the public Privacy page must use approved legal and provider content. Do not put tenant secrets or other sensitive values in public-page URLs.
 * Do not expose this service to the public internet without appropriate network controls.
 
 ## Implementation Plans

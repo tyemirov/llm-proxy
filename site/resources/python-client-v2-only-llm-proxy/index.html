@@ -69,6 +69,7 @@
               <li>Install the package from the repository.</li>
 <li>Create ClientConfig with base_url and secret.</li>
 <li>Build ClientMessagesRequest with one or more ClientMessage values.</li>
+<li>Set reasoning_effort only for a nonblank value declared by the resolved route, or omit it to retain the tenant default.</li>
 <li>Call post_messages and let the proxy route provider details.</li>
             </ol>
           </section>
@@ -101,6 +102,13 @@
 
 
                         <tr>
+                          <td>Reasoning-effort override</td>
+                          <td>ClientMessagesRequest serializes an optional nonblank reasoning_effort value.</td>
+                          <td>The proxy validates it against the exact resolved provider/model capability.</td>
+                        </tr>
+
+
+                        <tr>
                           <td>Transport context</td>
                           <td>Python client errors include non-secret provider, model, and timeout context.</td>
                           <td>Debugging avoids leaking credentials.</td>
@@ -128,8 +136,8 @@
 
 
                     <section class="resource-card">
-                      <h3>Provider test</h3>
-                      <p>The client base URL includes provider=deepseek and the body omits model.</p>
+                      <h3>Reasoning route</h3>
+                      <p>The client targets provider=openai with gpt-5.5 and reasoning_effort=high for one supported request.</p>
                     </section>
 
             </div>
@@ -150,7 +158,7 @@
 
 client = Client(
     ClientConfig(
-        base_url=&quot;http://localhost:8080/?provider=gemini&quot;,
+        base_url=&quot;http://localhost:8080/?provider=openai&quot;,
         secret=&quot;mysecret&quot;,
     )
 )
@@ -158,7 +166,9 @@ client = Client(
 text = client.post_messages(
     ClientMessagesRequest(
         messages=(ClientMessage(role=&quot;user&quot;, content=&quot;Summarize this&quot;),),
+        model=&quot;gpt-5.5&quot;,
         max_tokens=512,
+        reasoning_effort=&quot;high&quot;,
     )
 )</code></pre>
             <p>Verified 2026-07-24 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>

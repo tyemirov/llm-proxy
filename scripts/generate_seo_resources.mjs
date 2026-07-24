@@ -12,7 +12,7 @@ const PRODUCT_NAME = "LLM Proxy";
 const REPOSITORY_URL = "https://github.com/tyemirov/llm-proxy";
 const README_USAGE_URL = `${REPOSITORY_URL}#usage`;
 const CLIENT_AUTHENTICATION_RESOURCE_SLUG = "llm-proxy-client-authentication";
-const CLIENT_DOCUMENTATION_MODIFIED_DATE = "2026-07-24";
+const CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE = "2026-07-24";
 const MIN_PAGE_COUNT = 40;
 const MAX_PAGE_COUNT = 50;
 
@@ -214,21 +214,24 @@ if (!this.hasSecret) {
   page({
     slug: "canonical-v2-chat-messages-api",
     category: "API contract",
+    modifiedDate: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE,
     primaryKeyword: "v2 chat messages API",
     title: "Canonical /v2 chat messages API for LLM calls",
     description: "Send ordered system, user, and assistant messages through one v2 endpoint before provider routing.",
     audience: "Developers who want a stable chat transcript contract instead of provider-specific payloads.",
     problem: "Chat transcript callers can end up building OpenAI, Anthropic, Gemini, and compatible-provider request bodies separately, with different message rules in each client.",
-    solution: "LLM Proxy exposes POST /v2 as the canonical chat endpoint. It accepts messages, optional model, optional web_search, and optional max_tokens, then maps the request to the selected provider.",
+    solution: "LLM Proxy exposes POST /v2 as the canonical chat endpoint. It accepts messages plus optional model, web_search, max_tokens, and route-bound reasoning_effort, then maps the request to the selected provider.",
     steps: [
       "Send POST /v2 with messages[] and the tenant key query parameter.",
       "Use system role messages for instructions rather than a body system_prompt.",
       "Provide order values only when every submitted message has a unique non-negative order.",
       "Let omitted model resolve to the tenant or selected-provider default.",
+      "Omit reasoning_effort to retain the tenant default, or send a nonblank value declared by the exact resolved route.",
     ],
     features: [
       ["Messages-only input", "The canonical endpoint rejects prompt and body system_prompt fields.", "Ambiguous input fails before an upstream call."],
       ["Order support", "Messages can be sorted by explicit order when callers cannot rely on array position.", "Event-sourced transcripts can still route deterministically."],
+      ["Route-bound reasoning effort", "A caller can override the tenant default only with a nonblank value declared by the exact resolved provider/model route.", "Blank, null, and unsupported values fail with 400 before an upstream call."],
       ["Provider mapping", "The proxy maps shared messages into OpenAI, Claude, Gemini, or compatible provider shapes.", "Client code does not need a provider SDK."],
     ],
     examples: [
@@ -239,6 +242,7 @@ if (!this.hasSecret) {
     limitations: [
       "POST /v2 requires at least one user message.",
       "Unsupported roles, duplicate order values, and mixed prompt fields return 400.",
+      "Reasoning effort is not a global option list; a value unsupported by the resolved route returns 400.",
       "Server-injected tenant default system prompts are sent upstream but not echoed in response metadata.",
     ],
   }),
@@ -866,7 +870,7 @@ export function revokeSecret() {
   evidencedPage({
     slug: CLIENT_AUTHENTICATION_RESOURCE_SLUG,
     category: "Clients",
-    publishedDate: CLIENT_DOCUMENTATION_MODIFIED_DATE,
+    publishedDate: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE,
     relatedSlugs: [
       "tenant-secret-ai-gateway",
       "server-side-provider-api-keys",
@@ -902,7 +906,7 @@ export function revokeSecret() {
     ],
     repoExample: {
       source: "README.md",
-      verifiedOn: CLIENT_DOCUMENTATION_MODIFIED_DATE,
+      verifiedOn: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE,
       code: `curl -X POST \\
   -H "Content-Type: application/json" \\
   --data '{"messages":[{"role":"user","content":"Summarize this","order":2},{"role":"system","content":"Be concise.","order":1}],"model":"deepseek-v4-flash","max_tokens":4096}' \\
@@ -935,7 +939,7 @@ export function revokeSecret() {
   page({
     slug: "go-client-v2-only-llm-proxy",
     category: "Clients",
-    modifiedDate: CLIENT_DOCUMENTATION_MODIFIED_DATE,
+    modifiedDate: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE,
     primaryKeyword: "Go LLM proxy client v2",
     title: "Go LLM Proxy client with a v2-only transport",
     description: "Use the Go package to send canonical messages requests through POST /v2.",
@@ -947,11 +951,13 @@ export function revokeSecret() {
       "Build a MessagesRequest with NewMessagesRequest.",
       "Configure base URL and tenant secret.",
       "Let omitted model stay omitted when provider defaults should apply.",
+      "Set MessagesRequestInput.ReasoningEffort only for a nonblank value the resolved route declares.",
     ],
     features: [
       ["v2-only API", "The reusable package exposes messages requests rather than multiple text shapes.", "Callers standardize on POST /v2."],
       ["Provider query preservation", "Base URLs can include non-payload query parameters such as provider.", "Provider-selected requests still use the canonical body."],
       ["Omitted-model behavior", "The client omits model unless the caller specifies it.", "Server-side defaults remain authoritative."],
+      ["Reasoning-effort override", "MessagesRequestInput serializes an optional nonblank ReasoningEffort value.", "The proxy, not the client, validates exact model capability."],
     ],
     examples: [
       ["Backend service", "A Go service sends system and user messages through Client.PostMessages."],
@@ -965,7 +971,7 @@ export function revokeSecret() {
     ],
     repoExample: {
       source: "README.md",
-      verifiedOn: CLIENT_DOCUMENTATION_MODIFIED_DATE,
+      verifiedOn: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE,
       code: `config, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
     BaseURL:            "http://localhost:8080/",
     Secret:             serviceSecret,
@@ -985,7 +991,7 @@ if err != nil {
   page({
     slug: "python-client-v2-only-llm-proxy",
     category: "Clients",
-    modifiedDate: CLIENT_DOCUMENTATION_MODIFIED_DATE,
+    modifiedDate: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE,
     primaryKeyword: "Python LLM proxy client v2",
     title: "Python LLM Proxy client with v2 messages",
     description: "Use ClientMessagesRequest and post_messages for canonical text requests from Python.",
@@ -996,17 +1002,19 @@ if err != nil {
       "Install the package from the repository.",
       "Create ClientConfig with base_url and secret.",
       "Build ClientMessagesRequest with one or more ClientMessage values.",
+      "Set reasoning_effort only for a nonblank value declared by the resolved route, or omit it to retain the tenant default.",
       "Call post_messages and let the proxy route provider details.",
     ],
     features: [
       ["Messages request object", "Callers send system, user, and assistant messages in one typed request shape.", "Chat workflows avoid ad hoc JSON."],
       ["Optional order", "Messages can include order values when array order is not enough.", "The proxy sorts before routing."],
+      ["Reasoning-effort override", "ClientMessagesRequest serializes an optional nonblank reasoning_effort value.", "The proxy validates it against the exact resolved provider/model capability."],
       ["Transport context", "Python client errors include non-secret provider, model, and timeout context.", "Debugging avoids leaking credentials."],
     ],
     examples: [
       ["Scripted summary", "A Python script sends one user message to a configured provider default."],
       ["Transcript replay", "A workflow sends ordered chat messages for review."],
-      ["Provider test", "The client base URL includes provider=deepseek and the body omits model."],
+      ["Reasoning route", "The client targets provider=openai with gpt-5.5 and reasoning_effort=high for one supported request."],
     ],
     limitations: [
       "The package is v2-only for text requests.",
@@ -1015,12 +1023,12 @@ if err != nil {
     ],
     repoExample: {
       source: "README.md",
-      verifiedOn: CLIENT_DOCUMENTATION_MODIFIED_DATE,
+      verifiedOn: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE,
       code: `from llm_proxy_client import Client, ClientConfig, ClientMessagesRequest, ClientMessage
 
 client = Client(
     ClientConfig(
-        base_url="http://localhost:8080/?provider=gemini",
+        base_url="http://localhost:8080/?provider=openai",
         secret="mysecret",
     )
 )
@@ -1028,7 +1036,9 @@ client = Client(
 text = client.post_messages(
     ClientMessagesRequest(
         messages=(ClientMessage(role="user", content="Summarize this"),),
+        model="gpt-5.5",
         max_tokens=512,
+        reasoning_effort="high",
     )
 )`,
     },
@@ -1036,7 +1046,7 @@ text = client.post_messages(
   page({
     slug: "installable-llm-proxy-cli",
     category: "Clients",
-    modifiedDate: CLIENT_DOCUMENTATION_MODIFIED_DATE,
+    modifiedDate: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE,
     primaryKeyword: "installable LLM proxy CLI",
     title: "Installable LLM Proxy CLI for prompt workflows",
     description: "Use llm-proxy-client to send prompt text as canonical /v2 messages from the command line.",
@@ -1047,11 +1057,12 @@ text = client.post_messages(
       "Install with go install github.com/tyemirov/llm-proxy/llm-proxy-client@latest.",
       "Set --base-url and --secret, or use LLM_PROXY_BASE_URL and LLM_PROXY_SECRET.",
       "Send --prompt, --prompt-file, or stdin content.",
-      "Optionally include --system-prompt, --model, max tokens, or provider in the base URL.",
+      "Optionally include --system-prompt, --model, --max-tokens, or --reasoning-effort; keep provider in the base URL.",
     ],
     features: [
       ["Canonical POST /v2", "The CLI sends prompt input as v2 messages.", "CLI behavior matches reusable client behavior."],
       ["Environment support", "Base URL and secret can come from env for shell workflows.", "Prompt content can flow from stdin."],
+      ["Reasoning-effort flag", "The CLI serializes --reasoning-effort in the v2 JSON body.", "The server validates it against the resolved route rather than accepting a global option list."],
       ["Payload/query cleanup", "The client strips body-owned query fields and preserves non-payload query parameters.", "Provider selection can stay in the base URL."],
     ],
     examples: [
@@ -1066,10 +1077,12 @@ text = client.post_messages(
     ],
     repoExample: {
       source: "README.md",
-      verifiedOn: CLIENT_DOCUMENTATION_MODIFIED_DATE,
+      verifiedOn: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE,
       code: `llm-proxy-client \\
-  --base-url "http://localhost:8080/?provider=gemini" \\
+  --base-url "http://localhost:8080/?provider=openai" \\
   --secret "$SERVICE_SECRET" \\
+  --model "gpt-5.5" \\
+  --reasoning-effort "high" \\
   --prompt "Summarize this"`,
     },
   }),
@@ -2227,6 +2240,7 @@ Generated: ${currentResourceModifiedDate}
 | Usage dashboard | Selectable all-time, 30-day, 7-day, and 1-day usage summaries by request, token, provider, model, status, and time bucket. | README management UI section | High | Current | Yes |
 | API-served runtime config | Browser config comes from backend /config-ui.yaml, not a static Pages config artifact. | README hosted split-origin section | High | Current | Yes |
 | Bundled v2-only clients | Go package, Go CLI, and Python package send canonical /v2 messages for text. | README clients section | High | Current | Yes |
+| Public-page telemetry | Public static pages load Google Analytics and LoopAware page-view scripts. | site/index.html, resource generator | High | Current | Yes, with privacy caveat |
 | Worker/queue controls | server.workers limits upstream HTTP operations and queue_size limits pending operations. | README REST contract and config section | High | Current | Yes |
 
 ### Non-Capabilities, Limits, and Cautions
@@ -2237,6 +2251,7 @@ Generated: ${currentResourceModifiedDate}
 | Not every upstream feature is exposed | Provider adapters define current capabilities. | README provider and dictation matrices | Do not claim universal provider feature parity. |
 | Meta support is text-only | Muse Spark 1.1 uses the shared Chat Completions adapter. | README provider-specific details | Do not imply Meta dictation, web search, tools, multimodal inputs, or Responses fallback. |
 | Web search limited to configured OpenAI models | Other providers are marked unsupported. | README provider-specific details | Do not imply search across all providers. |
+| Third-party static-page telemetry | Public static pages load Google Analytics and LoopAware scripts. | site/index.html, resource generator | Do not claim collection, retention, consent, or opt-out behavior without approved legal or provider documentation. |
 | Live provider tests can spend money | Live smoke tests are not part of CI. | README local automation | Do not present live tests as routine CI. |
 | Management requires TAuth/database config | Self-service UI needs several hosted values. | README management UI and split-origin setup | Do not imply zero-config hosted management. |
 
