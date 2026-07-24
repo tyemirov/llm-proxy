@@ -15,6 +15,7 @@ FORMAT_QUERY_KEY = "format"
 FORMAT_QUERY_VALUE_TEXT_PLAIN = "text/plain"
 JSON_CONTENT_TYPE = "application/json; charset=utf-8"
 KEY_QUERY_KEY = "key"
+REQUEST_TIMEOUT_HEADER = "X-LLM-Proxy-Request-Timeout-Seconds"
 PROVIDER_QUERY_KEY = "provider"
 MODEL_PROFILE_MODEL_KEY = "model"
 MODEL_PROFILE_SUBJECT = "model_profile"
@@ -63,7 +64,7 @@ class LLMProxyTransportError(RuntimeError):
 class ResponseOpener(Protocol):
     """Callable that executes a prepared urllib request."""
 
-    def __call__(self, request: urllib.request.Request, timeout: float) -> str:
+    def __call__(self, request: urllib.request.Request) -> str:
         """Return decoded response text for the prepared request."""
 
 
@@ -92,7 +93,6 @@ class ClientConfig:
     base_url: str
     secret: str
     provider: str = ""
-    timeout_seconds: float = 390.0
     model_profile_path: str = ""
     model_profile_reader: ModelProfileReader | None = None
 
@@ -106,9 +106,6 @@ class ClientConfig:
             raise LLMProxyClientError("llm_proxy_client_invalid_config: base_url must include host")
         if not self.secret.strip():
             raise LLMProxyClientError("llm_proxy_client_invalid_config: missing secret")
-        if self.timeout_seconds <= 0:
-            raise LLMProxyClientError("llm_proxy_client_invalid_config: timeout_seconds must be positive")
-
         model_profile_path = self.model_profile_path.strip()
         if not model_profile_path and self.model_profile_reader is not None:
             raise LLMProxyClientError(
@@ -303,6 +300,7 @@ class ClientMessagesRequest:
     web_search: bool = False
     max_tokens: int | None = None
     reasoning_effort: str | None = None
+    request_timeout_seconds: int | None = None
 
     def __post_init__(self) -> None:
         if len(self.messages) == 0:
@@ -312,6 +310,14 @@ class ClientMessagesRequest:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: max_tokens must be positive")
         if self.reasoning_effort is not None and not self.reasoning_effort.strip():
             raise LLMProxyClientError("llm_proxy_client_invalid_request: reasoning_effort must be nonblank")
+        if self.request_timeout_seconds is not None and (
+            isinstance(self.request_timeout_seconds, bool)
+            or not isinstance(self.request_timeout_seconds, int)
+            or self.request_timeout_seconds <= 0
+        ):
+            raise LLMProxyClientError(
+                "llm_proxy_client_invalid_request: request_timeout_seconds must be a positive whole number"
+            )
 
     def body(self) -> dict[str, Any]:
         """Return the JSON body payload for this v2 request."""
@@ -375,26 +381,32 @@ class Client:
             return self._post_json(
                 request._body_with_model(model_profile.model),
                 self.config._messages_post_url_for_provider(model_profile.provider),
+                request.request_timeout_seconds,
             )
-        return self._post_json(request.body(), self.config.messages_post_url())
+        return self._post_json(request.body(), self.config.messages_post_url(), request.request_timeout_seconds)
 
-    def _post_json(self, request_payload: dict[str, Any], request_url: str) -> str:
+    def _post_json(
+        self, request_payload: dict[str, Any], request_url: str, request_timeout_seconds: int | None
+    ) -> str:
         """Send a JSON POST request payload and return the response text."""
 
         request_body = json.dumps(request_payload, ensure_ascii=False).encode("utf-8")
+        request_headers = {
+            ACCEPT_HEADER: FORMAT_QUERY_VALUE_TEXT_PLAIN,
+            CONTENT_TYPE_HEADER: JSON_CONTENT_TYPE,
+        }
+        if request_timeout_seconds is not None:
+            request_headers[REQUEST_TIMEOUT_HEADER] = str(request_timeout_seconds)
         prepared_request = urllib.request.Request(
             request_url,
             data=request_body,
-            headers={
-                ACCEPT_HEADER: FORMAT_QUERY_VALUE_TEXT_PLAIN,
-                CONTENT_TYPE_HEADER: JSON_CONTENT_TYPE,
-            },
+            headers=request_headers,
             method="POST",
         )
         opener = self.opener or default_response_opener
-        failure_context = request_failure_context(request_payload, request_url, self.config.timeout_seconds)
+        failure_context = request_failure_context(request_payload, request_url, request_timeout_seconds)
         try:
-            return opener(prepared_request, self.config.timeout_seconds)
+            return opener(prepared_request)
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", errors="replace")
             raise LLMProxyHTTPError(error.code, body, str(error.reason), failure_context) from error
@@ -412,7 +424,9 @@ class Client:
             ) from error
 
 
-def request_failure_context(request_payload: dict[str, Any], request_url: str, timeout_seconds: float) -> str:
+def request_failure_context(
+    request_payload: dict[str, Any], request_url: str, request_timeout_seconds: int | None
+) -> str:
     """Return non-secret request context for HTTP and transport failures."""
 
     parsed_url = urllib.parse.urlparse(request_url)
@@ -420,7 +434,8 @@ def request_failure_context(request_payload: dict[str, Any], request_url: str, t
     provider = first_query_value(query_values, PROVIDER_QUERY_KEY, "omitted")
     model_value = request_payload.get("model")
     model = model_value if isinstance(model_value, str) and model_value.strip() else "omitted"
-    return f"provider={provider} model={model} timeout_seconds={timeout_seconds:g}"
+    timeout_value = request_timeout_seconds if request_timeout_seconds is not None else "omitted"
+    return f"provider={provider} model={model} request_timeout_seconds={timeout_value}"
 
 
 def first_query_value(query_values: dict[str, list[str]], key: str, default: str) -> str:
@@ -435,9 +450,9 @@ def first_query_value(query_values: dict[str, list[str]], key: str, default: str
     return value
 
 
-def default_response_opener(request: urllib.request.Request, timeout: float) -> str:
+def default_response_opener(request: urllib.request.Request) -> str:
     """Execute a prepared urllib request and return decoded text."""
 
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    with urllib.request.urlopen(request) as response:
         response_body = cast(bytes, response.read())
         return response_body.decode("utf-8")

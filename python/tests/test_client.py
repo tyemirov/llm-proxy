@@ -36,6 +36,7 @@ class CapturedRequest:
     path: str = ""
     accept: str = ""
     content_type: str = ""
+    request_timeout: str = ""
     body: dict[str, Any] | None = None
 
 
@@ -58,6 +59,7 @@ class CapturingHandler(BaseHTTPRequestHandler):
             path=self.path,
             accept=self.headers.get("Accept", ""),
             content_type=self.headers.get("Content-Type", ""),
+            request_timeout=self.headers.get("X-LLM-Proxy-Request-Timeout-Seconds", ""),
             body=json.loads(raw_body),
         )
         type(self).captured_request = captured_request
@@ -147,6 +149,7 @@ def test_client_posts_v2_body_and_preserves_non_body_query(running_server: Runni
         ClientMessagesRequest(
             messages=(ClientMessage(role="user", content="Проверить текст"),),
             model="gpt-5.5",
+            request_timeout_seconds=27,
         )
     )
 
@@ -157,6 +160,7 @@ def test_client_posts_v2_body_and_preserves_non_body_query(running_server: Runni
     assert captured_request.method == "POST"
     assert captured_request.accept == "text/plain"
     assert captured_request.content_type == "application/json; charset=utf-8"
+    assert captured_request.request_timeout == "27"
     assert parsed_path.path == "/review/v2"
     assert query_values["key"] == ["test-secret"]
     assert query_values["format"] == ["text/plain"]
@@ -192,6 +196,7 @@ def test_client_omits_model_when_request_uses_provider_default(running_server: R
     assert parsed_path.path == "/review/v2"
     assert query_values["provider"] == ["gemini"]
     assert "model" not in query_values
+    assert captured_request.request_timeout == ""
     assert captured_request.body == {
         "messages": [{"role": "user", "content": "Use provider default"}],
         "web_search": False,
@@ -423,7 +428,6 @@ def test_client_posts_v2_messages_body(running_server: RunningServer) -> None:
         ({"base_url": "ftp://example.test", "secret": "sekret"}, "base_url must use http or https"),
         ({"base_url": "http://", "secret": "sekret"}, "base_url must include host"),
         ({"base_url": "http://example.test", "secret": ""}, "missing secret"),
-        ({"base_url": "http://example.test", "secret": "sekret", "timeout_seconds": 0}, "timeout_seconds must be positive"),
         (
             {"base_url": "http://example.test", "secret": "sekret", "model_profile_path": "/profiles/user.json"},
             "model_profile_path requires model_profile_reader",
@@ -512,6 +516,18 @@ def test_config_validation_errors(config_kwargs: dict[str, object], expected_err
             {"messages": (ClientMessage(role="user", content="prompt"),), "reasoning_effort": ""},
             "reasoning_effort must be nonblank",
         ),
+        (
+            {"messages": (ClientMessage(role="user", content="prompt"),), "request_timeout_seconds": 0},
+            "request_timeout_seconds must be a positive whole number",
+        ),
+        (
+            {"messages": (ClientMessage(role="user", content="prompt"),), "request_timeout_seconds": 1.5},
+            "request_timeout_seconds must be a positive whole number",
+        ),
+        (
+            {"messages": (ClientMessage(role="user", content="prompt"),), "request_timeout_seconds": True},
+            "request_timeout_seconds must be a positive whole number",
+        ),
     ],
 )
 def test_messages_request_validation_errors(request_kwargs: dict[str, object], expected_error: str) -> None:
@@ -545,7 +561,6 @@ def test_http_error_exposes_status_and_body(running_server: RunningServer) -> No
         ClientConfig(
             base_url=f"{running_server.url}/?provider=gemini",
             secret="test-secret",
-            timeout_seconds=12,
         )
     )
 
@@ -554,80 +569,83 @@ def test_http_error_exposes_status_and_body(running_server: RunningServer) -> No
             ClientMessagesRequest(
                 messages=(ClientMessage(role="user", content="prompt"),),
                 model="gpt-5-mini",
+                request_timeout_seconds=12,
             )
         )
 
     assert error_info.value.status_code == 502
     assert error_info.value.body == "upstream failed"
-    assert error_info.value.request_context == "provider=gemini model=gpt-5-mini timeout_seconds=12"
-    assert "provider=gemini model=gpt-5-mini timeout_seconds=12" in str(error_info.value)
+    assert error_info.value.request_context == "provider=gemini model=gpt-5-mini request_timeout_seconds=12"
+    assert "provider=gemini model=gpt-5-mini request_timeout_seconds=12" in str(error_info.value)
 
 
 def test_transport_error_is_typed() -> None:
     """Transport errors are surfaced separately from HTTP status errors."""
 
-    def failing_opener(request: urllib.request.Request, timeout: float) -> str:
+    def failing_opener(request: urllib.request.Request) -> str:
         raise urllib.error.URLError("network unavailable")
 
     client = Client(
         ClientConfig(
             base_url="http://example.test/?provider=gemini",
             secret="test-secret",
-            timeout_seconds=9,
         ),
         opener=failing_opener,
     )
 
     with pytest.raises(
         LLMProxyTransportError,
-        match="provider=gemini model=gpt-5-mini timeout_seconds=9.*network unavailable",
+        match="provider=gemini model=gpt-5-mini request_timeout_seconds=9.*network unavailable",
     ):
         client.post_messages(
             ClientMessagesRequest(
                 messages=(ClientMessage(role="user", content="prompt"),),
                 model="gpt-5-mini",
+                request_timeout_seconds=9,
             )
         )
 
 
-def test_read_timeout_is_typed_transport_error(running_server: RunningServer) -> None:
-    """Socket read timeouts are surfaced through the transport-error contract."""
+def test_transport_owned_timeout_is_typed_transport_error() -> None:
+    """An injected transport may still enforce its independently owned cancellation policy."""
 
-    CapturingHandler.response_delay_seconds = 0.3
+    def timing_out_opener(request: urllib.request.Request) -> str:
+        raise TimeoutError("transport timed out")
+
     client = Client(
-        ClientConfig(
-            base_url=running_server.url,
-            secret="test-secret",
-            timeout_seconds=0.05,
-        )
+        ClientConfig(base_url="http://example.test", secret="test-secret"),
+        opener=timing_out_opener,
     )
 
-    with pytest.raises(LLMProxyTransportError, match="provider=omitted model=omitted timeout_seconds=0.05.*timed out"):
+    with pytest.raises(
+        LLMProxyTransportError,
+        match="provider=omitted model=omitted request_timeout_seconds=omitted.*transport timed out",
+    ):
         client.post_messages(ClientMessagesRequest(messages=(ClientMessage(role="user", content="prompt"),)))
 
 
 def test_ssl_failure_is_typed_transport_error() -> None:
     """Raw socket and SSL style failures are surfaced through the transport-error contract."""
 
-    def failing_opener(request: urllib.request.Request, timeout: float) -> str:
+    def failing_opener(request: urllib.request.Request) -> str:
         raise OSError("record layer failure")
 
     client = Client(
         ClientConfig(
             base_url="http://example.test/?provider=openai",
             secret="test-secret",
-            timeout_seconds=240,
         ),
         opener=failing_opener,
     )
 
     with pytest.raises(
         LLMProxyTransportError,
-        match="provider=openai model=gpt-5.5 timeout_seconds=240.*record layer failure",
+        match="provider=openai model=gpt-5.5 request_timeout_seconds=240.*record layer failure",
     ):
         client.post_messages(
             ClientMessagesRequest(
                 messages=(ClientMessage(role="user", content="prompt"),),
                 model="gpt-5.5",
+                request_timeout_seconds=240,
             )
         )
