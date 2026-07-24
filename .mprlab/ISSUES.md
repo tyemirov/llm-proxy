@@ -9,14 +9,15 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 - `[ ]` open, `[-]` taken, `[!]` blocked, `[x]` closed.
 - Blocked issues (`[!]`) must include a `Blocked:` line in the body.
 
-Triage, 2026-07-23: execute M018 first, then M020, then F013. M020 consumes the
+Triage, 2026-07-24: execute M018 first, then M020, then F013. M020 consumes the
 activated MPR UI v3.11.3 surface through the canonical `@latest` integration
 contract and clears P005's remaining shared-library dependency. F014 follows
-F013, and I027 follows F014 because F014 replaces the singleton management
-profile and usage contracts it would otherwise consume. M019 follows M018, and
-M013 then M012 resolve the remaining governance path. P005 still waits for
-P002 and P004 and remains a deferred Planning item; recurring maintenance
-remains scheduled work.
+F013, and I027 and I031 follow F014 because F014 replaces the singleton
+management profile and usage contracts they would otherwise consume. I031 also
+follows I029 so its failure-detail operation enters the canonical OpenAPI
+contract. M019 follows M018, and M013 then M012 resolve the remaining
+governance path. P005 still waits for P002 and P004 and remains a deferred
+Planning item; recurring maintenance remains scheduled work.
 
 ## BugFixes
 
@@ -2054,6 +2055,103 @@ remains scheduled work.
   - Extended public static-site Playwright coverage for the guide, navigation,
     metadata, and sitemap date. Final `timeout -k 350s -s SIGKILL 350s make ci`
     validation passed.
+
+- [ ] [I031] (P1) {I029,F014} Add tenant-scoped failure details to the usage dashboard.
+  Goal:
+  Let a signed-in tenant owner open a selected-period **failed requests** link
+  from the success-rate metric and inspect safe, individual failure metadata.
+  A 55% success rate over 22 requests means 10 failed requests, but that is not
+  necessarily 10 provider failures: client validation and upstream/runtime
+  failures must remain distinguishable.
+
+  Evidence:
+  - Managed usage rows already retain event time, endpoint, provider, model,
+    HTTP status, success, and latency, while the current usage response already
+    aggregates `status_codes`; neither surface retains or renders a per-event
+    failure reason.
+  - F014 replaces the current singular management/usage API with canonical
+    tenant-scoped routes, and I029 makes OpenAPI the sole HTTP contract source.
+    A new unscoped endpoint now would be immediately obsolete.
+
+  Requirements:
+  - Implement only after I029 and F014. Use F014's canonical tenant-scoped
+    management contract; do not add an unscoped endpoint, alias, compatibility
+    response, dual read, or client fallback.
+  - Add exactly one owner-only operation:
+    `GET /api/management/tenants/:tenant_id/usage/failures`.
+    It requires exactly one `interval=all|30d|7d|1d`, accepts optional single
+    `limit` (default 25, inclusive range 1-100) and opaque `cursor`, and
+    rejects missing, repeated, malformed, or unknown query fields with `400`.
+    Scope every query by both authenticated owner and tenant id; a missing or
+    foreign tenant returns the same `404` used by F014.
+  - Return newest-first failure rows with a stable `(created_at, id)` cursor and
+    an opaque snapshot boundary. Each row contains only `occurred_at`,
+    `endpoint`, `provider`, `model`, `status_code`, `outcome_code`, and
+    `latency_ms`; do not expose row ids, tenant/user ids, prompts, responses,
+    audio, transcripts, client secrets, provider keys, raw upstream bodies, or
+    free-form error text.
+  - Introduce one nonblank canonical `outcome_code` for every usage event:
+    `success`, `invalid_request`, `payload_too_large`, `rate_limited`,
+    `service_unavailable`, `request_timeout`, or `upstream_error`. Construct it
+    at the request/error boundary alongside the HTTP status, persist it once,
+    and use it for the details response. Never persist `error.Error()` or any
+    provider response text.
+  - Add one bounded, versioned GORM migration after F014's tenant migration.
+    Populate every historical usage row from its status: successful rows become
+    `success`; `400`, `413`, `429`, `503`, `504`, and `502` map to their exact
+    canonical failure codes. Preflight and reject a row with any other status
+    rather than leaving a blank/unknown value. Keep one current schema and add
+    the tenant/success/time/id index needed for the failure-page query.
+  - Refactor managed validation and upstream-error recording so every
+    authenticated managed proxy outcome has an explicit code before it is
+    written. Keep the caller's current response behavior intact, but do not use
+    its message as dashboard telemetry.
+  - In the user dashboard, keep the existing selected interval and render a
+    visible, keyboard-operable **N failed requests** action inside the success
+    metric only when failures exist. It opens a semantic, focus-managed failure
+    details dialog with the existing non-success status-code breakdown, safe
+    code/status labels, rows, loading/empty/error states, and a **Load more**
+    action. A failed details request clears only that dialog's state and cannot
+    replace a current tenant's main dashboard data.
+  - Derive user-facing labels only from centralized frontend copy/constants or
+    backend payload values. Preserve F014 tenant request identity/cancellation
+    rules so an out-of-order details response cannot appear for a different
+    tenant or interval. Keep the admin surface aggregate-only; it must not
+    expose another tenant's failure rows.
+  - Update `docs/openapi.yaml`, management types/client, README, provider
+    routing documentation, and any generator-owned public usage documentation
+    from the final single API contract. Document that historical rows receive
+    normalized status-derived codes, not reconstructed raw error messages.
+
+  Deliverables:
+  - Tenant-scoped failure-event query, cursor domain type, outcome-code domain
+    type, indexed current-schema migration, and safe request-boundary recording.
+  - The failure-details dialog, central copy/types/client methods, responsive
+    styles, and selected-interval/status-summary presentation.
+  - Canonical OpenAPI and product documentation describing the operation,
+    response, privacy boundary, and safe diagnostic vocabulary.
+
+  Validation:
+  - Add black-box HTTP coverage through the real management router for interval
+    validation, owner/tenant isolation, newest-first stable pagination, all
+    supported outcome codes, zero failures, and absence of every prohibited
+    sensitive field.
+  - Exercise public managed proxy requests that yield validation, payload-size,
+    rate-limit, unavailable, timeout, and upstream failures; prove each stores
+    the exact safe code and a success stores `success`, without persisting a raw
+    error message.
+  - Run the real SQLite and PostgreSQL migration paths with historical events;
+    prove exact code backfill, index creation, totals preservation, contextual
+    rejection/rollback for an unsupported status, and no obsolete nullable or
+    compatibility path.
+  - Add Playwright coverage for 10 failures from 22 requests, zero-failure link
+    absence, interval changes, tenant switching, pagination, loading/error and
+    stale-response states, keyboard/focus behavior, mobile layout, and no
+    secret-bearing or raw-error text in rendered DOM or browser storage.
+  - Prove the exact new operation and exchanges conform to `docs/openapi.yaml`,
+    then run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last code edit.
 
 - [ ] [I029] (P1) {B068} Publish one canonical OpenAPI contract and enforce server/client conformance.
   Goal:
