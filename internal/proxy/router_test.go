@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
@@ -186,39 +187,114 @@ func TestChatHandlerAcceptsJSONBody(testingInstance *testing.T) {
 	}
 }
 
-func TestChatHandlersRejectPublicReasoningEffortParameter(testingInstance *testing.T) {
-	mockServer := NewSessionMockServer(`{"status":"completed","output_text":"unused"}`)
+func TestChatHandlersApplyPublicReasoningEffortOverTenantDefault(testingInstance *testing.T) {
+	var capturedPayloads []map[string]any
+	mockServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		bodyBytes, readError := io.ReadAll(httpRequest.Body)
+		if readError != nil {
+			testingInstance.Fatalf("read request body: %v", readError)
+		}
+		var payload map[string]any
+		if unmarshalError := json.Unmarshal(bodyBytes, &payload); unmarshalError != nil {
+			testingInstance.Fatalf("unmarshal request body: %v", unmarshalError)
+		}
+		capturedPayloads = append(capturedPayloads, payload)
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"id":"public-reasoning","status":"completed","output_text":"reviewed"}`))
+	}))
 	testingInstance.Cleanup(mockServer.Close)
-	router := NewTestRouter(testingInstance, mockServer.URL)
+
+	endpoints := proxy.NewEndpoints()
+	endpoints.SetResponsesURL(mockServer.URL)
+	defaults := proxy.DefaultTenantDefaults()
+	defaults.Model = proxy.ModelNameGPT55
+	defaults.ReasoningEffort = "xhigh"
+	router, buildError := buildRouterWithCatalogs(testingInstance, proxy.Configuration{
+		Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, defaults),
+		OpenAIKey:             TestAPIKey,
+		LogLevel:              proxy.LogLevelDebug,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+		Endpoints:             endpoints,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		testingInstance.Fatalf(messageBuildRouterError, buildError)
+	}
 
 	testCases := []struct {
-		name string
-		path string
-		body string
+		name           string
+		method         string
+		path           string
+		body           string
+		expectedEffort string
 	}{
-		{
-			name: "root request",
-			path: "/?key=" + TestSecret,
-			body: `{"prompt":"public effort is unsupported","reasoning_effort":"low"}`,
-		},
-		{
-			name: "v2 request",
-			path: "/v2?key=" + TestSecret,
-			body: `{"messages":[{"role":"user","content":"public effort is unsupported"}],"reasoning_effort":"low"}`,
-		},
+		{name: "GET query", method: http.MethodGet, path: "/?key=" + TestSecret + "&prompt=review&reasoning_effort=high", expectedEffort: "high"},
+		{name: "root JSON", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","reasoning_effort":"high"}`, expectedEffort: "high"},
+		{name: "v2 JSON", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"reasoning_effort":"high"}`, expectedEffort: "high"},
+		{name: "omitted field", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}]}`, expectedEffort: "xhigh"},
 	}
-	for _, testCase := range testCases {
+	for requestIndex, testCase := range testCases {
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
-			request := httptest.NewRequest(http.MethodPost, testCase.path, bytes.NewBufferString(testCase.body))
-			request.Header.Set("Content-Type", "application/json")
+			request := httptest.NewRequest(testCase.method, testCase.path, strings.NewReader(testCase.body))
+			if testCase.method == http.MethodPost {
+				request.Header.Set("Content-Type", "application/json")
+			}
 			response := httptest.NewRecorder()
 
 			router.ServeHTTP(response, request)
 
-			if response.Code != http.StatusBadRequest {
-				subTest.Fatalf("status=%d want=%d body=%s", response.Code, http.StatusBadRequest, response.Body.String())
+			if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != "reviewed" {
+				subTest.Fatalf("status=%d body=%q", response.Code, response.Body.String())
+			}
+			reasoning, hasReasoning := capturedPayloads[requestIndex]["reasoning"].(map[string]any)
+			if !hasReasoning || reasoning["effort"] != testCase.expectedEffort {
+				subTest.Fatalf("upstream reasoning=%v want=%q", capturedPayloads[requestIndex]["reasoning"], testCase.expectedEffort)
 			}
 		})
+	}
+}
+
+func TestChatHandlersRejectUnsupportedPublicReasoningEffortBeforeUpstreamRequest(testingInstance *testing.T) {
+	var upstreamRequests atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		upstreamRequests.Add(1)
+		responseWriter.WriteHeader(http.StatusInternalServerError)
+	}))
+	testingInstance.Cleanup(mockServer.Close)
+	router := NewTestRouter(testingInstance, mockServer.URL)
+
+	testCases := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{name: "GET query", method: http.MethodGet, path: "/?key=" + TestSecret + "&prompt=review&model=" + proxy.ModelNameGPT41 + "&reasoning_effort=high"},
+		{name: "root JSON", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + proxy.ModelNameGPT41 + `","reasoning_effort":"high"}`},
+		{name: "v2 JSON", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + proxy.ModelNameGPT41 + `","reasoning_effort":"high"}`},
+		{name: "supported route with unsupported effort", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + proxy.ModelNameGPT55 + `","reasoning_effort":"max"}`},
+		{name: "GET blank effort", method: http.MethodGet, path: "/?key=" + TestSecret + "&prompt=review&model=" + proxy.ModelNameGPT55 + "&reasoning_effort="},
+		{name: "root JSON blank effort", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + proxy.ModelNameGPT55 + `","reasoning_effort":""}`},
+		{name: "v2 JSON blank effort", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + proxy.ModelNameGPT55 + `","reasoning_effort":""}`},
+	}
+	for _, testCase := range testCases {
+		testingInstance.Run(testCase.name, func(subTest *testing.T) {
+			request := httptest.NewRequest(testCase.method, testCase.path, strings.NewReader(testCase.body))
+			if testCase.method == http.MethodPost {
+				request.Header.Set("Content-Type", "application/json")
+			}
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "invalid reasoning_effort parameter") {
+				subTest.Fatalf("status=%d body=%q", response.Code, response.Body.String())
+			}
+		})
+	}
+	if upstreamRequests.Load() != 0 {
+		testingInstance.Fatalf("upstream requests=%d want=0", upstreamRequests.Load())
 	}
 }
 

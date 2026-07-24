@@ -182,11 +182,14 @@ credential boundary. MiniMax M2.7 maps public `max_tokens` to
 `max_completion_tokens` and carries a configured 2048-token output ceiling.
 GLM-5.2 remains on the existing BigModel/Zhipu Chat Completions endpoint. Its
 128K output maximum is catalog metadata; optional `thinking` and
-`reasoning_effort` controls are not part of the public proxy request contract.
-The distinct tenant routing-default `reasoning_effort` can be forwarded only
-through an explicit catalog capability mapping. The current mapping is the
-OpenAI Responses reasoning adapter; it does not enable GLM or generic
-OpenAI-compatible routes.
+provider-native `reasoning_effort` controls are not exposed directly. The
+canonical proxy `reasoning_effort` request field is validated against the exact
+resolved provider/model capability and translated only through its configured
+adapter. A supplied value must be nonblank and exact and takes precedence over
+the tenant routing default; an omitted value uses that default. The current
+mapping is the OpenAI Responses reasoning adapter, so a blank or unsupported
+effort fails closed for GLM and generic OpenAI-compatible routes instead of
+being ignored or leaked downstream.
 
 OpenAI `request_profile` values select stable payload shapes:
 
@@ -204,6 +207,9 @@ Bundled clients intentionally expose only the canonical `POST /v2` text
 contract. The installable Go CLI maps prompt flags or stdin into v2 `system` and
 `user` messages, while the reusable Go and Python packages expose only
 messages-request constructors and `PostMessages`/`post_messages` send methods.
+Their optional `reasoning_effort` input serializes the same canonical field;
+the clients reject only blank local input and leave exact model-capability
+validation to the proxy edge.
 When a bundled-client request omits `model`, it deliberately sends no model
 field and delegates selection to the authenticated tenant or selected provider.
 The server keeps `GET /` and compatibility JSON `POST /` available for direct

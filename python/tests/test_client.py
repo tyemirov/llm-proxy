@@ -137,7 +137,7 @@ def test_client_posts_v2_body_and_preserves_non_body_query(running_server: Runni
         ClientConfig(
             base_url=(
                 f"{running_server.url}/review?"
-                "prompt=old&model=old&max_tokens=9&web_search=true&provider=gemini&keep=1"
+                "prompt=old&model=old&max_tokens=9&reasoning_effort=old&web_search=true&provider=gemini&keep=1"
             ),
             secret="test-secret",
         )
@@ -162,7 +162,7 @@ def test_client_posts_v2_body_and_preserves_non_body_query(running_server: Runni
     assert query_values["format"] == ["text/plain"]
     assert query_values["provider"] == ["gemini"]
     assert query_values["keep"] == ["1"]
-    for stripped_query_key in ("prompt", "model", "max_tokens", "web_search"):
+    for stripped_query_key in ("prompt", "model", "max_tokens", "reasoning_effort", "web_search"):
         assert stripped_query_key not in query_values
     assert captured_request.body == {
         "messages": [{"role": "user", "content": "Проверить текст"}],
@@ -362,6 +362,7 @@ def test_client_overrides_provider_and_sends_optional_v2_body_fields(running_ser
             ),
             web_search=True,
             max_tokens=42,
+            reasoning_effort="high",
         )
     )
 
@@ -379,6 +380,7 @@ def test_client_overrides_provider_and_sends_optional_v2_body_fields(running_ser
         ],
         "web_search": True,
         "max_tokens": 42,
+        "reasoning_effort": "high",
     }
 
 
@@ -505,6 +507,10 @@ def test_config_validation_errors(config_kwargs: dict[str, object], expected_err
         (
             {"messages": (ClientMessage(role="user", content="prompt"),), "max_tokens": 0},
             "max_tokens must be positive",
+        ),
+        (
+            {"messages": (ClientMessage(role="user", content="prompt"),), "reasoning_effort": ""},
+            "reasoning_effort must be nonblank",
         ),
     ],
 )

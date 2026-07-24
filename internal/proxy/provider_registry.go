@@ -322,9 +322,13 @@ func validateReasoningEffortForResolvedTextRoute(provider providerDefinition, mo
 		return nil
 	}
 	if !model.reasoningEffort.supports(effort) {
-		return fmt.Errorf("%w: provider=%s model=%s capability=reasoning_effort effort=%s", ErrUnsupportedCapability, provider.identifier.string(), model.string(), effort)
+		return unsupportedReasoningEffortError(provider, model, effort)
 	}
 	return nil
+}
+
+func unsupportedReasoningEffortError(provider providerDefinition, model textModelDefinition, effort string) error {
+	return fmt.Errorf("%w: provider=%s model=%s capability=reasoning_effort effort=%s", ErrUnsupportedCapability, provider.identifier.string(), model.string(), effort)
 }
 
 func (registry *providerRegistry) resolveTextRequest(rawProvider string, rawModel string, defaultProvider string, defaultModel string, webSearchEnabled bool) (providerDefinition, textModelDefinition, error) {

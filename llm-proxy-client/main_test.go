@@ -83,7 +83,7 @@ func TestCommandPostsPromptAsV2UserMessage(t *testing.T) {
 	var stderr bytes.Buffer
 	exitCode := run(
 		[]string{
-			"--base-url", server.URL + "/review?prompt=old&model=old&max_tokens=9&web_search=true&provider=gemini&keep=1",
+			"--base-url", server.URL + "/review?prompt=old&model=old&max_tokens=9&reasoning_effort=old&web_search=true&provider=gemini&keep=1",
 			"--secret", "test-secret",
 			"--model", " 5.5 ",
 			"--prompt", "Проверить текст",
@@ -129,7 +129,7 @@ func TestCommandPostsPromptAsV2UserMessage(t *testing.T) {
 	if queryValues.Get("keep") != "1" {
 		t.Fatalf("keep=%q", queryValues.Get("keep"))
 	}
-	for _, removedQueryKey := range []string{"prompt", "model", "max_tokens", "web_search"} {
+	for _, removedQueryKey := range []string{"prompt", "model", "max_tokens", "reasoning_effort", "web_search"} {
 		if queryValues.Has(removedQueryKey) {
 			t.Fatalf("query key %s should have been removed", removedQueryKey)
 		}
@@ -214,6 +214,7 @@ func TestCommandReadsPromptFileAndOptionalBodyFields(t *testing.T) {
 			"--web-search",
 			"--system-prompt", "Be terse.",
 			"--max-tokens", "42",
+			"--reasoning-effort", "high",
 			"--timeout", "2s",
 		},
 		strings.NewReader(""),
@@ -245,6 +246,7 @@ func TestCommandReadsPromptFileAndOptionalBodyFields(t *testing.T) {
 		`"messages":[{"content":"Be terse.","role":"system"},{"content":"file prompt","role":"user"}]`,
 		`"web_search":true`,
 		`"max_tokens":42`,
+		`"reasoning_effort":"high"`,
 	} {
 		if !strings.Contains(capturedRequest.body, expectedBodyFragment) {
 			t.Fatalf("body=%s missing %s", capturedRequest.body, expectedBodyFragment)
@@ -461,6 +463,12 @@ func TestCommandRejectsInvalidInputs(t *testing.T) {
 			arguments:   []string{"--base-url", "http://example.test", "--secret", "sekret", "--prompt", "prompt", "--max-tokens", "-1"},
 			stdin:       strings.NewReader(""),
 			errorString: "max_tokens must be positive",
+		},
+		{
+			name:        "blank reasoning effort",
+			arguments:   []string{"--base-url", "http://example.test", "--secret", "sekret", "--prompt", "prompt", "--reasoning-effort", ""},
+			stdin:       strings.NewReader(""),
+			errorString: "reasoning_effort must be nonblank",
 		},
 		{
 			name:        "missing prompt file",

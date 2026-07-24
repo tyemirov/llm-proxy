@@ -16,6 +16,7 @@ client.
   - `POST /dictate?key=...[&provider=...]` for audio transcription
 - Choose the provider per request via `provider=...`; omitted provider uses the authenticated tenant default
 - Choose the model per request via `model=...`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
+- Set optional nonblank `reasoning_effort=...` on `GET /`, or in a JSON body for `POST /` and `POST /v2`, to select a capability-supported reasoning level for that exact resolved route. An explicit value overrides the tenant default; an omitted value retains it. Blank or unsupported values fail before an upstream call.
 - Choose the dictation model per request via `model=...` on `/dictate`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
 - Optional per-request web search via `web_search=1|true|yes` when the selected provider/model is configured to support it
 - Optional logging at `debug` or `info` levels
@@ -373,10 +374,11 @@ The transport deliberately omits sampling controls because Kimi K3 fixes those
 values upstream.
 GLM-5.2 uses the existing BigModel/Zhipu Chat Completions endpoint with a
 configured 131072-token output cap; its optional `thinking` and
-`reasoning_effort` controls remain outside the public request contract. The
-proxy's saved tenant `reasoning_effort` default is separate: it is forwarded
-only when a resolved route has an explicit catalog mapping, never to GLM or a
-generic compatible-provider adapter.
+provider-native `reasoning_effort` controls are not exposed directly. The
+proxy's provider-neutral request-level `reasoning_effort` is accepted only when
+the exact resolved route declares a capability mapping. Blank values and
+supplied values for GLM or generic compatible-provider routes fail before an
+upstream call; an omitted field retains the supported tenant default.
 Qwen Cloud Token Plan is separate from DashScope: select `qwencloud` with a
 dedicated `${QWEN_CLOUD_TOKEN_PLAN_API_KEY}` and its token-plan base URL; the
 existing `qwen` alias remains DashScope-only. MiniMax M2.7 uses

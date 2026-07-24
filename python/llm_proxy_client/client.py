@@ -25,6 +25,7 @@ POST_BODY_QUERY_KEYS = frozenset(
         MODEL_PROFILE_MODEL_KEY,
         "max_output_tokens",
         "max_tokens",
+        "reasoning_effort",
         "prompt",
         "system_prompt",
         "web_search",
@@ -301,6 +302,7 @@ class ClientMessagesRequest:
     model: str = ""
     web_search: bool = False
     max_tokens: int | None = None
+    reasoning_effort: str | None = None
 
     def __post_init__(self) -> None:
         if len(self.messages) == 0:
@@ -308,6 +310,8 @@ class ClientMessagesRequest:
         validate_messages(self.messages)
         if self.max_tokens is not None and self.max_tokens <= 0:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: max_tokens must be positive")
+        if self.reasoning_effort is not None and not self.reasoning_effort.strip():
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: reasoning_effort must be nonblank")
 
     def body(self) -> dict[str, Any]:
         """Return the JSON body payload for this v2 request."""
@@ -325,6 +329,8 @@ class ClientMessagesRequest:
             payload[MODEL_PROFILE_MODEL_KEY] = model
         if self.max_tokens is not None:
             payload["max_tokens"] = self.max_tokens
+        if self.reasoning_effort is not None:
+            payload["reasoning_effort"] = self.reasoning_effort
         return payload
 
 

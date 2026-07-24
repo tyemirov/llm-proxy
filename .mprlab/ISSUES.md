@@ -20,6 +20,41 @@ remains scheduled work.
 
 ## BugFixes
 
+- [x] [B068] (P1) Let text callers select a capability-validated reasoning effort.
+  Goal:
+  Make `reasoning_effort` an optional canonical text-request parameter, rather than a tenant-wide setting that every caller must inherit. An omitted request must retain the resolved tenant default; an explicit request must override it only when the exact resolved provider/model capability supports that value.
+
+  Evidence:
+  - Kamu F001 source-world review for `neblagodarnost` reached the active llm-proxy tenant using `gpt-5.5`, but returned `504` with zero generated tokens while the tenant default was `xhigh`.
+  - The same story set had previously completed source-world work with the same model, and the current review is a bounded application task rather than a tenant-wide policy change.
+  - The public request parser currently rejects `reasoning_effort` as an unknown JSON field (`TestChatHandlersRejectPublicReasoningEffortParameter`), while `chatRequestParameters` derives effort only from `TenantDefaults.ReasoningEffort`.
+  - Model catalogs already declare exact supported effort values and adapter mappings, and `validateReasoningEffortForResolvedTextRoute` already validates a provider/model route. The missing capability is public request ownership and precedence.
+
+  Requirements:
+  - Add optional `reasoning_effort` to the canonical text contract for `GET /`, compatibility `POST /`, and canonical `POST /v2`.
+  - Preserve the existing tenant routing default only when the request omits the field. A supplied value must be nonblank and exact and must fail closed with HTTP 400 before any provider call when the resolved route does not support it.
+  - Keep provider translation inside the model-capability adapter. Do not expose OpenAI, OpenAI-compatible, or other provider-specific field names to callers; unsupported providers must not silently ignore a supplied effort.
+  - Extend the bundled Go and Python v2 clients, and the Go CLI, to serialize the same optional field. Client libraries may reject blank local input but must leave model-specific capability validation to llm-proxy.
+  - Replace the obsolete public-field rejection test with no-spend regression coverage for explicit override, omitted-default preservation, unsupported-route rejection, and client serialization.
+  - Update the REST and provider-routing documentation. Do not raise global timeouts or mutate a tenant default as a workaround.
+
+  Validation:
+  - A `gpt-5.5` v2 request with tenant default `xhigh` and request `reasoning_effort: "high"` produces exactly OpenAI's mapped `reasoning.effort: "high"` upstream.
+  - An omitted request field continues to produce the supported tenant default.
+  - A blank effort, a supplied unsupported effort on a reasoning route, or any supplied effort on a non-reasoning route returns HTTP 400 and reaches no provider transport.
+  - `timeout -k 350s -s SIGKILL 350s make ci` passes.
+
+  Resolution:
+  - The public canonical text contract now accepts optional `reasoning_effort` on `GET /`, compatibility `POST /`, and `POST /v2`. When omitted, the resolved tenant default remains authoritative; when supplied, the request value takes precedence only after exact resolved-route capability validation.
+  - The request remains provider-neutral. LLM Proxy rejects blank values, performs the provider/model capability check and adapter translation, and returns HTTP 400 before provider transport for unsupported request values.
+  - The bundled Go and Python v2 clients and the Go CLI serialize the same optional field. The JSON v2 client body is canonical and does not retain a stale query-string copy.
+  - README and provider-routing documentation describe precedence, validation, and the provider-neutral caller contract.
+
+  Implementation validation:
+  - No-spend HTTP coverage proves explicit `high` overrides a tenant `xhigh` default, an omitted field preserves that default, and blank, unsupported-value, and unsupported-route requests return HTTP 400 without an upstream request.
+  - Go, Python, and CLI client coverage proves canonical serialization and rejects blank local input.
+  - The required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed, including static analysis, race-tested Go coverage, Python tests, frontend tests, release-tooling tests, and live-provider harness preflight.
+
 - [x] [B001] (P2) Make management request examples copyable and provider-specific.
   ### Summary
   The Settings modal renders request examples as one inert snippet. Users need default examples and selected-provider examples as separate copyable commands so they can copy the exact public proxy request shape they intend to use.
