@@ -163,6 +163,12 @@ settings-section {
   font-size: 0.78rem;
 }
 
+.public-resource-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .public-resource-link a,
 .resource-button {
   display: inline-flex;

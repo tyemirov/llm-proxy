@@ -20,7 +20,7 @@
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Tenant-secret AI gateway for internal applications","description":"Give client apps one llm-proxy tenant secret while the service owns provider credentials and routing.","url":"https://llm-proxy.mprlab.com/resources/tenant-secret-ai-gateway/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/tenant-secret-ai-gateway/","about":["LLM Proxy","Security","tenant secret AI gateway"]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Tenant-secret AI gateway for internal applications","item":"https://llm-proxy.mprlab.com/resources/tenant-secret-ai-gateway/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of tenant secret AI gateway?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy keeps public proxy requests authenticated by key=<tenant secret>, then applies the tenant's configured defaults and server-side provider credentials."}},{"@type":"Question","name":"Who should read this security resource?","acceptedAnswer":{"@type":"Answer","text":"Teams building internal apps that need a single guarded AI service boundary."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Keep provider API keys server-side for LLM apps, which covers server-side provider API keys."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of tenant secret AI gateway?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy keeps public proxy requests authenticated by key=<tenant secret>, then applies the tenant's configured defaults and server-side provider credentials."}},{"@type":"Question","name":"Who should read this security resource?","acceptedAnswer":{"@type":"Answer","text":"Teams building internal apps that need a single guarded AI service boundary."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Authenticate an LLM Proxy client with a tenant secret, which covers LLM Proxy client authentication."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="resource-page">
@@ -29,6 +29,7 @@
         <a class="resource-brand" href="/">LLM Proxy</a>
         <nav aria-label="Resource navigation">
           <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
           <a href="/">Main page</a>
         </nav>
       </header>
@@ -173,7 +174,7 @@
 
                     <details>
                       <summary>What should I read next?</summary>
-                      <p>A closely related resource is Keep provider API keys server-side for LLM apps, which covers server-side provider API keys.</p>
+                      <p>A closely related resource is Authenticate an LLM Proxy client with a tenant secret, which covers LLM Proxy client authentication.</p>
                     </details>
 
             </div>
@@ -182,6 +183,12 @@
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
+
+                    <a class="resource-related" href="/resources/llm-proxy-client-authentication/">
+                      <span>Clients</span>
+                      <strong>Authenticate an LLM Proxy client with a tenant secret</strong>
+                    </a>
+
 
                     <a class="resource-related" href="/resources/server-side-provider-api-keys/">
                       <span>Security</span>
@@ -213,6 +220,7 @@
       <footer class="resource-shell resource-footer">
         <a href="/">LLM Proxy main page</a>
         <a href="/resources/">Resource hub</a>
+        <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
 
