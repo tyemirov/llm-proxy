@@ -570,6 +570,7 @@ export function createKeyManagement() {
         throw new Error(`usage_interval_invalid:${interval}`);
       }
       this.selectedUsageInterval = interval;
+      this.usage = emptyUsageSummary(interval);
       await this.loadUsageSummary(false);
     },
 

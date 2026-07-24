@@ -2908,6 +2908,13 @@ remains scheduled work.
   Required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs
   passed with 100% Go aggregate coverage, 30 Python tests, 46 frontend tests,
   one real-stack browser test, 47 release tests, and the live harness preflight.
+  Follow-up review correction: the canonical staged deployment profile
+  `.mprlab/deploy/.env` now defines
+  `LLM_PROXY_MANAGEMENT_TAUTH_SESSION_PATH=/auth/session` alongside the tracked
+  sample, so the strict management config expansion has the required runtime
+  value. The required post-change `timeout -k 350s -s SIGKILL 350s make ci`
+  passed with 100% Go coverage, 49 frontend tests, the real TAuth management
+  black-box test, 47 release tests, and the live-provider harness preflight.
 
 
 ## Features
@@ -3134,6 +3141,18 @@ remains scheduled work.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
   ### Resolution
   Added the validated `all`, `30d`, `7d`, and `1d` usage-interval domain, tenant-isolated finite/all GORM queries, one-timestamp aggregation, and the forward-only user response with `interval`, `bucket_unit`, and ordered `buckets`; missing, repeated, and unknown intervals now return `400`, while the administrator response remains a separate fixed 30-day contract. Added the ordered accessible interval control with a `30 days` default, selected-snapshot rendering across every dashboard surface, selection-preserving refresh, loading locks, failure clearing, and response-version protection against stale requests. Updated frontend types, generic chart presentation, README, provider-routing documentation, and the generated usage resource. Tests were written first and captured the missing interval domain/UI before implementation. Focused validation passed with `make go-test` at 100% aggregate coverage, `make frontend-lint`, `make frontend-test` (49 tests), and `make test-management-auth-blackbox` (1 real-stack test). The required pre-change and post-change `make ci` runs passed; the final gate also passed 30 Python tests, 47 release tests, and live-provider harness preflight.
+  Follow-up review correction: finite and all-time usage reads now consume
+  fixed-size GORM batches after releasing the shared tenant-store mutex, so a
+  lifetime query no longer materializes every retained event or blocks managed
+  writes for its scan. Selecting an interval now clears the prior snapshot in
+  the same transition that activates the new control, preventing old totals
+  from appearing under a new interval while its response is pending. Database
+  coverage crosses the read-batch boundary, and Playwright holds a selection
+  response open while asserting the selected control and cleared dashboard stay
+  synchronized. The required post-change
+  `timeout -k 350s -s SIGKILL 350s make ci` passed with 100% aggregate Go
+  coverage, 30 Python tests, 49 frontend tests, the real-stack TAuth management
+  test, 47 release tests, and live-provider harness preflight.
 
 - [ ] [F014] (P1) {B036,I025,F011,F013} Support multiple isolated tenants per managed user.
   Goal:

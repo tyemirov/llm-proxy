@@ -611,30 +611,44 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
   await installManagementRoutes(page);
   await page.goto(baseURL);
   await page.unroute(usageRequestPattern());
+  /** @type {() => void} */
+  let releaseSevenDayResponse = () => {};
+  const sevenDayResponseGate = new Promise((resolve) => {
+    releaseSevenDayResponse = () => resolve(undefined);
+  });
   await page.route(usageRequestPattern(), async (route) => {
     const interval = new URL(route.request().url()).searchParams.get("interval") || "";
-    await new Promise((resolve) => setTimeout(resolve, interval === "7d" ? 250 : 20));
+    if (interval === "7d") {
+      await sevenDayResponseGate;
+    }
     await route.fulfill({ status: httpOK, json: managementUsage(interval) });
   });
 
   const intervalGroup = page.getByRole("group", { name: "Usage interval" });
   const sevenDayButton = intervalGroup.getByRole("button", { name: "7 days" });
-  await sevenDayButton.click();
-  for (const intervalButton of await intervalGroup.getByRole("button").all()) {
-    await expect(intervalButton).toBeDisabled();
-  }
-  await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeDisabled();
-  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
-    const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
-    const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
-    if (!applicationState) {
-      throw new Error("usage_interval_state_missing");
+  try {
+    await sevenDayButton.click();
+    for (const intervalButton of await intervalGroup.getByRole("button").all()) {
+      await expect(intervalButton).toBeDisabled();
     }
-    void applicationState.selectUsageInterval("1d");
-  });
-  await expect(intervalGroup.getByRole("button", { name: "1 day" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("1");
-  await page.waitForTimeout(300);
+    await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeDisabled();
+    await expect(sevenDayButton).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("0");
+    await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
+    await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+      const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+      const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+      if (!applicationState) {
+        throw new Error("usage_interval_state_missing");
+      }
+      void applicationState.selectUsageInterval("1d");
+    });
+    await expect(intervalGroup.getByRole("button", { name: "1 day" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("1");
+  } finally {
+    releaseSevenDayResponse();
+  }
+  await page.waitForLoadState("networkidle");
   await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("1");
 
   await page.unroute(usageRequestPattern());

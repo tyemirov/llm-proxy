@@ -435,6 +435,9 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 	if _, summaryError := queryUsageErrorStore.usageSummary(principal, thirtyDayInterval); !errors.Is(summaryError, errManagedTenantStorePersist) {
 		t.Fatalf("usage summary usage error=%v want %v", summaryError, errManagedTenantStorePersist)
 	}
+	if _, summaryError := queryUsageErrorStore.usageSummary(principal, allInterval); !errors.Is(summaryError, errManagedTenantStorePersist) {
+		t.Fatalf("all usage summary usage error=%v want %v", summaryError, errManagedTenantStorePersist)
+	}
 
 	boundedUsageDatabase := newFakeManagedTenantDatabase()
 	boundedUsageDatabase.records[principal.userID] = internalManagedTenantRecord(principal.userID, "", fixedTime)
@@ -1145,7 +1148,7 @@ func TestManagedTenantGORMDatabaseEncryptsProviderKeysAtRest(t *testing.T) {
 	}
 }
 
-func TestManagedTenantGORMDatabaseMigratesUsageIndexes(t *testing.T) {
+func TestManagedTenantGORMDatabaseUsageIndexesAndStreaming(t *testing.T) {
 	database, databaseError := newGORMManagedTenantDatabase(ManagementConfiguration{
 		DatabaseDialect: ManagementDatabaseDialectSQLite,
 		DatabaseDSN:     filepath.Join(t.TempDir(), "managed-usage-indexes.db"),
@@ -1170,13 +1173,45 @@ func TestManagedTenantGORMDatabaseMigratesUsageIndexes(t *testing.T) {
 	if createError := database.database.Create(&records).Error; createError != nil {
 		t.Fatalf("create usage fixtures: %v", createError)
 	}
-	finiteRecords, finiteError := database.usageEventsByUserIDBetween("owner", periodStart, periodEnd)
+	finiteRecords := []managedUsageEventRecord{}
+	finiteError := database.streamUsageEventsByUserIDBetween("owner", periodStart, periodEnd, func(record managedUsageEventRecord) {
+		finiteRecords = append(finiteRecords, record)
+	})
 	if finiteError != nil || len(finiteRecords) != 2 || finiteRecords[0].ProviderID != "start" || finiteRecords[1].ProviderID != "end" {
 		t.Fatalf("finite records=%+v error=%v", finiteRecords, finiteError)
 	}
-	allRecords, allError := database.usageEventsByUserIDThrough("owner", periodEnd)
+	earliestUsageEvent, earliestUsageEventError := database.earliestUsageEventByUserIDThrough("owner", periodEnd)
+	if earliestUsageEventError != nil || !earliestUsageEvent.Equal(records[0].CreatedAt) {
+		t.Fatalf("earliest usage event=%s error=%v", earliestUsageEvent, earliestUsageEventError)
+	}
+	missingUsageEvent, missingUsageEventError := database.earliestUsageEventByUserIDThrough("missing", periodEnd)
+	if missingUsageEventError != nil || !missingUsageEvent.IsZero() {
+		t.Fatalf("missing usage event=%s error=%v", missingUsageEvent, missingUsageEventError)
+	}
+	allRecords := []managedUsageEventRecord{}
+	allError := database.streamUsageEventsByUserIDThrough("owner", periodEnd, func(record managedUsageEventRecord) {
+		allRecords = append(allRecords, record)
+	})
 	if allError != nil || len(allRecords) != 3 || allRecords[0].ProviderID != "old" || allRecords[2].ProviderID != "end" {
 		t.Fatalf("all records=%+v error=%v", allRecords, allError)
+	}
+	batchedRecords := make([]managedUsageEventRecord, managedUsageReadBatchSize+1)
+	for recordIndex := range batchedRecords {
+		batchedRecords[recordIndex] = managedUsageEventRecord{
+			UserID:     "batch-owner",
+			ProviderID: "batched",
+			CreatedAt:  periodStart.Add(time.Duration(recordIndex) * time.Second),
+		}
+	}
+	if createError := database.database.Create(&batchedRecords).Error; createError != nil {
+		t.Fatalf("create batched usage fixtures: %v", createError)
+	}
+	streamedRecordCount := 0
+	streamError := database.streamUsageEventsByUserIDThrough("batch-owner", periodEnd, func(managedUsageEventRecord) {
+		streamedRecordCount++
+	})
+	if streamError != nil || streamedRecordCount != len(batchedRecords) {
+		t.Fatalf("streamed records=%d want=%d error=%v", streamedRecordCount, len(batchedRecords), streamError)
 	}
 }
 
@@ -1640,35 +1675,48 @@ func (database *fakeManagedTenantDatabase) createUsageEvent(record managedUsageE
 	return nil
 }
 
-func (database *fakeManagedTenantDatabase) usageEventsByUserIDBetween(userID string, periodStart time.Time, periodEnd time.Time) ([]managedUsageEventRecord, error) {
+func (database *fakeManagedTenantDatabase) earliestUsageEventByUserIDThrough(userID string, periodEnd time.Time) (time.Time, error) {
 	if database.usageEventsQueryError != nil {
-		return nil, database.usageEventsQueryError
+		return time.Time{}, database.usageEventsQueryError
+	}
+	database.usageEventsQueryPeriodEnd = periodEnd
+	database.usageEventsQueryMode = "all"
+	var earliestUsageEvent time.Time
+	for _, record := range database.usageEvents {
+		if record.UserID == userID && !record.CreatedAt.After(periodEnd) && (earliestUsageEvent.IsZero() || record.CreatedAt.Before(earliestUsageEvent)) {
+			earliestUsageEvent = record.CreatedAt
+		}
+	}
+	return earliestUsageEvent, nil
+}
+
+func (database *fakeManagedTenantDatabase) streamUsageEventsByUserIDBetween(userID string, periodStart time.Time, periodEnd time.Time, visit managedUsageEventVisitor) error {
+	if database.usageEventsQueryError != nil {
+		return database.usageEventsQueryError
 	}
 	database.usageEventsQueryPeriodStart = periodStart
 	database.usageEventsQueryPeriodEnd = periodEnd
 	database.usageEventsQueryMode = "finite"
-	records := make([]managedUsageEventRecord, 0, len(database.usageEvents))
 	for _, record := range database.usageEvents {
 		if record.UserID == userID && !record.CreatedAt.Before(periodStart) && !record.CreatedAt.After(periodEnd) {
-			records = append(records, record)
+			visit(record)
 		}
 	}
-	return records, nil
+	return nil
 }
 
-func (database *fakeManagedTenantDatabase) usageEventsByUserIDThrough(userID string, periodEnd time.Time) ([]managedUsageEventRecord, error) {
+func (database *fakeManagedTenantDatabase) streamUsageEventsByUserIDThrough(userID string, periodEnd time.Time, visit managedUsageEventVisitor) error {
 	if database.usageEventsQueryError != nil {
-		return nil, database.usageEventsQueryError
+		return database.usageEventsQueryError
 	}
 	database.usageEventsQueryPeriodEnd = periodEnd
 	database.usageEventsQueryMode = "all"
-	records := make([]managedUsageEventRecord, 0, len(database.usageEvents))
 	for _, record := range database.usageEvents {
 		if record.UserID == userID && !record.CreatedAt.After(periodEnd) {
-			records = append(records, record)
+			visit(record)
 		}
 	}
-	return records, nil
+	return nil
 }
 
 func (database *fakeManagedTenantDatabase) usageEventsSince(periodStart time.Time) ([]managedUsageEventRecord, error) {
