@@ -70,6 +70,7 @@
 <li>Build a MessagesRequest with NewMessagesRequest.</li>
 <li>Configure base URL and tenant secret.</li>
 <li>Let omitted model stay omitted when provider defaults should apply.</li>
+<li>Set MessagesRequestInput.ReasoningEffort only for a nonblank value the resolved route declares.</li>
             </ol>
           </section>
 
@@ -104,6 +105,13 @@
                           <td>Omitted-model behavior</td>
                           <td>The client omits model unless the caller specifies it.</td>
                           <td>Server-side defaults remain authoritative.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Reasoning-effort override</td>
+                          <td>MessagesRequestInput serializes an optional nonblank ReasoningEffort value.</td>
+                          <td>The proxy, not the client, validates exact model capability.</td>
                         </tr>
 
                 </tbody>

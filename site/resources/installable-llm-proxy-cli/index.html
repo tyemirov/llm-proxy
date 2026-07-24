@@ -69,7 +69,7 @@
               <li>Install with go install github.com/tyemirov/llm-proxy/llm-proxy-client@latest.</li>
 <li>Set --base-url and --secret, or use LLM_PROXY_BASE_URL and LLM_PROXY_SECRET.</li>
 <li>Send --prompt, --prompt-file, or stdin content.</li>
-<li>Optionally include --system-prompt, --model, max tokens, or provider in the base URL.</li>
+<li>Optionally include --system-prompt, --model, --max-tokens, or --reasoning-effort; keep provider in the base URL.</li>
             </ol>
           </section>
 
@@ -97,6 +97,13 @@
                           <td>Environment support</td>
                           <td>Base URL and secret can come from env for shell workflows.</td>
                           <td>Prompt content can flow from stdin.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Reasoning-effort flag</td>
+                          <td>The CLI serializes --reasoning-effort in the v2 JSON body.</td>
+                          <td>The server validates it against the resolved route rather than accepting a global option list.</td>
                         </tr>
 
 
@@ -147,8 +154,10 @@
           <section>
             <h2>Repository evidence</h2>
             <pre class="usage-snippet"><code>llm-proxy-client \
-  --base-url &quot;http://localhost:8080/?provider=gemini&quot; \
+  --base-url &quot;http://localhost:8080/?provider=openai&quot; \
   --secret &quot;$SERVICE_SECRET&quot; \
+  --model &quot;gpt-5.5&quot; \
+  --reasoning-effort &quot;high&quot; \
   --prompt &quot;Summarize this&quot;</code></pre>
             <p>Verified 2026-07-24 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
           </section>
