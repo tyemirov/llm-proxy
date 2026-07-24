@@ -811,14 +811,90 @@ func TestOperationalDeployRejectsNoncanonicalTag(testingInstance *testing.T) {
 	}
 }
 
+func TestOperationalRequestTimeoutCapacityReader(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	readerPath := filepath.Join(repositoryRoot, operationalScriptsDirectory, "read-request-timeout-capacity.sh")
+	testCases := []struct {
+		name           string
+		configuration  string
+		expectedOutput string
+		expectedError  string
+	}{
+		{
+			name: "valid",
+			configuration: "server:\n" +
+				"  request_timeout_seconds: 360\n" +
+				"  max_request_timeout_seconds: 3600\n",
+			expectedOutput: "3600\n",
+		},
+		{
+			name: "commented",
+			configuration: "server:\n" +
+				"  max_request_timeout_seconds: 900 # operator capacity\n",
+			expectedOutput: "900\n",
+		},
+		{
+			name:          "missing",
+			configuration: "server:\n  request_timeout_seconds: 360\n",
+			expectedError: "expected exactly one server.max_request_timeout_seconds, found 0",
+		},
+		{
+			name: "duplicate",
+			configuration: "server:\n" +
+				"  max_request_timeout_seconds: 900\n" +
+				"  max_request_timeout_seconds: 1200\n",
+			expectedError: "expected exactly one server.max_request_timeout_seconds, found 2",
+		},
+		{
+			name:          "invalid",
+			configuration: "server:\n  max_request_timeout_seconds: 0\n",
+			expectedError: "must be a positive whole number",
+		},
+		{
+			name: "nested-lookalike",
+			configuration: "provider:\n" +
+				"  max_request_timeout_seconds: 900\n" +
+				"server:\n" +
+				"  max_request_timeout_seconds: 3600\n",
+			expectedOutput: "3600\n",
+		},
+	}
+
+	for _, testCase := range testCases {
+		testingInstance.Run(testCase.name, func(testingInstance *testing.T) {
+			configPath := filepath.Join(testingInstance.TempDir(), "config.yml")
+			writeOperationalFile(testingInstance, configPath, testCase.configuration, 0o644)
+			command := exec.Command(readerPath, configPath)
+			output, commandError := command.CombinedOutput()
+			if testCase.expectedError == "" {
+				if commandError != nil {
+					testingInstance.Fatalf("read request-timeout capacity: %v\n%s", commandError, output)
+				}
+				if string(output) != testCase.expectedOutput {
+					testingInstance.Fatalf("unexpected request-timeout capacity: %q", output)
+				}
+				return
+			}
+			if commandError == nil {
+				testingInstance.Fatalf("capacity reader accepted invalid config: %s", output)
+			}
+			if !strings.Contains(string(output), testCase.expectedError) {
+				testingInstance.Fatalf("unexpected capacity-reader error: %s", output)
+			}
+		})
+	}
+}
+
 func TestOperationalDeployPreflightsPagesBeforeGatewayMutation(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixtureRoot := testingInstance.TempDir()
 	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"), filepath.Join(fixtureRoot, operationalScriptsDirectory, "deploy.sh"))
+	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, operationalScriptsDirectory, "read-request-timeout-capacity.sh"), filepath.Join(fixtureRoot, operationalScriptsDirectory, "read-request-timeout-capacity.sh"))
+	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, "configs", "config.yml"), filepath.Join(fixtureRoot, "configs", "config.yml"))
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "init")
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "config", "user.name", "Operational Test")
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "config", "user.email", "operational-test@example.invalid")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "add", operationalScriptsDirectory)
+	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "add", operationalScriptsDirectory, "configs")
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "commit", "-m", "Fixture")
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "branch", "-M", "master")
 	remoteRoot := filepath.Join(testingInstance.TempDir(), "origin.git")
@@ -834,7 +910,7 @@ func TestOperationalDeployPreflightsPagesBeforeGatewayMutation(testingInstance *
 	writeOperationalFile(
 		testingInstance,
 		filepath.Join(toolDirectory, "make"),
-		"#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\t%s\\n' \"$*\" \"${DEPLOY_PAGES_ARGS:-}\" >>\"${MAKE_CAPTURE}\"\nif [[ \"$*\" == *pages-deploy* && \"${DEPLOY_PAGES_ARGS:-}\" == *--verify-only* ]]; then exit 42; fi\nif [[ \"${1:-}\" == \"-C\" && \"$*\" == *deploy-llm-proxy-backend* ]]; then : >\"${GATEWAY_SENTINEL}\"; fi\n",
+		"#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\t%s\\t%s\\n' \"$*\" \"${DEPLOY_PAGES_ARGS:-}\" \"${LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS:-}\" >>\"${MAKE_CAPTURE}\"\nif [[ \"$*\" == *pages-deploy* && \"${DEPLOY_PAGES_ARGS:-}\" == *--verify-only* ]]; then exit 42; fi\nif [[ \"${1:-}\" == \"-C\" && \"$*\" == *deploy-llm-proxy-backend* ]]; then : >\"${GATEWAY_SENTINEL}\"; fi\n",
 		0o755,
 	)
 	gatewayDirectory := filepath.Join(testingInstance.TempDir(), "gateway")
@@ -872,16 +948,21 @@ func TestOperationalDeployPreflightsPagesBeforeGatewayMutation(testingInstance *
 	if !strings.Contains(string(captureBytes), "pages-deploy\t--verify-only") {
 		testingInstance.Fatalf("Pages verify-only preflight was not invoked: %s", captureBytes)
 	}
+	if !strings.Contains(string(captureBytes), "verify-llm-proxy-deployment-contract\t\t3600") {
+		testingInstance.Fatalf("gateway verification did not receive the configured request capacity: %s", captureBytes)
+	}
 }
 
 func TestOperationalDeployForwardsSelectedRemoteToPages(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixtureRoot := testingInstance.TempDir()
 	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"), filepath.Join(fixtureRoot, operationalScriptsDirectory, "deploy.sh"))
+	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, operationalScriptsDirectory, "read-request-timeout-capacity.sh"), filepath.Join(fixtureRoot, operationalScriptsDirectory, "read-request-timeout-capacity.sh"))
+	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, "configs", "config.yml"), filepath.Join(fixtureRoot, "configs", "config.yml"))
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "init")
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "config", "user.name", "Operational Test")
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "config", "user.email", "operational-test@example.invalid")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "add", operationalScriptsDirectory)
+	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "add", operationalScriptsDirectory, "configs")
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "commit", "-m", "Fixture")
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "branch", "-M", "master")
 	remoteRoot := filepath.Join(testingInstance.TempDir(), "upstream.git")
