@@ -9,6 +9,10 @@ const REPORT_PATH = "docs/marketing/seo-resource-cluster-report.md";
 const RESOURCE_PUBLISHED_DATE = "2026-07-06";
 const RESOURCE_DEFAULT_MODIFIED_DATE = "2026-07-11";
 const PRODUCT_NAME = "LLM Proxy";
+const REPOSITORY_URL = "https://github.com/tyemirov/llm-proxy";
+const README_USAGE_URL = `${REPOSITORY_URL}#usage`;
+const CLIENT_AUTHENTICATION_RESOURCE_SLUG = "llm-proxy-client-authentication";
+const CLIENT_DOCUMENTATION_MODIFIED_DATE = "2026-07-24";
 const MIN_PAGE_COUNT = 40;
 const MAX_PAGE_COUNT = 50;
 
@@ -54,6 +58,7 @@ const pages = Object.freeze([
   page({
     slug: "server-side-provider-api-keys",
     category: "Security",
+    relatedSlugs: [CLIENT_AUTHENTICATION_RESOURCE_SLUG],
     primaryKeyword: "server-side provider API keys",
     title: "Keep provider API keys server-side for LLM apps",
     description: "Use tenant secrets for clients while upstream provider credentials stay on the LLM Proxy server.",
@@ -85,6 +90,7 @@ const pages = Object.freeze([
   page({
     slug: "tenant-secret-ai-gateway",
     category: "Security",
+    relatedSlugs: [CLIENT_AUTHENTICATION_RESOURCE_SLUG],
     primaryKeyword: "tenant secret AI gateway",
     title: "Tenant-secret AI gateway for internal applications",
     description: "Give client apps one llm-proxy tenant secret while the service owns provider credentials and routing.",
@@ -857,9 +863,79 @@ export function revokeSecret() {
       "Provider transport config and model catalogs still live in config.yml.",
     ],
   }),
+  evidencedPage({
+    slug: CLIENT_AUTHENTICATION_RESOURCE_SLUG,
+    category: "Clients",
+    publishedDate: CLIENT_DOCUMENTATION_MODIFIED_DATE,
+    relatedSlugs: [
+      "tenant-secret-ai-gateway",
+      "server-side-provider-api-keys",
+      "canonical-v2-chat-messages-api",
+    ],
+    primaryKeyword: "LLM Proxy client authentication",
+    title: "Authenticate an LLM Proxy client with a tenant secret",
+    description: "Configure a client with a tenant secret, send canonical /v2 requests, and keep management sessions and provider keys on separate boundaries.",
+    audience: "Developers connecting an application, script, or command-line workflow to LLM Proxy.",
+    problem: "A client integration can confuse three different credentials: the tenant secret that authorizes proxy requests, the TAuth session that authorizes management actions, and upstream provider API keys that must stay server-side.",
+    solution: "LLM Proxy authenticates public client requests with key=<tenant secret>. The bundled text clients send canonical POST /v2 messages, while the optional TAuth-protected management UI creates or manages client access and provider settings separately.",
+    steps: [
+      "Choose the tenant-secret source: an operator configures a static tenant, or a signed-in management user receives a generated client key once.",
+      "Give the client a proxy base URL and tenant secret through its application configuration; the installable CLI accepts flags or LLM_PROXY_BASE_URL and LLM_PROXY_SECRET.",
+      "Send canonical POST /v2 messages with the tenant secret in the key query parameter.",
+      "Omit provider and model to use the authenticated tenant default, or select a configured provider when the request needs an override.",
+      "Replace or revoke the client key when access changes; future proxy requests with a missing, invalid, or revoked key return 403.",
+    ],
+    features: [
+      ["One public client credential", "The client authenticates to LLM Proxy with a tenant secret instead of an upstream provider key.", "A script sends key=mysecret to /v2 while OpenAI, Gemini, or other provider credentials remain on the server."],
+      ["Separate management authentication", "TAuth/MPR UI sessions authorize management APIs and Settings, not a direct text request.", "A signed-in user can create or replace a client key, then the application uses that key on its own proxy calls."],
+      ["Explicit client configuration", "The installable CLI reads flags or environment values; it has no user-level or system-level YAML lookup.", "An application can use the optional JSON model profile only when it owns per-user provider/model selection."],
+    ],
+    examples: [
+      ["Backend integration", "A service stores its tenant secret in its deployment-owned configuration and sends messages through /v2."],
+      ["Management onboarding", "A user signs in through the shared MPR UI, copies the one-time client key, and saves a provider key before using generated request examples."],
+      ["Provider-default request", "A caller omits provider and model so the authenticated tenant's configured route decides the upstream provider and model."],
+    ],
+    limitations: [
+      "The bundled Go, Python, and CLI clients are text-message clients; dictation uses the separate multipart /dictate contract.",
+      "A tenant secret is still sensitive application access material and is not an upstream provider API key.",
+      "The optional application-owned model profile is JSON only and cannot be combined with competing provider or model inputs.",
+    ],
+    repoExample: {
+      source: "README.md",
+      verifiedOn: CLIENT_DOCUMENTATION_MODIFIED_DATE,
+      code: `curl -X POST \\
+  -H "Content-Type: application/json" \\
+  --data '{"messages":[{"role":"user","content":"Summarize this","order":2},{"role":"system","content":"Be concise.","order":1}],"model":"deepseek-v4-flash","max_tokens":4096}' \\
+  "http://localhost:8080/v2?key=mysecret&provider=deepseek"`,
+    },
+    quickVerdict: "Use the tenant secret on client-to-proxy calls; use the TAuth management session only to obtain or manage access, and never substitute an upstream provider API key for either one.",
+    faq: [
+      {
+        question: "Does the LLM Proxy client load user-level or system-level YAML?",
+        answer: "No. The installable client uses explicit flags or LLM_PROXY_BASE_URL and LLM_PROXY_SECRET, and its optional file-based provider/model input is an application-owned JSON model profile. config.yml belongs to the service runtime.",
+      },
+      {
+        question: "What authenticates a public text request?",
+        answer: "GET, POST, and POST /v2 requests authenticate with the tenant secret in the key query parameter. The bundled text clients add that parameter while sending the request body to canonical /v2.",
+      },
+      {
+        question: "What authenticates management Settings operations?",
+        answer: "The optional management UI relies on the configured MPR UI and TAuth session for management APIs. That browser session is separate from the tenant secret used by public proxy requests.",
+      },
+      {
+        question: "Where do provider API keys belong?",
+        answer: "Provider API keys belong in server-side runtime configuration or authenticated management storage. Public proxy requests reject provider-key-like fields instead of forwarding them upstream.",
+      },
+      {
+        question: "What happens when the client key is missing, invalid, or revoked?",
+        answer: "The public proxy request returns 403 before it reaches an upstream provider.",
+      },
+    ],
+  }),
   page({
     slug: "go-client-v2-only-llm-proxy",
     category: "Clients",
+    modifiedDate: CLIENT_DOCUMENTATION_MODIFIED_DATE,
     primaryKeyword: "Go LLM proxy client v2",
     title: "Go LLM Proxy client with a v2-only transport",
     description: "Use the Go package to send canonical messages requests through POST /v2.",
@@ -887,10 +963,29 @@ export function revokeSecret() {
       "It does not implement OpenAI background polling because the server owns that lifecycle.",
       "Direct REST callers can still use server GET and compatibility POST endpoints outside the client package.",
     ],
+    repoExample: {
+      source: "README.md",
+      verifiedOn: CLIENT_DOCUMENTATION_MODIFIED_DATE,
+      code: `config, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
+    BaseURL:            "http://localhost:8080/",
+    Secret:             serviceSecret,
+    ModelProfilePath:   userModelProfilePath,
+    ModelProfileReader: os.ReadFile,
+    Timeout:            390 * time.Second,
+})
+if err != nil {
+    return err
+}
+client, err := llmproxyclient.NewClient(config, http.DefaultClient)
+if err != nil {
+    return err
+}`,
+    },
   }),
   page({
     slug: "python-client-v2-only-llm-proxy",
     category: "Clients",
+    modifiedDate: CLIENT_DOCUMENTATION_MODIFIED_DATE,
     primaryKeyword: "Python LLM proxy client v2",
     title: "Python LLM Proxy client with v2 messages",
     description: "Use ClientMessagesRequest and post_messages for canonical text requests from Python.",
@@ -918,10 +1013,30 @@ export function revokeSecret() {
       "It does not send raw provider API keys.",
       "Dictation requires direct multipart HTTP usage today.",
     ],
+    repoExample: {
+      source: "README.md",
+      verifiedOn: CLIENT_DOCUMENTATION_MODIFIED_DATE,
+      code: `from llm_proxy_client import Client, ClientConfig, ClientMessagesRequest, ClientMessage
+
+client = Client(
+    ClientConfig(
+        base_url="http://localhost:8080/?provider=gemini",
+        secret="mysecret",
+    )
+)
+
+text = client.post_messages(
+    ClientMessagesRequest(
+        messages=(ClientMessage(role="user", content="Summarize this"),),
+        max_tokens=512,
+    )
+)`,
+    },
   }),
   page({
     slug: "installable-llm-proxy-cli",
     category: "Clients",
+    modifiedDate: CLIENT_DOCUMENTATION_MODIFIED_DATE,
     primaryKeyword: "installable LLM proxy CLI",
     title: "Installable LLM Proxy CLI for prompt workflows",
     description: "Use llm-proxy-client to send prompt text as canonical /v2 messages from the command line.",
@@ -949,6 +1064,14 @@ export function revokeSecret() {
       "It still requires a valid tenant secret.",
       "It is not a provider SDK and does not bypass proxy validation.",
     ],
+    repoExample: {
+      source: "README.md",
+      verifiedOn: CLIENT_DOCUMENTATION_MODIFIED_DATE,
+      code: `llm-proxy-client \\
+  --base-url "http://localhost:8080/?provider=gemini" \\
+  --secret "$SERVICE_SECRET" \\
+  --prompt "Summarize this"`,
+    },
   }),
   page({
     slug: "llm-response-formats-json-xml-csv-text",
@@ -1265,6 +1388,7 @@ export function revokeSecret() {
   evidencedPage({
     slug: "copyable-llm-curl-examples",
     category: "Management UI",
+    relatedSlugs: [CLIENT_AUTHENTICATION_RESOURCE_SLUG],
     primaryKeyword: "copyable LLM curl examples",
     title: "Copyable LLM curl examples from current profile data",
     description: "Render copyable LLM curl examples from live profile data while keeping the one-time raw client key out of page markup and copied commands.",
@@ -1539,8 +1663,10 @@ console.log(`generated ${pages.length} SEO resource pages`);
 /**
  * @param {{
  *   slug: string,
+ *   publishedDate?: string,
  *   modifiedDate?: string,
  *   category: string,
+ *   relatedSlugs?: string[],
  *   primaryKeyword: string,
  *   title: string,
  *   description: string,
@@ -1559,6 +1685,7 @@ console.log(`generated ${pages.length} SEO resource pages`);
 function page(input) {
   return Object.freeze({
     ...input,
+    publishedDate: input.publishedDate || RESOURCE_PUBLISHED_DATE,
     modifiedDate: input.modifiedDate || RESOURCE_DEFAULT_MODIFIED_DATE,
     path: `/resources/${input.slug}/`,
     canonical: `${PUBLIC_ORIGIN}/resources/${input.slug}/`,
@@ -1609,7 +1736,7 @@ function renderResourcePage(resourcePage) {
     headline: resourcePage.title,
     description: resourcePage.description,
     url: resourcePage.canonical,
-    datePublished: RESOURCE_PUBLISHED_DATE,
+    datePublished: resourcePage.publishedDate,
     dateModified: resourcePage.modifiedDate,
     mainEntityOfPage: resourcePage.canonical,
     about: [PRODUCT_NAME, resourcePage.category, resourcePage.primaryKeyword],
@@ -1647,6 +1774,7 @@ function renderResourcePage(resourcePage) {
         <a class="resource-brand" href="/">LLM Proxy</a>
         <nav aria-label="Resource navigation">
           <a href="/resources/">Resources</a>
+          <a href="${README_USAGE_URL}">README</a>
           <a href="/">Main page</a>
         </nav>
       </header>
@@ -1790,6 +1918,7 @@ function renderResourcePage(resourcePage) {
       <footer class="resource-shell resource-footer">
         <a href="/">LLM Proxy main page</a>
         <a href="/resources/">Resource hub</a>
+        <a href="${README_USAGE_URL}">README</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
     `,
@@ -1834,6 +1963,7 @@ function renderHub() {
         <a class="resource-brand" href="/">LLM Proxy</a>
         <nav aria-label="Resource navigation">
           <a href="/resources/">Resources</a>
+          <a href="${README_USAGE_URL}">README</a>
           <a href="/">Main page</a>
         </nav>
       </header>
@@ -1878,6 +2008,7 @@ function renderHub() {
       </main>
       <footer class="resource-shell resource-footer">
         <a href="/">LLM Proxy main page</a>
+        <a href="${README_USAGE_URL}">README</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
     `,
@@ -1933,13 +2064,20 @@ ${input.body}
  * @returns {ReturnType<typeof page>[]}
  */
 function relatedFor(resourcePage) {
+  const explicitlyRelatedPages = (resourcePage.relatedSlugs || []).map((relatedSlug) => {
+    const explicitlyRelatedPage = pages.find((candidate) => candidate.slug === relatedSlug);
+    if (!explicitlyRelatedPage || explicitlyRelatedPage.slug === resourcePage.slug) {
+      throw new Error(`seo_resource_related_page_missing: slug=${resourcePage.slug} related_slug=${relatedSlug}`);
+    }
+    return explicitlyRelatedPage;
+  });
   const sameCategory = pages.filter((candidate) => candidate.category === resourcePage.category && candidate.slug !== resourcePage.slug);
   const currentIndex = pages.findIndex((candidate) => candidate.slug === resourcePage.slug);
   const adjacent = [
     pages[(currentIndex + 1) % pages.length],
     pages[(currentIndex + pages.length - 1) % pages.length],
   ].filter((candidate) => candidate.slug !== resourcePage.slug);
-  return uniquePages([...sameCategory.slice(0, 2), ...adjacent]).slice(0, 4);
+  return uniquePages([...explicitlyRelatedPages, ...sameCategory.slice(0, 2), ...adjacent]).slice(0, 4);
 }
 
 /**
@@ -2133,7 +2271,7 @@ ${categoryRows}
 - The main page links to /resources/ through a crawlable anchor in the public HTML.
 - The /resources/ hub links every generated resource page grouped by category.
 - Every resource page links back to /, /resources/, sitemap.xml, and related resources.
-- sitemap.xml lists /, /resources/, and all 45 page URLs with the same trailing-slash canonical form used in internal links.
+- sitemap.xml lists /, /resources/, and all ${pages.length} page URLs with the same trailing-slash canonical form used in internal links.
 - robots.txt allows crawling and references the sitemap.
 
 ## Evaluation Report
