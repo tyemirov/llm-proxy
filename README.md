@@ -430,8 +430,8 @@ provider/model route; provider-level and catalog-wide declarations are rejected.
 Each declaration uses the `openai_responses` adapter and a nonempty,
 duplicate-free ordered list of values that adapter supports, and only an OpenAI
 `openai_responses_reasoning_tools` route may declare it. The capability limits
-the tenant default that can be persisted for that route; it is not a public
-request parameter.
+the tenant default that can be persisted for that route and validates any
+supplied public request value.
 
 `request_profile` is currently required only for OpenAI text models. It selects
 the stable proxy payload shape for that OpenAI model and must be one of:
@@ -440,7 +440,7 @@ the stable proxy payload shape for that OpenAI model and must be one of:
 |-----------------|------------------|
 | `openai_responses_temperature` | Adds `temperature`. |
 | `openai_responses_temperature_tools` | Adds `temperature`; includes web-search tools only when both the request and model catalog enable web search. |
-| `openai_responses_reasoning_tools` | Adds reasoning/text controls; includes web-search tools only when both the request and model catalog enable web search. A saved tenant reasoning effort is sent only when this route declares the capability. |
+| `openai_responses_reasoning_tools` | Adds reasoning/text controls; includes web-search tools only when both the request and model catalog enable web search. The resolved request-level reasoning effort is sent only when this route declares the capability. |
 
 All OpenAI Responses text requests also send `background: true` and
 `store: true`. llm-proxy polls the stored OpenAI response server-side until it
@@ -920,8 +920,9 @@ tenants:
 ```
 
 For a static tenant, `reasoning_effort` is a route-bound default. Set it only
-when the exact configured provider/model declares the value; it is not a
-per-request setting. For example, a supported OpenAI route can use `high`:
+when the exact configured provider/model declares the value. It applies when a
+caller omits the optional per-request field; a supplied supported value
+overrides it. For example, a supported OpenAI route can use `high`:
 
 ```yaml
 tenants:
