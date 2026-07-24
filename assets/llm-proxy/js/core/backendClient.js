@@ -30,10 +30,11 @@ export function fetchProfile() {
 }
 
 /**
+ * @param {import("../types.d.js").UsageInterval} interval
  * @returns {Promise<import("../types.d.js").ManagementUsageSummary>}
  */
-export function fetchUsageSummary() {
-  return requestJSON(`${MANAGEMENT_BASE_PATH}/usage`, { method: "GET" });
+export function fetchUsageSummary(interval) {
+  return requestJSON(`${MANAGEMENT_BASE_PATH}/usage?interval=${encodeURIComponent(interval)}`, { method: "GET" });
 }
 
 /**

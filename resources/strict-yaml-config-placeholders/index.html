@@ -14,9 +14,10 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Strict YAML config placeholders for LLM Proxy","description":"Use config.yml as the only service config source and env only for strict placeholder expansion.","url":"https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/","about":["LLM Proxy","Configuration","strict YAML config placeholders"]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Strict YAML config placeholders for LLM Proxy","item":"https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of strict YAML config placeholders?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy reads service configuration from config.yml, expands ${NAME} placeholders from env or a sibling .env file, rejects unknown YAML keys, and fails startup for missing required placeholders."}},{"@type":"Question","name":"Who should read this configuration resource?","acceptedAnswer":{"@type":"Answer","text":"Operators who want predictable startup behavior and no hidden runtime defaults."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is LLM model catalog configuration in config.yml, which covers LLM model catalog configuration."}}]}</script>
@@ -83,27 +84,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Single config file</td>
                           <td>Runtime code receives only validated config values.</td>
                           <td>Flags and env are not alternate service config sources.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Strict placeholders</td>
                           <td>Missing placeholders fail startup outside the exact optional provider-key case.</td>
                           <td>Configuration errors are visible before traffic.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Unknown-key rejection</td>
                           <td>Stale or misspelled YAML keys fail instead of being ignored.</td>
                           <td>Forward-only config stays clean.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -112,24 +113,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Hosted profile</h3>
                       <p>Deployment secrets provide LLM_PROXY_MANAGEMENT_* placeholder values.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Local profile</h3>
                       <p>configs/.env supplies SQLite management database values for local runs.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Provider disabled</h3>
                       <p>A non-default provider api_key that is exactly a missing placeholder can expand to blank and remain disabled.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -145,66 +146,66 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of strict YAML config placeholders?</summary>
                       <p>LLM Proxy reads service configuration from config.yml, expands ${NAME} placeholders from env or a sibling .env file, rejects unknown YAML keys, and fails startup for missing required placeholders.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this configuration resource?</summary>
                       <p>Operators who want predictable startup behavior and no hidden runtime defaults.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is LLM model catalog configuration in config.yml, which covers LLM model catalog configuration.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/model-catalog-configuration/">
                       <span>Configuration</span>
                       <strong>LLM model catalog configuration in config.yml</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/provider-default-model-selection/">
                       <span>Configuration</span>
                       <strong>Provider default model selection for omitted models</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/static-to-managed-tenant-migration/">
                       <span>Configuration</span>
                       <strong>Legacy token ownership migration in management mode</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/reject-client-provider-key-leaks/">
                       <span>Security</span>
                       <strong>Reject client-supplied provider key leaks</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -220,6 +221,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

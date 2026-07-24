@@ -14,9 +14,10 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Gemini generateContent proxy for shared LLM calls","description":"Map shared proxy messages into Gemini native generateContent requests with configured model limits.","url":"https://llm-proxy.mprlab.com/resources/gemini-generatecontent-proxy/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/gemini-generatecontent-proxy/","about":["LLM Proxy","Provider routing","Gemini generateContent proxy"]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Gemini generateContent proxy for shared LLM calls","item":"https://llm-proxy.mprlab.com/resources/gemini-generatecontent-proxy/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of Gemini generateContent proxy?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy implements a Gemini adapter that receives the shared proxy request, routes to the configured Gemini base URL, and normalizes usage metadata where available."}},{"@type":"Question","name":"Who should read this provider routing resource?","acceptedAnswer":{"@type":"Answer","text":"Developers adding Gemini as a provider without bringing Gemini-specific payloads into every app."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Multi-provider LLM proxy for internal tools, which covers multi-provider LLM proxy."}}]}</script>
@@ -83,27 +84,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Native adapter</td>
                           <td>The backend maps user and assistant messages into Gemini contents.</td>
                           <td>System instructions use Gemini's systemInstruction shape.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Configured defaults</td>
                           <td>Omitted model uses the Gemini text default_model.</td>
                           <td>The default currently comes from config, not client code.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Output limit validation</td>
                           <td>Gemini max_tokens values above configured limits return 400 before upstream calls.</td>
                           <td>Known constraints are enforced at the edge.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -112,24 +113,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Gemini summary</h3>
                       <p>A service sends provider=gemini and omits model to use the configured default.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Long transcript</h3>
                       <p>A /v2 messages request routes through Gemini without a Gemini SDK.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Limit check</h3>
                       <p>A caller sets max_tokens inside the configured Gemini limit.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -145,66 +146,66 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of Gemini generateContent proxy?</summary>
                       <p>LLM Proxy implements a Gemini adapter that receives the shared proxy request, routes to the configured Gemini base URL, and normalizes usage metadata where available.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this provider routing resource?</summary>
                       <p>Developers adding Gemini as a provider without bringing Gemini-specific payloads into every app.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Multi-provider LLM proxy for internal tools, which covers multi-provider LLM proxy.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/multi-provider-llm-proxy/">
                       <span>Provider routing</span>
                       <strong>Multi-provider LLM proxy for internal tools</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/openai-claude-gemini-one-endpoint/">
                       <span>Provider routing</span>
                       <strong>OpenAI, Claude, and Gemini through one endpoint</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/anthropic-claude-messages-proxy/">
                       <span>Provider routing</span>
                       <strong>Anthropic Claude Messages proxy for /v2 callers</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/openai-compatible-provider-gateway/">
                       <span>Provider routing</span>
                       <strong>OpenAI-compatible provider gateway</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -220,6 +221,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

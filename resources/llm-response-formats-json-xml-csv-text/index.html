@@ -14,9 +14,10 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"LLM response formats: JSON, XML, CSV, and text","description":"Choose response formatting through format or Accept without changing the provider route.","url":"https://llm-proxy.mprlab.com/resources/llm-response-formats-json-xml-csv-text/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/llm-response-formats-json-xml-csv-text/","about":["LLM Proxy","API contract","LLM response formats JSON XML CSV text"]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"LLM response formats: JSON, XML, CSV, and text","item":"https://llm-proxy.mprlab.com/resources/llm-response-formats-json-xml-csv-text/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of LLM response formats JSON XML CSV text?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy supports plain text by default and can return JSON, XML, or CSV through the format query parameter or Accept header."}},{"@type":"Question","name":"Who should read this api contract resource?","acceptedAnswer":{"@type":"Answer","text":"Developers integrating proxy responses into scripts, services, and data pipelines."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Canonical /v2 chat messages API for LLM calls, which covers v2 chat messages API."}}]}</script>
@@ -83,27 +84,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Format negotiation</td>
                           <td>Callers choose output shape without changing provider selection.</td>
                           <td>The same route can serve scripts and apps.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>JSON metadata</td>
                           <td>JSON responses include request, response, object, model, choices, messages, and usage when available.</td>
                           <td>Apps get structured context.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Usage headers</td>
                           <td>Token headers remain separate from body format.</td>
                           <td>Plain text callers can still read usage counts.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -112,24 +113,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Shell output</h3>
                       <p>A CLI caller accepts text/plain for direct terminal display.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Structured app</h3>
                       <p>A backend requests application/json to store response and token metadata.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>CSV export</h3>
                       <p>A workflow asks for text/csv when it wants one escaped cell.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -145,66 +146,66 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of LLM response formats JSON XML CSV text?</summary>
                       <p>LLM Proxy supports plain text by default and can return JSON, XML, or CSV through the format query parameter or Accept header.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this api contract resource?</summary>
                       <p>Developers integrating proxy responses into scripts, services, and data pipelines.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Canonical /v2 chat messages API for LLM calls, which covers v2 chat messages API.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/canonical-v2-chat-messages-api/">
                       <span>API contract</span>
                       <strong>Canonical /v2 chat messages API for LLM calls</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/large-prompt-json-post/">
                       <span>API contract</span>
                       <strong>Large prompt JSON POST for LLM requests</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/llm-proxy-status-code-map/">
                       <span>Reliability</span>
                       <strong>LLM Proxy status code map for callers</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/installable-llm-proxy-cli/">
                       <span>Clients</span>
                       <strong>Installable LLM Proxy CLI for prompt workflows</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -220,6 +221,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

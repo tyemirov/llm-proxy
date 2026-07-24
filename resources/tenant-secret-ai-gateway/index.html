@@ -14,9 +14,10 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Tenant-secret AI gateway for internal applications","description":"Give client apps one llm-proxy tenant secret while the service owns provider credentials and routing.","url":"https://llm-proxy.mprlab.com/resources/tenant-secret-ai-gateway/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/tenant-secret-ai-gateway/","about":["LLM Proxy","Security","tenant secret AI gateway"]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Tenant-secret AI gateway for internal applications","item":"https://llm-proxy.mprlab.com/resources/tenant-secret-ai-gateway/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of tenant secret AI gateway?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy keeps public proxy requests authenticated by key=<tenant secret>, then applies the tenant's configured defaults and server-side provider credentials."}},{"@type":"Question","name":"Who should read this security resource?","acceptedAnswer":{"@type":"Answer","text":"Teams building internal apps that need a single guarded AI service boundary."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Keep provider API keys server-side for LLM apps, which covers server-side provider API keys."}}]}</script>
@@ -83,27 +84,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Single credential surface</td>
                           <td>Apps call one proxy secret instead of many provider keys.</td>
                           <td>The same secret can protect text and dictation traffic.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Tenant defaults</td>
                           <td>Omitted provider and model values resolve through tenant defaults.</td>
                           <td>A caller can stay simple until it needs a per-request override.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>403 boundary</td>
                           <td>Missing, invalid, or revoked tenant secrets return forbidden responses.</td>
                           <td>Callers do not receive tenant discovery details.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -112,24 +113,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Shared app platform</h3>
                       <p>A platform team provisions tenant secrets for several internal apps while keeping provider credentials central.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Access revocation</h3>
                       <p>A generated secret can be revoked so future proxy calls with that secret stop working.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Dictation plus text</h3>
                       <p>The same tenant-secret model can protect voice transcription and LLM response generation.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -145,60 +146,60 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of tenant secret AI gateway?</summary>
                       <p>LLM Proxy keeps public proxy requests authenticated by key=&lt;tenant secret&gt;, then applies the tenant's configured defaults and server-side provider credentials.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this security resource?</summary>
                       <p>Teams building internal apps that need a single guarded AI service boundary.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Keep provider API keys server-side for LLM apps, which covers server-side provider API keys.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/server-side-provider-api-keys/">
                       <span>Security</span>
                       <strong>Keep provider API keys server-side for LLM apps</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/generated-secret-rotation-and-revocation/">
                       <span>Security</span>
                       <strong>Generated LLM Proxy secret rotation and revocation</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/self-service-llm-key-management/">
                       <span>Management UI</span>
                       <strong>Self-service LLM key management for internal teams</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -214,6 +215,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

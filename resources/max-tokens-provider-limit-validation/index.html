@@ -14,9 +14,10 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"max_tokens validation across LLM providers","description":"Map max_tokens to provider-specific fields and reject known invalid token caps before upstream calls.","url":"https://llm-proxy.mprlab.com/resources/max-tokens-provider-limit-validation/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/max-tokens-provider-limit-validation/","about":["LLM Proxy","API contract","max tokens provider limit validation"]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"max_tokens validation across LLM providers","item":"https://llm-proxy.mprlab.com/resources/max-tokens-provider-limit-validation/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of max tokens provider limit validation?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy accepts max_tokens and maps it to the selected provider's expected field while validating known Gemini and Claude limits at the request edge."}},{"@type":"Question","name":"Who should read this api contract resource?","acceptedAnswer":{"@type":"Answer","text":"Developers and operators who need predictable output caps without provider-specific client code."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Canonical /v2 chat messages API for LLM calls, which covers v2 chat messages API."}}]}</script>
@@ -83,27 +84,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Shared request field</td>
                           <td>Callers use one max_tokens input across providers.</td>
                           <td>Provider payload mapping stays backend-owned.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Known ceiling checks</td>
                           <td>Gemini and Claude limits are validated before upstream calls.</td>
                           <td>Invalid caps return 400.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Anthropic requirement handling</td>
                           <td>The proxy sends required Claude max_tokens from config when omitted.</td>
                           <td>Clients do not need to know that Anthropic requires the field.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -112,24 +113,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Short answer</h3>
                       <p>A caller sets max_tokens=512 for a concise response.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Gemini guard</h3>
                       <p>A Gemini request above 65536 is rejected before provider traffic.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Claude default</h3>
                       <p>A Claude request omits max_tokens and the proxy uses the configured model output limit.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -145,66 +146,66 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of max tokens provider limit validation?</summary>
                       <p>LLM Proxy accepts max_tokens and maps it to the selected provider's expected field while validating known Gemini and Claude limits at the request edge.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this api contract resource?</summary>
                       <p>Developers and operators who need predictable output caps without provider-specific client code.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Canonical /v2 chat messages API for LLM calls, which covers v2 chat messages API.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/canonical-v2-chat-messages-api/">
                       <span>API contract</span>
                       <strong>Canonical /v2 chat messages API for LLM calls</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/large-prompt-json-post/">
                       <span>API contract</span>
                       <strong>Large prompt JSON POST for LLM requests</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/usage-metadata-without-prompts/">
                       <span>Usage</span>
                       <strong>Usage metadata without storing prompts or responses</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/system-prompt-handling/">
                       <span>API contract</span>
                       <strong>System prompt handling without ambiguous inputs</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -220,6 +221,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

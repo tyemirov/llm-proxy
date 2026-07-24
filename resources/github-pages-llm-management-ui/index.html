@@ -14,9 +14,10 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"GitHub Pages management UI for LLM Proxy","description":"Publish the static management frontend from site/ while the backend owns API and runtime config.","url":"https://llm-proxy.mprlab.com/resources/github-pages-llm-management-ui/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/github-pages-llm-management-ui/","about":["LLM Proxy","Deployment","GitHub Pages LLM management UI"]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"GitHub Pages management UI for LLM Proxy","item":"https://llm-proxy.mprlab.com/resources/github-pages-llm-management-ui/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of GitHub Pages LLM management UI?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy keeps the frontend in site/ for GitHub Pages and keeps the Go backend responsible for /config-ui.yaml, /api/management/*, /, /v2, and /dictate."}},{"@type":"Question","name":"Who should read this deployment resource?","acceptedAnswer":{"@type":"Answer","text":"Teams deploying the self-service management UI as a static site."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is API-served runtime config for a static LLM UI, which covers API-served runtime config static UI."}}]}</script>
@@ -85,27 +86,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Pages-owned static UI</td>
                           <td>llm-proxy.mprlab.com belongs to GitHub Pages.</td>
                           <td>The backend does not serve management HTML.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Makefile lifecycle</td>
                           <td>Release prepares, publish uploads, and deploy activates Pages.</td>
                           <td>GitHub Actions does not own production deployment.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Artifact checks</td>
                           <td>The rendered Pages artifact is checked for forbidden static config files.</td>
                           <td>The static shell stays config-free.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -114,24 +115,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Pages preparation</h3>
                       <p>make release renders the validated Pages archive locally.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Artifact publication</h3>
                       <p>make publish uploads the exact prepared image and Pages artifacts.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Backend deploy</h3>
                       <p>make deploy rolls out the backend and then activates the published Pages archive.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -147,60 +148,60 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of GitHub Pages LLM management UI?</summary>
                       <p>LLM Proxy keeps the frontend in site/ for GitHub Pages and keeps the Go backend responsible for /config-ui.yaml, /api/management/*, /, /v2, and /dictate.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this deployment resource?</summary>
                       <p>Teams deploying the self-service management UI as a static site.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is API-served runtime config for a static LLM UI, which covers API-served runtime config static UI.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/api-served-runtime-config-for-static-ui/">
                       <span>Deployment</span>
                       <strong>API-served runtime config for a static LLM UI</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/local-and-hosted-llm-proxy-config-profiles/">
                       <span>Deployment</span>
                       <strong>Local and hosted LLM Proxy config profiles</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/live-provider-smoke-tests/">
                       <span>Validation</span>
                       <strong>Live provider smoke tests for LLM Proxy</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -216,6 +217,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

@@ -14,9 +14,10 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"OpenAI background response polling without client loops","description":"Let LLM Proxy own OpenAI Responses background mode and return the final answer in one REST call.","url":"https://llm-proxy.mprlab.com/resources/openai-background-response-polling/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/openai-background-response-polling/","about":["LLM Proxy","Reliability","OpenAI background response polling"]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"OpenAI background response polling without client loops","item":"https://llm-proxy.mprlab.com/resources/openai-background-response-polling/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of OpenAI background response polling?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy sends stored OpenAI background requests upstream and polls server-side until the answer is terminal or the configured request deadline expires."}},{"@type":"Question","name":"Who should read this reliability resource?","acceptedAnswer":{"@type":"Answer","text":"Backend teams with long OpenAI prompts that should not require client polling logic."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Upstream worker and queue limits for LLM traffic, which covers upstream worker queue limits."}}]}</script>
@@ -83,27 +84,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>One-shot REST contract</td>
                           <td>Clients do not stream, poll, or follow resume endpoints.</td>
                           <td>The final answer arrives in the original response.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Server-side polling</td>
                           <td>The backend polls stored OpenAI response IDs internally.</td>
                           <td>Provider lifecycle details stay out of product code.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Timeout ownership</td>
                           <td>server.request_timeout_seconds bounds the overall proxy request.</td>
                           <td>A timeout becomes a documented 504.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -112,24 +113,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Semantic review</h3>
                       <p>A workflow sends a long JSON-only review prompt and waits on one proxy request.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>CLI caller</h3>
                       <p>The bundled CLI can stay a simple v2 transport without polling support.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Backend integration</h3>
                       <p>A service keeps its existing synchronous request path while the proxy handles OpenAI background work.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -145,60 +146,60 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of OpenAI background response polling?</summary>
                       <p>LLM Proxy sends stored OpenAI background requests upstream and polls server-side until the answer is terminal or the configured request deadline expires.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this reliability resource?</summary>
                       <p>Backend teams with long OpenAI prompts that should not require client polling logic.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Upstream worker and queue limits for LLM traffic, which covers upstream worker queue limits.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/upstream-worker-queue-limits/">
                       <span>Reliability</span>
                       <strong>Upstream worker and queue limits for LLM traffic</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/llm-proxy-status-code-map/">
                       <span>Reliability</span>
                       <strong>LLM Proxy status code map for callers</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/openai-claude-gemini-one-endpoint/">
                       <span>Provider routing</span>
                       <strong>OpenAI, Claude, and Gemini through one endpoint</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -214,6 +215,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

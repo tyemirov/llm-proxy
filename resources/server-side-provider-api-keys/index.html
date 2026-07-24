@@ -14,9 +14,10 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Keep provider API keys server-side for LLM apps","description":"Use tenant secrets for clients while upstream provider credentials stay on the LLM Proxy server.","url":"https://llm-proxy.mprlab.com/resources/server-side-provider-api-keys/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/server-side-provider-api-keys/","about":["LLM Proxy","Security","server-side provider API keys"]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Keep provider API keys server-side for LLM apps","item":"https://llm-proxy.mprlab.com/resources/server-side-provider-api-keys/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of server-side provider API keys?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy rejects upstream-provider-key-like fields on public proxy requests and reads provider credentials only from server-side config or authenticated management storage."}},{"@type":"Question","name":"Who should read this security resource?","acceptedAnswer":{"@type":"Answer","text":"Internal-tool builders who need AI calls without distributing raw upstream keys."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Tenant-secret AI gateway for internal applications, which covers tenant secret AI gateway."}}]}</script>
@@ -83,27 +84,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Tenant secret authentication</td>
                           <td>Clients authenticate to the proxy, not directly to provider APIs.</td>
                           <td>A browser app can call the proxy without handling an OpenAI key.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Provider-key rejection</td>
                           <td>Public endpoints reject provider key fields in query, JSON, and multipart input.</td>
                           <td>A mistaken api_key field fails before the upstream call.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Managed provider storage</td>
                           <td>Signed-in users can persist provider keys through authenticated management endpoints.</td>
                           <td>Mutation responses return masked status; raw retrieval is a separate owner-authenticated reveal action.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -112,24 +113,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Browser dashboard</h3>
                       <p>A static Pages app can show copyable proxy examples without embedding upstream keys.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Notebook access</h3>
                       <p>A data notebook uses a tenant secret while provider credentials remain in the service boundary.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Provider rotation</h3>
                       <p>Ops updates the provider key once in backend state instead of touching each app.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -145,60 +146,60 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of server-side provider API keys?</summary>
                       <p>LLM Proxy rejects upstream-provider-key-like fields on public proxy requests and reads provider credentials only from server-side config or authenticated management storage.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this security resource?</summary>
                       <p>Internal-tool builders who need AI calls without distributing raw upstream keys.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Tenant-secret AI gateway for internal applications, which covers tenant secret AI gateway.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/tenant-secret-ai-gateway/">
                       <span>Security</span>
                       <strong>Tenant-secret AI gateway for internal applications</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/generated-secret-rotation-and-revocation/">
                       <span>Security</span>
                       <strong>Generated LLM Proxy secret rotation and revocation</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/multi-provider-llm-proxy/">
                       <span>Provider routing</span>
                       <strong>Multi-provider LLM proxy for internal tools</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -214,6 +215,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

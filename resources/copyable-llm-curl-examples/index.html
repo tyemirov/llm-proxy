@@ -14,9 +14,10 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Copyable LLM curl examples from current profile data","description":"Render copyable LLM curl examples from live profile data while keeping the one-time raw client key out of page markup and copied commands.","url":"https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/","datePublished":"2026-07-06","dateModified":"2026-07-22","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/","about":["LLM Proxy","Management UI","copyable LLM curl examples"]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Copyable LLM curl examples from current profile data","item":"https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What do copied curl examples use for the client key?","acceptedAnswer":{"@type":"Answer","text":"Every example uses the <generated-secret> placeholder. The user supplies the separately copied one-time client key when preparing the real request."}},{"@type":"Question","name":"Where do example hosts and provider choices come from?","acceptedAnswer":{"@type":"Answer","text":"The Settings UI builds examples from the API-served runtime configuration and the current authenticated management profile instead of hardcoding deployment-specific values."}},{"@type":"Question","name":"Can copying an example expose the raw generated key?","acceptedAnswer":{"@type":"Answer","text":"No. The generated value stays in its dedicated read-only field, while example markup and clipboard actions use only the placeholder."}},{"@type":"Question","name":"When does a provider-specific dictation example appear?","acceptedAnswer":{"@type":"Answer","text":"It appears only when the selected provider supports dictation; text and /v2 examples remain available for configured text providers."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Self-service LLM key management for internal teams, which covers self-service LLM key management."}}]}</script>
@@ -87,27 +88,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Generated-secret placeholder</td>
                           <td>Examples always use &lt;generated-secret&gt;, including after automatic client-key creation.</td>
                           <td>Raw client keys never enter example markup.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Separate one-time key</td>
                           <td>The newly created key appears masked in a read-only field with Show and Copy actions.</td>
                           <td>Users substitute it for the placeholder outside the page.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Provider-specific variants</td>
                           <td>Selected-provider examples include provider and model context.</td>
                           <td>Dictation examples appear only for dictation-capable providers.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -116,24 +117,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>First run</h3>
                       <p>A new user copies the automatically created client key, saves a provider key, and then copies the default /v2 example.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>After creation</h3>
                       <p>The example still contains &lt;generated-secret&gt; so the raw client key is not copied implicitly.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Provider switch</h3>
                       <p>Selecting DeepSeek updates provider-specific examples and hides dictation when unsupported.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -157,66 +158,66 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What do copied curl examples use for the client key?</summary>
                       <p>Every example uses the &lt;generated-secret&gt; placeholder. The user supplies the separately copied one-time client key when preparing the real request.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where do example hosts and provider choices come from?</summary>
                       <p>The Settings UI builds examples from the API-served runtime configuration and the current authenticated management profile instead of hardcoding deployment-specific values.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Can copying an example expose the raw generated key?</summary>
                       <p>No. The generated value stays in its dedicated read-only field, while example markup and clipboard actions use only the placeholder.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>When does a provider-specific dictation example appear?</summary>
                       <p>It appears only when the selected provider supports dictation; text and /v2 examples remain available for configured text providers.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Self-service LLM key management for internal teams, which covers self-service LLM key management.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/self-service-llm-key-management/">
                       <span>Management UI</span>
                       <strong>Self-service LLM key management for internal teams</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/bring-your-own-provider-key-portal/">
                       <span>Management UI</span>
                       <strong>Bring-your-own provider key portal for AI access</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/provider-specific-system-prompts/">
                       <span>Management UI</span>
                       <strong>Provider-specific system prompts in LLM Proxy Settings</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/usage-metadata-without-prompts/">
                       <span>Usage</span>
                       <strong>Usage metadata without storing prompts or responses</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -232,6 +233,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

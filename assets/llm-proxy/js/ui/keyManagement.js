@@ -4,11 +4,13 @@ import {
   AUTH_STATES,
   COPY,
   DASHBOARD_VIEWS,
+  DEFAULT_USAGE_INTERVAL,
   EVENTS,
   MENU_ACTIONS,
   NOTICE_AUTO_DISMISS_MILLISECONDS,
   NOTICE_KINDS,
   ROUTING_DEFAULTS_INVALID_ERROR,
+  USAGE_INTERVALS,
   WORKSPACE_INTEGRITY_ERROR,
 } from "../constants.js";
 import {
@@ -71,6 +73,11 @@ export function createKeyManagement() {
     authState: AUTH_STATES.LOADING,
     busy: false,
     dashboardView: DASHBOARD_VIEWS.USAGE,
+    usageIntervals: USAGE_INTERVALS,
+    /** @type {import("../types.d.js").UsageInterval} */
+    selectedUsageInterval: DEFAULT_USAGE_INTERVAL,
+    usageLoading: false,
+    usageLoadVersion: 0,
     /** @type {import("../types.d.js").ManagementProfile | null} */
     profile: null,
     /** @type {import("../types.d.js").FrontendRuntimeConfig | null} */
@@ -96,7 +103,7 @@ export function createKeyManagement() {
     /** @type {import("../types.d.js").TenantDefaults} */
     defaults: emptyDefaults(),
     /** @type {import("../types.d.js").ManagementUsageSummary} */
-    usage: emptyUsageSummary(),
+    usage: emptyUsageSummary(DEFAULT_USAGE_INTERVAL),
     /** @type {import("../types.d.js").ManagementAdminUser[]} */
     adminUsers: [],
     /** @type {Promise<void> | null} */
@@ -180,6 +187,14 @@ export function createKeyManagement() {
 
     get dashboardRefreshCopy() {
       return this.dashboardView === DASHBOARD_VIEWS.ADMIN ? COPY.refreshAdmin : COPY.refreshUsage;
+    },
+
+    get dashboardRefreshDisabled() {
+      return this.busy || this.usageLoading;
+    },
+
+    get usageControlsDisabled() {
+      return this.busy || this.usageLoading;
     },
 
     get hasAdminUsers() {
@@ -532,12 +547,7 @@ export function createKeyManagement() {
     },
 
     async loadUsageForAuthenticatedProfile() {
-      try {
-        this.usage = await fetchUsageSummary();
-      } catch {
-        this.usage = emptyUsageSummary();
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
-      }
+      await this.loadUsageSummary(false);
     },
 
     async refreshDashboard() {
@@ -549,16 +559,67 @@ export function createKeyManagement() {
     },
 
     async refreshUsage() {
-      this.busy = true;
-      try {
-        this.usage = await fetchUsageSummary();
-        this.setNotice(NOTICE_KINDS.SUCCESS, COPY.usageRefreshed);
-      } catch (requestError) {
-        this.usage = emptyUsageSummary();
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
-      } finally {
-        this.busy = false;
+      await this.loadUsageSummary(true);
+    },
+
+    /**
+     * @param {import("../types.d.js").UsageInterval} interval
+     */
+    async selectUsageInterval(interval) {
+      if (!this.usageIntervals.some((candidate) => candidate.id === interval)) {
+        throw new Error(`usage_interval_invalid:${interval}`);
       }
+      this.selectedUsageInterval = interval;
+      this.usage = emptyUsageSummary(interval);
+      await this.loadUsageSummary(false);
+    },
+
+    /**
+     * @param {boolean} showSuccessNotice
+     */
+    async loadUsageSummary(showSuccessNotice) {
+      const workspaceVersion = this.workspaceVersion;
+      const interval = this.selectedUsageInterval;
+      const loadVersion = this.usageLoadVersion + 1;
+      this.usageLoadVersion = loadVersion;
+      this.usageLoading = true;
+      try {
+        const usage = await fetchUsageSummary(interval);
+        if (!this.canApplyUsageSummary(workspaceVersion, loadVersion, interval)) {
+          return;
+        }
+        if (usage.interval !== interval) {
+          throw new Error(WORKSPACE_INTEGRITY_ERROR);
+        }
+        this.usage = usage;
+        if (showSuccessNotice) {
+          this.setNotice(NOTICE_KINDS.SUCCESS, COPY.usageRefreshed);
+        }
+      } catch {
+        if (this.canApplyUsageSummary(workspaceVersion, loadVersion, interval)) {
+          this.usage = emptyUsageSummary(interval);
+          this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+        }
+      } finally {
+        if (this.workspaceVersion === workspaceVersion && this.usageLoadVersion === loadVersion) {
+          this.usageLoading = false;
+        }
+      }
+    },
+
+    /**
+     * @param {number} workspaceVersion
+     * @param {number} loadVersion
+     * @param {import("../types.d.js").UsageInterval} interval
+     * @returns {boolean}
+     */
+    canApplyUsageSummary(workspaceVersion, loadVersion, interval) {
+      return (
+        this.workspaceVersion === workspaceVersion &&
+        this.usageLoadVersion === loadVersion &&
+        this.selectedUsageInterval === interval &&
+        this.authState === AUTH_STATES.AUTHENTICATED
+      );
     },
 
     async refreshAdminUsers() {
@@ -1366,6 +1427,9 @@ export function createKeyManagement() {
     clearAuthenticatedState() {
       this.workspaceVersion += 1;
       this.profileApplicationVersion += 1;
+      this.usageLoadVersion += 1;
+      this.usageLoading = false;
+      this.selectedUsageInterval = DEFAULT_USAGE_INTERVAL;
       this.providerAutosavePromise = null;
       this.providerAutosavePending = false;
       this.routingDefaultsAutosavePromise = null;
@@ -1381,7 +1445,7 @@ export function createKeyManagement() {
       this.providers = [];
       this.replaceProviderEditorSession(EMPTY_STRING);
       this.defaults = emptyDefaults();
-      this.usage = emptyUsageSummary();
+      this.usage = emptyUsageSummary(DEFAULT_USAGE_INTERVAL);
       this.adminUsers = [];
       this.clearGeneratedSecret();
       this.settingsOpen = false;

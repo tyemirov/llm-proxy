@@ -13,6 +13,7 @@
   --llm-muted: #727887;
   --llm-subtle: #c4c7d1;
   --llm-accent: #5d93ff;
+  --llm-accent-surface: rgba(93, 147, 255, 0.14);
   --llm-good: #95c23d;
   --llm-danger: #cc4b4b;
   --llm-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
@@ -205,6 +206,24 @@ dashboard-actions {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+.usage-interval-control {
+  display: inline-flex;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+llm-proxy-key-management .usage-interval-button {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+llm-proxy-key-management .usage-interval-button.is-active,
+llm-proxy-key-management .usage-interval-button.is-active:hover:not(:disabled) {
+  border-color: var(--llm-accent);
+  background: var(--llm-accent-surface);
+  color: var(--llm-accent);
 }
 
 usage-dashboard {
@@ -518,7 +537,8 @@ client-key-row input {
 }
 
 .client-key-visibility-toggle .material-symbols-outlined,
-.client-key-revoke .material-symbols-outlined {
+.client-key-revoke .material-symbols-outlined,
+.client-key-replace .material-symbols-outlined {
   display: block;
   font-size: 1.125rem;
   line-height: 1;
@@ -1019,6 +1039,15 @@ settings-section,
 
   .provider-selector select {
     width: 100%;
+  }
+
+  .usage-interval-control {
+    width: 100%;
+  }
+
+  llm-proxy-key-management .usage-interval-button {
+    flex: 1 1 0;
+    padding-inline: 0.35rem;
   }
 
   h1 {
