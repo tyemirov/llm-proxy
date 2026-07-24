@@ -2023,6 +2023,38 @@ remains scheduled work.
 
 ## Improvements
 
+- [x] [I030] (P2) Document LLM Proxy client authentication and configuration boundaries.
+  Goal:
+  Make the client credential, management-authentication, provider-key, and
+  configuration ownership boundaries discoverable from both the README and the
+  public documentation site.
+
+  Requirements:
+  - State that bundled clients do not load user-level or system-level YAML;
+    the CLI uses flags/environment and optional application-owned JSON model
+    profiles, while `config.yml` remains service-side.
+  - Publish one repository-evidenced public guide that distinguishes tenant
+    secrets for proxy calls from TAuth/MPR UI management sessions and upstream
+    provider API keys.
+  - Include a canonical authenticated `/v2` request, direct README access, and
+    crawlable links from the public home page, hub, client pages, and relevant
+    security/management resources.
+  - Cover the published guide and its navigation with the static-site
+    Playwright contract, regenerate derived public resources and sitemap, and
+    pass `timeout -k 350s -s SIGKILL 350s make ci` after the final edit.
+
+  Resolution:
+  - Added the public `llm-proxy-client-authentication` resource with a
+    repository-evidenced canonical `/v2` example, tenant-secret/TAuth/provider
+    key boundaries, and explicit no-YAML-client-lookup guidance.
+  - Linked it from the public home page, resource hub, related client/security
+    resources, sitemap, and README; client pages now expose repository-verified
+    Go, Python, and CLI examples and all public resources have a direct README
+    link.
+  - Extended public static-site Playwright coverage for the guide, navigation,
+    metadata, and sitemap date. Final `timeout -k 350s -s SIGKILL 350s make ci`
+    validation passed.
+
 - [ ] [I029] (P1) {B068} Publish one canonical OpenAPI contract and enforce server/client conformance.
   Goal:
   Make one committed OpenAPI 3.1 document the sole canonical HTTP wire

@@ -1074,6 +1074,27 @@ with `PAGES_DOMAIN=<domain>`, `PAGES_CONFIG_URL=<https-config-url>`,
 
 ## Usage
 
+### Client authentication and configuration boundary
+
+The installable `llm-proxy-client` command does not discover a user-level or
+system-level YAML configuration file. It accepts `--base-url` and `--secret`,
+with `LLM_PROXY_BASE_URL` and `LLM_PROXY_SECRET` as their environment
+counterparts; the Go and Python libraries accept the same values through
+application-supplied configuration. The only optional file-based client
+configuration input is an application-owned JSON model profile for per-user
+provider/model selection. Service `config.yml` remains server-side operator
+configuration and is never loaded by a bundled client.
+
+Public proxy calls authenticate with the tenant secret in `key=...`. The
+optional MPR UI/TAuth session instead authorizes management actions such as
+creating a client key or saving a provider key; it does not authenticate a
+direct `POST /v2` request. Upstream provider API keys stay in server-side
+configuration or authenticated management storage and must never be sent by a
+client.
+
+For an end-to-end first request and the boundary between these credentials, see
+the [client authentication guide](https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/).
+
 ### Installable prompt client
 
 Install the reusable JSON POST client:

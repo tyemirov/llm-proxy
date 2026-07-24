@@ -6,7 +6,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/</loc>
-    <lastmod>2026-07-23</lastmod>
+    <lastmod>2026-07-24</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/</loc>
@@ -109,16 +109,20 @@
     <lastmod>2026-07-11</lastmod>
   </url>
   <url>
+    <loc>https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/</loc>
+    <lastmod>2026-07-24</lastmod>
+  </url>
+  <url>
     <loc>https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/</loc>
-    <lastmod>2026-07-11</lastmod>
+    <lastmod>2026-07-24</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/python-client-v2-only-llm-proxy/</loc>
-    <lastmod>2026-07-11</lastmod>
+    <lastmod>2026-07-24</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/installable-llm-proxy-cli/</loc>
-    <lastmod>2026-07-11</lastmod>
+    <lastmod>2026-07-24</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/llm-response-formats-json-xml-csv-text/</loc>
