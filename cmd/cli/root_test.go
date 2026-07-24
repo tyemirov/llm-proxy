@@ -57,6 +57,7 @@ server:
   workers: 2
   queue_size: 9
   request_timeout_seconds: 7
+  max_request_timeout_seconds: 11
   max_prompt_bytes: 1024
   max_input_audio_bytes: 2048
   upstream_rate_limits:
@@ -124,6 +125,13 @@ P411_LEGACY_TOKEN_OWNER_EMAIL=Legacy.Owner@Example.com
 	}
 	if capturedConfiguration.Port != 18080 {
 		t.Fatalf("port=%d", capturedConfiguration.Port)
+	}
+	if capturedConfiguration.RequestTimeoutSeconds != 7 || capturedConfiguration.MaxRequestTimeoutSeconds != 11 {
+		t.Fatalf(
+			"request timeout default=%d maximum=%d",
+			capturedConfiguration.RequestTimeoutSeconds,
+			capturedConfiguration.MaxRequestTimeoutSeconds,
+		)
 	}
 	if len(capturedConfiguration.UpstreamRateLimits) != 1 || capturedConfiguration.UpstreamRateLimits[0].Origin != "https://openai.example" || capturedConfiguration.UpstreamRateLimits[0].MaxRequests != 12 || capturedConfiguration.UpstreamRateLimits[0].Interval != "1m" {
 		t.Fatalf("upstreamRateLimits=%+v", capturedConfiguration.UpstreamRateLimits)
@@ -246,6 +254,47 @@ tenants:
 	executeError := executeRootCommand(t, "--config", configPath)
 	if executeError != nil {
 		t.Fatalf("ExecuteC error: %v", executeError)
+	}
+}
+
+func TestRootCommandRejectsInvalidRequestTimeoutConfiguration(t *testing.T) {
+	testCases := []struct {
+		name          string
+		serverYAML    string
+		expectedError string
+	}{
+		{
+			name:          "zero default",
+			serverYAML:    "  request_timeout_seconds: 0\n",
+			expectedError: "server.request_timeout_seconds must be positive",
+		},
+		{
+			name:          "zero maximum",
+			serverYAML:    "  max_request_timeout_seconds: 0\n",
+			expectedError: "server.max_request_timeout_seconds must be positive",
+		},
+		{
+			name:          "default exceeds maximum",
+			serverYAML:    "  request_timeout_seconds: 5\n  max_request_timeout_seconds: 4\n",
+			expectedError: "server.request_timeout_seconds exceeds server.max_request_timeout_seconds",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			configPath := writeTestConfig(subTest, subTest.TempDir(), `
+server:
+`+testCase.serverYAML+`tenants:
+  - id: default
+    secret: "sekret"
+`+completeLiteralProvidersYAML())
+			withServeProxy(subTest, failingServeProxy(subTest))
+
+			executeError := executeRootCommand(subTest, "--config", configPath)
+			if executeError == nil || !strings.Contains(executeError.Error(), testCase.expectedError) {
+				subTest.Fatalf("error=%v want contains %q", executeError, testCase.expectedError)
+			}
+		})
 	}
 }
 
