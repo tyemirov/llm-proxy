@@ -6,6 +6,32 @@ All notable changes to this project will be documented in this file.
 
 - Declare the llm-proxy TAuth tenant requirements in the app-owned deployment manifest for gateway assembly.
 
+## [v0.2.41] - 2026-07-23
+
+- feat(environment): enhance local environment preparation for deterministic readiness
+- Merge pull request #220 from tyemirov/gix/add-selectable-usage-dashboard-intervals-and-adopt
+- Merge remote-tracking branch 'origin/gix/add-selectable-usage-dashboard-intervals-and-adopt' into gix/add-selectable-usage-dashboard-intervals-and-adopt
+- fix(management): stream usage events in batches to avoid memory exhaustion
+- Merge branch 'master' into gix/add-selectable-usage-dashboard-intervals-and-adopt
+- Merge pull request #219 from tyemirov/improvement/I028-ga4-reporting
+- test: update UI tests for client key replace button and interval styles
+- style(client-key): use Material icon and update styles for replace key button
+- docs(issues): record contrast and key replacement UI improvements
+- test: add usage interval selection and state handling to management UI specs
+- feat(ui): add interval selection controls to usage dashboard
+- docs: update usage dashboard descriptions and add TAUTH_SESSION_PATH var
+- chore: remove mpr-ui from devDependencies in package.json
+- chore(deps): remove mpr-ui from package-lock.json
+- feat(management): add usage interval selection and refined usage summary API
+- chore(deps): update golang.org/x/* modules to latest versions in go.sum
+- chore(deps): update golang.org/x/* dependencies to latest versions
+- docs: extend provider routing plan with canonical MPR UI contract details
+- feat(config): add session_path support for management tauth endpoints
+- feat(cli): add support for management.session_path in config and tests
+- docs: document dashboard usage intervals and mpr-ui@latest shell usage
+- docs(issues): close M018, B063, F013; add M020; update triage and P005 blockers
+- Add I028 LLM Proxy GA4 reporting
+
 ## [v0.2.40] - 2026-07-23
 
 - test: add check for PROXY_PID_CAPTURE file in curl operational script
