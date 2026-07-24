@@ -1387,6 +1387,7 @@ func TestProviderKeyRejectionInternalEdges(t *testing.T) {
 	ginContext, _ := gin.CreateTestContext(response)
 	ginContext.Request = httptest.NewRequest(http.MethodPost, "/", nil)
 	ginContext.Request.Body = failingReadCloser{}
+	ginContext.Set(contextKeyRequestTimeoutState, &requestTimeoutState{})
 	if _, ok := readJSONProxyBody(ginContext); ok || response.Code != http.StatusBadRequest {
 		t.Fatalf("readJSONProxyBody ok=%v status=%d", ok, response.Code)
 	}

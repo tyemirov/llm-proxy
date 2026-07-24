@@ -25,8 +25,10 @@ const (
 	// DefaultDictationProvider is the provider used when /dictate does not supply one.
 	DefaultDictationProvider = ProviderNameOpenAI
 
-	// DefaultRequestTimeoutSeconds is the overall app-side request timeout.
+	// DefaultRequestTimeoutSeconds is the request work budget used when the client omits one.
 	DefaultRequestTimeoutSeconds = 360
+	// DefaultMaxRequestTimeoutSeconds is the one-hour operator capacity ceiling for a request.
+	DefaultMaxRequestTimeoutSeconds = 60 * 60
 	// DefaultMaxPromptBytes limits JSON LLM request bodies accepted by POST /.
 	DefaultMaxPromptBytes      = 4 * 1024 * 1024
 	DefaultDictationModel      = "gpt-4o-mini-transcribe"
@@ -77,6 +79,7 @@ type Configuration struct {
 	WorkerCount                  int
 	QueueSize                    int
 	RequestTimeoutSeconds        int
+	MaxRequestTimeoutSeconds     int
 	MaxPromptBytes               int64
 	MaxInputAudioBytes           int64
 	UpstreamRateLimits           []UpstreamRateLimitConfiguration
@@ -85,6 +88,7 @@ type Configuration struct {
 	upstreamRateLimits           upstreamRateLimits
 	tenants                      tenantRegistry
 	managementSessionValidator   *managementSessionValidator
+	requestTimeoutPolicy         requestTimeoutPolicy
 	validated                    bool
 }
 
@@ -123,6 +127,10 @@ type LegacyTokenMigrationConfiguration struct {
 // NewConfiguration returns a normalized runtime configuration after validating startup invariants.
 func NewConfiguration(configuration Configuration) (Configuration, error) {
 	configuration.ApplyTunables()
+	timeoutPolicy, timeoutPolicyError := newRequestTimeoutPolicy(configuration.RequestTimeoutSeconds, configuration.MaxRequestTimeoutSeconds)
+	if timeoutPolicyError != nil {
+		return Configuration{}, timeoutPolicyError
+	}
 	upstreamRateLimits, rateLimitError := newUpstreamRateLimits(configuration.UpstreamRateLimits)
 	if rateLimitError != nil {
 		return Configuration{}, rateLimitError
@@ -142,6 +150,7 @@ func NewConfiguration(configuration Configuration) (Configuration, error) {
 	configuration.upstreamRateLimits = upstreamRateLimits
 	configuration.tenants = tenants
 	configuration.managementSessionValidator = sessionValidator
+	configuration.requestTimeoutPolicy = timeoutPolicy
 	configuration.validated = true
 	return configuration, nil
 }
@@ -222,8 +231,11 @@ func (configuration *Configuration) ApplyTunables() {
 	if configuration.QueueSize <= 0 {
 		configuration.QueueSize = DefaultQueueSize
 	}
-	if configuration.RequestTimeoutSeconds <= 0 {
+	if configuration.RequestTimeoutSeconds == 0 {
 		configuration.RequestTimeoutSeconds = DefaultRequestTimeoutSeconds
+	}
+	if configuration.MaxRequestTimeoutSeconds == 0 {
+		configuration.MaxRequestTimeoutSeconds = DefaultMaxRequestTimeoutSeconds
 	}
 	if configuration.MaxPromptBytes <= 0 {
 		configuration.MaxPromptBytes = DefaultMaxPromptBytes

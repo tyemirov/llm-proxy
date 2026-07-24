@@ -1390,8 +1390,8 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		request = request.WithContext(requestContext)
 		responseRecorder := httptest.NewRecorder()
 		router.ServeHTTP(responseRecorder, request)
-		if responseRecorder.Code != http.StatusGatewayTimeout {
-			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusGatewayTimeout, responseRecorder.Body.String())
+		if responseRecorder.Code != 499 {
+			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, 499, responseRecorder.Body.String())
 		}
 	})
 
@@ -1697,8 +1697,8 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		queryParameters := url.Values{}
 		queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
 		statusCode, _, _ := performCoverageTextRequestWithTimeout(subTest, router, queryParameters, "", coverageShortRequestTimeout)
-		if statusCode != http.StatusGatewayTimeout {
-			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
+		if statusCode != 499 {
+			subTest.Fatalf("status=%d want=%d", statusCode, 499)
 		}
 	})
 
@@ -1749,8 +1749,8 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 		queryParameters := url.Values{}
 		queryParameters.Set("provider", proxy.ProviderNameDeepSeek)
 		statusCode, _, _ := performCoverageTextRequestWithTimeout(subTest, router, queryParameters, "", coverageShortRequestTimeout)
-		if statusCode != http.StatusGatewayTimeout {
-			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
+		if statusCode != 499 {
+			subTest.Fatalf("status=%d want=%d", statusCode, 499)
 		}
 		close(releaseUpstream)
 		select {
@@ -2125,8 +2125,8 @@ func TestCoverageHTTPUtilityReadFailure(t *testing.T) {
 	})
 	queryParameters := url.Values{}
 	statusCode, _, _ := performCoverageTextRequestWithTimeout(t, router, queryParameters, "", coverageShortRequestTimeout)
-	if statusCode != http.StatusGatewayTimeout {
-		t.Fatalf("status=%d want=%d", statusCode, http.StatusGatewayTimeout)
+	if statusCode != 499 {
+		t.Fatalf("status=%d want=%d", statusCode, 499)
 	}
 }
 

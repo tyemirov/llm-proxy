@@ -41,11 +41,8 @@ func (client *OpenAIClient) transcribeAudioWithURL(parentContext context.Context
 
 	_ = multipartWriter.Close()
 
-	requestContext, cancelRequest := context.WithTimeout(parentContext, client.requestTimeout)
-	defer cancelRequest()
-
 	requestBody := bytes.NewReader(payloadBuffer.Bytes())
-	httpRequest, buildError := http.NewRequestWithContext(requestContext, http.MethodPost, transcriptionsURL, requestBody)
+	httpRequest, buildError := http.NewRequestWithContext(parentContext, http.MethodPost, transcriptionsURL, requestBody)
 	if buildError != nil {
 		return constants.EmptyString, buildError
 	}

@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
 	"github.com/tyemirov/llm-proxy/internal/utils"
@@ -23,8 +22,7 @@ const (
 type geminiFinishReason string
 
 type geminiGenerateContentClient struct {
-	httpClient     HTTPDoer
-	requestTimeout time.Duration
+	httpClient HTTPDoer
 }
 
 type geminiGenerateContentRequest struct {
@@ -71,10 +69,9 @@ type geminiUsageMetadata struct {
 	TotalTokenCount      *int `json:"totalTokenCount"`
 }
 
-func newGeminiGenerateContentClient(httpClient HTTPDoer, requestTimeout time.Duration) *geminiGenerateContentClient {
+func newGeminiGenerateContentClient(httpClient HTTPDoer) *geminiGenerateContentClient {
 	return &geminiGenerateContentClient{
-		httpClient:     httpClient,
-		requestTimeout: requestTimeout,
+		httpClient: httpClient,
 	}
 }
 
@@ -90,9 +87,7 @@ func (client *geminiGenerateContentClient) generateText(parentContext context.Co
 	payloadBytes, _ := json.Marshal(payload)
 
 	requestURL := geminiGenerateContentURL(baseURL, modelIdentifier)
-	requestContext, cancelRequest := context.WithTimeout(parentContext, client.requestTimeout)
-	defer cancelRequest()
-	httpRequest, buildError := http.NewRequestWithContext(requestContext, http.MethodPost, requestURL, bytes.NewReader(payloadBytes))
+	httpRequest, buildError := http.NewRequestWithContext(parentContext, http.MethodPost, requestURL, bytes.NewReader(payloadBytes))
 	if buildError != nil {
 		structuredLogger.Errorw(logEventBuildHTTPRequest, constants.LogFieldError, buildError)
 		return textGenerationResult{}, buildError
