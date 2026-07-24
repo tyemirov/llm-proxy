@@ -2023,6 +2023,95 @@ remains scheduled work.
 
 ## Improvements
 
+- [ ] [I029] (P1) {B068} Publish one canonical OpenAPI contract and enforce server/client conformance.
+  Goal:
+  Make one committed OpenAPI 3.1 document the sole canonical HTTP wire
+  contract for every llm-proxy-owned endpoint, publish that exact artifact on
+  the public site, and make CI reject drift in handlers, bundled clients, or
+  human-facing API documentation.
+
+  Evidence:
+  - The repository currently has no OpenAPI or Swagger artifact and no
+    contract-conformance gate.
+  - The public site and API origin return `404` for the conventional OpenAPI
+    and interactive-documentation paths.
+  - The published canonical-v2 prose page omits the request-level
+    `reasoning_effort` field delivered by B068, demonstrating that independently
+    maintained prose can drift from the live wire contract.
+
+  Requirements:
+  - Add exactly one hand-maintained canonical contract at
+    `docs/openapi.yaml`. Do not add aliases, fallback schema locations,
+    generated source copies, legacy operations, compatibility fields, or a
+    second independently editable contract.
+  - Describe every llm-proxy-owned public proxy, configuration, and management
+    operation, including methods, paths, query parameters, headers, request
+    bodies, multipart parts, response bodies, response headers, content types,
+    authentication, and every intentionally returned status code. Exclude
+    TAuth-owned endpoints from the llm-proxy contract.
+  - Define the current `/v2` request precisely, including `model`, `messages`,
+    `web_search`, `max_tokens`, and `reasoning_effort`; preserve the B068
+    distinction between omission and an explicit non-blank value, and document
+    route capability validation and the canonical error response.
+  - Define security at the actual boundary: the tenant client key query
+    parameter for proxy operations and the TAuth session cookie for management
+    operations. Examples and fixtures must never contain real credentials,
+    tenant identifiers, or user data.
+  - Treat a server or client wire-contract change as incomplete unless the same
+    change updates `docs/openapi.yaml`. CI must fail when a registered
+    llm-proxy route is absent from the contract, a contract operation has no
+    registered handler, or an exercised request/response/status/header/content
+    type violates the contract.
+  - Enforce conformance through black-box tests at the public HTTP boundary.
+    Load the real router and handlers, compare their operation inventory with
+    the OpenAPI operations, and validate representative success and error
+    exchanges against the schemas. Permit only explicitly documented protocol
+    handling such as `OPTIONS`; do not substitute isolated schema unit tests.
+  - Make the bundled Go package, Python package, and Go CLI prove compliance
+    with the same artifact. Their real serialized `/v2` requests and parsed
+    success/error responses must cover tenant-key placement, provider
+    selection, query stripping, model, messages, web search, token limits, and
+    reasoning effort. CI must reject an undocumented field or a missing current
+    field; do not generate compatibility clients or preserve obsolete shapes.
+  - Publish the byte-equivalent canonical artifact at
+    `https://llm-proxy.mprlab.com/openapi.yaml` and publish a human-readable
+    reference at `https://llm-proxy.mprlab.com/docs/` derived from that
+    artifact. The contract's server URL must identify
+    `https://llm-proxy-api.mprlab.com`; the API origin must not become a second
+    schema source.
+  - Build publication from the committed artifact, record enough provenance to
+    prove the deployed file came from the release source, and fail release
+    validation when the Pages artifact differs. Link both forms from the site
+    navigation/resource index and include the documentation page in the
+    sitemap.
+  - Remove independently maintained endpoint and field inventories from prose
+    API resource pages, or derive and verify them from the OpenAPI artifact.
+    In particular, the canonical-v2 documentation must expose
+    `reasoning_effort` without creating another source of truth.
+
+  Deliverables:
+  - The canonical `docs/openapi.yaml` contract and documented ownership/update
+    rule.
+  - Server-route and HTTP-exchange conformance checks wired into `make ci`.
+  - Go, Python, and CLI client conformance coverage wired into `make ci`.
+  - The exact published schema, derived human-readable reference, navigation,
+    sitemap, and release/publication verification.
+  - Updated repository and site documentation that points contributors and
+    clients to the canonical contract.
+
+  Validation:
+  - Run the required baseline `make ci` before the first implementation edit
+    and the required final `make ci` after the last edit.
+  - Prove the route inventory is bidirectionally complete and representative
+    real-handler exchanges validate against `docs/openapi.yaml`.
+  - Prove all three bundled clients serialize and consume the current `/v2`
+    contract, including omitted and explicit `reasoning_effort`.
+  - Prove the generated Pages artifact contains the byte-equivalent canonical
+    schema and derived documentation, with no independently generated copy.
+  - After the user-owned production deployment, capture live `200` responses
+    for `/openapi.yaml` and `/docs/` and verify the published schema matches the
+    released source artifact.
+
 - [x] [I028] (P1) Emit LLM Proxy page views to its dedicated GA4 property.
   Resolved: added a first-party GA4 loader for `G-Z780618FPW`, included it in the main site and all generated resource pages, extended the generator and browser contract coverage, and passed the full `make ci` gate.
 - [ ] [I027] (P1) {F014} Redesign the user dashboard around connected-provider widgets.
