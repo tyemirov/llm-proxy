@@ -12,75 +12,210 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 Resolved history: `.mprlab/ISSUES-ARCHIVE.md`; the complete original issue
 bodies, resolution notes, and validation records remain in `v0.2.43`.
 
-Triage, 2026-07-24: B069 is the immediate active regression. F014 has no
-remaining active prerequisites and unblocks I027 and P001. I029 is the
-remaining contract predecessor for I031; I031 also waits for F014. M019 is now
-independently ready because M018 is complete. M013 then M012 resolve the
-product-context governance path. Planning proceeds P002 -> P003 -> P004 ->
-P005, with M020 already satisfied; recurring maintenance remains scheduled
-work.
+Triage, 2026-07-24: B069 is the immediate active regression. Under the
+one-issue-at-a-time workflow, the selected P1 execution tranche is
+**B069 -> F014 -> I029**: B069 establishes the bounded per-request timeout and
+error contract for public upstream work, F014 replaces singular management
+routes with tenant-scoped routes, and I029 then freezes those final public and
+management contracts in OpenAPI. I031 is the next convergence item after I029
+and F014; I027 and P001 are independent F014 successors. M019 is independently
+ready because M018 is complete. M013 then M012 resolve the product-context
+governance path. Planning proceeds P002 -> P003 -> P004 -> P005, with M020
+already satisfied; recurring maintenance remains scheduled work.
 
 ## BugFixes
 
-- [ ] [B069] (P1) Restore the long v2 semantic-review completion contract after request-level effort rollout.
-  ### Summary
-  The redeployed production endpoint accepts the canonical optional `reasoning_effort` field, but a production-sized F001 source-world request still outlives the caller without returning either the final response or a structured proxy timeout. A small request using the same endpoint, credentials, model, and explicit `high` effort succeeds, so this is the long-request boundary previously covered by B016, B017, and B018 rather than request-shape rejection or total service unavailability.
+- [!] [B069] (P1) Make upstream request timeouts an explicit, bounded client-to-proxy contract.
+  Goal:
+  Let each client choose the exact bounded amount of time LLM Proxy may spend
+  on one upstream request, while keeping caller cancellation, provider work,
+  and gateway protection under distinct owners.
 
-  ### Impact
-  Kamu F001 cannot begin Bulgarian Creative Director source-world review. The failed one-shot request produced no durable response or safe completion receipt, so the caller cannot distinguish a still-running provider operation from a failed operation and must not retry it.
+  Problem:
+  A production-sized F001 `POST /v2` request reached the caller's independent
+  300-second HTTP deadline before LLM Proxy returned either a result or its own
+  360-second timeout. The owned gateway was staged with 420-second outer
+  deadlines. The Go CLI and Python package separately use 390 seconds, but that
+  number has no product, protocol, provider, or deployment significance.
 
-  ### Production evidence
-  - On 2026-07-24, after the effort-capable deployment, a sanitized `POST /v2` control using `gpt-5.5`, `reasoning_effort: "high"`, `max_tokens: 16`, and `Reply exactly: OK` returned `OK` in about 2.6 seconds.
-  - Creative Director was then upgraded to released `github.com/tyemirov/llm-proxy v0.2.42`. No-spend HTTP coverage proves the F001 delivery-profile value is serialized as canonical `reasoning_effort: "high"` and that omitted configuration remains absent.
-  - The exact F001 profile passed Creative Director validation at SHA-256 `eec521a661b9f64886bfb7bbc232752f0947c6067ffa33dddec15d5a5966e581`. The selected `neblagodarnost` canonical source is 15,845 bytes with SHA-256 `45da648ff5dd21d417c65ad8e022919e8f761d52ad628d017192bf5095f6d58d`.
-  - The canonical pipeline request started with inherited `LLM_PROXY_SECRET`, `LLM_PROXY_BASE_URL`, and `LLM_PROXY_MODEL` unset so the project-owned dotenv configuration was authoritative:
-    ```bash
-    env -u LLM_PROXY_SECRET -u LLM_PROXY_BASE_URL -u LLM_PROXY_MODEL \
-      /Users/tyemirov/Development/Smith/creative-director/bin/creative-director pipeline \
-      --project-profile /Users/tyemirov/Documents/Projects/Kamu/configs/creative-director/kamu-tales.json \
-      --story-id neblagodarnost \
-      --mode storyboard \
-      --delivery-profile kamu-storyboard \
-      --execute \
-      --from source-world \
-      --to source-world \
-      --confirm-provider-spend \
-      --json
-    ```
-  - At `2026-07-24T21:51:55Z`, after the configured 300-second caller deadline, the pipeline stopped with stable code `source_world_review_llm_proxy_http_error` and the sanitized error:
-    ```text
-    llm_proxy_client_http_failure: post request: Post "[redacted-url]": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
-    ```
-  - No source-world prompt, review, or manifest was promoted by the failed transaction. The pipeline wrote only its blocked execution state and did not retry the provider request.
-  - Public verification after the failure resolved `llm-proxy-api.mprlab.com` to the expected gateway and returned the expected Caddy-served `403` health response from `/` plus `200` from `/config-ui.yaml`; the service was not generally unavailable.
-  - Read-only inspection of the files staged on the gateway host confirms `request_timeout_seconds: 360`, `response_header_timeout 420s`, and `read_timeout 420s`. The running container image digest could not be inspected without the gateway sudo boundary, and no sudo or deployment command was attempted.
-  - The signed-in one-day usage dashboard records three `openai / gpt-5.5` requests but exposes only aggregate counts, so it cannot identify whether the abandoned long request later completed or reached the proxy deadline.
-  - Released `v0.2.43` contains only client-authentication documentation/site work and does not address this issue.
+  The defect is not that one of these constants is too small. The defect is
+  that the caller, proxy, provider adapters, and gateway each own an implicit
+  clock, so a client cannot ask LLM Proxy for the work budget its request needs
+  and cannot know which layer ended the request.
 
-  ### Confirmed boundary defect and remaining investigation
-  B016 and B017 established a one-request REST contract in which LLM Proxy owns OpenAI background polling, the proxy runtime owns the terminal or structured timeout, packaged clients wait longer than the server, and the gateway waits longer than clients. The deployed files preserve the 360-second server and 420-second gateway deadlines, but this existing product profile supplies a 300-second client deadline. That ordering guarantees the caller can abandon a valid in-flight proxy request before LLM Proxy owns completion or returns its structured timeout.
+  Consequence:
+  Kamu F001 cannot safely retry its Bulgarian source-world review. The failed
+  one-shot request produced no response or durable completion receipt, and the
+  available aggregate usage count cannot establish whether provider work later
+  completed or the proxy eventually reached its deadline.
 
-  The reusable Go package does not currently expose the documented 390-second supported-client deadline as a public constant or default. `llmproxyclient.ConfigInput` requires every application to supply a positive duration, while `390 * time.Second` exists only as a private `llm-proxy-client` command constant and a README example. Creative Director therefore cannot consume one owner-defined timeout contract; its package default is 120 seconds and the Kamu profile duplicates a 300-second product value.
+  Evidence:
+  - A small `gpt-5.5` request with explicit `reasoning_effort: "high"` returned
+    `200` in about 2.6 seconds, so the released field, route, credentials, and
+    basic service path work.
+  - The approximately 16 KB `neblagodarnost` source-world request ended after
+    300 seconds with `Client.Timeout exceeded while awaiting headers`; no
+    source-world artifact was promoted and the caller did not retry.
+  - The current runtime uses `server.request_timeout_seconds: 360`; staged
+    gateway `response_header_timeout` and `read_timeout` values are 420
+    seconds. The Go CLI, README example, and Python client introduce a separate
+    390-second convention, while the reusable Go package requires every caller
+    to invent its own positive HTTP timeout.
+  - LLM Proxy currently constructs a global timeout for provider clients,
+    creates another deadline in the text handler, and lets dictation rely on
+    provider-local deadlines. There is no single request-ingress deadline
+    shared consistently by every upstream operation.
 
-  Fix this contract defect first. Production-safe correlation must then establish whether the explicit-effort workload also reveals a provider/background-lifecycle regression after a supported client remains connected through the proxy deadline. Possible remaining failures are:
-  1. the deployed effort-capable route no longer completing the background polling lifecycle for this workload;
-  2. runtime/gateway timeout ordering drifting from the released contract; or
-  3. the provider legitimately reaching the proxy-owned deadline and LLM Proxy returning a structured timeout.
+  Contract:
+  Define one optional request header for every public operation that can start
+  upstream work:
+  ```text
+  X-LLM-Proxy-Request-Timeout-Seconds: <positive whole number>
+  ```
+  It applies to `GET /`, `POST /`, `POST /v2`, and `POST /dictate`; management
+  and static-site operations are out of scope.
 
-  The investigation must establish the terminal boundary from production-safe correlation evidence. Do not assume that merely raising a product-local timeout proves or repairs the owning defect.
+  The header is the maximum wall-clock budget LLM Proxy may spend on the
+  authenticated request. It begins before request-body parsing and includes
+  validation, admission/queue wait, the provider call, OpenAI background
+  polling, and response construction. It is a ceiling, not a promise that the
+  operation will run for that long: validation, queue saturation, provider
+  failure, or explicit caller cancellation may finish it earlier.
 
-  ### Requirements
-  1. Reproduce a production-comparable `POST /v2` request with an approximately 16 KB source-world prompt, `gpt-5.5`, and explicit `reasoning_effort: "high"` through the released public boundary.
-  2. Prove from safe request correlation that LLM Proxy received `high`, resolved the expected provider/model, entered the OpenAI background lifecycle, and either reached a terminal response or its own configured deadline.
-  3. Restore deterministic timeout ordering so the proxy returns the final body or a structured proxy/provider error before any supported caller or gateway closes the connection. Expose one canonical supported-client deadline from the Go client package so Creative Director can consume the owner contract and Kamu can remove its product-local magic number.
-  4. Preserve the one-shot public REST contract from B017. Do not add product-side retries, prompt chunking, tenant-default mutation, provider-specific fields, direct OpenAI calls, or a Kamu-only timeout exception.
-  5. Add production-comparable black-box coverage for the explicit-effort long-request path and retain the existing small-request behavior.
+  - If the header is omitted, use `server.request_timeout_seconds` as the
+    effective budget.
+  - Add `server.max_request_timeout_seconds` as the operator-owned capacity
+    limit. Accept a requested value exactly when it is within the inclusive
+    range `1..max`; never round, clamp, replace, or silently fall back.
+  - Reject a blank, repeated, signed, fractional, nonnumeric, zero, negative,
+    or over-limit value with `400` before queue admission or any provider call.
+    Return `application/json` with the exact safe envelope
+    `{"error":{"code":"invalid_request_timeout","max_request_timeout_seconds":M}}`.
+  - Return the effective value on every accepted response, including errors,
+    in `X-LLM-Proxy-Request-Timeout-Seconds`.
+  - When the accepted budget expires, cancel queued/provider/polling work and
+    return `504 application/json` with the exact safe envelope
+    `{"error":{"code":"request_timeout","request_timeout_seconds":N}}`, where
+    `N` is the effective timeout. Do not report it as a provider failure.
+  - Create the deadline once at authenticated request ingress and propagate
+    that context unchanged. Provider adapters must not start a fresh timeout or
+    extend the remaining budget.
 
-  ### Acceptance criteria
-  - The exact F001 `neblagodarnost` source-world canary returns a final review body or a structured, attributable proxy error; it never ends as an opaque client `awaiting headers` timeout.
-  - A small explicit-`high` v2 control continues to return HTTP 200.
-  - The effective server, supported-client, and gateway deadlines are verified at the deployed boundary.
-  - `make ci` passes and the released/deployed artifact is verified before F001 retries the request.
+  Caller cancellation is a separate concern. A Go context, process signal, or
+  explicitly configured transport policy may cancel a request sooner, in which
+  case no response is guaranteed. Bundled clients must not hide such a policy
+  behind the server-budget setting or impose an unrelated total-response
+  deadline by default.
+
+  The owned gateway is the final outer guard. Its response-header and read
+  deadlines must be strictly greater than
+  `server.max_request_timeout_seconds`, with the relationship validated from
+  deployment configuration. The gateway must not use a client-specific magic
+  number.
+
+  Requirements:
+  1. Validate the server default and maximum at startup: both effective values
+     are positive and the default does not exceed the maximum. An explicitly
+     invalid value fails startup rather than being reset.
+  2. Enforce the header and one ingress-owned context identically across all
+     four upstream public operations. Preserve the one-shot REST lifecycle:
+     no async receipt, retry, prompt chunking, provider-specific timeout field,
+     tenant mutation, direct provider call, or product-only exception.
+  3. Move timeout selection into each Go and Python messages request and
+     serialize it as the canonical header. Replace the CLI's ambiguous
+     `--timeout` with `--request-timeout-seconds`. Remove the 390-second
+     constants and config-level total-response timeout, and replace the
+     390-second README example. Continue to honor the Go caller's context and
+     injected transports as separate cancellation mechanisms.
+  4. Record the effective timeout and terminal outcome in safe structured
+     request evidence without prompts, audio, credentials, provider response
+     bodies, or free-form error text. Production correlation must distinguish
+     success, proxy deadline, provider failure, and caller cancellation.
+  5. Update the owning documentation in the same change:
+     - `README.md` defines the header, default/max behavior, client examples,
+       status codes, and the distinction between work budget and cancellation.
+     - `CHANGELOG.md` records the externally visible header, errors, client API
+       change, and removal of the arbitrary supported-client deadline.
+     - `configs/config.yml` declares the current operator-selected default and
+       maximum. The accepted request budget is at most the proxy maximum, which
+       remains strictly below the owned gateway's outer guard; caller
+       cancellation is independent of that ordering.
+     - This repository currently has no `PRD.md` or `ARCHITECTURE.md`. Do not
+       create partial timeout-only placeholders. M013 owns the product-context
+       document decision and must carry this final behavior into any canonical
+       documents it introduces. I029 will subsequently freeze the wire
+       contract in canonical OpenAPI.
+
+  Deployment dependency:
+  The current gateway schema-v1 `caddy_route` declaration cannot express
+  transport timeout values and rejects unknown fields. Do not invent an
+  llm-proxy-only manifest field or extend that obsolete shape. Production
+  activation requires a companion `mprlab-gateway` change or the forward-only
+  I204 `caddy_fragment` migration to make the edge guard greater than the
+  configured proxy maximum, plus non-deploying validation of the assembled
+  Caddy configuration. Production deployment itself remains user-owned.
+
+  Validation:
+  - Add black-box tests proving omission uses the server default; a shorter
+    accepted value times out and cancels work; a value longer than the default
+    can succeed after the default would have expired; and malformed, repeated,
+    or over-limit values return `400` without an upstream request.
+  - Exercise `GET /`, both JSON POST routes, and `/dictate`; prove queue time and
+    OpenAI background polling consume the same non-resetting budget.
+  - Exercise the Go package, Python package, and CLI against a real test server;
+    prove each sends the requested header, omits it when not requested, receives
+    the server's effective response header, and has no hidden 390-second
+    deadline.
+  - Validate startup invariants and reject a deployment whose gateway outer
+    deadline cannot outwait the configured server maximum.
+  - Re-run a production-comparable approximately 16 KB `gpt-5.5`,
+    explicit-`high` request with a deliberately selected budget above the
+    deployed default and within the deployed maximum. Correlate it through a
+    final body or the canonical proxy `504`; it must not end at an opaque
+    bundled-client `awaiting headers` timeout. Retain the small explicit-`high`
+    `200` control.
+  - Run the required baseline and final `make ci` pair, with the final run after
+    the last code edit. Verify the released artifact and deployed timeout
+    relationship before F001 retries the request.
+
+  Implemented 2026-07-24:
+  LLM Proxy now accepts the canonical request-scoped header on all four
+  upstream routes, validates the configured default and maximum, starts one
+  cause-preserving deadline before body parsing, echoes the effective budget,
+  and returns exact safe `400` and `504` envelopes. Queue wait, provider work,
+  dictation, and OpenAI background polling share that deadline without adapter
+  resets. Safe terminal evidence distinguishes success, proxy timeout, provider
+  failure, and caller cancellation.
+
+  The Go package, Go CLI, and Python package now serialize the budget per
+  request and impose no hidden total-response deadline. Go integrations move
+  `ConfigInput.Timeout` to
+  `MessagesRequestInput.RequestTimeoutSeconds`; Python client `0.2.0` moves
+  `ClientConfig.timeout_seconds` to
+  `ClientMessagesRequest.request_timeout_seconds`; the CLI uses only
+  `--request-timeout-seconds`. README, changelog, implementation plans,
+  generated public client guides, and upgrade commands document the migration.
+
+  The app deployment preflight reads its tracked maximum and supplies it to the
+  companion gateway verifier. The gateway parses only its own Caddy
+  configuration, rejects outer guards that are not strictly greater, and sets
+  the response-header, upstream-read, and client-write guards to 3660 seconds
+  for the current 3600-second service capacity. The connection-idle policy
+  remains independent. Focused Go coverage is 100%, Python checks pass, the
+  complete gateway test suite and pinned-container Caddy validation pass, and
+  no production deployment command was run.
+
+  The required pre-change and post-change `make ci` runs pass. The final run
+  followed the last code edit and passed exact 100% Go coverage, 33 Python
+  tests, 51 management-browser tests, the black-box authentication test,
+  release-contract checks, and the live-provider harness preflight.
+
+  Blocked:
+  Source implementation is complete, but resolution still requires the
+  execution chain to land and release the coordinated app and gateway changes,
+  the user-owned production deployment, verification of the deployed
+  max/outer-guard relationship, and the production-comparable approximately
+  16 KB explicit-`high` canary plus its small control before Kamu F001 retries.
 
 ## Improvements
 
@@ -181,7 +316,7 @@ work.
     `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
     last code edit.
 
-- [ ] [I029] (P1) Publish one canonical OpenAPI contract and enforce server/client conformance.
+- [ ] [I029] (P1) {B069,F014} Publish one canonical OpenAPI contract and enforce server/client conformance.
   Goal:
   Make one committed OpenAPI 3.1 document the sole canonical HTTP wire
   contract for every llm-proxy-owned endpoint, publish that exact artifact on
@@ -196,6 +331,14 @@ work.
   - The published canonical-v2 prose page omits the request-level
     `reasoning_effort` field delivered by B068, demonstrating that independently
     maintained prose can drift from the live wire contract.
+
+  Dependencies:
+  - B069 must settle the final public per-request timeout and attributable
+    error boundary before this issue freezes its request/response
+    documentation and client conformance expectations.
+  - F014 replaces the singular management endpoints with tenant-scoped routes.
+    This contract must describe only that final management surface, rather than
+    documenting a shape that F014 immediately removes.
 
   Requirements:
   - Add exactly one hand-maintained canonical contract at
@@ -397,11 +540,15 @@ work.
   - Sample the open entries after the pass and confirm each has clear next actions and validation expectations.
   - Confirm no recurring runbook was marked complete.
   - Confirm duplicates were merged or explicitly cross-referenced.
-  Last run: 2026-07-23. Polished 14 non-recurring unresolved entries. B063 is
-  explicitly blocked on an operator-owned deployment; M018 is P0 after a
-  pinned-toolchain scan found reachable GO-2026-5970; F013, F014, and I027 now
-  have their implementation order recorded. Planning entries remain open but
-  deferred under the repository workflow.
+  Last run: 2026-07-24. Polished 13 non-recurring unresolved entries after the
+  resolved-history archive. Added I029 dependencies on B069 and F014: the
+  former settles the public per-request timeout/error contract and the latter
+  replaces singular management routes. B069 now records its external gateway
+  deployment dependency, and M013 waits for B069 so future product-context
+  documents cannot omit the resulting timeout contract. Selected the
+  sequential P1 tranche B069 -> F014 -> I029; I031 is the resulting convergence
+  item, while I027 and P001 remain independent F014 successors. Planning
+  entries remain open but deferred under the repository workflow.
 - [ ] [M003R] (P2) Architecture and policy review.
   Goal:
   Catch architecture, policy, and workflow drift before it becomes hidden maintenance debt.
@@ -534,12 +681,16 @@ work.
   - A reviewed governance normalization change with no unrelated product or runtime edits.
   Validation:
   - Run the MPR Lab governor in `--dry-run` and `--check` modes and require no pending managed-file changes.
-- [ ] [M013] (P2) Resolve missing product-context document references.
+- [ ] [M013] (P2) {B069} Resolve missing product-context document references.
   Goal:
   Keep the root governance entrypoint limited to product-context documents that exist and represent the current contract.
   Requirements:
   - Decide whether current `PRD.md` and `ARCHITECTURE.md` documents are required or whether their references are stale.
   - Add current canonical documents or remove the obsolete references; do not add placeholders or compatibility documents.
+  - Treat B069's final bounded client-selected request budget, ingress deadline
+    ownership, caller-cancellation distinction, and gateway outer-guard
+    invariant as required source material if canonical product or architecture
+    documents are added.
   Deliverables:
   - Root governance references that resolve to current product-context files.
   Validation:
