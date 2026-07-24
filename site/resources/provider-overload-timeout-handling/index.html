@@ -96,7 +96,7 @@
 
                         <tr>
                           <td>Deadline status</td>
-                          <td>Long requests that exceed server.request_timeout_seconds return 504.</td>
+                          <td>Long requests that exceed their accepted proxy work budget return a canonical 504.</td>
                           <td>Clients should not poll llm-proxy after a timeout.</td>
                         </tr>
 

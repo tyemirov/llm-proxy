@@ -71,6 +71,7 @@
 <li>Configure base URL and tenant secret.</li>
 <li>Let omitted model stay omitted when provider defaults should apply.</li>
 <li>Set MessagesRequestInput.ReasoningEffort only for a nonblank value the resolved route declares.</li>
+<li>Set MessagesRequestInput.RequestTimeoutSeconds only when this request needs a specific proxy work budget.</li>
             </ol>
           </section>
 
@@ -114,6 +115,13 @@
                           <td>The proxy, not the client, validates exact model capability.</td>
                         </tr>
 
+
+                        <tr>
+                          <td>Per-request work budget</td>
+                          <td>RequestTimeoutSeconds serializes the canonical timeout header.</td>
+                          <td>Go context cancellation remains separate and caller-owned.</td>
+                        </tr>
+
                 </tbody>
               </table>
             </div>
@@ -140,6 +148,12 @@
                       <p>A caller adds max_tokens for one request without changing provider defaults.</p>
                     </section>
 
+
+                    <section class="resource-card">
+                      <h3>Long review</h3>
+                      <p>A caller requests a larger bounded proxy work budget without changing the HTTP client's total timeout.</p>
+                    </section>
+
             </div>
           </section>
 
@@ -159,7 +173,6 @@
     Secret:             serviceSecret,
     ModelProfilePath:   userModelProfilePath,
     ModelProfileReader: os.ReadFile,
-    Timeout:            390 * time.Second,
 })
 if err != nil {
     return err
@@ -167,7 +180,14 @@ if err != nil {
 client, err := llmproxyclient.NewClient(config, http.DefaultClient)
 if err != nil {
     return err
-}</code></pre>
+}
+requestTimeoutSeconds := 900
+request, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{
+    Messages: []llmproxyclient.MessageInput{
+        {Role: &quot;user&quot;, Content: &quot;Summarize this&quot;},
+    },
+    RequestTimeoutSeconds: &amp;requestTimeoutSeconds,
+})</code></pre>
             <p>Verified 2026-07-24 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
           </section>
 
