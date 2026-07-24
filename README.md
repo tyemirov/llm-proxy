@@ -35,11 +35,52 @@ know whether the selected upstream provider uses synchronous responses,
 background responses, or provider-specific polling internally. For OpenAI
 Responses, llm-proxy always owns the background-response lifecycle: it sends
 stored background requests upstream and polls OpenAI server-side until the answer
-is terminal or `server.request_timeout_seconds` expires.
+is terminal or the request's effective work budget expires.
 
 A `504 Gateway Timeout` means the overall proxy request deadline expired before
 the selected upstream provider produced a final answer. It is not a prompt for
 the client to poll llm-proxy.
+
+### Request work budgets
+
+Every authenticated operation that can start upstream work accepts one optional
+header:
+
+```text
+X-LLM-Proxy-Request-Timeout-Seconds: N
+```
+
+`N` is the positive whole-number wall-clock budget, in seconds, for that
+request. The budget begins before body parsing and covers validation, queue
+admission, every provider call, OpenAI background polling, and response
+construction for `GET /`, `POST /`, `POST /v2`, and `POST /dictate`.
+
+If the header is omitted, `server.request_timeout_seconds` is the effective
+budget. A supplied value must be in the inclusive range
+`1..server.max_request_timeout_seconds`; the proxy never rounds, clamps, or
+replaces it. A blank, repeated, signed, fractional, nonnumeric, zero, negative,
+or over-limit value returns this exact `400 application/json` response before
+queue admission:
+
+```json
+{"error":{"code":"invalid_request_timeout","max_request_timeout_seconds":3600}}
+```
+
+Every accepted response, including errors, echoes the effective value in
+`X-LLM-Proxy-Request-Timeout-Seconds`. If that budget expires, the proxy cancels
+the remaining queued, provider, or polling work and returns:
+
+```json
+{"error":{"code":"request_timeout","request_timeout_seconds":900}}
+```
+
+with `504 application/json`. The value shown is the effective budget for that
+request.
+
+This server work budget is not a client transport timeout. A caller may still
+cancel sooner with a Go context, a process signal, or an explicitly configured
+HTTP transport policy, and no response is guaranteed after caller cancellation.
+The bundled clients impose no separate total-response deadline by default.
 
 Internally, `server.workers` limits concurrent upstream provider HTTP
 operations and `server.queue_size` limits upstream HTTP operations waiting for a
@@ -69,6 +110,7 @@ server:
   workers: 4
   queue_size: 100
   request_timeout_seconds: 360
+  max_request_timeout_seconds: 3600
   max_prompt_bytes: 4194304
   max_input_audio_bytes: 26214400
   upstream_rate_limits: []
@@ -404,6 +446,12 @@ providers:
             efforts: ["minimal", "low", "medium", "high"]
 ```
 
+`server.request_timeout_seconds` and `server.max_request_timeout_seconds` must
+both be positive, and the default must not exceed the maximum. Invalid explicit
+values fail startup. The maximum is operator-owned service capacity and must
+remain strictly below the response-header and read deadlines of the outer
+gateway.
+
 Dictation-capable providers must also declare a dictation catalog:
 
 ```yaml
@@ -444,10 +492,10 @@ the stable proxy payload shape for that OpenAI model and must be one of:
 
 All OpenAI Responses text requests also send `background: true` and
 `store: true`. llm-proxy polls the stored OpenAI response server-side until it
-reaches a terminal state or the normal `server.request_timeout_seconds` deadline
-expires. Plain REST callers use one `GET /`, `POST /`, or `POST /v2` request and
-receive the final formatted answer; they do not stream, poll, or follow a
-separate resume endpoint.
+reaches a terminal state or the request's effective work budget expires. Plain
+REST callers use one `GET /`, `POST /`, or `POST /v2` request and receive the
+final formatted answer; they do not stream, poll, or follow a separate resume
+endpoint.
 
 Provider-specific details:
 
@@ -1068,7 +1116,12 @@ than treating a completed push as immediate public availability.
 `llm-proxy` is a gateway-local service in `mprlab-gateway`, so `make deploy`
 uses the sole gateway `deploy-llm-proxy-backend` target after the gateway-owned
 `verify-llm-proxy-deployment-contract` preflight proves the coupled TAuth
-service, runtime assets, and health checks. Override only the checkout with
+service, runtime assets, and health checks. That preflight reads
+`server.max_request_timeout_seconds` from the app-owned tracked config and
+passes it to the gateway verifier; deployment fails unless the gateway-owned
+response-header, upstream-read, and client-write guards are all strictly
+greater. Neither repository carries a fallback copy of the other's capacity.
+Override only the checkout with
 `GATEWAY_DIR=/path/to/mprlab-gateway`; the selected gateway checkout must be a
 clean, synchronized `origin/master`. Override Pages preparation and activation
 with `PAGES_DOMAIN=<domain>`, `PAGES_CONFIG_URL=<https-config-url>`,
@@ -1132,6 +1185,7 @@ llm-proxy-client \
   --secret "$SERVICE_SECRET" \
   --model gpt-5.5 \
   --reasoning-effort high \
+  --request-timeout-seconds 900 \
   --prompt "Summarize this"
 ```
 
@@ -1141,13 +1195,50 @@ such as `prompt` and `model`, and sends the prompt as a v2 `user` message.
 `--system-prompt` becomes a v2 `system` message. Optional `model`,
 `web_search`, `max_tokens`, and `reasoning_effort` values remain body fields.
 When `--model` is omitted, the body omits `model` so llm-proxy uses the selected
-provider's configured default model.
+provider's configured default model. `--request-timeout-seconds` is instead
+serialized as `X-LLM-Proxy-Request-Timeout-Seconds`; omitting the flag omits the
+header and selects the server default. The obsolete `--timeout` flag is not an
+alias and is rejected.
 
 The reusable Go package under `pkg/llmproxyclient` is v2-only: construct a
 `MessagesRequest` with `NewMessagesRequest` and send it with
 `Client.PostMessages`. `MessagesRequestInput.ReasoningEffort` is an optional
 nonblank request override; the proxy validates it against the exact resolved
 provider/model capability before it calls upstream.
+
+Set `MessagesRequestInput.RequestTimeoutSeconds` when one request needs a
+specific proxy work budget:
+
+```go
+requestTimeoutSeconds := 900
+request, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{
+    Messages: []llmproxyclient.MessageInput{
+        {Role: "user", Content: "Summarize this"},
+    },
+    RequestTimeoutSeconds: &requestTimeoutSeconds,
+})
+if err != nil {
+    return err
+}
+text, err := client.PostMessages(ctx, request)
+```
+
+The request value controls only the proxy budget header. `ctx` remains the Go
+caller's independent cancellation authority, and the injected `HTTPDoer` may
+have its own explicitly selected transport policy. The package does not add a
+total-response timeout.
+
+To upgrade the Go package and CLI:
+
+```shell
+go get github.com/tyemirov/llm-proxy/pkg/llmproxyclient@latest
+go install github.com/tyemirov/llm-proxy/llm-proxy-client@latest
+```
+
+Remove `ConfigInput.Timeout` from existing Go integrations and move the desired
+proxy budget to `MessagesRequestInput.RequestTimeoutSeconds`. Use a caller
+context only when the application intentionally needs an independent,
+potentially shorter cancellation deadline.
 
 #### Model selection without application redeployment
 
@@ -1201,7 +1292,6 @@ config, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
     Secret:             serviceSecret,
     ModelProfilePath:   userModelProfilePath,
     ModelProfileReader: os.ReadFile,
-    Timeout:            390 * time.Second,
 })
 if err != nil {
     return err
@@ -1232,8 +1322,11 @@ remains the separate normal contract.
 The same transport contract is available as an importable Python package:
 
 ```shell
-uv pip install "llm-proxy-client @ git+https://github.com/tyemirov/llm-proxy.git"
+uv pip install --upgrade "llm-proxy-client @ git+https://github.com/tyemirov/llm-proxy.git@master#subdirectory=python"
 ```
+
+For reproducible application builds, replace `master` with the desired released
+repository tag.
 
 ```python
 from llm_proxy_client import Client, ClientConfig, ClientMessagesRequest, ClientMessage
@@ -1249,6 +1342,7 @@ text = client.post_messages(
     ClientMessagesRequest(
         messages=(ClientMessage(role="user", content="Summarize this"),),
         max_tokens=512,
+        request_timeout_seconds=900,
     )
 )
 ```
@@ -1256,6 +1350,14 @@ text = client.post_messages(
 `ClientMessagesRequest.reasoning_effort` is the same optional per-request
 override. Supply a nonblank value only for a resolved provider/model route that
 declares it; omit the field to retain the tenant default.
+`ClientMessagesRequest.request_timeout_seconds` serializes the canonical proxy
+work-budget header. Omit it to use the server default.
+
+Python client `0.2.0` removes `ClientConfig.timeout_seconds`. Move that value to
+each `ClientMessagesRequest` that needs it. The default urllib transport is
+called without a total-response timeout; applications that intentionally need
+an independent transport deadline can continue to inject an opener that owns
+that policy.
 
 The Python package is v2-only. For chat-transcript callers, send the same
 `post_messages` request with multiple messages:
@@ -1561,6 +1663,11 @@ but are not returned in response metadata.
 
 ### LLM endpoint
 
+All four public upstream endpoints accept
+`X-LLM-Proxy-Request-Timeout-Seconds: N`. Omit it to use the configured server
+default. See [Request work budgets](#request-work-budgets) for validation,
+response-header, timeout-error, and cancellation semantics.
+
 ```text
 GET /
   ?prompt=STRING            # required
@@ -1734,12 +1841,12 @@ and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-mo
 ### Status codes
 
 * `200 OK` - success
-* `400 Bad Request` - missing/invalid parameters, invalid multipart audio form, unknown provider/model, or unsupported provider capability
+* `400 Bad Request` - missing/invalid parameters, invalid request timeout, invalid multipart audio form, unknown provider/model, or unsupported provider capability. Invalid timeout headers return `{"error":{"code":"invalid_request_timeout","max_request_timeout_seconds":M}}`.
 * `403 Forbidden` - missing or invalid `key`
 * `413 Payload Too Large` - JSON prompt body exceeds `max_prompt_bytes`
 * `429 Too Many Requests` - upstream provider rate limit
 * `503 Service Unavailable` - selected provider credential is unavailable because that non-default provider is disabled or missing its API key
-* `504 Gateway Timeout` - the overall proxy request timed out before the selected upstream provider returned a final result
+* `504 Gateway Timeout` - the accepted proxy work budget expired; the response is `{"error":{"code":"request_timeout","request_timeout_seconds":N}}`
 * `502 Bad Gateway` - upstream provider API returned an error
 
 ## Security
