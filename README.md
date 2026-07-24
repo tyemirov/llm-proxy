@@ -16,6 +16,7 @@ client.
   - `POST /dictate?key=...[&provider=...]` for audio transcription
 - Choose the provider per request via `provider=...`; omitted provider uses the authenticated tenant default
 - Choose the model per request via `model=...`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
+- Set optional nonblank `reasoning_effort=...` on `GET /`, or in a JSON body for `POST /` and `POST /v2`, to select a capability-supported reasoning level for that exact resolved route. An explicit value overrides the tenant default; an omitted value retains it. Blank or unsupported values fail before an upstream call.
 - Choose the dictation model per request via `model=...` on `/dictate`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
 - Optional per-request web search via `web_search=1|true|yes` when the selected provider/model is configured to support it
 - Optional logging at `debug` or `info` levels
@@ -373,10 +374,11 @@ The transport deliberately omits sampling controls because Kimi K3 fixes those
 values upstream.
 GLM-5.2 uses the existing BigModel/Zhipu Chat Completions endpoint with a
 configured 131072-token output cap; its optional `thinking` and
-`reasoning_effort` controls remain outside the public request contract. The
-proxy's saved tenant `reasoning_effort` default is separate: it is forwarded
-only when a resolved route has an explicit catalog mapping, never to GLM or a
-generic compatible-provider adapter.
+provider-native `reasoning_effort` controls are not exposed directly. The
+proxy's provider-neutral request-level `reasoning_effort` is accepted only when
+the exact resolved route declares a capability mapping. Blank values and
+supplied values for GLM or generic compatible-provider routes fail before an
+upstream call; an omitted field retains the supported tenant default.
 Qwen Cloud Token Plan is separate from DashScope: select `qwencloud` with a
 dedicated `${QWEN_CLOUD_TOKEN_PLAN_API_KEY}` and its token-plan base URL; the
 existing `qwen` alias remains DashScope-only. MiniMax M2.7 uses
@@ -428,8 +430,8 @@ provider/model route; provider-level and catalog-wide declarations are rejected.
 Each declaration uses the `openai_responses` adapter and a nonempty,
 duplicate-free ordered list of values that adapter supports, and only an OpenAI
 `openai_responses_reasoning_tools` route may declare it. The capability limits
-the tenant default that can be persisted for that route; it is not a public
-request parameter.
+the tenant default that can be persisted for that route and validates any
+supplied public request value.
 
 `request_profile` is currently required only for OpenAI text models. It selects
 the stable proxy payload shape for that OpenAI model and must be one of:
@@ -438,7 +440,7 @@ the stable proxy payload shape for that OpenAI model and must be one of:
 |-----------------|------------------|
 | `openai_responses_temperature` | Adds `temperature`. |
 | `openai_responses_temperature_tools` | Adds `temperature`; includes web-search tools only when both the request and model catalog enable web search. |
-| `openai_responses_reasoning_tools` | Adds reasoning/text controls; includes web-search tools only when both the request and model catalog enable web search. A saved tenant reasoning effort is sent only when this route declares the capability. |
+| `openai_responses_reasoning_tools` | Adds reasoning/text controls; includes web-search tools only when both the request and model catalog enable web search. The resolved request-level reasoning effort is sent only when this route declares the capability. |
 
 All OpenAI Responses text requests also send `background: true` and
 `store: true`. llm-proxy polls the stored OpenAI response server-side until it
@@ -918,8 +920,9 @@ tenants:
 ```
 
 For a static tenant, `reasoning_effort` is a route-bound default. Set it only
-when the exact configured provider/model declares the value; it is not a
-per-request setting. For example, a supported OpenAI route can use `high`:
+when the exact configured provider/model declares the value. It applies when a
+caller omits the optional per-request field; a supplied supported value
+overrides it. For example, a supported OpenAI route can use `high`:
 
 ```yaml
 tenants:

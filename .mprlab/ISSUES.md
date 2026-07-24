@@ -20,6 +20,41 @@ remains scheduled work.
 
 ## BugFixes
 
+- [x] [B068] (P1) Let text callers select a capability-validated reasoning effort.
+  Goal:
+  Make `reasoning_effort` an optional canonical text-request parameter, rather than a tenant-wide setting that every caller must inherit. An omitted request must retain the resolved tenant default; an explicit request must override it only when the exact resolved provider/model capability supports that value.
+
+  Evidence:
+  - Kamu F001 source-world review for `neblagodarnost` reached the active llm-proxy tenant using `gpt-5.5`, but returned `504` with zero generated tokens while the tenant default was `xhigh`.
+  - The same story set had previously completed source-world work with the same model, and the current review is a bounded application task rather than a tenant-wide policy change.
+  - The public request parser currently rejects `reasoning_effort` as an unknown JSON field (`TestChatHandlersRejectPublicReasoningEffortParameter`), while `chatRequestParameters` derives effort only from `TenantDefaults.ReasoningEffort`.
+  - Model catalogs already declare exact supported effort values and adapter mappings, and `validateReasoningEffortForResolvedTextRoute` already validates a provider/model route. The missing capability is public request ownership and precedence.
+
+  Requirements:
+  - Add optional `reasoning_effort` to the canonical text contract for `GET /`, compatibility `POST /`, and canonical `POST /v2`.
+  - Preserve the existing tenant routing default only when the request omits the field. A supplied value must be nonblank and exact and must fail closed with HTTP 400 before any provider call when the resolved route does not support it.
+  - Keep provider translation inside the model-capability adapter. Do not expose OpenAI, OpenAI-compatible, or other provider-specific field names to callers; unsupported providers must not silently ignore a supplied effort.
+  - Extend the bundled Go and Python v2 clients, and the Go CLI, to serialize the same optional field. Client libraries may reject blank local input but must leave model-specific capability validation to llm-proxy.
+  - Replace the obsolete public-field rejection test with no-spend regression coverage for explicit override, omitted-default preservation, unsupported-route rejection, and client serialization.
+  - Update the REST and provider-routing documentation. Do not raise global timeouts or mutate a tenant default as a workaround.
+
+  Validation:
+  - A `gpt-5.5` v2 request with tenant default `xhigh` and request `reasoning_effort: "high"` produces exactly OpenAI's mapped `reasoning.effort: "high"` upstream.
+  - An omitted request field continues to produce the supported tenant default.
+  - A blank effort, a supplied unsupported effort on a reasoning route, or any supplied effort on a non-reasoning route returns HTTP 400 and reaches no provider transport.
+  - `timeout -k 350s -s SIGKILL 350s make ci` passes.
+
+  Resolution:
+  - The public canonical text contract now accepts optional `reasoning_effort` on `GET /`, compatibility `POST /`, and `POST /v2`. When omitted, the resolved tenant default remains authoritative; when supplied, the request value takes precedence only after exact resolved-route capability validation.
+  - The request remains provider-neutral. LLM Proxy rejects blank or null values, performs the provider/model capability check and adapter translation, and returns HTTP 400 before provider transport for unsupported request values.
+  - The bundled Go and Python v2 clients and the Go CLI serialize the same optional field. The JSON v2 client body is canonical and does not retain a stale query-string copy.
+  - README and provider-routing documentation describe precedence, validation, and the provider-neutral caller contract.
+
+  Implementation validation:
+  - No-spend HTTP coverage proves explicit `high` overrides a tenant `xhigh` default, an omitted field preserves that default, and blank, null, unsupported-value, and unsupported-route requests return HTTP 400 without an upstream request.
+  - Go, Python, and CLI client coverage proves canonical serialization and rejects blank local input.
+  - The required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed, including static analysis, race-tested Go coverage, Python tests, frontend tests, release-tooling tests, and live-provider harness preflight.
+
 - [x] [B001] (P2) Make management request examples copyable and provider-specific.
   ### Summary
   The Settings modal renders request examples as one inert snippet. Users need default examples and selected-provider examples as separate copyable commands so they can copy the exact public proxy request shape they intend to use.
@@ -1987,6 +2022,95 @@ remains scheduled work.
 
 
 ## Improvements
+
+- [ ] [I029] (P1) {B068} Publish one canonical OpenAPI contract and enforce server/client conformance.
+  Goal:
+  Make one committed OpenAPI 3.1 document the sole canonical HTTP wire
+  contract for every llm-proxy-owned endpoint, publish that exact artifact on
+  the public site, and make CI reject drift in handlers, bundled clients, or
+  human-facing API documentation.
+
+  Evidence:
+  - The repository currently has no OpenAPI or Swagger artifact and no
+    contract-conformance gate.
+  - The public site and API origin return `404` for the conventional OpenAPI
+    and interactive-documentation paths.
+  - The published canonical-v2 prose page omits the request-level
+    `reasoning_effort` field delivered by B068, demonstrating that independently
+    maintained prose can drift from the live wire contract.
+
+  Requirements:
+  - Add exactly one hand-maintained canonical contract at
+    `docs/openapi.yaml`. Do not add aliases, fallback schema locations,
+    generated source copies, legacy operations, compatibility fields, or a
+    second independently editable contract.
+  - Describe every llm-proxy-owned public proxy, configuration, and management
+    operation, including methods, paths, query parameters, headers, request
+    bodies, multipart parts, response bodies, response headers, content types,
+    authentication, and every intentionally returned status code. Exclude
+    TAuth-owned endpoints from the llm-proxy contract.
+  - Define the current `/v2` request precisely, including `model`, `messages`,
+    `web_search`, `max_tokens`, and `reasoning_effort`; preserve the B068
+    distinction between omission and an explicit non-blank value, and document
+    route capability validation and the canonical error response.
+  - Define security at the actual boundary: the tenant client key query
+    parameter for proxy operations and the TAuth session cookie for management
+    operations. Examples and fixtures must never contain real credentials,
+    tenant identifiers, or user data.
+  - Treat a server or client wire-contract change as incomplete unless the same
+    change updates `docs/openapi.yaml`. CI must fail when a registered
+    llm-proxy route is absent from the contract, a contract operation has no
+    registered handler, or an exercised request/response/status/header/content
+    type violates the contract.
+  - Enforce conformance through black-box tests at the public HTTP boundary.
+    Load the real router and handlers, compare their operation inventory with
+    the OpenAPI operations, and validate representative success and error
+    exchanges against the schemas. Permit only explicitly documented protocol
+    handling such as `OPTIONS`; do not substitute isolated schema unit tests.
+  - Make the bundled Go package, Python package, and Go CLI prove compliance
+    with the same artifact. Their real serialized `/v2` requests and parsed
+    success/error responses must cover tenant-key placement, provider
+    selection, query stripping, model, messages, web search, token limits, and
+    reasoning effort. CI must reject an undocumented field or a missing current
+    field; do not generate compatibility clients or preserve obsolete shapes.
+  - Publish the byte-equivalent canonical artifact at
+    `https://llm-proxy.mprlab.com/openapi.yaml` and publish a human-readable
+    reference at `https://llm-proxy.mprlab.com/docs/` derived from that
+    artifact. The contract's server URL must identify
+    `https://llm-proxy-api.mprlab.com`; the API origin must not become a second
+    schema source.
+  - Build publication from the committed artifact, record enough provenance to
+    prove the deployed file came from the release source, and fail release
+    validation when the Pages artifact differs. Link both forms from the site
+    navigation/resource index and include the documentation page in the
+    sitemap.
+  - Remove independently maintained endpoint and field inventories from prose
+    API resource pages, or derive and verify them from the OpenAPI artifact.
+    In particular, the canonical-v2 documentation must expose
+    `reasoning_effort` without creating another source of truth.
+
+  Deliverables:
+  - The canonical `docs/openapi.yaml` contract and documented ownership/update
+    rule.
+  - Server-route and HTTP-exchange conformance checks wired into `make ci`.
+  - Go, Python, and CLI client conformance coverage wired into `make ci`.
+  - The exact published schema, derived human-readable reference, navigation,
+    sitemap, and release/publication verification.
+  - Updated repository and site documentation that points contributors and
+    clients to the canonical contract.
+
+  Validation:
+  - Run the required baseline `make ci` before the first implementation edit
+    and the required final `make ci` after the last edit.
+  - Prove the route inventory is bidirectionally complete and representative
+    real-handler exchanges validate against `docs/openapi.yaml`.
+  - Prove all three bundled clients serialize and consume the current `/v2`
+    contract, including omitted and explicit `reasoning_effort`.
+  - Prove the generated Pages artifact contains the byte-equivalent canonical
+    schema and derived documentation, with no independently generated copy.
+  - After the user-owned production deployment, capture live `200` responses
+    for `/openapi.yaml` and `/docs/` and verify the published schema matches the
+    released source artifact.
 
 - [x] [I028] (P1) Emit LLM Proxy page views to its dedicated GA4 property.
   Resolved: added a first-party GA4 loader for `G-Z780618FPW`, included it in the main site and all generated resource pages, extended the generator and browser contract coverage, and passed the full `make ci` gate.

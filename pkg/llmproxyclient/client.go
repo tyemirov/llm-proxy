@@ -48,6 +48,7 @@ var postBodyQueryKeys = map[string]struct{}{
 	queryModel:          {},
 	"max_output_tokens": {},
 	"max_tokens":        {},
+	"reasoning_effort":  {},
 	"prompt":            {},
 	"system_prompt":     {},
 	"web_search":        {},
@@ -204,18 +205,20 @@ type message struct {
 
 // MessagesRequestInput is the unvalidated external input for a v2 messages-only JSON POST request.
 type MessagesRequestInput struct {
-	Messages  []MessageInput
-	Model     string
-	WebSearch bool
-	MaxTokens *int
+	Messages        []MessageInput
+	Model           string
+	WebSearch       bool
+	MaxTokens       *int
+	ReasoningEffort *string
 }
 
 // MessagesRequest is a validated v2 messages-only JSON POST request.
 type MessagesRequest struct {
-	messages  []message
-	model     string
-	webSearch bool
-	maxTokens *int
+	messages        []message
+	model           string
+	webSearch       bool
+	maxTokens       *int
+	reasoningEffort *string
 }
 
 // NewMessagesRequest validates v2 messages-only request input.
@@ -226,15 +229,19 @@ func NewMessagesRequest(input MessagesRequestInput) (MessagesRequest, error) {
 	if input.MaxTokens != nil && *input.MaxTokens <= 0 {
 		return MessagesRequest{}, fmt.Errorf("%w: max_tokens must be positive", ErrInvalidClientRequest)
 	}
+	if input.ReasoningEffort != nil && strings.TrimSpace(*input.ReasoningEffort) == "" {
+		return MessagesRequest{}, fmt.Errorf("%w: reasoning_effort must be nonblank", ErrInvalidClientRequest)
+	}
 	messages, messageError := newMessages(input.Messages)
 	if messageError != nil {
 		return MessagesRequest{}, messageError
 	}
 	return MessagesRequest{
-		messages:  messages,
-		model:     strings.TrimSpace(input.Model),
-		webSearch: input.WebSearch,
-		maxTokens: input.MaxTokens,
+		messages:        messages,
+		model:           strings.TrimSpace(input.Model),
+		webSearch:       input.WebSearch,
+		maxTokens:       input.MaxTokens,
+		reasoningEffort: input.ReasoningEffort,
 	}, nil
 }
 
@@ -248,6 +255,9 @@ func (request MessagesRequest) payloadBody(model string) []byte {
 	}
 	if request.maxTokens != nil {
 		payload["max_tokens"] = *request.maxTokens
+	}
+	if request.reasoningEffort != nil {
+		payload["reasoning_effort"] = *request.reasoningEffort
 	}
 	payloadBytes, _ := json.Marshal(payload)
 	return payloadBytes

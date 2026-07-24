@@ -19,7 +19,7 @@ import (
 
 func TestConfigMessagesPostURLShapesAuthenticatedV2JSONPostURL(testingInstance *testing.T) {
 	config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
-		BaseURL:  "https://proxy.example/review?prompt=old&model=old&max_tokens=9&web_search=true&provider=gemini&keep=1",
+		BaseURL:  "https://proxy.example/review?prompt=old&model=old&max_tokens=9&reasoning_effort=old&web_search=true&provider=gemini&keep=1",
 		Secret:   "sekret",
 		Provider: "deepseek",
 		Timeout:  time.Second,
@@ -71,7 +71,7 @@ func TestConfigMessagesPostURLShapesAuthenticatedV2JSONPostURL(testingInstance *
 	if queryValues.Get("keep") != "1" {
 		testingInstance.Fatalf("keep=%q", queryValues.Get("keep"))
 	}
-	for _, removedQueryKey := range []string{"prompt", "model", "max_tokens", "web_search"} {
+	for _, removedQueryKey := range []string{"prompt", "model", "max_tokens", "reasoning_effort", "web_search"} {
 		if queryValues.Has(removedQueryKey) {
 			testingInstance.Fatalf("query key %s should have been removed", removedQueryKey)
 		}
@@ -109,14 +109,16 @@ func TestClientPostMessagesSendsV2MessagesBody(testingInstance *testing.T) {
 		testingInstance.Fatalf("client error: %v", clientError)
 	}
 	maxTokens := messageOrder(5)
+	reasoningEffort := "high"
 	request, requestError := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{
 		Messages: []llmproxyclient.MessageInput{
 			{Role: "assistant", Content: "Hi", Order: secondOrder},
 			{Role: "user", Content: "Hello", Order: firstOrder},
 		},
-		Model:     "deepseek-v4-flash",
-		WebSearch: true,
-		MaxTokens: maxTokens,
+		Model:           "deepseek-v4-flash",
+		WebSearch:       true,
+		MaxTokens:       maxTokens,
+		ReasoningEffort: &reasoningEffort,
 	})
 	if requestError != nil {
 		testingInstance.Fatalf("request error: %v", requestError)
@@ -141,7 +143,7 @@ func TestClientPostMessagesSendsV2MessagesBody(testingInstance *testing.T) {
 	if !ok || firstMessage["role"] != "user" || firstMessage["content"] != "Hello" || firstMessage["order"] != float64(1) {
 		testingInstance.Fatalf("firstMessage=%v", rawMessages[0])
 	}
-	if capturedBody["model"] != "deepseek-v4-flash" || capturedBody["web_search"] != true || capturedBody["max_tokens"] != float64(5) {
+	if capturedBody["model"] != "deepseek-v4-flash" || capturedBody["web_search"] != true || capturedBody["max_tokens"] != float64(5) || capturedBody["reasoning_effort"] != "high" {
 		testingInstance.Fatalf("body=%v", capturedBody)
 	}
 }
@@ -617,6 +619,7 @@ func TestClientSendsUnknownModelProfilePairToProxy(testingInstance *testing.T) {
 }
 
 func TestMessagesRequestRejectsInvalidInputs(testingInstance *testing.T) {
+	emptyReasoningEffort := ""
 	testCases := []struct {
 		name        string
 		input       llmproxyclient.MessagesRequestInput
@@ -631,6 +634,11 @@ func TestMessagesRequestRejectsInvalidInputs(testingInstance *testing.T) {
 			name:        "invalid max tokens",
 			input:       llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "prompt"}}, MaxTokens: messageOrder(0)},
 			errorString: "max_tokens must be positive",
+		},
+		{
+			name:        "blank reasoning effort",
+			input:       llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "prompt"}}, ReasoningEffort: &emptyReasoningEffort},
+			errorString: "reasoning_effort must be nonblank",
 		},
 		{
 			name:        "unsupported role",
