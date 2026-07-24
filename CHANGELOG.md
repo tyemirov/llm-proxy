@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 
 - Declare the llm-proxy TAuth tenant requirements in the app-owned deployment manifest for gateway assembly.
 
+## [v0.2.43] - 2026-07-24
+
+- docs(issues): document I031 for tenant-scoped usage failure details and triage update
+- Merge pull request #222 from tyemirov/gix/add-public-guide-for-llm-proxy-client-authentication
+- test: add SEO coverage for LLM Proxy client authentication resource
+- feat(site): add client authentication resource and link from homepage
+- feat(seo): add client authentication resource and repo usage examples
+- docs(seo): add LLM Proxy client authentication resource to cluster report
+- docs: clarify client authentication and configuration boundary in README
+- docs: publish public client authentication/configuration ownership guide
+
 ## [v0.2.42] - 2026-07-24
 
 - Merge pull request #221 from tyemirov/bugfix/B068-request-reasoning-effort
