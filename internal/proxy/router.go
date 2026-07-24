@@ -26,23 +26,38 @@ type result struct {
 // chatRequestPayload is the JSON contract for POST / LLM requests.
 // Client authentication stays outside this body on the key query parameter; provider credentials are loaded from server configuration.
 type chatRequestPayload struct {
-	Prompt          string                `json:"prompt"`
-	Messages        *[]chatMessagePayload `json:"messages"`
-	Model           string                `json:"model"`
-	WebSearch       bool                  `json:"web_search"`
-	SystemPrompt    string                `json:"system_prompt"`
-	MaxTokens       *int                  `json:"max_tokens"`
-	ReasoningEffort *string               `json:"reasoning_effort"`
+	Prompt          string                      `json:"prompt"`
+	Messages        *[]chatMessagePayload       `json:"messages"`
+	Model           string                      `json:"model"`
+	WebSearch       bool                        `json:"web_search"`
+	SystemPrompt    string                      `json:"system_prompt"`
+	MaxTokens       *int                        `json:"max_tokens"`
+	ReasoningEffort requestReasoningEffortInput `json:"reasoning_effort"`
 }
 
 type chatV2RequestPayload struct {
-	Prompt          json.RawMessage       `json:"prompt"`
-	Messages        *[]chatMessagePayload `json:"messages"`
-	Model           string                `json:"model"`
-	WebSearch       bool                  `json:"web_search"`
-	SystemPrompt    json.RawMessage       `json:"system_prompt"`
-	MaxTokens       *int                  `json:"max_tokens"`
-	ReasoningEffort *string               `json:"reasoning_effort"`
+	Prompt          json.RawMessage             `json:"prompt"`
+	Messages        *[]chatMessagePayload       `json:"messages"`
+	Model           string                      `json:"model"`
+	WebSearch       bool                        `json:"web_search"`
+	SystemPrompt    json.RawMessage             `json:"system_prompt"`
+	MaxTokens       *int                        `json:"max_tokens"`
+	ReasoningEffort requestReasoningEffortInput `json:"reasoning_effort"`
+}
+
+type requestReasoningEffortInput struct {
+	value    *string
+	supplied bool
+}
+
+func (input *requestReasoningEffortInput) UnmarshalJSON(rawInput []byte) error {
+	var value *string
+	if unmarshalError := json.Unmarshal(rawInput, &value); unmarshalError != nil {
+		return unmarshalError
+	}
+	input.value = value
+	input.supplied = true
+	return nil
 }
 
 // chatRequestParameters is the normalized request shape shared by GET and POST handlers after edge validation.
@@ -295,11 +310,7 @@ func chatRequestFromQuery(ginContext *gin.Context, defaults textRequestDefaults,
 		ginContext.String(http.StatusBadRequest, errorInvalidMaxTokens)
 		return chatRequestParameters{}, false
 	}
-	requestedReasoningEffort, reasoningEffortRequested := ginContext.GetQuery(queryParameterReasoningEffort)
-	var requestReasoningEffort *string
-	if reasoningEffortRequested {
-		requestReasoningEffort = &requestedReasoningEffort
-	}
+	requestReasoningEffort := requestReasoningEffortFromQuery(ginContext)
 
 	providerDefinition, modelIdentifier, verificationError := validator.ResolveText(
 		ginContext.Query(queryParameterProvider),
@@ -473,17 +484,25 @@ func reasoningEffortForResolvedTextRoute(model textModelDefinition, rawEffort st
 	return rawEffort
 }
 
-func requestReasoningEffortForResolvedTextRoute(provider providerDefinition, model textModelDefinition, defaultEffort string, requestedEffort *string) (string, error) {
-	if requestedEffort == nil {
+func requestReasoningEffortFromQuery(ginContext *gin.Context) requestReasoningEffortInput {
+	value, supplied := ginContext.GetQuery(queryParameterReasoningEffort)
+	if !supplied {
+		return requestReasoningEffortInput{}
+	}
+	return requestReasoningEffortInput{value: &value, supplied: true}
+}
+
+func requestReasoningEffortForResolvedTextRoute(provider providerDefinition, model textModelDefinition, defaultEffort string, requestedEffort requestReasoningEffortInput) (string, error) {
+	if !requestedEffort.supplied {
 		return reasoningEffortForResolvedTextRoute(model, defaultEffort), nil
 	}
-	if *requestedEffort == constants.EmptyString {
-		return constants.EmptyString, unsupportedReasoningEffortError(provider, model, *requestedEffort)
+	if requestedEffort.value == nil || *requestedEffort.value == constants.EmptyString {
+		return constants.EmptyString, unsupportedReasoningEffortError(provider, model, constants.EmptyString)
 	}
-	if validationError := validateReasoningEffortForResolvedTextRoute(provider, model, *requestedEffort); validationError != nil {
+	if validationError := validateReasoningEffortForResolvedTextRoute(provider, model, *requestedEffort.value); validationError != nil {
 		return constants.EmptyString, validationError
 	}
-	return *requestedEffort, nil
+	return *requestedEffort.value, nil
 }
 
 func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRouter, chatRequest chatRequestParameters, requestTenant tenant, usageEndpoint string, requestTimeout time.Duration, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger) {

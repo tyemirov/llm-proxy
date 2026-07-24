@@ -255,7 +255,7 @@ func TestChatHandlersApplyPublicReasoningEffortOverTenantDefault(testingInstance
 	}
 }
 
-func TestChatHandlersRejectUnsupportedPublicReasoningEffortBeforeUpstreamRequest(testingInstance *testing.T) {
+func TestChatHandlersRejectInvalidPublicReasoningEffortBeforeUpstreamRequest(testingInstance *testing.T) {
 	var upstreamRequests atomic.Int32
 	mockServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 		upstreamRequests.Add(1)
@@ -265,10 +265,11 @@ func TestChatHandlersRejectUnsupportedPublicReasoningEffortBeforeUpstreamRequest
 	router := NewTestRouter(testingInstance, mockServer.URL)
 
 	testCases := []struct {
-		name   string
-		method string
-		path   string
-		body   string
+		name            string
+		method          string
+		path            string
+		body            string
+		expectedMessage string
 	}{
 		{name: "GET query", method: http.MethodGet, path: "/?key=" + TestSecret + "&prompt=review&model=" + proxy.ModelNameGPT41 + "&reasoning_effort=high"},
 		{name: "root JSON", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + proxy.ModelNameGPT41 + `","reasoning_effort":"high"}`},
@@ -277,6 +278,9 @@ func TestChatHandlersRejectUnsupportedPublicReasoningEffortBeforeUpstreamRequest
 		{name: "GET blank effort", method: http.MethodGet, path: "/?key=" + TestSecret + "&prompt=review&model=" + proxy.ModelNameGPT55 + "&reasoning_effort="},
 		{name: "root JSON blank effort", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + proxy.ModelNameGPT55 + `","reasoning_effort":""}`},
 		{name: "v2 JSON blank effort", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + proxy.ModelNameGPT55 + `","reasoning_effort":""}`},
+		{name: "root JSON null effort", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + proxy.ModelNameGPT41 + `","reasoning_effort":null}`},
+		{name: "v2 JSON null effort", method: http.MethodPost, path: "/v2?key=" + TestSecret, body: `{"messages":[{"role":"user","content":"review"}],"model":"` + proxy.ModelNameGPT41 + `","reasoning_effort":null}`},
+		{name: "root JSON nonstring effort", method: http.MethodPost, path: "/?key=" + TestSecret, body: `{"prompt":"review","model":"` + proxy.ModelNameGPT41 + `","reasoning_effort":1}`, expectedMessage: "invalid JSON request"},
 	}
 	for _, testCase := range testCases {
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
@@ -288,7 +292,11 @@ func TestChatHandlersRejectUnsupportedPublicReasoningEffortBeforeUpstreamRequest
 
 			router.ServeHTTP(response, request)
 
-			if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "invalid reasoning_effort parameter") {
+			expectedMessage := testCase.expectedMessage
+			if expectedMessage == "" {
+				expectedMessage = "invalid reasoning_effort parameter"
+			}
+			if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), expectedMessage) {
 				subTest.Fatalf("status=%d body=%q", response.Code, response.Body.String())
 			}
 		})
