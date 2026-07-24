@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 
 - Declare the llm-proxy TAuth tenant requirements in the app-owned deployment manifest for gateway assembly.
 
+## [v0.2.42] - 2026-07-24
+
+- Merge pull request #221 from tyemirov/bugfix/B068-request-reasoning-effort
+- refactor: unify reasoning_effort input handling and validation
+- docs: clarify reasoning_effort field behavior and request-level overrides
+- docs: clarify handling of null reasoning_effort in issue notes
+- Docs: record I029 OpenAPI conformance follow-up
+- Fix B068 request-level reasoning effort
+
 ## [v0.2.41] - 2026-07-23
 
 - feat(environment): enhance local environment preparation for deterministic readiness
