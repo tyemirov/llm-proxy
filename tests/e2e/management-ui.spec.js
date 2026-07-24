@@ -1,3 +1,5 @@
+// @ts-check
+
 import { expect, test } from "@playwright/test";
 import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat } from "node:fs/promises";
@@ -13,8 +15,10 @@ const faviconPath = "/assets/llm-proxy/img/favicon.svg";
 const appIconPath = "/assets/llm-proxy/img/llm-proxy-icon.svg";
 const resourcesPath = "/resources/";
 const representativeResourcePath = "/resources/multi-provider-llm-proxy/";
+const clientAuthenticationResourcePath = "/resources/llm-proxy-client-authentication/";
 const sitemapPath = "/sitemap.xml";
 const robotsPath = "/robots.txt";
+const repositoryUsageURL = "https://github.com/tyemirov/llm-proxy#usage";
 const mprUICSSURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css";
 const mprUIConfigURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js";
 const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
@@ -39,10 +43,11 @@ const mimeTypes = Object.freeze({
   ".xml": "application/xml",
   ".yaml": "application/yaml",
 });
-const generatedResourcePageCount = 45;
+const generatedResourcePageCount = 46;
 const seoContentModifiedDate = "2026-07-11";
 const seoCurrentContentModifiedDate = "2026-07-22";
 const seoUsageContentModifiedDate = "2026-07-23";
+const seoClientDocumentationModifiedDate = "2026-07-24";
 const settingsLayerViewports = Object.freeze([
   { name: "desktop", width: 1280, height: 720 },
   { name: "compact", width: 480, height: 780 },
@@ -81,6 +86,7 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(htmlResponse.status()).toBe(httpOK);
   const html = await htmlResponse.text();
   expect(html).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/">');
+  expect(html).toContain(`<a href="${clientAuthenticationResourcePath}">Client authentication</a>`);
   expect(html).toContain(`<a href="${resourcesPath}">Browse resources</a>`);
   expect(html).toContain('<meta name="theme-color" content="#0076c3">');
   expect(html).toContain(`<link rel="icon" type="image/svg+xml" href="${faviconPath}">`);
@@ -267,6 +273,7 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
   expect(hubHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/">');
   expect(hubHTML).toContain('"@type":"CollectionPage"');
   expect(hubHTML).toContain(`href="${representativeResourcePath}"`);
+  expect(hubHTML).toContain(`href="${clientAuthenticationResourcePath}"`);
   const resourceLinks = hubHTML.match(/href="\/resources\/[^"]+\/"/g) || [];
   expect(new Set(resourceLinks).size).toBe(generatedResourcePageCount);
 
@@ -281,6 +288,47 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
   expect(pageHTML).toContain('<a class="resource-button" href="/">Open LLM Proxy</a>');
   expect(pageHTML).toContain('href="/resources/openai-claude-gemini-one-endpoint/"');
   expect(pageHTML).toContain(`"dateModified":"${seoContentModifiedDate}"`);
+});
+
+test("SEO client-authentication guide documents the credential and configuration boundaries", async ({ request }) => {
+  const response = await request.get(`${baseURL}${clientAuthenticationResourcePath}`);
+  expect(response.status()).toBe(httpOK);
+  const pageHTML = await response.text();
+  expect(pageHTML).toContain("<h1>Authenticate an LLM Proxy client with a tenant secret</h1>");
+  expect(pageHTML).toContain(
+    '<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/">',
+  );
+  expect(pageHTML).toContain(`"dateModified":"${seoClientDocumentationModifiedDate}"`);
+  expect(pageHTML).toContain(`"datePublished":"${seoClientDocumentationModifiedDate}"`);
+  expect(pageHTML).toContain("curl -X POST");
+  expect(pageHTML).toContain("/v2?key=mysecret&amp;provider=deepseek");
+  expect(pageHTML).toContain("no user-level or system-level YAML lookup");
+  expect(pageHTML).toContain("LLM_PROXY_BASE_URL and LLM_PROXY_SECRET");
+  expect(pageHTML).toContain("configured MPR UI and TAuth session");
+  expect(pageHTML).toContain(`<a href="${repositoryUsageURL}">README</a>`);
+  expect(pageHTML).toContain('href="/resources/tenant-secret-ai-gateway/"');
+  expect(pageHTML).toContain('href="/resources/server-side-provider-api-keys/"');
+  expect(pageHTML).toContain('href="/resources/canonical-v2-chat-messages-api/"');
+  expect(pageHTML).toContain("<h2>Repository evidence</h2>");
+  expect(pageHTML).toContain(`Verified ${seoClientDocumentationModifiedDate}`);
+});
+
+test("SEO client and security resources link to the canonical authentication guide", async ({ request }) => {
+  const linkedResourcePaths = [
+    "/resources/go-client-v2-only-llm-proxy/",
+    "/resources/python-client-v2-only-llm-proxy/",
+    "/resources/installable-llm-proxy-cli/",
+    "/resources/server-side-provider-api-keys/",
+    "/resources/tenant-secret-ai-gateway/",
+    "/resources/copyable-llm-curl-examples/",
+  ];
+  for (const resourcePath of linkedResourcePaths) {
+    const response = await request.get(`${baseURL}${resourcePath}`);
+    expect(response.status()).toBe(httpOK);
+    const pageHTML = await response.text();
+    expect(pageHTML).toContain(`href="${clientAuthenticationResourcePath}"`);
+    expect(pageHTML).toContain(`<a href="${repositoryUsageURL}">README</a>`);
+  }
 });
 
 test("SEO reliability pages describe configured upstream rate limits", async ({ request }) => {
@@ -369,6 +417,7 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
       `<lastmod>${seoContentModifiedDate}</lastmod>`,
       `<lastmod>${seoCurrentContentModifiedDate}</lastmod>`,
       `<lastmod>${seoUsageContentModifiedDate}</lastmod>`,
+      `<lastmod>${seoClientDocumentationModifiedDate}</lastmod>`,
     ]),
   );
   expect(sitemapXML).toContain(
@@ -376,6 +425,9 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
   );
   expect(sitemapXML).toContain(
     `<loc>https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/</loc>\n    <lastmod>${seoUsageContentModifiedDate}</lastmod>`,
+  );
+  expect(sitemapXML).toContain(
+    `<loc>https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/</loc>\n    <lastmod>${seoClientDocumentationModifiedDate}</lastmod>`,
   );
   expect(sitemapXML).not.toContain("config-ui.yaml");
   expect(sitemapXML).not.toContain("llm-proxy-config.json");
