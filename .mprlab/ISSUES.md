@@ -46,12 +46,12 @@ remains scheduled work.
 
   Resolution:
   - The public canonical text contract now accepts optional `reasoning_effort` on `GET /`, compatibility `POST /`, and `POST /v2`. When omitted, the resolved tenant default remains authoritative; when supplied, the request value takes precedence only after exact resolved-route capability validation.
-  - The request remains provider-neutral. LLM Proxy rejects blank values, performs the provider/model capability check and adapter translation, and returns HTTP 400 before provider transport for unsupported request values.
+  - The request remains provider-neutral. LLM Proxy rejects blank or null values, performs the provider/model capability check and adapter translation, and returns HTTP 400 before provider transport for unsupported request values.
   - The bundled Go and Python v2 clients and the Go CLI serialize the same optional field. The JSON v2 client body is canonical and does not retain a stale query-string copy.
   - README and provider-routing documentation describe precedence, validation, and the provider-neutral caller contract.
 
   Implementation validation:
-  - No-spend HTTP coverage proves explicit `high` overrides a tenant `xhigh` default, an omitted field preserves that default, and blank, unsupported-value, and unsupported-route requests return HTTP 400 without an upstream request.
+  - No-spend HTTP coverage proves explicit `high` overrides a tenant `xhigh` default, an omitted field preserves that default, and blank, null, unsupported-value, and unsupported-route requests return HTTP 400 without an upstream request.
   - Go, Python, and CLI client coverage proves canonical serialization and rejects blank local input.
   - The required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` runs passed, including static analysis, race-tested Go coverage, Python tests, frontend tests, release-tooling tests, and live-provider harness preflight.
 
