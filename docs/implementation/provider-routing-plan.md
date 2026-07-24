@@ -23,6 +23,19 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - Omitted `max_tokens` means the proxy omits provider max-token fields and lets the selected provider/model default apply, except Anthropic Messages where the upstream API requires `max_tokens` and the proxy sends the selected model's configured synchronous output limit.
 - Known provider-specific output-token ceilings are validated before upstream calls; MiniMax M2.7 rejects `max_tokens` above `2048`, Gemini text models reject values above `65536`, and Claude models reject values above their configured synchronous Messages output limits with `400 Bad Request`.
 - `reasoning_effort` is optional on `GET /` as a query parameter and on JSON `POST /` and `POST /v2` as a body field. Omission retains the resolved tenant default. A supplied value must be nonblank and supported by the exact resolved text provider/model route; blank, `null`, or unsupported values return `400 Bad Request` before a provider call.
+- `X-LLM-Proxy-Request-Timeout-Seconds` is an optional positive whole-number
+  header on `GET /`, `POST /`, `POST /v2`, and `POST /dictate`. Omission uses
+  `server.request_timeout_seconds`; a supplied value must be in the inclusive
+  range `1..server.max_request_timeout_seconds`.
+- The effective request budget begins at authenticated ingress before body
+  parsing and covers validation, queue admission, provider work, OpenAI
+  background polling, and response construction. Provider adapters propagate
+  the ingress context and never start a replacement deadline.
+- Accepted responses echo the effective timeout header. Invalid values return
+  the canonical `400 invalid_request_timeout` JSON envelope before upstream
+  admission, and budget expiry returns the canonical `504 request_timeout`
+  JSON envelope. Caller cancellation remains independent and may end the
+  request sooner without a response.
 - For JSON `POST /`, query `model` may override the body only when the body omits `model` or provides the same value.
 - Conflicting query/body `model` values return `400 Bad Request`.
 - JSON `POST /` bodies that provide both `prompt` and `messages`, neither field, empty messages, unsupported roles, empty content, a missing user message, partially specified `order`, duplicate `order`, or negative `order` return `400 Bad Request`.
@@ -97,6 +110,7 @@ Shared config fields:
 - `server.workers`
 - `server.queue_size`
 - `server.request_timeout_seconds`
+- `server.max_request_timeout_seconds`
 - `server.max_prompt_bytes`
 - `server.max_input_audio_bytes`
 - `server.upstream_rate_limits[].origin`
@@ -200,9 +214,9 @@ OpenAI `request_profile` values select stable payload shapes:
 
 Every OpenAI Responses text request includes `background: true` and
 `store: true`; the proxy polls the returned response id server-side until a
-terminal status or `server.request_timeout_seconds`. Callers use one normal
-`GET /`, `POST /`, or `POST /v2` request and receive the final formatted answer;
-there is no streaming or client-side polling contract.
+terminal status or the request's effective ingress-owned budget. Callers use
+one normal `GET /`, `POST /`, or `POST /v2` request and receive the final
+formatted answer; there is no streaming or client-side polling contract.
 
 Bundled clients intentionally expose only the canonical `POST /v2` text
 contract. The installable Go CLI maps prompt flags or stdin into v2 `system` and
@@ -211,6 +225,13 @@ messages-request constructors and `PostMessages`/`post_messages` send methods.
 Their optional `reasoning_effort` input serializes the same canonical field;
 the clients reject only blank local input and leave exact model-capability
 validation to the proxy edge.
+Their optional request-timeout input serializes
+`X-LLM-Proxy-Request-Timeout-Seconds` on each messages request. The Go CLI uses
+`--request-timeout-seconds`; the Go and Python packages expose
+`RequestTimeoutSeconds` and `request_timeout_seconds` on their request types.
+Omission delegates to the server default. Bundled transports add no unrelated
+total-response timeout; Go contexts and explicitly injected transports remain
+independent caller-owned cancellation mechanisms.
 When a bundled-client request omits `model`, it deliberately sends no model
 field and delegates selection to the authenticated tenant or selected provider.
 The server keeps `GET /` and compatibility JSON `POST /` available for direct

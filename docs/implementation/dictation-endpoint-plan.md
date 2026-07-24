@@ -9,6 +9,8 @@ Provide an authenticated audio-transcription endpoint in `llm-proxy` so downstre
 - `POST /dictate?key=SERVICE_SECRET[&model=MODEL_ID]`
 - `Content-Type: multipart/form-data`
 - request audio part name: `audio` (alias `file` for compatibility)
+- optional `X-LLM-Proxy-Request-Timeout-Seconds` header: the same bounded,
+  ingress-owned work budget used by every public text route
 - success response: JSON `{ "text": "..." }`
 
 ## Implementation Path
@@ -27,7 +29,9 @@ Provide an authenticated audio-transcription endpoint in `llm-proxy` so downstre
    - register `POST /dictate` route
    - reuse `secretMiddleware` (query `key`)
    - enforce multipart/size limits and missing-file validation
-   - return proxy-mapped status codes (`400`, `502`, `504`)
+   - apply the shared request-timeout header before multipart parsing and
+     return its canonical `400`/`504` JSON envelopes
+   - return other proxy-mapped status codes (`400`, `502`)
 5. Update README endpoint docs and curl examples for `/dictate`.
 
 ## Test Plan
