@@ -66,17 +66,45 @@ ensure_generated_local_value() {
 
 write_scoped_local_environment() {
   local destination_path="$1"
-  local variable_name
-  local variable_value
   local temporary_environment_path
   shift
 
   temporary_environment_path="$(mktemp "${destination_path}.XXXXXX")"
-  for variable_name in "$@"; do
-    variable_value="$(local_environment_value "${variable_name}")"
-    [[ -n "${variable_value}" ]] || fail "${local_environment_path} must define ${variable_name}"
-    printf '%s=%s\n' "${variable_name}" "${variable_value}" >>"${temporary_environment_path}"
-  done
+  if ! awk '
+    BEGIN {
+      environment_path = ARGV[1]
+      requested_count = 0
+      for (argument_index = 2; argument_index < ARGC; argument_index++) {
+        requested_count++
+        requested_names[requested_count] = ARGV[argument_index]
+        requested_lookup[ARGV[argument_index]] = 1
+        ARGV[argument_index] = ""
+      }
+    }
+    {
+      separator_index = index($0, "=")
+      if (separator_index == 0) {
+        next
+      }
+      variable_name = substr($0, 1, separator_index - 1)
+      if ((variable_name in requested_lookup) && !(variable_name in environment_values)) {
+        environment_values[variable_name] = substr($0, separator_index + 1)
+      }
+    }
+    END {
+      for (requested_index = 1; requested_index <= requested_count; requested_index++) {
+        variable_name = requested_names[requested_index]
+        if (!(variable_name in environment_values) || environment_values[variable_name] == "") {
+          printf "error: %s must define %s\n", environment_path, variable_name >"/dev/stderr"
+          exit 1
+        }
+        printf "%s=%s\n", variable_name, environment_values[variable_name]
+      }
+    }
+  ' "${local_environment_path}" "$@" >"${temporary_environment_path}"; then
+    rm -f "${temporary_environment_path}"
+    return 1
+  fi
   mv "${temporary_environment_path}" "${destination_path}"
   chmod 600 "${destination_path}"
 }

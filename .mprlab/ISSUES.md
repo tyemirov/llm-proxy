@@ -1946,6 +1946,45 @@ remains scheduled work.
   aggregate Go coverage, 30 Python tests, 49 browser scenarios, the TAuth
   black-box, 47 release tests, and the non-paid live-provider preflight.
 
+- [x] [B067] (P1) Make local environment projection readiness deterministic.
+  Goal:
+  Keep the release-time `make up` operational contract from exhausting its
+  readiness guard while preparing service-scoped local environment files.
+
+  Evidence:
+  - `make release` failed in
+    `TestOperationalMakeUpStartsLocalWebOrchestration` after 5.01 seconds while
+    waiting for the final fake-curl readiness marker.
+  - `write_scoped_local_environment` starts a separate `awk` process for every
+    projected variable before Compose can start, so full-suite process load can
+    consume the guard before the first HTTP readiness probe.
+
+  Requirements:
+  - Project each service's allowlisted local environment in one validated read
+    of the canonical ignored `.env.local` file.
+  - Preserve the exact service-owned key sets, generated-secret behavior,
+    Compose-start boundary, and five HTTP readiness contracts.
+  - Add deterministic black-box pressure for environment preparation without
+    increasing the operational timeout or adding a fallback path.
+
+  Validation:
+  - Run the focused operational test with Go's race detector.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+
+  Resolution:
+  `make up` now validates and writes each service-scoped environment through
+  one `awk` read of `.env.local` instead of starting one process per projected
+  variable. The operational fixture adds a 150 ms penalty to every `awk`
+  process and rejects more than seven preparation processes, while retaining
+  the unchanged five-second readiness guard, exact service key sets,
+  Compose-start boundary, and five HTTP probes. Focused
+  `go test -race` coverage passed in 2.22 seconds. The required baseline and
+  final `make ci` runs passed; the final gate covered 100% aggregate Go
+  coverage, 30 Python tests, 49 browser scenarios, the real TAuth black-box,
+  47 release tests, and the non-paid live-provider preflight.
+
 
 ## Improvements
 

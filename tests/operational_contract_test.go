@@ -18,11 +18,13 @@ import (
 )
 
 const (
-	operationalScriptsDirectory     = "scripts"
-	operationalReleaseToolsRelative = "tools/gitrelease"
-	operationalHelpTimeout          = 5 * time.Second
-	operationalHelpWaitDelay        = time.Second
-	constrainedPipeHelpCommand      = `ulimit -p 1 2>/dev/null || true
+	operationalScriptsDirectory                     = "scripts"
+	operationalReleaseToolsRelative                 = "tools/gitrelease"
+	operationalHelpTimeout                          = 5 * time.Second
+	operationalHelpWaitDelay                        = time.Second
+	operationalScopedEnvironmentAWKDelaySeconds     = "0.15"
+	operationalScopedEnvironmentMaximumAWKProcesses = 7
+	constrainedPipeHelpCommand                      = `ulimit -p 1 2>/dev/null || true
 exec "$@"`
 )
 
@@ -96,6 +98,11 @@ func TestOperationalMakeUpStartsLocalWebOrchestration(testingInstance *testing.T
 	}
 
 	toolDirectory := filepath.Join(fixtureRoot, "tools")
+	realAWKPath, lookupAWKError := exec.LookPath("awk")
+	if lookupAWKError != nil {
+		testingInstance.Fatalf("resolve awk executable: %v", lookupAWKError)
+	}
+	awkInvocationsPath := filepath.Join(fixtureRoot, "awk-invocations")
 	composePIDPath := filepath.Join(fixtureRoot, "compose.pid")
 	composeArgumentsPath := filepath.Join(fixtureRoot, "compose-arguments")
 	composeDownPath := filepath.Join(fixtureRoot, "compose-down")
@@ -185,6 +192,13 @@ set -euo pipefail
 [[ "${2:?}" == "-base64" ]]
 builtin printf '%s' generated-local-value
 `, 0o755)
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "awk"), `#!/usr/bin/env bash
+set -euo pipefail
+
+builtin printf '%s\n' invoked >>"${AWK_INVOCATION_CAPTURE:?}"
+sleep "${AWK_DELAY_SECONDS:?}"
+exec "${REAL_AWK_PATH:?}" "$@"
+`, 0o755)
 
 	command := exec.Command("make", "up")
 	command.Dir = fixtureRoot
@@ -192,6 +206,9 @@ builtin printf '%s' generated-local-value
 	command.Env = append(
 		os.Environ(),
 		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"AWK_DELAY_SECONDS="+operationalScopedEnvironmentAWKDelaySeconds,
+		"AWK_INVOCATION_CAPTURE="+awkInvocationsPath,
+		"REAL_AWK_PATH="+realAWKPath,
 		"DOCKER_ARGUMENT_CAPTURE="+composeArgumentsPath,
 		"COMPOSE_PID_CAPTURE="+composePIDPath,
 		"COMPOSE_DOWN_CAPTURE="+composeDownPath,
@@ -240,6 +257,18 @@ builtin printf '%s' generated-local-value
 	}
 	if _, earlyReadError := os.ReadFile(curlEarlyPath); !os.IsNotExist(earlyReadError) {
 		testingInstance.Fatalf("make up started HTTP readiness before Compose reported startup: %v", earlyReadError)
+	}
+	awkInvocations, readAWKInvocationsError := os.ReadFile(awkInvocationsPath)
+	if readAWKInvocationsError != nil {
+		testingInstance.Fatalf("read awk invocations: %v", readAWKInvocationsError)
+	}
+	awkProcessCount := len(strings.Fields(string(awkInvocations)))
+	if awkProcessCount == 0 || awkProcessCount > operationalScopedEnvironmentMaximumAWKProcesses {
+		testingInstance.Fatalf(
+			"make up used %d awk processes while preparing scoped environments; want 1..%d",
+			awkProcessCount,
+			operationalScopedEnvironmentMaximumAWKProcesses,
+		)
 	}
 
 	curlArguments, readCurlArgumentsError := os.ReadFile(curlArgumentsPath)
@@ -502,8 +531,8 @@ func assertOperationalEnvironmentKeys(testingInstance *testing.T, environmentPat
 	lines := strings.Split(strings.TrimSpace(string(environmentBytes)), "\n")
 	actualKeys := make(map[string]struct{}, len(lines))
 	for _, line := range lines {
-		key, _, hasValue := strings.Cut(line, "=")
-		if !hasValue || key == "" {
+		key, value, hasValue := strings.Cut(line, "=")
+		if !hasValue || key == "" || value == "" {
 			testingInstance.Fatalf("invalid scoped environment line in %s: %q", environmentPath, line)
 		}
 		actualKeys[key] = struct{}{}
