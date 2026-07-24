@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
@@ -88,27 +88,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>One-time display</td>
                           <td>Generated secrets are shown once after creation.</td>
                           <td>The database stores only their digest.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Immediate revocation</td>
                           <td>Revoked secrets stop authenticating future public proxy requests.</td>
                           <td>Access can be cut without provider-key rotation.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Secret-safe examples</td>
                           <td>Request examples retain the &lt;generated-secret&gt; placeholder after creation.</td>
                           <td>Raw client keys remain confined to the one-time Key field.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -117,24 +117,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>New app secret</h3>
                       <p>A developer copies the automatically created client key and substitutes it for the /v2 example placeholder.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Compromised client</h3>
                       <p>A user revokes the generated secret and creates a replacement.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Provider key unchanged</h3>
                       <p>Rotating the tenant secret does not require changing the saved provider API key.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -162,66 +162,66 @@ export function revokeSecret() {
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>When does LLM Proxy create a client key?</summary>
                       <p>The management UI creates one after authentication when the current profile reports that no client key exists. A configured profile does not trigger another creation request.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Can the raw generated client key be retrieved later?</summary>
                       <p>No. The raw value is presented once in a masked, read-only field, while the backend stores only the digest used to authenticate proxy requests.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What does revoking the client key affect?</summary>
                       <p>Revocation stops that client key from authenticating public proxy requests. It does not remove or rotate separately stored upstream provider credentials.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Do request examples embed the generated key?</summary>
                       <p>No. Examples retain the &lt;generated-secret&gt; placeholder so the one-time raw value does not enter page markup or copied example commands.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Keep provider API keys server-side for LLM apps, which covers server-side provider API keys.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/server-side-provider-api-keys/">
                       <span>Security</span>
                       <strong>Keep provider API keys server-side for LLM apps</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/tenant-secret-ai-gateway/">
                       <span>Security</span>
                       <strong>Tenant-secret AI gateway for internal applications</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/encrypted-provider-key-storage/">
                       <span>Security</span>
                       <strong>Encrypted provider key storage for managed tenants</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/tauth-protected-management-api/">
                       <span>Management UI</span>
                       <strong>TAuth-protected management API for LLM Proxy</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -237,6 +237,6 @@ export function revokeSecret() {
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

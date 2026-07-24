@@ -15,12 +15,21 @@ const resourcesPath = "/resources/";
 const representativeResourcePath = "/resources/multi-provider-llm-proxy/";
 const sitemapPath = "/sitemap.xml";
 const robotsPath = "/robots.txt";
+const mprUICSSURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css";
+const mprUIConfigURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js";
+const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
 const b020ScreenshotDirectory = path.join(repoRoot, "output/playwright");
 const httpOK = 200;
 const httpInternalServerError = 500;
 const noticeClockPauseLeadMilliseconds = 5_000;
 const noticeClockPreDeadlineAdvanceMilliseconds = 4_000;
 const noticeClockPostDeadlineAdvanceMilliseconds = 2_000;
+const usageIntervals = Object.freeze([
+  { id: "all", label: "ALL", requests: 91, totalTokens: 91_000, providerCount: 1 },
+  { id: "30d", label: "30 days", requests: 37, totalTokens: 12_345, providerCount: 2 },
+  { id: "7d", label: "7 days", requests: 7, totalTokens: 7_000, providerCount: 1 },
+  { id: "1d", label: "1 day", requests: 1, totalTokens: 1_000, providerCount: 1 },
+]);
 const mimeTypes = Object.freeze({
   ".css": "text/css",
   ".html": "text/html",
@@ -33,6 +42,7 @@ const mimeTypes = Object.freeze({
 const generatedResourcePageCount = 45;
 const seoContentModifiedDate = "2026-07-11";
 const seoCurrentContentModifiedDate = "2026-07-22";
+const seoUsageContentModifiedDate = "2026-07-23";
 const settingsLayerViewports = Object.freeze([
   { name: "desktop", width: 1280, height: 720 },
   { name: "compact", width: 480, height: 780 },
@@ -76,7 +86,10 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain(`<link rel="icon" type="image/svg+xml" href="${faviconPath}">`);
   expect(html).toContain(`<link rel="apple-touch-icon" href="${appIconPath}">`);
   expect(html).toContain(`data-config-url="${configPath}"`);
-  expect(html).toContain("data-mpr-ui-bundle-src=");
+  expect(html).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
+  expect(html).toContain(`<script src="${mprUIConfigURL}"></script>`);
+  expect(html).toContain(`data-mpr-ui-bundle-src="${mprUIBundleURL}"`);
+  expect(html).not.toContain("MarcoPoloResearchLab/mpr-ui@v");
   expect(html).not.toContain("tauth.js");
   expect(html).toMatch(/<notification-region\s+slot="aux"[\s\S]*?<mpr-user\s+slot="aux"/);
   expect(html).toContain('<body x-data="llmProxyKeyManagement" x-init="init()">');
@@ -87,7 +100,7 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).not.toContain("brand-label=");
   expect(html).not.toContain("data:image");
   expect(html).toContain(
-    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=delete,visibility,visibility_off&amp;display=block">',
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=delete,key,visibility,visibility_off&amp;display=block">',
   );
   expect(html).toContain(
     '<span class="material-symbols-outlined" x-show="!providerKeyVisible" aria-hidden="true">visibility</span>',
@@ -139,11 +152,11 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
     '<button type="button" class="icon-button client-key-create" x-cloak x-show="!hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.createKey">',
   );
   expect(html).toContain(
-    '<button type="button" class="icon-only client-key-replace" x-cloak x-show="hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.replaceKey" x-bind:aria-label="copy.replaceKey">',
+    '<button type="button" class="icon-button client-key-replace" x-cloak x-show="hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.replaceKey" x-bind:aria-label="copy.replaceKey">',
   );
-  expect(html).toContain(
-    '<svg class="utility-icon recycle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">',
-  );
+  expect(html).toContain('<span class="material-symbols-outlined" aria-hidden="true">key</span>');
+  expect(html).toContain('<span class="client-key-replace-label" x-text="copy.replaceKey"></span>');
+  expect(html).not.toContain("recycle-icon");
   expect(html).toContain(
     '<button type="button" class="icon-only client-key-copy" x-cloak x-show="hasGeneratedSecret" x-on:click="copyGeneratedSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.copyClientKey" x-bind:aria-label="copy.copyClientKey">',
   );
@@ -280,6 +293,15 @@ test("SEO reliability pages describe configured upstream rate limits", async ({ 
   }
 });
 
+test("SEO usage resource documents selectable tenant intervals", async ({ request }) => {
+  const response = await request.get(`${baseURL}/resources/managed-tenant-usage-dashboard/`);
+  expect(response.status()).toBe(httpOK);
+  const pageHTML = await response.text();
+  expect(pageHTML).toContain(`"dateModified":"${seoUsageContentModifiedDate}"`);
+  expect(pageHTML).toContain("ALL, 30 days, 7 days, and 1 day");
+  expect(pageHTML).toContain("GET /api/management/usage?interval=&lt;interval&gt;");
+});
+
 test("SEO management resources document required onboarding and secret-safe examples", async ({ request }) => {
   const resourceExpectations = [
     {
@@ -346,10 +368,14 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
     new Set([
       `<lastmod>${seoContentModifiedDate}</lastmod>`,
       `<lastmod>${seoCurrentContentModifiedDate}</lastmod>`,
+      `<lastmod>${seoUsageContentModifiedDate}</lastmod>`,
     ]),
   );
   expect(sitemapXML).toContain(
     `<loc>https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/</loc>\n    <lastmod>${seoCurrentContentModifiedDate}</lastmod>`,
+  );
+  expect(sitemapXML).toContain(
+    `<loc>https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/</loc>\n    <lastmod>${seoUsageContentModifiedDate}</lastmod>`,
   );
   expect(sitemapXML).not.toContain("config-ui.yaml");
   expect(sitemapXML).not.toContain("llm-proxy-config.json");
@@ -399,8 +425,9 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
     "This key is saved and can’t be shown again. Replace it to create and copy a new key.",
   );
   const replaceKeyButton = clientAccessRow.getByRole("button", { name: "Replace key" });
-  await expect(replaceKeyButton).toHaveText("");
-  await expect(replaceKeyButton.locator("svg.recycle-icon")).toHaveCount(1);
+  await expect(replaceKeyButton.locator(".material-symbols-outlined")).toHaveText("key");
+  await expect(replaceKeyButton.locator(".client-key-replace-label")).toHaveText("Replace key");
+  await expect(replaceKeyButton.locator("svg")).toHaveCount(0);
   await expect(clientAccessRow.getByRole("button", { name: "Revoke key" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Routing defaults" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Request examples" })).toBeVisible();
@@ -492,6 +519,149 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
     "provider=meta",
   );
   await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
+});
+
+test("usage intervals load every dashboard surface, remain active on refresh, and fit mobile", async ({ page }) => {
+  const requestedIntervals = [];
+  page.on("request", (request) => {
+    const requestURL = new URL(request.url());
+    if (requestURL.pathname === "/api/management/usage") {
+      requestedIntervals.push(requestURL.searchParams.get("interval"));
+    }
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+
+  await page.goto(baseURL);
+
+  const intervalGroup = page.getByRole("group", { name: "Usage interval" });
+  const intervalButtons = intervalGroup.getByRole("button");
+  await expect(intervalButtons).toHaveCount(usageIntervals.length);
+  await expect(intervalButtons).toHaveText(usageIntervals.map((interval) => interval.label));
+  const activeIntervalButton = intervalGroup.getByRole("button", { name: "30 days" });
+  await expect(activeIntervalButton).toHaveAttribute("aria-pressed", "true");
+  const activeIntervalStyle = async () =>
+    activeIntervalButton.evaluate((button) => {
+      const style = getComputedStyle(button);
+      return {
+        backgroundColor: style.backgroundColor,
+        borderColor: style.borderColor,
+        color: style.color,
+      };
+    });
+  const expectedActiveIntervalStyle = {
+    backgroundColor: "rgba(93, 147, 255, 0.14)",
+    borderColor: "rgb(93, 147, 255)",
+    color: "rgb(93, 147, 255)",
+  };
+  expect(await activeIntervalStyle()).toEqual(expectedActiveIntervalStyle);
+  await activeIntervalButton.hover();
+  expect(await activeIntervalStyle()).toEqual(expectedActiveIntervalStyle);
+  expect(requestedIntervals).toEqual(["30d"]);
+
+  for (const interval of usageIntervals) {
+    await intervalGroup.getByRole("button", { name: interval.label, exact: true }).click();
+    await expect(intervalGroup.getByRole("button", { name: interval.label, exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText(
+      interval.requests.toLocaleString("en-US"),
+    );
+    await expect(page.locator("usage-card").filter({ hasText: "Tokens" }).locator("strong")).toHaveText(
+      interval.totalTokens.toLocaleString("en-US"),
+    );
+    await expect(page.locator("usage-card").filter({ hasText: "Providers" }).locator("strong")).toHaveText(
+      String(interval.providerCount),
+    );
+    await expect(page.locator("usage-chart-panel").first().locator("polyline")).toHaveAttribute("points", /,/);
+    await expect(page.locator("usage-breakdown").first()).toContainText(
+      interval.id === "30d" ? "openai" : `provider-${interval.id}`,
+    );
+    await expect(page.locator("usage-breakdown").nth(1)).toContainText(
+      interval.id === "30d" ? "gpt-4.1" : `model-${interval.id}`,
+    );
+  }
+
+  const selectedInterval = usageIntervals.at(-1);
+  if (!selectedInterval) {
+    throw new Error("usage_interval_fixture_missing");
+  }
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  expect(requestedIntervals.at(-1)).toBe(selectedInterval.id);
+  await expect(intervalGroup.getByRole("button", { name: selectedInterval.label, exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+
+  await page.setViewportSize({ width: 390, height: 780 });
+  await expect(intervalGroup).toBeVisible();
+  const intervalGroupBox = await intervalGroup.boundingBox();
+  if (!intervalGroupBox) {
+    throw new Error("usage_interval_group_missing");
+  }
+  expect(intervalGroupBox.x).toBeGreaterThanOrEqual(0);
+  expect(intervalGroupBox.x + intervalGroupBox.width).toBeLessThanOrEqual(390);
+  for (const intervalButton of await intervalButtons.all()) {
+    await intervalButton.focus();
+    await expect(intervalButton).toBeFocused();
+  }
+});
+
+test("usage interval loading blocks controls, ignores stale responses, and clears failed selections", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await page.goto(baseURL);
+  await page.unroute(usageRequestPattern());
+  /** @type {() => void} */
+  let releaseSevenDayResponse = () => {};
+  const sevenDayResponseGate = new Promise((resolve) => {
+    releaseSevenDayResponse = () => resolve(undefined);
+  });
+  await page.route(usageRequestPattern(), async (route) => {
+    const interval = new URL(route.request().url()).searchParams.get("interval") || "";
+    if (interval === "7d") {
+      await sevenDayResponseGate;
+    }
+    await route.fulfill({ status: httpOK, json: managementUsage(interval) });
+  });
+
+  const intervalGroup = page.getByRole("group", { name: "Usage interval" });
+  const sevenDayButton = intervalGroup.getByRole("button", { name: "7 days" });
+  try {
+    await sevenDayButton.click();
+    for (const intervalButton of await intervalGroup.getByRole("button").all()) {
+      await expect(intervalButton).toBeDisabled();
+    }
+    await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeDisabled();
+    await expect(sevenDayButton).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("0");
+    await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
+    await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+      const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+      const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+      if (!applicationState) {
+        throw new Error("usage_interval_state_missing");
+      }
+      void applicationState.selectUsageInterval("1d");
+    });
+    await expect(intervalGroup.getByRole("button", { name: "1 day" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("1");
+  } finally {
+    releaseSevenDayResponse();
+  }
+  await page.waitForLoadState("networkidle");
+  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("1");
+
+  await page.unroute(usageRequestPattern());
+  await page.route(usageRequestPattern(), async (route) => {
+    await route.fulfill({ status: httpInternalServerError, json: { error: "usage_failed" } });
+  });
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(page.getByText("Request failed")).toBeVisible();
+  await expect(intervalGroup.getByRole("button", { name: "1 day" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("0");
+  await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
 });
 
 test("provider selection autosaves its exact editor while transient removal stays local", async ({ page }) => {
@@ -1896,14 +2066,17 @@ test("new client keys stay left-aligned and read-only while supporting key actio
     await expect(clientKeyInput).toHaveValue("••••••••••••");
     await expect(clientKeyInput).toHaveAttribute("readonly", "");
     const replaceKeyButton = clientAccessRow.getByRole("button", { name: "Replace key", exact: true });
-    const recycleIcon = replaceKeyButton.locator("svg.recycle-icon");
+    const replaceKeyIcon = replaceKeyButton.locator(".material-symbols-outlined");
+    const replaceKeyLabel = replaceKeyButton.locator(".client-key-replace-label");
     await expect(replaceKeyButton).toBeVisible();
-    await expect(replaceKeyButton).toHaveText("");
+    await expect(replaceKeyButton).toHaveClass(/icon-button/);
     await expect(replaceKeyButton).toHaveAttribute("title", "Replace key");
-    await expect(recycleIcon).toHaveAttribute("aria-hidden", "true");
-    await expect(recycleIcon).toHaveAttribute("focusable", "false");
-    await expect(recycleIcon).toHaveAttribute("viewBox", "0 0 24 24");
-    await expect(recycleIcon.locator("path")).toHaveCount(4);
+    await expect(replaceKeyButton.locator("svg")).toHaveCount(0);
+    await expect(replaceKeyIcon).toHaveAttribute("aria-hidden", "true");
+    await expect(replaceKeyIcon).toHaveText("key");
+    await expect(replaceKeyIcon).toBeVisible();
+    await expect(replaceKeyLabel).toHaveText("Replace key");
+    await expect(replaceKeyLabel).toBeVisible();
     await expect(visibilityButton).toHaveAttribute("aria-pressed", "false");
     await expect(visibilitySymbols).toHaveCount(2);
     await expect(visibilitySymbols.nth(0)).toHaveText("visibility");
@@ -1941,6 +2114,8 @@ test("new client keys stay left-aligned and read-only while supporting key actio
     const clientKeyBox = await clientKey.boundingBox();
     const clientKeyInputBox = await clientKeyInput.boundingBox();
     const replaceKeyButtonBox = await replaceKeyButton.boundingBox();
+    const replaceKeyIconBox = await replaceKeyIcon.boundingBox();
+    const replaceKeyLabelBox = await replaceKeyLabel.boundingBox();
     const keyLabelBox = await keyLabel.boundingBox();
     const clientKeyRowBox = await clientKeyRow.boundingBox();
     if (
@@ -1948,6 +2123,8 @@ test("new client keys stay left-aligned and read-only while supporting key actio
       !clientKeyBox ||
       !clientKeyInputBox ||
       !replaceKeyButtonBox ||
+      !replaceKeyIconBox ||
+      !replaceKeyLabelBox ||
       !keyLabelBox ||
       !clientKeyRowBox
     ) {
@@ -1967,6 +2144,16 @@ test("new client keys stay left-aligned and read-only while supporting key actio
           (replaceKeyButtonBox.y + replaceKeyButtonBox.height / 2),
       ),
     ).toBeLessThanOrEqual(1);
+    expect(replaceKeyButtonBox.width).toBeGreaterThan(30);
+    expect(replaceKeyButtonBox.width).toBeLessThanOrEqual(120);
+    expect(replaceKeyIconBox.x).toBeGreaterThanOrEqual(replaceKeyButtonBox.x);
+    expect(replaceKeyLabelBox.x).toBeGreaterThan(replaceKeyIconBox.x + replaceKeyIconBox.width);
+    expect(replaceKeyLabelBox.x + replaceKeyLabelBox.width).toBeLessThanOrEqual(
+      replaceKeyButtonBox.x + replaceKeyButtonBox.width,
+    );
+    expect(replaceKeyButtonBox.x + replaceKeyButtonBox.width).toBeLessThanOrEqual(
+      clientAccessRowBox.x + clientAccessRowBox.width,
+    );
 
     await visibilityButton.click();
     await expect(clientKeyInput).toHaveValue(generatedSecret);
@@ -1995,6 +2182,10 @@ test("new client keys stay left-aligned and read-only while supporting key actio
     await expect(clientAccessRow.getByRole("button", { name: "Copy key", exact: true })).toBeHidden();
     await expect(revokeButton).toBeVisible();
 
+    await replaceKeyButton.click();
+    await expect(clientKeyInput).toBeVisible();
+    await expect(clientKeyInput).toHaveValue("••••••••••••");
+    await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Key created");
     await revokeButton.click();
     await expect(clientAccessRow.getByText("No key created")).toBeVisible();
     await expect(revokeButton).toBeHidden();
@@ -2151,7 +2342,7 @@ test("management notices auto-dismiss after ten seconds and replacement notices 
   await refresh.click();
   await expect(notice).toHaveText("Usage refreshed");
   await page.clock.fastForward(5_000);
-  await installUsageResponse(page, httpOK, managementUsage({
+  await installUsageResponse(page, httpOK, managementUsage("30d", {
     requests: 38,
     successful_requests: 36,
     text_requests: 36,
@@ -2262,8 +2453,8 @@ test("usage refresh clears stale metrics when summary reload fails", async ({ pa
   await page.goto(baseURL);
 
   await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("37");
-  await page.unroute(`${baseURL}/api/management/usage`);
-  await page.route(`${baseURL}/api/management/usage`, async (route) => {
+  await page.unroute(usageRequestPattern());
+  await page.route(usageRequestPattern(), async (route) => {
     await route.fulfill({ status: httpInternalServerError, json: { error: "usage_failed" } });
   });
   await page.getByRole("button", { name: "Refresh" }).click();
@@ -2600,11 +2791,18 @@ async function headerBrandFacts(page) {
  * @param {object} [usage]
  * @returns {Promise<void>}
  */
-async function installUsageResponse(page, status, usage = managementUsage()) {
-  await page.unroute(`${baseURL}/api/management/usage`);
-  await page.route(`${baseURL}/api/management/usage`, async (route) => {
+async function installUsageResponse(page, status, usage = managementUsage("30d")) {
+  await page.unroute(usageRequestPattern());
+  await page.route(usageRequestPattern(), async (route) => {
     await route.fulfill({ status, json: usage });
   });
+}
+
+/**
+ * @returns {string}
+ */
+function usageRequestPattern() {
+  return `${baseURL}/api/management/usage?interval=*`;
 }
 
 /**
@@ -2661,8 +2859,14 @@ async function installManagementRoutes(page, options = {}) {
     }
     await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
   });
-  await page.route(`${baseURL}/api/management/usage`, async (route) => {
-    await route.fulfill({ status: options.usageStatus || httpOK, json: managementUsage() });
+  await page.route(usageRequestPattern(), async (route) => {
+    const interval = new URL(route.request().url()).searchParams.get("interval") || "";
+    const supportedInterval = usageIntervals.some((candidate) => candidate.id === interval);
+    if (!supportedInterval) {
+      await route.fulfill({ status: 400, json: { error: "managed_usage_interval_invalid" } });
+      return;
+    }
+    await route.fulfill({ status: options.usageStatus || httpOK, json: managementUsage(interval) });
   });
   await page.route(`${baseURL}/api/management/admin/users`, async (route) => {
     await route.fulfill({ json: managementAdminUsers() });
@@ -2963,7 +3167,7 @@ function managementAdminUsers() {
           created_at: "2026-06-01T00:00:00Z",
           updated_at: "2026-06-29T00:00:00Z",
         },
-        usage: managementUsage(),
+        usage: managementAdminUsage(),
       },
       {
         user: {
@@ -2979,7 +3183,7 @@ function managementAdminUsers() {
           updated_at: "2026-06-10T00:00:00Z",
         },
         usage: {
-          ...managementUsage(),
+          ...managementAdminUsage(),
           totals: usageAggregate(),
           providers: [],
           models: [],
@@ -2991,51 +3195,108 @@ function managementAdminUsers() {
 }
 
 /**
+ * @param {string} [interval]
  * @param {Partial<Record<string, number>>} [totalOverrides]
  * @returns {object}
  */
-function managementUsage(totalOverrides = {}) {
-  const daily = Array.from({ length: 30 }, (_, index) => ({
-    date: `2026-06-${String(index + 1).padStart(2, "0")}`,
+function managementUsage(interval = "30d", totalOverrides = {}) {
+  const intervalFixture = usageIntervals.find((candidate) => candidate.id === interval);
+  if (!intervalFixture) {
+    throw new Error(`management_usage_interval_invalid:${interval}`);
+  }
+  const bucketCount = interval === "all" ? 1 : interval === "1d" ? 24 : Number.parseInt(interval, 10);
+  const bucketUnit = interval === "1d" ? "hour" : "day";
+  const buckets = Array.from({ length: bucketCount }, (_, index) => ({
+    start: new Date(Date.UTC(2026, 5, index + 1)).toISOString(),
     data: usageAggregate(),
   }));
-  daily[28].data = usageAggregate({ requests: 17, successful_requests: 17, text_requests: 17, total_tokens: 6000 });
-  daily[29].data = usageAggregate({
-    requests: 20,
-    successful_requests: 18,
-    failed_requests: 2,
-    text_requests: 18,
-    dictation_requests: 2,
-    total_tokens: 6345,
+  buckets[buckets.length - 1].data = usageAggregate({
+    requests: intervalFixture.requests,
+    successful_requests: intervalFixture.requests,
+    text_requests: intervalFixture.requests,
+    total_tokens: intervalFixture.totalTokens,
   });
-  return {
-    period_days: 30,
-    totals: usageAggregate({
-      requests: 37,
-      successful_requests: 35,
+  const isDefaultInterval = interval === "30d";
+  if (isDefaultInterval) {
+    buckets[28].data = usageAggregate({
+      requests: 17,
+      successful_requests: 17,
+      text_requests: 17,
+      total_tokens: 6000,
+    });
+    buckets[29].data = usageAggregate({
+      requests: 20,
+      successful_requests: 18,
       failed_requests: 2,
-      text_requests: 35,
+      text_requests: 18,
       dictation_requests: 2,
+      total_tokens: 6345,
+    });
+  }
+  const providerBreakdown = isDefaultInterval
+    ? [
+        { provider: "openai", data: usageAggregate({ requests: 24 }) },
+        { provider: "deepseek", data: usageAggregate({ requests: 13 }) },
+      ]
+    : [
+        {
+          provider: `provider-${interval}`,
+          data: usageAggregate({ requests: intervalFixture.requests }),
+        },
+      ];
+  const modelBreakdown = isDefaultInterval
+    ? [
+        { provider: "openai", model: "gpt-4.1", data: usageAggregate({ requests: 21 }) },
+        { provider: "deepseek", model: "deepseek-chat", data: usageAggregate({ requests: 13 }) },
+        { provider: "openai", model: "gpt-4o-mini-transcribe", data: usageAggregate({ requests: 3 }) },
+      ]
+    : [
+        {
+          provider: `provider-${interval}`,
+          model: `model-${interval}`,
+          data: usageAggregate({ requests: intervalFixture.requests }),
+        },
+      ];
+  return {
+    interval,
+    bucket_unit: bucketUnit,
+    totals: usageAggregate({
+      requests: intervalFixture.requests,
+      successful_requests: isDefaultInterval ? 35 : intervalFixture.requests,
+      failed_requests: isDefaultInterval ? 2 : 0,
+      text_requests: isDefaultInterval ? 35 : intervalFixture.requests,
+      dictation_requests: isDefaultInterval ? 2 : 0,
       request_tokens: 4567,
       response_tokens: 7778,
-      total_tokens: 12345,
+      total_tokens: intervalFixture.totalTokens,
       average_latency_ms: 312,
       ...totalOverrides,
     }),
-    daily,
-    providers: [
-      { provider: "openai", data: usageAggregate({ requests: 24 }) },
-      { provider: "deepseek", data: usageAggregate({ requests: 13 }) },
-    ],
-    models: [
-      { provider: "openai", model: "gpt-4.1", data: usageAggregate({ requests: 21 }) },
-      { provider: "deepseek", model: "deepseek-chat", data: usageAggregate({ requests: 13 }) },
-      { provider: "openai", model: "gpt-4o-mini-transcribe", data: usageAggregate({ requests: 3 }) },
-    ],
+    buckets,
+    providers: providerBreakdown,
+    models: modelBreakdown,
     status_codes: [
-      { status_code: 200, requests: 35 },
-      { status_code: 502, requests: 2 },
+      { status_code: 200, requests: isDefaultInterval ? 35 : intervalFixture.requests },
+      ...(isDefaultInterval ? [{ status_code: 502, requests: 2 }] : []),
     ],
+  };
+}
+
+/**
+ * @returns {object}
+ */
+function managementAdminUsage() {
+  const summary = managementUsage("30d");
+  return {
+    period_days: 30,
+    totals: summary.totals,
+    daily: summary.buckets.map((bucket) => ({
+      date: bucket.start.slice(0, 10),
+      data: bucket.data,
+    })),
+    providers: summary.providers,
+    models: summary.models,
+    status_codes: summary.status_codes,
   };
 }
 

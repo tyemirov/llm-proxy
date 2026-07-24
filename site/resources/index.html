@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
@@ -41,7 +41,7 @@
             <a class="resource-link" href="/sitemap.xml">View sitemap</a>
           </div>
         </section>
-        
+
               <section class="resource-category">
                 <header class="section-header compact">
                   <div>
@@ -50,44 +50,44 @@
                   </div>
                 </header>
                 <div class="resource-card-grid">
-                  
+
                         <a class="resource-index-card" href="/resources/multi-provider-llm-proxy/">
                           <span>multi-provider LLM proxy</span>
                           <strong>Multi-provider LLM proxy for internal tools</strong>
                           <p>Route OpenAI, Meta Muse, Claude, Gemini, Grok, and compatible providers through one tenant-secret HTTP boundary.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/openai-claude-gemini-one-endpoint/">
                           <span>OpenAI Claude Gemini one endpoint</span>
                           <strong>OpenAI, Claude, and Gemini through one endpoint</strong>
                           <p>Use one proxy contract while LLM Proxy maps requests into OpenAI, Anthropic, and Gemini APIs.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/openai-compatible-provider-gateway/">
                           <span>OpenAI-compatible provider gateway</span>
                           <strong>OpenAI-compatible provider gateway</strong>
                           <p>Route Meta Muse Spark, DeepSeek, DashScope Qwen, Qwen Cloud, Kimi, MiniMax, SiliconFlow, Zhipu, and Grok text calls through one compatible adapter.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/gemini-generatecontent-proxy/">
                           <span>Gemini generateContent proxy</span>
                           <strong>Gemini generateContent proxy for shared LLM calls</strong>
                           <p>Map shared proxy messages into Gemini native generateContent requests with configured model limits.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/anthropic-claude-messages-proxy/">
                           <span>Anthropic Claude Messages proxy</span>
                           <strong>Anthropic Claude Messages proxy for /v2 callers</strong>
                           <p>Route shared messages to Anthropic's native Messages API without changing client contracts.</p>
                         </a>
-                      
+
                 </div>
               </section>
-            
+
 
               <section class="resource-category">
                 <header class="section-header compact">
@@ -97,44 +97,44 @@
                   </div>
                 </header>
                 <div class="resource-card-grid">
-                  
+
                         <a class="resource-index-card" href="/resources/server-side-provider-api-keys/">
                           <span>server-side provider API keys</span>
                           <strong>Keep provider API keys server-side for LLM apps</strong>
                           <p>Use tenant secrets for clients while upstream provider credentials stay on the LLM Proxy server.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/tenant-secret-ai-gateway/">
                           <span>tenant secret AI gateway</span>
                           <strong>Tenant-secret AI gateway for internal applications</strong>
                           <p>Give client apps one llm-proxy tenant secret while the service owns provider credentials and routing.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/generated-secret-rotation-and-revocation/">
                           <span>generated LLM proxy secret rotation</span>
                           <strong>Generated LLM Proxy secret rotation and revocation</strong>
                           <p>Automatically create a missing LLM Proxy client key, show it once, store only its digest, and support explicit rotation and revocation.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/encrypted-provider-key-storage/">
                           <span>encrypted provider key storage</span>
                           <strong>Encrypted provider key storage for managed tenants</strong>
                           <p>Store tenant-owned provider API keys with AES-GCM encryption at rest and honest security wording.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/reject-client-provider-key-leaks/">
                           <span>reject client provider key leaks</span>
                           <strong>Reject client-supplied provider key leaks</strong>
                           <p>Fail public proxy requests that try to send upstream provider API keys in query, JSON, or multipart input.</p>
                         </a>
-                      
+
                 </div>
               </section>
-            
+
 
               <section class="resource-category">
                 <header class="section-header compact">
@@ -144,44 +144,44 @@
                   </div>
                 </header>
                 <div class="resource-card-grid">
-                  
+
                         <a class="resource-index-card" href="/resources/self-service-llm-key-management/">
                           <span>self-service LLM key management</span>
                           <strong>Self-service LLM key management for internal teams</strong>
                           <p>Automatically create a signed-in user's LLM Proxy client key, then autosave one provider API key before they leave Settings.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/bring-your-own-provider-key-portal/">
                           <span>bring your own provider key portal</span>
                           <strong>Bring-your-own provider key portal for AI access</strong>
                           <p>Use LLM Proxy Settings to let users save provider keys and keep public proxy calls key-free.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/tauth-protected-management-api/">
                           <span>TAuth protected management API</span>
                           <strong>TAuth-protected management API for LLM Proxy</strong>
                           <p>Gate tenant, provider key, defaults, usage, and admin APIs behind validated TAuth sessions.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/copyable-llm-curl-examples/">
                           <span>copyable LLM curl examples</span>
                           <strong>Copyable LLM curl examples from current profile data</strong>
                           <p>Render copyable LLM curl examples from live profile data while keeping the one-time raw client key out of page markup and copied commands.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/provider-specific-system-prompts/">
                           <span>provider-specific system prompts</span>
                           <strong>Provider-specific system prompts in LLM Proxy Settings</strong>
                           <p>Store each provider's text model and system prompt with its managed provider configuration.</p>
                         </a>
-                      
+
                 </div>
               </section>
-            
+
 
               <section class="resource-category">
                 <header class="section-header compact">
@@ -191,58 +191,58 @@
                   </div>
                 </header>
                 <div class="resource-card-grid">
-                  
+
                         <a class="resource-index-card" href="/resources/canonical-v2-chat-messages-api/">
                           <span>v2 chat messages API</span>
                           <strong>Canonical /v2 chat messages API for LLM calls</strong>
                           <p>Send ordered system, user, and assistant messages through one v2 endpoint before provider routing.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/large-prompt-json-post/">
                           <span>large prompt JSON POST</span>
                           <strong>Large prompt JSON POST for LLM requests</strong>
                           <p>Use JSON POST bodies when prompts are too large or structured for query-string requests.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/openai-web-search-guardrails/">
                           <span>OpenAI web search guardrails</span>
                           <strong>OpenAI web search guardrails in an LLM proxy</strong>
                           <p>Expose web_search only when the selected OpenAI model is configured to support it.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/llm-response-formats-json-xml-csv-text/">
                           <span>LLM response formats JSON XML CSV text</span>
                           <strong>LLM response formats: JSON, XML, CSV, and text</strong>
                           <p>Choose response formatting through format or Accept without changing the provider route.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/per-request-provider-model-selection/">
                           <span>per-request provider model selection</span>
                           <strong>Per-request provider and model selection</strong>
                           <p>Use provider and model parameters only when a request should override tenant or provider defaults.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/system-prompt-handling/">
                           <span>LLM system prompt handling</span>
                           <strong>System prompt handling without ambiguous inputs</strong>
                           <p>Keep system instructions explicit across prompt bodies, v2 messages, tenant defaults, and provider settings.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/max-tokens-provider-limit-validation/">
                           <span>max tokens provider limit validation</span>
                           <strong>max_tokens validation across LLM providers</strong>
                           <p>Map max_tokens to provider-specific fields and reject known invalid token caps before upstream calls.</p>
                         </a>
-                      
+
                 </div>
               </section>
-            
+
 
               <section class="resource-category">
                 <header class="section-header compact">
@@ -252,23 +252,23 @@
                   </div>
                 </header>
                 <div class="resource-card-grid">
-                  
+
                         <a class="resource-index-card" href="/resources/audio-transcription-proxy-api/">
                           <span>audio transcription proxy API</span>
                           <strong>Audio transcription proxy API behind tenant secrets</strong>
                           <p>Route multipart audio transcription through /dictate using the same tenant-secret boundary as text.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/dictation-provider-routing/">
                           <span>dictation provider routing</span>
                           <strong>Dictation provider routing for OpenAI, Zhipu, Grok, and SiliconFlow</strong>
                           <p>Select dictation-capable providers through /dictate while keeping transcription URLs server-side.</p>
                         </a>
-                      
+
                 </div>
               </section>
-            
+
 
               <section class="resource-category">
                 <header class="section-header compact">
@@ -278,37 +278,37 @@
                   </div>
                 </header>
                 <div class="resource-card-grid">
-                  
+
                         <a class="resource-index-card" href="/resources/openai-background-response-polling/">
                           <span>OpenAI background response polling</span>
                           <strong>OpenAI background response polling without client loops</strong>
                           <p>Let LLM Proxy own OpenAI Responses background mode and return the final answer in one REST call.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/upstream-worker-queue-limits/">
                           <span>upstream worker queue limits</span>
                           <strong>Upstream worker and queue limits for LLM traffic</strong>
                           <p>Use shared worker and queue controls to bound upstream HTTP operations for text and dictation.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/llm-proxy-status-code-map/">
                           <span>LLM proxy status code map</span>
                           <strong>LLM Proxy status code map for callers</strong>
                           <p>Handle missing keys, bad inputs, rate limits, disabled providers, timeouts, and upstream failures consistently.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/provider-overload-timeout-handling/">
                           <span>LLM provider overload timeout handling</span>
                           <strong>Provider overload and timeout handling for LLM calls</strong>
                           <p>Use clear 503 and 504 behavior for queue pressure and provider work that exceeds the proxy deadline.</p>
                         </a>
-                      
+
                 </div>
               </section>
-            
+
 
               <section class="resource-category">
                 <header class="section-header compact">
@@ -318,44 +318,44 @@
                   </div>
                 </header>
                 <div class="resource-card-grid">
-                  
+
                         <a class="resource-index-card" href="/resources/model-catalog-configuration/">
                           <span>LLM model catalog configuration</span>
                           <strong>LLM model catalog configuration in config.yml</strong>
                           <p>Keep provider model IDs, defaults, web-search flags, and token limits in runtime config.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/provider-default-model-selection/">
                           <span>provider default model selection</span>
                           <strong>Provider default model selection for omitted models</strong>
                           <p>Let omitted model fields resolve through tenant defaults or selected-provider configured defaults.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/strict-yaml-config-placeholders/">
                           <span>strict YAML config placeholders</span>
                           <strong>Strict YAML config placeholders for LLM Proxy</strong>
                           <p>Use config.yml as the only service config source and env only for strict placeholder expansion.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/static-to-managed-tenant-migration/">
                           <span>static to managed tenant migration</span>
                           <strong>Legacy token ownership migration in management mode</strong>
                           <p>Claim one prior static-config token for a verified user account without changing the token or losing usage history.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/gorm-managed-tenant-persistence/">
                           <span>GORM managed tenant persistence</span>
                           <strong>GORM-managed tenant persistence for LLM Proxy</strong>
                           <p>Persist signups, provider settings, generated secret digests, defaults, and usage through GORM.</p>
                         </a>
-                      
+
                 </div>
               </section>
-            
+
 
               <section class="resource-category">
                 <header class="section-header compact">
@@ -365,37 +365,37 @@
                   </div>
                 </header>
                 <div class="resource-card-grid">
-                  
+
                         <a class="resource-index-card" href="/resources/normalized-token-usage-metadata/">
                           <span>normalized token usage metadata</span>
                           <strong>Normalized token usage metadata across providers</strong>
                           <p>Expose request, response, and total token counts through common headers and JSON fields.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/managed-tenant-usage-dashboard/">
                           <span>managed tenant usage dashboard</span>
                           <strong>Managed tenant usage dashboard for LLM requests</strong>
-                          <p>Show signed-in users 30-day request, token, provider, model, and status summaries.</p>
+                          <p>Show signed-in users selectable all-time, 30-day, 7-day, and 1-day LLM usage summaries.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/admin-usage-visibility-without-secrets/">
                           <span>admin usage visibility without secrets</span>
                           <strong>Admin usage visibility without exposing secrets</strong>
                           <p>Let configured administrators inspect managed users and 30-day usage without raw keys or prompts.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/usage-metadata-without-prompts/">
                           <span>usage metadata without prompts</span>
                           <strong>Usage metadata without storing prompts or responses</strong>
                           <p>Track managed-tenant usage signals while excluding prompt, transcript, audio, response, and secret content.</p>
                         </a>
-                      
+
                 </div>
               </section>
-            
+
 
               <section class="resource-category">
                 <header class="section-header compact">
@@ -405,30 +405,30 @@
                   </div>
                 </header>
                 <div class="resource-card-grid">
-                  
+
                         <a class="resource-index-card" href="/resources/api-served-runtime-config-for-static-ui/">
                           <span>API-served runtime config static UI</span>
                           <strong>API-served runtime config for a static LLM UI</strong>
                           <p>Keep the Pages frontend static while the backend serves current runtime config at /config-ui.yaml.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/local-and-hosted-llm-proxy-config-profiles/">
                           <span>local and hosted LLM proxy config</span>
                           <strong>Local and hosted LLM Proxy config profiles</strong>
                           <p>Use the same strict config contract locally and in hosted split-origin deployments.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/github-pages-llm-management-ui/">
                           <span>GitHub Pages LLM management UI</span>
                           <strong>GitHub Pages management UI for LLM Proxy</strong>
                           <p>Publish the static management frontend from site/ while the backend owns API and runtime config.</p>
                         </a>
-                      
+
                 </div>
               </section>
-            
+
 
               <section class="resource-category">
                 <header class="section-header compact">
@@ -438,30 +438,30 @@
                   </div>
                 </header>
                 <div class="resource-card-grid">
-                  
+
                         <a class="resource-index-card" href="/resources/go-client-v2-only-llm-proxy/">
                           <span>Go LLM proxy client v2</span>
                           <strong>Go LLM Proxy client with a v2-only transport</strong>
                           <p>Use the Go package to send canonical messages requests through POST /v2.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/python-client-v2-only-llm-proxy/">
                           <span>Python LLM proxy client v2</span>
                           <strong>Python LLM Proxy client with v2 messages</strong>
                           <p>Use ClientMessagesRequest and post_messages for canonical text requests from Python.</p>
                         </a>
-                      
+
 
                         <a class="resource-index-card" href="/resources/installable-llm-proxy-cli/">
                           <span>installable LLM proxy CLI</span>
                           <strong>Installable LLM Proxy CLI for prompt workflows</strong>
                           <p>Use llm-proxy-client to send prompt text as canonical /v2 messages from the command line.</p>
                         </a>
-                      
+
                 </div>
               </section>
-            
+
 
               <section class="resource-category">
                 <header class="section-header compact">
@@ -471,16 +471,16 @@
                   </div>
                 </header>
                 <div class="resource-card-grid">
-                  
+
                         <a class="resource-index-card" href="/resources/live-provider-smoke-tests/">
                           <span>live provider smoke tests</span>
                           <strong>Live provider smoke tests for LLM Proxy</strong>
                           <p>Run paid-provider smoke checks separately from CI when real upstream behavior needs verification.</p>
                         </a>
-                      
+
                 </div>
               </section>
-            
+
 
               <section class="resource-category">
                 <header class="section-header compact">
@@ -490,21 +490,21 @@
                   </div>
                 </header>
                 <div class="resource-card-grid">
-                  
+
                         <a class="resource-index-card" href="/resources/internal-ai-gateway-for-product-tools/">
                           <span>internal AI gateway</span>
                           <strong>Internal AI gateway for product tools</strong>
                           <p>Centralize provider routing, tenant secrets, request validation, and usage signals for internal AI tools.</p>
                         </a>
-                      
+
                 </div>
               </section>
-            
+
       </main>
       <footer class="resource-shell resource-footer">
         <a href="/">LLM Proxy main page</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
@@ -84,27 +84,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Model-aware flag</td>
                           <td>The request option is checked against provider and model metadata.</td>
                           <td>DeepSeek with web_search returns a client error instead of a hidden fallback.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Config-owned support</td>
                           <td>OpenAI web-search support is explicit in the model catalog.</td>
                           <td>Operators can see which model entries expose the capability.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Early rejection</td>
                           <td>Unsupported combinations fail before provider spend.</td>
                           <td>Callers get a clear request error.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -113,24 +113,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Research prompt</h3>
                       <p>A caller selects gpt-5 with web_search=1 for a search-enabled answer.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Non-search provider</h3>
                       <p>A Gemini request with web_search does not silently pretend to search.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Default model check</h3>
                       <p>If the tenant default model lacks web search, the request must choose a supporting OpenAI model.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -146,66 +146,66 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of OpenAI web search guardrails?</summary>
                       <p>LLM Proxy accepts web_search per request but enables it only for OpenAI model catalog entries marked with web_search support.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this api contract resource?</summary>
                       <p>Teams that need controlled search-enabled model calls without making web search a universal flag.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Canonical /v2 chat messages API for LLM calls, which covers v2 chat messages API.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/canonical-v2-chat-messages-api/">
                       <span>API contract</span>
                       <strong>Canonical /v2 chat messages API for LLM calls</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/large-prompt-json-post/">
                       <span>API contract</span>
                       <strong>Large prompt JSON POST for LLM requests</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/normalized-token-usage-metadata/">
                       <span>Usage</span>
                       <strong>Normalized token usage metadata across providers</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/provider-default-model-selection/">
                       <span>Configuration</span>
                       <strong>Provider default model selection for omitted models</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -221,6 +221,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

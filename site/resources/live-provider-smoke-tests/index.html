@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
@@ -85,27 +85,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Separate from CI</td>
                           <td>Live provider smoke tests are not part of make ci.</td>
                           <td>Routine validation stays deterministic.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Provider discovery and isolation</td>
                           <td>The dynamic target runs providers whose keys are available through a management-disabled temporary config.</td>
                           <td>Missing optional keys and hosted management state do not affect unrelated smoke checks.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Default model path</td>
                           <td>By default, smoke requests omit model so provider configured defaults are tested.</td>
                           <td>The test exercises the default-selection contract.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -114,24 +114,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>OpenAI smoke</h3>
                       <p>Run LLM_PROXY_LIVE_PROVIDERS=openai with a live env file.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Gemini wrapper</h3>
                       <p>Use make test-live-gemini as the Gemini-specific compatibility target.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Post-deploy check</h3>
                       <p>After publishing, run selected live smokes for providers touched by config changes.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -147,54 +147,54 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of live provider smoke tests?</summary>
                       <p>LLM Proxy keeps live provider smoke tests outside make ci, parses provider keys from a dotenv file without executing shell code, and forces the temporary proxy into management-disabled mode.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this validation resource?</summary>
                       <p>Operators validating provider credentials and hosted provider routes after config or deployment changes.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Internal AI gateway for product tools, which covers internal AI gateway.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/internal-ai-gateway-for-product-tools/">
                       <span>Use cases</span>
                       <strong>Internal AI gateway for product tools</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/github-pages-llm-management-ui/">
                       <span>Deployment</span>
                       <strong>GitHub Pages management UI for LLM Proxy</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -210,6 +210,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

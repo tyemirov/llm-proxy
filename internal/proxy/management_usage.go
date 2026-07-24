@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -15,7 +16,19 @@ const (
 	usageEndpointV2        = "v2"
 	usageEndpointDictation = "dictation"
 	usageDateFormat        = "2006-01-02"
+	usageIntervalAll       = usageInterval("all")
+	usageIntervalThirtyDay = usageInterval("30d")
+	usageIntervalSevenDay  = usageInterval("7d")
+	usageIntervalOneDay    = usageInterval("1d")
+	usageBucketUnitDay     = usageBucketUnit("day")
+	usageBucketUnitHour    = usageBucketUnit("hour")
 )
+
+var errManagedUsageIntervalInvalid = errors.New("managed_usage_interval_invalid")
+
+type usageInterval string
+
+type usageBucketUnit string
 
 type managedUsageEvent struct {
 	endpoint            string
@@ -27,6 +40,16 @@ type managedUsageEvent struct {
 }
 
 type managedUsageSummary struct {
+	interval    usageInterval
+	bucketUnit  usageBucketUnit
+	totals      managedUsageAggregate
+	buckets     []managedUsageBucket
+	providers   []managedUsageProviderBucket
+	models      []managedUsageModelBucket
+	statusCodes []managedUsageStatusBucket
+}
+
+type managedAdminUsageSummary struct {
 	periodDays  int
 	totals      managedUsageAggregate
 	daily       []managedUsageDailyBucket
@@ -48,6 +71,11 @@ type managedUsageAggregate struct {
 	averageLatencyMillis int64
 }
 
+type managedUsageBucket struct {
+	start     time.Time
+	aggregate managedUsageAggregate
+}
+
 type managedUsageDailyBucket struct {
 	date      string
 	aggregate managedUsageAggregate
@@ -67,6 +95,48 @@ type managedUsageModelBucket struct {
 type managedUsageStatusBucket struct {
 	statusCode int
 	requests   int
+}
+
+type managedUsageAccumulator struct {
+	totals    managedUsageAggregate
+	providers map[string]managedUsageAggregate
+	models    map[string]managedUsageModelBucket
+	statuses  map[int]int
+}
+
+type managedUsageSummaryAccumulator struct {
+	interval       usageInterval
+	bucketUnit     usageBucketUnit
+	periodStart    time.Time
+	periodEnd      time.Time
+	bucketDuration time.Duration
+	buckets        []managedUsageBucket
+	usage          managedUsageAccumulator
+}
+
+func newUsageInterval(value string) (usageInterval, error) {
+	interval := usageInterval(value)
+	switch interval {
+	case usageIntervalAll, usageIntervalThirtyDay, usageIntervalSevenDay, usageIntervalOneDay:
+		return interval, nil
+	default:
+		return "", fmt.Errorf("%w: interval=%q", errManagedUsageIntervalInvalid, value)
+	}
+}
+
+func (interval usageInterval) finiteWindow() (time.Duration, int, usageBucketUnit, bool) {
+	switch interval {
+	case usageIntervalThirtyDay:
+		return managedUsageSummaryDays * 24 * time.Hour, managedUsageSummaryDays, usageBucketUnitDay, true
+	case usageIntervalSevenDay:
+		return 7 * 24 * time.Hour, 7, usageBucketUnitDay, true
+	case usageIntervalOneDay:
+		return 24 * time.Hour, 24, usageBucketUnitHour, true
+	case usageIntervalAll:
+		return 0, 0, usageBucketUnitDay, false
+	default:
+		panic(errManagedUsageIntervalInvalid)
+	}
 }
 
 func (store *managedTenantStore) recordUsage(requestTenant tenant, event managedUsageEvent) error {
@@ -105,19 +175,33 @@ func (store *managedTenantStore) recordUsage(requestTenant tenant, event managed
 	return nil
 }
 
-func (store *managedTenantStore) usageSummary(principal managementPrincipal) (managedUsageSummary, error) {
+func (store *managedTenantStore) usageSummary(principal managementPrincipal, interval usageInterval) (managedUsageSummary, error) {
 	store.mutex.Lock()
-	defer store.mutex.Unlock()
 	record, recordError := store.ensureRecordLocked(principal)
+	timestamp := store.now()
+	store.mutex.Unlock()
 	if recordError != nil {
 		return managedUsageSummary{}, recordError
 	}
-	timestamp := store.now()
-	records, recordsError := store.database.usageEventsByUserIDSince(record.UserID, usagePeriodStart(timestamp))
+	windowDuration, _, _, finite := interval.finiteWindow()
+	var earliestUsageEvent time.Time
+	var recordsError error
+	if !finite {
+		earliestUsageEvent, recordsError = store.database.earliestUsageEventByUserIDThrough(record.UserID, timestamp)
+	}
 	if recordsError != nil {
 		return managedUsageSummary{}, fmt.Errorf("%w: user_id=%s: %v", errManagedTenantStorePersist, record.UserID, recordsError)
 	}
-	return summarizeManagedUsage(records, timestamp), nil
+	accumulator := newManagedUsageSummaryAccumulator(interval, timestamp, earliestUsageEvent)
+	if finite {
+		recordsError = store.database.streamUsageEventsByUserIDBetween(record.UserID, timestamp.Add(-windowDuration), timestamp, accumulator.apply)
+	} else {
+		recordsError = store.database.streamUsageEventsByUserIDThrough(record.UserID, timestamp, accumulator.apply)
+	}
+	if recordsError != nil {
+		return managedUsageSummary{}, fmt.Errorf("%w: user_id=%s: %v", errManagedTenantStorePersist, record.UserID, recordsError)
+	}
+	return accumulator.summary(), nil
 }
 
 func (store *managedTenantStore) adminUsersSummary() ([]managedAdminUserSnapshot, error) {
@@ -139,7 +223,7 @@ func (store *managedTenantStore) adminUsersSummary() ([]managedAdminUserSnapshot
 	}
 	adminSnapshots := make([]managedAdminUserSnapshot, 0, len(tenantRecords))
 	for _, tenantRecord := range tenantRecords {
-		adminSnapshots = append(adminSnapshots, tenantRecord.adminSnapshot(summarizeManagedUsage(usageRecordsByUserID[tenantRecord.UserID], timestamp)))
+		adminSnapshots = append(adminSnapshots, tenantRecord.adminSnapshot(summarizeManagedAdminUsage(usageRecordsByUserID[tenantRecord.UserID], timestamp)))
 	}
 	sort.Slice(adminSnapshots, func(firstIndex int, secondIndex int) bool {
 		firstEmail := strings.ToLower(adminSnapshots[firstIndex].userEmail)
@@ -152,7 +236,100 @@ func (store *managedTenantStore) adminUsersSummary() ([]managedAdminUserSnapshot
 	return adminSnapshots, nil
 }
 
-func summarizeManagedUsage(records []managedUsageEventRecord, now time.Time) managedUsageSummary {
+func summarizeManagedUsage(records []managedUsageEventRecord, interval usageInterval, now time.Time) managedUsageSummary {
+	periodEnd := now.UTC()
+	var earliestUsageEvent time.Time
+	_, _, _, finite := interval.finiteWindow()
+	if !finite {
+		earliestUsageEvent = earliestManagedUsageEvent(records, periodEnd)
+	}
+	accumulator := newManagedUsageSummaryAccumulator(interval, now, earliestUsageEvent)
+	for _, record := range records {
+		accumulator.apply(record)
+	}
+	return accumulator.summary()
+}
+
+func newManagedUsageSummaryAccumulator(interval usageInterval, now time.Time, earliestUsageEvent time.Time) managedUsageSummaryAccumulator {
+	windowDuration, bucketCount, bucketUnit, finite := interval.finiteWindow()
+	periodEnd := now.UTC()
+	periodStart := periodEnd.Add(-windowDuration)
+	if !finite {
+		periodStart, bucketCount = allUsagePeriod(earliestUsageEvent, periodEnd)
+	}
+	buckets := make([]managedUsageBucket, 0, bucketCount)
+	bucketDuration := 24 * time.Hour
+	if bucketUnit == usageBucketUnitHour {
+		bucketDuration = time.Hour
+	}
+	for bucketIndex := 0; bucketIndex < bucketCount; bucketIndex++ {
+		buckets = append(buckets, managedUsageBucket{start: periodStart.Add(time.Duration(bucketIndex) * bucketDuration)})
+	}
+	return managedUsageSummaryAccumulator{
+		interval:       interval,
+		bucketUnit:     bucketUnit,
+		periodStart:    periodStart,
+		periodEnd:      periodEnd,
+		bucketDuration: bucketDuration,
+		buckets:        buckets,
+		usage:          newManagedUsageAccumulator(),
+	}
+}
+
+func (accumulator *managedUsageSummaryAccumulator) apply(record managedUsageEventRecord) {
+	if record.CreatedAt.Before(accumulator.periodStart) || record.CreatedAt.After(accumulator.periodEnd) {
+		return
+	}
+	accumulator.usage.apply(record)
+	bucketPosition := int(record.CreatedAt.Sub(accumulator.periodStart) / accumulator.bucketDuration)
+	if bucketPosition == len(accumulator.buckets) {
+		bucketPosition--
+	}
+	applyUsageRecord(&accumulator.buckets[bucketPosition].aggregate, record)
+}
+
+func (accumulator managedUsageSummaryAccumulator) summary() managedUsageSummary {
+	for bucketIndex := range accumulator.buckets {
+		finalizeUsageAggregate(&accumulator.buckets[bucketIndex].aggregate)
+	}
+	totals, providers, models, statuses := accumulator.usage.summary()
+	return managedUsageSummary{
+		interval:    accumulator.interval,
+		bucketUnit:  accumulator.bucketUnit,
+		totals:      totals,
+		buckets:     accumulator.buckets,
+		providers:   providers,
+		models:      models,
+		statusCodes: statuses,
+	}
+}
+
+func earliestManagedUsageEvent(records []managedUsageEventRecord, periodEnd time.Time) time.Time {
+	var earliest time.Time
+	for _, record := range records {
+		recordTime := record.CreatedAt.UTC()
+		if recordTime.After(periodEnd) {
+			continue
+		}
+		if earliest.IsZero() || recordTime.Before(earliest) {
+			earliest = recordTime
+		}
+	}
+	return earliest
+}
+
+func allUsagePeriod(earliestUsageEvent time.Time, periodEnd time.Time) (time.Time, int) {
+	if earliestUsageEvent.IsZero() {
+		return periodEnd, 0
+	}
+	earliestUTC := earliestUsageEvent.UTC()
+	periodStart := time.Date(earliestUTC.Year(), earliestUTC.Month(), earliestUTC.Day(), 0, 0, 0, 0, time.UTC)
+	currentDay := time.Date(periodEnd.Year(), periodEnd.Month(), periodEnd.Day(), 0, 0, 0, 0, time.UTC)
+	bucketCount := int(currentDay.Sub(periodStart)/(24*time.Hour)) + 1
+	return periodStart, bucketCount
+}
+
+func summarizeManagedAdminUsage(records []managedUsageEventRecord, now time.Time) managedAdminUsageSummary {
 	periodStart := usagePeriodStart(now)
 	dailyBuckets := make([]managedUsageDailyBucket, 0, managedUsageSummaryDays)
 	dailyIndex := make(map[string]int, managedUsageSummaryDays)
@@ -161,46 +338,28 @@ func summarizeManagedUsage(records []managedUsageEventRecord, now time.Time) man
 		dailyIndex[date] = len(dailyBuckets)
 		dailyBuckets = append(dailyBuckets, managedUsageDailyBucket{date: date})
 	}
-	providerBuckets := map[string]managedUsageAggregate{}
-	modelBuckets := map[string]managedUsageModelBucket{}
-	statusBuckets := map[int]int{}
-	var totals managedUsageAggregate
+	accumulator := newManagedUsageAccumulator()
 	for _, record := range records {
-		if record.CreatedAt.Before(periodStart) {
+		if record.CreatedAt.Before(periodStart) || record.CreatedAt.After(now) {
 			continue
 		}
-		applyUsageRecord(&totals, record)
+		accumulator.apply(record)
 		recordDate := record.CreatedAt.UTC().Format(usageDateFormat)
 		if dailyPosition, exists := dailyIndex[recordDate]; exists {
 			applyUsageRecord(&dailyBuckets[dailyPosition].aggregate, record)
 		}
-		providerKey := record.ProviderID
-		providerAggregate := providerBuckets[providerKey]
-		applyUsageRecord(&providerAggregate, record)
-		providerBuckets[providerKey] = providerAggregate
-
-		modelKey := record.ProviderID + "\x00" + record.ModelID
-		modelBucket := modelBuckets[modelKey]
-		modelBucket.providerIdentifier = record.ProviderID
-		modelBucket.modelIdentifier = record.ModelID
-		applyUsageRecord(&modelBucket.aggregate, record)
-		modelBuckets[modelKey] = modelBucket
-		statusBuckets[record.StatusCode]++
 	}
-	finalizeUsageAggregate(&totals)
 	for dailyIndex := range dailyBuckets {
 		finalizeUsageAggregate(&dailyBuckets[dailyIndex].aggregate)
 	}
-	providerList := usageProviderBucketList(providerBuckets)
-	modelList := usageModelBucketList(modelBuckets)
-	statusList := usageStatusBucketList(statusBuckets)
-	return managedUsageSummary{
+	totals, providers, models, statuses := accumulator.summary()
+	return managedAdminUsageSummary{
 		periodDays:  managedUsageSummaryDays,
 		totals:      totals,
 		daily:       dailyBuckets,
-		providers:   providerList,
-		models:      modelList,
-		statusCodes: statusList,
+		providers:   providers,
+		models:      models,
+		statusCodes: statuses,
 	}
 }
 
@@ -208,6 +367,37 @@ func usagePeriodStart(now time.Time) time.Time {
 	utcNow := now.UTC()
 	today := time.Date(utcNow.Year(), utcNow.Month(), utcNow.Day(), 0, 0, 0, 0, time.UTC)
 	return today.AddDate(0, 0, -managedUsageSummaryDays+1)
+}
+
+func newManagedUsageAccumulator() managedUsageAccumulator {
+	return managedUsageAccumulator{
+		providers: map[string]managedUsageAggregate{},
+		models:    map[string]managedUsageModelBucket{},
+		statuses:  map[int]int{},
+	}
+}
+
+func (accumulator *managedUsageAccumulator) apply(record managedUsageEventRecord) {
+	applyUsageRecord(&accumulator.totals, record)
+	providerAggregate := accumulator.providers[record.ProviderID]
+	applyUsageRecord(&providerAggregate, record)
+	accumulator.providers[record.ProviderID] = providerAggregate
+
+	modelKey := record.ProviderID + "\x00" + record.ModelID
+	modelBucket := accumulator.models[modelKey]
+	modelBucket.providerIdentifier = record.ProviderID
+	modelBucket.modelIdentifier = record.ModelID
+	applyUsageRecord(&modelBucket.aggregate, record)
+	accumulator.models[modelKey] = modelBucket
+	accumulator.statuses[record.StatusCode]++
+}
+
+func (accumulator managedUsageAccumulator) summary() (managedUsageAggregate, []managedUsageProviderBucket, []managedUsageModelBucket, []managedUsageStatusBucket) {
+	finalizeUsageAggregate(&accumulator.totals)
+	return accumulator.totals,
+		usageProviderBucketList(accumulator.providers),
+		usageModelBucketList(accumulator.models),
+		usageStatusBucketList(accumulator.statuses)
 }
 
 func applyUsageRecord(aggregate *managedUsageAggregate, record managedUsageEventRecord) {

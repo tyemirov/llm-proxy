@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
@@ -88,7 +88,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>TAuth-gated UI</td>
                           <td>Management controls appear only after login.</td>
@@ -108,14 +108,14 @@
                           <td>Provider key, text model, and system prompt live together and autosave.</td>
                           <td>A user can update one provider without scanning every provider card or pressing a save button.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Copyable examples</td>
                           <td>Default and provider-specific curl examples use the current proxy origin and generated-secret placeholder.</td>
                           <td>Users can start with the exact request shape shown in Settings.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -124,24 +124,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>New team onboarding</h3>
                       <p>A user signs in, copies the automatically created client key, enters an OpenAI key, and closes Settings after autosave completes.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Provider update</h3>
                       <p>A user switches the selected provider editor to DeepSeek and its changed model autosaves.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Usage review</h3>
-                      <p>The user returns to the dashboard to see 30-day request and token summaries.</p>
+                      <p>The user returns to the dashboard and selects all-time, 30-day, 7-day, or 1-day request and token summaries.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -168,60 +168,60 @@ if (!this.hasSecret) {
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>How does first-run LLM Proxy setup begin?</summary>
                       <p>After MPR UI reports an authenticated session, the management profile loads and the UI automatically creates a client key when the profile has none.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What lets a user leave Settings?</summary>
                       <p>The loaded profile must report a client key and at least one persisted managed provider key. Until both conditions are true, close actions explain what is missing and keep Settings open.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does typing a provider key unlock Settings?</summary>
                       <p>No. Only a provider record returned with has_key after a successful autosave counts; drafts and local dotenv credentials do not satisfy managed onboarding.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does onboarding change provider or model defaults?</summary>
                       <p>No. Automatic client-key creation and provider-key validation leave the user's existing provider and model defaults unchanged.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Bring-your-own provider key portal for AI access, which covers bring your own provider key portal.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/bring-your-own-provider-key-portal/">
                       <span>Management UI</span>
                       <strong>Bring-your-own provider key portal for AI access</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/tauth-protected-management-api/">
                       <span>Management UI</span>
                       <strong>TAuth-protected management API for LLM Proxy</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/tenant-secret-ai-gateway/">
                       <span>Security</span>
                       <strong>Tenant-secret AI gateway for internal applications</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -237,6 +237,6 @@ if (!this.hasSecret) {
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

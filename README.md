@@ -86,6 +86,7 @@ management:
   login_path: "${LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH}"
   logout_path: "${LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH}"
   nonce_path: "${LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH}"
+  session_path: "${LLM_PROXY_MANAGEMENT_TAUTH_SESSION_PATH}"
   jwt_signing_key: "${LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY}"
   jwt_issuer: "${LLM_PROXY_MANAGEMENT_JWT_ISSUER}"
   session_cookie_name: "${LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME}"
@@ -536,8 +537,8 @@ can consume the current llm-proxy runtime, MPR UI, and TAuth bootstrap values
 from `llm-proxy-api`.
 
 The static UI uses the shared MPR shell through API-served `config-ui.yaml`,
-pinned `mpr-ui` assets, `mpr-ui-config.js`,
-`<mpr-header data-config-url="...">`, the pinned bundle marker, `<mpr-user>`,
+literal `mpr-ui@latest` assets, `mpr-ui-config.js`,
+`<mpr-header data-config-url="...">`, the `@latest` bundle marker, `<mpr-user>`,
 and `<mpr-footer>`. It does not load `tauth.js` directly or apply MPR UI config
 from application JavaScript. The Pages artifact contains no static
 `config-ui.yaml` or `llm-proxy-config.json`; release rendering writes the
@@ -546,6 +547,9 @@ single API-served YAML points browser management API calls, generated usage
 examples, and MPR UI/TAuth at the configured origins. Browser-facing values are
 projected from the already-loaded backend `config.yml`; there is no second
 environment expansion path for Pages.
+
+The consumed shared bundle registers `mpr-legal-document`; legal-page routes
+and document rendering remain owned by P005 and are not duplicated here.
 
 MPR UI is the sole browser authentication authority. LLM Proxy registers the
 documented `mpr-ui:auth:authenticated` and `mpr-ui:auth:unauthenticated`
@@ -579,6 +583,7 @@ Required hosted values are profile-specific:
 | `management.login_path` | Browser-facing TAuth Google login path. |
 | `management.logout_path` | Browser-facing TAuth logout path. |
 | `management.nonce_path` | Browser-facing TAuth nonce path. |
+| `management.session_path` | Browser-facing TAuth session restore path, normally `/auth/session`. |
 | `management.jwt_signing_key` | Internal signing key used to validate the TAuth session cookie. |
 | `management.jwt_issuer` | JWT issuer, normally `tauth`. |
 | `management.session_cookie_name` | Exact app/environment TAuth session cookie name. |
@@ -678,11 +683,13 @@ error. Once the marker exists, every stored field must already be canonical and
 catalog-valid; startup rejects invalid data rather than selecting a replacement
 at runtime.
 
-Configured authenticated users land on a usage dashboard. It shows 30-day
+Configured authenticated users land on a usage dashboard. Its ordered `ALL`,
+`30 days`, `7 days`, and `1 day` controls default to `30 days` and replace the
 request and token graphs, total request and token counts, success rate, and
-provider and model breakdowns for the signed-in user's managed tenant. Users
-whose client/provider setup is incomplete enter the mandatory Settings modal
-instead; after setup, the modal remains available from the avatar dropdown. The
+provider and model breakdowns with one selected snapshot for the signed-in
+user's managed tenant. `Refresh` retains that selection. Users whose
+client/provider setup is incomplete enter the mandatory Settings modal instead;
+after setup, the modal remains available from the avatar dropdown. The
 `Settings` menu item is inserted before `Sign out` through the shared
 `<mpr-user>` menu contract. The modal contains client access, generated secret,
 routing defaults, copyable default request examples, copyable selected-provider
@@ -706,12 +713,24 @@ masked provider-key strings, generated tenant secrets, secret digests, prompts,
 audio names, transcripts, or model responses. Authenticated non-admin users get
 `403 Forbidden` from admin-only APIs.
 
-`GET /api/management/usage` returns the dashboard data for the authenticated
-user. Usage events are recorded only for managed tenants when they call the
-public proxy endpoints with a generated secret. Stored usage metadata includes
-endpoint, provider, model, status code, success flag, latency, and normalized
-request/response/total token counts. Prompts, audio, transcripts, responses,
-tenant secrets, and provider API keys are not stored in usage events.
+`GET /api/management/usage?interval=all|30d|7d|1d` returns dashboard data only
+for the authenticated user's managed tenant. `interval` is required exactly
+once; a missing, repeated, or unknown value returns `400`. The response contains
+the selected `interval`, its `bucket_unit`, `totals`, ordered generic `buckets`,
+and provider, model, and status-code breakdowns; the user endpoint has no
+`period_days` or `daily` fields. `1d` uses 24 hourly buckets, `7d` and `30d` use
+7 and 30 daily buckets, and each finite interval is an exact trailing duration
+ending at one captured server timestamp. `all` includes retained tenant events
+through that timestamp in UTC daily buckets from the earliest event through
+today, or an empty bucket list when the tenant has no events. The administrator
+endpoint remains a separate fixed 30-day daily contract.
+
+Usage events are recorded only for managed tenants when they call the public
+proxy endpoints with a generated secret. Every usage query applies the
+authenticated user id and selected time boundary in the database. Stored usage
+metadata includes endpoint, provider, model, status code, success flag, latency,
+and normalized request/response/total token counts. Prompts, audio, transcripts,
+responses, tenant secrets, and provider API keys are not stored in usage events.
 
 Management mode no longer imports config tenants or global provider keys, and
 startup removes the obsolete static-import marker table. A deployment that
@@ -803,17 +822,17 @@ and refresh cookies. It then drives the mounted header through the documented
 lifecycle event and persists MPR UI's session-restore hint. The test proves the
 anonymous/authorized behavior of `/api/management/profile`, proves the browser
 makes no protected profile request before MPR UI authentication and exactly one
-to hydrate the workspace afterward, and waits for the pinned `mpr-ui` shell
+to hydrate the workspace afterward, and waits for the `mpr-ui@latest` shell
 plus the dashboard to report the authenticated state. It then proves an ordinary reload
 stays authenticated, removes only the access cookie and proves `/auth/session`
 recovers it from the refresh cookie without rendering the signed-out panel, and
 uses the visible **Sign out** action to prove `/auth/logout` clears both cookies
-and returns TAuth plus the management API to anonymous responses. CDN
-application assets are served from pinned local npm dependencies during this
-test; TAuth and management API routes are never mocked.
+and returns TAuth plus the management API to anonymous responses. The MPR UI
+application assets are loaded through their literal `@latest` CDN contract;
+TAuth and management API routes are never mocked.
 
 Normal navigation, page refreshes, and access-cookie expiration do not sign the
-user out. The pinned MPR UI shell silently restores the TAuth session while its
+user out. The `mpr-ui@latest` shell silently restores the TAuth session while its
 rotating refresh cookie remains valid. Only the explicit **Sign out** action
 calls TAuth logout and clears the browser session; LLM Proxy does not own a
 second session store or an automatic logout path.

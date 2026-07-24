@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
@@ -85,27 +85,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Queue status</td>
                           <td>The shared upstream operation queue returns service-unavailable behavior when full.</td>
                           <td>Callers can back off before adding more pressure.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Deadline status</td>
                           <td>Long requests that exceed server.request_timeout_seconds return 504.</td>
                           <td>Clients should not poll llm-proxy after a timeout.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Provider error mapping</td>
                           <td>Rate limits and provider failures map to distinct statuses.</td>
                           <td>Retry logic can be status-aware.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -114,24 +114,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Capacity alert</h3>
                       <p>A spike in queue-full responses points to proxy capacity tuning.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Long prompt timeout</h3>
                       <p>A semantic-review request returns 504 when provider work exceeds the configured deadline.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Disabled provider</h3>
                       <p>A selected provider without an API key returns 503 provider not configured.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -147,66 +147,66 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of LLM provider overload timeout handling?</summary>
                       <p>LLM Proxy separates request queue pressure, disabled provider credentials, upstream provider rate limits, gateway timeout, and provider failures through documented status codes.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this reliability resource?</summary>
                       <p>Developers building retry and alerting behavior around LLM Proxy.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is OpenAI background response polling without client loops, which covers OpenAI background response polling.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/openai-background-response-polling/">
                       <span>Reliability</span>
                       <strong>OpenAI background response polling without client loops</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/upstream-worker-queue-limits/">
                       <span>Reliability</span>
                       <strong>Upstream worker and queue limits for LLM traffic</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/multi-provider-llm-proxy/">
                       <span>Provider routing</span>
                       <strong>Multi-provider LLM proxy for internal tools</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/internal-ai-gateway-for-product-tools/">
                       <span>Use cases</span>
                       <strong>Internal AI gateway for product tools</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -222,6 +222,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

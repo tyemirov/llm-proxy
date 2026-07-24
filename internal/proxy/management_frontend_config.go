@@ -49,5 +49,8 @@ func RenderManagementConfigUI(configuration ManagementConfiguration) string {
 	builder.WriteString("      noncePath: ")
 	builder.WriteString(strconv.Quote(configuration.NoncePath))
 	builder.WriteString("\n")
+	builder.WriteString("      sessionPath: ")
+	builder.WriteString(strconv.Quote(configuration.SessionPath))
+	builder.WriteString("\n")
 	return builder.String()
 }

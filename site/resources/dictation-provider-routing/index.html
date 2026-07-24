@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
@@ -84,27 +84,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Dictation catalogs</td>
                           <td>Supported providers declare default dictation models and model lists.</td>
                           <td>Unknown models fail at the request edge.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Transcription URL config</td>
                           <td>Each dictation-capable provider owns an explicit transcriptions_url.</td>
                           <td>Client apps do not hardcode provider STT URLs.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Provider-specific multipart handling</td>
                           <td>The backend handles details such as whether a model field is sent.</td>
                           <td>Grok/xAI STT omits the multipart model field.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -113,24 +113,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>OpenAI default dictation</h3>
                       <p>A caller omits provider and model to use tenant dictation defaults.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Zhipu transcription</h3>
                       <p>A caller chooses provider=zhipu when that tenant has GLM-ASR configured.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Grok/xAI STT</h3>
                       <p>The proxy routes provider=grok to the configured xAI STT endpoint.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -146,60 +146,60 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of dictation provider routing?</summary>
                       <p>LLM Proxy exposes dictation-capable providers through configured catalogs and provider-specific transcription URLs while preserving one /dictate endpoint.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this dictation resource?</summary>
                       <p>Teams testing transcription providers behind one proxy endpoint.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Audio transcription proxy API behind tenant secrets, which covers audio transcription proxy API.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/audio-transcription-proxy-api/">
                       <span>Dictation</span>
                       <strong>Audio transcription proxy API behind tenant secrets</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/openai-compatible-provider-gateway/">
                       <span>Provider routing</span>
                       <strong>OpenAI-compatible provider gateway</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/llm-proxy-status-code-map/">
                       <span>Reliability</span>
                       <strong>LLM Proxy status code map for callers</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -215,6 +215,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

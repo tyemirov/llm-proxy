@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
@@ -84,27 +84,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Single browser config surface</td>
                           <td>The API backend projects runtime config into /config-ui.yaml.</td>
                           <td>Pages does not own a duplicate JSON config.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Split-origin support</td>
                           <td>managementApiOrigin and proxyOrigin are served to the browser.</td>
                           <td>The UI can call llm-proxy-api while hosted on llm-proxy.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Publish validation</td>
                           <td>The Pages publisher rejects forbidden static config artifacts.</td>
                           <td>Stale config files are removed from the rendered artifact.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -113,24 +113,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Production Pages host</h3>
                       <p>llm-proxy.mprlab.com serves the static UI while llm-proxy-api.mprlab.com serves config and APIs.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Local preview</h3>
                       <p>A test server can serve /config-ui.yaml for browser checks without editing the static HTML.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Config rotation</h3>
                       <p>Updating backend runtime config changes browser config without rebuilding the Pages artifact.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -146,66 +146,66 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of API-served runtime config static UI?</summary>
                       <p>LLM Proxy's Pages app fetches backend-owned /config-ui.yaml at runtime, and the Pages artifact contains no static config-ui.yaml or llm-proxy-config.json.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this deployment resource?</summary>
                       <p>Teams deploying a split-origin static management UI and backend API.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Local and hosted LLM Proxy config profiles, which covers local and hosted LLM proxy config.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/local-and-hosted-llm-proxy-config-profiles/">
                       <span>Deployment</span>
                       <strong>Local and hosted LLM Proxy config profiles</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/github-pages-llm-management-ui/">
                       <span>Deployment</span>
                       <strong>GitHub Pages management UI for LLM Proxy</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/tauth-protected-management-api/">
                       <span>Management UI</span>
                       <strong>TAuth-protected management API for LLM Proxy</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/admin-usage-visibility-without-secrets/">
                       <span>Usage</span>
                       <strong>Admin usage visibility without exposing secrets</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -221,6 +221,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

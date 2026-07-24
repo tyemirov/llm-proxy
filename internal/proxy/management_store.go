@@ -40,6 +40,7 @@ const (
 	maskedSecretPrefixLength            = 3
 	maskedSecretSuffixLength            = 4
 	managedUsageSummaryDays             = 30
+	managedUsageReadBatchSize           = 256
 )
 
 var (
@@ -66,6 +67,8 @@ type managedTenantStore struct {
 	now               func() time.Time
 }
 
+type managedUsageEventVisitor func(managedUsageEventRecord)
+
 type managedTenantDatabase interface {
 	tenantByUserID(userID string) (managedTenantRecord, error)
 	tenantByTenantID(tenantID string) (managedTenantRecord, error)
@@ -77,7 +80,9 @@ type managedTenantDatabase interface {
 	saveProviderKey(record managedProviderAPIKeyRecord) error
 	deleteProviderKey(record managedProviderAPIKeyRecord) error
 	createUsageEvent(record managedUsageEventRecord) error
-	usageEventsByUserIDSince(userID string, periodStart time.Time) ([]managedUsageEventRecord, error)
+	earliestUsageEventByUserIDThrough(userID string, periodEnd time.Time) (time.Time, error)
+	streamUsageEventsByUserIDBetween(userID string, periodStart time.Time, periodEnd time.Time, visit managedUsageEventVisitor) error
+	streamUsageEventsByUserIDThrough(userID string, periodEnd time.Time, visit managedUsageEventVisitor) error
 	usageEventsSince(periodStart time.Time) ([]managedUsageEventRecord, error)
 	routingDefaultsMigration() (managedRoutingDefaultsMigrationRecord, error)
 	migrateRoutingDefaults(records []managedTenantRecord, migration managedRoutingDefaultsMigrationRecord) error
@@ -161,7 +166,7 @@ type managedAdminUserSnapshot struct {
 	hasSecret       bool
 	createdAt       time.Time
 	updatedAt       time.Time
-	usage           managedUsageSummary
+	usage           managedAdminUsageSummary
 }
 
 type managedProviderKeyCipher struct {
@@ -413,14 +418,46 @@ func (database *gormManagedTenantDatabase) createUsageEvent(record managedUsageE
 	return database.database.Create(&record).Error
 }
 
-func (database *gormManagedTenantDatabase) usageEventsByUserIDSince(userID string, periodStart time.Time) ([]managedUsageEventRecord, error) {
+func (database *gormManagedTenantDatabase) earliestUsageEventByUserIDThrough(userID string, periodEnd time.Time) (time.Time, error) {
 	var records []managedUsageEventRecord
-	queryError := database.database.
+	queryResult := database.database.
+		Where(&managedUsageEventRecord{UserID: userID}).
+		Where(clause.Lte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: periodEnd}).
+		Order(clause.OrderBy{Columns: []clause.OrderByColumn{
+			{Column: clause.Column{Name: managedUsageCreatedAtColumn}},
+			{Column: clause.Column{Name: "id"}},
+		}}).
+		Limit(1).
+		Find(&records)
+	if len(records) == 0 || queryResult.Error != nil {
+		return time.Time{}, queryResult.Error
+	}
+	return records[0].CreatedAt, nil
+}
+
+func (database *gormManagedTenantDatabase) streamUsageEventsByUserIDBetween(userID string, periodStart time.Time, periodEnd time.Time, visit managedUsageEventVisitor) error {
+	query := database.database.
 		Where(&managedUsageEventRecord{UserID: userID}).
 		Where(clause.Gte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: periodStart}).
-		Find(&records).
-		Error
-	return records, queryError
+		Where(clause.Lte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: periodEnd})
+	return database.streamUsageEvents(query, visit)
+}
+
+func (database *gormManagedTenantDatabase) streamUsageEventsByUserIDThrough(userID string, periodEnd time.Time, visit managedUsageEventVisitor) error {
+	query := database.database.
+		Where(&managedUsageEventRecord{UserID: userID}).
+		Where(clause.Lte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: periodEnd})
+	return database.streamUsageEvents(query, visit)
+}
+
+func (database *gormManagedTenantDatabase) streamUsageEvents(query *gorm.DB, visit managedUsageEventVisitor) error {
+	records := make([]managedUsageEventRecord, 0, managedUsageReadBatchSize)
+	return query.FindInBatches(&records, managedUsageReadBatchSize, func(_ *gorm.DB, _ int) error {
+		for _, record := range records {
+			visit(record)
+		}
+		return nil
+	}).Error
 }
 
 func (database *gormManagedTenantDatabase) usageEventsSince(periodStart time.Time) ([]managedUsageEventRecord, error) {
@@ -1110,7 +1147,7 @@ func (store *managedTenantStore) snapshot(record managedTenantRecord) (managedTe
 	}, nil
 }
 
-func (record managedTenantRecord) adminSnapshot(usageSummary managedUsageSummary) managedAdminUserSnapshot {
+func (record managedTenantRecord) adminSnapshot(usageSummary managedAdminUsageSummary) managedAdminUserSnapshot {
 	return managedAdminUserSnapshot{
 		userID:          record.UserID,
 		userEmail:       record.UserEmail,

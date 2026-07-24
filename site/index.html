@@ -14,17 +14,17 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=delete,visibility,visibility_off&amp;display=block">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=delete,key,visibility,visibility_off&amp;display=block">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui-config.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
     <script
       id="mpr-ui-bundle"
       type="application/json"
-      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.js"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
     ></script>
     <script type="module" src="/assets/llm-proxy/js/app.js"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
@@ -79,7 +79,20 @@
                 </div>
                 <dashboard-actions>
                   <button type="button" x-show="dashboardView === dashboardViews.ADMIN" x-on:click="openUsageDashboard()" x-text="copy.openUsageDashboard"></button>
-                  <button type="button" x-on:click="refreshDashboard()" x-bind:disabled="busy" x-text="dashboardRefreshCopy"></button>
+                  <div class="usage-interval-control" role="group" x-show="dashboardView === dashboardViews.USAGE" x-bind:aria-label="copy.usageInterval">
+                    <template x-for="interval in usageIntervals" x-bind:key="interval.id">
+                      <button
+                        type="button"
+                        class="usage-interval-button"
+                        x-bind:class="{ 'is-active': selectedUsageInterval === interval.id }"
+                        x-bind:aria-pressed="selectedUsageInterval === interval.id ? 'true' : 'false'"
+                        x-bind:disabled="usageControlsDisabled"
+                        x-on:click="selectUsageInterval(interval.id)"
+                        x-text="interval.label"
+                      ></button>
+                    </template>
+                  </div>
+                  <button type="button" x-on:click="refreshDashboard()" x-bind:disabled="dashboardRefreshDisabled" x-text="dashboardRefreshCopy"></button>
                 </dashboard-actions>
               </header>
             </section>
@@ -276,13 +289,9 @@
                       <span aria-hidden="true">+</span>
                       <span x-text="copy.createKey"></span>
                     </button>
-                    <button type="button" class="icon-only client-key-replace" x-cloak x-show="hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.replaceKey" x-bind:aria-label="copy.replaceKey">
-                      <svg class="utility-icon recycle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
-                        <path d="M20 7v5h-5"></path>
-                        <path d="M4 17v-5h5"></path>
-                        <path d="M6.1 9a7 7 0 0 1 11.5-2.6L20 9"></path>
-                        <path d="M17.9 15a7 7 0 0 1-11.5 2.6L4 15"></path>
-                      </svg>
+                    <button type="button" class="icon-button client-key-replace" x-cloak x-show="hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.replaceKey" x-bind:aria-label="copy.replaceKey">
+                      <span class="material-symbols-outlined" aria-hidden="true">key</span>
+                      <span class="client-key-replace-label" x-text="copy.replaceKey"></span>
                     </button>
                   </client-access-row>
 

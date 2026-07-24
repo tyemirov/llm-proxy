@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
@@ -84,27 +84,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Metadata-only events</td>
                           <td>Usage records describe routing and status, not request content.</td>
                           <td>Dashboards can work without prompt storage.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Tenant isolation</td>
                           <td>Signed-in users see their own usage summary.</td>
                           <td>Admins get summaries without sensitive content.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Provider/model breakdown</td>
                           <td>Aggregates show where traffic went.</td>
                           <td>Operators can inspect patterns without reading prompts.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -113,24 +113,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Privacy-conscious dashboard</h3>
                       <p>A user sees request counts and token totals but no prompt body.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Admin overview</h3>
                       <p>An admin sees tenant facts and usage summaries without generated secrets.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Error trend</h3>
                       <p>Status-code buckets reveal failures without storing responses.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -146,66 +146,66 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of usage metadata without prompts?</summary>
                       <p>LLM Proxy records operational metadata for managed-tenant usage while excluding raw content and secret material.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this usage resource?</summary>
                       <p>Teams that need AI usage visibility without making the usage store a sensitive content log.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Normalized token usage metadata across providers, which covers normalized token usage metadata.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/normalized-token-usage-metadata/">
                       <span>Usage</span>
                       <strong>Normalized token usage metadata across providers</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/managed-tenant-usage-dashboard/">
                       <span>Usage</span>
                       <strong>Managed tenant usage dashboard for LLM requests</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/copyable-llm-curl-examples/">
                       <span>Management UI</span>
                       <strong>Copyable LLM curl examples from current profile data</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/max-tokens-provider-limit-validation/">
                       <span>API contract</span>
                       <strong>max_tokens validation across LLM providers</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -221,6 +221,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

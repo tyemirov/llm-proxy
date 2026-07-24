@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
@@ -84,27 +84,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Common headers</td>
                           <td>Token counts stay available for plain text, CSV, and XML bodies.</td>
                           <td>The body format does not erase usage metadata.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>JSON usage object</td>
                           <td>JSON responses include normalized request, response, and total counts.</td>
                           <td>Callers can store one shape.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Managed usage aggregation</td>
                           <td>Usage events record normalized token counts without storing prompts or responses.</td>
-                          <td>Dashboards can show 30-day token totals.</td>
+                          <td>Dashboards can show token totals for the selected all-time, 30-day, 7-day, or 1-day interval.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -113,24 +113,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Plain text caller</h3>
                       <p>A CLI reads the text body and token headers separately.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Dashboard metric</h3>
                       <p>The management UI shows request and token graphs for the signed-in tenant.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Provider comparison</h3>
                       <p>A team compares usage by provider and model using the normalized metadata available in management mode.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -146,60 +146,60 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of normalized token usage metadata?</summary>
                       <p>LLM Proxy normalizes upstream token usage into common response headers and JSON usage fields when providers return token metadata.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this usage resource?</summary>
                       <p>Teams that need operational usage signals without parsing every provider's response shape.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is Managed tenant usage dashboard for LLM requests, which covers managed tenant usage dashboard.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/managed-tenant-usage-dashboard/">
                       <span>Usage</span>
                       <strong>Managed tenant usage dashboard for LLM requests</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/admin-usage-visibility-without-secrets/">
                       <span>Usage</span>
                       <strong>Admin usage visibility without exposing secrets</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/openai-web-search-guardrails/">
                       <span>API contract</span>
                       <strong>OpenAI web search guardrails in an LLM proxy</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -215,6 +215,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>

@@ -121,6 +121,16 @@ type managementProviderKeyRevealResponse struct {
 }
 
 type managementUsageSummaryResponse struct {
+	Interval    string                            `json:"interval"`
+	BucketUnit  string                            `json:"bucket_unit"`
+	Totals      managementUsageAggregateResponse  `json:"totals"`
+	Buckets     []managementUsageBucketResponse   `json:"buckets"`
+	Providers   []managementUsageProviderResponse `json:"providers"`
+	Models      []managementUsageModelResponse    `json:"models"`
+	StatusCodes []managementUsageStatusResponse   `json:"status_codes"`
+}
+
+type managementAdminUsageSummaryResponse struct {
 	PeriodDays  int                               `json:"period_days"`
 	Totals      managementUsageAggregateResponse  `json:"totals"`
 	Daily       []managementUsageDailyResponse    `json:"daily"`
@@ -146,6 +156,11 @@ type managementUsageDailyResponse struct {
 	Data managementUsageAggregateResponse `json:"data"`
 }
 
+type managementUsageBucketResponse struct {
+	Start string                           `json:"start"`
+	Data  managementUsageAggregateResponse `json:"data"`
+}
+
 type managementUsageProviderResponse struct {
 	Provider string                           `json:"provider"`
 	Data     managementUsageAggregateResponse `json:"data"`
@@ -168,9 +183,9 @@ type managementAdminUsersResponse struct {
 }
 
 type managementAdminUserResponse struct {
-	User   managementUserResponse         `json:"user"`
-	Tenant managementAdminTenantResponse  `json:"tenant"`
-	Usage  managementUsageSummaryResponse `json:"usage"`
+	User   managementUserResponse              `json:"user"`
+	Tenant managementAdminTenantResponse       `json:"tenant"`
+	Usage  managementAdminUsageSummaryResponse `json:"usage"`
 }
 
 type managementAdminTenantResponse struct {
@@ -327,8 +342,19 @@ func (service *managementService) profileHandler() gin.HandlerFunc {
 
 func (service *managementService) usageHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		query := ginContext.Request.URL.Query()
+		intervalValues, intervalExists := query["interval"]
+		if len(query) != 1 || !intervalExists || len(intervalValues) != 1 {
+			ginContext.String(http.StatusBadRequest, errManagedUsageIntervalInvalid.Error())
+			return
+		}
+		interval, intervalError := newUsageInterval(intervalValues[0])
+		if intervalError != nil {
+			ginContext.String(http.StatusBadRequest, intervalError.Error())
+			return
+		}
 		principal := managementPrincipalFromContext(ginContext)
-		summary, summaryError := service.store.usageSummary(principal)
+		summary, summaryError := service.store.usageSummary(principal, interval)
 		if summaryError != nil {
 			ginContext.String(http.StatusInternalServerError, summaryError.Error())
 			return
@@ -650,6 +676,18 @@ func managementDefaultsResponse(defaults managedRoutingDefaults) managementTenan
 
 func managementUsageSummary(summary managedUsageSummary) managementUsageSummaryResponse {
 	return managementUsageSummaryResponse{
+		Interval:    string(summary.interval),
+		BucketUnit:  string(summary.bucketUnit),
+		Totals:      managementUsageAggregate(summary.totals),
+		Buckets:     managementUsageBuckets(summary.buckets),
+		Providers:   managementUsageProviders(summary.providers),
+		Models:      managementUsageModels(summary.models),
+		StatusCodes: managementUsageStatuses(summary.statusCodes),
+	}
+}
+
+func managementAdminUsageSummary(summary managedAdminUsageSummary) managementAdminUsageSummaryResponse {
+	return managementAdminUsageSummaryResponse{
 		PeriodDays:  summary.periodDays,
 		Totals:      managementUsageAggregate(summary.totals),
 		Daily:       managementUsageDaily(summary.daily),
@@ -679,6 +717,17 @@ func managementUsageDaily(daily []managedUsageDailyBucket) []managementUsageDail
 		responses = append(responses, managementUsageDailyResponse{
 			Date: bucket.date,
 			Data: managementUsageAggregate(bucket.aggregate),
+		})
+	}
+	return responses
+}
+
+func managementUsageBuckets(buckets []managedUsageBucket) []managementUsageBucketResponse {
+	responses := make([]managementUsageBucketResponse, 0, len(buckets))
+	for _, bucket := range buckets {
+		responses = append(responses, managementUsageBucketResponse{
+			Start: bucket.start.UTC().Format(time.RFC3339Nano),
+			Data:  managementUsageAggregate(bucket.aggregate),
 		})
 	}
 	return responses
@@ -736,7 +785,7 @@ func (service *managementService) adminUsersResponse(snapshots []managedAdminUse
 				CreatedAt: snapshot.createdAt.Format(time.RFC3339),
 				UpdatedAt: snapshot.updatedAt.Format(time.RFC3339),
 			},
-			Usage: managementUsageSummary(snapshot.usage),
+			Usage: managementAdminUsageSummary(snapshot.usage),
 		})
 	}
 	return managementAdminUsersResponse{

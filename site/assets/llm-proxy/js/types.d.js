@@ -103,10 +103,15 @@
  */
 
 /**
+ * @typedef {"all" | "30d" | "7d" | "1d"} UsageInterval
+ */
+
+/**
  * @typedef {{
- *   period_days: number,
+ *   interval: UsageInterval,
+ *   bucket_unit: "day" | "hour",
  *   totals: UsageAggregate,
- *   daily: Array<{ date: string, data: UsageAggregate }>,
+ *   buckets: Array<{ start: string, data: UsageAggregate }>,
  *   providers: Array<{ provider: string, data: UsageAggregate }>,
  *   models: Array<{ provider: string, model: string, data: UsageAggregate }>,
  *   status_codes: Array<{ status_code: number, requests: number }>
@@ -115,9 +120,20 @@
 
 /**
  * @typedef {{
+ *   period_days: number,
+ *   totals: UsageAggregate,
+ *   daily: Array<{ date: string, data: UsageAggregate }>,
+ *   providers: Array<{ provider: string, data: UsageAggregate }>,
+ *   models: Array<{ provider: string, model: string, data: UsageAggregate }>,
+ *   status_codes: Array<{ status_code: number, requests: number }>
+ * }} ManagementAdminUsageSummary
+ */
+
+/**
+ * @typedef {{
  *   user: { id: string, email?: string, display_name?: string, avatar_url?: string, is_admin: boolean },
  *   tenant: { id: string, has_secret: boolean, created_at?: string, updated_at?: string },
- *   usage: ManagementUsageSummary
+ *   usage: ManagementAdminUsageSummary
  * }} ManagementAdminUser
  */
 

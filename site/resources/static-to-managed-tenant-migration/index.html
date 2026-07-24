@@ -14,7 +14,7 @@
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@v3.11.1/mpr-ui.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
@@ -84,27 +84,27 @@
                   </tr>
                 </thead>
                 <tbody>
-                  
+
                         <tr>
                           <td>Verified owner claim</td>
                           <td>Only a live TAuth session whose normalized email matches the configured owner can claim the tenant.</td>
                           <td>The migration does not trust stored email alone.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Token and usage continuity</td>
                           <td>The token digest, tenant defaults, creation time, and every usage event are preserved.</td>
                           <td>Existing clients keep their token while the dashboard gains its history.</td>
                         </tr>
-                      
+
 
                         <tr>
                           <td>Provider key re-encryption</td>
                           <td>Provider ciphertext is decrypted under the synthetic user id and re-encrypted for the TAuth subject inside one GORM transaction.</td>
                           <td>Ownership changes without copying invalid ciphertext.</td>
                         </tr>
-                      
+
                 </tbody>
               </table>
             </div>
@@ -113,24 +113,24 @@
           <section>
             <h2>Use-case examples</h2>
             <div class="resource-card-grid">
-              
+
                     <section class="resource-card">
                       <h3>Unowned token before claim</h3>
                       <p>The legacy token returns 403 instead of continuing as a global system credential.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>First matching sign-in</h3>
                       <p>The configured owner opens the management site and receives the existing tenant and usage history.</p>
                     </section>
-                  
+
 
                     <section class="resource-card">
                       <h3>Post-migration cleanup</h3>
                       <p>Operators remove the temporary owner mapping after verifying the unchanged token in production.</p>
                     </section>
-                  
+
             </div>
           </section>
 
@@ -146,66 +146,66 @@
           <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
-              
+
                     <details>
                       <summary>What is the main job of static to managed tenant migration?</summary>
                       <p>LLM Proxy rejects the unowned token, then atomically replaces any empty account created by an earlier sign-in and rekeys the legacy tenant, encrypted provider settings, and usage events when the configured owner email signs in through TAuth.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Who should read this configuration resource?</summary>
                       <p>Operators retiring the final unowned management-mode token after moving to self-service accounts.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Does this page claim provider performance or pricing advantages?</summary>
                       <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>Where should setup details come from?</summary>
                       <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
                     </details>
-                  
+
 
                     <details>
                       <summary>What should I read next?</summary>
                       <p>A closely related resource is LLM model catalog configuration in config.yml, which covers LLM model catalog configuration.</p>
                     </details>
-                  
+
             </div>
           </section>
 
           <section>
             <h2>Related resources</h2>
             <div class="resource-related-grid">
-              
+
                     <a class="resource-related" href="/resources/model-catalog-configuration/">
                       <span>Configuration</span>
                       <strong>LLM model catalog configuration in config.yml</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/provider-default-model-selection/">
                       <span>Configuration</span>
                       <strong>Provider default model selection for omitted models</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/gorm-managed-tenant-persistence/">
                       <span>Configuration</span>
                       <strong>GORM-managed tenant persistence for LLM Proxy</strong>
                     </a>
-                  
+
 
                     <a class="resource-related" href="/resources/strict-yaml-config-placeholders/">
                       <span>Configuration</span>
                       <strong>Strict YAML config placeholders for LLM Proxy</strong>
                     </a>
-                  
+
             </div>
           </section>
 
@@ -221,6 +221,6 @@
         <a href="/resources/">Resource hub</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
-    
+
   </body>
 </html>
