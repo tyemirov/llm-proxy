@@ -20,11 +20,12 @@ routes with tenant-scoped routes, and I029 then freezes those final public and
 management contracts in OpenAPI. I031 is the next convergence item after I029
 and F014; I027 and P001 are independent F014 successors. I032 follows F014
 and I027 so its activity-breakdown presentation is added to the final
-tenant-scoped dashboard rather than the obsolete singleton layout. M019 is
-independently ready because M018 is complete. M013 then M012 resolve the
-product-context governance path. Planning proceeds P002 -> P003 -> P004 ->
-P005, with M020 already satisfied; recurring maintenance remains scheduled
-work.
+tenant-scoped dashboard rather than the obsolete singleton layout. I033 follows
+F014 and I029 so its bounded dashboard freshness contract uses the final
+tenant-scoped endpoint and canonical response headers. M019 is independently
+ready because M018 is complete. M013 then M012 resolve the product-context
+governance path. Planning proceeds P002 -> P003 -> P004 -> P005, with M020
+already satisfied; recurring maintenance remains scheduled work.
 
 ## BugFixes
 
@@ -261,6 +262,112 @@ work.
   16 KB explicit-`high` canary plus its small control before Kamu F001 retries.
 
 ## Improvements
+
+- [ ] [I033] (P2) {F014,I029} Keep the visible tenant usage dashboard automatically fresh.
+  Goal:
+  Let a user returning to an unattended selected-tenant usage dashboard see
+  current activity without having to discover and press Refresh. Provide a
+  bounded, observable near-real-time freshness contract rather than claiming a
+  push-based real-time feed.
+
+  Evidence:
+  - The current dashboard loads usage at authenticated-workspace startup and on
+    interval selection or explicit Refresh only. It has no usage timer or page
+    visibility lifecycle, so an open page can display yesterday's snapshot
+    indefinitely.
+  - The current refresh path clears the rendered summary after a request error.
+    That is safe for a newly selected interval, but an automatic refresh would
+    turn a true prior snapshot into misleading zeroes after a transient failure.
+  - The existing usage GET uses the browser's default cache behavior, and the
+    current usage handler does not send the `Cache-Control: no-store` protection
+    already used by sensitive management responses.
+  - F014 replaces the singleton endpoint with selected-tenant usage routes, and
+    I029 makes their headers and response behavior one canonical HTTP contract.
+
+  Requirements:
+  - Implement only after F014 and I029, against the canonical selected-tenant
+    usage operation. Do not retain the singleton route, add a second polling
+    endpoint, introduce WebSocket/SSE/service-worker push infrastructure, or
+    add a browser-stored freshness preference. This issue is foreground
+    revalidation of the existing aggregate snapshot, not a streaming product.
+  - Define one centralized `USAGE_FRESHNESS_MILLISECONDS` budget of 60 seconds.
+    It is a user-facing maximum ordinary age while the usage view is visible,
+    not an arbitrary retry or transport timeout. The authenticated selected-
+    tenant usage view revalidates no more often than that budget, and a return
+    from a hidden page revalidates immediately when the accepted snapshot is
+    older than the same budget or absent. Hidden tabs, the admin dashboard, and
+    signed-out/error workspaces perform no periodic usage request.
+  - Maintain exactly one scheduled usage revalidation and at most one in-flight
+    usage request for the active tenant/interval. Schedule the next foreground
+    revalidation only after the current request settles; do not use overlapping
+    interval callbacks or a hot retry loop. Cancel/invalidate scheduled work on
+    logout, workspace reset, tenant or interval change, dashboard-view change,
+    and page teardown. Resume only after the final active usage context is
+    established.
+  - Reuse F014's tenant, interval, workspace, and request-identity guards. An
+    automatic or visibility-triggered response can update only the still-active
+    tenant and interval; it must not overwrite a newer manual refresh, tenant
+    switch, interval selection, authentication reset, or local I032 breakdown
+    presentation choice. A manual Refresh may request immediate revalidation
+    but must join the same single-request lifecycle and reschedule freshness.
+  - Track and visibly expose the receipt time of the last accepted usage
+    snapshot using centralized copy and semantic time markup. Do not announce a
+    success toast every minute. Distinguish a current snapshot, an in-progress
+    refresh, and a stale snapshot accessibly, without presenting browser-clock
+    metadata as server event time.
+  - Preserve a successfully rendered snapshot when a same-tenant/same-interval
+    manual, automatic, or return-to-visible refresh fails. Mark it stale and
+    provide a clear retry path; do not replace its counts, charts, breakdowns,
+    or I032 view with empty/zero data. Keep the current clear-before-load rule
+    for a changed tenant or interval so one tenant's data can never appear as
+    another tenant's. An initial load with no prior accepted snapshot retains
+    the explicit empty/error state rather than fabricating a last-updated time.
+  - Make every canonical tenant usage response and the browser usage fetch
+    uncacheable (`Cache-Control: no-store` and `cache: "no-store"` respectively)
+    so a revalidation cannot be satisfied by a stale private cache. Record the
+    response header in `docs/openapi.yaml` and its HTTP conformance coverage;
+    do not change the JSON payload merely to transport client receipt time.
+  - Keep the refresh scope to aggregate usage metadata already authorized for
+    the selected tenant. Do not poll or reveal generated secrets, provider keys,
+    prompts, responses, transcripts, audio names, other tenants, or aggregate
+    administrator facts. Continue to make `connected provider` state I027-owned
+    rather than inferring it from refreshed historical activity.
+  - Update README, CHANGELOG.md, `docs/implementation/provider-routing-plan.md`,
+    and the source in `scripts/generate_seo_resources.mjs`, then regenerate the
+    managed-tenant usage resource. Document the exact foreground/hidden behavior,
+    60-second freshness meaning, manual Refresh role, last-updated/stale signal,
+    and the fact that this is not a push, billing, provider-performance, or
+    exact-event-time guarantee. This repository has no PRD.md or
+    ARCHITECTURE.md; do not create partial placeholders for this behavior.
+
+  Deliverables:
+  - One typed usage-refresh reason/lifecycle contract, central freshness budget,
+    visibility-aware single scheduler, cache-safe usage client request, and
+    race-safe selected-tenant state integration.
+  - A compact accessible last-updated/loading/stale status and retry behavior
+    that preserves a valid current-context snapshot across refresh failures.
+  - Canonical no-store response-header documentation/conformance plus updated
+    repository and generated public documentation; no new streaming endpoint,
+    persistence schema, or client-library API.
+
+  Validation:
+  - Add real management-router coverage proving the selected-tenant usage
+    response carries `Cache-Control: no-store` and the OpenAPI contract accepts
+    that header without changing its aggregate JSON shape.
+  - Add Playwright scenarios with controlled time and page visibility for the
+    initial load, one-minute foreground revalidation, no hidden/admin polling,
+    stale-on-return immediate revalidation, one in-flight request, manual
+    Refresh coordination, timer cleanup on logout/tenant/interval/view changes,
+    and stale-response rejection across tenant and interval races.
+  - Prove a failed refresh after a successful snapshot preserves its exact data
+    and marks it stale, while a successful later refresh updates counts and the
+    receipt timestamp; prove a new tenant/interval never retains prior data.
+    Cover keyboard/screen-reader status, narrow layouts, no browser storage,
+    no success-notice spam, and absence of sensitive values from DOM/network
+    payloads beyond the existing usage contract.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
+    the final run after the last code edit.
 
 - [ ] [I032] (P2) {F014,I027} Switch provider/model activity breakdowns between bar graphs and segmented disks.
   Goal:
