@@ -11,6 +11,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any
 
@@ -130,6 +131,12 @@ def replace_model_profile(profile_path: Path, profile_document: str) -> None:
     replacement_path = profile_path.with_name("next-model.json")
     replacement_path.write_text(profile_document, encoding="utf-8")
     os.replace(replacement_path, profile_path)
+
+
+def test_distribution_metadata_matches_public_package_version() -> None:
+    """The source-tree distribution metadata exposes the released client version."""
+
+    assert version("llm-proxy-client") == "0.2.0"
 
 
 def test_client_posts_v2_body_and_preserves_non_body_query(running_server: RunningServer) -> None:
