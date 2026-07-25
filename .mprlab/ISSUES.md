@@ -18,10 +18,13 @@ one-issue-at-a-time workflow, the selected P1 execution tranche is
 error contract for public upstream work, F014 replaces singular management
 routes with tenant-scoped routes, and I029 then freezes those final public and
 management contracts in OpenAPI. I031 is the next convergence item after I029
-and F014; I027 and P001 are independent F014 successors. M019 is independently
-ready because M018 is complete. M013 then M012 resolve the product-context
-governance path. Planning proceeds P002 -> P003 -> P004 -> P005, with M020
-already satisfied; recurring maintenance remains scheduled work.
+and F014; I027 and P001 are independent F014 successors. I032 follows F014
+and I027 so its activity-breakdown presentation is added to the final
+tenant-scoped dashboard rather than the obsolete singleton layout. M019 is
+independently ready because M018 is complete. M013 then M012 resolve the
+product-context governance path. Planning proceeds P002 -> P003 -> P004 ->
+P005, with M020 already satisfied; recurring maintenance remains scheduled
+work.
 
 ## BugFixes
 
@@ -258,6 +261,107 @@ already satisfied; recurring maintenance remains scheduled work.
   16 KB explicit-`high` canary plus its small control before Kamu F001 retries.
 
 ## Improvements
+
+- [ ] [I032] (P2) {F014,I027} Switch provider/model activity breakdowns between bar graphs and segmented disks.
+  Goal:
+  Let a signed-in user choose one clear presentation for both the selected
+  tenant's Provider usage and Model usage activity breakdowns, while preserving
+  the selected interval, exact request counts, and the distinction between
+  historical activity and currently connected providers.
+
+  Evidence:
+  - The current usage summary already returns deterministically ordered
+    provider and model aggregates with request counts. The existing rows are
+    ranked horizontal bars scaled to the largest category, not shares of the
+    breakdown total.
+  - The summary has time buckets only for total requests and tokens. It has no
+    provider- or model-specific time series, so `Graph` must mean the ranked
+    horizontal-bar display rather than a new trend chart.
+  - F014 replaces the singleton management/usage route with selected-tenant
+    APIs. I027 then establishes the final dashboard layout and explicitly
+    reserves provider/model breakdowns for historical selected-period activity,
+    rather than current `has_key` connection state.
+
+  Requirements:
+  - Implement only after F014 and I027, against the canonical selected-tenant
+    usage response. Do not add a presentation-specific endpoint, response
+    field, server persistence, URL parameter, tenant setting, browser storage,
+    or client-library change.
+    If final implementation exposes a genuinely missing data field, file and
+    order a separate contract issue rather than broadening this UI issue.
+  - Add one shared, visible, keyboard-operable `Breakdown view` control for
+    both activity panels. It has exactly `Graph` and `Segmented disk` choices;
+    `Graph` is the default and is the existing ranked horizontal-bar graph.
+    Switching a mode changes both panels together so their distributions remain
+    directly comparable.
+  - Keep the choice local to the mounted authenticated dashboard. It survives
+    interval selection, Refresh, and an F014 tenant switch, but resets on
+    authentication/workspace reset and a full page reload. A mode change is a
+    pure presentation action: it must not fetch, mutate the selected interval
+    or usage snapshot, or weaken F014's request-identity/stale-response rules.
+  - Build every disk from the same ordered `providers[].data.requests` or
+    `models[].data.requests` data that Graph renders. The percentage denominator
+    is the complete source breakdown total, never token counts or the largest
+    row. Preserve every source category exactly once: Graph always lists each
+    category; the disk may combine the ordered tail into a visibly labelled
+    `Other` segment only when a named, documented, geometry-derived disk-capacity
+    rule would otherwise make the compact panel unreadable. `Other` must expose
+    its exact aggregate count and deterministic share; it cannot discard or
+    relabel source data.
+  - Render the alternative as a dependency-free SVG segmented disk in the
+    existing compact dark dashboard style. Give each segment a deterministic
+    palette assignment from the canonical summary order, but never use color or
+    hover alone to communicate meaning. Show a visible semantic legend/list
+    with category name, request count, and deterministic percentage; rounded
+    legend shares must total 100 percent. Handle zero activity with the existing
+    empty state and one-category activity as one 100-percent segment without
+    invalid SVG geometry.
+  - Use centralized frontend copy and typed presentation data for the control,
+    mode names, legend, `Other`, and accessible SVG label. Preserve visible
+    focus and full keyboard operation (`aria-pressed` or an equivalent
+    single-choice control), and keep labels/counts/shares available to assistive
+    technology without a tooltip. Validate desktop and narrow layouts without
+    clipping, overlap, or horizontal overflow.
+  - Keep the scope to the selected user's activity dashboard. I027's connected
+    provider widgets remain a separate `has_key` projection; an inactive
+    connected provider and historical activity for a disconnected provider must
+    retain their existing meanings. Do not add this control to the aggregate
+    admin dashboard or expose credentials, keys, prompts, responses, or other
+    sensitive usage data.
+  - Document the resulting presentation contract in README, CHANGELOG.md, and
+    `docs/implementation/provider-routing-plan.md`. Update the source in
+    `scripts/generate_seo_resources.mjs` and regenerate the managed-tenant
+    usage resource; do not hand-maintain a divergent generated page. State
+    explicitly that this is a client-side view of existing aggregate request
+    data, not a billing, provider-performance, connected-provider, token-share,
+    or new management-API feature. This repository has no PRD.md or
+    ARCHITECTURE.md; do not create partial placeholders for this UI change.
+
+  Deliverables:
+  - One typed local presentation-mode contract, pure provider/model distribution
+    transform, shared selector, semantic bar/disk renderings, responsive styles,
+    and centralized copy in the tenant dashboard.
+  - A legible, deterministic SVG disk/legend treatment that preserves all
+    request counts and makes any `Other` aggregation explicit.
+  - Updated README, CHANGELOG.md, implementation documentation, generator-owned
+    public usage resource, generated artifact, and browser coverage; no
+    management API, Go client, Python client, or CLI wire-contract change.
+
+  Validation:
+  - Add Playwright coverage through the real management dashboard showing the
+    default Graph mode, keyboard selection of Segmented disk, simultaneous
+    changes to provider and model panels, visible names/counts/shares, and no
+    additional usage request when the presentation changes.
+  - Exercise interval changes, Refresh, tenant switching, loading/failure, and
+    out-of-order response scenarios; prove the local mode remains selected only
+    where specified and never presents a stale tenant or interval snapshot.
+  - Cover zero, one, and many-category distributions, including deterministic
+    `Other` aggregation, exact request-count conservation, share totals of 100
+    percent, Graph access to every source category, non-color-only semantics,
+    administrator isolation, and desktop/narrow viewport geometry.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
+    the final run after the last code edit.
 
 - [ ] [I031] (P1) {I029,F014} Add tenant-scoped failure details to the usage dashboard.
   Goal:
