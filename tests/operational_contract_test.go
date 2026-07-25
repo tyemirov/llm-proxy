@@ -889,12 +889,10 @@ func TestOperationalDeployPreflightsPagesBeforeGatewayMutation(testingInstance *
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixtureRoot := testingInstance.TempDir()
 	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"), filepath.Join(fixtureRoot, operationalScriptsDirectory, "deploy.sh"))
-	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, operationalScriptsDirectory, "read-request-timeout-capacity.sh"), filepath.Join(fixtureRoot, operationalScriptsDirectory, "read-request-timeout-capacity.sh"))
-	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, "configs", "config.yml"), filepath.Join(fixtureRoot, "configs", "config.yml"))
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "init")
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "config", "user.name", "Operational Test")
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "config", "user.email", "operational-test@example.invalid")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "add", operationalScriptsDirectory, "configs")
+	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "add", operationalScriptsDirectory)
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "commit", "-m", "Fixture")
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "branch", "-M", "master")
 	remoteRoot := filepath.Join(testingInstance.TempDir(), "origin.git")
@@ -910,7 +908,7 @@ func TestOperationalDeployPreflightsPagesBeforeGatewayMutation(testingInstance *
 	writeOperationalFile(
 		testingInstance,
 		filepath.Join(toolDirectory, "make"),
-		"#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\t%s\\t%s\\n' \"$*\" \"${DEPLOY_PAGES_ARGS:-}\" \"${LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS:-}\" >>\"${MAKE_CAPTURE}\"\nif [[ \"$*\" == *pages-deploy* && \"${DEPLOY_PAGES_ARGS:-}\" == *--verify-only* ]]; then exit 42; fi\nif [[ \"${1:-}\" == \"-C\" && \"$*\" == *deploy-llm-proxy-backend* ]]; then : >\"${GATEWAY_SENTINEL}\"; fi\n",
+		"#!/usr/bin/env bash\nset -euo pipefail\n[[ -z \"${LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS+x}\" ]] || { printf '%s\\n' 'forbidden timeout-capacity environment handoff' >&2; exit 91; }\nprintf '%s\\t%s\\n' \"$*\" \"${DEPLOY_PAGES_ARGS:-}\" >>\"${MAKE_CAPTURE}\"\nif [[ \"$*\" == *pages-deploy* && \"${DEPLOY_PAGES_ARGS:-}\" == *--verify-only* ]]; then exit 42; fi\nif [[ \"${1:-}\" == \"-C\" && \"$*\" == *deploy-llm-proxy-backend* ]]; then : >\"${GATEWAY_SENTINEL}\"; fi\n",
 		0o755,
 	)
 	gatewayDirectory := filepath.Join(testingInstance.TempDir(), "gateway")
@@ -948,8 +946,8 @@ func TestOperationalDeployPreflightsPagesBeforeGatewayMutation(testingInstance *
 	if !strings.Contains(string(captureBytes), "pages-deploy\t--verify-only") {
 		testingInstance.Fatalf("Pages verify-only preflight was not invoked: %s", captureBytes)
 	}
-	if !strings.Contains(string(captureBytes), "verify-llm-proxy-deployment-contract\t\t3600") {
-		testingInstance.Fatalf("gateway verification did not receive the configured request capacity: %s", captureBytes)
+	if !strings.Contains(string(captureBytes), "verify-llm-proxy-deployment-contract\t") {
+		testingInstance.Fatalf("gateway verification was not invoked: %s", captureBytes)
 	}
 }
 
@@ -957,12 +955,10 @@ func TestOperationalDeployForwardsSelectedRemoteToPages(testingInstance *testing
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixtureRoot := testingInstance.TempDir()
 	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"), filepath.Join(fixtureRoot, operationalScriptsDirectory, "deploy.sh"))
-	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, operationalScriptsDirectory, "read-request-timeout-capacity.sh"), filepath.Join(fixtureRoot, operationalScriptsDirectory, "read-request-timeout-capacity.sh"))
-	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, "configs", "config.yml"), filepath.Join(fixtureRoot, "configs", "config.yml"))
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "init")
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "config", "user.name", "Operational Test")
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "config", "user.email", "operational-test@example.invalid")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "add", operationalScriptsDirectory, "configs")
+	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "add", operationalScriptsDirectory)
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "commit", "-m", "Fixture")
 	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "branch", "-M", "master")
 	remoteRoot := filepath.Join(testingInstance.TempDir(), "upstream.git")
@@ -977,7 +973,7 @@ func TestOperationalDeployForwardsSelectedRemoteToPages(testingInstance *testing
 	writeOperationalFile(
 		testingInstance,
 		filepath.Join(toolDirectory, "make"),
-		"#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\t%s\\t%s\\n' \"$*\" \"${PUBLISH_REMOTE:-}\" \"${LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS:-}\" >>\"${MAKE_CAPTURE}\"\n",
+		"#!/usr/bin/env bash\nset -euo pipefail\n[[ -z \"${LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS+x}\" ]] || { printf '%s\\n' 'forbidden timeout-capacity environment handoff' >&2; exit 91; }\nprintf '%s\\t%s\\n' \"$*\" \"${PUBLISH_REMOTE:-}\" >>\"${MAKE_CAPTURE}\"\n",
 		0o755,
 	)
 	gatewayDirectory := filepath.Join(testingInstance.TempDir(), "gateway")
@@ -1008,8 +1004,8 @@ func TestOperationalDeployForwardsSelectedRemoteToPages(testingInstance *testing
 	if !strings.Contains(string(captureBytes), "--no-print-directory pages-deploy\tupstream") {
 		testingInstance.Fatalf("Pages deployment did not receive selected remote: %s", captureBytes)
 	}
-	if !strings.Contains(string(captureBytes), "deploy-llm-proxy-backend\t\t3600") {
-		testingInstance.Fatalf("gateway deployment did not receive the configured request capacity: %s", captureBytes)
+	if !strings.Contains(string(captureBytes), "deploy-llm-proxy-backend\t") {
+		testingInstance.Fatalf("gateway deployment was not invoked: %s", captureBytes)
 	}
 }
 
