@@ -246,7 +246,8 @@ fi
 
 if [[ "${SKIP_GATEWAY}" != "true" ]]; then
   echo "==> [deploy] Deploying llm-proxy through mprlab-gateway target ${GATEWAY_TARGET}"
-  timeout --foreground -k 1200s -s SIGKILL 1200s make -C "${GATEWAY_DIR}" "${GATEWAY_TARGET}"
+  LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS="${max_request_timeout_seconds}" \
+    timeout --foreground -k 1200s -s SIGKILL 1200s make -C "${GATEWAY_DIR}" "${GATEWAY_TARGET}"
 fi
 
 if [[ "${SKIP_PAGES}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then
