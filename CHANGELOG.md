@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - Add the bounded `X-LLM-Proxy-Request-Timeout-Seconds` contract across text and dictation routes, including effective response headers and canonical `400 invalid_request_timeout` and `504 request_timeout` JSON errors.
 - Move Go and Python timeout selection from client configuration onto each messages request, replace the CLI `--timeout` flag with `--request-timeout-seconds`, and remove the arbitrary 390-second bundled-client deadline.
 - Add `server.max_request_timeout_seconds`, one ingress-owned deadline shared by body parsing, queue admission, provider calls, and OpenAI polling, plus safe terminal-outcome logging.
+- Keep response construction and managed-usage persistence under request cancellation, classify queue saturation as `proxy_overload`, reject explicit null timeout configuration, and synchronize Python client distribution metadata at `0.2.0`.
 - Make deployment pass the app-owned maximum request budget into the gateway contract verifier, which rejects outer response guards that cannot outwait it.
 
 ## [v0.2.43] - 2026-07-24
