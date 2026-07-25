@@ -82,6 +82,19 @@ cancel sooner with a Go context, a process signal, or an explicitly configured
 HTTP transport policy, and no response is guaranteed after caller cancellation.
 The bundled clients impose no separate total-response deadline by default.
 
+Accepted upstream requests emit safe terminal evidence with the effective
+budget and one of `validation_failure`, `success`, `proxy_timeout`,
+`proxy_overload`, `provider_failure`, or `caller_cancelled`. Queue-capacity
+rejection is proxy overload, not a provider failure.
+
+For managed tenants, usage persistence begins only after the selected response
+status and body have been written and the response writer has been flushed.
+The store lock and database calls use the same request context, so they stop
+when the accepted budget or caller cancellation ends the request. Consequently,
+a request canceled before its usage transaction commits may have terminal log
+evidence but no managed-usage row; usage persistence never changes an already
+selected response.
+
 Internally, `server.workers` limits concurrent upstream provider HTTP
 operations and `server.queue_size` limits upstream HTTP operations waiting for a
 worker. Long OpenAI background-response poll sleeps do not occupy a worker slot;
@@ -448,9 +461,10 @@ providers:
 
 `server.request_timeout_seconds` and `server.max_request_timeout_seconds` must
 both be positive, and the default must not exceed the maximum. Invalid explicit
-values fail startup. The maximum is operator-owned service capacity and must
-remain strictly below the response-header and read deadlines of the outer
-gateway.
+values fail startup, including YAML `null` and an explicitly empty YAML value;
+omitting either field selects its compiled default. The maximum is
+operator-owned service capacity and must remain strictly below the
+response-header and read deadlines of the outer gateway.
 
 Dictation-capable providers must also declare a dictation catalog:
 
@@ -1118,9 +1132,10 @@ uses the sole gateway `deploy-llm-proxy-backend` target after the gateway-owned
 `verify-llm-proxy-deployment-contract` preflight proves the coupled TAuth
 service, runtime assets, and health checks. That preflight reads
 `server.max_request_timeout_seconds` from the app-owned tracked config and
-passes it to the gateway verifier; deployment fails unless the gateway-owned
-response-header, upstream-read, and client-write guards are all strictly
-greater. Neither repository carries a fallback copy of the other's capacity.
+passes it to both the early gateway verifier and the protected gateway
+deployment target; deployment fails unless the gateway-owned response-header,
+upstream-read, and client-write guards are all strictly greater. Neither
+repository carries a fallback copy of the other's capacity.
 Override only the checkout with
 `GATEWAY_DIR=/path/to/mprlab-gateway`; the selected gateway checkout must be a
 clean, synchronized `origin/master`. Override Pages preparation and activation
