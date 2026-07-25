@@ -27,7 +27,7 @@ GATEWAY_DIR ?=
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-root-import-test frontend-test test-management-auth-blackbox release-test test-live-provider-harness test-live-providers test-live-gemini build clean ci up release container-artifacts pages-artifact publish-release publish pages-deploy deploy
+.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-package-install-test frontend-test test-management-auth-blackbox release-test test-live-provider-harness test-live-providers test-live-gemini build clean ci up release container-artifacts pages-artifact publish-release publish pages-deploy deploy
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -60,10 +60,10 @@ go-test:
 
 python-test:
 	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev pytest
-	$(MAKE) python-root-import-test
+	$(MAKE) python-package-install-test
 
-python-root-import-test:
-	$(UV) run --no-project --with-editable . python -c 'from llm_proxy_client import Client, ClientConfig, ClientMessage, ClientMessagesRequest, LLMProxyModelProfileError; assert Client and ClientConfig and ClientMessage and ClientMessagesRequest and LLMProxyModelProfileError'
+python-package-install-test:
+	@set -eu; temporary_package_directory="$$(mktemp -d)"; trap 'rm -rf "$$temporary_package_directory"' 0; cp "$(PYTHON_PROJECT_DIR)/pyproject.toml" "$$temporary_package_directory/pyproject.toml"; cp -R "$(PYTHON_PROJECT_DIR)/llm_proxy_client" "$$temporary_package_directory/llm_proxy_client"; LLM_PROXY_CLIENT_PROJECT_PATH="$$temporary_package_directory/pyproject.toml" $(UV) run --no-project --with "$$temporary_package_directory" python -c 'from importlib.metadata import version; from pathlib import Path; import os, tomllib; from llm_proxy_client import Client, ClientConfig, ClientMessage, ClientMessagesRequest, LLMProxyModelProfileError; assert version("llm-proxy-client") == tomllib.loads(Path(os.environ["LLM_PROXY_CLIENT_PROJECT_PATH"]).read_text(encoding="utf-8"))["project"]["version"]; assert Client and ClientConfig and ClientMessage and ClientMessagesRequest and LLMProxyModelProfileError'
 
 frontend-test:
 	$(NPM) run frontend:test
