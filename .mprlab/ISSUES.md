@@ -222,10 +222,17 @@ already satisfied; recurring maintenance remains scheduled work.
   Explicit YAML `null` and empty timeout values now fail startup instead of
   selecting defaults, while true omission still selects the compiled default.
   Queue saturation records `proxy_overload` rather than
-  `provider_failure`. The tracked Python distribution metadata now reports
-  client version `0.2.0`, with a package-metadata regression test. The required
+  `provider_failure`. The canonical Python package metadata reports client
+  version `0.2.0`, with a package-metadata regression test. The required
   review-follow-up baseline and final `make ci` runs pass; the final run follows
   the last tracked edit.
+
+  Packaging contract cleanup 2026-07-24:
+  `python/pyproject.toml` is the sole Python distribution definition. The
+  root-level package-install check stages that project in a temporary directory,
+  installs it as a normal package, and verifies both its public import surface
+  and installed version against the canonical metadata. Setuptools and coverage
+  outputs remain generated, ignored local artifacts rather than tracked sources.
 
   Gateway review correction 2026-07-24:
   The final `deploy-llm-proxy-backend` invocation now receives the same
@@ -234,6 +241,14 @@ already satisfied; recurring maintenance remains scheduled work.
   value, so direct or aggregate gateway deployment cannot bypass the
   request-capacity contract. The public deployment fixture and final
   post-edit `make ci` pass without production contact.
+
+  Flag-free gateway correction 2026-07-24:
+  The app deploy script no longer reads or forwards the capacity. Gateway now
+  discovers the canonical LLM Proxy checkout, verifies the exact committed
+  reader and tracked config, and derives the maximum inside its sealed
+  ready-fleet plan. The app invokes the verifier and deployment target without
+  `LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS`; focused operational coverage rejects
+  any reintroduction of that environment handoff.
 
   Blocked:
   Source implementation is complete, but resolution still requires the
