@@ -33,6 +33,9 @@ tmp/
 __pycache__/
 *.py[cod]
 *.egg-info/
+.coverage
+.coverage.*
+build/
 python/.venv/
 python/.pytest_cache/
 python/.mypy_cache/
