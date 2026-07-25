@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
 	"github.com/tyemirov/llm-proxy/internal/utils"
@@ -21,8 +20,7 @@ const (
 )
 
 type anthropicMessagesClient struct {
-	httpClient     HTTPDoer
-	requestTimeout time.Duration
+	httpClient HTTPDoer
 }
 
 type anthropicMessagesRequest struct {
@@ -47,10 +45,9 @@ type anthropicContentBlock struct {
 	Text string `json:"text"`
 }
 
-func newAnthropicMessagesClient(httpClient HTTPDoer, requestTimeout time.Duration) *anthropicMessagesClient {
+func newAnthropicMessagesClient(httpClient HTTPDoer) *anthropicMessagesClient {
 	return &anthropicMessagesClient{
-		httpClient:     httpClient,
-		requestTimeout: requestTimeout,
+		httpClient: httpClient,
 	}
 }
 
@@ -64,10 +61,8 @@ func (client *anthropicMessagesClient) generateText(parentContext context.Contex
 	}
 	payloadBytes, _ := json.Marshal(payload)
 
-	requestContext, cancelRequest := context.WithTimeout(parentContext, client.requestTimeout)
-	defer cancelRequest()
 	requestURL := strings.TrimRight(baseURL, "/") + "/v1/messages"
-	httpRequest, buildError := http.NewRequestWithContext(requestContext, http.MethodPost, requestURL, bytes.NewReader(payloadBytes))
+	httpRequest, buildError := http.NewRequestWithContext(parentContext, http.MethodPost, requestURL, bytes.NewReader(payloadBytes))
 	if buildError != nil {
 		structuredLogger.Errorw(logEventBuildHTTPRequest, constants.LogFieldError, buildError)
 		return textGenerationResult{}, buildError

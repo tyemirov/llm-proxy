@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
 	"github.com/tyemirov/llm-proxy/internal/utils"
@@ -16,8 +15,7 @@ import (
 )
 
 type openAICompatibleChatClient struct {
-	httpClient     HTTPDoer
-	requestTimeout time.Duration
+	httpClient HTTPDoer
 }
 
 type chatCompletionMessage struct {
@@ -46,10 +44,9 @@ type chatCompletionResponseMessage struct {
 	ReasoningContent string `json:"reasoning_content"`
 }
 
-func newOpenAICompatibleChatClient(httpClient HTTPDoer, requestTimeout time.Duration) *openAICompatibleChatClient {
+func newOpenAICompatibleChatClient(httpClient HTTPDoer) *openAICompatibleChatClient {
 	return &openAICompatibleChatClient{
-		httpClient:     httpClient,
-		requestTimeout: requestTimeout,
+		httpClient: httpClient,
 	}
 }
 
@@ -68,10 +65,8 @@ func (client *openAICompatibleChatClient) generateText(parentContext context.Con
 	}
 	payloadBytes, _ := json.Marshal(payload)
 
-	requestContext, cancelRequest := context.WithTimeout(parentContext, client.requestTimeout)
-	defer cancelRequest()
 	requestURL := strings.TrimRight(baseURL, "/") + "/chat/completions"
-	httpRequest, buildError := buildAuthorizedJSONRequest(requestContext, http.MethodPost, requestURL, apiKey, bytes.NewReader(payloadBytes))
+	httpRequest, buildError := buildAuthorizedJSONRequest(parentContext, http.MethodPost, requestURL, apiKey, bytes.NewReader(payloadBytes))
 	if buildError != nil {
 		structuredLogger.Errorw(logEventBuildHTTPRequest, constants.LogFieldError, buildError)
 		return textGenerationResult{}, buildError

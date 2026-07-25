@@ -69,7 +69,7 @@
               <li>Install with go install github.com/tyemirov/llm-proxy/llm-proxy-client@latest.</li>
 <li>Set --base-url and --secret, or use LLM_PROXY_BASE_URL and LLM_PROXY_SECRET.</li>
 <li>Send --prompt, --prompt-file, or stdin content.</li>
-<li>Optionally include --system-prompt, --model, --max-tokens, or --reasoning-effort; keep provider in the base URL.</li>
+<li>Optionally include --system-prompt, --model, --max-tokens, --reasoning-effort, or --request-timeout-seconds; keep provider in the base URL.</li>
             </ol>
           </section>
 
@@ -108,6 +108,13 @@
 
 
                         <tr>
+                          <td>Request-timeout flag</td>
+                          <td>The CLI serializes --request-timeout-seconds as the canonical proxy work-budget header.</td>
+                          <td>Omission selects the server default without a hidden CLI deadline.</td>
+                        </tr>
+
+
+                        <tr>
                           <td>Payload/query cleanup</td>
                           <td>The client strips body-owned query fields and preserves non-payload query parameters.</td>
                           <td>Provider selection can stay in the base URL.</td>
@@ -139,6 +146,12 @@
                       <p>Pass --system-prompt so the CLI sends a v2 system message.</p>
                     </section>
 
+
+                    <section class="resource-card">
+                      <h3>Long request</h3>
+                      <p>Pass --request-timeout-seconds for a bounded proxy budget chosen for that prompt.</p>
+                    </section>
+
             </div>
           </section>
 
@@ -158,6 +171,7 @@
   --secret &quot;$SERVICE_SECRET&quot; \
   --model &quot;gpt-5.5&quot; \
   --reasoning-effort &quot;high&quot; \
+  --request-timeout-seconds 900 \
   --prompt &quot;Summarize this&quot;</code></pre>
             <p>Verified 2026-07-24 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
           </section>

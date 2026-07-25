@@ -11,17 +11,18 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/tyemirov/llm-proxy/pkg/llmproxyclient"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
 
 type capturedProxyRequest struct {
-	method      string
-	path        string
-	contentType string
-	accept      string
-	body        string
+	method         string
+	path           string
+	contentType    string
+	accept         string
+	requestTimeout string
+	body           string
 }
 
 type failingHTTPDoer struct {
@@ -68,11 +69,12 @@ func TestCommandPostsPromptAsV2UserMessage(t *testing.T) {
 			t.Fatalf("read body: %v", readError)
 		}
 		capturedRequest = capturedProxyRequest{
-			method:      httpRequest.Method,
-			path:        httpRequest.URL.RequestURI(),
-			contentType: httpRequest.Header.Get("Content-Type"),
-			accept:      httpRequest.Header.Get("Accept"),
-			body:        string(bodyBytes),
+			method:         httpRequest.Method,
+			path:           httpRequest.URL.RequestURI(),
+			contentType:    httpRequest.Header.Get("Content-Type"),
+			accept:         httpRequest.Header.Get("Accept"),
+			requestTimeout: httpRequest.Header.Get(llmproxycontract.HeaderRequestTimeoutSeconds),
+			body:           string(bodyBytes),
 		}
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte("reviewed"))
@@ -108,6 +110,9 @@ func TestCommandPostsPromptAsV2UserMessage(t *testing.T) {
 	}
 	if capturedRequest.accept != "text/plain" {
 		t.Fatalf("accept=%q", capturedRequest.accept)
+	}
+	if capturedRequest.requestTimeout != "" {
+		t.Fatalf("request timeout header should be omitted: %q", capturedRequest.requestTimeout)
 	}
 	parsedRequestURL, parseError := url.Parse(capturedRequest.path)
 	if parseError != nil {
@@ -152,7 +157,11 @@ func TestCommandReadsEnvironmentAndStdin(t *testing.T) {
 		if readError != nil {
 			t.Fatalf("read body: %v", readError)
 		}
-		capturedRequest = capturedProxyRequest{path: httpRequest.URL.RequestURI(), body: string(bodyBytes)}
+		capturedRequest = capturedProxyRequest{
+			path:           httpRequest.URL.RequestURI(),
+			requestTimeout: httpRequest.Header.Get(llmproxycontract.HeaderRequestTimeoutSeconds),
+			body:           string(bodyBytes),
+		}
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte("stdin-ok"))
 	}))
@@ -197,7 +206,11 @@ func TestCommandReadsPromptFileAndOptionalBodyFields(t *testing.T) {
 		if readError != nil {
 			t.Fatalf("read body: %v", readError)
 		}
-		capturedRequest = capturedProxyRequest{path: httpRequest.URL.RequestURI(), body: string(bodyBytes)}
+		capturedRequest = capturedProxyRequest{
+			path:           httpRequest.URL.RequestURI(),
+			requestTimeout: httpRequest.Header.Get(llmproxycontract.HeaderRequestTimeoutSeconds),
+			body:           string(bodyBytes),
+		}
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte("file-ok"))
 	}))
@@ -215,7 +228,7 @@ func TestCommandReadsPromptFileAndOptionalBodyFields(t *testing.T) {
 			"--system-prompt", "Be terse.",
 			"--max-tokens", "42",
 			"--reasoning-effort", "high",
-			"--timeout", "2s",
+			"--request-timeout-seconds", "2",
 		},
 		strings.NewReader(""),
 		&stdout,
@@ -234,6 +247,9 @@ func TestCommandReadsPromptFileAndOptionalBodyFields(t *testing.T) {
 	}
 	if strings.Contains(capturedRequest.path, "model=") {
 		t.Fatalf("path must omit model query: %q", capturedRequest.path)
+	}
+	if capturedRequest.requestTimeout != "2" {
+		t.Fatalf("request timeout header=%q", capturedRequest.requestTimeout)
 	}
 	parsedRequestURL, parseError := url.Parse(capturedRequest.path)
 	if parseError != nil {
@@ -447,10 +463,16 @@ func TestCommandRejectsInvalidInputs(t *testing.T) {
 			errorString: "missing secret",
 		},
 		{
-			name:        "invalid timeout",
-			arguments:   []string{"--base-url", "http://example.test", "--secret", "sekret", "--prompt", "prompt", "--timeout", "0s"},
+			name:        "invalid request timeout",
+			arguments:   []string{"--base-url", "http://example.test", "--secret", "sekret", "--prompt", "prompt", "--request-timeout-seconds", "0"},
 			stdin:       strings.NewReader(""),
-			errorString: "timeout must be positive",
+			errorString: "request_timeout_seconds must be positive",
+		},
+		{
+			name:        "obsolete timeout flag",
+			arguments:   []string{"--base-url", "http://example.test", "--secret", "sekret", "--prompt", "prompt", "--timeout", "1s"},
+			stdin:       strings.NewReader(""),
+			errorString: "unknown flag: --timeout",
 		},
 		{
 			name:        "missing prompt",
@@ -530,7 +552,7 @@ func TestCommandReportsProxyAndIOErrors(t *testing.T) {
 			strings.NewReader(""),
 			&stdout,
 			&stderr,
-			func(timeout time.Duration) llmproxyclient.HTTPDoer {
+			func() llmproxyclient.HTTPDoer {
 				return failingHTTPDoer{err: errors.New("transport failed")}
 			},
 		)
@@ -549,7 +571,7 @@ func TestCommandReportsProxyAndIOErrors(t *testing.T) {
 			strings.NewReader(""),
 			&stdout,
 			&stderr,
-			func(timeout time.Duration) llmproxyclient.HTTPDoer {
+			func() llmproxyclient.HTTPDoer {
 				return readFailHTTPDoer{}
 			},
 		)
@@ -568,7 +590,7 @@ func TestCommandReportsProxyAndIOErrors(t *testing.T) {
 			strings.NewReader(""),
 			&stdout,
 			&stderr,
-			func(timeout time.Duration) llmproxyclient.HTTPDoer {
+			func() llmproxyclient.HTTPDoer {
 				return nil
 			},
 		)

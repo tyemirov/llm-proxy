@@ -136,6 +136,8 @@ repo_root="$(git rev-parse --show-toplevel)"
 cd "${repo_root}"
 release_helper="${RELEASE_HELPER:-${repo_root}/tools/gitrelease/scripts/release_helper.py}"
 [[ -f "${release_helper}" ]] || { echo "error: release helper is missing: ${release_helper}" >&2; exit 1; }
+request_timeout_capacity_reader="${repo_root}/scripts/read-request-timeout-capacity.sh"
+[[ -x "${request_timeout_capacity_reader}" ]] || { echo "error: request-timeout capacity reader is missing or not executable: ${request_timeout_capacity_reader}" >&2; exit 1; }
 
 resolve_gateway_dir() {
   if [[ -n "${GATEWAY_DIR}" ]]; then
@@ -146,6 +148,7 @@ resolve_gateway_dir() {
 }
 
 if [[ "${SKIP_GATEWAY}" != "true" ]]; then
+  max_request_timeout_seconds="$("${request_timeout_capacity_reader}" "${repo_root}/configs/config.yml")"
   GATEWAY_DIR="$(resolve_gateway_dir)"
   [[ -n "${GATEWAY_DIR}" ]] || { echo "error: gateway checkout not found; set GATEWAY_DIR=/path/to/mprlab-gateway or pass --gateway-dir" >&2; exit 1; }
   [[ -d "${GATEWAY_DIR}" ]] || { echo "error: gateway checkout not found: ${GATEWAY_DIR}" >&2; exit 1; }
@@ -161,9 +164,9 @@ if [[ "${SKIP_GATEWAY}" != "true" ]]; then
     exit 1
   fi
 
-  echo "==> [deploy] Verifying coupled llm-proxy/TAuth gateway contract"
-  if ! timeout -k 180s -s SIGKILL 180s make -C "${GATEWAY_DIR}" "${GATEWAY_CONTRACT_TARGET}"; then
-    echo "error: gateway checkout does not satisfy the coupled llm-proxy/TAuth deployment contract" >&2
+  echo "==> [deploy] Verifying coupled llm-proxy/TAuth gateway contract and ${max_request_timeout_seconds}s request capacity"
+  if ! LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS="${max_request_timeout_seconds}" timeout -k 180s -s SIGKILL 180s make -C "${GATEWAY_DIR}" "${GATEWAY_CONTRACT_TARGET}"; then
+    echo "error: gateway checkout does not satisfy the coupled llm-proxy/TAuth deployment and request-capacity contract" >&2
     exit 1
   fi
 
@@ -243,7 +246,8 @@ fi
 
 if [[ "${SKIP_GATEWAY}" != "true" ]]; then
   echo "==> [deploy] Deploying llm-proxy through mprlab-gateway target ${GATEWAY_TARGET}"
-  timeout --foreground -k 1200s -s SIGKILL 1200s make -C "${GATEWAY_DIR}" "${GATEWAY_TARGET}"
+  LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS="${max_request_timeout_seconds}" \
+    timeout --foreground -k 1200s -s SIGKILL 1200s make -C "${GATEWAY_DIR}" "${GATEWAY_TARGET}"
 fi
 
 if [[ "${SKIP_PAGES}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then

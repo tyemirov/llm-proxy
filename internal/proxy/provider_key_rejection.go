@@ -49,6 +49,9 @@ func rejectClientProviderCredentialsFromQuery(ginContext *gin.Context) bool {
 func readJSONProxyBody(ginContext *gin.Context) ([]byte, bool) {
 	bodyBytes, readError := io.ReadAll(ginContext.Request.Body)
 	if readError != nil {
+		if requestContextEnded(ginContext) {
+			return nil, false
+		}
 		var maxBytesError *http.MaxBytesError
 		if errors.As(readError, &maxBytesError) {
 			ginContext.String(http.StatusRequestEntityTooLarge, errorPromptPayloadTooLarge)

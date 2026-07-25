@@ -102,8 +102,8 @@
 
                         <tr>
                           <td>Timeout ownership</td>
-                          <td>server.request_timeout_seconds bounds the overall proxy request.</td>
-                          <td>A timeout becomes a documented 504.</td>
+                          <td>Each request can select a bounded proxy work budget; omission uses server.request_timeout_seconds.</td>
+                          <td>A budget expiry becomes a canonical 504.</td>
                         </tr>
 
                 </tbody>

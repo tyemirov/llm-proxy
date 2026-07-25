@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -11,11 +12,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/glebarez/sqlite"
 	"github.com/tyemirov/llm-proxy/internal/constants"
+	"golang.org/x/sync/semaphore"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -41,6 +42,7 @@ const (
 	maskedSecretSuffixLength            = 4
 	managedUsageSummaryDays             = 30
 	managedUsageReadBatchSize           = 256
+	managedTenantStoreLockCapacity      = int64(1 << 30)
 )
 
 var (
@@ -58,7 +60,7 @@ var (
 )
 
 type managedTenantStore struct {
-	mutex             sync.RWMutex
+	mutex             *managedTenantStoreMutex
 	database          managedTenantDatabase
 	providerKeyCipher managedProviderKeyCipher
 	routingDefaults   *providerRegistry
@@ -67,11 +69,39 @@ type managedTenantStore struct {
 	now               func() time.Time
 }
 
+type managedTenantStoreMutex struct {
+	weighted *semaphore.Weighted
+}
+
+func newManagedTenantStoreMutex() *managedTenantStoreMutex {
+	return &managedTenantStoreMutex{weighted: semaphore.NewWeighted(managedTenantStoreLockCapacity)}
+}
+
+func (mutex *managedTenantStoreMutex) Lock() {
+	_ = mutex.weighted.Acquire(context.Background(), managedTenantStoreLockCapacity)
+}
+
+func (mutex *managedTenantStoreMutex) LockContext(requestContext context.Context) error {
+	return mutex.weighted.Acquire(requestContext, managedTenantStoreLockCapacity)
+}
+
+func (mutex *managedTenantStoreMutex) Unlock() {
+	mutex.weighted.Release(managedTenantStoreLockCapacity)
+}
+
+func (mutex *managedTenantStoreMutex) RLock() {
+	_ = mutex.weighted.Acquire(context.Background(), 1)
+}
+
+func (mutex *managedTenantStoreMutex) RUnlock() {
+	mutex.weighted.Release(1)
+}
+
 type managedUsageEventVisitor func(managedUsageEventRecord)
 
 type managedTenantDatabase interface {
 	tenantByUserID(userID string) (managedTenantRecord, error)
-	tenantByTenantID(tenantID string) (managedTenantRecord, error)
+	tenantByTenantID(requestContext context.Context, tenantID string) (managedTenantRecord, error)
 	tenantBySecretDigest(secretDigest string) (managedTenantRecord, error)
 	tenants() ([]managedTenantRecord, error)
 	providerKeys() ([]managedProviderAPIKeyRecord, error)
@@ -79,7 +109,7 @@ type managedTenantDatabase interface {
 	saveTenant(record managedTenantRecord) error
 	saveProviderKey(record managedProviderAPIKeyRecord) error
 	deleteProviderKey(record managedProviderAPIKeyRecord) error
-	createUsageEvent(record managedUsageEventRecord) error
+	createUsageEvent(requestContext context.Context, record managedUsageEventRecord) error
 	earliestUsageEventByUserIDThrough(userID string, periodEnd time.Time) (time.Time, error)
 	streamUsageEventsByUserIDBetween(userID string, periodStart time.Time, periodEnd time.Time, visit managedUsageEventVisitor) error
 	streamUsageEventsByUserIDThrough(userID string, periodEnd time.Time, visit managedUsageEventVisitor) error
@@ -242,6 +272,7 @@ func newManagedTenantStoreWithDatabase(database managedTenantDatabase) *managedT
 
 func newManagedTenantStoreWithDatabaseAndCipher(database managedTenantDatabase, providerKeyCipher managedProviderKeyCipher) *managedTenantStore {
 	return &managedTenantStore{
+		mutex:             newManagedTenantStoreMutex(),
 		database:          database,
 		providerKeyCipher: providerKeyCipher,
 		randomReader:      rand.Reader,
@@ -359,9 +390,9 @@ func (database *gormManagedTenantDatabase) tenantByUserID(userID string) (manage
 	return record, queryError
 }
 
-func (database *gormManagedTenantDatabase) tenantByTenantID(tenantID string) (managedTenantRecord, error) {
+func (database *gormManagedTenantDatabase) tenantByTenantID(requestContext context.Context, tenantID string) (managedTenantRecord, error) {
 	var record managedTenantRecord
-	queryError := database.database.
+	queryError := database.database.WithContext(requestContext).
 		Where(&managedTenantRecord{TenantID: tenantID}).
 		First(&record).
 		Error
@@ -414,8 +445,8 @@ func (database *gormManagedTenantDatabase) deleteProviderKey(record managedProvi
 	return database.database.Where(&record).Delete(&managedProviderAPIKeyRecord{}).Error
 }
 
-func (database *gormManagedTenantDatabase) createUsageEvent(record managedUsageEventRecord) error {
-	return database.database.Create(&record).Error
+func (database *gormManagedTenantDatabase) createUsageEvent(requestContext context.Context, record managedUsageEventRecord) error {
+	return database.database.WithContext(requestContext).Create(&record).Error
 }
 
 func (database *gormManagedTenantDatabase) earliestUsageEventByUserIDThrough(userID string, periodEnd time.Time) (time.Time, error) {

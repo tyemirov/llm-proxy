@@ -11,7 +11,9 @@ DEPLOY_SCRIPT = REPOSITORY_ROOT / "scripts" / "deploy.sh"
 
 
 class DeployContractTests(unittest.TestCase):
-    def test_deploy_rejects_gateway_without_coupled_tauth_contract(self) -> None:
+    def test_deploy_rejects_gateway_without_coupled_deployment_and_capacity_contract(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             gateway_directory = self.initialize_gateway(
                 Path(temporary_directory),
@@ -24,7 +26,8 @@ class DeployContractTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(
-                "gateway checkout does not satisfy the coupled llm-proxy/TAuth deployment contract",
+                "gateway checkout does not satisfy the coupled llm-proxy/TAuth "
+                "deployment and request-capacity contract",
                 result.stderr,
             )
             self.assertFalse((gateway_directory / "deployed").exists())

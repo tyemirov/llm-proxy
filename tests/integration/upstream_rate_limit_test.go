@@ -345,8 +345,8 @@ func TestIntegrationCanceledWorkerAcquisitionsDoNotReserveRateSlots(testingInsta
 		httpRequest := httptest.NewRequest(http.MethodGet, requestPath, nil).WithContext(requestContext)
 		responseRecorder := httptest.NewRecorder()
 		router.ServeHTTP(responseRecorder, httpRequest)
-		if responseRecorder.Code != http.StatusGatewayTimeout {
-			testingInstance.Fatalf("canceled request %d status=%d want=%d", requestIndex, responseRecorder.Code, http.StatusGatewayTimeout)
+		if responseRecorder.Code != 499 {
+			testingInstance.Fatalf("canceled request %d status=%d want=%d", requestIndex, responseRecorder.Code, 499)
 		}
 	}
 
@@ -527,7 +527,7 @@ func TestIntegrationUpstreamRateLimitCancellationReturnsGatewayTimeoutAndLogs(te
 	}))
 	testingInstance.Cleanup(cancelingGateway.Close)
 	secondStatus, secondError := performRateLimitTextRequest(cancelingGateway.Client(), cancelingGateway.URL, proxy.ProviderNameDeepSeek)
-	if secondError != nil || secondStatus != http.StatusGatewayTimeout {
+	if secondError != nil || secondStatus != 499 {
 		testingInstance.Fatalf("canceled status=%d error=%v", secondStatus, secondError)
 	}
 

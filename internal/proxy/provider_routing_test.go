@@ -2103,8 +2103,8 @@ func TestProviderRoutingMapsGeminiTransportErrors(t *testing.T) {
 		defer cancelRequest()
 		responseRecorder := httptest.NewRecorder()
 		router.ServeHTTP(responseRecorder, request.WithContext(requestContext))
-		if responseRecorder.Code != http.StatusGatewayTimeout {
-			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusGatewayTimeout, responseRecorder.Body.String())
+		if responseRecorder.Code != 499 {
+			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, 499, responseRecorder.Body.String())
 		}
 	})
 }
@@ -2207,8 +2207,8 @@ func TestProviderRoutingMapsAnthropicTransportErrors(t *testing.T) {
 		defer cancelRequest()
 		responseRecorder := httptest.NewRecorder()
 		router.ServeHTTP(responseRecorder, request.WithContext(requestContext))
-		if responseRecorder.Code != http.StatusGatewayTimeout {
-			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusGatewayTimeout, responseRecorder.Body.String())
+		if responseRecorder.Code != 499 {
+			subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, 499, responseRecorder.Body.String())
 		}
 	})
 }

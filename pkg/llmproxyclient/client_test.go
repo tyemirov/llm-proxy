@@ -12,9 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/tyemirov/llm-proxy/pkg/llmproxyclient"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
 
 func TestConfigMessagesPostURLShapesAuthenticatedV2JSONPostURL(testingInstance *testing.T) {
@@ -22,7 +22,6 @@ func TestConfigMessagesPostURLShapesAuthenticatedV2JSONPostURL(testingInstance *
 		BaseURL:  "https://proxy.example/review?prompt=old&model=old&max_tokens=9&reasoning_effort=old&web_search=true&provider=gemini&keep=1",
 		Secret:   "sekret",
 		Provider: "deepseek",
-		Timeout:  time.Second,
 	})
 	if configError != nil {
 		testingInstance.Fatalf("config error: %v", configError)
@@ -42,7 +41,6 @@ func TestConfigMessagesPostURLShapesAuthenticatedV2JSONPostURL(testingInstance *
 	v2Config, v2ConfigError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
 		BaseURL: "https://proxy.example/v2?prompt=old",
 		Secret:  "sekret",
-		Timeout: time.Second,
 	})
 	if v2ConfigError != nil {
 		testingInstance.Fatalf("v2 config error: %v", v2ConfigError)
@@ -82,9 +80,11 @@ func TestClientPostMessagesSendsV2MessagesBody(testingInstance *testing.T) {
 	firstOrder := messageOrder(1)
 	secondOrder := messageOrder(2)
 	var capturedPath string
+	var capturedTimeout string
 	var capturedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 		capturedPath = httpRequest.URL.Path
+		capturedTimeout = httpRequest.Header.Get(llmproxycontract.HeaderRequestTimeoutSeconds)
 		bodyBytes, readError := io.ReadAll(httpRequest.Body)
 		if readError != nil {
 			testingInstance.Fatalf("read body: %v", readError)
@@ -99,7 +99,6 @@ func TestClientPostMessagesSendsV2MessagesBody(testingInstance *testing.T) {
 	config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
 		BaseURL: server.URL,
 		Secret:  "sekret",
-		Timeout: time.Second,
 	})
 	if configError != nil {
 		testingInstance.Fatalf("config error: %v", configError)
@@ -109,20 +108,23 @@ func TestClientPostMessagesSendsV2MessagesBody(testingInstance *testing.T) {
 		testingInstance.Fatalf("client error: %v", clientError)
 	}
 	maxTokens := messageOrder(5)
+	requestTimeoutSeconds := 12
 	reasoningEffort := "high"
 	request, requestError := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{
 		Messages: []llmproxyclient.MessageInput{
 			{Role: "assistant", Content: "Hi", Order: secondOrder},
 			{Role: "user", Content: "Hello", Order: firstOrder},
 		},
-		Model:           "deepseek-v4-flash",
-		WebSearch:       true,
-		MaxTokens:       maxTokens,
-		ReasoningEffort: &reasoningEffort,
+		Model:                 "deepseek-v4-flash",
+		WebSearch:             true,
+		MaxTokens:             maxTokens,
+		ReasoningEffort:       &reasoningEffort,
+		RequestTimeoutSeconds: &requestTimeoutSeconds,
 	})
 	if requestError != nil {
 		testingInstance.Fatalf("request error: %v", requestError)
 	}
+	requestTimeoutSeconds = 99
 
 	responseText, postError := client.PostMessages(context.Background(), request)
 
@@ -131,6 +133,9 @@ func TestClientPostMessagesSendsV2MessagesBody(testingInstance *testing.T) {
 	}
 	if responseText != "ok" || capturedPath != "/v2" {
 		testingInstance.Fatalf("response=%q path=%q", responseText, capturedPath)
+	}
+	if capturedTimeout != "12" {
+		testingInstance.Fatalf("request timeout header=%q", capturedTimeout)
 	}
 	if capturedBody["prompt"] != nil || capturedBody["system_prompt"] != nil {
 		testingInstance.Fatalf("legacy fields must be omitted for v2 messages body: %v", capturedBody)
@@ -150,6 +155,7 @@ func TestClientPostMessagesSendsV2MessagesBody(testingInstance *testing.T) {
 
 func TestClientOmitsModelWhenRequestUsesProviderDefault(testingInstance *testing.T) {
 	var capturedPath string
+	var capturedTimeout string
 	var capturedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 		bodyBytes, readError := io.ReadAll(httpRequest.Body)
@@ -160,6 +166,7 @@ func TestClientOmitsModelWhenRequestUsesProviderDefault(testingInstance *testing
 			testingInstance.Fatalf("decode body: %v", decodeError)
 		}
 		capturedPath = httpRequest.URL.RequestURI()
+		capturedTimeout = httpRequest.Header.Get(llmproxycontract.HeaderRequestTimeoutSeconds)
 		_, _ = responseWriter.Write([]byte("ok"))
 	}))
 	defer server.Close()
@@ -167,7 +174,6 @@ func TestClientOmitsModelWhenRequestUsesProviderDefault(testingInstance *testing
 	config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
 		BaseURL: server.URL + "/review?provider=gemini&model=stale&keep=1",
 		Secret:  "sekret",
-		Timeout: time.Second,
 	})
 	if configError != nil {
 		testingInstance.Fatalf("config error: %v", configError)
@@ -200,6 +206,9 @@ func TestClientOmitsModelWhenRequestUsesProviderDefault(testingInstance *testing
 	}
 	if _, hasModel := capturedBody["model"]; hasModel {
 		testingInstance.Fatalf("body must omit model when using provider default: %v", capturedBody)
+	}
+	if capturedTimeout != "" {
+		testingInstance.Fatalf("request timeout header should be omitted: %q", capturedTimeout)
 	}
 }
 
@@ -238,7 +247,6 @@ func TestClientReloadsAtomicallyReplacedModelProfile(testingInstance *testing.T)
 		Secret:             "sekret",
 		ModelProfilePath:   profilePath,
 		ModelProfileReader: os.ReadFile,
-		Timeout:            time.Second,
 	})
 	if configError != nil {
 		testingInstance.Fatalf("config error: %v", configError)
@@ -284,7 +292,6 @@ func TestConfigMessagesPostURLReloadsModelProfile(testingInstance *testing.T) {
 		Secret:             "sekret",
 		ModelProfilePath:   profilePath,
 		ModelProfileReader: os.ReadFile,
-		Timeout:            time.Second,
 	})
 	if configError != nil {
 		testingInstance.Fatalf("config error: %v", configError)
@@ -338,7 +345,6 @@ func TestClientRejectsInvalidOrCompetingModelProfilesBeforeHTTP(testingInstance 
 		Secret:             "sekret",
 		ModelProfilePath:   profilePath,
 		ModelProfileReader: os.ReadFile,
-		Timeout:            time.Second,
 	})
 	if configError != nil {
 		testingInstance.Fatalf("config error: %v", configError)
@@ -506,7 +512,6 @@ func TestConfigRejectsModelProfileSourceConflicts(testingInstance *testing.T) {
 				BaseURL:            "https://proxy.example",
 				Secret:             "sekret",
 				ModelProfileReader: profileReader,
-				Timeout:            time.Second,
 			},
 			errorString: "model_profile_reader requires model_profile_path",
 		},
@@ -516,7 +521,6 @@ func TestConfigRejectsModelProfileSourceConflicts(testingInstance *testing.T) {
 				BaseURL:          "https://proxy.example",
 				Secret:           "sekret",
 				ModelProfilePath: "/profiles/user.json",
-				Timeout:          time.Second,
 			},
 			errorString: "model_profile_path requires model_profile_reader",
 		},
@@ -528,7 +532,6 @@ func TestConfigRejectsModelProfileSourceConflicts(testingInstance *testing.T) {
 				Provider:           "gemini",
 				ModelProfilePath:   "/profiles/user.json",
 				ModelProfileReader: profileReader,
-				Timeout:            time.Second,
 			},
 			errorString: "conflicts with provider",
 		},
@@ -539,7 +542,6 @@ func TestConfigRejectsModelProfileSourceConflicts(testingInstance *testing.T) {
 				Secret:             "sekret",
 				ModelProfilePath:   "/profiles/user.json",
 				ModelProfileReader: profileReader,
-				Timeout:            time.Second,
 			},
 			errorString: "base_url provider query",
 		},
@@ -550,7 +552,6 @@ func TestConfigRejectsModelProfileSourceConflicts(testingInstance *testing.T) {
 				Secret:             "sekret",
 				ModelProfilePath:   "/profiles/user.json",
 				ModelProfileReader: profileReader,
-				Timeout:            time.Second,
 			},
 			errorString: "base_url model query",
 		},
@@ -594,7 +595,6 @@ func TestClientSendsUnknownModelProfilePairToProxy(testingInstance *testing.T) {
 		Secret:             "sekret",
 		ModelProfilePath:   profilePath,
 		ModelProfileReader: os.ReadFile,
-		Timeout:            time.Second,
 	})
 	if configError != nil {
 		testingInstance.Fatalf("config error: %v", configError)
@@ -639,6 +639,11 @@ func TestMessagesRequestRejectsInvalidInputs(testingInstance *testing.T) {
 			name:        "blank reasoning effort",
 			input:       llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "prompt"}}, ReasoningEffort: &emptyReasoningEffort},
 			errorString: "reasoning_effort must be nonblank",
+		},
+		{
+			name:        "invalid request timeout",
+			input:       llmproxyclient.MessagesRequestInput{Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "prompt"}}, RequestTimeoutSeconds: messageOrder(0)},
+			errorString: "request_timeout_seconds must be positive",
 		},
 		{
 			name:        "unsupported role",

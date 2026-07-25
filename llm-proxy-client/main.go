@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxyclient"
@@ -17,41 +16,39 @@ const (
 	commandUse   = "llm-proxy-client"
 	commandShort = "Send a v2 JSON POST request through llm-proxy"
 
-	flagBaseURL         = "base-url"
-	flagSecret          = "secret"
-	flagProvider        = "provider"
-	flagModel           = "model"
-	flagModelProfile    = "model-profile"
-	flagPrompt          = "prompt"
-	flagPromptFile      = "prompt-file"
-	flagWebSearch       = "web-search"
-	flagSystemPrompt    = "system-prompt"
-	flagMaxTokens       = "max-tokens"
-	flagReasoningEffort = "reasoning-effort"
-	flagTimeout         = "timeout"
+	flagBaseURL               = "base-url"
+	flagSecret                = "secret"
+	flagProvider              = "provider"
+	flagModel                 = "model"
+	flagModelProfile          = "model-profile"
+	flagPrompt                = "prompt"
+	flagPromptFile            = "prompt-file"
+	flagWebSearch             = "web-search"
+	flagSystemPrompt          = "system-prompt"
+	flagMaxTokens             = "max-tokens"
+	flagReasoningEffort       = "reasoning-effort"
+	flagRequestTimeoutSeconds = "request-timeout-seconds"
 
 	envNameBaseURL = "LLM_PROXY_BASE_URL"
 	envNameSecret  = "LLM_PROXY_SECRET"
-
-	defaultTimeout = 390 * time.Second
 )
 
 type commandOptions struct {
-	baseURL          string
-	secret           string
-	provider         string
-	model            string
-	modelProfilePath string
-	prompt           string
-	promptFile       string
-	webSearch        bool
-	systemPrompt     string
-	maxTokens        int
-	reasoningEffort  string
-	timeout          time.Duration
+	baseURL               string
+	secret                string
+	provider              string
+	model                 string
+	modelProfilePath      string
+	prompt                string
+	promptFile            string
+	webSearch             bool
+	systemPrompt          string
+	maxTokens             int
+	reasoningEffort       string
+	requestTimeoutSeconds int
 }
 
-type httpClientFactory func(timeout time.Duration) llmproxyclient.HTTPDoer
+type httpClientFactory func() llmproxyclient.HTTPDoer
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr, defaultHTTPClientFactory))
@@ -107,7 +104,6 @@ func newRootCommand(
 				Secret:           configuredString(command, flagSecret, envNameSecret, options.secret),
 				Provider:         options.provider,
 				ModelProfilePath: options.modelProfilePath,
-				Timeout:          options.timeout,
 			}
 			if options.modelProfilePath != "" {
 				configInput.ModelProfileReader = os.ReadFile
@@ -132,11 +128,14 @@ func newRootCommand(
 			if command.Flags().Changed(flagReasoningEffort) {
 				requestInput.ReasoningEffort = &options.reasoningEffort
 			}
+			if command.Flags().Changed(flagRequestTimeoutSeconds) {
+				requestInput.RequestTimeoutSeconds = &options.requestTimeoutSeconds
+			}
 			request, requestError := llmproxyclient.NewMessagesRequest(requestInput)
 			if requestError != nil {
 				return fmt.Errorf("llm_proxy_client_request_failed: %w", requestError)
 			}
-			client, clientError := llmproxyclient.NewClient(config, httpClientFactoryValue(config.Timeout()))
+			client, clientError := llmproxyclient.NewClient(config, httpClientFactoryValue())
 			if clientError != nil {
 				return fmt.Errorf("llm_proxy_client_create_failed: %w", clientError)
 			}
@@ -164,7 +163,7 @@ func newRootCommand(
 	flagSet.StringVar(&options.systemPrompt, flagSystemPrompt, "", "v2 system message content")
 	flagSet.IntVar(&options.maxTokens, flagMaxTokens, 0, "positive output token cap")
 	flagSet.StringVar(&options.reasoningEffort, flagReasoningEffort, "", "model-supported reasoning effort")
-	flagSet.DurationVar(&options.timeout, flagTimeout, defaultTimeout, "request timeout")
+	flagSet.IntVar(&options.requestTimeoutSeconds, flagRequestTimeoutSeconds, 0, "positive proxy work budget in whole seconds")
 
 	return rootCommand
 }
@@ -197,6 +196,6 @@ func readPrompt(stdin io.Reader, promptValue string, promptFile string) (string,
 	return string(promptBytes), nil
 }
 
-func defaultHTTPClientFactory(timeout time.Duration) llmproxyclient.HTTPDoer {
-	return &http.Client{Timeout: timeout}
+func defaultHTTPClientFactory() llmproxyclient.HTTPDoer {
+	return &http.Client{}
 }

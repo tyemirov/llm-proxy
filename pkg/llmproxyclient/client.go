@@ -11,8 +11,10 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
-	"time"
+
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
 
 const (
@@ -66,7 +68,6 @@ type ConfigInput struct {
 	Provider           string
 	ModelProfilePath   string
 	ModelProfileReader ModelProfileReader
-	Timeout            time.Duration
 }
 
 // Config is validated llm-proxy client configuration.
@@ -76,7 +77,6 @@ type Config struct {
 	provider           string
 	modelProfilePath   string
 	modelProfileReader ModelProfileReader
-	timeout            time.Duration
 }
 
 // NewConfig validates external client configuration.
@@ -119,22 +119,13 @@ func NewConfig(input ConfigInput) (Config, error) {
 	if trimmedSecret == "" {
 		return Config{}, fmt.Errorf("%w: missing secret", ErrInvalidClientConfig)
 	}
-	if input.Timeout <= 0 {
-		return Config{}, fmt.Errorf("%w: timeout must be positive", ErrInvalidClientConfig)
-	}
 	return Config{
 		baseURL:            parsedBaseURL,
 		secret:             trimmedSecret,
 		provider:           trimmedProvider,
 		modelProfilePath:   trimmedModelProfilePath,
 		modelProfileReader: input.ModelProfileReader,
-		timeout:            input.Timeout,
 	}, nil
-}
-
-// Timeout returns the validated client timeout.
-func (config Config) Timeout() time.Duration {
-	return config.timeout
 }
 
 // MessagesPostURL builds the authenticated v2 JSON POST URL for this config.
@@ -210,15 +201,18 @@ type MessagesRequestInput struct {
 	WebSearch       bool
 	MaxTokens       *int
 	ReasoningEffort *string
+	// RequestTimeoutSeconds optionally selects the proxy-owned wall-clock work budget.
+	RequestTimeoutSeconds *int
 }
 
 // MessagesRequest is a validated v2 messages-only JSON POST request.
 type MessagesRequest struct {
-	messages        []message
-	model           string
-	webSearch       bool
-	maxTokens       *int
-	reasoningEffort *string
+	messages              []message
+	model                 string
+	webSearch             bool
+	maxTokens             *int
+	reasoningEffort       *string
+	requestTimeoutSeconds *int
 }
 
 // NewMessagesRequest validates v2 messages-only request input.
@@ -232,16 +226,25 @@ func NewMessagesRequest(input MessagesRequestInput) (MessagesRequest, error) {
 	if input.ReasoningEffort != nil && strings.TrimSpace(*input.ReasoningEffort) == "" {
 		return MessagesRequest{}, fmt.Errorf("%w: reasoning_effort must be nonblank", ErrInvalidClientRequest)
 	}
+	if input.RequestTimeoutSeconds != nil && *input.RequestTimeoutSeconds <= 0 {
+		return MessagesRequest{}, fmt.Errorf("%w: request_timeout_seconds must be positive", ErrInvalidClientRequest)
+	}
+	var requestTimeoutSeconds *int
+	if input.RequestTimeoutSeconds != nil {
+		copiedRequestTimeoutSeconds := *input.RequestTimeoutSeconds
+		requestTimeoutSeconds = &copiedRequestTimeoutSeconds
+	}
 	messages, messageError := newMessages(input.Messages)
 	if messageError != nil {
 		return MessagesRequest{}, messageError
 	}
 	return MessagesRequest{
-		messages:        messages,
-		model:           strings.TrimSpace(input.Model),
-		webSearch:       input.WebSearch,
-		maxTokens:       input.MaxTokens,
-		reasoningEffort: input.ReasoningEffort,
+		messages:              messages,
+		model:                 strings.TrimSpace(input.Model),
+		webSearch:             input.WebSearch,
+		maxTokens:             input.MaxTokens,
+		reasoningEffort:       input.ReasoningEffort,
+		requestTimeoutSeconds: requestTimeoutSeconds,
 	}, nil
 }
 
@@ -357,7 +360,7 @@ func (client Client) PostMessages(contextValue context.Context, request Messages
 	if requestError != nil {
 		return "", requestError
 	}
-	return client.postPayload(contextValue, requestURL, requestBody)
+	return client.postPayload(contextValue, requestURL, requestBody, request.requestTimeoutSeconds)
 }
 
 func (client Client) messagesPostRequest(request MessagesRequest) (url.URL, []byte, error) {
@@ -378,7 +381,7 @@ func (client Client) messagesPostRequest(request MessagesRequest) (url.URL, []by
 	return client.config.messagesPostURLForProvider(modelProfile.provider), request.payloadBody(modelProfile.model), nil
 }
 
-func (client Client) postPayload(contextValue context.Context, requestURL url.URL, requestBody []byte) (string, error) {
+func (client Client) postPayload(contextValue context.Context, requestURL url.URL, requestBody []byte, requestTimeoutSeconds *int) (string, error) {
 	httpRequest := (&http.Request{
 		Method:        http.MethodPost,
 		URL:           &requestURL,
@@ -388,6 +391,9 @@ func (client Client) postPayload(contextValue context.Context, requestURL url.UR
 	}).WithContext(contextValue)
 	httpRequest.Header.Set(headerAccept, formatQueryValueTextPlain)
 	httpRequest.Header.Set(headerContentType, jsonContentType)
+	if requestTimeoutSeconds != nil {
+		httpRequest.Header.Set(llmproxycontract.HeaderRequestTimeoutSeconds, strconv.Itoa(*requestTimeoutSeconds))
+	}
 
 	httpResponse, httpError := client.httpClient.Do(httpRequest)
 	if httpError != nil {

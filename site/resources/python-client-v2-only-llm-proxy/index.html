@@ -70,6 +70,7 @@
 <li>Create ClientConfig with base_url and secret.</li>
 <li>Build ClientMessagesRequest with one or more ClientMessage values.</li>
 <li>Set reasoning_effort only for a nonblank value declared by the resolved route, or omit it to retain the tenant default.</li>
+<li>Set request_timeout_seconds only when this request needs a specific proxy work budget.</li>
 <li>Call post_messages and let the proxy route provider details.</li>
             </ol>
           </section>
@@ -105,6 +106,13 @@
                           <td>Reasoning-effort override</td>
                           <td>ClientMessagesRequest serializes an optional nonblank reasoning_effort value.</td>
                           <td>The proxy validates it against the exact resolved provider/model capability.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Per-request work budget</td>
+                          <td>ClientMessagesRequest serializes request_timeout_seconds as the canonical timeout header.</td>
+                          <td>The default urllib transport adds no unrelated total-response deadline.</td>
                         </tr>
 
 
@@ -169,6 +177,7 @@ text = client.post_messages(
         model=&quot;gpt-5.5&quot;,
         max_tokens=512,
         reasoning_effort=&quot;high&quot;,
+        request_timeout_seconds=900,
     )
 )</code></pre>
             <p>Verified 2026-07-24 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>

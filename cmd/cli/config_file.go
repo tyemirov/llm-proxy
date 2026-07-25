@@ -53,14 +53,15 @@ type fileConfiguration struct {
 }
 
 type serverConfiguration struct {
-	Port                  int                              `mapstructure:"port"`
-	LogLevel              string                           `mapstructure:"log_level"`
-	Workers               int                              `mapstructure:"workers"`
-	QueueSize             int                              `mapstructure:"queue_size"`
-	RequestTimeoutSeconds int                              `mapstructure:"request_timeout_seconds"`
-	MaxPromptBytes        int64                            `mapstructure:"max_prompt_bytes"`
-	MaxInputAudioBytes    int64                            `mapstructure:"max_input_audio_bytes"`
-	UpstreamRateLimits    []upstreamRateLimitConfiguration `mapstructure:"upstream_rate_limits"`
+	Port                     int                              `mapstructure:"port"`
+	LogLevel                 string                           `mapstructure:"log_level"`
+	Workers                  int                              `mapstructure:"workers"`
+	QueueSize                int                              `mapstructure:"queue_size"`
+	RequestTimeoutSeconds    *int                             `mapstructure:"request_timeout_seconds"`
+	MaxRequestTimeoutSeconds *int                             `mapstructure:"max_request_timeout_seconds"`
+	MaxPromptBytes           int64                            `mapstructure:"max_prompt_bytes"`
+	MaxInputAudioBytes       int64                            `mapstructure:"max_input_audio_bytes"`
+	UpstreamRateLimits       []upstreamRateLimitConfiguration `mapstructure:"upstream_rate_limits"`
 }
 
 type upstreamRateLimitConfiguration struct {
@@ -186,6 +187,9 @@ func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error)
 	if readConfigError := configReader.ReadConfig(strings.NewReader(expandedConfig)); readConfigError != nil {
 		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigFileParse, configPath, readConfigError)
 	}
+	if timeoutValidationError := validateExplicitRequestTimeoutConfiguration(configReader); timeoutValidationError != nil {
+		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigInvalid, configPath, timeoutValidationError)
+	}
 
 	var parsedConfiguration fileConfiguration
 	if unmarshalError := configReader.UnmarshalExact(&parsedConfiguration); unmarshalError != nil {
@@ -196,6 +200,19 @@ func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error)
 		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigInvalid, configPath, configError)
 	}
 	return runtimeConfig, nil
+}
+
+func validateExplicitRequestTimeoutConfiguration(configReader *viper.Viper) error {
+	timeoutFields := map[string]struct{}{
+		"server.request_timeout_seconds":     {},
+		"server.max_request_timeout_seconds": {},
+	}
+	for _, configuredField := range configReader.AllKeys() {
+		if _, isTimeoutField := timeoutFields[configuredField]; isTimeoutField && configReader.Get(configuredField) == nil {
+			return fmt.Errorf("invalid configuration: %s must be positive", configuredField)
+		}
+	}
+	return nil
 }
 
 func normalizedConfigPath(rawConfigPath string) string {
@@ -272,6 +289,14 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 	if configurationValidationError := configuration.validateCompleteConfiguration(); configurationValidationError != nil {
 		return proxy.Configuration{}, configurationValidationError
 	}
+	requestTimeoutSeconds, timeoutError := configuredPositiveSeconds(configuration.Server.RequestTimeoutSeconds, proxy.DefaultRequestTimeoutSeconds, "server.request_timeout_seconds")
+	if timeoutError != nil {
+		return proxy.Configuration{}, timeoutError
+	}
+	maxRequestTimeoutSeconds, maxTimeoutError := configuredPositiveSeconds(configuration.Server.MaxRequestTimeoutSeconds, proxy.DefaultMaxRequestTimeoutSeconds, "server.max_request_timeout_seconds")
+	if maxTimeoutError != nil {
+		return proxy.Configuration{}, maxTimeoutError
+	}
 	return proxy.NewConfiguration(proxy.Configuration{
 		Tenants:                      tenantConfigurations(configuration.Tenants),
 		Management:                   managementProxyConfiguration(configuration.Management),
@@ -307,12 +332,23 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		LogLevel:                     configuration.Server.LogLevel,
 		WorkerCount:                  configuration.Server.Workers,
 		QueueSize:                    configuration.Server.QueueSize,
-		RequestTimeoutSeconds:        configuration.Server.RequestTimeoutSeconds,
+		RequestTimeoutSeconds:        requestTimeoutSeconds,
+		MaxRequestTimeoutSeconds:     maxRequestTimeoutSeconds,
 		MaxPromptBytes:               configuration.Server.MaxPromptBytes,
 		MaxInputAudioBytes:           configuration.Server.MaxInputAudioBytes,
 		UpstreamRateLimits:           proxyUpstreamRateLimitConfigurations(configuration.Server.UpstreamRateLimits),
 		ProviderModels:               configuration.Providers.providerModelCatalogs(),
 	})
+}
+
+func configuredPositiveSeconds(configuredValue *int, defaultValue int, fieldName string) (int, error) {
+	if configuredValue == nil {
+		return defaultValue, nil
+	}
+	if *configuredValue <= 0 {
+		return 0, fmt.Errorf("invalid configuration: %s must be positive", fieldName)
+	}
+	return *configuredValue, nil
 }
 
 func proxyUpstreamRateLimitConfigurations(configurations []upstreamRateLimitConfiguration) []proxy.UpstreamRateLimitConfiguration {

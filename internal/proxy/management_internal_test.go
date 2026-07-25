@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -376,10 +377,10 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 
 	noOpDatabase := newFakeManagedTenantDatabase()
 	noOpStore := newManagedTenantStoreWithDatabase(noOpDatabase)
-	if recordError := noOpStore.recordUsage(tenant{identifier: tenantID("static-usage")}, managedUsageEvent{statusCode: http.StatusOK}); recordError != nil {
+	if recordError := noOpStore.recordUsage(context.Background(), tenant{identifier: tenantID("static-usage")}, managedUsageEvent{statusCode: http.StatusOK}); recordError != nil {
 		t.Fatalf("unmanaged record usage error=%v", recordError)
 	}
-	if recordError := noOpStore.recordUsage(tenant{identifier: tenantID("missing-user"), managed: true}, managedUsageEvent{statusCode: http.StatusOK}); recordError != nil {
+	if recordError := noOpStore.recordUsage(context.Background(), tenant{identifier: tenantID("missing-user"), managed: true}, managedUsageEvent{statusCode: http.StatusOK}); recordError != nil {
 		t.Fatalf("missing user record usage error=%v", recordError)
 	}
 	if len(noOpDatabase.usageEvents) != 0 {
@@ -393,7 +394,7 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 	createErrorDatabase.createUsageEventError = errInternalTestDatabase
 	createErrorStore := newManagedTenantStoreWithDatabase(createErrorDatabase)
 	createErrorStore.now = func() time.Time { return fixedTime }
-	recordError := createErrorStore.recordUsage(managedTenant, managedUsageEvent{
+	recordError := createErrorStore.recordUsage(context.Background(), managedTenant, managedUsageEvent{
 		endpoint:            usageEndpointText,
 		providerIdentifier:  ProviderNameOpenAI,
 		modelIdentifier:     ModelNameGPT41,
@@ -408,7 +409,7 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 	ownerQueryErrorDatabase := newFakeManagedTenantDatabase()
 	ownerQueryErrorDatabase.userQueryErrors = []error{errInternalTestDatabase}
 	ownerQueryErrorStore := newManagedTenantStoreWithDatabase(ownerQueryErrorDatabase)
-	if recordError := ownerQueryErrorStore.recordUsage(managedTenant, managedUsageEvent{statusCode: http.StatusOK}); !errors.Is(recordError, errManagedTenantStorePersist) {
+	if recordError := ownerQueryErrorStore.recordUsage(context.Background(), managedTenant, managedUsageEvent{statusCode: http.StatusOK}); !errors.Is(recordError, errManagedTenantStorePersist) {
 		t.Fatalf("owner query usage error=%v want %v", recordError, errManagedTenantStorePersist)
 	}
 
@@ -417,7 +418,7 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 	unownedRecord.TenantID = managedTenant.identifier.string()
 	unownedDatabase.records[unownedRecord.UserID] = unownedRecord
 	unownedStore := newManagedTenantStoreWithDatabase(unownedDatabase)
-	if recordError := unownedStore.recordUsage(managedTenant, managedUsageEvent{statusCode: http.StatusOK}); !errors.Is(recordError, errManagedLegacyTokenUnowned) {
+	if recordError := unownedStore.recordUsage(context.Background(), managedTenant, managedUsageEvent{statusCode: http.StatusOK}); !errors.Is(recordError, errManagedLegacyTokenUnowned) {
 		t.Fatalf("unowned usage error=%v want %v", recordError, errManagedLegacyTokenUnowned)
 	}
 
@@ -466,9 +467,32 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 	}
 
 	observedCore, observedLogs := observer.New(zapcore.WarnLevel)
-	recordManagedUsage(createErrorStore, zap.New(observedCore).Sugar(), managedTenant, usageEndpointText, ProviderNameOpenAI, ModelNameGPT41, http.StatusOK, nil, fixedTime.Add(-time.Second))
+	usageRecorder := httptest.NewRecorder()
+	usageContext, _ := gin.CreateTestContext(usageRecorder)
+	usageContext.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	usageContext.Status(http.StatusOK)
+	recordManagedUsage(createErrorStore, zap.New(observedCore).Sugar(), usageContext, managedTenant, usageEndpointText, ProviderNameOpenAI, ModelNameGPT41, http.StatusOK, nil, fixedTime.Add(-time.Second))
 	if observedLogs.Len() != 1 || observedLogs.All()[0].Message != logEventUsageRecordFailed {
 		t.Fatalf("usage record logs=%+v", observedLogs.All())
+	}
+	if !usageRecorder.Flushed {
+		t.Fatal("managed usage persistence must run after the response writer is flushed")
+	}
+
+	cancelledRequestContext, cancelRequest := context.WithCancel(context.Background())
+	cancelRequest()
+	cancelledRecordError := createErrorStore.recordUsage(cancelledRequestContext, managedTenant, managedUsageEvent{statusCode: http.StatusOK})
+	if !errors.Is(cancelledRecordError, context.Canceled) || !errors.Is(cancelledRecordError, errManagedTenantStorePersist) {
+		t.Fatalf("cancelled usage error=%v", cancelledRecordError)
+	}
+	cancelledRecorder := httptest.NewRecorder()
+	cancelledGinContext, _ := gin.CreateTestContext(cancelledRecorder)
+	cancelledGinContext.Request = httptest.NewRequest(http.MethodGet, "/", nil).WithContext(cancelledRequestContext)
+	cancelledGinContext.Status(http.StatusOK)
+	cancelledCore, cancelledLogs := observer.New(zapcore.WarnLevel)
+	recordManagedUsage(createErrorStore, zap.New(cancelledCore).Sugar(), cancelledGinContext, managedTenant, usageEndpointText, ProviderNameOpenAI, ModelNameGPT41, http.StatusOK, nil, fixedTime.Add(-time.Second))
+	if cancelledLogs.Len() != 0 || !cancelledRecorder.Flushed {
+		t.Fatalf("cancelled usage logs=%+v flushed=%t", cancelledLogs.All(), cancelledRecorder.Flushed)
 	}
 
 	service := newInternalManagementService(t, queryUsageErrorDatabase)
@@ -500,6 +524,80 @@ func TestManagedTenantStoreUsageEdges(t *testing.T) {
 	adminSnapshots, adminSnapshotsError := newManagedTenantStoreWithDatabase(adminOrderingDatabase).adminUsersSummary()
 	if adminSnapshotsError != nil || len(adminSnapshots) != 2 || adminSnapshots[0].userID != "admin-user-a" {
 		t.Fatalf("admin snapshots=%+v error=%v", adminSnapshots, adminSnapshotsError)
+	}
+}
+
+func TestResponseConstructionHonorsRequestDeadline(t *testing.T) {
+	testCases := []struct {
+		name     string
+		complete func(*gin.Context)
+	}{
+		{
+			name: "text",
+			complete: func(ginContext *gin.Context) {
+				completeChatRequest(
+					ginContext,
+					chatRequestParameters{},
+					textGenerationResult{text: "late response"},
+					tenant{},
+					usageEndpointText,
+					nil,
+					zap.NewNop().Sugar(),
+					time.Now(),
+				)
+			},
+		},
+		{
+			name: "dictation",
+			complete: func(ginContext *gin.Context) {
+				completeDictationRequest(
+					ginContext,
+					"late transcription",
+					tenant{},
+					providerDefinition{},
+					modelID(""),
+					nil,
+					zap.NewNop().Sugar(),
+					time.Now(),
+				)
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			requestContext, cancelRequest := context.WithCancelCause(context.Background())
+			cancelRequest(errRequestTimeoutBudgetExpired)
+			responseRecorder := httptest.NewRecorder()
+			ginContext, _ := gin.CreateTestContext(responseRecorder)
+			ginContext.Request = httptest.NewRequest(http.MethodGet, "/", nil).WithContext(requestContext)
+			timeoutState := &requestTimeoutState{
+				budget:  newRequestTimeoutBudget(7),
+				outcome: requestOutcomeValidation,
+			}
+			ginContext.Set(contextKeyRequestTimeoutState, timeoutState)
+
+			testCase.complete(ginContext)
+
+			if responseRecorder.Code != http.StatusGatewayTimeout {
+				subTest.Fatalf("status=%d want=%d", responseRecorder.Code, http.StatusGatewayTimeout)
+			}
+			if responseRecorder.Body.String() != `{"error":{"code":"request_timeout","request_timeout_seconds":7}}` {
+				subTest.Fatalf("body=%q", responseRecorder.Body.String())
+			}
+			if timeoutState.outcome != requestOutcomeProxyTimeout {
+				subTest.Fatalf("outcome=%q want=%q", timeoutState.outcome, requestOutcomeProxyTimeout)
+			}
+		})
+	}
+}
+
+func TestRequestFailureOutcomeClassifiesProxyOverload(t *testing.T) {
+	if outcome := requestFailureOutcome(errQueueFull); outcome != requestOutcomeProxyOverload {
+		t.Fatalf("queue outcome=%q want=%q", outcome, requestOutcomeProxyOverload)
+	}
+	if outcome := requestFailureOutcome(errInternalTestDatabase); outcome != requestOutcomeProviderFailure {
+		t.Fatalf("provider outcome=%q want=%q", outcome, requestOutcomeProviderFailure)
 	}
 }
 
@@ -869,7 +967,7 @@ func TestGORMManagedLegacyTenantClaimStateAndFailures(t *testing.T) {
 				}
 			} else {
 				orphanUsage := managedUsageEventRecord{UserID: claim.targetUserID, TenantID: claim.tenantID, CreatedAt: time.Now().UTC()}
-				if createError := database.createUsageEvent(orphanUsage); createError != nil {
+				if createError := database.createUsageEvent(context.Background(), orphanUsage); createError != nil {
 					subTest.Fatalf("create orphan usage: %v", createError)
 				}
 			}
@@ -1387,6 +1485,7 @@ func TestProviderKeyRejectionInternalEdges(t *testing.T) {
 	ginContext, _ := gin.CreateTestContext(response)
 	ginContext.Request = httptest.NewRequest(http.MethodPost, "/", nil)
 	ginContext.Request.Body = failingReadCloser{}
+	ginContext.Set(contextKeyRequestTimeoutState, &requestTimeoutState{})
 	if _, ok := readJSONProxyBody(ginContext); ok || response.Code != http.StatusBadRequest {
 		t.Fatalf("readJSONProxyBody ok=%v status=%d", ok, response.Code)
 	}
@@ -1491,7 +1590,7 @@ func newGORMManagedLegacyClaimFixture(t *testing.T, withProvider bool, withUsage
 	}
 	if withUsage {
 		usageRecord := managedUsageEventRecord{UserID: sourceUserID, TenantID: "legacy", Endpoint: usageEndpointText, StatusCode: http.StatusOK, Success: true, CreatedAt: fixedTime}
-		if createError := database.createUsageEvent(usageRecord); createError != nil {
+		if createError := database.createUsageEvent(context.Background(), usageRecord); createError != nil {
 			t.Fatalf("create source usage: %v", createError)
 		}
 	}
@@ -1555,7 +1654,7 @@ func (database *fakeManagedTenantDatabase) tenantByUserID(userID string) (manage
 	return cloneManagedTenantRecord(record), nil
 }
 
-func (database *fakeManagedTenantDatabase) tenantByTenantID(tenantID string) (managedTenantRecord, error) {
+func (database *fakeManagedTenantDatabase) tenantByTenantID(_ context.Context, tenantID string) (managedTenantRecord, error) {
 	if queryError, hasQueryError := database.popUserQueryError(); hasQueryError {
 		return managedTenantRecord{}, queryError
 	}
@@ -1666,7 +1765,7 @@ func (database *fakeManagedTenantDatabase) deleteProviderKey(record managedProvi
 	return nil
 }
 
-func (database *fakeManagedTenantDatabase) createUsageEvent(record managedUsageEventRecord) error {
+func (database *fakeManagedTenantDatabase) createUsageEvent(_ context.Context, record managedUsageEventRecord) error {
 	if database.createUsageEventError != nil {
 		return database.createUsageEventError
 	}

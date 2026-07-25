@@ -357,7 +357,7 @@ if (!this.hasSecret) {
     features: [
       ["One-shot REST contract", "Clients do not stream, poll, or follow resume endpoints.", "The final answer arrives in the original response."],
       ["Server-side polling", "The backend polls stored OpenAI response IDs internally.", "Provider lifecycle details stay out of product code."],
-      ["Timeout ownership", "server.request_timeout_seconds bounds the overall proxy request.", "A timeout becomes a documented 504."],
+      ["Timeout ownership", "Each request can select a bounded proxy work budget; omission uses server.request_timeout_seconds.", "A budget expiry becomes a canonical 504."],
     ],
     examples: [
       ["Semantic review", "A workflow sends a long JSON-only review prompt and waits on one proxy request."],
@@ -952,17 +952,20 @@ export function revokeSecret() {
       "Configure base URL and tenant secret.",
       "Let omitted model stay omitted when provider defaults should apply.",
       "Set MessagesRequestInput.ReasoningEffort only for a nonblank value the resolved route declares.",
+      "Set MessagesRequestInput.RequestTimeoutSeconds only when this request needs a specific proxy work budget.",
     ],
     features: [
       ["v2-only API", "The reusable package exposes messages requests rather than multiple text shapes.", "Callers standardize on POST /v2."],
       ["Provider query preservation", "Base URLs can include non-payload query parameters such as provider.", "Provider-selected requests still use the canonical body."],
       ["Omitted-model behavior", "The client omits model unless the caller specifies it.", "Server-side defaults remain authoritative."],
       ["Reasoning-effort override", "MessagesRequestInput serializes an optional nonblank ReasoningEffort value.", "The proxy, not the client, validates exact model capability."],
+      ["Per-request work budget", "RequestTimeoutSeconds serializes the canonical timeout header.", "Go context cancellation remains separate and caller-owned."],
     ],
     examples: [
       ["Backend service", "A Go service sends system and user messages through Client.PostMessages."],
       ["Provider-specific base URL", "The base URL includes ?provider=gemini while the request body omits model."],
       ["Max-token override", "A caller adds max_tokens for one request without changing provider defaults."],
+      ["Long review", "A caller requests a larger bounded proxy work budget without changing the HTTP client's total timeout."],
     ],
     limitations: [
       "The Go client is for text messages, not /dictate multipart uploads.",
@@ -977,7 +980,6 @@ export function revokeSecret() {
     Secret:             serviceSecret,
     ModelProfilePath:   userModelProfilePath,
     ModelProfileReader: os.ReadFile,
-    Timeout:            390 * time.Second,
 })
 if err != nil {
     return err
@@ -985,7 +987,14 @@ if err != nil {
 client, err := llmproxyclient.NewClient(config, http.DefaultClient)
 if err != nil {
     return err
-}`,
+}
+requestTimeoutSeconds := 900
+request, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{
+    Messages: []llmproxyclient.MessageInput{
+        {Role: "user", Content: "Summarize this"},
+    },
+    RequestTimeoutSeconds: &requestTimeoutSeconds,
+})`,
     },
   }),
   page({
@@ -1003,12 +1012,14 @@ if err != nil {
       "Create ClientConfig with base_url and secret.",
       "Build ClientMessagesRequest with one or more ClientMessage values.",
       "Set reasoning_effort only for a nonblank value declared by the resolved route, or omit it to retain the tenant default.",
+      "Set request_timeout_seconds only when this request needs a specific proxy work budget.",
       "Call post_messages and let the proxy route provider details.",
     ],
     features: [
       ["Messages request object", "Callers send system, user, and assistant messages in one typed request shape.", "Chat workflows avoid ad hoc JSON."],
       ["Optional order", "Messages can include order values when array order is not enough.", "The proxy sorts before routing."],
       ["Reasoning-effort override", "ClientMessagesRequest serializes an optional nonblank reasoning_effort value.", "The proxy validates it against the exact resolved provider/model capability."],
+      ["Per-request work budget", "ClientMessagesRequest serializes request_timeout_seconds as the canonical timeout header.", "The default urllib transport adds no unrelated total-response deadline."],
       ["Transport context", "Python client errors include non-secret provider, model, and timeout context.", "Debugging avoids leaking credentials."],
     ],
     examples: [
@@ -1039,6 +1050,7 @@ text = client.post_messages(
         model="gpt-5.5",
         max_tokens=512,
         reasoning_effort="high",
+        request_timeout_seconds=900,
     )
 )`,
     },
@@ -1057,18 +1069,20 @@ text = client.post_messages(
       "Install with go install github.com/tyemirov/llm-proxy/llm-proxy-client@latest.",
       "Set --base-url and --secret, or use LLM_PROXY_BASE_URL and LLM_PROXY_SECRET.",
       "Send --prompt, --prompt-file, or stdin content.",
-      "Optionally include --system-prompt, --model, --max-tokens, or --reasoning-effort; keep provider in the base URL.",
+      "Optionally include --system-prompt, --model, --max-tokens, --reasoning-effort, or --request-timeout-seconds; keep provider in the base URL.",
     ],
     features: [
       ["Canonical POST /v2", "The CLI sends prompt input as v2 messages.", "CLI behavior matches reusable client behavior."],
       ["Environment support", "Base URL and secret can come from env for shell workflows.", "Prompt content can flow from stdin."],
       ["Reasoning-effort flag", "The CLI serializes --reasoning-effort in the v2 JSON body.", "The server validates it against the resolved route rather than accepting a global option list."],
+      ["Request-timeout flag", "The CLI serializes --request-timeout-seconds as the canonical proxy work-budget header.", "Omission selects the server default without a hidden CLI deadline."],
       ["Payload/query cleanup", "The client strips body-owned query fields and preserves non-payload query parameters.", "Provider selection can stay in the base URL."],
     ],
     examples: [
       ["Quick summary", "Pipe text into llm-proxy-client with a configured base URL and secret."],
       ["Provider route", "Use a base URL with ?provider=gemini to test Gemini without changing the body."],
       ["System instruction", "Pass --system-prompt so the CLI sends a v2 system message."],
+      ["Long request", "Pass --request-timeout-seconds for a bounded proxy budget chosen for that prompt."],
     ],
     limitations: [
       "The CLI is a text client; it does not upload audio to /dictate.",
@@ -1083,6 +1097,7 @@ text = client.post_messages(
   --secret "$SERVICE_SECRET" \\
   --model "gpt-5.5" \\
   --reasoning-effort "high" \\
+  --request-timeout-seconds 900 \\
   --prompt "Summarize this"`,
     },
   }),
@@ -1139,7 +1154,7 @@ text = client.post_messages(
     ],
     examples: [
       ["Disabled provider", "A selected non-default provider without an API key returns 503 provider not configured."],
-      ["Long provider work", "A request exceeding server.request_timeout_seconds returns 504."],
+      ["Long provider work", "A request exceeding its accepted proxy work budget returns the canonical request_timeout 504 envelope."],
       ["Provider outage", "A non-rate-limit upstream provider failure maps to bad gateway behavior."],
     ],
     limitations: [
@@ -1632,7 +1647,7 @@ text = client.post_messages(
     ],
     features: [
       ["Queue status", "The shared upstream operation queue returns service-unavailable behavior when full.", "Callers can back off before adding more pressure."],
-      ["Deadline status", "Long requests that exceed server.request_timeout_seconds return 504.", "Clients should not poll llm-proxy after a timeout."],
+      ["Deadline status", "Long requests that exceed their accepted proxy work budget return a canonical 504.", "Clients should not poll llm-proxy after a timeout."],
       ["Provider error mapping", "Rate limits and provider failures map to distinct statuses.", "Retry logic can be status-aware."],
     ],
     examples: [

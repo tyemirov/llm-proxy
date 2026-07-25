@@ -30,17 +30,15 @@ var (
 // OpenAIClient provides access to the OpenAI responses API with configurable
 // endpoints and tunable parameters.
 type OpenAIClient struct {
-	httpClient     HTTPDoer
-	endpoints      *Endpoints
-	requestTimeout time.Duration
+	httpClient HTTPDoer
+	endpoints  *Endpoints
 }
 
 // NewOpenAIClient constructs an OpenAIClient initialized with the supplied components.
-func NewOpenAIClient(httpClient HTTPDoer, endpoints *Endpoints, requestTimeout time.Duration) *OpenAIClient {
+func NewOpenAIClient(httpClient HTTPDoer, endpoints *Endpoints) *OpenAIClient {
 	return &OpenAIClient{
-		httpClient:     httpClient,
-		endpoints:      endpoints,
-		requestTimeout: requestTimeout,
+		httpClient: httpClient,
+		endpoints:  endpoints,
 	}
 }
 
@@ -82,9 +80,7 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 	payload := BuildRequestPayload(modelIdentifier.string(), modelIdentifier.requestProfile.string(), messages.openAIResponsesInput(), webSearchEnabled, maxTokens, reasoningEffort)
 	payloadBytes, _ := json.Marshal(payload)
 
-	requestContext, cancelRequest := context.WithTimeout(parentContext, client.requestTimeout)
-	defer cancelRequest()
-	httpRequest, buildError := buildAuthorizedJSONRequest(requestContext, http.MethodPost, client.endpoints.GetResponsesURL(), openAIKey, bytes.NewReader(payloadBytes))
+	httpRequest, buildError := buildAuthorizedJSONRequest(parentContext, http.MethodPost, client.endpoints.GetResponsesURL(), openAIKey, bytes.NewReader(payloadBytes))
 	if buildError != nil {
 		structuredLogger.Errorw(logEventBuildHTTPRequest, constants.LogFieldError, buildError)
 		return textGenerationResult{}, buildError
@@ -119,7 +115,7 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 		return textGenerationResult{}, errors.New(errorOpenAIAPI)
 	}
 
-	return client.resolveOpenAIResponse(requestContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
+	return client.resolveOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 }
 
 type openAIResponseSnapshot struct {
@@ -307,9 +303,7 @@ func (client *OpenAIClient) startIncompleteContinuation(parentContext context.Co
 func (client *OpenAIClient) startContinuationResponse(parentContext context.Context, openAIKey string, payload map[string]any, structuredLogger *zap.SugaredLogger) (string, error) {
 	payloadBytes, _ := json.Marshal(payload)
 
-	requestContext, cancelRequest := context.WithTimeout(parentContext, client.requestTimeout)
-	defer cancelRequest()
-	request, _ := buildAuthorizedJSONRequest(requestContext, http.MethodPost, client.endpoints.GetResponsesURL(), openAIKey, bytes.NewReader(payloadBytes))
+	request, _ := buildAuthorizedJSONRequest(parentContext, http.MethodPost, client.endpoints.GetResponsesURL(), openAIKey, bytes.NewReader(payloadBytes))
 
 	statusCode, responseBytes, _, requestError := client.performResponsesRequest(request, structuredLogger, logEventOpenAIRequestError)
 	if requestError != nil {
@@ -376,10 +370,7 @@ func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context,
 // fetchResponseByID retrieves a response by identifier and reports whether the response is complete.
 func (client *OpenAIClient) fetchResponseByID(parentContext context.Context, openAIKey string, responseIdentifier string, structuredLogger *zap.SugaredLogger) (openAIResponseSnapshot, bool, error) {
 	resourceURL := client.endpoints.GetResponsesURL() + "/" + responseIdentifier
-	requestContext, cancel := context.WithTimeout(parentContext, client.requestTimeout)
-	defer cancel()
-
-	httpRequest, buildError := buildAuthorizedJSONRequest(requestContext, http.MethodGet, resourceURL, openAIKey, nil)
+	httpRequest, buildError := buildAuthorizedJSONRequest(parentContext, http.MethodGet, resourceURL, openAIKey, nil)
 	if buildError != nil {
 		return openAIResponseSnapshot{}, false, buildError
 	}
