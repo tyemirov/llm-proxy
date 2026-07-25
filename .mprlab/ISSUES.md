@@ -184,8 +184,8 @@ already satisfied; recurring maintenance remains scheduled work.
   cause-preserving deadline before body parsing, echoes the effective budget,
   and returns exact safe `400` and `504` envelopes. Queue wait, provider work,
   dictation, and OpenAI background polling share that deadline without adapter
-  resets. Safe terminal evidence distinguishes success, proxy timeout, provider
-  failure, and caller cancellation.
+  resets. Safe terminal evidence distinguishes validation failure, success,
+  proxy timeout, proxy overload, provider failure, and caller cancellation.
 
   The Go package, Go CLI, and Python package now serialize the budget per
   request and impose no hidden total-response deadline. Go integrations move
@@ -206,9 +206,34 @@ already satisfied; recurring maintenance remains scheduled work.
   no production deployment command was run.
 
   The required pre-change and post-change `make ci` runs pass. The final run
-  followed the last code edit and passed exact 100% Go coverage, 33 Python
+  followed the last code edit and passed exact 100% Go coverage, 34 Python
   tests, 51 management-browser tests, the black-box authentication test,
   release-contract checks, and the live-provider harness preflight.
+
+  Review follow-up 2026-07-24:
+  Response bodies are now fully constructed and checked against the request
+  context before success is selected. Managed-usage persistence runs only
+  after the selected response is written and flushed; its store-lock
+  acquisition and GORM operations use the same request context. Cancellation
+  can therefore leave terminal log evidence without a managed-usage row, which
+  is documented in README, but persistence can no longer outwait the accepted
+  request budget or change the selected response.
+
+  Explicit YAML `null` and empty timeout values now fail startup instead of
+  selecting defaults, while true omission still selects the compiled default.
+  Queue saturation records `proxy_overload` rather than
+  `provider_failure`. The tracked Python distribution metadata now reports
+  client version `0.2.0`, with a package-metadata regression test. The required
+  review-follow-up baseline and final `make ci` runs pass; the final run follows
+  the last tracked edit.
+
+  Gateway review correction 2026-07-24:
+  The final `deploy-llm-proxy-backend` invocation now receives the same
+  app-owned maximum that was read once from the tracked configuration and
+  supplied to the early verifier. The gateway target itself requires that
+  value, so direct or aggregate gateway deployment cannot bypass the
+  request-capacity contract. The public deployment fixture and final
+  post-edit `make ci` pass without production contact.
 
   Blocked:
   Source implementation is complete, but resolution still requires the
