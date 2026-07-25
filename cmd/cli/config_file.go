@@ -187,6 +187,9 @@ func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error)
 	if readConfigError := configReader.ReadConfig(strings.NewReader(expandedConfig)); readConfigError != nil {
 		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigFileParse, configPath, readConfigError)
 	}
+	if timeoutValidationError := validateExplicitRequestTimeoutConfiguration(configReader); timeoutValidationError != nil {
+		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigInvalid, configPath, timeoutValidationError)
+	}
 
 	var parsedConfiguration fileConfiguration
 	if unmarshalError := configReader.UnmarshalExact(&parsedConfiguration); unmarshalError != nil {
@@ -197,6 +200,19 @@ func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error)
 		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigInvalid, configPath, configError)
 	}
 	return runtimeConfig, nil
+}
+
+func validateExplicitRequestTimeoutConfiguration(configReader *viper.Viper) error {
+	timeoutFields := map[string]struct{}{
+		"server.request_timeout_seconds":     {},
+		"server.max_request_timeout_seconds": {},
+	}
+	for _, configuredField := range configReader.AllKeys() {
+		if _, isTimeoutField := timeoutFields[configuredField]; isTimeoutField && configReader.Get(configuredField) == nil {
+			return fmt.Errorf("invalid configuration: %s must be positive", configuredField)
+		}
+	}
+	return nil
 }
 
 func normalizedConfigPath(rawConfigPath string) string {

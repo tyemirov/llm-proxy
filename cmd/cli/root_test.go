@@ -269,8 +269,28 @@ func TestRootCommandRejectsInvalidRequestTimeoutConfiguration(t *testing.T) {
 			expectedError: "server.request_timeout_seconds must be positive",
 		},
 		{
+			name:          "null default",
+			serverYAML:    "  request_timeout_seconds: null\n",
+			expectedError: "server.request_timeout_seconds must be positive",
+		},
+		{
+			name:          "empty default",
+			serverYAML:    "  request_timeout_seconds:\n",
+			expectedError: "server.request_timeout_seconds must be positive",
+		},
+		{
 			name:          "zero maximum",
 			serverYAML:    "  max_request_timeout_seconds: 0\n",
+			expectedError: "server.max_request_timeout_seconds must be positive",
+		},
+		{
+			name:          "null maximum",
+			serverYAML:    "  max_request_timeout_seconds: null\n",
+			expectedError: "server.max_request_timeout_seconds must be positive",
+		},
+		{
+			name:          "empty maximum",
+			serverYAML:    "  max_request_timeout_seconds:\n",
 			expectedError: "server.max_request_timeout_seconds must be positive",
 		},
 		{
