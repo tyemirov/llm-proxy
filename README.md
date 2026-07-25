@@ -1130,12 +1130,12 @@ than treating a completed push as immediate public availability.
 `llm-proxy` is a gateway-local service in `mprlab-gateway`, so `make deploy`
 uses the sole gateway `deploy-llm-proxy-backend` target after the gateway-owned
 `verify-llm-proxy-deployment-contract` preflight proves the coupled TAuth
-service, runtime assets, and health checks. That preflight reads
-`server.max_request_timeout_seconds` from the app-owned tracked config and
-passes it to both the early gateway verifier and the protected gateway
-deployment target; deployment fails unless the gateway-owned response-header,
-upstream-read, and client-write guards are all strictly greater. Neither
-repository carries a fallback copy of the other's capacity.
+service, runtime assets, and health checks. The gateway discovers this
+canonical checkout and reads `server.max_request_timeout_seconds` through the
+committed app-owned capacity reader; the app deploy script passes no capacity
+flag or environment variable. Deployment fails unless the gateway-owned
+response-header, upstream-read, and client-write guards are all strictly
+greater. Neither repository carries a fallback copy of the other's capacity.
 Override only the checkout with
 `GATEWAY_DIR=/path/to/mprlab-gateway`; the selected gateway checkout must be a
 clean, synchronized `origin/master`. Override Pages preparation and activation
@@ -1422,10 +1422,11 @@ position. When any message includes `order`, every submitted message must
 include a unique non-negative integer `order`; the proxy sorts ascending before
 provider routing and echoes provided order values in JSON responses.
 
-For local development:
+For local development from the repository root, target the canonical `python/`
+package project explicitly:
 
 ```shell
-uv pip install -e .
+uv pip install -e ./python
 make python-test
 make python-lint
 ```
