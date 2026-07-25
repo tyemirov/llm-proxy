@@ -11,6 +11,48 @@ All notable changes to this project will be documented in this file.
 - Keep response construction and managed-usage persistence under request cancellation, classify queue saturation as `proxy_overload`, reject explicit null timeout configuration, and synchronize Python client distribution metadata at `0.2.0`.
 - Make deployment pass the app-owned maximum request budget into the gateway contract verifier, which rejects outer response guards that cannot outwait it.
 
+## [v0.2.44] - 2026-07-25
+
+- Merge pull request #225 from tyemirov/gix/remove-gateway-timeout-env-handoff-and-clean-up-python
+- test: remove timeout-capacity handoff checks in operational contract tests
+- refactor(scripts): remove request-timeout capacity checks from deploy.sh
+- test(client.py): remove distribution metadata version check
+- chore(python): remove pyproject.toml configuration file
+- docs: clarify deployment flow and local development steps in README
+- test(makefile): add python-package-install-test and verify metadata version
+- docs(issues): document packaging and flag-free gateway contract cleanups
+- chore: update .gitignore to exclude coverage files and build directory
+- Merge pull request #224 from tyemirov/gix/make-per-request-timeout-explicit-contract-with-header
+- test: verify gateway deployment receives configured request timeout
+- chore(deploy): set LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS for gateway deploy
+- test: verify distribution metadata matches published client version
+- refactor(proxy): add context support to tenant store database methods
+- chore(deps): update golang.org/x/sync to direct dependency in go.mod
+- fix(config): reject null and missing request timeout fields as invalid
+- docs: clarify upstream request evidence and managed usage persistence
+- docs: update changelog for cancellation handling and Python client sync
+- docs(ISSUES): clarify success selection, queue overload, and usage persistence
+- test: update deploy contract test to check deployment and capacity contracts
+- test: expand integration tests for request timeout contract and enforcement
+- docs(clients): document per-request proxy work budget and timeout envelope
+- feat(deploy): verify gateway contract against max request timeout capacity
+- feat(python): add per-request timeout header/kwarg to client API
+- feat(go-client): add request_timeout_seconds support to messages API
+- feat(cli): replace --timeout with --request-timeout-seconds flag
+- feat(proxy): centralize request timeout enforcement in router
+- docs: clarify ingress-owned request-timeout header and config on all routes
+- config: add max_request_timeout_seconds to server settings
+- feat(cli): validate and support max_request_timeout_seconds in config
+- docs: document configurable request timeout header and API changes
+- feat: implement per-request timeout contract and controls across all APIs
+- docs(issues): formalize per-request timeout as explicit public contract
+- Merge pull request #223 from tyemirov/gix/archive-resolved-issues-and-summarize-in-issues-md
+- docs: clarify v2 reasoning_effort option and update client usage
+- docs: document route-bound reasoning_effort and public telemetry in resources
+- docs: document static-page telemetry and reasoning_effort parameter behavior
+- docs: document per-request reasoning_effort override for all client APIs
+- chore(issues): archive resolved items to .mprlab/ISSUES-ARCHIVE.md
+
 ## [v0.2.43] - 2026-07-24
 
 - docs(issues): document I031 for tenant-scoped usage failure details and triage update
