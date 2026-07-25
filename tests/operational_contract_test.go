@@ -977,7 +977,7 @@ func TestOperationalDeployForwardsSelectedRemoteToPages(testingInstance *testing
 	writeOperationalFile(
 		testingInstance,
 		filepath.Join(toolDirectory, "make"),
-		"#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\t%s\\n' \"$*\" \"${PUBLISH_REMOTE:-}\" >>\"${MAKE_CAPTURE}\"\n",
+		"#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\t%s\\t%s\\n' \"$*\" \"${PUBLISH_REMOTE:-}\" \"${LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS:-}\" >>\"${MAKE_CAPTURE}\"\n",
 		0o755,
 	)
 	gatewayDirectory := filepath.Join(testingInstance.TempDir(), "gateway")
@@ -1007,6 +1007,9 @@ func TestOperationalDeployForwardsSelectedRemoteToPages(testingInstance *testing
 	}
 	if !strings.Contains(string(captureBytes), "--no-print-directory pages-deploy\tupstream") {
 		testingInstance.Fatalf("Pages deployment did not receive selected remote: %s", captureBytes)
+	}
+	if !strings.Contains(string(captureBytes), "deploy-llm-proxy-backend\t\t3600") {
+		testingInstance.Fatalf("gateway deployment did not receive the configured request capacity: %s", captureBytes)
 	}
 }
 
