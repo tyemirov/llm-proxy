@@ -22,6 +22,7 @@ const (
 	requestOutcomeValidation      = "validation_failure"
 	requestOutcomeSuccess         = "success"
 	requestOutcomeProxyTimeout    = "proxy_timeout"
+	requestOutcomeProxyOverload   = "proxy_overload"
 	requestOutcomeProviderFailure = "provider_failure"
 	requestOutcomeCallerCancelled = "caller_cancelled"
 	statusClientClosedRequest     = 499
@@ -152,6 +153,13 @@ func requestTimeoutHandler(policy requestTimeoutPolicy, structuredLogger *zap.Su
 
 func markRequestOutcome(ginContext *gin.Context, outcome string) {
 	requestTimeoutStateFromContext(ginContext).outcome = outcome
+}
+
+func requestFailureOutcome(requestError error) string {
+	if errors.Is(requestError, errQueueFull) {
+		return requestOutcomeProxyOverload
+	}
+	return requestOutcomeProviderFailure
 }
 
 func requestTimeoutStateFromContext(ginContext *gin.Context) *requestTimeoutState {

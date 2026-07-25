@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -139,15 +140,17 @@ func (interval usageInterval) finiteWindow() (time.Duration, int, usageBucketUni
 	}
 }
 
-func (store *managedTenantStore) recordUsage(requestTenant tenant, event managedUsageEvent) error {
+func (store *managedTenantStore) recordUsage(requestContext context.Context, requestTenant tenant, event managedUsageEvent) error {
 	if !requestTenant.managed || requestTenant.userID == constants.EmptyString {
 		return nil
 	}
-	store.mutex.Lock()
+	if lockError := store.mutex.LockContext(requestContext); lockError != nil {
+		return fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, requestTenant.identifier.string(), lockError)
+	}
 	defer store.mutex.Unlock()
-	ownerRecord, ownerError := store.database.tenantByTenantID(requestTenant.identifier.string())
+	ownerRecord, ownerError := store.database.tenantByTenantID(requestContext, requestTenant.identifier.string())
 	if ownerError != nil {
-		return fmt.Errorf("%w: tenant_id=%s: %v", errManagedTenantStorePersist, requestTenant.identifier.string(), ownerError)
+		return fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, requestTenant.identifier.string(), ownerError)
 	}
 	if strings.HasPrefix(ownerRecord.UserID, legacyStaticTenantUserIDPrefix) {
 		return fmt.Errorf("%w: tenant_id=%s", errManagedLegacyTokenUnowned, requestTenant.identifier.string())
@@ -169,8 +172,8 @@ func (store *managedTenantStore) recordUsage(requestTenant tenant, event managed
 		usageRecord.ResponseTokens = event.usage.ResponseTokens
 		usageRecord.TotalTokens = event.usage.TotalTokens
 	}
-	if persistError := store.database.createUsageEvent(usageRecord); persistError != nil {
-		return fmt.Errorf("%w: user_id=%s: %v", errManagedTenantStorePersist, ownerRecord.UserID, persistError)
+	if persistError := store.database.createUsageEvent(requestContext, usageRecord); persistError != nil {
+		return fmt.Errorf("%w: user_id=%s: %w", errManagedTenantStorePersist, ownerRecord.UserID, persistError)
 	}
 	return nil
 }
