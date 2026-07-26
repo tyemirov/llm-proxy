@@ -9,11 +9,8 @@ client.
 
 ## Features
 
-- Minimal HTTP server that accepts:
-  - `GET /?prompt=...&key=...[&provider=...]` for LLM responses
-  - `POST /?key=...[&provider=...]` for large JSON prompt bodies
-  - `POST /v2?key=...[&provider=...]` for ordered chat-message JSON bodies
-  - `POST /dictate?key=...[&provider=...]` for audio transcription
+- Minimal HTTP server whose complete owned operation surface is defined by the
+  [canonical OpenAPI contract](docs/openapi.yaml)
 - Choose the provider per request via `provider=...`; omitted provider uses the authenticated tenant default
 - Choose the model per request via `model=...`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
 - Set optional nonblank `reasoning_effort=...` on `GET /`, or in a JSON body for `POST /` and `POST /v2`, to select a capability-supported reasoning level for that exact resolved route. An explicit value overrides the tenant default; an omitted value retains it. Blank or unsupported values fail before an upstream call.
@@ -29,6 +26,27 @@ client.
 llm-proxy exposes a blocking REST contract for text generation. A caller sends
 one authenticated `GET /`, `POST /`, or `POST /v2` request and receives the final
 formatted answer in that same HTTP response.
+
+### Canonical OpenAPI ownership
+
+[`docs/openapi.yaml`](docs/openapi.yaml) is the sole hand-maintained HTTP wire
+contract for every llm-proxy-owned proxy, browser-configuration, and management
+operation. It defines exact paths, methods, authentication, parameters, bodies,
+multipart parts, response headers, media types, schemas, and intentional status
+codes. TAuth-owned operations are deliberately excluded.
+
+Every server or bundled-client wire change must update that artifact in the
+same change. CI compares the real router inventory bidirectionally with it and
+validates representative real-handler, Go package, Python package, and Go CLI
+exchanges against it. Prose and command examples in this README are explanatory,
+not a second contract.
+
+The Pages release copies those committed bytes to
+[`/openapi.yaml`](https://llm-proxy.mprlab.com/openapi.yaml) and publishes a
+human-readable reference derived from them at
+[`/docs/`](https://llm-proxy.mprlab.com/docs/). The contract names
+`https://llm-proxy-api.mprlab.com` as its API server; the API origin does not
+serve another schema location.
 
 The caller does not stream tokens, poll a job endpoint, follow a resume token, or
 know whether the selected upstream provider uses synchronous responses,
@@ -89,11 +107,10 @@ rejection is proxy overload, not a provider failure.
 
 For managed tenants, usage persistence begins only after the selected response
 status and body have been written and the response writer has been flushed.
-The store lock and database calls use the same request context, so they stop
-when the accepted budget or caller cancellation ends the request. Consequently,
-a request canceled before its usage transaction commits may have terminal log
-evidence but no managed-usage row; usage persistence never changes an already
-selected response.
+The store lock and database calls run in a detached, five-second persistence
+budget so a selected timeout or caller cancellation does not erase its terminal
+usage event. Persistence still happens after response selection and never
+changes an already selected response.
 
 Internally, `server.workers` limits concurrent upstream provider HTTP
 operations and `server.queue_size` limits upstream HTTP operations waiting for a
@@ -151,9 +168,6 @@ management:
   provider_key_encryption_key: "${LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY}"
   management_api_origin: "${LLM_PROXY_MANAGEMENT_API_ORIGIN}"
   proxy_origin: "${LLM_PROXY_MANAGEMENT_PROXY_ORIGIN}"
-  legacy_token_migration:
-    tenant_id: default
-    owner_email: "${LLM_PROXY_MANAGEMENT_LEGACY_TOKEN_OWNER_EMAIL}"
 providers:
   openai:
     base_url: "https://api.openai.com/v1"
@@ -612,6 +626,11 @@ examples, and MPR UI/TAuth at the configured origins. Browser-facing values are
 projected from the already-loaded backend `config.yml`; there is no second
 environment expansion path for Pages.
 
+Release rendering also copies the exact committed `docs/openapi.yaml` bytes to
+the Pages artifact root and verifies the SHA-256 provenance embedded in the
+derived `site/docs/index.html`. `site/openapi.yaml` is intentionally forbidden:
+there is no independently editable or generated schema copy in site source.
+
 The consumed shared bundle registers `mpr-legal-document`; legal-page routes
 and document rendering remain owned by P005 and are not duplicated here.
 
@@ -619,7 +638,7 @@ MPR UI is the sole browser authentication authority. LLM Proxy registers the
 documented `mpr-ui:auth:authenticated` and `mpr-ui:auth:unauthenticated`
 lifecycle listeners, uses the header's documented `data-mpr-auth-status` only
 to reconcile the current state after startup, and does not request
-`/api/management/profile` until MPR UI reports `authenticated`. LLM Proxy does
+`/api/management/account` until MPR UI reports `authenticated`. LLM Proxy does
 not inspect TAuth cookies, storage, tokens, or claims and does not call TAuth
 authentication endpoints. After MPR UI reports authentication, a management
 API failure renders an explicit workspace error; it does not reinterpret the
@@ -656,12 +675,24 @@ Required hosted values are profile-specific:
 | `management.provider_key_encryption_key` | Required base64-encoded 32-byte key used for AES-GCM encryption of tenant-owned provider API keys at rest. Generate with `openssl rand -base64 32` and store it with backend deployment secrets. |
 | `management.management_api_origin` | Browser-facing management API origin served from `/config-ui.yaml` under `llmProxy.managementApiOrigin`. |
 | `management.proxy_origin` | Browser-facing public proxy origin served from `/config-ui.yaml` under `llmProxy.proxyOrigin` for generated examples. |
-| `management.legacy_token_migration.tenant_id` | Optional one-off source tenant id; must be provided together with `owner_email`. |
-| `management.legacy_token_migration.owner_email` | Optional normalized email that alone may claim the configured legacy tenant through a verified TAuth session. Keep the real value in deployment secrets. |
 
 After the shared `mpr-ui` shell reports authentication, the frontend loads the
-management profile. If that profile has no llm-proxy client key, the frontend
-creates one through `POST /api/management/secrets` and presents the one-time
+account through `GET /api/management/account`, then loads the selected workspace
+through `GET /api/management/tenants/:tenant_id`. A new TAuth subject receives
+one `Default` workspace. Each account may create, rename, switch among, and
+delete its own workspaces; deleting the final workspace returns `409 Conflict`.
+The opaque workspace id is persisted in the URL as `tenant=<tenant_id>`.
+An absent parameter selects the oldest workspace and replaces the current
+history entry, while an unknown or foreign id renders an explicit workspace
+error and is never replaced by a fallback selection. History navigation,
+reloads, and independent tabs therefore retain independent selections.
+
+Every settings and usage operation is nested below the selected workspace.
+Switching while Settings contains unsaved input requires an explicit discard
+confirmation, and switching clears one-time generated secrets and revealed
+provider credentials from browser state. If the selected workspace has no
+llm-proxy client key, the frontend creates one through
+`POST /api/management/tenants/:tenant_id/secrets` and presents the one-time
 value masked in the read-only Key field with explicit Show and Copy actions.
 Settings opens automatically and cannot be dismissed until the profile has both
 that client key and at least one persisted managed provider key. Only
@@ -701,16 +732,19 @@ SQL. Generated secrets continue to authenticate the public proxy endpoints with 
 through authenticated management endpoints and are encrypted at rest with AES-GCM
 before database persistence. Normal save, profile, and administrator responses
 return only masked key status. The sole raw-key response is the explicit
-owner-authenticated `POST /api/management/provider-keys/:provider/reveal`
+owner-authenticated
+`POST /api/management/tenants/:tenant_id/provider-keys/:provider/reveal`
 management action, which requires the configured management origin and returns
 `Cache-Control: no-store`. Provider-key records also store the selected text model and
 provider-specific system prompt for that provider. Managed text requests that
 select a provider and omit `model` use the saved provider text model; when
 request-level system instructions are omitted, the provider-specific system
-prompt is injected before routing upstream. Existing plaintext provider-key
-rows are encrypted and cleared during management startup. Existing provider-key
-rows without a text model are normalized to the current configured provider
-default model at startup. The backend decrypts provider keys only inside the runtime
+prompt is injected before routing upstream. The F014 ownership migration accepts
+only already-encrypted legacy provider-key rows, decrypts them with their prior
+user binding, and re-encrypts them with the preserved opaque workspace id as
+AES-GCM associated data. Plaintext, corrupt, orphaned, or non-canonical rows
+fail startup before the migration transaction begins. The backend decrypts
+provider keys only inside the runtime
 path that routes requests to upstream providers and the explicit owner reveal action,
 so this protects database dumps, backups, and direct storage access; it is not a user-only decryption or
 zero-knowledge guarantee. Generated tenant secrets are returned once and the
@@ -719,7 +753,8 @@ immediately makes future public proxy requests with that secret return `403`.
 
 Managed routing defaults contain two required, canonical provider/model pairs:
 one for text and one for dictation, plus a route-bound `reasoning_effort`.
-`PUT /api/management/defaults` resolves the supplied text pair before validating
+`PUT /api/management/tenants/:tenant_id/defaults` resolves the supplied text
+pair before validating
 the effort. Empty is the explicit unset value; a nonempty value must be in that
 exact route's declared list. A blank model, unknown provider, unsupported
 dictation provider, cross-provider model, or incompatible effort returns `400
@@ -738,25 +773,26 @@ default remains authoritative. An explicit value must be nonblank and exactly
 supported by the resolved provider/model route, otherwise the proxy returns
 `400` before an upstream call.
 
-Management startup performs a bounded, transactional version-3 routing-defaults
-migration. It retains a stored effort only when it is valid for the stored text
-pair; every invalid nonempty value becomes the explicit unset value. It never
-infers an effort from a model name, provider, request profile, or web-search
-behavior. Before its marker exists, it repairs only a blank model or a model
-known to the other configured provider for that endpoint by choosing the saved
-provider's current catalog default. Unknown models and unknown or unsupported
-providers fail startup with the tenant, endpoint, provider, and model in the
-error. Once the marker exists, every stored field must already be canonical and
-catalog-valid; startup rejects invalid data rather than selecting a replacement
-at runtime.
+Management startup requires every persisted routing field to be canonical and
+catalog-valid. It never infers or repairs a provider, model, or reasoning effort
+at read time. The bounded F014 schema migration applies the same validation to
+legacy rows before making any database change; invalid rows stop startup with
+the owner, workspace, endpoint, provider, and model context.
 
 Configured authenticated users land on a usage dashboard. Its ordered `ALL`,
 `30 days`, `7 days`, and `1 day` controls default to `30 days` and replace the
 request and token graphs, total request and token counts, success rate, and
-provider and model breakdowns with one selected snapshot for the signed-in
-user's managed tenant. `Refresh` retains that selection. Users whose
+provider and model breakdowns with one selected snapshot for the active
+workspace. `Refresh` retains that selection. Users whose
 client/provider setup is incomplete enter the mandatory Settings modal instead;
 after setup, the modal remains available from the avatar dropdown. The
+success-rate metric renders an **N failed requests** action only when the selected
+snapshot contains failures. It opens a keyboard- and focus-managed dialog with
+the current non-success status breakdown and newest-first safe failure metadata.
+The dialog retains the active interval, paginates within one opaque snapshot,
+and discards any response made stale by an interval or workspace change. A
+details error stays inside the dialog and never replaces aggregate dashboard
+data. The
 `Settings` menu item is inserted before `Sign out` through the shared
 `<mpr-user>` menu contract. The modal contains client access, generated secret,
 routing defaults, copyable default request examples, copyable selected-provider
@@ -772,7 +808,7 @@ Administrators are configured only through `management.admin_emails`; use the
 plural `${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` placeholder in public config files
 and define the real value as a YAML flow sequence in the runtime environment or
 ignored `configs/.env`. When the validated TAuth
-session email matches that list, the profile response includes
+session email matches that list, the account response includes
 `user.is_admin: true`, the shared avatar menu gets an `Admin` item, and
 `GET /api/management/admin/users` returns all managed users with tenant facts
 and 30-day usage summaries. Admin responses never include provider API keys,
@@ -780,9 +816,10 @@ masked provider-key strings, generated tenant secrets, secret digests, prompts,
 audio names, transcripts, or model responses. Authenticated non-admin users get
 `403 Forbidden` from admin-only APIs.
 
-`GET /api/management/usage?interval=all|30d|7d|1d` returns dashboard data only
-for the authenticated user's managed tenant. `interval` is required exactly
-once; a missing, repeated, or unknown value returns `400`. The response contains
+`GET /api/management/tenants/:tenant_id/usage?interval=all|30d|7d|1d` returns
+dashboard data only when the selected workspace belongs to the authenticated
+TAuth subject. `interval` is required exactly once; a missing, repeated, or
+unknown value returns `400`. The response contains
 the selected `interval`, its `bucket_unit`, `totals`, ordered generic `buckets`,
 and provider, model, and status-code breakdowns; the user endpoint has no
 `period_days` or `daily` fields. `1d` uses 24 hourly buckets, `7d` and `30d` use
@@ -792,33 +829,74 @@ through that timestamp in UTC daily buckets from the earliest event through
 today, or an empty bucket list when the tenant has no events. The administrator
 endpoint remains a separate fixed 30-day daily contract.
 
-Usage events are recorded only for managed tenants when they call the public
-proxy endpoints with a generated secret. Every usage query applies the
-authenticated user id and selected time boundary in the database. Stored usage
-metadata includes endpoint, provider, model, status code, success flag, latency,
-and normalized request/response/total token counts. Prompts, audio, transcripts,
-responses, tenant secrets, and provider API keys are not stored in usage events.
+`GET /api/management/tenants/:tenant_id/usage/failures?interval=all|30d|7d|1d`
+is the sole per-event diagnostic operation. It requires exactly one `interval`,
+accepts one optional `limit` from 1 through 100 (default 25) and one optional
+opaque `cursor`, and rejects missing, repeated, malformed, or unknown query
+fields with `400`. The authenticated owner and selected workspace scope every
+page; missing and foreign workspace ids both return `404`. Pages are newest
+first under a stable `(created_at, id)` position and an opaque snapshot boundary.
+Each row contains only `occurred_at`, `endpoint`, `provider`, `model`,
+`status_code`, `outcome_code`, and `latency_ms`. The operation never returns row,
+user, or workspace ids; prompts; responses; audio; transcripts; client secrets;
+provider keys; raw upstream bodies; or free-form errors. The administrator
+surface remains aggregate-only and cannot fetch another owner's rows.
 
-Management mode no longer imports config tenants or global provider keys, and
-startup removes the obsolete static-import marker table. A deployment that
-still contains one prior `static-config:<tenant-id>` database row must configure
-the exact `legacy_token_migration` tenant id and target
-email. The unowned token returns `403` until that email signs in. Drain every
-old service instance before the matching account signs in. On that account's
-first authenticated management request, llm-proxy atomically rekeys the tenant
-to the verified TAuth subject, preserves the tenant id,
-existing token digest, defaults, creation time, and all usage events, and
-re-encrypts provider keys for the new owner id. A different email cannot claim
-the row. If an earlier sign-in created a destination account with no secret,
-provider settings, or usage, the same transaction removes that empty account
-before rekeying the legacy tenant. A populated destination account returns
-`409 Conflict` without partial changes. Once production claim verification succeeds, remove the
-temporary migration block and owner-email environment value. Server/runtime
-settings, backend auth validation settings, provider base URLs, transcription
-URLs, model catalogs, and browser-facing MPR
-UI/TAuth bootstrap settings remain config-file-owned. The GitHub Pages artifact
-is only the static shell; API-served browser config endpoints are projections of
-backend `config.yml`, not independent configuration sources.
+Usage events are recorded only for managed workspaces when they call the public
+proxy endpoints with a generated secret. Every usage query applies the
+authenticated owner id, selected workspace id, and time boundary in the
+database. Stored usage
+metadata includes endpoint, provider, model, status code, success flag, one
+canonical outcome code, latency, and normalized request/response/total token
+counts. Outcome codes are exactly `success`, `invalid_request`,
+`payload_too_large`, `rate_limited`, `service_unavailable`, `request_timeout`,
+or `upstream_error`. They are selected at the request/error boundary; prompts,
+audio, transcripts, responses, tenant secrets, provider API keys, raw upstream
+bodies, and free-form error text are not stored in usage events.
+
+Management mode no longer imports config tenants or global provider keys.
+TAuth subjects own personal workspaces directly; there is no shared-workspace,
+membership, role, invitation, or team-tenancy contract.
+
+F014 upgrades the previous one-workspace-per-user database to schema version 1
+as one bounded startup transaction:
+
+1. Drain every old llm-proxy instance and take an operator-owned database
+   backup. Never run the old and new binaries against the same database during
+   this migration.
+2. Exercise the exact migration on disposable boundaries with `make go-test`
+   for SQLite and `make test-management-postgres` for PostgreSQL. Supplying
+   `LLM_PROXY_TEST_POSTGRES_DSN` uses that disposable database; otherwise the
+   target starts and removes its own loopback-only PostgreSQL container.
+3. Start one new instance. Preflight reads all legacy tenant, provider-key, and
+   usage rows before opening the mutation transaction. It rejects missing
+   tables, unclaimed `static-config:` owners, blank or duplicate owners and
+   workspace ids, duplicate or malformed secret digests, orphan provider or
+   usage rows, plaintext or corrupt provider keys, and non-canonical routing
+   data.
+4. The transaction renames the three legacy tables, creates explicit user and
+   workspace tables, preserves every opaque tenant id, moves secret digests and
+   routing data, rebinds encrypted provider keys from the prior user id to the
+   workspace id, copies usage rows, verifies counts and values including
+   decryption, writes schema version 1, and removes the bounded legacy tables.
+5. Verify account, workspace, provider, secret, routing, and usage behavior
+   before adding capacity. A failed stage rolls the transaction back to the
+   untouched legacy schema and prevents startup. Correct the source data or
+   restore the backup; do not hand-edit a partially migrated shape.
+
+The subsequent bounded schema-version-2 migration preflights every schema-1
+usage row, maps successful rows to `success`, and maps historical `400`, `413`,
+`429`, `503`, `504`, and `502` statuses to their exact canonical failure codes.
+It rejects any other historical failure status before mutation, then writes the
+non-null outcome field and the tenant/success/time/id failure-page index in one
+transaction. Historical diagnostics therefore contain normalized,
+status-derived codes, never reconstructed raw error messages.
+
+Server/runtime settings, backend auth validation settings, provider base URLs,
+transcription URLs, model catalogs, and browser-facing MPR UI/TAuth bootstrap
+settings remain config-file-owned. The GitHub Pages artifact is only the static
+shell; API-served browser config endpoints are projections of backend
+`config.yml`, not independent configuration sources.
 
 ### Hosted split-origin setup
 
@@ -849,8 +927,7 @@ Then configure GitHub Pages for this repository:
 4. Configure real backend deployment secrets outside the Pages artifact:
    `LLM_PROXY_MANAGEMENT_ADMIN_EMAILS`, `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`,
    `LLM_PROXY_MANAGEMENT_DATABASE_DSN`,
-   `LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY`, and, only for the bounded
-   ownership migration, `LLM_PROXY_MANAGEMENT_LEGACY_TOKEN_OWNER_EMAIL`.
+   and `LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY`.
 5. Do not store browser runtime config in the Pages branch. Production browser
    config is served only by `https://llm-proxy-api.mprlab.com/config-ui.yaml`
    from the running backend's loaded management config. `make release` writes
@@ -887,10 +964,13 @@ the test enforces TAuth login CORS and receives the configured HttpOnly access
 and refresh cookies. It then drives the mounted header through the documented
 `MPRUI.testing.authenticate` adapter, which emits the normal authenticated
 lifecycle event and persists MPR UI's session-restore hint. The test proves the
-anonymous/authorized behavior of `/api/management/profile`, proves the browser
-makes no protected profile request before MPR UI authentication and exactly one
-to hydrate the workspace afterward, and waits for the `mpr-ui@latest` shell
-plus the dashboard to report the authenticated state. It then proves an ordinary reload
+anonymous/authorized behavior of `/api/management/account`, proves the browser
+makes no protected account or workspace request before MPR UI authentication,
+then hydrates the selected workspace afterward. It creates two workspaces for
+one real TAuth subject, proves their secrets, settings, and usage remain
+isolated, and signs in a second real subject to prove foreign workspace ids
+return `404` without disclosure. It waits for the `mpr-ui@latest` shell plus the
+dashboard to report the authenticated state, then proves an ordinary reload
 stays authenticated, removes only the access cookie and proves `/auth/session`
 recovers it from the refresh cookie without rendering the signed-out panel, and
 uses the visible **Sign out** action to prove `/auth/logout` clears both cookies
@@ -1515,7 +1595,7 @@ curl -X POST \
   "http://localhost:8080/?key=mysecret"
 ```
 
-Compatibility chat transcript on `/`:
+Chat transcript on `POST /`:
 
 ```shell
 curl -X POST \
@@ -1533,17 +1613,13 @@ curl -X POST \
   "http://localhost:8080/v2?key=mysecret&provider=deepseek"
 ```
 
-JSON body fields:
-
-| Field | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `prompt` | Yes, unless `messages` is provided | none | Full text to send to the LLM. Use this body field for large or non-ASCII prompts. |
-| `messages` | Yes, unless `prompt` is provided | none | Chat messages using `role` and string `content`. Supported roles are `system`, `user`, and `assistant`; at least one `user` message is required. Each item may include numeric `order`; if any item includes it, every submitted item must include a unique non-negative `order`, and messages are sorted ascending before routing. |
-| `model` | No | tenant or configured provider default | Model identifier from the selected provider's configured model list. Omitted model uses the tenant default when `provider` is omitted; otherwise it uses the selected provider's configured default. |
-| `web_search` | No | `false` | Enables OpenAI web search when the selected provider/model supports it. |
-| `system_prompt` | No | authenticated tenant default | Per-request system prompt override. With `messages`, it is prepended as a system message only when the body does not already contain a system message. |
-| `max_tokens` | No | provider default | Positive integer output-token cap for this request. The proxy maps it to OpenAI `max_output_tokens`, Meta, Moonshot, and MiniMax `max_completion_tokens`, other OpenAI-compatible providers' `max_tokens`, Anthropic `max_tokens`, or Gemini `generationConfig.maxOutputTokens`. |
-| `reasoning_effort` | No | resolved tenant default | Nonblank capability-supported override for the exact resolved text provider/model. Omit it to retain the default; a blank, `null`, or unsupported value returns `400` before an upstream call. |
+The authoritative body-field list, required/optional distinction, nested message
+shape, and response schemas are rendered directly from OpenAPI in the
+[`POST /` API reference](https://llm-proxy.mprlab.com/docs/#operation-postText)
+and
+[`POST /v2` API reference](https://llm-proxy.mprlab.com/docs/#operation-postV2Messages).
+The examples above are intentionally illustrative rather than a separately
+maintained field inventory.
 
 For `POST /`, `provider` remains a query parameter. Query `model` may override
 the JSON body only when the body omits `model` or provides the same value;
@@ -1556,11 +1632,11 @@ MiniMax M2.7 `max_tokens` values above `2048`, Gemini values above `65536`, and
 Anthropic values above the configured Claude model output limit return `400 Bad
 Request` before the proxy calls the selected provider.
 
-`POST /v2` is the canonical chat endpoint. It accepts the same `messages`,
-`model`, `web_search`, `max_tokens`, and `reasoning_effort` body fields, but
-rejects `prompt` and body `system_prompt`; send a `system` role message instead.
-The tenant default system prompt is still prepended when the submitted messages
-do not include a system message.
+`POST /v2` is the canonical chat endpoint. Its exact accepted fields come from
+the OpenAPI schema, including the omission-versus-explicit-value contract for
+`reasoning_effort`. It rejects `prompt` and body `system_prompt`; send a
+`system` role message instead. The tenant default system prompt is still
+prepended when the submitted messages do not include a system message.
 
 ### Choose an OpenAI model
 
@@ -1675,85 +1751,18 @@ The response `messages` field echoes only caller-visible request messages.
 Server-injected tenant default system prompts are sent upstream when applicable,
 but are not returned in response metadata.
 
-## Endpoint
+## Canonical endpoint reference
 
-### LLM endpoint
+Use the derived [API reference](https://llm-proxy.mprlab.com/docs/) for the
+complete operation inventory and the exact query, header, JSON, multipart,
+authentication, media-type, response-header, and status contracts. Use the
+[committed OpenAPI artifact](docs/openapi.yaml) for tooling and review.
 
-All four public upstream endpoints accept
-`X-LLM-Proxy-Request-Timeout-Seconds: N`. Omit it to use the configured server
-default. See [Request work budgets](#request-work-budgets) for validation,
-response-header, timeout-error, and cancellation semantics.
+The request examples in [Usage](#usage) demonstrate common calls without
+duplicating that inventory. In particular, dictation has one canonical incoming
+multipart file part, `audio`; the obsolete `file` alias is rejected.
 
-```text
-GET /
-  ?prompt=STRING            # required
-  &key=SERVICE_SECRET       # required
-  &provider=PROVIDER        # optional; tenant default
-  &model=MODEL_NAME         # optional; tenant or configured provider default
-  &web_search=1|true|yes    # optional; requires configured model support
-  &max_tokens=N             # optional positive integer per-request cap
-  &reasoning_effort=VALUE   # optional; exact resolved-route capability
-  &format=CONTENT_TYPE      # optional; or use Accept header
-```
-
-```text
-POST /
-  ?key=SERVICE_SECRET       # required
-  &provider=PROVIDER        # optional; tenant default
-  &model=MODEL_NAME         # optional; overrides JSON body if absent or equal
-  &format=CONTENT_TYPE      # optional; or use Accept header
-Content-Type: application/json
-{
-  "prompt": "STRING",       # required unless messages is provided
-  "messages": [             # required unless prompt is provided
-    {"role": "user", "content": "STRING", "order": 1}
-  ],
-  "model": "MODEL_NAME",    # optional; tenant or configured provider default
-  "web_search": false,      # optional; defaults to false
-  "system_prompt": "STRING",# optional; tenant default
-  "max_tokens": 512,        # optional positive integer per-request cap
-  "reasoning_effort": "high" # optional; exact resolved-route capability
-}
-```
-
-```text
-POST /v2
-  ?key=SERVICE_SECRET       # required
-  &provider=PROVIDER        # optional; tenant default
-  &model=MODEL_NAME         # optional; overrides JSON body if absent or equal
-  &format=CONTENT_TYPE      # optional; or use Accept header
-Content-Type: application/json
-{
-  "messages": [             # required
-    {"role": "user", "content": "STRING", "order": 1}
-  ],
-  "model": "MODEL_NAME",    # optional; tenant or configured provider default
-  "web_search": false,      # optional; defaults to false
-  "max_tokens": 512,        # optional positive integer per-request cap
-  "reasoning_effort": "high" # optional; exact resolved-route capability
-}
-```
-
-The POST JSON body carries only LLM request parameters. The tenant secret
-remains in the `key` query parameter, and upstream provider API keys are
-never accepted from client requests.
-
-### Dictation endpoint
-
-```text
-POST /dictate
-  ?key=SERVICE_SECRET       # required
-  &provider=PROVIDER        # optional; tenant default
-  &model=MODEL_NAME         # optional; tenant or configured provider default
-Content-Type: multipart/form-data
-  audio=<file>              # required (alias: file)
-```
-
-Success response:
-
-```json
-{ "text": "..." }
-```
+## Model catalog
 
 The default model catalog in [configs/config.yml](configs/config.yml)
 declares the LLM endpoint models below. The `/dictate` endpoint defaults to
