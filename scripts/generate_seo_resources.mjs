@@ -739,7 +739,7 @@ export function revokeSecret() {
     ],
     examples: [
       ["SQLite local profile", "A local management database stores encrypted provider key rows."],
-      ["Postgres hosted profile", "Hosted management state uses the same encrypted key contract."],
+      ["SQLite hosted profile", "A hosted management database at the configured path uses the same encrypted key contract."],
       ["Storage exposure reduction", "A database backup does not contain raw provider API keys."],
     ],
     limitations: [
@@ -822,7 +822,7 @@ export function revokeSecret() {
     solution: "LLM Proxy preflights the complete legacy dataset, then atomically creates explicit user and workspace records, preserves tenant ids and usage, and rebinds encrypted provider keys to workspace ownership.",
     steps: [
       "Drain old service instances and take an operator-owned database backup.",
-      "Exercise SQLite and PostgreSQL migration scenarios through the repository test targets.",
+      "Exercise the SQLite migration scenario through the repository test targets.",
       "Start one new instance so preflight and the bounded schema-version transaction run once.",
       "Verify account, workspace, secret, provider, routing, and usage isolation before adding capacity.",
     ],
@@ -833,7 +833,7 @@ export function revokeSecret() {
     ],
     examples: [
       ["SQLite verification", "A disposable legacy database migrates and reopens with explicit user and workspace tables."],
-      ["PostgreSQL verification", "The same ownership, encryption, usage, and rollback contract runs against a disposable PostgreSQL service."],
+      ["Configured path verification", "The real startup path opens and migrates a disposable SQLite database at the supplied location."],
       ["Rollback", "An injected failure at any rename, create, verify, version, or drop stage leaves the legacy schema untouched."],
     ],
     limitations: [
@@ -852,24 +852,23 @@ export function revokeSecret() {
     problem: "Self-service management needs persistent tenant state without mutating runtime config files or adding raw SQL paths.",
     solution: "LLM Proxy stores TAuth users, their personal workspaces, provider keys, defaults, generated secret digests, and usage events in a GORM-managed database.",
     steps: [
-      "Configure management.database_dialect as postgres or sqlite.",
-      "Configure management.database_dsn for the selected dialect.",
+      "Configure management.database_path with the SQLite database location.",
       "Run management mode with the required provider-key encryption key.",
       "Let GORM model APIs own signup, provider, defaults, secret, and usage state.",
     ],
     features: [
-      ["Postgres or SQLite", "Hosted and local management profiles can use supported GORM dialects.", "SQLite uses a pure-Go driver for CGO_DISABLED builds."],
+      ["SQLite through GORM", "Hosted and local management profiles choose the database location with one path.", "The pure-Go SQLite driver keeps CGO_DISABLED builds valid."],
       ["No runtime config mutation", "User signup and provider enablement update database state, not config.yml.", "Configuration stays operator-owned."],
       ["Usage event persistence", "Managed request metadata is stored with tenant isolation.", "Dashboards survive restarts."],
     ],
     examples: [
-      ["Local development", "A developer uses sqlite with a local ignored database file."],
-      ["Hosted deployment", "Production uses a Postgres DSN supplied through deployment secrets."],
+      ["Local development", "A developer supplies the path to a local ignored SQLite database file."],
+      ["Hosted deployment", "The service receives its persistent SQLite database path through deployment configuration."],
       ["Usage dashboard", "The dashboard reads aggregate usage from persisted events."],
     ],
     limitations: [
-      "Only postgres and sqlite are documented supported dialects.",
-      "Database outages can affect management state and dashboard access.",
+      "The current persistence engine is SQLite; other database engines are outside the contract.",
+      "Storage access failures can affect management state and dashboard access.",
       "Provider transport config and model catalogs still live in config.yml.",
     ],
   }),
