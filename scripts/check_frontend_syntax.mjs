@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 const files = [
   "playwright.config.js",
   "playwright.blackbox.config.js",
+  "scripts/generate_openapi_docs.mjs",
   "scripts/generate_seo_resources.mjs",
   "tests/blackbox/localManagementStack.mjs",
 ];

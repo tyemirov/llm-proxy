@@ -145,8 +145,7 @@ prepare_local_environment() {
     "LLM_PROXY_MANAGEMENT_DATABASE_DSN" \
     "LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY" \
     "LLM_PROXY_MANAGEMENT_API_ORIGIN" \
-    "LLM_PROXY_MANAGEMENT_PROXY_ORIGIN" \
-    "LLM_PROXY_MANAGEMENT_LEGACY_TOKEN_OWNER_EMAIL"
+    "LLM_PROXY_MANAGEMENT_PROXY_ORIGIN"
   write_scoped_local_environment "${tauth_environment_path}" \
     "TAUTH_CONFIG_FILE" \
     "TAUTH_LISTEN_ADDR" \
@@ -246,7 +245,7 @@ wait_for_http_status "ghttp static frontend" "200" "http://127.0.0.1:4179/"
 wait_for_http_status "ghttp runtime configuration" "200" "http://127.0.0.1:4179/config-ui.yaml"
 wait_for_http_status "LLM Proxy API boundary" "403" "http://127.0.0.1:8080/?prompt=ready"
 wait_for_http_status "TAuth session boundary" "204" "http://127.0.0.1:8082/auth/session" --header "Origin: ${local_frontend_origin}" --header "X-Requested-With: XMLHttpRequest"
-wait_for_http_status "LLM Proxy management API boundary" "401" "http://127.0.0.1:8080/api/management/profile" --header "Origin: ${local_frontend_origin}"
+wait_for_http_status "LLM Proxy management API boundary" "401" "http://127.0.0.1:8080/api/management/account" --header "Origin: ${local_frontend_origin}"
 local_stack_ready="1"
 
 echo
