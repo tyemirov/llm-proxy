@@ -94,6 +94,7 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 	legacyUsage := []legacyManagedUsageEventRecord{
 		{ID: 11, UserID: firstTenant.UserID, TenantID: firstTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: http.StatusOK, Success: true, LatencyMilliseconds: 17, RequestTokens: 2, ResponseTokens: 3, TotalTokens: 5, CreatedAt: fixedTime.Add(3 * time.Hour)},
 		{ID: 29, UserID: secondTenant.UserID, TenantID: secondTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: http.StatusBadGateway, Success: false, LatencyMilliseconds: 31, CreatedAt: fixedTime.Add(4 * time.Hour)},
+		{ID: 41, UserID: firstTenant.UserID, TenantID: firstTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: statusClientClosedRequest, Success: false, LatencyMilliseconds: 7, CreatedAt: fixedTime.Add(5 * time.Hour)},
 	}
 	if createError := legacyDatabase.Table(managedUsageEventTable).Create(&legacyUsage).Error; createError != nil {
 		t.Fatalf("seed legacy usage: %v", createError)
@@ -149,8 +150,11 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 	if queryError := database.database.Order("id").Find(&usageRecords).Error; queryError != nil {
 		t.Fatalf("load migrated usage: %v", queryError)
 	}
-	if len(usageRecords) != 2 || usageRecords[0].ID != 11 || usageRecords[0].TenantID != firstTenant.TenantID ||
-		usageRecords[0].TotalTokens != 5 || usageRecords[1].ID != 29 || usageRecords[1].TenantID != secondTenant.TenantID {
+	if len(usageRecords) != 3 || usageRecords[0].ID != 11 || usageRecords[0].TenantID != firstTenant.TenantID ||
+		usageRecords[0].TotalTokens != 5 || usageRecords[1].ID != 29 || usageRecords[1].TenantID != secondTenant.TenantID ||
+		usageRecords[2].ID != 41 || usageRecords[2].TenantID != firstTenant.TenantID ||
+		usageRecords[2].StatusCode != statusClientClosedRequest ||
+		usageRecords[2].OutcomeCode != managedUsageOutcomeRequestTimeout {
 		t.Fatalf("migrated usage=%+v", usageRecords)
 	}
 	store := newManagedTenantStoreWithDatabaseAndCipher(database, providerKeyCipher)

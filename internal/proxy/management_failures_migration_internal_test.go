@@ -275,6 +275,7 @@ func seedManagedUsageSchemaOne(t *testing.T, database *gorm.DB) {
 		{ID: 5, TenantID: tenantRecord.TenantID, Endpoint: usageEndpointText, StatusCode: http.StatusServiceUnavailable, TotalTokens: 5, CreatedAt: now.Add(4 * time.Second)},
 		{ID: 6, TenantID: tenantRecord.TenantID, Endpoint: usageEndpointText, StatusCode: http.StatusGatewayTimeout, TotalTokens: 6, CreatedAt: now.Add(5 * time.Second)},
 		{ID: 7, TenantID: tenantRecord.TenantID, Endpoint: usageEndpointDictation, StatusCode: http.StatusBadGateway, TotalTokens: 7, CreatedAt: now.Add(6 * time.Second)},
+		{ID: 8, TenantID: tenantRecord.TenantID, Endpoint: usageEndpointText, StatusCode: statusClientClosedRequest, TotalTokens: 8, CreatedAt: now.Add(7 * time.Second)},
 	}
 	if createError := database.Create(&records).Error; createError != nil {
 		t.Fatalf("seed usage: %v", createError)
@@ -305,7 +306,7 @@ func assertManagedUsageOutcomeMigration(t *testing.T, database *gorm.DB) {
 		t.Fatalf("migrate usage outcomes: %v", migrationError)
 	}
 	after := readTotals()
-	if before != after || after.Requests != 7 || after.TotalTokens != 38 {
+	if before != after || after.Requests != 8 || after.TotalTokens != 46 {
 		t.Fatalf("usage totals before=%+v after=%+v", before, after)
 	}
 	var records []managedUsageEventRecord
@@ -324,6 +325,7 @@ func assertManagedUsageOutcomeMigration(t *testing.T, database *gorm.DB) {
 		managedUsageOutcomeServiceUnavailable,
 		managedUsageOutcomeRequestTimeout,
 		managedUsageOutcomeUpstreamError,
+		managedUsageOutcomeRequestTimeout,
 	}
 	if !reflect.DeepEqual(actualOutcomes, expectedOutcomes) {
 		t.Fatalf("outcomes=%v want=%v", actualOutcomes, expectedOutcomes)

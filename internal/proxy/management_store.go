@@ -560,7 +560,7 @@ func historicalManagedUsageOutcome(success bool, statusCode int) (managedUsageOu
 		return managedUsageOutcomeRateLimited, nil
 	case http.StatusServiceUnavailable:
 		return managedUsageOutcomeServiceUnavailable, nil
-	case http.StatusGatewayTimeout:
+	case statusClientClosedRequest, http.StatusGatewayTimeout:
 		return managedUsageOutcomeRequestTimeout, nil
 	case http.StatusBadGateway:
 		return managedUsageOutcomeUpstreamError, nil
