@@ -76,7 +76,7 @@ func BuildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	return buildRouter(configuration, structuredLogger, newManagedTenantStore)
 }
 
-type managedTenantStoreOpener func(ManagementConfiguration) (*managedTenantStore, error)
+type managedTenantStoreOpener func(ManagementConfiguration, *providerRegistry) (*managedTenantStore, error)
 
 func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogger, openManagedTenantStore managedTenantStoreOpener) (*gin.Engine, error) {
 	configuration, validationError := ensureValidatedConfiguration(configuration)
@@ -111,15 +111,9 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	runtimeStaticTenants := configuration.tenants
 	if configuration.Management.Enabled {
 		var storeError error
-		managedTenants, storeError = openManagedTenantStore(configuration.Management)
+		managedTenants, storeError = openManagedTenantStore(configuration.Management, providers)
 		if storeError != nil {
 			return nil, storeError
-		}
-		if migrationError := managedTenants.migrateProviderTextSettings(providers); migrationError != nil {
-			return nil, migrationError
-		}
-		if migrationError := managedTenants.migrateRoutingDefaultPairs(providers); migrationError != nil {
-			return nil, migrationError
 		}
 		runtimeStaticTenants = tenantRegistry{}
 	}
@@ -509,7 +503,7 @@ func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRoute
 			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), ginContext.Writer.Status(), nil, requestStart)
 			return
 		}
-		markRequestOutcome(ginContext, requestFailureOutcome(requestError))
+		markRequestOutcome(ginContext, requestFailureOutcome(requestError), managedRequestFailureOutcome(requestError))
 		statusCode := statusCodeForError(requestError)
 		ginContext.String(statusCode, responseMessageForError(requestError))
 		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), statusCode, nil, requestStart)
@@ -529,7 +523,7 @@ func completeChatRequest(ginContext *gin.Context, chatRequest chatRequestParamet
 		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), ginContext.Writer.Status(), nil, requestStart)
 		return
 	}
-	markRequestOutcome(ginContext, requestOutcomeSuccess)
+	markRequestOutcome(ginContext, requestOutcomeSuccess, managedUsageOutcomeSuccess)
 	writeTokenUsageHeaders(ginContext.Writer.Header(), generation.usage)
 	ginContext.Data(http.StatusOK, contentType, []byte(formattedBody))
 	recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), http.StatusOK, generation.usage, requestStart)
@@ -560,12 +554,9 @@ func dictateHandler(upstreamProviders *providerRouter, providers *providerRegist
 
 		audioFile, header, fileError := ginContext.Request.FormFile(formFieldAudio)
 		if fileError != nil {
-			audioFile, header, fileError = ginContext.Request.FormFile(formFieldFile)
-			if fileError != nil {
-				ginContext.String(http.StatusBadRequest, errorMissingAudioFile)
-				recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, usageDictationProviderIdentifier(ginContext, requestTenant.defaults), usageDictationModelIdentifier(ginContext, requestTenant.defaults), requestStart)
-				return
-			}
+			ginContext.String(http.StatusBadRequest, errorMissingAudioFile)
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, usageDictationProviderIdentifier(ginContext, requestTenant.defaults), usageDictationModelIdentifier(ginContext, requestTenant.defaults), requestStart)
+			return
 		}
 		defer audioFile.Close()
 
@@ -602,7 +593,7 @@ func dictateHandler(upstreamProviders *providerRouter, providers *providerRegist
 				recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, providerDefinition.identifier.string(), modelIdentifier.string(), ginContext.Writer.Status(), nil, requestStart)
 				return
 			}
-			markRequestOutcome(ginContext, requestFailureOutcome(requestError))
+			markRequestOutcome(ginContext, requestFailureOutcome(requestError), managedRequestFailureOutcome(requestError))
 			statusCode := statusCodeForError(requestError)
 			ginContext.String(statusCode, responseMessageForError(requestError))
 			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, providerDefinition.identifier.string(), modelIdentifier.string(), statusCode, nil, requestStart)
@@ -623,7 +614,7 @@ func completeDictationRequest(ginContext *gin.Context, transcribedText string, r
 		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, providerDefinition.identifier.string(), modelIdentifier.string(), ginContext.Writer.Status(), nil, requestStart)
 		return
 	}
-	markRequestOutcome(ginContext, requestOutcomeSuccess)
+	markRequestOutcome(ginContext, requestOutcomeSuccess, managedUsageOutcomeSuccess)
 	ginContext.Data(http.StatusOK, mimeApplicationJSON, responseBody)
 	recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, providerDefinition.identifier.string(), modelIdentifier.string(), http.StatusOK, nil, requestStart)
 }
@@ -634,11 +625,14 @@ func recordManagedUsage(managedTenants *managedTenantStore, structuredLogger *za
 	}
 	ginContext.Writer.Flush()
 	requestContext := ginContext.Request.Context()
-	recordError := managedTenants.recordUsage(requestContext, requestTenant, managedUsageEvent{
+	persistenceContext, cancelPersistence := context.WithTimeout(context.WithoutCancel(requestContext), managedUsagePersistenceTimeout)
+	defer cancelPersistence()
+	recordError := managedTenants.recordUsage(persistenceContext, requestTenant, managedUsageEvent{
 		endpoint:            endpoint,
 		providerIdentifier:  providerIdentifier,
 		modelIdentifier:     modelIdentifier,
 		statusCode:          statusCode,
+		outcomeCode:         requestTimeoutStateFromContext(ginContext).managedUsageOutcome,
 		latencyMilliseconds: time.Since(requestStart).Milliseconds(),
 		usage:               usage,
 	})
@@ -660,6 +654,9 @@ func recordManagedUsage(managedTenants *managedTenantStore, structuredLogger *za
 
 func recordManagedUsageValidationFailure(managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, ginContext *gin.Context, requestTenant tenant, endpoint string, providerIdentifier string, modelIdentifier string, requestStart time.Time) {
 	statusCode := ginContext.Writer.Status()
+	if outcomeCode, outcomeError := historicalManagedUsageOutcome(false, statusCode); outcomeError == nil {
+		markManagedUsageOutcome(ginContext, outcomeCode)
+	}
 	recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, endpoint, providerIdentifier, modelIdentifier, statusCode, nil, requestStart)
 }
 

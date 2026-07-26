@@ -54,6 +54,7 @@ func readJSONProxyBody(ginContext *gin.Context) ([]byte, bool) {
 		}
 		var maxBytesError *http.MaxBytesError
 		if errors.As(readError, &maxBytesError) {
+			markManagedUsageOutcome(ginContext, managedUsageOutcomePayloadTooLarge)
 			ginContext.String(http.StatusRequestEntityTooLarge, errorPromptPayloadTooLarge)
 			return nil, false
 		}

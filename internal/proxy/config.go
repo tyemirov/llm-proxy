@@ -114,14 +114,7 @@ type ManagementConfiguration struct {
 	ProviderKeyEncryptionKey string
 	ManagementAPIOrigin      string
 	ProxyOrigin              string
-	LegacyTokenMigration     LegacyTokenMigrationConfiguration
 	DatabaseDialector        gorm.Dialector
-}
-
-// LegacyTokenMigrationConfiguration identifies the one legacy tenant and verified account email allowed to claim it.
-type LegacyTokenMigrationConfiguration struct {
-	TenantID   string
-	OwnerEmail string
 }
 
 // NewConfiguration returns a normalized runtime configuration after validating startup invariants.
@@ -337,16 +330,10 @@ func (configuration *ManagementConfiguration) ApplyTunables() {
 	configuration.ProviderKeyEncryptionKey = strings.TrimSpace(configuration.ProviderKeyEncryptionKey)
 	configuration.ManagementAPIOrigin = strings.TrimSpace(configuration.ManagementAPIOrigin)
 	configuration.ProxyOrigin = strings.TrimSpace(configuration.ProxyOrigin)
-	configuration.LegacyTokenMigration.TenantID = strings.TrimSpace(configuration.LegacyTokenMigration.TenantID)
-	configuration.LegacyTokenMigration.OwnerEmail = strings.ToLower(strings.TrimSpace(configuration.LegacyTokenMigration.OwnerEmail))
 }
 
 func validateManagementConfiguration(configuration ManagementConfiguration) error {
-	migrationConfigured := configuration.LegacyTokenMigration.TenantID != constants.EmptyString || configuration.LegacyTokenMigration.OwnerEmail != constants.EmptyString
 	if !configuration.Enabled {
-		if migrationConfigured {
-			return fmt.Errorf("%w: field=management.legacy_token_migration requires_management", ErrInvalidManagementConfiguration)
-		}
 		return nil
 	}
 	requiredFields := []struct {
@@ -386,9 +373,6 @@ func validateManagementConfiguration(configuration ManagementConfiguration) erro
 			return fmt.Errorf("%w: field=management.admin_emails value=%s", ErrInvalidManagementConfiguration, emailValue)
 		}
 	}
-	if migrationError := validateLegacyTokenMigrationConfiguration(configuration.LegacyTokenMigration); migrationError != nil {
-		return migrationError
-	}
 	if !supportedManagementDatabaseDialect(configuration.DatabaseDialect) {
 		return fmt.Errorf("%w: field=management.database_dialect value=%s", ErrInvalidManagementConfiguration, configuration.DatabaseDialect)
 	}
@@ -409,24 +393,6 @@ func decodeManagedProviderKey(rawEncryptionKey string) ([managedProviderKeyBytes
 	var encryptionKey [managedProviderKeyBytes]byte
 	copy(encryptionKey[:], decodedKey)
 	return encryptionKey, nil
-}
-
-func validateLegacyTokenMigrationConfiguration(configuration LegacyTokenMigrationConfiguration) error {
-	tenantIdentifier := strings.TrimSpace(configuration.TenantID)
-	ownerEmail := strings.TrimSpace(configuration.OwnerEmail)
-	if tenantIdentifier == constants.EmptyString && ownerEmail == constants.EmptyString {
-		return nil
-	}
-	if tenantIdentifier == constants.EmptyString {
-		return fmt.Errorf("%w: field=management.legacy_token_migration.tenant_id", ErrInvalidManagementConfiguration)
-	}
-	if ownerEmail == constants.EmptyString {
-		return fmt.Errorf("%w: field=management.legacy_token_migration.owner_email", ErrInvalidManagementConfiguration)
-	}
-	if _, emailError := normalizeManagementEmail(ownerEmail); emailError != nil {
-		return fmt.Errorf("%w: field=management.legacy_token_migration.owner_email value=%s", ErrInvalidManagementConfiguration, ownerEmail)
-	}
-	return nil
 }
 
 func normalizeManagementEmail(rawEmail string) (string, error) {

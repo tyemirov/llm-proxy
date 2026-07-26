@@ -1,11 +1,16 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
+	"io"
+	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,21 +28,101 @@ const (
 	usageIntervalOneDay    = usageInterval("1d")
 	usageBucketUnitDay     = usageBucketUnit("day")
 	usageBucketUnitHour    = usageBucketUnit("hour")
+
+	managedUsageFailureCursorVersion = 1
+	managedUsageFailureDefaultLimit  = 25
+	managedUsageFailureMaximumLimit  = 100
+	managedUsagePersistenceTimeout   = 5 * time.Second
+	usageFailureIntervalQuery        = "interval"
+	usageFailureLimitQuery           = "limit"
+	usageFailureCursorQuery          = "cursor"
+
+	managedUsageOutcomeSuccess            = managedUsageOutcomeCode("success")
+	managedUsageOutcomeInvalidRequest     = managedUsageOutcomeCode("invalid_request")
+	managedUsageOutcomePayloadTooLarge    = managedUsageOutcomeCode("payload_too_large")
+	managedUsageOutcomeRateLimited        = managedUsageOutcomeCode("rate_limited")
+	managedUsageOutcomeServiceUnavailable = managedUsageOutcomeCode("service_unavailable")
+	managedUsageOutcomeRequestTimeout     = managedUsageOutcomeCode("request_timeout")
+	managedUsageOutcomeUpstreamError      = managedUsageOutcomeCode("upstream_error")
 )
 
-var errManagedUsageIntervalInvalid = errors.New("managed_usage_interval_invalid")
+var (
+	errManagedUsageIntervalInvalid = errors.New("managed_usage_interval_invalid")
+	errManagedUsageFailureQuery    = errors.New("managed_usage_failure_query_invalid")
+	errManagedUsageOutcomeInvalid  = errors.New("managed_usage_outcome_invalid")
+)
 
 type usageInterval string
 
 type usageBucketUnit string
+
+type managedUsageOutcomeCode string
 
 type managedUsageEvent struct {
 	endpoint            string
 	providerIdentifier  string
 	modelIdentifier     string
 	statusCode          int
+	outcomeCode         managedUsageOutcomeCode
 	latencyMilliseconds int64
 	usage               *tokenUsage
+}
+
+type managedUsageFailureQuery struct {
+	interval usageInterval
+	limit    int
+	cursor   *managedUsageFailureCursor
+}
+
+type managedUsageFailureCursor struct {
+	interval   usageInterval
+	snapshotAt time.Time
+	snapshotID uint
+	positionAt time.Time
+	positionID uint
+}
+
+type managedUsageFailureCursorPayload struct {
+	Version    int    `json:"v"`
+	Interval   string `json:"i"`
+	SnapshotAt string `json:"s"`
+	SnapshotID uint   `json:"x"`
+	PositionAt string `json:"p"`
+	PositionID uint   `json:"n"`
+}
+
+type managedUsageFailureRecordQuery struct {
+	periodStart *time.Time
+	snapshotAt  time.Time
+	snapshotID  *uint
+	position    *managedUsageFailurePosition
+	limit       int
+}
+
+type managedUsageFailurePosition struct {
+	occurredAt time.Time
+	recordID   uint
+}
+
+type managedUsageFailurePage struct {
+	interval   usageInterval
+	failures   []managedUsageFailure
+	nextCursor string
+}
+
+type managedUsageFailure struct {
+	occurredAt          time.Time
+	endpoint            string
+	providerIdentifier  string
+	modelIdentifier     string
+	statusCode          int
+	outcomeCode         managedUsageOutcomeCode
+	latencyMilliseconds int64
+}
+
+type managedUsageFailureRecord struct {
+	recordID uint
+	failure  managedUsageFailure
 }
 
 type managedUsageSummary struct {
@@ -125,6 +210,125 @@ func newUsageInterval(value string) (usageInterval, error) {
 	}
 }
 
+func newManagedUsageOutcomeCode(value string) (managedUsageOutcomeCode, error) {
+	outcomeCode := managedUsageOutcomeCode(value)
+	switch outcomeCode {
+	case managedUsageOutcomeSuccess,
+		managedUsageOutcomeInvalidRequest,
+		managedUsageOutcomePayloadTooLarge,
+		managedUsageOutcomeRateLimited,
+		managedUsageOutcomeServiceUnavailable,
+		managedUsageOutcomeRequestTimeout,
+		managedUsageOutcomeUpstreamError:
+		return outcomeCode, nil
+	default:
+		return "", fmt.Errorf("%w: outcome_code=%q", errManagedUsageOutcomeInvalid, value)
+	}
+}
+
+func newManagedUsageFailureQuery(queryValues url.Values) (managedUsageFailureQuery, error) {
+	for queryName := range queryValues {
+		switch queryName {
+		case usageFailureIntervalQuery, usageFailureLimitQuery, usageFailureCursorQuery:
+		default:
+			return managedUsageFailureQuery{}, fmt.Errorf("%w: unknown_query=%s", errManagedUsageFailureQuery, queryName)
+		}
+	}
+	intervalValues := queryValues[usageFailureIntervalQuery]
+	if len(intervalValues) != 1 {
+		return managedUsageFailureQuery{}, fmt.Errorf("%w: interval_count=%d", errManagedUsageFailureQuery, len(intervalValues))
+	}
+	interval, intervalError := newUsageInterval(intervalValues[0])
+	if intervalError != nil {
+		return managedUsageFailureQuery{}, fmt.Errorf("%w: %v", errManagedUsageFailureQuery, intervalError)
+	}
+	limit := managedUsageFailureDefaultLimit
+	if limitValues, supplied := queryValues[usageFailureLimitQuery]; supplied {
+		if len(limitValues) != 1 || !decimalDigits(limitValues[0]) {
+			return managedUsageFailureQuery{}, fmt.Errorf("%w: limit", errManagedUsageFailureQuery)
+		}
+		parsedLimit, parseError := strconv.Atoi(limitValues[0])
+		if parseError != nil || parsedLimit < 1 || parsedLimit > managedUsageFailureMaximumLimit || strconv.Itoa(parsedLimit) != limitValues[0] {
+			return managedUsageFailureQuery{}, fmt.Errorf("%w: limit=%q", errManagedUsageFailureQuery, limitValues[0])
+		}
+		limit = parsedLimit
+	}
+	var cursor *managedUsageFailureCursor
+	if cursorValues, supplied := queryValues[usageFailureCursorQuery]; supplied {
+		if len(cursorValues) != 1 || strings.TrimSpace(cursorValues[0]) == constants.EmptyString {
+			return managedUsageFailureQuery{}, fmt.Errorf("%w: cursor", errManagedUsageFailureQuery)
+		}
+		parsedCursor, cursorError := newManagedUsageFailureCursor(cursorValues[0], interval)
+		if cursorError != nil {
+			return managedUsageFailureQuery{}, cursorError
+		}
+		cursor = &parsedCursor
+	}
+	return managedUsageFailureQuery{interval: interval, limit: limit, cursor: cursor}, nil
+}
+
+func newManagedUsageFailureCursor(rawCursor string, expectedInterval usageInterval) (managedUsageFailureCursor, error) {
+	cursorBytes, decodeError := base64.RawURLEncoding.DecodeString(rawCursor)
+	if decodeError != nil {
+		return managedUsageFailureCursor{}, fmt.Errorf("%w: cursor_encoding: %v", errManagedUsageFailureQuery, decodeError)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(cursorBytes))
+	decoder.DisallowUnknownFields()
+	var payload managedUsageFailureCursorPayload
+	if decodeError := decoder.Decode(&payload); decodeError != nil {
+		return managedUsageFailureCursor{}, fmt.Errorf("%w: cursor_payload: %v", errManagedUsageFailureQuery, decodeError)
+	}
+	var trailingValue any
+	if trailingError := decoder.Decode(&trailingValue); !errors.Is(trailingError, io.EOF) {
+		return managedUsageFailureCursor{}, fmt.Errorf("%w: cursor_trailing", errManagedUsageFailureQuery)
+	}
+	if payload.Version != managedUsageFailureCursorVersion || payload.Interval != string(expectedInterval) ||
+		payload.SnapshotID == 0 || payload.PositionID == 0 || payload.PositionID > payload.SnapshotID {
+		return managedUsageFailureCursor{}, fmt.Errorf("%w: cursor_fields", errManagedUsageFailureQuery)
+	}
+	snapshotAt, snapshotError := time.Parse(time.RFC3339Nano, payload.SnapshotAt)
+	if snapshotError != nil {
+		return managedUsageFailureCursor{}, fmt.Errorf("%w: cursor_snapshot: %v", errManagedUsageFailureQuery, snapshotError)
+	}
+	positionAt, positionError := time.Parse(time.RFC3339Nano, payload.PositionAt)
+	if positionError != nil || positionAt.After(snapshotAt) {
+		return managedUsageFailureCursor{}, fmt.Errorf("%w: cursor_position", errManagedUsageFailureQuery)
+	}
+	cursor := managedUsageFailureCursor{
+		interval:   expectedInterval,
+		snapshotAt: snapshotAt.UTC(),
+		snapshotID: payload.SnapshotID,
+		positionAt: positionAt.UTC(),
+		positionID: payload.PositionID,
+	}
+	if cursor.encoded() != rawCursor {
+		return managedUsageFailureCursor{}, fmt.Errorf("%w: cursor_noncanonical", errManagedUsageFailureQuery)
+	}
+	return cursor, nil
+}
+
+func (cursor managedUsageFailureCursor) encoded() string {
+	payload := `{"v":` + strconv.Itoa(managedUsageFailureCursorVersion) +
+		`,"i":` + strconv.Quote(string(cursor.interval)) +
+		`,"s":` + strconv.Quote(cursor.snapshotAt.UTC().Format(time.RFC3339Nano)) +
+		`,"x":` + strconv.FormatUint(uint64(cursor.snapshotID), 10) +
+		`,"p":` + strconv.Quote(cursor.positionAt.UTC().Format(time.RFC3339Nano)) +
+		`,"n":` + strconv.FormatUint(uint64(cursor.positionID), 10) + `}`
+	return base64.RawURLEncoding.EncodeToString([]byte(payload))
+}
+
+func decimalDigits(value string) bool {
+	if value == constants.EmptyString {
+		return false
+	}
+	for _, character := range value {
+		if character < '0' || character > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func (interval usageInterval) finiteWindow() (time.Duration, int, usageBucketUnit, bool) {
 	switch interval {
 	case usageIntervalThirtyDay:
@@ -148,22 +352,19 @@ func (store *managedTenantStore) recordUsage(requestContext context.Context, req
 		return fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, requestTenant.identifier.string(), lockError)
 	}
 	defer store.mutex.Unlock()
-	ownerRecord, ownerError := store.database.tenantByTenantID(requestContext, requestTenant.identifier.string())
-	if ownerError != nil {
-		return fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, requestTenant.identifier.string(), ownerError)
-	}
-	if strings.HasPrefix(ownerRecord.UserID, legacyStaticTenantUserIDPrefix) {
-		return fmt.Errorf("%w: tenant_id=%s", errManagedLegacyTokenUnowned, requestTenant.identifier.string())
-	}
 	timestamp := store.now()
+	outcomeCode, outcomeError := newManagedUsageOutcomeCode(string(event.outcomeCode))
+	if outcomeError != nil {
+		return fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, requestTenant.identifier.string(), outcomeError)
+	}
 	usageRecord := managedUsageEventRecord{
-		UserID:              ownerRecord.UserID,
 		TenantID:            requestTenant.identifier.string(),
 		Endpoint:            event.endpoint,
 		ProviderID:          event.providerIdentifier,
 		ModelID:             event.modelIdentifier,
 		StatusCode:          event.statusCode,
-		Success:             event.statusCode >= http.StatusOK && event.statusCode < http.StatusBadRequest,
+		Success:             outcomeCode == managedUsageOutcomeSuccess,
+		OutcomeCode:         outcomeCode,
 		LatencyMilliseconds: event.latencyMilliseconds,
 		CreatedAt:           timestamp,
 	}
@@ -173,38 +374,97 @@ func (store *managedTenantStore) recordUsage(requestContext context.Context, req
 		usageRecord.TotalTokens = event.usage.TotalTokens
 	}
 	if persistError := store.database.createUsageEvent(requestContext, usageRecord); persistError != nil {
-		return fmt.Errorf("%w: user_id=%s: %w", errManagedTenantStorePersist, ownerRecord.UserID, persistError)
+		return fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, requestTenant.identifier.string(), persistError)
 	}
 	return nil
 }
 
-func (store *managedTenantStore) usageSummary(principal managementPrincipal, interval usageInterval) (managedUsageSummary, error) {
+func (store *managedTenantStore) usageSummary(principal managementPrincipal, tenantIdentifier managedTenantIdentifier, interval usageInterval) (managedUsageSummary, error) {
 	store.mutex.Lock()
-	record, recordError := store.ensureRecordLocked(principal)
+	_, accountError := store.ensureUserLocked(principal)
+	record, recordError := store.database.tenantByOwnerAndID(principal.userID, tenantIdentifier.string())
 	timestamp := store.now()
 	store.mutex.Unlock()
+	if accountError != nil {
+		return managedUsageSummary{}, accountError
+	}
 	if recordError != nil {
-		return managedUsageSummary{}, recordError
+		return managedUsageSummary{}, managedTenantQueryError(principal.userID, tenantIdentifier.string(), recordError)
 	}
 	windowDuration, _, _, finite := interval.finiteWindow()
 	var earliestUsageEvent time.Time
 	var recordsError error
 	if !finite {
-		earliestUsageEvent, recordsError = store.database.earliestUsageEventByUserIDThrough(record.UserID, timestamp)
+		earliestUsageEvent, recordsError = store.database.earliestUsageEventByTenantIDThrough(record.TenantID, timestamp)
 	}
 	if recordsError != nil {
-		return managedUsageSummary{}, fmt.Errorf("%w: user_id=%s: %v", errManagedTenantStorePersist, record.UserID, recordsError)
+		return managedUsageSummary{}, fmt.Errorf("%w: tenant_id=%s: %v", errManagedTenantStorePersist, record.TenantID, recordsError)
 	}
 	accumulator := newManagedUsageSummaryAccumulator(interval, timestamp, earliestUsageEvent)
 	if finite {
-		recordsError = store.database.streamUsageEventsByUserIDBetween(record.UserID, timestamp.Add(-windowDuration), timestamp, accumulator.apply)
+		recordsError = store.database.streamUsageEventsByTenantIDBetween(record.TenantID, timestamp.Add(-windowDuration), timestamp, accumulator.apply)
 	} else {
-		recordsError = store.database.streamUsageEventsByUserIDThrough(record.UserID, timestamp, accumulator.apply)
+		recordsError = store.database.streamUsageEventsByTenantIDThrough(record.TenantID, timestamp, accumulator.apply)
 	}
 	if recordsError != nil {
-		return managedUsageSummary{}, fmt.Errorf("%w: user_id=%s: %v", errManagedTenantStorePersist, record.UserID, recordsError)
+		return managedUsageSummary{}, fmt.Errorf("%w: tenant_id=%s: %v", errManagedTenantStorePersist, record.TenantID, recordsError)
 	}
 	return accumulator.summary(), nil
+}
+
+func (store *managedTenantStore) usageFailures(principal managementPrincipal, tenantIdentifier managedTenantIdentifier, query managedUsageFailureQuery) (managedUsageFailurePage, error) {
+	snapshotAt := store.now().UTC()
+	var snapshotID *uint
+	var position *managedUsageFailurePosition
+	if query.cursor != nil {
+		snapshotAt = query.cursor.snapshotAt
+		snapshotIDValue := query.cursor.snapshotID
+		snapshotID = &snapshotIDValue
+		position = &managedUsageFailurePosition{
+			occurredAt: query.cursor.positionAt,
+			recordID:   query.cursor.positionID,
+		}
+	}
+	var periodStart *time.Time
+	if windowDuration, _, _, finite := query.interval.finiteWindow(); finite {
+		periodStartValue := snapshotAt.Add(-windowDuration)
+		periodStart = &periodStartValue
+	}
+	records, resolvedSnapshotID, recordsError := store.database.usageFailuresByOwnerAndTenant(
+		principal.userID,
+		tenantIdentifier.string(),
+		managedUsageFailureRecordQuery{
+			periodStart: periodStart,
+			snapshotAt:  snapshotAt,
+			snapshotID:  snapshotID,
+			position:    position,
+			limit:       query.limit + 1,
+		},
+	)
+	if recordsError != nil {
+		return managedUsageFailurePage{}, managedTenantQueryError(principal.userID, tenantIdentifier.string(), recordsError)
+	}
+	hasNextPage := len(records) > query.limit
+	if hasNextPage {
+		records = records[:query.limit]
+	}
+	failures := make([]managedUsageFailure, 0, len(records))
+	for _, record := range records {
+		failures = append(failures, record.failure)
+	}
+	page := managedUsageFailurePage{interval: query.interval, failures: failures}
+	if hasNextPage {
+		positionRecord := records[len(records)-1]
+		cursor := managedUsageFailureCursor{
+			interval:   query.interval,
+			snapshotAt: snapshotAt,
+			snapshotID: resolvedSnapshotID,
+			positionAt: positionRecord.failure.occurredAt,
+			positionID: positionRecord.recordID,
+		}
+		page.nextCursor = cursor.encoded()
+	}
+	return page, nil
 }
 
 func (store *managedTenantStore) adminUsersSummary() ([]managedAdminUserSnapshot, error) {
@@ -212,21 +472,38 @@ func (store *managedTenantStore) adminUsersSummary() ([]managedAdminUserSnapshot
 	defer store.mutex.Unlock()
 	timestamp := store.now()
 	periodStart := usagePeriodStart(timestamp)
-	tenantRecords, tenantRecordsError := store.database.tenants()
-	if tenantRecordsError != nil {
-		return nil, fmt.Errorf("%w: admin_users: %v", errManagedTenantStorePersist, tenantRecordsError)
+	userRecords, userRecordsError := store.database.users()
+	if userRecordsError != nil {
+		return nil, fmt.Errorf("%w: admin_users: %v", errManagedTenantStorePersist, userRecordsError)
 	}
 	usageRecords, usageRecordsError := store.database.usageEventsSince(periodStart)
 	if usageRecordsError != nil {
 		return nil, fmt.Errorf("%w: admin_usage: %v", errManagedTenantStorePersist, usageRecordsError)
 	}
-	usageRecordsByUserID := make(map[string][]managedUsageEventRecord, len(tenantRecords))
+	usageRecordsByTenantID := make(map[string][]managedUsageEventRecord)
 	for _, usageRecord := range usageRecords {
-		usageRecordsByUserID[usageRecord.UserID] = append(usageRecordsByUserID[usageRecord.UserID], usageRecord)
+		usageRecordsByTenantID[usageRecord.TenantID] = append(usageRecordsByTenantID[usageRecord.TenantID], usageRecord)
 	}
-	adminSnapshots := make([]managedAdminUserSnapshot, 0, len(tenantRecords))
-	for _, tenantRecord := range tenantRecords {
-		adminSnapshots = append(adminSnapshots, tenantRecord.adminSnapshot(summarizeManagedAdminUsage(usageRecordsByUserID[tenantRecord.UserID], timestamp)))
+	adminSnapshots := make([]managedAdminUserSnapshot, 0, len(userRecords))
+	for _, userRecord := range userRecords {
+		tenantSnapshots := make([]managedAdminTenantSnapshot, 0, len(userRecord.Tenants))
+		for _, tenantRecord := range userRecord.Tenants {
+			tenantSnapshots = append(tenantSnapshots, managedAdminTenantSnapshot{
+				tenantID:  tenantRecord.TenantID,
+				name:      tenantRecord.Name,
+				hasSecret: tenantRecord.SecretDigest != nil,
+				createdAt: tenantRecord.CreatedAt,
+				updatedAt: tenantRecord.UpdatedAt,
+				usage:     summarizeManagedAdminUsage(usageRecordsByTenantID[tenantRecord.TenantID], timestamp),
+			})
+		}
+		adminSnapshots = append(adminSnapshots, managedAdminUserSnapshot{
+			userID:          userRecord.UserID,
+			userEmail:       userRecord.UserEmail,
+			userDisplayName: userRecord.UserDisplayName,
+			userAvatarURL:   userRecord.UserAvatarURL,
+			tenants:         tenantSnapshots,
+		})
 	}
 	sort.Slice(adminSnapshots, func(firstIndex int, secondIndex int) bool {
 		firstEmail := strings.ToLower(adminSnapshots[firstIndex].userEmail)

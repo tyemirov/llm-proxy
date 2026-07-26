@@ -119,23 +119,8 @@ func TestDictateHandlerSuccessWithAudioField(t *testing.T) {
 	}
 }
 
-func TestDictateHandlerAcceptsFileAlias(t *testing.T) {
-	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		if parseError := request.ParseMultipartForm(1024 * 1024); parseError != nil {
-			t.Fatalf("ParseMultipartForm error: %v", parseError)
-		}
-		if model := request.FormValue("model"); model != proxy.DefaultDictationModel {
-			t.Fatalf("model=%q want=%q", model, proxy.DefaultDictationModel)
-		}
-		if _, _, fileError := request.FormFile("file"); fileError != nil {
-			t.Fatalf("FormFile(file) error: %v", fileError)
-		}
-		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"text":"ok from alias"}`))
-	}))
-	defer upstreamServer.Close()
-
-	router := newDictationRouter(t, upstreamServer.URL, TestTimeout)
+func TestDictateHandlerRejectsObsoleteFileField(t *testing.T) {
+	router := newDictationRouter(t, "http://example.invalid", TestTimeout)
 	body, contentType := buildMultipartAudioRequest(t, "file")
 	request := httptest.NewRequest(http.MethodPost, "/dictate?key="+TestSecret, body)
 	request.Header.Set("Content-Type", contentType)
@@ -143,11 +128,8 @@ func TestDictateHandlerAcceptsFileAlias(t *testing.T) {
 
 	router.ServeHTTP(responseRecorder, request)
 
-	if responseRecorder.Code != http.StatusOK {
-		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
-	}
-	if responseText := decodeTextResponse(t, responseRecorder.Body.Bytes()); responseText != "ok from alias" {
-		t.Fatalf("text=%q want=%q", responseText, "ok from alias")
+	if responseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
 	}
 }
 

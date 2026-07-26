@@ -15,12 +15,15 @@ import (
 
 const (
 	managementAPIPath                   = "/api/management"
-	managementProfilePath               = "/profile"
+	managementAccountPath               = "/account"
+	managementTenantsPath               = "/tenants"
+	managementTenantPath                = managementTenantsPath + "/:tenant_id"
 	managementProviderKeysPath          = "/provider-keys/:provider"
 	managementProviderKeyRevealPath     = managementProviderKeysPath + "/reveal"
 	managementDefaultsPath              = "/defaults"
 	managementSecretsPath               = "/secrets"
 	managementUsagePath                 = "/usage"
+	managementUsageFailuresPath         = managementUsagePath + "/failures"
 	managementAdminUsersPath            = "/admin/users"
 	contextKeyManagementPrincipal       = "management_principal"
 	headerAccessControlAllowCredentials = "Access-Control-Allow-Credentials"
@@ -48,8 +51,12 @@ type managementService struct {
 	structuredLogger *zap.SugaredLogger
 }
 
-type managementProfileResponse struct {
-	User      managementUserResponse       `json:"user"`
+type managementAccountResponse struct {
+	User    managementUserResponse            `json:"user"`
+	Tenants []managementTenantSummaryResponse `json:"tenants"`
+}
+
+type managementTenantProfileResponse struct {
 	Tenant    managementTenantResponse     `json:"tenant"`
 	Providers []managementProviderResponse `json:"providers"`
 	Proxy     managementProxyResponse      `json:"proxy"`
@@ -65,10 +72,19 @@ type managementUserResponse struct {
 
 type managementTenantResponse struct {
 	ID        string                           `json:"id"`
+	Name      string                           `json:"name"`
 	HasSecret bool                             `json:"has_secret"`
 	Defaults  managementTenantDefaultsResponse `json:"defaults"`
 	CreatedAt string                           `json:"created_at"`
 	UpdatedAt string                           `json:"updated_at"`
+}
+
+type managementTenantSummaryResponse struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	HasSecret bool   `json:"has_secret"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 type managementTenantDefaultsResponse struct {
@@ -112,8 +128,8 @@ type managementProxyResponse struct {
 }
 
 type managementSecretResponse struct {
-	Secret  string                    `json:"secret"`
-	Profile managementProfileResponse `json:"profile"`
+	Secret  string                          `json:"secret"`
+	Profile managementTenantProfileResponse `json:"profile"`
 }
 
 type managementProviderKeyRevealResponse struct {
@@ -128,6 +144,22 @@ type managementUsageSummaryResponse struct {
 	Providers   []managementUsageProviderResponse `json:"providers"`
 	Models      []managementUsageModelResponse    `json:"models"`
 	StatusCodes []managementUsageStatusResponse   `json:"status_codes"`
+}
+
+type managementUsageFailuresResponse struct {
+	Interval   string                           `json:"interval"`
+	Failures   []managementUsageFailureResponse `json:"failures"`
+	NextCursor string                           `json:"next_cursor,omitempty"`
+}
+
+type managementUsageFailureResponse struct {
+	OccurredAt          string `json:"occurred_at"`
+	Endpoint            string `json:"endpoint"`
+	Provider            string `json:"provider"`
+	Model               string `json:"model"`
+	StatusCode          int    `json:"status_code"`
+	OutcomeCode         string `json:"outcome_code"`
+	LatencyMilliseconds int64  `json:"latency_ms"`
 }
 
 type managementAdminUsageSummaryResponse struct {
@@ -183,16 +215,22 @@ type managementAdminUsersResponse struct {
 }
 
 type managementAdminUserResponse struct {
-	User   managementUserResponse              `json:"user"`
-	Tenant managementAdminTenantResponse       `json:"tenant"`
-	Usage  managementAdminUsageSummaryResponse `json:"usage"`
+	User        managementUserResponse          `json:"user"`
+	TenantCount int                             `json:"tenant_count"`
+	Tenants     []managementAdminTenantResponse `json:"tenants"`
 }
 
 type managementAdminTenantResponse struct {
-	ID        string `json:"id"`
-	HasSecret bool   `json:"has_secret"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID        string                              `json:"id"`
+	Name      string                              `json:"name"`
+	HasSecret bool                                `json:"has_secret"`
+	CreatedAt string                              `json:"created_at"`
+	UpdatedAt string                              `json:"updated_at"`
+	Usage     managementAdminUsageSummaryResponse `json:"usage"`
+}
+
+type managementTenantNameRequest struct {
+	Name string `json:"name"`
 }
 
 type managementProviderKeyRequest struct {
@@ -230,15 +268,22 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.OPTIONS("/*path", service.corsPreflightHandler())
 	managementGroup.Use(service.sessionMiddleware())
 	managementGroup.Use(service.managementMutationMiddleware())
-	managementGroup.GET(managementProfilePath, service.profileHandler())
-	managementGroup.GET(managementUsagePath, service.usageHandler())
+	managementGroup.GET(managementAccountPath, service.accountHandler())
+	managementGroup.POST(managementTenantsPath, service.createTenantHandler())
 	managementGroup.GET(managementAdminUsersPath, service.adminUsersHandler())
-	managementGroup.PUT(managementProviderKeysPath, service.saveProviderKeyHandler())
-	managementGroup.DELETE(managementProviderKeysPath, service.removeProviderKeyHandler())
-	managementGroup.POST(managementProviderKeyRevealPath, service.managementCredentialedActionMiddleware(), service.revealProviderKeyHandler())
-	managementGroup.PUT(managementDefaultsPath, service.updateDefaultsHandler())
-	managementGroup.POST(managementSecretsPath, service.generateSecretHandler())
-	managementGroup.DELETE(managementSecretsPath, service.revokeSecretHandler())
+
+	tenantGroup := managementGroup.Group(managementTenantPath)
+	tenantGroup.GET("", service.tenantProfileHandler())
+	tenantGroup.PUT("", service.renameTenantHandler())
+	tenantGroup.DELETE("", service.deleteTenantHandler())
+	tenantGroup.GET(managementUsagePath, service.usageHandler())
+	tenantGroup.GET(managementUsageFailuresPath, service.usageFailuresHandler())
+	tenantGroup.PUT(managementProviderKeysPath, service.saveProviderKeyHandler())
+	tenantGroup.DELETE(managementProviderKeysPath, service.removeProviderKeyHandler())
+	tenantGroup.POST(managementProviderKeyRevealPath, service.managementCredentialedActionMiddleware(), service.revealProviderKeyHandler())
+	tenantGroup.PUT(managementDefaultsPath, service.updateDefaultsHandler())
+	tenantGroup.POST(managementSecretsPath, service.generateSecretHandler())
+	tenantGroup.DELETE(managementSecretsPath, service.revokeSecretHandler())
 }
 
 func (service *managementService) sessionMiddleware() gin.HandlerFunc {
@@ -247,15 +292,6 @@ func (service *managementService) sessionMiddleware() gin.HandlerFunc {
 		if validationError != nil {
 			service.structuredLogger.Warnw("management session rejected", "reason", managementSessionRejectionReason(validationError))
 			ginContext.AbortWithStatus(http.StatusUnauthorized)
-			return
-		}
-		if migrationError := service.store.claimLegacyToken(principal); migrationError != nil {
-			statusCode := http.StatusInternalServerError
-			if errors.Is(migrationError, errManagedLegacyTokenConflict) {
-				statusCode = http.StatusConflict
-			}
-			ginContext.String(statusCode, migrationError.Error())
-			ginContext.Abort()
 			return
 		}
 		ginContext.Set(contextKeyManagementPrincipal, principal)
@@ -328,20 +364,119 @@ func (service *managementService) applyCORSHeaders(ginContext *gin.Context) {
 	ginContext.Header(headerVary, headerOrigin)
 }
 
-func (service *managementService) profileHandler() gin.HandlerFunc {
+func (service *managementService) accountHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		principal := managementPrincipalFromContext(ginContext)
-		snapshot, snapshotError := service.store.profile(principal)
+		snapshot, snapshotError := service.store.account(principal)
 		if snapshotError != nil {
 			ginContext.String(http.StatusInternalServerError, snapshotError.Error())
 			return
 		}
-		service.writeProfileResponse(ginContext, principal, snapshot)
+		tenants := make([]managementTenantSummaryResponse, 0, len(snapshot.tenants))
+		for _, tenantSummary := range snapshot.tenants {
+			tenants = append(tenants, managementTenantSummaryResponse{
+				ID:        tenantSummary.tenantID,
+				Name:      tenantSummary.name,
+				HasSecret: tenantSummary.hasSecret,
+				CreatedAt: tenantSummary.createdAt.Format(time.RFC3339),
+				UpdatedAt: tenantSummary.updatedAt.Format(time.RFC3339),
+			})
+		}
+		ginContext.Header(headerCacheControl, cacheControlNoStore)
+		ginContext.JSON(http.StatusOK, managementAccountResponse{
+			User: managementUserResponse{
+				ID:          snapshot.userID,
+				Email:       snapshot.userEmail,
+				DisplayName: snapshot.userDisplayName,
+				AvatarURL:   snapshot.userAvatarURL,
+				IsAdmin:     principal.isAdmin,
+			},
+			Tenants: tenants,
+		})
+	}
+}
+
+func (service *managementService) createTenantHandler() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		var request managementTenantNameRequest
+		if decodeError := decodeManagementJSON(ginContext, &request); decodeError != nil {
+			ginContext.String(http.StatusBadRequest, decodeError.Error())
+			return
+		}
+		name, nameError := newManagedTenantName(request.Name)
+		if nameError != nil {
+			ginContext.String(http.StatusBadRequest, nameError.Error())
+			return
+		}
+		snapshot, createError := service.store.createTenant(managementPrincipalFromContext(ginContext), name)
+		if createError != nil {
+			writeManagementStoreError(ginContext, createError)
+			return
+		}
+		service.writeTenantProfileResponse(ginContext, snapshot, http.StatusCreated)
+	}
+}
+
+func (service *managementService) tenantProfileHandler() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
+		if !identifierValid {
+			return
+		}
+		snapshot, snapshotError := service.store.tenantProfile(managementPrincipalFromContext(ginContext), tenantIdentifier)
+		if snapshotError != nil {
+			writeManagementStoreError(ginContext, snapshotError)
+			return
+		}
+		service.writeTenantProfileResponse(ginContext, snapshot, http.StatusOK)
+	}
+}
+
+func (service *managementService) renameTenantHandler() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
+		if !identifierValid {
+			return
+		}
+		var request managementTenantNameRequest
+		if decodeError := decodeManagementJSON(ginContext, &request); decodeError != nil {
+			ginContext.String(http.StatusBadRequest, decodeError.Error())
+			return
+		}
+		name, nameError := newManagedTenantName(request.Name)
+		if nameError != nil {
+			ginContext.String(http.StatusBadRequest, nameError.Error())
+			return
+		}
+		snapshot, renameError := service.store.renameTenant(managementPrincipalFromContext(ginContext), tenantIdentifier, name)
+		if renameError != nil {
+			writeManagementStoreError(ginContext, renameError)
+			return
+		}
+		service.writeTenantProfileResponse(ginContext, snapshot, http.StatusOK)
+	}
+}
+
+func (service *managementService) deleteTenantHandler() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
+		if !identifierValid {
+			return
+		}
+		if deleteError := service.store.deleteTenant(managementPrincipalFromContext(ginContext), tenantIdentifier); deleteError != nil {
+			writeManagementStoreError(ginContext, deleteError)
+			return
+		}
+		ginContext.Status(http.StatusNoContent)
 	}
 }
 
 func (service *managementService) usageHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
+		if !identifierValid {
+			return
+		}
 		query := ginContext.Request.URL.Query()
 		intervalValues, intervalExists := query["interval"]
 		if len(query) != 1 || !intervalExists || len(intervalValues) != 1 {
@@ -354,12 +489,33 @@ func (service *managementService) usageHandler() gin.HandlerFunc {
 			return
 		}
 		principal := managementPrincipalFromContext(ginContext)
-		summary, summaryError := service.store.usageSummary(principal, interval)
+		summary, summaryError := service.store.usageSummary(principal, tenantIdentifier, interval)
 		if summaryError != nil {
-			ginContext.String(http.StatusInternalServerError, summaryError.Error())
+			writeManagementStoreError(ginContext, summaryError)
 			return
 		}
 		ginContext.JSON(http.StatusOK, managementUsageSummary(summary))
+	}
+}
+
+func (service *managementService) usageFailuresHandler() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
+		if !identifierValid {
+			return
+		}
+		query, queryError := newManagedUsageFailureQuery(ginContext.Request.URL.Query())
+		if queryError != nil {
+			ginContext.String(http.StatusBadRequest, queryError.Error())
+			return
+		}
+		page, pageError := service.store.usageFailures(managementPrincipalFromContext(ginContext), tenantIdentifier, query)
+		if pageError != nil {
+			writeManagementStoreError(ginContext, pageError)
+			return
+		}
+		ginContext.Header(headerCacheControl, cacheControlNoStore)
+		ginContext.JSON(http.StatusOK, managementUsageFailuresResponseFor(page))
 	}
 }
 
@@ -381,6 +537,10 @@ func (service *managementService) adminUsersHandler() gin.HandlerFunc {
 
 func (service *managementService) saveProviderKeyHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
+		if !identifierValid {
+			return
+		}
 		principal := managementPrincipalFromContext(ginContext)
 		providerIdentifier, providerError := service.providers.canonicalProviderID(ginContext.Param("provider"))
 		if providerError != nil {
@@ -396,43 +556,51 @@ func (service *managementService) saveProviderKeyHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusBadRequest, providerSettingsError.Error())
 			return
 		}
-		snapshot, storeError := service.store.saveProviderKey(principal, providerIdentifier, request.APIKey, request.TextModel, request.SystemPrompt)
+		snapshot, storeError := service.store.saveProviderKey(principal, tenantIdentifier, providerIdentifier, request.APIKey, request.TextModel, request.SystemPrompt)
 		if storeError != nil {
-			ginContext.String(http.StatusBadRequest, storeError.Error())
+			writeManagementStoreError(ginContext, storeError)
 			return
 		}
-		service.writeProfileResponse(ginContext, principal, snapshot)
+		service.writeTenantProfileResponse(ginContext, snapshot, http.StatusOK)
 	}
 }
 
 func (service *managementService) removeProviderKeyHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
+		if !identifierValid {
+			return
+		}
 		principal := managementPrincipalFromContext(ginContext)
 		providerIdentifier, providerError := service.providers.canonicalProviderID(ginContext.Param("provider"))
 		if providerError != nil {
 			ginContext.String(http.StatusBadRequest, providerError.Error())
 			return
 		}
-		snapshot, storeError := service.store.removeProviderKey(principal, providerIdentifier)
+		snapshot, storeError := service.store.removeProviderKey(principal, tenantIdentifier, providerIdentifier)
 		if storeError != nil {
-			ginContext.String(http.StatusInternalServerError, storeError.Error())
+			writeManagementStoreError(ginContext, storeError)
 			return
 		}
-		service.writeProfileResponse(ginContext, principal, snapshot)
+		service.writeTenantProfileResponse(ginContext, snapshot, http.StatusOK)
 	}
 }
 
 func (service *managementService) revealProviderKeyHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		ginContext.Header(headerCacheControl, cacheControlNoStore)
+		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
+		if !identifierValid {
+			return
+		}
 		providerIdentifier, providerError := service.providers.canonicalProviderID(ginContext.Param("provider"))
 		if providerError != nil {
 			ginContext.String(http.StatusBadRequest, providerError.Error())
 			return
 		}
-		apiKey, revealError := service.store.revealProviderKey(managementPrincipalFromContext(ginContext), providerIdentifier)
+		apiKey, revealError := service.store.revealProviderKey(managementPrincipalFromContext(ginContext), tenantIdentifier, providerIdentifier)
 		if revealError != nil {
-			if errors.Is(revealError, errManagedProviderKeyNotFound) {
+			if errors.Is(revealError, errManagedProviderKeyNotFound) || errors.Is(revealError, errManagedTenantNotFound) {
 				ginContext.AbortWithStatus(http.StatusNotFound)
 				return
 			}
@@ -445,6 +613,10 @@ func (service *managementService) revealProviderKeyHandler() gin.HandlerFunc {
 
 func (service *managementService) updateDefaultsHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
+		if !identifierValid {
+			return
+		}
 		principal := managementPrincipalFromContext(ginContext)
 		var request managementDefaultsRequest
 		if decodeError := decodeManagementJSON(ginContext, &request); decodeError != nil {
@@ -461,33 +633,37 @@ func (service *managementService) updateDefaultsHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusBadRequest, defaultsConstructionError.Error())
 			return
 		}
-		currentSnapshot, snapshotError := service.store.profile(principal)
+		currentSnapshot, snapshotError := service.store.tenantProfile(principal, tenantIdentifier)
 		if snapshotError != nil {
-			ginContext.String(http.StatusInternalServerError, snapshotError.Error())
+			writeManagementStoreError(ginContext, snapshotError)
 			return
 		}
 		if defaultsError := service.validateManagedRoutingDefaults(currentSnapshot.providerAPIKeys, defaults); defaultsError != nil {
 			ginContext.String(http.StatusBadRequest, defaultsError.Error())
 			return
 		}
-		snapshot, storeError := service.store.updateDefaults(principal, defaults)
+		snapshot, storeError := service.store.updateDefaults(principal, tenantIdentifier, defaults)
 		if storeError != nil {
-			ginContext.String(http.StatusInternalServerError, storeError.Error())
+			writeManagementStoreError(ginContext, storeError)
 			return
 		}
-		service.writeProfileResponse(ginContext, principal, snapshot)
+		service.writeTenantProfileResponse(ginContext, snapshot, http.StatusOK)
 	}
 }
 
 func (service *managementService) generateSecretHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
-		principal := managementPrincipalFromContext(ginContext)
-		rawSecret, snapshot, generationError := service.store.generateSecret(principal, service.authenticator.containsStaticSecretDigest)
-		if generationError != nil {
-			ginContext.String(http.StatusInternalServerError, generationError.Error())
+		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
+		if !identifierValid {
 			return
 		}
-		profile, profileError := service.profileResponse(principal, snapshot)
+		principal := managementPrincipalFromContext(ginContext)
+		rawSecret, snapshot, generationError := service.store.generateSecret(principal, tenantIdentifier, service.authenticator.containsStaticSecretDigest)
+		if generationError != nil {
+			writeManagementStoreError(ginContext, generationError)
+			return
+		}
+		profile, profileError := service.tenantProfileResponse(snapshot)
 		if profileError != nil {
 			ginContext.String(http.StatusInternalServerError, profileError.Error())
 			return
@@ -502,41 +678,39 @@ func (service *managementService) generateSecretHandler() gin.HandlerFunc {
 
 func (service *managementService) revokeSecretHandler() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
-		principal := managementPrincipalFromContext(ginContext)
-		snapshot, storeError := service.store.revokeSecret(principal)
-		if storeError != nil {
-			ginContext.String(http.StatusInternalServerError, storeError.Error())
+		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
+		if !identifierValid {
 			return
 		}
-		service.writeProfileResponse(ginContext, principal, snapshot)
+		principal := managementPrincipalFromContext(ginContext)
+		snapshot, storeError := service.store.revokeSecret(principal, tenantIdentifier)
+		if storeError != nil {
+			writeManagementStoreError(ginContext, storeError)
+			return
+		}
+		service.writeTenantProfileResponse(ginContext, snapshot, http.StatusOK)
 	}
 }
 
-func (service *managementService) writeProfileResponse(ginContext *gin.Context, principal managementPrincipal, snapshot managedTenantSnapshot) {
-	profile, profileError := service.profileResponse(principal, snapshot)
+func (service *managementService) writeTenantProfileResponse(ginContext *gin.Context, snapshot managedTenantSnapshot, statusCode int) {
+	profile, profileError := service.tenantProfileResponse(snapshot)
 	if profileError != nil {
 		ginContext.String(http.StatusInternalServerError, profileError.Error())
 		return
 	}
 	ginContext.Header(headerCacheControl, cacheControlNoStore)
-	ginContext.JSON(http.StatusOK, profile)
+	ginContext.JSON(statusCode, profile)
 }
 
-func (service *managementService) profileResponse(principal managementPrincipal, snapshot managedTenantSnapshot) (managementProfileResponse, error) {
+func (service *managementService) tenantProfileResponse(snapshot managedTenantSnapshot) (managementTenantProfileResponse, error) {
 	defaults, defaultsError := validatePersistedManagedRoutingDefaults(service.providers, snapshot.defaults)
 	if defaultsError != nil {
-		return managementProfileResponse{}, fmt.Errorf("%w: tenant=%s: %w", errManagedRoutingDefaultsInvalid, snapshot.tenantID, defaultsError)
+		return managementTenantProfileResponse{}, fmt.Errorf("%w: tenant=%s: %w", errManagedRoutingDefaultsInvalid, snapshot.tenantID, defaultsError)
 	}
-	return managementProfileResponse{
-		User: managementUserResponse{
-			ID:          snapshot.userID,
-			Email:       snapshot.userEmail,
-			DisplayName: snapshot.userDisplayName,
-			AvatarURL:   snapshot.userAvatarURL,
-			IsAdmin:     principal.isAdmin,
-		},
+	return managementTenantProfileResponse{
 		Tenant: managementTenantResponse{
 			ID:        snapshot.tenantID,
+			Name:      snapshot.tenantName,
 			HasSecret: snapshot.hasSecret,
 			Defaults:  managementDefaultsResponse(defaults),
 			CreatedAt: snapshot.createdAt.Format(time.RFC3339),
@@ -549,6 +723,28 @@ func (service *managementService) profileResponse(principal managementPrincipal,
 			DictationPath: dictatePath,
 		},
 	}, nil
+}
+
+func managementTenantIdentifierFromContext(ginContext *gin.Context) (managedTenantIdentifier, bool) {
+	tenantIdentifier, identifierError := newManagedTenantIdentifier(ginContext.Param("tenant_id"))
+	if identifierError != nil {
+		ginContext.AbortWithStatus(http.StatusNotFound)
+		return "", false
+	}
+	return tenantIdentifier, true
+}
+
+func writeManagementStoreError(ginContext *gin.Context, storeError error) {
+	switch {
+	case errors.Is(storeError, errManagedTenantNotFound):
+		ginContext.AbortWithStatus(http.StatusNotFound)
+	case errors.Is(storeError, errManagedTenantNameConflict), errors.Is(storeError, errManagedFinalTenantDeletion):
+		ginContext.String(http.StatusConflict, storeError.Error())
+	case errors.Is(storeError, errManagedTenantNameInvalid), errors.Is(storeError, errManagedProviderKeyInvalid):
+		ginContext.String(http.StatusBadRequest, storeError.Error())
+	default:
+		ginContext.String(http.StatusInternalServerError, storeError.Error())
+	}
 }
 
 func (service *managementService) providerResponses(providerSettings map[providerID]managedProviderSettings) []managementProviderResponse {
@@ -567,7 +763,7 @@ func (service *managementService) providerResponses(providerSettings map[provide
 		response := managementProviderResponse{
 			ID:                    summary.identifier,
 			Label:                 summary.label,
-			Aliases:               summary.aliases,
+			Aliases:               append([]string{}, summary.aliases...),
 			HasKey:                hasKey,
 			TextModel:             summary.textDefaultModel,
 			SystemPrompt:          constants.EmptyString,
@@ -686,6 +882,26 @@ func managementUsageSummary(summary managedUsageSummary) managementUsageSummaryR
 	}
 }
 
+func managementUsageFailuresResponseFor(page managedUsageFailurePage) managementUsageFailuresResponse {
+	failures := make([]managementUsageFailureResponse, 0, len(page.failures))
+	for _, failure := range page.failures {
+		failures = append(failures, managementUsageFailureResponse{
+			OccurredAt:          failure.occurredAt.UTC().Format(time.RFC3339Nano),
+			Endpoint:            failure.endpoint,
+			Provider:            failure.providerIdentifier,
+			Model:               failure.modelIdentifier,
+			StatusCode:          failure.statusCode,
+			OutcomeCode:         string(failure.outcomeCode),
+			LatencyMilliseconds: failure.latencyMilliseconds,
+		})
+	}
+	return managementUsageFailuresResponse{
+		Interval:   string(page.interval),
+		Failures:   failures,
+		NextCursor: page.nextCursor,
+	}
+}
+
 func managementAdminUsageSummary(summary managedAdminUsageSummary) managementAdminUsageSummaryResponse {
 	return managementAdminUsageSummaryResponse{
 		PeriodDays:  summary.periodDays,
@@ -771,6 +987,17 @@ func (service *managementService) adminUsersResponse(snapshots []managedAdminUse
 	users := make([]managementAdminUserResponse, 0, len(snapshots))
 	for _, snapshot := range snapshots {
 		_, userIsAdmin := service.sessionValidator.adminEmails[strings.ToLower(strings.TrimSpace(snapshot.userEmail))]
+		tenants := make([]managementAdminTenantResponse, 0, len(snapshot.tenants))
+		for _, tenantSnapshot := range snapshot.tenants {
+			tenants = append(tenants, managementAdminTenantResponse{
+				ID:        tenantSnapshot.tenantID,
+				Name:      tenantSnapshot.name,
+				HasSecret: tenantSnapshot.hasSecret,
+				CreatedAt: tenantSnapshot.createdAt.Format(time.RFC3339),
+				UpdatedAt: tenantSnapshot.updatedAt.Format(time.RFC3339),
+				Usage:     managementAdminUsageSummary(tenantSnapshot.usage),
+			})
+		}
 		users = append(users, managementAdminUserResponse{
 			User: managementUserResponse{
 				ID:          snapshot.userID,
@@ -779,13 +1006,8 @@ func (service *managementService) adminUsersResponse(snapshots []managedAdminUse
 				AvatarURL:   snapshot.userAvatarURL,
 				IsAdmin:     userIsAdmin,
 			},
-			Tenant: managementAdminTenantResponse{
-				ID:        snapshot.tenantID,
-				HasSecret: snapshot.hasSecret,
-				CreatedAt: snapshot.createdAt.Format(time.RFC3339),
-				UpdatedAt: snapshot.updatedAt.Format(time.RFC3339),
-			},
-			Usage: managementAdminUsageSummary(snapshot.usage),
+			TenantCount: len(tenants),
+			Tenants:     tenants,
 		})
 	}
 	return managementAdminUsersResponse{
