@@ -34,6 +34,9 @@ const httpInternalServerError = 500;
 const noticeClockPauseLeadMilliseconds = 5_000;
 const noticeClockPreDeadlineAdvanceMilliseconds = 4_000;
 const noticeClockPostDeadlineAdvanceMilliseconds = 2_000;
+const tenantToolbarDesktopMaxHeight = 45;
+const tenantToolbarMobileMaxHeight = 80;
+const tenantSettingsRowMaxHeight = 64;
 const usageIntervals = Object.freeze([
   { id: "all", label: "ALL", requests: 91, totalTokens: 91_000, providerCount: 1 },
   { id: "30d", label: "30 days", requests: 37, totalTokens: 12_345, providerCount: 2 },
@@ -162,7 +165,9 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain('x-on:change="handleTenantSelection($event)"');
   expect(html).toContain('x-text="activeTenantID"');
   expect(html).toContain('<client-access-row role="group" x-bind:aria-label="copy.clientKey">');
-  expect(html).toContain('<client-access-tenant role="group" x-bind:aria-label="copy.renameTenant">');
+  expect(html).toContain('<client-access-tenant role="group" x-bind:aria-label="copy.tenantContext">');
+  expect(html).toContain('x-on:click="beginTenantNameEdit()"');
+  expect(html).toContain('x-on:click="cancelTenantNameEdit()"');
   expect(html).toContain('x-on:input="handleTenantNameInput($event)"');
   expect(html).toContain('x-on:click="requestTenantDeletion()"');
   expect(html).not.toContain("copy.tenantTitle");
@@ -594,9 +599,20 @@ test("tenant lifecycle is keyboard accessible, responsive, and guards the final 
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const tenantSettings = settingsDialog.getByRole("group", { name: "Rename tenant" });
-  await expect(tenantSettings.getByRole("button", { name: "Delete tenant" })).toBeDisabled();
-  await expect(tenantSettings.getByText("Your final tenant cannot be deleted.")).toBeVisible();
+  const tenantSettings = settingsDialog.getByRole("group", { name: "Tenant" });
+  const renameTenantButton = tenantSettings.getByRole("button", { name: "Rename" });
+  const deleteTenantButton = tenantSettings.getByRole("button", { name: "Delete tenant" });
+  await expect(tenantSettings.getByText("Default", { exact: true })).toBeVisible();
+  await expect(tenantSettings.getByText("tenant_1", { exact: true })).toBeVisible();
+  await expect(tenantSettings.getByText("Only tenant", { exact: true })).toBeVisible();
+  await expect(deleteTenantButton).toBeDisabled();
+  await expect(deleteTenantButton).toHaveAttribute("aria-describedby", "final-tenant-deletion");
+  await renameTenantButton.click();
+  const initialTenantName = tenantSettings.getByRole("textbox", { name: "Tenant name" });
+  await expect(initialTenantName).toBeFocused();
+  await tenantSettings.getByRole("button", { name: "Cancel" }).click();
+  await expect(initialTenantName).toBeHidden();
+  await expect(renameTenantButton).toBeFocused();
   await settingsDialog.getByRole("button", { name: "Close" }).click();
 
   const createTenantButton = page.getByRole("button", { name: "Create tenant" });
@@ -616,18 +632,22 @@ test("tenant lifecycle is keyboard accessible, responsive, and guards the final 
   await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_2`);
   await expect(page.getByRole("combobox", { name: "Active tenant" })).toHaveValue("tenant_2");
   await expect(settingsDialog).toBeVisible();
+  await renameTenantButton.click();
   const tenantName = tenantSettings.getByRole("textbox", { name: "Tenant name" });
   await tenantName.fill("Research Lab");
   await tenantSettings.getByRole("button", { name: "Save name" }).click();
+  await expect(renameTenantButton).toBeFocused();
+  await expect(tenantName).toBeHidden();
+  await expect(tenantSettings.getByText("Research Lab", { exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Active tenant" }).locator("option:checked")).toHaveText("Research Lab");
 
-  await tenantSettings.getByRole("button", { name: "Delete tenant" }).click();
+  await deleteTenantButton.click();
   const deleteDialog = page.getByRole("alertdialog", { name: "Delete “Research Lab”?" });
   await expect(deleteDialog.getByText("Research Lab", { exact: true })).toBeVisible();
   await expect(deleteDialog).toContainText("This permanently deletes the tenant");
   await deleteDialog.getByRole("button", { name: "Cancel" }).click();
   await expect(deleteDialog).toBeHidden();
-  await tenantSettings.getByRole("button", { name: "Delete tenant" }).click();
+  await deleteTenantButton.click();
   await deleteDialog.getByRole("button", { name: "Delete", exact: true }).click();
 
   await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_1`);
@@ -796,9 +816,11 @@ test("late tenant lifecycle responses cannot select or overwrite another tenant"
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const tenantSettings = settingsDialog.getByRole("group", { name: "Rename tenant" });
-  await tenantSettings.getByRole("textbox", { name: "Tenant name" }).fill("Late Rename");
-  await tenantSettings.getByRole("button", { name: "Save name" }).click();
+  const tenantSettings = settingsDialog.getByRole("group", { name: "Tenant" });
+  await tenantSettings.getByRole("button", { name: "Rename" }).click();
+  const tenantNameEditor = tenantSettings.getByRole("group", { name: "Rename tenant" });
+  await tenantNameEditor.getByRole("textbox", { name: "Tenant name" }).fill("Late Rename");
+  await tenantNameEditor.getByRole("button", { name: "Save name" }).click();
   await renameRequested;
   await navigateTenantHistory(page, "tenant_1");
   await page.getByRole("alertdialog", { name: "Discard unsaved changes?" }).getByRole("button", { name: "Discard and switch" }).click();
@@ -826,7 +848,7 @@ test("late tenant lifecycle responses cannot select or overwrite another tenant"
     await deleteReleased;
     await route.fulfill({ status: 204, body: "" }).catch(() => {});
   });
-  await settingsDialog.getByRole("group", { name: "Rename tenant" }).getByRole("button", { name: "Delete tenant" }).click();
+  await settingsDialog.getByRole("group", { name: "Tenant" }).getByRole("button", { name: "Delete tenant" }).click();
   await page.getByRole("alertdialog", { name: /Delete/ }).getByRole("button", { name: "Delete", exact: true }).click();
   await deleteRequested;
   await navigateTenantHistory(page, "tenant_1");
@@ -2769,13 +2791,17 @@ test("new client keys stay left-aligned and read-only while supporting key actio
     expect(
       Math.abs(keyLabelBox.y + keyLabelBox.height / 2 - (clientKeyRowBox.y + clientKeyRowBox.height / 2)),
     ).toBeLessThanOrEqual(1);
-    expect(clientKeyInputBox.x + clientKeyInputBox.width).toBeLessThanOrEqual(replaceKeyButtonBox.x);
-    expect(
-      Math.abs(
-        clientKeyInputBox.y + clientKeyInputBox.height / 2 -
-          (replaceKeyButtonBox.y + replaceKeyButtonBox.height / 2),
-      ),
-    ).toBeLessThanOrEqual(1);
+    if (viewport.name === "desktop") {
+      expect(clientKeyInputBox.x + clientKeyInputBox.width).toBeLessThanOrEqual(replaceKeyButtonBox.x);
+      expect(
+        Math.abs(
+          clientKeyInputBox.y + clientKeyInputBox.height / 2 -
+            (replaceKeyButtonBox.y + replaceKeyButtonBox.height / 2),
+        ),
+      ).toBeLessThanOrEqual(1);
+    } else {
+      expect(clientKeyRowBox.y + clientKeyRowBox.height).toBeLessThanOrEqual(replaceKeyButtonBox.y);
+    }
     expect(replaceKeyButtonBox.width).toBeGreaterThan(30);
     expect(replaceKeyButtonBox.width).toBeLessThanOrEqual(120);
     expect(replaceKeyIconBox.x).toBeGreaterThanOrEqual(replaceKeyButtonBox.x);
@@ -2855,12 +2881,37 @@ test("settings modal overlays MPR header and footer layers", async ({ page }) =>
   for (const viewport of settingsLayerViewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto(baseURL);
+    const tenantToolbarBox = await page.locator("tenant-context-bar").boundingBox();
+    const createTenantButtonBox = await page.getByRole("button", { name: "Create tenant" }).boundingBox();
+    if (!tenantToolbarBox || !createTenantButtonBox) {
+      throw new Error(`tenant_toolbar_geometry_missing:${viewport.name}`);
+    }
+    expect(tenantToolbarBox.x).toBeGreaterThanOrEqual(0);
+    expect(tenantToolbarBox.x + tenantToolbarBox.width).toBeLessThanOrEqual(viewport.width);
+    expect(tenantToolbarBox.height).toBeLessThanOrEqual(
+      viewport.name === "desktop" ? tenantToolbarDesktopMaxHeight : tenantToolbarMobileMaxHeight,
+    );
+    expect(createTenantButtonBox.x).toBeGreaterThanOrEqual(tenantToolbarBox.x);
+    expect(createTenantButtonBox.x + createTenantButtonBox.width).toBeLessThanOrEqual(
+      tenantToolbarBox.x + tenantToolbarBox.width,
+    );
     await page.getByTestId("avatar-menu").click();
     await page.getByTestId("avatar-menu-item").nth(0).click();
 
     const settingsDialog = page.getByRole("dialog", { name: "Settings" });
     await expect(settingsDialog).toBeVisible();
     await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeVisible();
+    const tenantSettings = settingsDialog.getByRole("group", { name: "Tenant" });
+    const tenantSettingsBox = await tenantSettings.boundingBox();
+    const settingsDialogBox = await settingsDialog.boundingBox();
+    if (!tenantSettingsBox || !settingsDialogBox) {
+      throw new Error(`tenant_settings_geometry_missing:${viewport.name}`);
+    }
+    expect(tenantSettingsBox.height).toBeLessThanOrEqual(tenantSettingsRowMaxHeight);
+    expect(tenantSettingsBox.x).toBeGreaterThanOrEqual(settingsDialogBox.x);
+    expect(tenantSettingsBox.x + tenantSettingsBox.width).toBeLessThanOrEqual(
+      settingsDialogBox.x + settingsDialogBox.width,
+    );
 
     const layerFacts = await settingsLayerFacts(page);
     expect(layerFacts.overlayZIndex).toBeGreaterThan(layerFacts.headerZIndex);
