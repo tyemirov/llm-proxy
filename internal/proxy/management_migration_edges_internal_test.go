@@ -121,17 +121,6 @@ func TestManagedTenantSQLiteMigrationPreflightRejectsMalformedOwnershipData(t *t
 			want: "tenant=\"\"",
 		},
 		{
-			name: "duplicate tenant",
-			configure: func(subTest *testing.T, testFixture fixture) {
-				second := testFixture.tenant
-				second.UserID = "other"
-				if createError := testFixture.database.Table(managedTenantTable).Create(&second).Error; createError != nil {
-					subTest.Fatalf("seed duplicate tenant: %v", createError)
-				}
-			},
-			want: "duplicate_tenant=" + "managed-default",
-		},
-		{
 			name: "invalid tenant identifier",
 			configure: func(subTest *testing.T, testFixture fixture) {
 				if updateError := testFixture.database.Table(managedTenantTable).Where("user_id = ?", testFixture.tenant.UserID).Update("tenant_id", "invalid/id").Error; updateError != nil {
@@ -267,6 +256,23 @@ func TestManagedTenantSQLiteMigrationPreflightRejectsMalformedOwnershipData(t *t
 			}
 		})
 	}
+
+	t.Run("duplicate tenant", func(subTest *testing.T) {
+		database := openUnconstrainedLegacyTenantDatabase(subTest, filepath.Join(subTest.TempDir(), "duplicate-tenant.db"))
+		for _, ownerUserID := range []string{"first-owner", "second-owner"} {
+			record := legacyManagedTenantRecord{
+				UserID: ownerUserID, TenantID: "managed-default", CreatedAt: now, UpdatedAt: now,
+			}
+			record.applyDefaults(defaultManagedRoutingDefaults())
+			if createError := database.Table(managedTenantTable).Create(&record).Error; createError != nil {
+				subTest.Fatalf("seed duplicate tenant: %v", createError)
+			}
+		}
+		_, preflightError := preflightLegacyManagedTenantSchema(database, cipher, providers)
+		if preflightError == nil || !strings.Contains(preflightError.Error(), "duplicate_tenant=managed-default") {
+			subTest.Fatalf("duplicate tenant error=%v", preflightError)
+		}
+	})
 
 	t.Run("duplicate owner", func(subTest *testing.T) {
 		database := openUnconstrainedLegacyTenantDatabase(subTest, filepath.Join(subTest.TempDir(), "duplicate-owner.db"))
@@ -508,6 +514,12 @@ func TestMigrateLegacyManagedTenantSchemaRollsBackTransactionalFailures(t *testi
 		configure func(*testing.T, *gorm.DB)
 	}{
 		{
+			name: "rename index",
+			open: func(subTest *testing.T, databasePath string) *gorm.DB {
+				return openDatabase(subTest, failingManagedIndexRenameDialector{Dialector: sqlite.Open(databasePath)})
+			},
+		},
+		{
 			name: "rename table",
 			open: func(subTest *testing.T, databasePath string) *gorm.DB {
 				return openDatabase(subTest, failingManagedRenameDialector{Dialector: sqlite.Open(databasePath)})
@@ -583,6 +595,11 @@ func TestMigrateLegacyManagedTenantSchemaRollsBackTransactionalFailures(t *testi
 				rollbackDatabase.Migrator().HasTable(managedUserTable) {
 				subTest.Fatalf("failed migration mutated schema: %v", migrationError)
 			}
+			for _, rename := range legacyManagedIndexRenames() {
+				if !rollbackDatabase.Migrator().HasIndex(rename.table, rename.source) {
+					subTest.Fatalf("failed migration removed legacy index %s: %v", rename.source, migrationError)
+				}
+			}
 		})
 	}
 }
@@ -628,6 +645,22 @@ func openUnconstrainedLegacyTenantDatabase(t *testing.T, databasePath string) *g
 
 type failingManagedRenameDialector struct {
 	gorm.Dialector
+}
+
+type failingManagedIndexRenameDialector struct {
+	gorm.Dialector
+}
+
+func (dialector failingManagedIndexRenameDialector) Migrator(database *gorm.DB) gorm.Migrator {
+	return failingManagedIndexRenameMigrator{Migrator: dialector.Dialector.Migrator(database)}
+}
+
+type failingManagedIndexRenameMigrator struct {
+	gorm.Migrator
+}
+
+func (failingManagedIndexRenameMigrator) RenameIndex(interface{}, string, string) error {
+	return errInternalTestDatabase
 }
 
 func (dialector failingManagedRenameDialector) Migrator(database *gorm.DB) gorm.Migrator {

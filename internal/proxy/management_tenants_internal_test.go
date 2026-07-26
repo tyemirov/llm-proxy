@@ -41,6 +41,11 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 	providerKeyCipher := internalManagedProviderKeyCipher()
 	providers := internalManagementProviderRegistry()
 	legacyDatabase := openLegacyManagedTenantDatabase(t, databasePath)
+	for _, rename := range legacyManagedIndexRenames() {
+		if !legacyDatabase.Migrator().HasIndex(rename.table, rename.source) {
+			t.Fatalf("legacy fixture missing index %s", rename.source)
+		}
+	}
 	fixedTime := time.Date(2026, 7, 25, 12, 30, 0, 0, time.UTC)
 
 	firstSecret := "llmp_first"
@@ -109,6 +114,11 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 		providerColumns, _ := migrator.ColumnTypes(managedProviderKeyTable)
 		usageColumns, _ := migrator.ColumnTypes(managedUsageEventTable)
 		t.Fatalf("unexpected ownership columns tenant=%v provider=%v usage=%v", managedColumnNames(tenantColumns), managedColumnNames(providerColumns), managedColumnNames(usageColumns))
+	}
+	for _, rename := range legacyManagedIndexRenames() {
+		if !migrator.HasIndex(rename.table, rename.source) {
+			t.Fatalf("current schema missing index %s", rename.source)
+		}
 	}
 	for _, legacyTable := range []string{legacyTenantMigrationTable, legacyProviderKeyMigrationTable, legacyUsageEventMigrationTable} {
 		if migrator.HasTable(legacyTable) {

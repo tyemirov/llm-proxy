@@ -51,6 +51,10 @@ const (
 	legacyTenantMigrationTable      = "managed_tenant_records_f014_legacy"
 	legacyProviderKeyMigrationTable = "managed_provider_api_key_records_f014_legacy"
 	legacyUsageEventMigrationTable  = "managed_usage_event_records_f014_legacy"
+	legacyTenantSecretDigestIndex   = "idx_managed_tenant_records_secret_digest"
+	legacyUsageCreatedAtIndex       = "idx_managed_usage_created_at"
+	migrationTenantSecretIndex      = "idx_f014_legacy_tenant_secret_digest"
+	migrationUsageCreatedAtIndex    = "idx_f014_legacy_usage_created_at"
 	obsoleteStaticMigrationTable    = "managed_static_config_migration_records"
 	obsoleteRoutingMigrationTable   = "managed_routing_defaults_migration_records"
 	legacyStaticTenantUserIDPrefix  = "static-config:"
@@ -583,8 +587,8 @@ type legacyManagedTenantRecord struct {
 	UserEmail                string
 	UserDisplayName          string
 	UserAvatarURL            string
-	TenantID                 string
-	SecretDigest             string
+	TenantID                 string `gorm:"uniqueIndex"`
+	SecretDigest             string `gorm:"index"`
 	DefaultProvider          string
 	DefaultModel             string
 	DefaultDictationProvider string
@@ -607,8 +611,8 @@ type legacyManagedProviderAPIKeyRecord struct {
 }
 
 type legacyManagedUsageEventRecord struct {
-	ID                  uint `gorm:"primaryKey"`
-	UserID              string
+	ID                  uint   `gorm:"primaryKey"`
+	UserID              string `gorm:"index:idx_managed_usage_user_created"`
 	TenantID            string
 	Endpoint            string
 	ProviderID          string
@@ -619,7 +623,13 @@ type legacyManagedUsageEventRecord struct {
 	RequestTokens       int
 	ResponseTokens      int
 	TotalTokens         int
-	CreatedAt           time.Time
+	CreatedAt           time.Time `gorm:"index:idx_managed_usage_user_created;index:idx_managed_usage_created_at"`
+}
+
+type managedIndexRename struct {
+	table  string
+	source string
+	target string
 }
 
 type managedTenantMigrationDataset struct {
@@ -640,6 +650,17 @@ func migrateLegacyManagedTenantSchema(database *gorm.DB, providerKeyCipher manag
 	}
 	return database.Transaction(func(transaction *gorm.DB) error {
 		migrator := transaction.Migrator()
+		for _, rename := range legacyManagedIndexRenames() {
+			if renameError := migrator.RenameIndex(rename.table, rename.source, rename.target); renameError != nil {
+				return fmt.Errorf(
+					"%w: operation=rename_index table=%s index=%s: %v",
+					errManagedTenantSchemaMigration,
+					rename.table,
+					rename.source,
+					renameError,
+				)
+			}
+		}
 		for _, rename := range []struct {
 			source string
 			target string
@@ -694,6 +715,13 @@ func migrateLegacyManagedTenantSchema(database *gorm.DB, providerKeyCipher manag
 		}
 		return nil
 	})
+}
+
+func legacyManagedIndexRenames() []managedIndexRename {
+	return []managedIndexRename{
+		{table: managedTenantTable, source: legacyTenantSecretDigestIndex, target: migrationTenantSecretIndex},
+		{table: managedUsageEventTable, source: legacyUsageCreatedAtIndex, target: migrationUsageCreatedAtIndex},
+	}
 }
 
 func preflightLegacyManagedTenantSchema(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) (managedTenantMigrationDataset, error) {
