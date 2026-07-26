@@ -881,11 +881,13 @@ as one bounded startup transaction:
 
 The subsequent bounded schema-version-2 migration preflights every schema-1
 usage row, maps successful rows to `success`, and maps historical `400`, `413`,
-`429`, `503`, `504`, and `502` statuses to their exact canonical failure codes.
-It rejects any other historical failure status before mutation, then writes the
-non-null outcome field and the tenant/success/time/id failure-page index in one
-transaction. Historical diagnostics therefore contain normalized,
-status-derived codes, never reconstructed raw error messages.
+`429`, `499`, `502`, `503`, and `504` statuses to their exact canonical failure
+codes. Caller cancellation `499` and proxy-budget expiry `504` both become
+`request_timeout`. It rejects any other historical failure status before
+mutation, then writes the non-null outcome field and the
+tenant/success/time/id failure-page index in one transaction. Historical
+diagnostics therefore contain normalized, status-derived codes, never
+reconstructed raw error messages.
 
 Server/runtime settings, backend auth validation settings, provider base URLs,
 transcription URLs, model catalogs, and browser-facing MPR UI/TAuth bootstrap
