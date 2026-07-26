@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "frontend:lint": "node scripts/check_frontend_syntax.mjs",
+    "frontend:lint": "node scripts/check_frontend_syntax.mjs && node scripts/generate_openapi_docs.mjs --check",
     "frontend:test": "playwright test",
     "frontend:test:blackbox": "playwright test --config=playwright.blackbox.config.js"
   },
