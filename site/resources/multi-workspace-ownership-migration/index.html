@@ -96,6 +96,13 @@
 
 
                         <tr>
+                          <td>SQLite index continuity</td>
+                          <td>Colliding legacy GORM index names move inside the same transaction before current tables are created.</td>
+                          <td>Preserved volumes migrate without deleting tenant or usage data.</td>
+                        </tr>
+
+
+                        <tr>
                           <td>Tenant and usage continuity</td>
                           <td>Opaque tenant ids, secret digests, routing defaults, timestamps, and every usage event are preserved.</td>
                           <td>Existing client secrets continue to identify the same workspace.</td>
