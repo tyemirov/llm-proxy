@@ -49,6 +49,10 @@ tenant-context-identity,
 client-access-row,
 client-access-key,
 client-access-tenant,
+tenant-identity,
+tenant-identity-copy,
+tenant-name-editor,
+tenant-name-actions,
 client-key-row,
 tenant-settings-actions,
 defaults-editor,
@@ -95,23 +99,25 @@ settings-section {
 tenant-context-bar {
   width: min(960px, calc(100vw - 24px));
   box-sizing: border-box;
-  margin: 0.5rem auto 0;
+  margin: 0.35rem auto 0;
   border: 1px solid var(--llm-border);
   border-radius: 6px;
   background: var(--llm-panel-strong);
-  padding: 0.55rem 0.65rem;
+  padding: 0.35rem 0.45rem;
 }
 
 tenant-switcher {
   display: grid;
-  grid-template-columns: minmax(12rem, 1fr) minmax(10rem, 1.5fr) auto;
-  align-items: end;
-  gap: 0.6rem;
+  grid-template-columns: minmax(14rem, 1fr) minmax(10rem, auto) auto;
+  align-items: center;
+  gap: 0.45rem;
 }
 
 tenant-switcher label {
   display: grid;
-  gap: 0.2rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
 }
 
 tenant-switcher .eyebrow {
@@ -119,9 +125,10 @@ tenant-switcher .eyebrow {
 }
 
 tenant-context-identity {
-  display: grid;
+  display: flex;
   min-width: 0;
-  gap: 0.15rem;
+  align-items: center;
+  gap: 0.35rem;
   color: var(--llm-muted);
   font-size: 0.65rem;
   font-weight: 700;
@@ -142,7 +149,7 @@ tenant-context-identity code {
 
 tenant-context-bar select,
 tenant-context-bar button {
-  min-height: 32px;
+  min-height: 30px;
   box-sizing: border-box;
   border: 1px solid var(--llm-border);
   border-radius: 6px;
@@ -162,6 +169,12 @@ tenant-context-bar button {
   padding: 0 0.7rem;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.tenant-create > span:first-child {
+  color: var(--llm-accent);
+  font-size: 1rem;
+  line-height: 1;
 }
 
 tenant-context-bar button:hover:not(:disabled) {
@@ -638,24 +651,58 @@ h3 {
 client-access-tenant {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 0.3rem 0.55rem;
+  align-items: center;
+  gap: 0.35rem 0.55rem;
   border: 1px solid var(--llm-border);
   border-radius: 6px;
   background: var(--llm-panel-strong);
-  padding: 0.55rem 0.65rem;
+  padding: 0.45rem 0.55rem;
 }
 
-client-access-tenant > label,
-client-access-tenant > .field-hint,
-client-access-tenant > .field-error {
-  grid-column: 1;
+tenant-identity {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
 }
 
-client-access-tenant > .field-hint,
-client-access-tenant > .field-error {
+tenant-identity > .eyebrow {
   margin: 0;
-  font-size: 0.7rem;
+}
+
+tenant-identity-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.05rem;
+}
+
+tenant-identity-copy strong,
+tenant-identity-copy code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+tenant-identity-copy strong {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+tenant-identity-copy code {
+  color: var(--llm-muted);
+  font-size: 0.65rem;
+}
+
+.tenant-protection-chip {
+  border: 1px solid var(--llm-border);
+  border-radius: 999px;
+  color: var(--llm-muted);
+  padding: 0.12rem 0.4rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .field-hint {
@@ -668,10 +715,34 @@ client-access-tenant > .field-error {
 
 tenant-settings-actions {
   display: flex;
-  grid-column: 2;
-  grid-row: 1 / span 3;
-  align-self: end;
+  align-items: center;
   gap: 0.4rem;
+}
+
+.tenant-delete .material-symbols-outlined {
+  display: block;
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+tenant-name-editor {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.3rem 0.45rem;
+}
+
+tenant-name-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+tenant-name-editor > .field-hint,
+tenant-name-editor > .field-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.7rem;
 }
 
 client-access-row {
@@ -1482,20 +1553,25 @@ settings-section,
     padding: 0.55rem;
   }
 
-  client-access-tenant {
+  tenant-identity {
+    gap: 0.35rem;
+  }
+
+  tenant-name-editor {
     grid-template-columns: 1fr;
   }
 
-  client-access-tenant > label,
-  client-access-tenant > .field-hint,
-  client-access-tenant > .field-error,
-  tenant-settings-actions {
-    grid-column: 1;
-    grid-row: auto;
+  tenant-name-actions {
+    justify-content: flex-end;
   }
 
-  tenant-settings-actions {
-    flex-wrap: wrap;
+  client-access-row {
+    grid-template-columns: 1fr;
+  }
+
+  .client-key-create,
+  .client-key-replace {
+    justify-self: end;
   }
 
   .settings-form-wide {

@@ -74,11 +74,15 @@
         </tenant-context-identity>
         <button
           type="button"
+          class="icon-button tenant-create"
           x-ref="createTenantButton"
           x-on:click="openCreateTenantDialog()"
           x-bind:disabled="busy"
-          x-text="copy.createTenant"
-        ></button>
+          x-bind:aria-label="copy.createTenant"
+        >
+          <span aria-hidden="true">+</span>
+          <span x-text="copy.createTenant"></span>
+        </button>
       </tenant-switcher>
     </tenant-context-bar>
 
@@ -426,39 +430,85 @@
                 ></p>
 
                 <settings-body>
-                  <client-access-tenant role="group" x-bind:aria-label="copy.renameTenant">
-                    <label for="tenant-name-input">
-                      <span class="eyebrow" x-text="copy.tenantName"></span>
-                      <input
-                        id="tenant-name-input"
-                        type="text"
-                        maxlength="80"
-                        x-bind:value="tenantNameDraft"
-                        x-on:input="handleTenantNameInput($event)"
-                        x-bind:disabled="settingsControlsDisabled"
-                        x-bind:aria-invalid="tenantNameError ? 'true' : 'false'"
-                        x-bind:aria-describedby="tenantNameError ? 'tenant-name-error' : 'tenant-name-hint'"
-                      >
-                    </label>
-                    <p id="tenant-name-hint" class="field-hint" x-text="copy.tenantNameHint"></p>
-                    <p id="tenant-name-error" class="field-error" x-show="tenantNameError" x-text="tenantNameError" role="alert"></p>
-                    <tenant-settings-actions>
+                  <client-access-tenant role="group" x-bind:aria-label="copy.tenantContext">
+                    <tenant-identity x-cloak x-show="!tenantNameEditing">
+                      <span class="eyebrow" x-text="copy.tenantContext"></span>
+                      <tenant-identity-copy>
+                        <strong x-text="activeTenantName"></strong>
+                        <code x-text="activeTenantID"></code>
+                      </tenant-identity-copy>
+                      <span
+                        class="tenant-protection-chip"
+                        x-cloak
+                        x-show="!canDeleteActiveTenant"
+                        x-text="copy.onlyTenant"
+                      ></span>
+                    </tenant-identity>
+                    <tenant-settings-actions x-cloak x-show="!tenantNameEditing">
                       <button
                         type="button"
-                        x-on:click="saveTenantName()"
-                        x-bind:disabled="settingsControlsDisabled || !tenantNameDirty"
-                        x-text="copy.saveTenantName"
+                        x-ref="tenantRenameButton"
+                        x-on:click="beginTenantNameEdit()"
+                        x-bind:disabled="settingsControlsDisabled"
+                        x-text="copy.renameTenantAction"
                       ></button>
                       <button
                         type="button"
-                        class="danger"
+                        class="icon-only danger tenant-delete"
                         x-ref="deleteTenantButton"
                         x-on:click="requestTenantDeletion()"
                         x-bind:disabled="settingsControlsDisabled || !canDeleteActiveTenant"
-                        x-text="copy.deleteTenant"
-                      ></button>
+                        x-bind:title="canDeleteActiveTenant ? copy.deleteTenant : copy.finalTenantDeletion"
+                        x-bind:aria-label="copy.deleteTenant"
+                        x-bind:aria-describedby="!canDeleteActiveTenant ? 'final-tenant-deletion' : null"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                      </button>
                     </tenant-settings-actions>
-                    <p class="field-hint" x-show="!canDeleteActiveTenant" x-text="copy.finalTenantDeletion"></p>
+                    <tenant-name-editor
+                      x-cloak
+                      x-show="tenantNameEditing"
+                      role="group"
+                      x-bind:aria-label="copy.renameTenant"
+                    >
+                      <label for="tenant-name-input">
+                        <span class="visually-hidden" x-text="copy.tenantName"></span>
+                        <input
+                          id="tenant-name-input"
+                          x-ref="tenantNameInput"
+                          type="text"
+                          maxlength="80"
+                          x-bind:value="tenantNameDraft"
+                          x-on:input="handleTenantNameInput($event)"
+                          x-bind:disabled="settingsControlsDisabled"
+                          x-bind:aria-invalid="tenantNameError ? 'true' : 'false'"
+                          x-bind:aria-describedby="tenantNameError ? 'tenant-name-error' : 'tenant-name-hint'"
+                        >
+                      </label>
+                      <tenant-name-actions>
+                        <button
+                          type="button"
+                          x-on:click="cancelTenantNameEdit()"
+                          x-bind:disabled="settingsControlsDisabled"
+                          x-text="copy.cancelTenantName"
+                        ></button>
+                        <button
+                          type="button"
+                          x-on:click="saveTenantName()"
+                          x-bind:disabled="settingsControlsDisabled || !tenantNameDirty"
+                          x-text="copy.saveTenantName"
+                        ></button>
+                      </tenant-name-actions>
+                      <p id="tenant-name-hint" class="field-hint" x-text="copy.tenantNameHint"></p>
+                      <p id="tenant-name-error" class="field-error" x-show="tenantNameError" x-text="tenantNameError" role="alert"></p>
+                    </tenant-name-editor>
+                    <p
+                      id="final-tenant-deletion"
+                      class="visually-hidden"
+                      x-cloak
+                      x-show="!canDeleteActiveTenant"
+                      x-text="copy.finalTenantDeletion"
+                    ></p>
                   </client-access-tenant>
 
                   <client-access-row role="group" x-bind:aria-label="copy.clientKey">

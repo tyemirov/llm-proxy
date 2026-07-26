@@ -149,6 +149,7 @@ export function createKeyManagement() {
     settingsClosePending: false,
     usageExamplesOpen: false,
     tenantNameDraft: EMPTY_STRING,
+    tenantNameEditing: false,
     tenantNameDirty: false,
     tenantNameError: EMPTY_STRING,
     createTenantDialogOpen: false,
@@ -956,6 +957,30 @@ export function createKeyManagement() {
       this.tenantNameError = EMPTY_STRING;
     },
 
+    beginTenantNameEdit() {
+      this.tenantNameDraft = this.activeTenantName;
+      this.tenantNameDirty = false;
+      this.tenantNameError = EMPTY_STRING;
+      this.tenantNameEditing = true;
+      this.$nextTick(() => {
+        this.$refs.tenantNameInput.focus();
+      });
+    },
+
+    resetTenantNameEdit() {
+      this.tenantNameDraft = this.activeTenantName;
+      this.tenantNameEditing = false;
+      this.tenantNameDirty = false;
+      this.tenantNameError = EMPTY_STRING;
+    },
+
+    cancelTenantNameEdit() {
+      this.resetTenantNameEdit();
+      this.$nextTick(() => {
+        this.$refs.tenantRenameButton.focus();
+      });
+    },
+
     async saveTenantName() {
       let name;
       try {
@@ -970,9 +995,10 @@ export function createKeyManagement() {
       if (!lifetimeController || !this.tenantNameDirty) {
         return;
       }
+      let tenantRenamed = false;
       this.busy = true;
       try {
-        await this.enqueueProfileMutation(workspaceVersion, async () => {
+        tenantRenamed = Boolean(await this.enqueueProfileMutation(workspaceVersion, async () => {
           const updatedProfile = await requestRenameTenant(tenantID, name, lifetimeController.signal);
           if (!this.canApplyTenantWorkspace(workspaceVersion, tenantID)) {
             return false;
@@ -983,6 +1009,7 @@ export function createKeyManagement() {
           ));
           this.account = { ...this.account, tenants: this.tenants };
           this.tenantNameDraft = updatedProfile.tenant.name;
+          this.tenantNameEditing = false;
           this.tenantNameDirty = false;
           this.applyProfile(
             updatedProfile,
@@ -991,7 +1018,7 @@ export function createKeyManagement() {
           );
           this.setNotice(NOTICE_KINDS.SUCCESS, COPY.tenantRenamed);
           return true;
-        });
+        }));
       } catch (requestError) {
         if (!isAbortError(requestError) && this.canApplyTenantWorkspace(workspaceVersion, tenantID)) {
           this.tenantNameError = requestError && requestError.status === 409
@@ -1000,6 +1027,13 @@ export function createKeyManagement() {
         }
       } finally {
         this.busy = false;
+      }
+      if (tenantRenamed) {
+        this.$nextTick(() => {
+          requestAnimationFrame(() => {
+            this.$refs.tenantRenameButton.focus();
+          });
+        });
       }
     },
 
@@ -1057,9 +1091,7 @@ export function createKeyManagement() {
     discardLocalTenantEdits() {
       this.providerEditorSession.dirty = false;
       this.routingDefaultsDirty = false;
-      this.tenantNameDraft = this.activeTenantName;
-      this.tenantNameDirty = false;
-      this.tenantNameError = EMPTY_STRING;
+      this.resetTenantNameEdit();
     },
 
     setUnauthenticated() {
@@ -1343,6 +1375,7 @@ export function createKeyManagement() {
       this.clearUsageFailures(false);
       this.usageExamplesOpen = false;
       this.dismissProviderKeyRemovalConfirmation();
+      this.resetTenantNameEdit();
       this.settingsOpen = true;
       requestAnimationFrame(() => {
         const entryControl = this.settingsRequired ? this.$refs.settingsRequirement : this.$refs.settingsClose;
@@ -1385,6 +1418,7 @@ export function createKeyManagement() {
         this.dismissProviderKeyRemovalConfirmation();
         this.clearProviderKeyMaterial();
         this.clearGeneratedSecret();
+        this.resetTenantNameEdit();
         this.settingsOpen = false;
       } finally {
         this.settingsClosePending = false;
@@ -2169,6 +2203,7 @@ export function createKeyManagement() {
       this.usage = emptyUsageSummary(this.selectedUsageInterval);
       this.clearGeneratedSecret();
       this.tenantNameDraft = EMPTY_STRING;
+      this.tenantNameEditing = false;
       this.tenantNameDirty = false;
       this.tenantNameError = EMPTY_STRING;
       this.usageExamplesOpen = false;
