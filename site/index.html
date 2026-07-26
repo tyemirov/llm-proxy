@@ -52,40 +52,6 @@
       <mpr-user slot="aux" display-mode="avatar" logout-url="/" logout-label="Sign out"></mpr-user>
     </mpr-header>
 
-    <tenant-context-bar x-cloak x-show="account && activeTenantID" aria-label="Tenant context">
-      <tenant-switcher>
-        <label>
-          <span class="eyebrow" x-text="copy.tenantSwitcherLabel"></span>
-          <select
-            x-ref="tenantSelector"
-            x-bind:value="activeTenantID"
-            x-on:change="handleTenantSelection($event)"
-            x-bind:disabled="busy"
-            x-bind:aria-label="copy.tenantSwitcherLabel"
-          >
-            <template x-for="tenant in tenants" x-bind:key="tenant.id">
-              <option x-bind:value="tenant.id" x-bind:selected="tenant.id === activeTenantID" x-text="tenant.name"></option>
-            </template>
-          </select>
-        </label>
-        <tenant-context-identity>
-          <span x-text="copy.tenantID"></span>
-          <code x-text="activeTenantID"></code>
-        </tenant-context-identity>
-        <button
-          type="button"
-          class="icon-button tenant-create"
-          x-ref="createTenantButton"
-          x-on:click="openCreateTenantDialog()"
-          x-bind:disabled="busy"
-          x-bind:aria-label="copy.createTenant"
-        >
-          <span aria-hidden="true">+</span>
-          <span x-text="copy.createTenant"></span>
-        </button>
-      </tenant-switcher>
-    </tenant-context-bar>
-
     <main class="llm-proxy-main">
       <llm-proxy-key-management x-bind:data-auth-state="authState">
         <section class="llm-panel" x-cloak x-show="authState === states.loading">
@@ -113,6 +79,21 @@
                 </div>
                 <dashboard-actions>
                   <button type="button" x-show="dashboardView === dashboardViews.ADMIN" x-on:click="openUsageDashboard()" x-text="copy.openUsageDashboard"></button>
+                  <label class="usage-tenant-control" x-show="dashboardView === dashboardViews.USAGE">
+                    <span class="visually-hidden" x-text="copy.usageTenant"></span>
+                    <select
+                      x-ref="usageTenantSelector"
+                      x-bind:value="selectedUsageTenantID"
+                      x-on:change="handleUsageTenantSelection($event)"
+                      x-bind:disabled="usageControlsDisabled"
+                      x-bind:aria-label="copy.usageTenant"
+                    >
+                      <option value="" x-bind:selected="usageScopeIsAllTenants" x-text="copy.allTenants"></option>
+                      <template x-for="tenant in tenants" x-bind:key="tenant.id">
+                        <option x-bind:value="tenant.id" x-bind:selected="tenant.id === selectedUsageTenantID" x-text="tenant.name"></option>
+                      </template>
+                    </select>
+                  </label>
                   <div class="usage-interval-control" role="group" x-show="dashboardView === dashboardViews.USAGE" x-bind:aria-label="copy.usageInterval">
                     <template x-for="interval in usageIntervals" x-bind:key="interval.id">
                       <button
@@ -347,6 +328,10 @@
                     <template x-for="(row, index) in usageFailureRows" x-bind:key="index">
                       <usage-failure-row role="listitem">
                         <dl>
+                          <div x-show="row.tenant">
+                            <dt x-text="copy.usageFailuresTenant"></dt>
+                            <dd x-text="row.tenant"></dd>
+                          </div>
                           <div>
                             <dt x-text="copy.usageFailuresOccurredAt"></dt>
                             <dd x-text="row.occurredAt"></dd>
@@ -430,17 +415,45 @@
                 ></p>
 
                 <settings-body>
+                  <tenant-management role="group" x-bind:aria-label="copy.settingsTenant">
+                    <label>
+                      <span class="eyebrow" x-text="copy.settingsTenant"></span>
+                      <select
+                        x-ref="settingsTenantSelector"
+                        x-bind:value="settingsTenantID"
+                        x-on:change="handleSettingsTenantSelection($event)"
+                        x-bind:disabled="settingsControlsDisabled"
+                        x-bind:aria-label="copy.settingsTenant"
+                      >
+                        <template x-for="tenant in tenants" x-bind:key="tenant.id">
+                          <option x-bind:value="tenant.id" x-bind:selected="tenant.id === settingsTenantID" x-text="tenant.name"></option>
+                        </template>
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      class="icon-button tenant-create"
+                      x-ref="createTenantButton"
+                      x-on:click="openCreateTenantDialog()"
+                      x-bind:disabled="settingsControlsDisabled"
+                      x-bind:aria-label="copy.createTenant"
+                    >
+                      <span aria-hidden="true">+</span>
+                      <span x-text="copy.createTenant"></span>
+                    </button>
+                  </tenant-management>
+
                   <client-access-tenant role="group" x-bind:aria-label="copy.tenantContext">
                     <tenant-identity x-cloak x-show="!tenantNameEditing">
                       <span class="eyebrow" x-text="copy.tenantContext"></span>
                       <tenant-identity-copy>
-                        <strong x-text="activeTenantName"></strong>
-                        <code x-text="activeTenantID"></code>
+                        <strong x-text="settingsTenantName"></strong>
+                        <code x-text="settingsTenantID"></code>
                       </tenant-identity-copy>
                       <span
                         class="tenant-protection-chip"
                         x-cloak
-                        x-show="!canDeleteActiveTenant"
+                        x-show="!canDeleteSettingsTenant"
                         x-text="copy.onlyTenant"
                       ></span>
                     </tenant-identity>
@@ -457,10 +470,10 @@
                         class="icon-only danger tenant-delete"
                         x-ref="deleteTenantButton"
                         x-on:click="requestTenantDeletion()"
-                        x-bind:disabled="settingsControlsDisabled || !canDeleteActiveTenant"
-                        x-bind:title="canDeleteActiveTenant ? copy.deleteTenant : copy.finalTenantDeletion"
+                        x-bind:disabled="settingsControlsDisabled || !canDeleteSettingsTenant"
+                        x-bind:title="canDeleteSettingsTenant ? copy.deleteTenant : copy.finalTenantDeletion"
                         x-bind:aria-label="copy.deleteTenant"
-                        x-bind:aria-describedby="!canDeleteActiveTenant ? 'final-tenant-deletion' : null"
+                        x-bind:aria-describedby="!canDeleteSettingsTenant ? 'final-tenant-deletion' : null"
                       >
                         <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                       </button>
@@ -506,7 +519,7 @@
                       id="final-tenant-deletion"
                       class="visually-hidden"
                       x-cloak
-                      x-show="!canDeleteActiveTenant"
+                      x-show="!canDeleteSettingsTenant"
                       x-text="copy.finalTenantDeletion"
                     ></p>
                   </client-access-tenant>
@@ -720,7 +733,7 @@
                 >
                   <h3 id="tenant-delete-title" x-text="deleteTenantTitle"></h3>
                   <p id="tenant-delete-description">
-                    <strong x-text="activeTenantName"></strong>
+                    <strong x-text="settingsTenantName"></strong>
                     <span x-text="copy.deleteTenantDescription"></span>
                   </p>
                   <footer class="provider-removal-actions">

@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Managed tenant usage dashboard for LLM requests</title>
-    <meta name="description" content="Show signed-in users selectable usage summaries plus safe, tenant-scoped failed-request details.">
+    <title>Account-wide managed tenant usage dashboard for LLMs</title>
+    <meta name="description" content="See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/">
-    <meta property="og:title" content="Managed tenant usage dashboard for LLM requests">
-    <meta property="og:description" content="Show signed-in users selectable usage summaries plus safe, tenant-scoped failed-request details.">
+    <meta property="og:title" content="Account-wide managed tenant usage dashboard for LLMs">
+    <meta property="og:description" content="See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/">
     <meta name="twitter:card" content="summary">
@@ -18,9 +18,9 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Managed tenant usage dashboard for LLM requests","description":"Show signed-in users selectable usage summaries plus safe, tenant-scoped failed-request details.","url":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","datePublished":"2026-07-06","dateModified":"2026-07-25","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","about":["LLM Proxy","Usage","managed tenant usage dashboard"]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Managed tenant usage dashboard for LLM requests","item":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of managed tenant usage dashboard?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy's authenticated landing screen combines aggregate usage with safe failure metadata for the signed-in user's selected workspace."}},{"@type":"Question","name":"Who should read this usage resource?","acceptedAnswer":{"@type":"Answer","text":"Teams giving users self-service AI access while keeping usage visible."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Normalized token usage metadata across providers, which covers normalized token usage metadata."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Account-wide managed tenant usage dashboard for LLMs","description":"See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.","url":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","datePublished":"2026-07-06","dateModified":"2026-07-26","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","about":["LLM Proxy","Usage","managed tenant usage dashboard"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Account-wide managed tenant usage dashboard for LLMs","item":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Does selecting a tenant activate or deactivate it?","acceptedAnswer":{"@type":"Answer","text":"No. Every owned tenant remains independently routable through its own generated secret; the Settings and Usage selectors only choose an editor or report scope."}},{"@type":"Question","name":"What does Usage Overview show by default?","acceptedAnswer":{"@type":"Answer","text":"It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary."}},{"@type":"Question","name":"Does changing the Settings tenant change Usage Overview?","acceptedAnswer":{"@type":"Answer","text":"No. Settings tenant and Usage tenant are independent; changing the Settings tenant does not change the Usage tenant filter."}},{"@type":"Question","name":"What tenant data appears in account-wide failure rows?","acceptedAnswer":{"@type":"Answer","text":"Only the safe opaque tenant ID and current display name are added. Credentials, prompts, responses, provider bodies, and free-form errors remain excluded."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Normalized token usage metadata across providers, which covers normalized token usage metadata."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="resource-page">
@@ -41,14 +41,18 @@
           <span>/</span>
           <a href="/resources/">Resources</a>
           <span>/</span>
-          <span>Managed tenant usage dashboard for LLM requests</span>
+          <span>Account-wide managed tenant usage dashboard for LLMs</span>
         </nav>
         <article>
           <header class="resource-hero">
             <p class="eyebrow">Usage</p>
-            <h1>Managed tenant usage dashboard for LLM requests</h1>
-            <p class="resource-deck">Show signed-in users selectable usage summaries plus safe, tenant-scoped failed-request details.</p>
+            <h1>Account-wide managed tenant usage dashboard for LLMs</h1>
+            <p class="resource-deck">See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.</p>
             <p class="resource-audience">Teams giving users self-service AI access while keeping usage visible.</p>
+            <aside class="resource-verdict" aria-label="Quick verdict">
+              <strong>Quick verdict</strong>
+              <p>Every tenant remains independently routable. Usage opens on All tenants and 30 days, while Settings has its own editor-only tenant selector.</p>
+            </aside>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
@@ -57,22 +61,23 @@
 
           <section>
             <h2>The problem</h2>
-            <p>A key-management portal is incomplete if users cannot see whether their managed proxy traffic is succeeding or which providers and models they use.</p>
+            <p>A multi-tenant key-management portal is incomplete when its default dashboard hides every tenant except one or implies that selecting a tenant activates it.</p>
           </section>
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy's authenticated landing screen combines aggregate usage with safe failure metadata for the signed-in user's selected workspace.</p>
+            <p>LLM Proxy's authenticated Usage Overview defaults to account-wide aggregates across every owned tenant, with an independent tenant filter and safe scope-bound failure details.</p>
           </section>
 
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
               <li>Enable management mode and generated-secret routing.</li>
-<li>Send proxy requests with the generated tenant secret.</li>
+<li>Send proxy requests through any owned tenant's generated secret; each tenant remains operational independently.</li>
 <li>Record canonical outcome metadata for managed-tenant requests without storing request or provider-error content.</li>
-<li>Select all, 30d, 7d, or 1d through GET /api/management/tenants/:tenant_id/usage?interval=&lt;interval&gt; and the dashboard UI.</li>
-<li>When failures exist, open N failed requests and page through GET /api/management/tenants/:tenant_id/usage/failures for the same interval.</li>
+<li>Open Usage Overview on All tenants and 30 days, or use the Usage tenant selector immediately before ALL to narrow the report.</li>
+<li>Read account-wide totals from GET /api/management/usage or one tenant from GET /api/management/tenants/:tenant_id/usage.</li>
+<li>When failures exist, open N failed requests; account-wide rows include safe tenant context and tenant-scoped rows do not repeat it.</li>
             </ol>
           </section>
 
@@ -90,9 +95,16 @@
                 <tbody>
 
                         <tr>
-                          <td>Selectable totals</td>
-                          <td>ALL, 30 days, 7 days, and 1 day replace requests, tokens, success rate, providers, and models together.</td>
-                          <td>Users can compare the same surfaces at useful time scales.</td>
+                          <td>All-tenant default</td>
+                          <td>The default All tenants and 30 days selections populate requests, tokens, success rate, providers, models, statuses, and buckets together.</td>
+                          <td>The first dashboard snapshot represents every owned tenant rather than the oldest one.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Independent selectors</td>
+                          <td>Settings tenant chooses only the editor; Usage tenant chooses only the report.</td>
+                          <td>Changing provider settings for one tenant cannot silently narrow the usage dashboard.</td>
                         </tr>
 
 
@@ -104,8 +116,8 @@
 
 
                         <tr>
-                          <td>Snapshot pagination</td>
-                          <td>Newest-first pages retain one opaque snapshot and expose only time, route, status, outcome, and latency metadata.</td>
+                          <td>Scope-bound pagination</td>
+                          <td>Newest-first cursors remain bound to All tenants or one exact tenant.</td>
                           <td>Prompts, responses, provider bodies, free-form errors, and credentials never enter the dialog.</td>
                         </tr>
 
@@ -119,20 +131,20 @@
             <div class="resource-card-grid">
 
                     <section class="resource-card">
-                      <h3>10 failures from 22 requests</h3>
-                      <p>A 55% success rate links to ten rows whose outcome labels separate client validation from runtime and provider failures.</p>
+                      <h3>Portfolio overview</h3>
+                      <p>A user sees the combined request and token totals for every owned tenant without making one browser request per tenant.</p>
                     </section>
 
 
                     <section class="resource-card">
-                      <h3>Status breakdown</h3>
-                      <p>A user compares 400, 429, 502, 503, and 504 counts before opening individual metadata rows.</p>
+                      <h3>Tenant investigation</h3>
+                      <p>Selecting Research narrows every usage surface and failure row to that tenant while Settings can remain on Default.</p>
                     </section>
 
 
                     <section class="resource-card">
-                      <h3>Selected-interval investigation</h3>
-                      <p>Changing from 30 days to 1 day invalidates the old dialog request so stale rows cannot cross intervals or workspaces.</p>
+                      <h3>Scope-safe failure review</h3>
+                      <p>Changing from All tenants to one tenant invalidates the old dialog request so stale rows and cursors cannot cross scopes.</p>
                     </section>
 
             </div>
@@ -148,30 +160,37 @@
           </section>
 
           <section>
+            <h2>Repository evidence</h2>
+            <pre class="usage-snippet"><code>GET /api/management/usage?interval=30d
+GET /api/management/tenants/:tenant_id/usage?interval=30d</code></pre>
+            <p>Verified 2026-07-26 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
+          </section>
+
+          <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
 
                     <details>
-                      <summary>What is the main job of managed tenant usage dashboard?</summary>
-                      <p>LLM Proxy's authenticated landing screen combines aggregate usage with safe failure metadata for the signed-in user's selected workspace.</p>
+                      <summary>Does selecting a tenant activate or deactivate it?</summary>
+                      <p>No. Every owned tenant remains independently routable through its own generated secret; the Settings and Usage selectors only choose an editor or report scope.</p>
                     </details>
 
 
                     <details>
-                      <summary>Who should read this usage resource?</summary>
-                      <p>Teams giving users self-service AI access while keeping usage visible.</p>
+                      <summary>What does Usage Overview show by default?</summary>
+                      <p>It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary.</p>
                     </details>
 
 
                     <details>
-                      <summary>Does this page claim provider performance or pricing advantages?</summary>
-                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                      <summary>Does changing the Settings tenant change Usage Overview?</summary>
+                      <p>No. Settings tenant and Usage tenant are independent; changing the Settings tenant does not change the Usage tenant filter.</p>
                     </details>
 
 
                     <details>
-                      <summary>Where should setup details come from?</summary>
-                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                      <summary>What tenant data appears in account-wide failure rows?</summary>
+                      <p>Only the safe opaque tenant ID and current display name are added. Credentials, prompts, responses, provider bodies, and free-form errors remain excluded.</p>
                     </details>
 
 

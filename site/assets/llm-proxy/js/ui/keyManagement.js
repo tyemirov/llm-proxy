@@ -20,6 +20,8 @@ import {
 import {
   createTenant as requestCreateTenant,
   deleteTenant as requestDeleteTenant,
+  fetchAccountUsageFailures,
+  fetchAccountUsageSummary,
   fetchAdminUsers,
   fetchAccount,
   fetchTenant,
@@ -60,7 +62,6 @@ const MASKED_PROVIDER_KEY_PREFIX = "****";
 const MASKED_PROVIDER_KEY_FINAL_CHARACTER_COUNT = 4;
 const MASKED_CLIENT_KEY = "••••••••••••";
 const SAVED_PROVIDER_KEY_MASK = "saved";
-const TENANT_QUERY_PARAMETER = "tenant";
 const TENANT_NAME_MAXIMUM_CHARACTERS = 80;
 
 /**
@@ -87,13 +88,14 @@ export function createKeyManagement() {
     usageIntervals: USAGE_INTERVALS,
     /** @type {import("../types.d.js").UsageInterval} */
     selectedUsageInterval: DEFAULT_USAGE_INTERVAL,
+    selectedUsageTenantID: EMPTY_STRING,
     usageLoading: false,
     usageLoadVersion: 0,
     /** @type {import("../types.d.js").ManagementAccount | null} */
     account: null,
     /** @type {import("../types.d.js").ManagementTenantSummary[]} */
     tenants: [],
-    activeTenantID: EMPTY_STRING,
+    settingsTenantID: EMPTY_STRING,
     /** @type {import("../types.d.js").ManagementTenantProfile | null} */
     profile: null,
     /** @type {import("../types.d.js").FrontendRuntimeConfig | null} */
@@ -124,7 +126,7 @@ export function createKeyManagement() {
     usageFailuresLoading: false,
     usageFailuresError: EMPTY_STRING,
     usageFailuresLoadVersion: 0,
-    /** @type {import("../types.d.js").ManagementUsageFailure[]} */
+    /** @type {Array<import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure>} */
     usageFailures: [],
     usageFailuresNextCursor: EMPTY_STRING,
     /** @type {import("../types.d.js").ManagementAdminUser[]} */
@@ -160,7 +162,6 @@ export function createKeyManagement() {
     deleteTenantPending: false,
     discardTenantChangesOpen: false,
     pendingTenantID: EMPTY_STRING,
-    pendingTenantHistoryMode: "push",
     notice: {
       kind: NOTICE_KINDS.INFO,
       message: EMPTY_STRING,
@@ -186,22 +187,23 @@ export function createKeyManagement() {
       document.addEventListener(EVENTS.USER_MENU_ITEM, (event) => {
         this.handleUserMenuItem(event);
       });
-      window.addEventListener("popstate", () => {
-        this.handleTenantHistoryNavigation();
-      });
       void this.start();
     },
 
-    get activeTenant() {
-      return this.tenants.find((tenant) => tenant.id === this.activeTenantID) || null;
+    get settingsTenant() {
+      return this.tenants.find((tenant) => tenant.id === this.settingsTenantID) || null;
     },
 
-    get activeTenantName() {
-      return this.activeTenant ? this.activeTenant.name : EMPTY_STRING;
+    get settingsTenantName() {
+      return this.settingsTenant ? this.settingsTenant.name : EMPTY_STRING;
     },
 
-    get canDeleteActiveTenant() {
+    get canDeleteSettingsTenant() {
       return this.tenants.length > 1;
+    },
+
+    get usageScopeIsAllTenants() {
+      return this.selectedUsageTenantID === EMPTY_STRING;
     },
 
     get hasUnsavedSettingsChanges() {
@@ -218,7 +220,7 @@ export function createKeyManagement() {
     },
 
     get deleteTenantTitle() {
-      return this.activeTenant ? `Delete “${this.activeTenant.name}”?` : COPY.deleteTenantTitle;
+      return this.settingsTenant ? `Delete “${this.settingsTenant.name}”?` : COPY.deleteTenantTitle;
     },
 
     get hasSecret() {
@@ -627,19 +629,12 @@ export function createKeyManagement() {
         this.account = loadedAccount;
         this.tenants = loadedAccount.tenants;
         applyUserMenuItems(Boolean(loadedAccount.user.is_admin));
-        const requestedTenantID = tenantIDFromURL();
-        if (requestedTenantID && !this.tenants.some((tenant) => tenant.id === requestedTenantID)) {
-          this.clearTenantWorkspaceState();
-          this.authState = AUTH_STATES.ERROR;
-          this.setNotice(NOTICE_KINDS.ERROR, COPY.invalidTenantURL);
-          return;
-        }
-        this.activeTenantID = requestedTenantID || this.tenants[0].id;
+        this.settingsTenantID = this.tenants[0].id;
         this.replaceTenantLifetimeController();
-        if (!requestedTenantID) {
-          this.writeTenantURL(this.activeTenantID, "replace");
+        await this.hydrateSettingsTenant(null, workspaceVersion);
+        if (this.authState === AUTH_STATES.AUTHENTICATED) {
+          await this.loadUsageSummary(false);
         }
-        await this.hydrateActiveTenant(null, workspaceVersion);
       } catch (requestError) {
         if (!isAbortError(requestError) && this.canApplyAuthenticatedWorkspace(workspaceVersion)) {
           this.clearAuthenticatedState();
@@ -659,20 +654,17 @@ export function createKeyManagement() {
      * @param {import("../types.d.js").ManagementTenantProfile | null} prefetchedProfile
      * @param {number} workspaceVersion
      */
-    async hydrateActiveTenant(prefetchedProfile, workspaceVersion) {
-      const tenantID = this.activeTenantID;
+    async hydrateSettingsTenant(prefetchedProfile, workspaceVersion) {
+      const tenantID = this.settingsTenantID;
       if (this.tenantRequestController) {
         this.tenantRequestController.abort();
       }
-      if (this.usageRequestController) {
-        this.usageRequestController.abort();
-      }
       const tenantRequestController = new AbortController();
       this.tenantRequestController = tenantRequestController;
-      this.clearTenantWorkspaceState();
+      this.clearSettingsTenantState();
       try {
         const loadedProfile = prefetchedProfile || await fetchTenant(tenantID, tenantRequestController.signal);
-        if (!this.canApplyTenantWorkspace(workspaceVersion, tenantID)) {
+        if (!this.canApplySettingsTenant(workspaceVersion, tenantID)) {
           return;
         }
         assertManagementTenantProfile(loadedProfile, tenantID);
@@ -685,14 +677,12 @@ export function createKeyManagement() {
         if (!this.hasSecret) {
           await this.requestAndApplyGeneratedSecret();
         }
-        if (!this.canApplyTenantWorkspace(workspaceVersion, tenantID) || this.authState !== AUTH_STATES.AUTHENTICATED) {
-          return;
-        }
-        await this.loadUsageForAuthenticatedProfile();
       } catch (requestError) {
-        if (!isAbortError(requestError) && this.canApplyTenantWorkspace(workspaceVersion, tenantID)) {
-          this.clearTenantWorkspaceState();
-          this.authState = AUTH_STATES.ERROR;
+        if (!isAbortError(requestError) && this.canApplySettingsTenant(workspaceVersion, tenantID)) {
+          this.clearSettingsTenantState();
+          if (this.authState !== AUTH_STATES.AUTHENTICATED) {
+            this.authState = AUTH_STATES.ERROR;
+          }
           this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
         }
       } finally {
@@ -718,8 +708,8 @@ export function createKeyManagement() {
      * @param {string} tenantID
      * @returns {boolean}
      */
-    canApplyTenantWorkspace(workspaceVersion, tenantID) {
-      return this.canApplyAuthenticatedWorkspace(workspaceVersion) && this.activeTenantID === tenantID;
+    canApplySettingsTenant(workspaceVersion, tenantID) {
+      return this.canApplyAuthenticatedWorkspace(workspaceVersion) && this.settingsTenantID === tenantID;
     },
 
     replaceTenantLifetimeController() {
@@ -729,111 +719,67 @@ export function createKeyManagement() {
       this.tenantLifetimeController = new AbortController();
     },
 
-    /**
-     * @param {"push" | "replace"} mode
-     */
-    writeTenantURL(tenantID, mode) {
-      const tenantURL = new URL(window.location.href);
-      tenantURL.searchParams.set(TENANT_QUERY_PARAMETER, tenantID);
-      window.history[`${mode}State`]({}, EMPTY_STRING, tenantURL);
-    },
-
-    handleTenantHistoryNavigation() {
-      if (!this.account) {
-        return;
-      }
-      const requestedTenantID = tenantIDFromURL();
-      if (!requestedTenantID || !this.tenants.some((tenant) => tenant.id === requestedTenantID)) {
-        this.workspaceVersion += 1;
-        this.replaceTenantLifetimeController();
-        this.clearTenantWorkspaceState();
-        this.activeTenantID = EMPTY_STRING;
-        this.authState = AUTH_STATES.ERROR;
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.invalidTenantURL);
-        return;
-      }
-      if (requestedTenantID === this.activeTenantID) {
-        return;
-      }
-      void this.requestTenantSwitch(requestedTenantID, "none");
-    },
-
     /** @param {Event} event */
-    handleTenantSelection(event) {
+    handleSettingsTenantSelection(event) {
       const tenantSelect = /** @type {HTMLSelectElement} */ (event.target);
-      void this.requestTenantSwitch(tenantSelect.value, "push");
+      void this.requestSettingsTenantSwitch(tenantSelect.value);
     },
 
     /**
      * @param {string} tenantID
-     * @param {"push" | "replace" | "none"} historyMode
      */
-    async requestTenantSwitch(tenantID, historyMode) {
+    async requestSettingsTenantSwitch(tenantID) {
       if (!this.tenants.some((tenant) => tenant.id === tenantID)) {
-        this.clearTenantWorkspaceState();
-        this.activeTenantID = EMPTY_STRING;
-        this.authState = AUTH_STATES.ERROR;
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.invalidTenantURL);
+        this.restoreSettingsTenantSelector();
+        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
         return;
       }
-      if (tenantID === this.activeTenantID) {
-        this.restoreTenantSelector();
+      if (tenantID === this.settingsTenantID) {
+        this.restoreSettingsTenantSelector();
         return;
       }
       if (this.hasUnsavedSettingsChanges) {
         this.pendingTenantID = tenantID;
-        this.pendingTenantHistoryMode = historyMode;
         this.discardTenantChangesOpen = true;
         this.$nextTick(() => {
           this.$refs.discardTenantStay.focus();
         });
         return;
       }
-      await this.switchTenant(tenantID, historyMode);
+      await this.switchSettingsTenant(tenantID);
     },
 
-    restoreTenantSelector() {
+    restoreSettingsTenantSelector() {
       this.$nextTick(() => {
-        if (this.$refs.tenantSelector) {
-          this.$refs.tenantSelector.value = this.activeTenantID;
+        if (this.$refs.settingsTenantSelector) {
+          this.$refs.settingsTenantSelector.value = this.settingsTenantID;
         }
       });
     },
 
     cancelTenantSwitch() {
-      const historyMode = this.pendingTenantHistoryMode;
       this.discardTenantChangesOpen = false;
       this.pendingTenantID = EMPTY_STRING;
-      this.pendingTenantHistoryMode = "push";
-      if (historyMode === "none" && this.activeTenantID) {
-        this.writeTenantURL(this.activeTenantID, "replace");
-      }
-      this.restoreTenantSelector();
+      this.restoreSettingsTenantSelector();
     },
 
     async confirmTenantSwitch() {
       const tenantID = this.pendingTenantID;
-      const historyMode = this.pendingTenantHistoryMode;
       this.discardTenantChangesOpen = false;
       this.pendingTenantID = EMPTY_STRING;
-      this.pendingTenantHistoryMode = "push";
       this.discardLocalTenantEdits();
-      await this.switchTenant(tenantID, historyMode);
+      await this.switchSettingsTenant(tenantID);
     },
 
     /**
      * @param {string} tenantID
-     * @param {"push" | "replace" | "none"} historyMode
      * @param {import("../types.d.js").ManagementTenantProfile | null} [prefetchedProfile]
      */
-    async switchTenant(tenantID, historyMode, prefetchedProfile = null) {
+    async switchSettingsTenant(tenantID, prefetchedProfile = null) {
       this.workspaceVersion += 1;
       const workspaceVersion = this.workspaceVersion;
       if (this.tenantRequestController) {
         this.tenantRequestController.abort();
-      }
-      if (this.usageRequestController) {
-        this.usageRequestController.abort();
       }
       this.replaceTenantLifetimeController();
       this.clearGeneratedSecret();
@@ -845,15 +791,10 @@ export function createKeyManagement() {
       this.createTenantError = EMPTY_STRING;
       this.discardTenantChangesOpen = false;
       this.pendingTenantID = EMPTY_STRING;
-      this.settingsOpen = false;
-      this.activeTenantID = tenantID;
-      if (historyMode !== "none") {
-        this.writeTenantURL(tenantID, historyMode);
-      }
-      this.authState = AUTH_STATES.LOADING;
+      this.settingsTenantID = tenantID;
       this.busy = true;
       try {
-        await this.hydrateActiveTenant(prefetchedProfile, workspaceVersion);
+        await this.hydrateSettingsTenant(prefetchedProfile, workspaceVersion);
       } finally {
         if (this.workspaceVersion === workspaceVersion) {
           this.busy = false;
@@ -935,8 +876,8 @@ export function createKeyManagement() {
         this.account = { ...this.account, tenants: this.tenants };
         this.createTenantDialogOpen = false;
         this.createTenantName = EMPTY_STRING;
-        await this.switchTenant(createdSummary.id, "push", createdProfile);
-        if (this.activeTenantID === createdSummary.id && this.authState === AUTH_STATES.AUTHENTICATED) {
+        await this.switchSettingsTenant(createdSummary.id, createdProfile);
+        if (this.settingsTenantID === createdSummary.id && this.authState === AUTH_STATES.AUTHENTICATED) {
           this.setNotice(NOTICE_KINDS.SUCCESS, COPY.tenantCreated);
         }
       } catch (requestError) {
@@ -953,12 +894,12 @@ export function createKeyManagement() {
     /** @param {Event} event */
     handleTenantNameInput(event) {
       this.tenantNameDraft = /** @type {HTMLInputElement} */ (event.target).value;
-      this.tenantNameDirty = this.tenantNameDraft !== this.activeTenantName;
+      this.tenantNameDirty = this.tenantNameDraft !== this.settingsTenantName;
       this.tenantNameError = EMPTY_STRING;
     },
 
     beginTenantNameEdit() {
-      this.tenantNameDraft = this.activeTenantName;
+      this.tenantNameDraft = this.settingsTenantName;
       this.tenantNameDirty = false;
       this.tenantNameError = EMPTY_STRING;
       this.tenantNameEditing = true;
@@ -968,7 +909,7 @@ export function createKeyManagement() {
     },
 
     resetTenantNameEdit() {
-      this.tenantNameDraft = this.activeTenantName;
+      this.tenantNameDraft = this.settingsTenantName;
       this.tenantNameEditing = false;
       this.tenantNameDirty = false;
       this.tenantNameError = EMPTY_STRING;
@@ -989,7 +930,7 @@ export function createKeyManagement() {
         this.tenantNameError = COPY.tenantNameInvalid;
         return;
       }
-      const tenantID = this.activeTenantID;
+      const tenantID = this.settingsTenantID;
       const workspaceVersion = this.workspaceVersion;
       const lifetimeController = this.tenantLifetimeController;
       if (!lifetimeController || !this.tenantNameDirty) {
@@ -1000,7 +941,7 @@ export function createKeyManagement() {
       try {
         tenantRenamed = Boolean(await this.enqueueProfileMutation(workspaceVersion, async () => {
           const updatedProfile = await requestRenameTenant(tenantID, name, lifetimeController.signal);
-          if (!this.canApplyTenantWorkspace(workspaceVersion, tenantID)) {
+          if (!this.canApplySettingsTenant(workspaceVersion, tenantID)) {
             return false;
           }
           assertManagementTenantProfile(updatedProfile, tenantID);
@@ -1020,7 +961,7 @@ export function createKeyManagement() {
           return true;
         }));
       } catch (requestError) {
-        if (!isAbortError(requestError) && this.canApplyTenantWorkspace(workspaceVersion, tenantID)) {
+        if (!isAbortError(requestError) && this.canApplySettingsTenant(workspaceVersion, tenantID)) {
           this.tenantNameError = requestError && requestError.status === 409
             ? COPY.tenantNameConflict
             : profileFailureMessage(requestError);
@@ -1038,7 +979,7 @@ export function createKeyManagement() {
     },
 
     requestTenantDeletion() {
-      if (!this.canDeleteActiveTenant) {
+      if (!this.canDeleteSettingsTenant) {
         this.setNotice(NOTICE_KINDS.ERROR, COPY.finalTenantDeletion);
         return;
       }
@@ -1058,26 +999,35 @@ export function createKeyManagement() {
     },
 
     async confirmTenantDeletion() {
-      const deletedTenantID = this.activeTenantID;
+      const deletedTenantID = this.settingsTenantID;
       const lifetimeController = this.tenantLifetimeController;
-      if (!lifetimeController || !this.canDeleteActiveTenant) {
+      if (!lifetimeController || !this.canDeleteSettingsTenant) {
         return;
       }
       this.deleteTenantPending = true;
       try {
         await requestDeleteTenant(deletedTenantID, lifetimeController.signal);
-        if (this.activeTenantID !== deletedTenantID || this.tenantLifetimeController !== lifetimeController) {
+        if (this.settingsTenantID !== deletedTenantID || this.tenantLifetimeController !== lifetimeController) {
           return;
         }
         this.tenants = this.tenants.filter((tenant) => tenant.id !== deletedTenantID);
         this.account = { ...this.account, tenants: this.tenants };
         this.deleteTenantConfirmationOpen = false;
-        await this.switchTenant(this.tenants[0].id, "replace");
+        const usageNeedsRefresh = this.usageScopeIsAllTenants || this.selectedUsageTenantID === deletedTenantID;
+        if (this.selectedUsageTenantID === deletedTenantID) {
+          this.selectedUsageTenantID = EMPTY_STRING;
+        }
+        await this.switchSettingsTenant(this.tenants[0].id);
+        if (usageNeedsRefresh) {
+          this.clearUsageFailures(false);
+          this.usage = emptyUsageSummary(this.selectedUsageInterval);
+          await this.loadUsageSummary(false);
+        }
         if (this.authState === AUTH_STATES.AUTHENTICATED) {
           this.setNotice(NOTICE_KINDS.SUCCESS, COPY.tenantDeleted);
         }
       } catch (requestError) {
-        if (!isAbortError(requestError) && this.activeTenantID === deletedTenantID) {
+        if (!isAbortError(requestError) && this.settingsTenantID === deletedTenantID) {
           this.setNotice(
             NOTICE_KINDS.ERROR,
             requestError && requestError.status === 409 ? COPY.finalTenantDeletion : profileFailureMessage(requestError),
@@ -1104,10 +1054,6 @@ export function createKeyManagement() {
       dispatchManagementReady();
     },
 
-    async loadUsageForAuthenticatedProfile() {
-      await this.loadUsageSummary(false);
-    },
-
     async refreshDashboard() {
       if (this.dashboardView === DASHBOARD_VIEWS.ADMIN) {
         await this.refreshAdminUsers();
@@ -1130,6 +1076,24 @@ export function createKeyManagement() {
       this.clearUsageFailures(false);
       this.selectedUsageInterval = interval;
       this.usage = emptyUsageSummary(interval);
+      await this.loadUsageSummary(false);
+    },
+
+    /** @param {Event} event */
+    async handleUsageTenantSelection(event) {
+      const tenantSelect = /** @type {HTMLSelectElement} */ (event.target);
+      const tenantID = tenantSelect.value;
+      if (tenantID && !this.tenants.some((tenant) => tenant.id === tenantID)) {
+        tenantSelect.value = this.selectedUsageTenantID;
+        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+        return;
+      }
+      if (tenantID === this.selectedUsageTenantID) {
+        return;
+      }
+      this.clearUsageFailures(false);
+      this.selectedUsageTenantID = tenantID;
+      this.usage = emptyUsageSummary(this.selectedUsageInterval);
       await this.loadUsageSummary(false);
     },
 
@@ -1173,8 +1137,7 @@ export function createKeyManagement() {
       if (append && !cursor) {
         return;
       }
-      const workspaceVersion = this.workspaceVersion;
-      const tenantID = this.activeTenantID;
+      const tenantID = this.selectedUsageTenantID;
       const interval = this.selectedUsageInterval;
       const loadVersion = this.usageFailuresLoadVersion + 1;
       this.usageFailuresLoadVersion = loadVersion;
@@ -1186,23 +1149,30 @@ export function createKeyManagement() {
       this.usageFailuresLoading = true;
       this.usageFailuresError = EMPTY_STRING;
       try {
-        const response = await fetchUsageFailures(
-          tenantID,
-          interval,
-          USAGE_FAILURE_PAGE_LIMIT,
-          cursor,
-          requestController.signal,
-        );
-        if (!this.canApplyUsageFailures(workspaceVersion, tenantID, loadVersion, interval)) {
+        const response = tenantID
+          ? await fetchUsageFailures(
+            tenantID,
+            interval,
+            USAGE_FAILURE_PAGE_LIMIT,
+            cursor,
+            requestController.signal,
+          )
+          : await fetchAccountUsageFailures(
+            interval,
+            USAGE_FAILURE_PAGE_LIMIT,
+            cursor,
+            requestController.signal,
+          );
+        if (!this.canApplyUsageFailures(tenantID, loadVersion, interval)) {
           return;
         }
-        const page = normalizedUsageFailurePage(response, interval);
+        const page = normalizedUsageFailurePage(response, interval, !tenantID);
         this.usageFailures = append ? [...this.usageFailures, ...page.failures] : page.failures;
         this.usageFailuresNextCursor = page.next_cursor || EMPTY_STRING;
       } catch (requestError) {
         if (
           !isAbortError(requestError) &&
-          this.canApplyUsageFailures(workspaceVersion, tenantID, loadVersion, interval)
+          this.canApplyUsageFailures(tenantID, loadVersion, interval)
         ) {
           this.usageFailuresError = COPY.usageFailuresError;
         }
@@ -1210,24 +1180,22 @@ export function createKeyManagement() {
         if (this.usageFailuresRequestController === requestController) {
           this.usageFailuresRequestController = null;
         }
-        if (this.canApplyUsageFailures(workspaceVersion, tenantID, loadVersion, interval)) {
+        if (this.canApplyUsageFailures(tenantID, loadVersion, interval)) {
           this.usageFailuresLoading = false;
         }
       }
     },
 
     /**
-     * @param {number} workspaceVersion
      * @param {string} tenantID
      * @param {number} loadVersion
      * @param {import("../types.d.js").UsageInterval} interval
      * @returns {boolean}
      */
-    canApplyUsageFailures(workspaceVersion, tenantID, loadVersion, interval) {
+    canApplyUsageFailures(tenantID, loadVersion, interval) {
       return (
         this.usageFailuresOpen &&
-        this.workspaceVersion === workspaceVersion &&
-        this.activeTenantID === tenantID &&
+        this.selectedUsageTenantID === tenantID &&
         this.usageFailuresLoadVersion === loadVersion &&
         this.selectedUsageInterval === interval &&
         this.authState === AUTH_STATES.AUTHENTICATED
@@ -1262,8 +1230,7 @@ export function createKeyManagement() {
      * @param {boolean} showSuccessNotice
      */
     async loadUsageSummary(showSuccessNotice) {
-      const workspaceVersion = this.workspaceVersion;
-      const tenantID = this.activeTenantID;
+      const tenantID = this.selectedUsageTenantID;
       const interval = this.selectedUsageInterval;
       const loadVersion = this.usageLoadVersion + 1;
       this.usageLoadVersion = loadVersion;
@@ -1274,8 +1241,10 @@ export function createKeyManagement() {
       this.usageRequestController = usageRequestController;
       this.usageLoading = true;
       try {
-        const usage = await fetchUsageSummary(tenantID, interval, usageRequestController.signal);
-        if (!this.canApplyUsageSummary(workspaceVersion, tenantID, loadVersion, interval)) {
+        const usage = tenantID
+          ? await fetchUsageSummary(tenantID, interval, usageRequestController.signal)
+          : await fetchAccountUsageSummary(interval, usageRequestController.signal);
+        if (!this.canApplyUsageSummary(tenantID, loadVersion, interval)) {
           return;
         }
         if (usage.interval !== interval) {
@@ -1289,7 +1258,7 @@ export function createKeyManagement() {
           this.setNotice(NOTICE_KINDS.SUCCESS, COPY.usageRefreshed);
         }
       } catch (requestError) {
-        if (!isAbortError(requestError) && this.canApplyUsageSummary(workspaceVersion, tenantID, loadVersion, interval)) {
+        if (!isAbortError(requestError) && this.canApplyUsageSummary(tenantID, loadVersion, interval)) {
           this.clearUsageFailures(false);
           this.usage = emptyUsageSummary(interval);
           this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
@@ -1299,8 +1268,7 @@ export function createKeyManagement() {
           this.usageRequestController = null;
         }
         if (
-          this.workspaceVersion === workspaceVersion &&
-          this.activeTenantID === tenantID &&
+          this.selectedUsageTenantID === tenantID &&
           this.usageLoadVersion === loadVersion
         ) {
           this.usageLoading = false;
@@ -1309,16 +1277,14 @@ export function createKeyManagement() {
     },
 
     /**
-     * @param {number} workspaceVersion
      * @param {string} tenantID
      * @param {number} loadVersion
      * @param {import("../types.d.js").UsageInterval} interval
      * @returns {boolean}
      */
-    canApplyUsageSummary(workspaceVersion, tenantID, loadVersion, interval) {
+    canApplyUsageSummary(tenantID, loadVersion, interval) {
       return (
-        this.workspaceVersion === workspaceVersion &&
-        this.activeTenantID === tenantID &&
+        this.selectedUsageTenantID === tenantID &&
         this.usageLoadVersion === loadVersion &&
         this.selectedUsageInterval === interval &&
         this.authState === AUTH_STATES.AUTHENTICATED
@@ -1544,7 +1510,7 @@ export function createKeyManagement() {
       }
       const revealProviderID = provider.id;
       const revealVersion = this.providerEditorSession.revealVersion + 1;
-      const tenantID = this.activeTenantID;
+      const tenantID = this.settingsTenantID;
       const workspaceVersion = this.workspaceVersion;
       const lifetimeController = this.tenantLifetimeController;
       if (!lifetimeController) {
@@ -1582,7 +1548,7 @@ export function createKeyManagement() {
     canApplyProviderKeyReveal(tenantID, workspaceVersion, providerID, revealVersion) {
       return (
         this.settingsOpen &&
-        this.activeTenantID === tenantID &&
+        this.settingsTenantID === tenantID &&
         this.workspaceVersion === workspaceVersion &&
         this.selectedProviderID === providerID &&
         this.providerEditorSession.revealVersion === revealVersion
@@ -1719,7 +1685,7 @@ export function createKeyManagement() {
         const revealVersion = editorSession.revealVersion;
         const editVersion = editorSession.editVersion;
         const workspaceVersion = this.workspaceVersion;
-        const tenantID = this.activeTenantID;
+        const tenantID = this.settingsTenantID;
         const lifetimeController = this.tenantLifetimeController;
         if (!lifetimeController) {
           return false;
@@ -1783,7 +1749,7 @@ export function createKeyManagement() {
      * @param {import("../types.d.js").ProviderProfile} provider
      */
     async removeProviderKey(provider) {
-      const tenantID = this.activeTenantID;
+      const tenantID = this.settingsTenantID;
       const lifetimeController = this.tenantLifetimeController;
       if (!lifetimeController) {
         return;
@@ -1823,7 +1789,7 @@ export function createKeyManagement() {
         const defaults = { ...this.defaults };
         const editVersion = this.routingDefaultsEditVersion;
         const workspaceVersion = this.workspaceVersion;
-        const tenantID = this.activeTenantID;
+        const tenantID = this.settingsTenantID;
         const lifetimeController = this.tenantLifetimeController;
         if (!lifetimeController) {
           return false;
@@ -1875,7 +1841,7 @@ export function createKeyManagement() {
     async generateAndApplySecret() {
       const generatedSecretVersion = this.generatedSecretVersion;
       const workspaceVersion = this.workspaceVersion;
-      const tenantID = this.activeTenantID;
+      const tenantID = this.settingsTenantID;
       const lifetimeController = this.tenantLifetimeController;
       if (!lifetimeController) {
         return false;
@@ -1934,7 +1900,7 @@ export function createKeyManagement() {
     },
 
     async revokeSecret() {
-      const tenantID = this.activeTenantID;
+      const tenantID = this.settingsTenantID;
       const lifetimeController = this.tenantLifetimeController;
       if (!lifetimeController) {
         return;
@@ -2137,7 +2103,7 @@ export function createKeyManagement() {
      * @param {boolean} [preserveRoutingDefaults]
      */
     applyProfile(nextProfile, preserveProviderEditor = false, preserveRoutingDefaults = false) {
-      assertManagementTenantProfile(nextProfile, this.activeTenantID);
+      assertManagementTenantProfile(nextProfile, this.settingsTenantID);
       const defaults = createWorkspaceRoutingDefaults(nextProfile);
       const profileApplicationVersion = this.profileApplicationVersion + 1;
       this.profileApplicationVersion = profileApplicationVersion;
@@ -2180,11 +2146,8 @@ export function createKeyManagement() {
       }
     },
 
-    clearTenantWorkspaceState() {
+    clearSettingsTenantState() {
       this.profileApplicationVersion += 1;
-      this.usageLoadVersion += 1;
-      this.usageLoading = false;
-      this.clearUsageFailures(false);
       this.providerAutosavePromise = null;
       this.providerAutosavePending = false;
       this.routingDefaultsAutosavePromise = null;
@@ -2200,13 +2163,19 @@ export function createKeyManagement() {
       this.providers = [];
       this.replaceProviderEditorSession(EMPTY_STRING);
       this.defaults = emptyDefaults();
-      this.usage = emptyUsageSummary(this.selectedUsageInterval);
       this.clearGeneratedSecret();
       this.tenantNameDraft = EMPTY_STRING;
       this.tenantNameEditing = false;
       this.tenantNameDirty = false;
       this.tenantNameError = EMPTY_STRING;
       this.usageExamplesOpen = false;
+    },
+
+    clearUsageState() {
+      this.usageLoadVersion += 1;
+      this.usageLoading = false;
+      this.clearUsageFailures(false);
+      this.usage = emptyUsageSummary(this.selectedUsageInterval);
     },
 
     clearAuthenticatedState() {
@@ -2232,11 +2201,13 @@ export function createKeyManagement() {
         this.tenantLifetimeController = null;
       }
       this.selectedUsageInterval = DEFAULT_USAGE_INTERVAL;
+      this.selectedUsageTenantID = EMPTY_STRING;
       this.clearNotice();
-      this.clearTenantWorkspaceState();
+      this.clearSettingsTenantState();
+      this.clearUsageState();
       this.account = null;
       this.tenants = [];
-      this.activeTenantID = EMPTY_STRING;
+      this.settingsTenantID = EMPTY_STRING;
       this.adminUsers = [];
       this.settingsOpen = false;
       this.createTenantDialogOpen = false;
@@ -2336,11 +2307,12 @@ function trapDialogFocus(event, dialog) {
 }
 
 /**
- * @param {import("../types.d.js").ManagementUsageFailurePage} response
+ * @param {import("../types.d.js").ManagementUsageFailurePage | import("../types.d.js").ManagementAccountUsageFailurePage} response
  * @param {import("../types.d.js").UsageInterval} interval
- * @returns {import("../types.d.js").ManagementUsageFailurePage}
+ * @param {boolean} accountScope
+ * @returns {import("../types.d.js").ManagementUsageFailurePage | import("../types.d.js").ManagementAccountUsageFailurePage}
  */
-function normalizedUsageFailurePage(response, interval) {
+function normalizedUsageFailurePage(response, interval, accountScope) {
   if (!response || response.interval !== interval || !Array.isArray(response.failures)) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
@@ -2349,17 +2321,18 @@ function normalizedUsageFailurePage(response, interval) {
   }
   return {
     interval,
-    failures: response.failures.map((failure) => normalizedUsageFailure(failure)),
+    failures: response.failures.map((failure) => normalizedUsageFailure(failure, accountScope)),
     ...(response.next_cursor ? { next_cursor: response.next_cursor } : {}),
   };
 }
 
 /**
- * @param {import("../types.d.js").ManagementUsageFailure} failure
- * @returns {import("../types.d.js").ManagementUsageFailure}
+ * @param {import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure} failure
+ * @param {boolean} accountScope
+ * @returns {import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure}
  */
-function normalizedUsageFailure(failure) {
-  const occurredAt = new Date(failure.occurred_at);
+function normalizedUsageFailure(failure, accountScope) {
+  const occurredAt = new Date(failure ? failure.occurred_at : EMPTY_STRING);
   if (
     !failure ||
     typeof failure.occurred_at !== "string" ||
@@ -2378,7 +2351,7 @@ function normalizedUsageFailure(failure) {
   ) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
-  return {
+  const commonFailure = {
     occurred_at: failure.occurred_at,
     endpoint: failure.endpoint,
     provider: failure.provider,
@@ -2387,11 +2360,31 @@ function normalizedUsageFailure(failure) {
     outcome_code: failure.outcome_code,
     latency_ms: failure.latency_ms,
   };
+  if (accountScope) {
+    if (
+      typeof failure.tenant_id !== "string" ||
+      !failure.tenant_id ||
+      typeof failure.tenant_name !== "string" ||
+      !failure.tenant_name
+    ) {
+      throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    }
+    return {
+      tenant_id: failure.tenant_id,
+      tenant_name: failure.tenant_name,
+      ...commonFailure,
+    };
+  }
+  if (Object.hasOwn(failure, "tenant_id") || Object.hasOwn(failure, "tenant_name")) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  return commonFailure;
 }
 
 /**
- * @param {import("../types.d.js").ManagementUsageFailure} failure
+ * @param {import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure} failure
  * @returns {{
+ *   tenant: string,
  *   occurredAt: string,
  *   endpoint: string,
  *   provider: string,
@@ -2403,6 +2396,7 @@ function normalizedUsageFailure(failure) {
  */
 function usageFailurePresentation(failure) {
   return {
+    tenant: "tenant_name" in failure ? `${failure.tenant_name} · ${failure.tenant_id}` : EMPTY_STRING,
     occurredAt: new Intl.DateTimeFormat("en-US", {
       dateStyle: "medium",
       timeStyle: "medium",
@@ -2682,13 +2676,6 @@ function tenantSummaryFromProfile(profile) {
     created_at: profile.tenant.created_at,
     updated_at: profile.tenant.updated_at,
   };
-}
-
-/**
- * @returns {string}
- */
-function tenantIDFromURL() {
-  return new URL(window.location.href).searchParams.get(TENANT_QUERY_PARAMETER) || EMPTY_STRING;
 }
 
 /**

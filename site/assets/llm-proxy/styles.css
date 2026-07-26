@@ -43,9 +43,7 @@ llm-proxy-key-management textarea {
 
 llm-proxy-key-management,
 workspace-surface,
-tenant-context-bar,
-tenant-switcher,
-tenant-context-identity,
+tenant-management,
 client-access-row,
 client-access-key,
 client-access-tenant,
@@ -96,100 +94,10 @@ settings-section {
   display: block;
 }
 
-tenant-context-bar {
-  width: min(960px, calc(100vw - 24px));
-  box-sizing: border-box;
-  margin: 0.35rem auto 0;
-  border: 1px solid var(--llm-border);
-  border-radius: 6px;
-  background: var(--llm-panel-strong);
-  padding: 0.35rem 0.45rem;
-}
-
-tenant-switcher {
-  display: grid;
-  grid-template-columns: minmax(14rem, 1fr) minmax(10rem, auto) auto;
-  align-items: center;
-  gap: 0.45rem;
-}
-
-tenant-switcher label {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 0.45rem;
-}
-
-tenant-switcher .eyebrow {
-  margin: 0;
-}
-
-tenant-context-identity {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 0.35rem;
-  color: var(--llm-muted);
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-tenant-context-identity code {
-  overflow: hidden;
-  color: var(--llm-subtle);
-  font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0;
-  text-overflow: ellipsis;
-  text-transform: none;
-  white-space: nowrap;
-}
-
-tenant-context-bar select,
-tenant-context-bar button {
-  min-height: 30px;
-  box-sizing: border-box;
-  border: 1px solid var(--llm-border);
-  border-radius: 6px;
-  background: var(--llm-bg);
-  color: var(--llm-text);
-  font: inherit;
-  font-size: 0.78rem;
-}
-
-tenant-context-bar select {
-  width: 100%;
-  padding: 0.38rem 0.5rem;
-}
-
-tenant-context-bar button {
-  cursor: pointer;
-  padding: 0 0.7rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
 .tenant-create > span:first-child {
   color: var(--llm-accent);
   font-size: 1rem;
   line-height: 1;
-}
-
-tenant-context-bar button:hover:not(:disabled) {
-  border-color: var(--llm-accent);
-}
-
-tenant-context-bar button:disabled {
-  cursor: not-allowed;
-  opacity: 0.52;
-}
-
-tenant-context-bar select:focus-visible,
-tenant-context-bar button:focus-visible {
-  outline: 2px solid var(--llm-accent);
-  outline-offset: 2px;
 }
 
 #llm-proxy-header .mpr-header__actions {
@@ -329,6 +237,10 @@ dashboard-actions {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+.usage-tenant-control {
+  min-width: 10rem;
 }
 
 .usage-interval-control {
@@ -657,6 +569,32 @@ client-access-tenant {
   border-radius: 6px;
   background: var(--llm-panel-strong);
   padding: 0.45rem 0.55rem;
+}
+
+tenant-management {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.45rem;
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-panel-strong);
+  padding: 0.45rem 0.55rem;
+}
+
+tenant-management label {
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
+}
+
+tenant-management .eyebrow {
+  margin: 0;
+}
+
+tenant-management .tenant-create {
+  white-space: nowrap;
 }
 
 tenant-identity {
@@ -1195,7 +1133,7 @@ usage-failure-row {
 
 usage-failure-row dl {
   display: grid;
-  grid-template-columns: 1.6fr 0.65fr 0.9fr 1.2fr 1fr 1fr 0.7fr;
+  grid-template-columns: 1.3fr 1.6fr 0.65fr 0.9fr 1.2fr 1fr 1fr 0.7fr;
   gap: 0.45rem;
   margin: 0;
 }
@@ -1462,22 +1400,6 @@ settings-section,
     padding-top: 0.55rem;
   }
 
-  tenant-context-bar {
-    width: min(100% - 18px, 960px);
-  }
-
-  tenant-switcher {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  tenant-switcher label {
-    grid-column: 1 / -1;
-  }
-
-  tenant-context-identity {
-    align-self: center;
-  }
-
   .llm-grid,
   usage-metrics,
   .dashboard-grid,
@@ -1503,6 +1425,10 @@ settings-section,
   }
 
   .usage-interval-control {
+    width: 100%;
+  }
+
+  .usage-tenant-control {
     width: 100%;
   }
 
@@ -1555,6 +1481,14 @@ settings-section,
 
   tenant-identity {
     gap: 0.35rem;
+  }
+
+  tenant-management {
+    grid-template-columns: 1fr;
+  }
+
+  tenant-management .tenant-create {
+    justify-self: end;
   }
 
   tenant-name-editor {

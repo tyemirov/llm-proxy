@@ -92,6 +92,18 @@ export function fetchUsageSummary(tenantID, interval, signal) {
 }
 
 /**
+ * @param {import("../types.d.js").UsageInterval} interval
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<import("../types.d.js").ManagementUsageSummary>}
+ */
+export function fetchAccountUsageSummary(interval, signal) {
+  return requestJSON(`${MANAGEMENT_BASE_PATH}/usage?interval=${encodeURIComponent(interval)}`, {
+    method: "GET",
+    signal,
+  });
+}
+
+/**
  * @param {string} tenantID
  * @param {import("../types.d.js").UsageInterval} interval
  * @param {number} limit
@@ -108,6 +120,27 @@ export function fetchUsageFailures(tenantID, interval, limit, cursor, signal) {
     query.set("cursor", cursor);
   }
   return requestJSON(`${managementTenantPath(tenantID)}/usage/failures?${query}`, {
+    method: "GET",
+    signal,
+  });
+}
+
+/**
+ * @param {import("../types.d.js").UsageInterval} interval
+ * @param {number} limit
+ * @param {string} cursor
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<import("../types.d.js").ManagementAccountUsageFailurePage>}
+ */
+export function fetchAccountUsageFailures(interval, limit, cursor, signal) {
+  const query = new URLSearchParams({
+    interval,
+    limit: String(limit),
+  });
+  if (cursor) {
+    query.set("cursor", cursor);
+  }
+  return requestJSON(`${MANAGEMENT_BASE_PATH}/usage/failures?${query}`, {
     method: "GET",
     signal,
   });

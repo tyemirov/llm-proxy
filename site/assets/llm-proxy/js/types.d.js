@@ -160,11 +160,26 @@
  */
 
 /**
+ * @typedef {ManagementUsageFailure & {
+ *   tenant_id: string,
+ *   tenant_name: string
+ * }} ManagementAccountUsageFailure
+ */
+
+/**
  * @typedef {{
  *   interval: UsageInterval,
  *   failures: ManagementUsageFailure[],
  *   next_cursor?: string
  * }} ManagementUsageFailurePage
+ */
+
+/**
+ * @typedef {{
+ *   interval: UsageInterval,
+ *   failures: ManagementAccountUsageFailure[],
+ *   next_cursor?: string
+ * }} ManagementAccountUsageFailurePage
  */
 
 /**
