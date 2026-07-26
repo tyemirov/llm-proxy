@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -9,9 +10,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
+	"github.com/tyemirov/llm-proxy/internal/openapitest"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxyclient"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
@@ -147,6 +151,77 @@ func TestCommandPostsPromptAsV2UserMessage(t *testing.T) {
 		if !strings.Contains(capturedRequest.body, expectedBodyFragment) {
 			t.Fatalf("body=%s missing %s", capturedRequest.body, expectedBodyFragment)
 		}
+	}
+}
+
+func TestCommandV2ExchangeConformsToCanonicalOpenAPI(t *testing.T) {
+	contract, loadError := openapitest.Load(filepath.Join("..", openapitest.CanonicalDocumentPath))
+	if loadError != nil {
+		t.Fatalf("load canonical OpenAPI contract: %v", loadError)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+		bodyBytes, readError := io.ReadAll(httpRequest.Body)
+		if readError != nil {
+			t.Fatalf("read body: %v", readError)
+		}
+		if validationError := contract.ValidateRequest("/v2", httpRequest.Method, httpRequest, bodyBytes); validationError != nil {
+			t.Fatalf("CLI request violates OpenAPI: %v", validationError)
+		}
+		var requestBody map[string]any
+		if decodeError := json.Unmarshal(bodyBytes, &requestBody); decodeError != nil {
+			t.Fatalf("decode CLI request: %v", decodeError)
+		}
+		actualFields := make([]string, 0, len(requestBody))
+		for fieldName := range requestBody {
+			actualFields = append(actualFields, fieldName)
+		}
+		sort.Strings(actualFields)
+		contractFields, fieldsError := contract.RequestPropertyNames("/v2", http.MethodPost)
+		if fieldsError != nil {
+			t.Fatalf("OpenAPI v2 fields: %v", fieldsError)
+		}
+		if !reflect.DeepEqual(actualFields, contractFields) {
+			t.Fatalf("CLI v2 fields=%v OpenAPI fields=%v", actualFields, contractFields)
+		}
+		responseBody := []byte("contract-reviewed")
+		responseHeader := http.Header{}
+		responseHeader.Set("Content-Type", "text/plain; charset=utf-8")
+		responseHeader.Set(llmproxycontract.HeaderRequestTimeoutSeconds, "9")
+		if validationError := contract.ValidateResponse("/v2", http.MethodPost, http.StatusOK, responseHeader, responseBody); validationError != nil {
+			t.Fatalf("CLI success fixture violates OpenAPI: %v", validationError)
+		}
+		for headerName, headerValues := range responseHeader {
+			responseWriter.Header()[headerName] = headerValues
+		}
+		_, _ = responseWriter.Write(responseBody)
+	}))
+	t.Cleanup(server.Close)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	exitCode := run(
+		[]string{
+			"--base-url", server.URL,
+			"--secret", "test-secret",
+			"--provider", "openai",
+			"--model", "gpt-5.5",
+			"--prompt", "Check the canonical contract.",
+			"--web-search",
+			"--max-tokens", "42",
+			"--reasoning-effort", "high",
+			"--request-timeout-seconds", "9",
+		},
+		strings.NewReader(""),
+		&stdout,
+		&stderr,
+		defaultHTTPClientFactory,
+	)
+
+	if exitCode != 0 {
+		t.Fatalf("exit=%d stderr=%s", exitCode, stderr.String())
+	}
+	if stdout.String() != "contract-reviewed" {
+		t.Fatalf("stdout=%q", stdout.String())
 	}
 }
 
@@ -522,9 +597,30 @@ func TestCommandRejectsInvalidInputs(t *testing.T) {
 
 func TestCommandReportsProxyAndIOErrors(t *testing.T) {
 	t.Run("proxy status", func(t *testing.T) {
+		contract, loadError := openapitest.Load(filepath.Join("..", openapitest.CanonicalDocumentPath))
+		if loadError != nil {
+			t.Fatalf("load canonical OpenAPI contract: %v", loadError)
+		}
 		server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			bodyBytes, readError := io.ReadAll(httpRequest.Body)
+			if readError != nil {
+				t.Fatalf("read body: %v", readError)
+			}
+			if validationError := contract.ValidateRequest("/v2", httpRequest.Method, httpRequest, bodyBytes); validationError != nil {
+				t.Fatalf("CLI error request violates OpenAPI: %v", validationError)
+			}
+			responseBody := []byte("upstream failed")
+			responseHeader := http.Header{}
+			responseHeader.Set("Content-Type", "text/plain; charset=utf-8")
+			responseHeader.Set(llmproxycontract.HeaderRequestTimeoutSeconds, "360")
+			if validationError := contract.ValidateResponse("/v2", http.MethodPost, http.StatusBadGateway, responseHeader, responseBody); validationError != nil {
+				t.Fatalf("CLI error fixture violates OpenAPI: %v", validationError)
+			}
+			for headerName, headerValues := range responseHeader {
+				responseWriter.Header()[headerName] = headerValues
+			}
 			responseWriter.WriteHeader(http.StatusBadGateway)
-			_, _ = responseWriter.Write([]byte("upstream failed"))
+			_, _ = responseWriter.Write(responseBody)
 		}))
 		t.Cleanup(server.Close)
 
