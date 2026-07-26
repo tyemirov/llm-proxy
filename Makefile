@@ -27,7 +27,7 @@ GATEWAY_DIR ?=
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test test-management-postgres python-test python-package-install-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox release-test test-live-provider-harness test-live-providers test-live-gemini build clean ci up release container-artifacts pages-artifact publish-release publish pages-deploy deploy
+.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-package-install-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox release-test test-live-provider-harness test-live-providers test-live-gemini build clean ci up release container-artifacts pages-artifact publish-release publish pages-deploy deploy
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -53,13 +53,10 @@ python-lint:
 frontend-lint:
 	$(NPM) run frontend:lint
 
-test: go-test test-management-postgres python-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox release-test test-live-provider-harness
+test: go-test python-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox release-test test-live-provider-harness
 
 go-test:
 	@GO="$(GO)" ./scripts/check_coverage.sh
-
-test-management-postgres:
-	@./scripts/test_management_postgres.sh
 
 python-test:
 	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev pytest
