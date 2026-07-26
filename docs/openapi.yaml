@@ -363,6 +363,85 @@
         }
       }
     },
+    "/api/management/usage": {
+      "get": {
+        "operationId": "getManagementAccountUsage",
+        "summary": "Read interval-scoped usage across every owned tenant",
+        "tags": [
+          "Management"
+        ],
+        "security": [
+          {
+            "TAuthSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UsageInterval"
+          },
+          {
+            "$ref": "#/components/parameters/OptionalOrigin"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UsageSuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/ManagementBadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/ManagementUnauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ManagementInternalError"
+          }
+        }
+      }
+    },
+    "/api/management/usage/failures": {
+      "get": {
+        "operationId": "getManagementAccountUsageFailures",
+        "summary": "Read safe failure details across every owned tenant and interval",
+        "description": "Returns a newest-first snapshot page of failed managed proxy events across every tenant owned by the authenticated user. Each row identifies its tenant by opaque ID and current name while exposing only bounded diagnostic metadata and canonical outcome codes. Rows never include prompts, responses, provider bodies, free-form errors, credentials, or another user's ownership data.",
+        "tags": [
+          "Management"
+        ],
+        "security": [
+          {
+            "TAuthSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UsageInterval"
+          },
+          {
+            "$ref": "#/components/parameters/UsageFailureLimit"
+          },
+          {
+            "$ref": "#/components/parameters/UsageFailureCursor"
+          },
+          {
+            "$ref": "#/components/parameters/OptionalOrigin"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AccountUsageFailuresSuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/ManagementBadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/ManagementUnauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ManagementInternalError"
+          }
+        }
+      }
+    },
     "/api/management/tenants": {
       "post": {
         "operationId": "createManagementTenant",
@@ -1141,7 +1220,7 @@
         "name": "cursor",
         "in": "query",
         "required": false,
-        "description": "Opaque continuation cursor returned by the preceding page for the same interval.",
+        "description": "Opaque continuation cursor returned by the preceding page for the same interval and reporting scope.",
         "schema": {
           "type": "string",
           "minLength": 1
@@ -1460,7 +1539,12 @@
         }
       },
       "UsageSuccess": {
-        "description": "Tenant usage summary for the exact requested interval.",
+        "description": "Usage summary for the exact requested interval and authenticated reporting scope.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
         "content": {
           "application/json": {
             "schema": {
@@ -1480,6 +1564,21 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/UsageFailurePage"
+            }
+          }
+        }
+      },
+      "AccountUsageFailuresSuccess": {
+        "description": "Snapshot page of safe failure details across every owned tenant for the exact requested interval.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AccountUsageFailurePage"
             }
           }
         }
@@ -2514,6 +2613,85 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/UsageFailure"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "AccountUsageFailure": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tenant_id",
+          "tenant_name",
+          "occurred_at",
+          "endpoint",
+          "provider",
+          "model",
+          "status_code",
+          "outcome_code",
+          "latency_ms"
+        ],
+        "properties": {
+          "tenant_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "tenant_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "status_code": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599
+          },
+          "outcome_code": {
+            "$ref": "#/components/schemas/UsageOutcomeCode"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AccountUsageFailurePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "interval",
+          "failures"
+        ],
+        "properties": {
+          "interval": {
+            "type": "string",
+            "enum": [
+              "1d",
+              "7d",
+              "30d",
+              "all"
+            ]
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountUsageFailure"
             }
           },
           "next_cursor": {

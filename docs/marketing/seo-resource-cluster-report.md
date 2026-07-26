@@ -1,6 +1,6 @@
 # LLM Proxy SEO Resource Cluster Report
 
-Generated: 2026-07-25
+Generated: 2026-07-26
 
 ## Repo Analysis Report
 
@@ -85,7 +85,7 @@ Generated: 2026-07-25
 | 13 | Provider default model selection for omitted models | Client developers and operators who want explicit defaults without hardcoding a model in every request. | If clients omit model, each provider route needs a clear rule. Otherwise requests can accidentally inherit a stale model from the wrong provider. | provider default model selection | Configuration | /resources/provider-default-model-selection/ | Low | Generate |
 | 14 | OpenAI web search guardrails in an LLM proxy | Teams that need controlled search-enabled model calls without making web search a universal flag. | A generic web_search flag can be misleading when only some providers and models support a search tool. | OpenAI web search guardrails | API contract | /resources/openai-web-search-guardrails/ | Low | Generate |
 | 15 | Normalized token usage metadata across providers | Teams that need operational usage signals without parsing every provider's response shape. | Providers report usage differently, and response format choices can make token accounting disappear from caller code. | normalized token usage metadata | Usage | /resources/normalized-token-usage-metadata/ | Low | Generate |
-| 16 | Managed tenant usage dashboard for LLM requests | Teams giving users self-service AI access while keeping usage visible. | A key-management portal is incomplete if users cannot see whether their managed proxy traffic is succeeding or which providers and models they use. | managed tenant usage dashboard | Usage | /resources/managed-tenant-usage-dashboard/ | Low | Generate |
+| 16 | Account-wide managed tenant usage dashboard for LLMs | Teams giving users self-service AI access while keeping usage visible. | A multi-tenant key-management portal is incomplete when its default dashboard hides every tenant except one or implies that selecting a tenant activates it. | managed tenant usage dashboard | Usage | /resources/managed-tenant-usage-dashboard/ | Low | Generate |
 | 17 | Admin usage visibility without exposing secrets | Operators who need oversight of managed AI access without turning dashboards into sensitive data exports. | Admin views can become dangerous if they show generated secrets, provider keys, prompts, transcripts, or model responses. | admin usage visibility without secrets | Usage | /resources/admin-usage-visibility-without-secrets/ | Low | Generate |
 | 18 | API-served runtime config for a static LLM UI | Teams deploying a split-origin static management UI and backend API. | Static frontends can accidentally ship stale API origins, OAuth values, or runtime config if those values are rendered into the artifact. | API-served runtime config static UI | Deployment | /resources/api-served-runtime-config-for-static-ui/ | Low | Generate |
 | 19 | TAuth-protected management API for LLM Proxy | Teams adopting the MPR/TAuth shell for authenticated AI self-service. | Key management APIs need a stronger boundary than a public static page. They must know who is signed in and which tenant that user owns. | TAuth protected management API | Management UI | /resources/tauth-protected-management-api/ | Low | Generate |
