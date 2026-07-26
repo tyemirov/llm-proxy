@@ -1,6 +1,6 @@
 # LLM Proxy SEO Resource Cluster Report
 
-Generated: 2026-07-24
+Generated: 2026-07-25
 
 ## Repo Analysis Report
 
@@ -93,8 +93,8 @@ Generated: 2026-07-24
 | 21 | Encrypted provider key storage for managed tenants | Teams evaluating how LLM Proxy stores BYO provider credentials in management mode. | Provider API keys are high-value secrets. A management database should not store raw upstream credentials as plaintext rows. | encrypted provider key storage | Security | /resources/encrypted-provider-key-storage/ | Low | Generate |
 | 22 | Reject client-supplied provider key leaks | Security-conscious teams that want mistakes to fail before provider credentials spread. | A caller may accidentally include an OpenAI or provider api_key field in a proxy request body, query string, or multipart form. | reject client provider key leaks | Security | /resources/reject-client-provider-key-leaks/ | Low | Generate |
 | 23 | Strict YAML config placeholders for LLM Proxy | Operators who want predictable startup behavior and no hidden runtime defaults. | Services that merge flags, env, defaults, and files can start with surprising configuration. Missing secrets may appear only when traffic arrives. | strict YAML config placeholders | Configuration | /resources/strict-yaml-config-placeholders/ | Low | Generate |
-| 24 | Legacy token ownership migration in management mode | Operators retiring the final unowned management-mode token after moving to self-service accounts. | A token imported by an older release can still belong to a synthetic static-config user, so its real owner cannot see that token's usage after signing in. | static to managed tenant migration | Configuration | /resources/static-to-managed-tenant-migration/ | Low | Generate |
-| 25 | GORM-managed tenant persistence for LLM Proxy | Backend operators deciding how management-mode state is stored. | Self-service management needs persistent tenant state without mutating runtime config files or adding raw SQL paths. | GORM managed tenant persistence | Configuration | /resources/gorm-managed-tenant-persistence/ | Low | Generate |
+| 24 | Transactional multi-workspace ownership migration | Operators upgrading an existing management database to the multi-workspace ownership schema. | The earlier persistence shape coupled one tenant row to one user, so one TAuth subject could not own multiple isolated workspaces. | multi workspace tenant migration | Configuration | /resources/multi-workspace-ownership-migration/ | Low | Generate |
+| 25 | GORM-managed workspace persistence for LLM Proxy | Backend operators deciding how management-mode state is stored. | Self-service management needs persistent tenant state without mutating runtime config files or adding raw SQL paths. | GORM managed tenant persistence | Configuration | /resources/gorm-managed-tenant-persistence/ | Low | Generate |
 | 26 | Authenticate an LLM Proxy client with a tenant secret | Developers connecting an application, script, or command-line workflow to LLM Proxy. | A client integration can confuse three different credentials: the tenant secret that authorizes proxy requests, the TAuth session that authorizes management actions, and upstream provider API keys that must stay server-side. | LLM Proxy client authentication | Clients | /resources/llm-proxy-client-authentication/ | Low | Generate |
 | 27 | Go LLM Proxy client with a v2-only transport | Go developers integrating application backends with LLM Proxy. | Reusable clients can expose too many legacy request shapes and force callers to choose between prompt JSON and chat messages. | Go LLM proxy client v2 | Clients | /resources/go-client-v2-only-llm-proxy/ | Low | Generate |
 | 28 | Python LLM Proxy client with v2 messages | Python workflow authors and service developers standardizing on the /v2 messages contract. | Python callers often start with raw requests and then duplicate provider-specific payload details in scripts. | Python LLM proxy client v2 | Clients | /resources/python-client-v2-only-llm-proxy/ | Low | Generate |
@@ -136,10 +136,10 @@ Generated: 2026-07-24
 
 ## Site Integration And Discoverability
 
-- The main page links to /resources/ through a crawlable anchor in the public HTML.
+- The main page links to /docs/, /openapi.yaml, and /resources/ through crawlable anchors in the public HTML.
 - The /resources/ hub links every generated resource page grouped by category.
-- Every resource page links back to /, /resources/, sitemap.xml, and related resources.
-- sitemap.xml lists /, /resources/, and all 46 page URLs with the same trailing-slash canonical form used in internal links.
+- Every resource page links to the derived API reference, exact schema, /, /resources/, sitemap.xml, and related resources.
+- sitemap.xml lists /, /docs/, /resources/, and all 46 page URLs with the same trailing-slash canonical form used in internal links.
 - robots.txt allows crawling and references the sitemap.
 
 ## Evaluation Report
