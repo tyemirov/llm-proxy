@@ -9,7 +9,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -26,6 +26,9 @@ from llm_proxy_client import (
     LLMProxyModelProfileError,
     LLMProxyTransportError,
 )
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+CANONICAL_OPENAPI_PATH = REPOSITORY_ROOT / "docs" / "openapi.yaml"
 
 
 @dataclass
@@ -68,6 +71,10 @@ class CapturingHandler(BaseHTTPRequestHandler):
             time.sleep(type(self).response_delay_seconds)
         self.send_response(type(self).response_status)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header(
+            "X-LLM-Proxy-Request-Timeout-Seconds",
+            captured_request.request_timeout or "360",
+        )
         self.end_headers()
         try:
             self.wfile.write(type(self).response_body.encode("utf-8"))
@@ -132,6 +139,76 @@ def replace_model_profile(profile_path: Path, profile_document: str) -> None:
     os.replace(replacement_path, profile_path)
 
 
+def canonical_openapi_document() -> dict[str, Any]:
+    """Load the sole committed HTTP contract."""
+
+    document = json.loads(CANONICAL_OPENAPI_PATH.read_text(encoding="utf-8"))
+    assert document["openapi"] == "3.1.0"
+    return document
+
+
+def resolve_openapi_reference(document: dict[str, Any], value: dict[str, Any]) -> dict[str, Any]:
+    """Resolve one local OpenAPI reference."""
+
+    reference = value.get("$ref")
+    if reference is None:
+        return value
+    assert isinstance(reference, str) and reference.startswith("#/")
+    resolved: Any = document
+    for encoded_segment in reference.removeprefix("#/").split("/"):
+        segment = encoded_segment.replace("~1", "/").replace("~0", "~")
+        assert isinstance(resolved, dict)
+        resolved = resolved[segment]
+    assert isinstance(resolved, dict)
+    return resolved
+
+
+def canonical_v2_operation(document: dict[str, Any]) -> dict[str, Any]:
+    """Return the canonical v2 POST operation."""
+
+    operation = document["paths"]["/v2"]["post"]
+    assert isinstance(operation, dict)
+    return operation
+
+
+def assert_python_v2_request_conforms_to_openapi(captured_request: CapturedRequest) -> None:
+    """Prove the Python package's real serialized request uses the canonical v2 shape."""
+
+    document = canonical_openapi_document()
+    operation = canonical_v2_operation(document)
+    request_body = resolve_openapi_reference(document, operation["requestBody"])
+    media_contract = request_body["content"]["application/json"]
+    request_schema = resolve_openapi_reference(document, media_contract["schema"])
+    contract_body_fields = set(request_schema["properties"])
+    client_body_fields = {
+        client_field.name
+        for client_field in fields(ClientMessagesRequest)
+        if client_field.name != "request_timeout_seconds"
+    }
+    assert client_body_fields == contract_body_fields
+    assert captured_request.body is not None
+    assert set(captured_request.body).issubset(contract_body_fields)
+    assert set(request_schema["required"]).issubset(captured_request.body)
+    assert request_schema["additionalProperties"] is False
+
+    declared_query_fields: set[str] = set()
+    for raw_parameter in operation["parameters"]:
+        parameter = resolve_openapi_reference(document, raw_parameter)
+        if parameter["in"] == "query":
+            declared_query_fields.add(parameter["name"])
+    parsed_path = urllib.parse.urlparse(captured_request.path)
+    actual_query_fields = set(urllib.parse.parse_qs(parsed_path.query))
+    assert {"key", "provider", "format"}.issubset(declared_query_fields)
+    assert contract_body_fields.isdisjoint(actual_query_fields)
+
+
+def canonical_v2_response_statuses() -> set[int]:
+    """Return every explicitly documented v2 response status."""
+
+    responses = canonical_v2_operation(canonical_openapi_document())["responses"]
+    return {int(status_code) for status_code in responses}
+
+
 def test_client_posts_v2_body_and_preserves_non_body_query(running_server: RunningServer) -> None:
     """The public client sends v2 messages in the body and auth in query."""
 
@@ -173,6 +250,7 @@ def test_client_posts_v2_body_and_preserves_non_body_query(running_server: Runni
         "web_search": False,
         "model": "gpt-5.5",
     }
+    assert_python_v2_request_conforms_to_openapi(captured_request)
 
 
 def test_client_omits_model_when_request_uses_provider_default(running_server: RunningServer) -> None:
@@ -343,6 +421,7 @@ def test_client_sends_unknown_model_profile_pair_to_proxy(running_server: Runnin
 
     parsed_path = urllib.parse.urlparse(CapturingHandler.captured_request.path)
     assert error_info.value.status_code == 400
+    assert error_info.value.status_code in canonical_v2_response_statuses()
     assert urllib.parse.parse_qs(parsed_path.query)["provider"] == ["unknown"]
     assert CapturingHandler.captured_request.body is not None
     assert CapturingHandler.captured_request.body["model"] == "unknown-model"
@@ -387,6 +466,7 @@ def test_client_overrides_provider_and_sends_optional_v2_body_fields(running_ser
         "max_tokens": 42,
         "reasoning_effort": "high",
     }
+    assert_python_v2_request_conforms_to_openapi(captured_request)
 
 
 def test_client_posts_v2_messages_body(running_server: RunningServer) -> None:
