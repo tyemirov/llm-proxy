@@ -25,6 +25,79 @@ already satisfied; recurring maintenance remains scheduled work.
 
 ## BugFixes
 
+- [x] [B071] (P1) {F014,I029,I031} Restore the SQLite-only GORM management database contract.
+  Goal:
+  Select the management database by its SQLite location and keep all runtime
+  persistence behind GORM model APIs, without a PostgreSQL or raw-SQL path.
+
+  Requirements:
+  - Replace `management.database_dialect` and `management.database_dsn` with
+    one required `management.database_path` field and the matching
+    `LLM_PROXY_MANAGEMENT_DATABASE_PATH` placeholder.
+  - Open the configured SQLite location with the pure-Go GORM dialector. Keep
+    injected GORM dialectors only as test boundaries; do not expose another
+    runtime database selector.
+  - Delete the PostgreSQL driver, raw sequence SQL, disposable PostgreSQL
+    harness, workflow service, and database-specific tests.
+  - Update current repository, operator, generated public, and issue
+    documentation to the forward-only SQLite contract without aliases or
+    compatibility reads.
+  - Preserve the real SQLite migration and management API coverage, then pass
+    the required post-edit `make ci`.
+
+  Resolved 2026-07-26:
+  Replaced the dialect/DSN pair with the required `management.database_path`
+  and `LLM_PROXY_MANAGEMENT_DATABASE_PATH` contract. Runtime persistence now
+  opens that SQLite location through GORM, while injected GORM dialectors
+  remain test-only boundaries.
+
+  Removed the PostgreSQL driver and transitive dependencies, raw identity
+  sequence SQL, PostgreSQL workflow service and environment, disposable
+  PostgreSQL harness, target, and database-specific tests. Updated the current
+  configuration examples, local and deployment environment files, repository
+  guidance, migration runbooks, issue records, and generated public resources
+  to the SQLite-only contract without an alias or fallback.
+
+  The required pre-change `make ci` established a failing exact-coverage
+  baseline at two `management_usage.go` branches. After the final code edit,
+  `make ci` passed static analysis, exact 100% Go coverage, 33 Python tests,
+  package installation, 63 browser scenarios, the TAuth black-box test, 47
+  release tests, and live-provider preflight.
+
+- [x] [B070] (P1) {F014,I029,I031} Correct review-discovered management presentation and OpenAPI gaps.
+  Goal:
+  Keep canonical failure presentation and OpenAPI conformance aligned with the
+  released multi-tenant management contract.
+
+  Requirements:
+  - Present the persisted caller-cancellation status `499` through the same
+    strict status-label and tenant-scoped failure-detail paths as every other
+    canonical failure.
+  - Document and validate the existing empty `api_key` request that retains a
+    stored credential while updating its provider model or system prompt.
+  - Enforce declared integer `maximum` values in the canonical OpenAPI
+    conformance validator.
+  - Cover each correction through the real-router, OpenAPI, and Playwright
+    integration boundaries, then pass the required post-edit `make ci`.
+
+  Resolved 2026-07-26:
+  Persisted caller cancellation now renders as canonical status `499 Client
+  closed request` in both usage breakdowns and tenant-scoped failure details.
+  The real management router proves cancellation persists only the normalized
+  `request_timeout` outcome, while Playwright proves the complete response
+  remains usable and secret-safe.
+
+  The canonical OpenAPI request describes empty `api_key` as the existing
+  retain-credential operation, its generated reference is synchronized, and a
+  real provider-settings request passes both schema and server validation.
+  Integer `maximum` values are enforced, with the documented failure-page
+  limit rejecting `101` in both the conformance gate and real handler.
+
+  The required pre-change and post-change `make ci` runs pass. The final run
+  followed the last code edit and passed exact 100% Go coverage, 33 Python
+  tests, 63 management-browser tests, TAuth black-box coverage, release
+  checks, and live-provider preflight.
+
 - [x] [B069] (P1) Make upstream request timeouts an explicit, bounded client-to-proxy contract.
   Goal:
   Let each client choose the exact bounded amount of time LLM Proxy may spend
@@ -549,7 +622,7 @@ already satisfied; recurring maintenance remains scheduled work.
     rate-limit, unavailable, timeout, and upstream failures; prove each stores
     the exact safe code and a success stores `success`, without persisting a raw
     error message.
-  - Run the real SQLite and PostgreSQL migration paths with historical events;
+  - Run the real SQLite migration path with historical events;
     prove exact code backfill, index creation, totals preservation, contextual
     rejection/rollback for an unsupported status, and no obsolete nullable or
     compatibility path.
@@ -567,7 +640,7 @@ already satisfied; recurring maintenance remains scheduled work.
     and cursor inputs; stable snapshot pagination; exact safe row fields; and
     indistinguishable missing/foreign-tenant behavior.
   - Added canonical outcome recording at the managed request boundary and the
-    transactional version-2 SQLite/PostgreSQL migration with exact historical
+    transactional version-2 SQLite migration with exact historical
     normalization, unsupported-status rollback, and the current failure-query
     index.
   - Added the selected-period failed-request action and accessible details
@@ -577,7 +650,7 @@ already satisfied; recurring maintenance remains scheduled work.
     repository, routing, and public usage documentation.
   - The required pre-change and post-change `make ci` runs pass. The final run
     followed the last code edit and passed static analysis, exact 100% Go
-    coverage, real SQLite/PostgreSQL migration checks, 33 Python tests, package
+    coverage, real SQLite migration checks, 33 Python tests, package
     installation, 63 browser scenarios, the TAuth black-box test, release
     checks, and the live-provider harness preflight.
 
@@ -690,7 +763,7 @@ already satisfied; recurring maintenance remains scheduled work.
     byte-for-byte with provenance and tamper/drift rejection.
   - The required pre-change and post-change `make ci` runs pass. The final run
     followed the last code edit and passed static analysis, exact 100% Go
-    coverage, SQLite/PostgreSQL checks, 33 Python tests, package installation,
+    coverage, SQLite checks, 33 Python tests, package installation,
     60 browser scenarios, the TAuth black-box test, release checks, and the
     live-provider harness preflight. Live publication verification remains
     user-owned after production deployment.
@@ -1010,7 +1083,7 @@ already satisfied; recurring maintenance remains scheduled work.
   - Preserve strict tenant isolation at the database query boundary. Every tenant-scoped management query and mutation must constrain both authenticated owner user id and tenant id. Return the same `404 Not Found` for a missing tenant and another user's tenant so identifiers cannot be enumerated.
   - Keep administrators read-only with respect to tenant ownership. Replace the singular admin tenant shape with an ordered `tenants` collection and tenant count per user; show each tenant's facts and existing 30-day usage summary without exposing provider keys, masked key material, secret digests, generated secrets, prompts, responses, audio names, or transcripts.
   Migration:
-  - Add one bounded, versioned, all-or-nothing GORM migration for both supported SQLite and PostgreSQL management databases. Do not add raw-SQL persistence, dual reads/writes, a runtime fallback to the old schema, or a compatibility response shape.
+  - Add one bounded, versioned, all-or-nothing GORM migration for the configured SQLite management database. Do not add raw-SQL persistence, dual reads/writes, a runtime fallback to the old schema, or a compatibility response shape.
   - Preflight the complete current dataset before mutation: require unique nonblank user and tenant ids, valid B036 provider/model pairs, matching tenant ids on usage rows, no orphan provider or usage rows, and successful decryption of every provider key. Reject any remaining `static-config:<tenant-id>` owner with a contextual instruction to complete the F011 ownership claim first.
   - Create one managed-user row for every current authenticated owner and one owned tenant row for that user's existing record. Name each migrated tenant `Default`; preserve tenant id, secret digest, defaults, provider settings, creation/update timestamps, and all usage fields and timestamps exactly.
   - Move provider records from the user foreign key to the preserved tenant id and decrypt/re-encrypt each key from the old user/provider associated data to the new tenant/provider associated data inside the migration boundary. Move usage ownership to its existing tenant id and remove user id as an independent usage-partition key.
@@ -1040,7 +1113,7 @@ already satisfied; recurring maintenance remains scheduled work.
   - Add black-box management HTTP scenarios where one authenticated user creates two tenants with different keys for the same provider, defaults, secrets, and usage; prove each tenant round-trips independently and another authenticated user receives indistinguishable `404` responses for both reads and mutations.
   - Prove through public proxy endpoints that each tenant's generated secret selects only that tenant's provider key/defaults, records usage only for that tenant, and that revoking or deleting one tenant never changes another tenant's authentication or history.
   - Exercise I025 reveal and F013 intervals through the tenant-scoped endpoints, including cross-tenant denial, response non-caching, concurrent requests, and the absence of raw secrets/keys from account, tenant-summary, usage, and admin payloads.
-  - Add disposable pre-migration database fixtures for SQLite and PostgreSQL containing multiple current users, encrypted provider keys, generated-secret digests, defaults, and usage. Run the real migration entrypoint and prove exact preservation, ciphertext re-binding, old-schema removal, idempotent version rejection, rollback on corrupted/orphaned rows, and unchanged client-secret routing.
+  - Add disposable pre-migration SQLite database fixtures containing multiple current users, encrypted provider keys, generated-secret digests, defaults, and usage. Run the real migration entrypoint and prove exact preservation, ciphertext re-binding, old-schema removal, idempotent version rejection, rollback on corrupted/orphaned rows, and unchanged client-secret routing.
   - Add Playwright coverage for first-user bootstrap, create, switch, URL reload/history, independent tabs, rename, guarded final-tenant deletion, confirmed deletion, unsaved-edit handling, one-time secret/key cleanup, response-order races, explicit invalid-URL errors, admin tenant lists, keyboard use, and desktop/mobile geometry.
   - Extend the real local TAuth black-box path to create and use two tenants for one verified session and prove a second verified user cannot access either tenant.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
@@ -1050,16 +1123,16 @@ already satisfied; recurring maintenance remains scheduled work.
     surface with account-owned opaque tenants, tenant-bound credentials,
     defaults, secrets, usage, administrator projections, and canonical
     `/api/management/tenants/:tenant_id/...` operations.
-  - Added the transactional version-1 SQLite/PostgreSQL ownership migration,
+  - Added the transactional version-1 SQLite ownership migration,
     provider-key ciphertext rebinding, strict preflight/verification/rollback,
-    disposable PostgreSQL harness, and operator-owned migration runbook.
+    disposable database fixtures, and operator-owned migration runbook.
   - Added URL-owned workspace selection and full create, switch, rename, and
     delete interaction with isolation, confirmation, cancellation, stale
     response protection, credential cleanup, responsive behavior, and updated
     generated documentation.
   - The required pre-change and post-change `make ci` runs pass. The final run
     followed the last code edit and passed static analysis, exact 100% Go
-    coverage, the real SQLite and PostgreSQL migrations, 33 Python tests,
+    coverage, the real SQLite migrations, 33 Python tests,
     package installation, 59 browser scenarios, the real two-user TAuth
     black-box test, release checks, and live-provider harness preflight.
 
