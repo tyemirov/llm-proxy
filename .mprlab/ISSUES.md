@@ -25,7 +25,60 @@ already satisfied; recurring maintenance remains scheduled work.
 
 ## BugFixes
 
-- [ ] [B073] (P1) {B070,F014,I031} Migrate persisted caller-cancellation usage outcomes.
+- [x] [B074] (P1) {F014} Make tenant context and lifecycle controls compact.
+  Goal:
+  Make multi-tenant context immediately legible without presenting the active
+  tenant as a permanently open edit form.
+
+  Problem:
+  The active-tenant toolbar stacks its label above the selector and separates
+  the immutable id into a wide second column. In Settings, the tenant name is
+  always rendered as a full-width input with save/delete actions and two help
+  lines. This gives stable tenant identity the visual weight of a pending form,
+  pushes the client key away from its owning context, and makes the final-tenant
+  guard read like an error during ordinary use.
+
+  Requirements:
+  - Keep the canonical F014 account, URL, isolation, and tenant lifecycle
+    behavior unchanged; this is one frontend presentation and interaction fix.
+  - Render the global active-tenant label, selector, immutable id, and create
+    action as one dense MPR toolbar on desktop with a bounded two-row mobile
+    layout.
+  - Render Settings tenant identity as a compact idle row with the display name
+    primary and immutable id secondary. Enter an inline name editor only after
+    an explicit Rename action, focus it deterministically, and return focus
+    after save or cancel.
+  - Keep deletion adjacent to the tenant it affects. Use a compact destructive
+    action, retain the named confirmation, and present the undeletable final
+    tenant as concise protected state with an accessible explanation.
+  - Keep the client-key row separate and preserve one-time reveal, copy,
+    replacement, revocation, mandatory-setup, and credential-clearing behavior.
+  - Preserve centralized copy, semantic custom elements, visible focus,
+    keyboard operation, screen-reader naming, and unclipped desktop/mobile
+    geometry.
+  - Extend Playwright coverage through the real rendered interface and pass the
+    required final `make ci` after the last code edit.
+
+  Resolved 2026-07-26:
+  The global tenant selector, immutable id, and create action now share one
+  dense context toolbar. Settings renders the active tenant as a compact
+  name/id row with an `Only tenant` protection chip and colocated destructive
+  action; the name input appears only after Rename and returns focus after save
+  or cancel.
+
+  The client-key contract remains a separate row with unchanged one-time
+  reveal, copy, replace, revoke, and mandatory-setup behavior. Its narrow
+  layout now gives key status the full row before placing the create/replace
+  action below it, avoiding the prior squeezed vertical copy.
+
+  Browser coverage proves lifecycle behavior, stale-response isolation, focus,
+  final-tenant protection, and bounded desktop/compact/mobile geometry. The
+  required pre-change and post-change `make ci` runs pass. The final run
+  followed the last code edit and passed static analysis, exact 100% Go
+  coverage, 33 Python tests, package installation, 63 browser scenarios, the
+  TAuth black-box test, 47 release tests, and live-provider preflight.
+
+- [x] [B073] (P1) {B070,F014,I031} Migrate persisted caller-cancellation usage outcomes.
   Goal:
   Let existing management databases containing valid caller-cancellation
   usage rows start and migrate to the canonical outcome schema.
@@ -45,6 +98,23 @@ already satisfied; recurring maintenance remains scheduled work.
   - Document that caller cancellation `499` and proxy-budget expiry `504`
     share the normalized `request_timeout` outcome.
   - Pass the required post-edit `make ci`.
+
+  Resolved 2026-07-26:
+  The historical outcome mapper now uses the canonical caller-cancellation
+  status constant to map persisted `499` rows to `request_timeout`, matching
+  current runtime recording and presentation. Unknown historical statuses
+  remain rejected before mutation.
+
+  The schema-1-to-2 and pre-F014 disposable SQLite startup migrations both
+  contain caller-cancellation rows and prove their status and normalized
+  outcome survive the bounded upgrade. README and implementation runbooks now
+  state that `499` caller cancellation and `504` proxy-budget expiry share the
+  canonical outcome without conflating their HTTP meanings.
+
+  The required pre-change and post-change `make ci` runs pass. The final run
+  followed the last code edit and passed static analysis, exact 100% Go
+  coverage, 33 Python tests, package installation, 63 browser scenarios, the
+  TAuth black-box test, 47 release tests, and live-provider preflight.
 
 - [x] [B072] (P1) {F014,B071} Preserve legacy SQLite index names through the ownership migration.
   Goal:
