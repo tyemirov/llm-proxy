@@ -12,13 +12,9 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 Resolved history: `.mprlab/ISSUES-ARCHIVE.md`; the complete original issue
 bodies, resolution notes, and validation records remain in `v0.2.43`.
 
-Triage, 2026-07-24: B069 is the immediate active regression. Under the
-one-issue-at-a-time workflow, the selected P1 execution tranche is
-**B069 -> F014 -> I029**: B069 establishes the bounded per-request timeout and
-error contract for public upstream work, F014 replaces singular management
-routes with tenant-scoped routes, and I029 then freezes those final public and
-management contracts in OpenAPI. I031 is the next convergence item after I029
-and F014; I027 and P001 are independent F014 successors. I032 follows F014
+Triage, 2026-07-25: B069, F014, I029, and I031 are resolved. The selected
+one-issue-at-a-time P1 execution tranche is complete. I027 and P001 are
+independent F014 successors. I032 follows F014
 and I027 so its activity-breakdown presentation is added to the final
 tenant-scoped dashboard rather than the obsolete singleton layout. I033 follows
 F014 and I029 so its bounded dashboard freshness contract uses the final
@@ -29,7 +25,7 @@ already satisfied; recurring maintenance remains scheduled work.
 
 ## BugFixes
 
-- [!] [B069] (P1) Make upstream request timeouts an explicit, bounded client-to-proxy contract.
+- [x] [B069] (P1) Make upstream request timeouts an explicit, bounded client-to-proxy contract.
   Goal:
   Let each client choose the exact bounded amount of time LLM Proxy may spend
   on one upstream request, while keeping caller cancellation, provider work,
@@ -254,12 +250,11 @@ already satisfied; recurring maintenance remains scheduled work.
   `LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS`; focused operational coverage rejects
   any reintroduction of that environment handoff.
 
-  Blocked:
-  Source implementation is complete, but resolution still requires the
-  execution chain to land and release the coordinated app and gateway changes,
-  the user-owned production deployment, verification of the deployed
-  max/outer-guard relationship, and the production-comparable approximately
-  16 KB explicit-`high` canary plus its small control before Kamu F001 retries.
+  Resolved 2026-07-25:
+  - The coordinated app and gateway changes were released and deployed by the operator; released client `v0.2.46` exposes the request-level budget without a hidden total-response deadline.
+  - A live `gpt-5.6-terra` / `max` control returned `OK` with a 900-second request budget.
+  - A production-sized Bulgarian source-world request using the same model, effort, and budget remained connected beyond the former 300-second caller deadline and the 360-second proxy default, then returned a complete passing review after roughly 6.5 minutes.
+  - Kamu F001 can therefore resume with the declared 900-second budget; no retry, direct-provider path, prompt chunking, or tenant mutation is required.
 
 ## Improvements
 
@@ -470,7 +465,7 @@ already satisfied; recurring maintenance remains scheduled work.
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
 
-- [ ] [I031] (P1) {I029,F014} Add tenant-scoped failure details to the usage dashboard.
+- [x] [I031] (P1) {I029,F014} Add tenant-scoped failure details to the usage dashboard.
   Goal:
   Let a signed-in tenant owner open a selected-period **failed requests** link
   from the success-rate metric and inspect safe, individual failure metadata.
@@ -567,7 +562,26 @@ already satisfied; recurring maintenance remains scheduled work.
     `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
     last code edit.
 
-- [ ] [I029] (P1) {B069,F014} Publish one canonical OpenAPI contract and enforce server/client conformance.
+  Resolved 2026-07-25:
+  - Added the owner-only tenant failure operation with strict interval, limit,
+    and cursor inputs; stable snapshot pagination; exact safe row fields; and
+    indistinguishable missing/foreign-tenant behavior.
+  - Added canonical outcome recording at the managed request boundary and the
+    transactional version-2 SQLite/PostgreSQL migration with exact historical
+    normalization, unsupported-status rollback, and the current failure-query
+    index.
+  - Added the selected-period failed-request action and accessible details
+    dialog with status context, safe labels, pagination, responsive behavior,
+    retry and stale-response protection, while keeping administrators
+    aggregate-only. Updated the canonical OpenAPI contract and generated,
+    repository, routing, and public usage documentation.
+  - The required pre-change and post-change `make ci` runs pass. The final run
+    followed the last code edit and passed static analysis, exact 100% Go
+    coverage, real SQLite/PostgreSQL migration checks, 33 Python tests, package
+    installation, 63 browser scenarios, the TAuth black-box test, release
+    checks, and the live-provider harness preflight.
+
+- [x] [I029] (P1) {B069,F014} Publish one canonical OpenAPI contract and enforce server/client conformance.
   Goal:
   Make one committed OpenAPI 3.1 document the sole canonical HTTP wire
   contract for every llm-proxy-owned endpoint, publish that exact artifact on
@@ -663,6 +677,23 @@ already satisfied; recurring maintenance remains scheduled work.
   - After the user-owned production deployment, capture live `200` responses
     for `/openapi.yaml` and `/docs/` and verify the published schema matches the
     released source artifact.
+
+  Resolved 2026-07-25:
+  - Added `docs/openapi.yaml` as the sole OpenAPI 3.1 source for all 18 owned
+    operations, with exact production server, authentication, request,
+    response, status, header, content-type, and `/v2` reasoning contracts.
+  - Added bidirectional real-router inventory and representative HTTP exchange
+    conformance, plus request/response coverage from the Go package, Python
+    package, and Go CLI against the same artifact.
+  - Derived the human API reference and resource-page wire inventory from the
+    contract, and made the Pages build publish the committed schema
+    byte-for-byte with provenance and tamper/drift rejection.
+  - The required pre-change and post-change `make ci` runs pass. The final run
+    followed the last code edit and passed static analysis, exact 100% Go
+    coverage, SQLite/PostgreSQL checks, 33 Python tests, package installation,
+    60 browser scenarios, the TAuth black-box test, release checks, and the
+    live-provider harness preflight. Live publication verification remains
+    user-owned after production deployment.
 
 - [ ] [I027] (P1) {F014} Redesign the user dashboard around connected-provider widgets.
   Goal:
@@ -962,7 +993,7 @@ already satisfied; recurring maintenance remains scheduled work.
 
 ## Features
 
-- [ ] [F014] (P1) Support multiple isolated tenants per managed user.
+- [x] [F014] (P1) Support multiple isolated tenants per managed user.
   Goal:
   Let one authenticated TAuth user create, select, rename, and delete multiple independently configured LLM Proxy tenants. Each tenant owns its own generated client secret, provider credentials and settings, routing defaults, request examples, and usage history. This feature is one-user-to-many-tenants; shared tenants, invitations, memberships, and team roles are outside scope.
   Current contract:
@@ -1013,6 +1044,24 @@ already satisfied; recurring maintenance remains scheduled work.
   - Add Playwright coverage for first-user bootstrap, create, switch, URL reload/history, independent tabs, rename, guarded final-tenant deletion, confirmed deletion, unsaved-edit handling, one-time secret/key cleanup, response-order races, explicit invalid-URL errors, admin tenant lists, keyboard use, and desktop/mobile geometry.
   - Extend the real local TAuth black-box path to create and use two tenants for one verified session and prove a second verified user cannot access either tenant.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
+
+  Resolved 2026-07-25:
+  - Replaced the one-user/one-tenant persistence and unscoped management
+    surface with account-owned opaque tenants, tenant-bound credentials,
+    defaults, secrets, usage, administrator projections, and canonical
+    `/api/management/tenants/:tenant_id/...` operations.
+  - Added the transactional version-1 SQLite/PostgreSQL ownership migration,
+    provider-key ciphertext rebinding, strict preflight/verification/rollback,
+    disposable PostgreSQL harness, and operator-owned migration runbook.
+  - Added URL-owned workspace selection and full create, switch, rename, and
+    delete interaction with isolation, confirmation, cancellation, stale
+    response protection, credential cleanup, responsive behavior, and updated
+    generated documentation.
+  - The required pre-change and post-change `make ci` runs pass. The final run
+    followed the last code edit and passed static analysis, exact 100% Go
+    coverage, the real SQLite and PostgreSQL migrations, 33 Python tests,
+    package installation, 59 browser scenarios, the real two-user TAuth
+    black-box test, release checks, and live-provider harness preflight.
 
 ## Planning
 *do not implement yet*
