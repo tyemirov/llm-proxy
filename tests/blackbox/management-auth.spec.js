@@ -183,6 +183,8 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
 
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await expect(settingsDialog).toBeVisible();
+  await expect(settingsDialog.getByRole("combobox", { name: "Settings tenant" })).toHaveValue(firstTenantID);
+  await expect(settingsDialog.getByRole("button", { name: "Create tenant" })).toBeVisible();
   await expect(settingsDialog.getByRole("alert")).toHaveText(
     "Add at least one provider API key before leaving Settings.",
   );
@@ -262,6 +264,44 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
     firstTenantID,
     secondTenantID,
   ]);
+  const accountUsageResponse = await context.request.get(
+    `${stack.llmProxyOrigin}/api/management/usage?interval=30d`,
+    { headers: { Origin: stack.frontendOrigin } },
+  );
+  expect(accountUsageResponse.status()).toBe(httpOK);
+  expect(accountUsageResponse.headers()["cache-control"]).toBe("no-store");
+  expect(await accountUsageResponse.json()).toMatchObject({
+    interval: "30d",
+    totals: {
+      requests: 2,
+      failed_requests: 2,
+    },
+  });
+  const accountUsageFailuresResponse = await context.request.get(
+    `${stack.llmProxyOrigin}/api/management/usage/failures?interval=30d&limit=10`,
+    { headers: { Origin: stack.frontendOrigin } },
+  );
+  expect(accountUsageFailuresResponse.status()).toBe(httpOK);
+  expect(accountUsageFailuresResponse.headers()["cache-control"]).toBe("no-store");
+  const accountUsageFailures = await accountUsageFailuresResponse.json();
+  expect(accountUsageFailures.interval).toBe("30d");
+  expect(accountUsageFailures.failures).toHaveLength(2);
+  expect(
+    accountUsageFailures.failures
+      .map((failure) => [failure.tenant_id, failure.tenant_name])
+      .sort(([leftTenantID], [rightTenantID]) => leftTenantID.localeCompare(rightTenantID)),
+  ).toEqual([
+    [firstTenantID, "Default"],
+    [secondTenantID, "Research"],
+  ].sort(([leftTenantID], [rightTenantID]) => leftTenantID.localeCompare(rightTenantID)));
+  expect(accountUsageFailures.failures).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        outcome_code: "invalid_request",
+        status_code: httpBadRequest,
+      }),
+    ]),
+  );
 
   const secondUserContext = await browser.newContext();
   try {
@@ -372,6 +412,10 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
 async function expectAuthenticatedDashboard(page) {
   await expect(page.locator("llm-proxy-key-management")).toHaveAttribute("data-auth-state", "authenticated");
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  const usageTenantSelector = page.getByRole("combobox", { name: "Usage tenant" });
+  await expect(usageTenantSelector).toHaveValue("");
+  await expect(usageTenantSelector.locator("option:checked")).toHaveText("All tenants");
+  await expect(page.locator("tenant-context-bar")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeHidden();
   await expect(page.locator("mpr-user")).toHaveAttribute("data-mpr-user-status", "authenticated");
   await expect(page.locator("mpr-user")).toHaveAttribute("data-user-email", localManagementProfile.operatorEmail);

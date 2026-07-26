@@ -163,19 +163,22 @@ if [[ ! -f "${COMPOSE_STARTED_CAPTURE:?}" ]]; then
 fi
 [[ ! -f "${CURL_EARLY_CAPTURE:?}" ]]
 case "${arguments}" in
-  *"http://127.0.0.1:4179/config-ui.yaml"*)
+  *"http://localhost:4179/config-ui.yaml"*)
     status=200
     ;;
-  *"http://127.0.0.1:4179/"*)
-    status=200
-    ;;
-  *"http://127.0.0.1:8080/?prompt=ready"*)
-    status=403
-    ;;
-  *"http://127.0.0.1:8082/auth/session"*)
+  *"http://localhost:4179/auth/session"*)
     status=204
     ;;
-  *"http://127.0.0.1:8080/api/management/account"*)
+  *"http://localhost:4179/auth/nonce"*)
+    status=200
+    ;;
+  *"http://localhost:4179/"*)
+    status=200
+    ;;
+  *"http://localhost:8080/?prompt=ready"*)
+    status=403
+    ;;
+  *"http://localhost:8080/api/management/account"*)
     status=401
     builtin printf '%s\n' ready >"${CURL_READY_CAPTURE:?}"
     ;;
@@ -276,11 +279,12 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		testingInstance.Fatalf("read curl arguments: %v", readCurlArgumentsError)
 	}
 	for _, expectedURL := range []string{
-		"http://127.0.0.1:4179/",
-		"http://127.0.0.1:4179/config-ui.yaml",
-		"http://127.0.0.1:8080/?prompt=ready",
-		"http://127.0.0.1:8082/auth/session",
-		"http://127.0.0.1:8080/api/management/account",
+		"http://localhost:4179/",
+		"http://localhost:4179/config-ui.yaml",
+		"http://localhost:4179/auth/session",
+		"http://localhost:4179/auth/nonce",
+		"http://localhost:8080/?prompt=ready",
+		"http://localhost:8080/api/management/account",
 	} {
 		if !strings.Contains(string(curlArguments), expectedURL) {
 			testingInstance.Fatalf("make up did not verify %s: %s", expectedURL, curlArguments)
@@ -289,6 +293,9 @@ exec "${REAL_AWK_PATH:?}" "$@"
 	if !strings.Contains(string(curlArguments), "Origin: http://localhost:4179") {
 		testingInstance.Fatalf("make up did not verify browser-origin authentication boundaries: %s", curlArguments)
 	}
+	if !strings.Contains(string(curlArguments), "--request POST --header Origin: http://localhost:4179 --header X-Requested-With: XMLHttpRequest http://localhost:4179/auth/nonce") {
+		testingInstance.Fatalf("make up did not verify browser nonce issuance through the same-origin frontend: %s", curlArguments)
+	}
 
 	localEnvironment, readLocalEnvironmentError := os.ReadFile(filepath.Join(fixtureRoot, "configs", ".env.local"))
 	if readLocalEnvironmentError != nil {
@@ -296,10 +303,8 @@ exec "${REAL_AWK_PATH:?}" "$@"
 	}
 	for _, expectedFragment := range []string{
 		"LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN=http://localhost:4179",
-		"LLM_PROXY_MANAGEMENT_TAUTH_URL=http://localhost:8082",
 		"LLM_PROXY_MANAGEMENT_API_ORIGIN=http://localhost:8080",
 		"GHTTP_SERVE_DIRECTORY=/app/site",
-		"GHTTP_SERVE_PROXIES=/config-ui.yaml=http://api:8080",
 		"LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY=generated-local-value",
 		"LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=generated-local-value",
 	} {
@@ -314,7 +319,6 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		"GHTTP_SERVE_PORT",
 		"GHTTP_SERVE_DIRECTORY",
 		"GHTTP_SERVE_NO_MARKDOWN",
-		"GHTTP_SERVE_PROXIES",
 	})
 	assertOperationalEnvironmentKeys(testingInstance, filepath.Join(fixtureRoot, "configs", ".env.api.local"), []string{
 		"LLM_PROXY_MANAGEMENT_ENABLED",
@@ -323,7 +327,6 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		"LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN",
 		"LLM_PROXY_MANAGEMENT_UI_DESCRIPTION",
 		"LLM_PROXY_MANAGEMENT_ADMIN_EMAILS",
-		"LLM_PROXY_MANAGEMENT_TAUTH_URL",
 		"LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID",
 		"LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID",
 		"LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH",
@@ -364,9 +367,10 @@ exec "${REAL_AWK_PATH:?}" "$@"
 				"./configs/.env.frontend.local",
 				"./configs/.env.api.local",
 				"./configs/.env.tauth.local",
+				"GHTTP_SERVE_PROXIES: \"/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080\"",
+				"LLM_PROXY_MANAGEMENT_TAUTH_URL: \"http://localhost:4179\"",
 				"127.0.0.1:4179:4179",
 				"127.0.0.1:8080:8080",
-				"127.0.0.1:8082:8080",
 				"./site:/app/site:ro",
 			},
 		},
@@ -406,6 +410,9 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		if strings.Contains(string(composeConfiguration), forbiddenEnvFile) {
 			testingInstance.Fatalf("local Compose injects aggregate environment file %q: %s", forbiddenEnvFile, composeConfiguration)
 		}
+	}
+	if strings.Contains(string(composeConfiguration), "127.0.0.1:8082:8080") {
+		testingInstance.Fatalf("local Compose exposes TAuth outside the same-origin frontend: %s", composeConfiguration)
 	}
 	if !strings.Contains(output.String(), "LLM Proxy local orchestration stopped.") {
 		testingInstance.Fatalf("make up did not report local stack shutdown: %s", output.String())

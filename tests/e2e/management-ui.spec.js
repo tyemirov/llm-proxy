@@ -34,8 +34,6 @@ const httpInternalServerError = 500;
 const noticeClockPauseLeadMilliseconds = 5_000;
 const noticeClockPreDeadlineAdvanceMilliseconds = 4_000;
 const noticeClockPostDeadlineAdvanceMilliseconds = 2_000;
-const tenantToolbarDesktopMaxHeight = 45;
-const tenantToolbarMobileMaxHeight = 80;
 const tenantSettingsRowMaxHeight = 64;
 const usageIntervals = Object.freeze([
   { id: "all", label: "ALL", requests: 91, totalTokens: 91_000, providerCount: 1 },
@@ -55,7 +53,7 @@ const mimeTypes = Object.freeze({
 const generatedResourcePageCount = 46;
 const seoContentModifiedDate = "2026-07-11";
 const seoCurrentContentModifiedDate = "2026-07-22";
-const seoUsageContentModifiedDate = "2026-07-25";
+const seoUsageContentModifiedDate = "2026-07-26";
 const seoClientDocumentationModifiedDate = "2026-07-25";
 const settingsLayerViewports = Object.freeze([
   { name: "desktop", width: 1280, height: 720 },
@@ -160,10 +158,14 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
     '<svg class="utility-icon close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">',
   );
   expect(html).not.toContain('x-text="copy.settingsTitle"');
-  expect(html).toContain('<tenant-context-bar x-cloak x-show="account && activeTenantID" aria-label="Tenant context">');
-  expect(html).toContain('x-bind:aria-label="copy.tenantSwitcherLabel"');
-  expect(html).toContain('x-on:change="handleTenantSelection($event)"');
-  expect(html).toContain('x-text="activeTenantID"');
+  expect(html).not.toContain("<tenant-context-bar");
+  expect(html).not.toContain("Active tenant");
+  expect(html).toContain('x-bind:aria-label="copy.usageTenant"');
+  expect(html).toContain('x-on:change="handleUsageTenantSelection($event)"');
+  expect(html).toContain('x-text="copy.allTenants"');
+  expect(html).toContain('<tenant-management role="group" x-bind:aria-label="copy.settingsTenant">');
+  expect(html).toContain('x-on:change="handleSettingsTenantSelection($event)"');
+  expect(html).toContain('x-text="settingsTenantID"');
   expect(html).toContain('<client-access-row role="group" x-bind:aria-label="copy.clientKey">');
   expect(html).toContain('<client-access-tenant role="group" x-bind:aria-label="copy.tenantContext">');
   expect(html).toContain('x-on:click="beginTenantNameEdit()"');
@@ -297,7 +299,7 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
   expect(documentationHTML).toContain('id="operation-postV2Messages"');
   expect(documentationHTML).toContain("<code>reasoning_effort</code>");
   expect(documentationHTML).toContain(`href="${openAPIPath}"`);
-  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(19);
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(21);
 });
 
 test("SEO resource pages are crawlable from the public site", async ({ request }) => {
@@ -380,14 +382,16 @@ test("SEO reliability pages describe configured upstream rate limits", async ({ 
   }
 });
 
-test("SEO usage resource documents selectable tenant intervals", async ({ request }) => {
+test("SEO usage resource documents account-wide and tenant-filtered intervals", async ({ request }) => {
   const response = await request.get(`${baseURL}/resources/managed-tenant-usage-dashboard/`);
   expect(response.status()).toBe(httpOK);
   const pageHTML = await response.text();
   expect(pageHTML).toContain(`"dateModified":"${seoUsageContentModifiedDate}"`);
-  expect(pageHTML).toContain("ALL, 30 days, 7 days, and 1 day");
+  expect(pageHTML).toContain("Usage opens on All tenants and 30 days");
+  expect(pageHTML).toContain("Usage tenant selector immediately before ALL");
+  expect(pageHTML).toContain("GET /api/management/usage?interval=30d");
   expect(pageHTML).toContain(
-    "GET /api/management/tenants/:tenant_id/usage?interval=&lt;interval&gt;",
+    "GET /api/management/tenants/:tenant_id/usage?interval=30d",
   );
 });
 
@@ -482,109 +486,66 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
   expect(robotsText).toContain("Sitemap: https://llm-proxy.mprlab.com/sitemap.xml");
 });
 
-test("tenant URL context selects and atomically switches isolated workspaces", async ({ page }) => {
-  await installAssetRoutes(page);
-  const tenantProfiles = {
-    tenant_1: managementProfile(false, true),
-    tenant_2: managementProfile(false, true),
-  };
-  tenantProfiles.tenant_1.tenant.name = "Default";
-  tenantProfiles.tenant_2.tenant.id = "tenant_2";
-  tenantProfiles.tenant_2.tenant.name = "Research";
-  tenantProfiles.tenant_2.tenant.defaults.model = "gpt-5.6";
-
-  await page.route(`${baseURL}/api/management/account`, async (route) => {
-    await route.fulfill({
-      headers: { "Cache-Control": "no-store" },
-      json: {
-        user: {
-          id: "user_1",
-          email: "owner@example.com",
-          display_name: "Owner",
-          is_admin: false,
-        },
-        tenants: [
-          {
-            id: "tenant_1",
-            name: "Default",
-            has_secret: true,
-            created_at: "2026-07-01T00:00:00Z",
-            updated_at: "2026-07-01T00:00:00Z",
-          },
-          {
-            id: "tenant_2",
-            name: "Research",
-            has_secret: true,
-            created_at: "2026-07-02T00:00:00Z",
-            updated_at: "2026-07-02T00:00:00Z",
-          },
-        ],
-      },
-    });
-  });
-  await page.route(`${baseURL}/api/management/tenants/**`, async (route) => {
-    const requestURL = new URL(route.request().url());
-    const pathParts = requestURL.pathname.split("/");
-    const tenantID = pathParts[4];
-    const tenantProfile = tenantProfiles[tenantID];
-    if (!tenantProfile) {
-      await route.fulfill({ status: 404 });
-      return;
-    }
-    if (pathParts[5] === "usage") {
-      const interval = requestURL.searchParams.get("interval") || "30d";
-      await route.fulfill({
-        json: managementUsage(interval, { requests: tenantID === "tenant_2" ? 7 : 37 }),
-      });
-      return;
-    }
-    await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: tenantProfile });
-  });
-
-  await page.goto(`${baseURL}/?tenant=tenant_2`);
-
-  const switcher = page.locator("tenant-switcher");
-  await expect(switcher.getByRole("combobox", { name: "Active tenant" })).toHaveValue("tenant_2");
-  await expect(switcher.getByText("tenant_2", { exact: true })).toBeVisible();
-  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
-
-  await switcher.getByRole("combobox", { name: "Active tenant" }).selectOption("tenant_1");
-  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_1`);
-  await expect(switcher.getByText("tenant_1", { exact: true })).toBeVisible();
-  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
-});
-
-test("tenant selection defaults to the oldest tenant and follows reload and browser history", async ({ page }) => {
+test("usage defaults to all tenants while tenant management lives in Settings", async ({ page }) => {
   await installAssetRoutes(page);
   await installMultiTenantRoutes(page);
 
   await page.goto(baseURL);
 
-  const tenantSelector = page.getByRole("combobox", { name: "Active tenant" });
-  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_1`);
-  await expect(tenantSelector).toHaveValue("tenant_1");
-  await tenantSelector.selectOption("tenant_2");
-  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_2`);
-  await page.reload();
-  await expect(tenantSelector).toHaveValue("tenant_2");
-  await page.goBack();
-  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_1`);
-  await expect(tenantSelector).toHaveValue("tenant_1");
-  await page.goForward();
-  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_2`);
-  await expect(tenantSelector).toHaveValue("tenant_2");
+  const usageTenantSelector = page.getByRole("combobox", { name: "Usage tenant" });
+  await expect(usageTenantSelector).toHaveValue("");
+  await expect(usageTenantSelector.locator("option:checked")).toHaveText("All tenants");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
+  await expect(page.locator("tenant-context-bar")).toHaveCount(0);
+  await expect(page.getByText("Active tenant", { exact: true })).toHaveCount(0);
+
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Settings tenant" });
+  await expect(settingsTenantSelector).toHaveValue("tenant_1");
+  await expect(settingsDialog.getByRole("button", { name: "Create tenant" })).toBeVisible();
+  await expect(settingsDialog.getByRole("group", { name: "Tenant", exact: true }).getByText("tenant_1", { exact: true })).toBeVisible();
 });
 
-test("an invalid tenant URL renders an explicit workspace error without fallback hydration", async ({ page }) => {
+test("Settings tenant and Usage tenant selections remain independent", async ({ page }) => {
   await installAssetRoutes(page);
-  const managementState = await installMultiTenantRoutes(page);
+  await installMultiTenantRoutes(page);
 
-  await page.goto(`${baseURL}/?tenant=tenant_missing`);
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Settings tenant" });
+  await settingsTenantSelector.selectOption("tenant_2");
+  await expect(settingsTenantSelector).toHaveValue("tenant_2");
+  await expect(settingsDialog.getByRole("group", { name: "Tenant", exact: true }).getByText("Research", { exact: true })).toBeVisible();
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
 
-  await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toBeVisible();
-  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("The tenant in this URL is unavailable.");
-  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_missing`);
-  expect(managementState.requests).toEqual([{ method: "GET", path: "/api/management/account" }]);
+  const usageTenantSelector = page.getByRole("combobox", { name: "Usage tenant" });
+  await expect(usageTenantSelector).toHaveValue("");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
+  await usageTenantSelector.selectOption("tenant_1");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
+
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  await expect(settingsDialog.getByRole("combobox", { name: "Settings tenant" })).toHaveValue("tenant_2");
+  await expect(page).toHaveURL(baseURL);
+});
+
+test("obsolete tenant query parameters do not choose Settings or Usage state", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page);
+
+  await page.goto(`${baseURL}/?tenant=tenant_2`);
+
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  await expect(page.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Settings tenant" })).toHaveValue("tenant_1");
+  await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toHaveCount(0);
 });
 
 test("tenant lifecycle is keyboard accessible, responsive, and guards the final tenant", async ({ page }) => {
@@ -599,7 +560,7 @@ test("tenant lifecycle is keyboard accessible, responsive, and guards the final 
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const tenantSettings = settingsDialog.getByRole("group", { name: "Tenant" });
+  const tenantSettings = settingsDialog.getByRole("group", { name: "Tenant", exact: true });
   const renameTenantButton = tenantSettings.getByRole("button", { name: "Rename" });
   const deleteTenantButton = tenantSettings.getByRole("button", { name: "Delete tenant" });
   await expect(tenantSettings.getByText("Default", { exact: true })).toBeVisible();
@@ -613,9 +574,8 @@ test("tenant lifecycle is keyboard accessible, responsive, and guards the final 
   await tenantSettings.getByRole("button", { name: "Cancel" }).click();
   await expect(initialTenantName).toBeHidden();
   await expect(renameTenantButton).toBeFocused();
-  await settingsDialog.getByRole("button", { name: "Close" }).click();
 
-  const createTenantButton = page.getByRole("button", { name: "Create tenant" });
+  const createTenantButton = settingsDialog.getByRole("button", { name: "Create tenant" });
   await createTenantButton.focus();
   await page.keyboard.press("Enter");
   const createDialog = page.getByRole("dialog", { name: "Create tenant" });
@@ -629,8 +589,8 @@ test("tenant lifecycle is keyboard accessible, responsive, and guards the final 
   await createName.fill("Research");
   await createDialog.getByRole("button", { name: "Create", exact: true }).click();
 
-  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_2`);
-  await expect(page.getByRole("combobox", { name: "Active tenant" })).toHaveValue("tenant_2");
+  await expect(page).toHaveURL(baseURL);
+  await expect(settingsDialog.getByRole("combobox", { name: "Settings tenant" })).toHaveValue("tenant_2");
   await expect(settingsDialog).toBeVisible();
   await renameTenantButton.click();
   const tenantName = tenantSettings.getByRole("textbox", { name: "Tenant name" });
@@ -639,7 +599,7 @@ test("tenant lifecycle is keyboard accessible, responsive, and guards the final 
   await expect(renameTenantButton).toBeFocused();
   await expect(tenantName).toBeHidden();
   await expect(tenantSettings.getByText("Research Lab", { exact: true })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Active tenant" }).locator("option:checked")).toHaveText("Research Lab");
+  await expect(settingsDialog.getByRole("combobox", { name: "Settings tenant" }).locator("option:checked")).toHaveText("Research Lab");
 
   await deleteTenantButton.click();
   const deleteDialog = page.getByRole("alertdialog", { name: "Delete “Research Lab”?" });
@@ -650,15 +610,16 @@ test("tenant lifecycle is keyboard accessible, responsive, and guards the final 
   await deleteTenantButton.click();
   await deleteDialog.getByRole("button", { name: "Delete", exact: true }).click();
 
-  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_1`);
-  await expect(page.getByRole("combobox", { name: "Active tenant" })).toHaveValue("tenant_1");
+  await expect(page).toHaveURL(baseURL);
+  await expect(settingsDialog.getByRole("combobox", { name: "Settings tenant" })).toHaveValue("tenant_1");
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
   expect(managementState.order).toEqual(["tenant_1"]);
-  const tenantBarBox = await page.locator("tenant-context-bar").boundingBox();
-  if (!tenantBarBox) {
-    throw new Error("tenant_context_bar_missing");
+  const tenantManagementBox = await settingsDialog.locator("tenant-management").boundingBox();
+  if (!tenantManagementBox) {
+    throw new Error("tenant_management_missing");
   }
-  expect(tenantBarBox.x).toBeGreaterThanOrEqual(0);
-  expect(tenantBarBox.x + tenantBarBox.width).toBeLessThanOrEqual(390);
+  expect(tenantManagementBox.x).toBeGreaterThanOrEqual(0);
+  expect(tenantManagementBox.x + tenantManagementBox.width).toBeLessThanOrEqual(390);
 });
 
 test("tenant switching requires discard and clears one-time and revealed credentials", async ({ page }) => {
@@ -682,7 +643,7 @@ test("tenant switching requires discard and clears one-time and revealed credent
     await route.fallback();
   });
 
-  await page.goto(`${baseURL}/?tenant=tenant_1`);
+  await page.goto(baseURL);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
@@ -698,25 +659,27 @@ test("tenant switching requires discard and clears one-time and revealed credent
   await page.keyboard.press("Tab");
   await providerSaveRequested;
 
-  await page.getByRole("combobox", { name: "Active tenant" }).selectOption("tenant_2");
+  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Settings tenant" });
+  await settingsTenantSelector.selectOption("tenant_2");
   const discardDialog = page.getByRole("alertdialog", { name: "Discard unsaved changes?" });
   await expect(discardDialog).toBeVisible();
   await discardDialog.getByRole("button", { name: "Stay" }).click();
-  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_1`);
+  await expect(settingsTenantSelector).toHaveValue("tenant_1");
   await expect(providerEditor.getByRole("textbox", { name: "System prompt" })).toHaveValue("Unsaved tenant one prompt");
 
-  await page.getByRole("combobox", { name: "Active tenant" }).selectOption("tenant_2");
+  await settingsTenantSelector.selectOption("tenant_2");
   await discardDialog.getByRole("button", { name: "Discard and switch" }).click();
   releaseProviderSave();
-  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_2`);
-  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
+  await expect(settingsTenantSelector).toHaveValue("tenant_2");
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
   await expect(page.locator("body")).not.toContainText("llmp_tenant_1_generated");
   await expect(page.locator("body")).not.toContainText("sk-tenant_1-openai");
   expect(await browserStorageContains(page, "llmp_tenant_1_generated")).toBe(false);
   expect(await browserStorageContains(page, "sk-tenant_1-openai")).toBe(false);
 });
 
-test("concurrent tabs keep independent tenant URL and workspace state", async ({ context, page }) => {
+test("concurrent tabs keep independent Settings and Usage tenant state", async ({ context, page }) => {
   const secondPage = await context.newPage();
   await installAssetRoutes(page);
   await installAssetRoutes(secondPage);
@@ -724,21 +687,26 @@ test("concurrent tabs keep independent tenant URL and workspace state", async ({
   await installMultiTenantRoutes(secondPage);
 
   await Promise.all([
-    page.goto(`${baseURL}/?tenant=tenant_1`),
-    secondPage.goto(`${baseURL}/?tenant=tenant_2`),
+    page.goto(baseURL),
+    secondPage.goto(baseURL),
   ]);
 
-  await expect(page.getByRole("combobox", { name: "Active tenant" })).toHaveValue("tenant_1");
-  await expect(secondPage.getByRole("combobox", { name: "Active tenant" })).toHaveValue("tenant_2");
+  await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("tenant_1");
+  await secondPage.getByRole("combobox", { name: "Usage tenant" }).selectOption("tenant_2");
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
   await expect(secondPage.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
-  await page.getByRole("combobox", { name: "Active tenant" }).selectOption("tenant_2");
-  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_2`);
-  await expect(secondPage).toHaveURL(`${baseURL}/?tenant=tenant_2`);
-  await expect(secondPage.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
+
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  await page.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Settings tenant" }).selectOption("tenant_2");
+  await secondPage.getByTestId("avatar-menu").click();
+  await secondPage.getByTestId("avatar-menu-item").getByText("Settings").click();
+  await expect(secondPage.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Settings tenant" })).toHaveValue("tenant_1");
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("tenant_1");
+  await expect(secondPage.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("tenant_2");
 });
 
-test("late tenant usage cannot overwrite a newer URL-selected tenant", async ({ page }) => {
+test("late tenant usage cannot overwrite a newer Usage tenant selection", async ({ page }) => {
   await installAssetRoutes(page);
   await installMultiTenantRoutes(page);
   let releaseFirstUsage;
@@ -755,13 +723,28 @@ test("late tenant usage cannot overwrite a newer URL-selected tenant", async ({ 
     await route.fallback();
   });
 
-  await page.goto(`${baseURL}/?tenant=tenant_1`);
+  await page.goto(baseURL);
+  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+    const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+    const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+    if (!applicationState) {
+      throw new Error("usage_tenant_state_missing");
+    }
+    void applicationState.handleUsageTenantSelection({ target: { value: "tenant_1" } });
+  });
   await firstUsageRequested;
-  await navigateTenantHistory(page, "tenant_2");
+  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+    const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+    const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+    if (!applicationState) {
+      throw new Error("usage_tenant_state_missing");
+    }
+    void applicationState.handleUsageTenantSelection({ target: { value: "tenant_2" } });
+  });
   releaseFirstUsage();
 
-  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_2`);
-  await expect(page.getByRole("combobox", { name: "Active tenant" })).toHaveValue("tenant_2");
+  await expect(page).toHaveURL(baseURL);
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("tenant_2");
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
   await page.waitForTimeout(50);
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
@@ -785,15 +768,27 @@ test("late tenant lifecycle responses cannot select or overwrite another tenant"
     await route.fulfill({ status: 201, json: delayedCreateProfile }).catch(() => {});
   });
 
-  await page.goto(`${baseURL}/?tenant=tenant_1`);
-  await page.getByRole("button", { name: "Create tenant" }).click();
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Settings tenant" });
+  await settingsDialog.getByRole("button", { name: "Create tenant" }).click();
   await page.getByRole("dialog", { name: "Create tenant" }).getByRole("textbox", { name: "Tenant name" }).fill("Late Create");
   await page.getByRole("dialog", { name: "Create tenant" }).getByRole("button", { name: "Create", exact: true }).click();
   await createRequested;
-  await navigateTenantHistory(page, "tenant_2");
+  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+    const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+    const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+    if (!applicationState) {
+      throw new Error("settings_tenant_state_missing");
+    }
+    void applicationState.requestSettingsTenantSwitch("tenant_2");
+  });
   releaseCreate();
-  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_2`);
-  await expect(page.getByRole("combobox", { name: "Active tenant" }).locator("option")).toHaveCount(2);
+  await expect(settingsTenantSelector).toHaveValue("tenant_2");
+  await expect(settingsTenantSelector.locator("option")).toHaveCount(2);
+  await expect(settingsDialog).not.toContainText("Late Create");
 
   let releaseRename;
   const renameReleased = new Promise((resolve) => {
@@ -813,48 +808,26 @@ test("late tenant lifecycle responses cannot select or overwrite another tenant"
     const renamedProfile = managementTenantProfile("tenant_2", "Late Rename");
     await route.fulfill({ json: renamedProfile }).catch(() => {});
   });
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
-  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const tenantSettings = settingsDialog.getByRole("group", { name: "Tenant" });
+  const tenantSettings = settingsDialog.getByRole("group", { name: "Tenant", exact: true });
   await tenantSettings.getByRole("button", { name: "Rename" }).click();
   const tenantNameEditor = tenantSettings.getByRole("group", { name: "Rename tenant" });
   await tenantNameEditor.getByRole("textbox", { name: "Tenant name" }).fill("Late Rename");
   await tenantNameEditor.getByRole("button", { name: "Save name" }).click();
   await renameRequested;
-  await navigateTenantHistory(page, "tenant_1");
+  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+    const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+    const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+    if (!applicationState) {
+      throw new Error("settings_tenant_state_missing");
+    }
+    void applicationState.requestSettingsTenantSwitch("tenant_1");
+  });
   await page.getByRole("alertdialog", { name: "Discard unsaved changes?" }).getByRole("button", { name: "Discard and switch" }).click();
   releaseRename();
-  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_1`);
-  await expect(page.getByRole("combobox", { name: "Active tenant" }).locator('option[value="tenant_2"]')).toHaveText("Research");
-
-  await page.getByRole("combobox", { name: "Active tenant" }).selectOption("tenant_2");
-  await page.getByTestId("avatar-menu").click();
-  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
-  let releaseDelete;
-  const deleteReleased = new Promise((resolve) => {
-    releaseDelete = resolve;
-  });
-  let deleteStarted;
-  const deleteRequested = new Promise((resolve) => {
-    deleteStarted = resolve;
-  });
-  await page.route(`${baseURL}/api/management/tenants/tenant_2`, async (route) => {
-    if (route.request().method() !== "DELETE") {
-      await route.fallback();
-      return;
-    }
-    deleteStarted();
-    await deleteReleased;
-    await route.fulfill({ status: 204, body: "" }).catch(() => {});
-  });
-  await settingsDialog.getByRole("group", { name: "Tenant" }).getByRole("button", { name: "Delete tenant" }).click();
-  await page.getByRole("alertdialog", { name: /Delete/ }).getByRole("button", { name: "Delete", exact: true }).click();
-  await deleteRequested;
-  await navigateTenantHistory(page, "tenant_1");
-  releaseDelete();
-  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_1`);
-  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
+  await expect(settingsTenantSelector).toHaveValue("tenant_1");
+  await expect(settingsTenantSelector.locator('option[value="tenant_2"]')).toHaveText("Research");
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
 });
 
 test("dashboard shows usage and settings opens from avatar menu before sign out", async ({ page }) => {
@@ -994,7 +967,7 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
   const requestedIntervals = [];
   page.on("request", (request) => {
     const requestURL = new URL(request.url());
-    if (requestURL.pathname === `${managementDefaultTenantPath}/usage`) {
+    if (requestURL.pathname === "/api/management/usage") {
       requestedIntervals.push(requestURL.searchParams.get("interval"));
     }
   });
@@ -1174,6 +1147,7 @@ test("failed-request details expose 10 of 22 requests as safe, focus-managed met
   await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("Bad request");
   await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("3");
   await expect(dialog.locator("usage-failure-row")).toHaveCount(10);
+  await expect(dialog.locator("usage-failure-row").first()).toContainText("Default · tenant_1");
   await expect(dialog.locator("usage-failure-row").first()).toContainText("V2");
   await expect(dialog.locator("usage-failure-row").first()).toContainText("502 Upstream error");
   await expect(dialog.locator("usage-failure-row").first()).toContainText("Upstream error");
@@ -1280,7 +1254,7 @@ test("failed-request pagination preserves metrics across loading and retryable e
   await expect(dialog.locator("usage-failure-row")).toHaveCount(25);
 });
 
-test("failed-request responses cannot cross interval or tenant workspace boundaries", async ({ page }) => {
+test("failed-request responses cannot cross interval or Usage tenant boundaries", async ({ page }) => {
   await installAssetRoutes(page);
   const routeState = await installMultiTenantRoutes(page, {
     usageRequests: { tenant_1: 22, tenant_2: 7 },
@@ -1295,7 +1269,7 @@ test("failed-request responses cannot cross interval or tenant workspace boundar
     await route.fulfill({ json: managementUsageFailures("30d", 10) });
   });
 
-  await page.goto(`${baseURL}?tenant=tenant_1`);
+  await page.goto(baseURL);
   await page.getByRole("button", { name: "2 failed requests" }).click();
   await expect(page.getByRole("dialog", { name: "Failed request details" })).toHaveAttribute("aria-busy", "true");
 
@@ -1316,13 +1290,12 @@ test("failed-request responses cannot cross interval or tenant workspace boundar
     if (!applicationState) {
       throw new Error("usage_failures_state_missing");
     }
-    void applicationState.requestTenantSwitch("tenant_2", "push");
+    void applicationState.handleUsageTenantSelection({ target: { value: "tenant_2" } });
   });
   releaseFailureResponse();
-  await expect(page.getByRole("combobox", { name: "Active tenant" })).toHaveValue("tenant_2");
-  await expect(page.locator("tenant-context-identity code")).toHaveText("tenant_2");
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("tenant_2");
   await expect(page.getByRole("dialog", { name: "Failed request details" })).toBeHidden();
-  expect(routeState.requests.some((request) => request.path === "/api/management/tenants/tenant_2")).toBe(true);
+  expect(routeState.requests.some((request) => request.path === "/api/management/tenants/tenant_2/usage")).toBe(true);
 });
 
 test("provider selection autosaves its exact editor while transient removal stays local", async ({ page }) => {
@@ -2881,32 +2854,44 @@ test("settings modal overlays MPR header and footer layers", async ({ page }) =>
   for (const viewport of settingsLayerViewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto(baseURL);
-    const tenantToolbarBox = await page.locator("tenant-context-bar").boundingBox();
-    const createTenantButtonBox = await page.getByRole("button", { name: "Create tenant" }).boundingBox();
-    if (!tenantToolbarBox || !createTenantButtonBox) {
-      throw new Error(`tenant_toolbar_geometry_missing:${viewport.name}`);
+    const usageTenantSelector = page.getByRole("combobox", { name: "Usage tenant" });
+    const usageTenantSelectorBox = await usageTenantSelector.boundingBox();
+    const allIntervalButtonBox = await page.getByRole("button", { name: "ALL", exact: true }).boundingBox();
+    if (!usageTenantSelectorBox || !allIntervalButtonBox) {
+      throw new Error(`usage_tenant_geometry_missing:${viewport.name}`);
     }
-    expect(tenantToolbarBox.x).toBeGreaterThanOrEqual(0);
-    expect(tenantToolbarBox.x + tenantToolbarBox.width).toBeLessThanOrEqual(viewport.width);
-    expect(tenantToolbarBox.height).toBeLessThanOrEqual(
-      viewport.name === "desktop" ? tenantToolbarDesktopMaxHeight : tenantToolbarMobileMaxHeight,
-    );
-    expect(createTenantButtonBox.x).toBeGreaterThanOrEqual(tenantToolbarBox.x);
-    expect(createTenantButtonBox.x + createTenantButtonBox.width).toBeLessThanOrEqual(
-      tenantToolbarBox.x + tenantToolbarBox.width,
-    );
+    expect(usageTenantSelectorBox.x).toBeGreaterThanOrEqual(0);
+    expect(usageTenantSelectorBox.x + usageTenantSelectorBox.width).toBeLessThanOrEqual(viewport.width);
+    await expect(page.locator(".usage-tenant-control + .usage-interval-control")).toHaveCount(1);
+    if (viewport.name === "desktop") {
+      expect(usageTenantSelectorBox.x + usageTenantSelectorBox.width).toBeLessThanOrEqual(allIntervalButtonBox.x);
+    } else {
+      expect(usageTenantSelectorBox.y).toBeLessThanOrEqual(allIntervalButtonBox.y);
+    }
     await page.getByTestId("avatar-menu").click();
     await page.getByTestId("avatar-menu-item").nth(0).click();
 
     const settingsDialog = page.getByRole("dialog", { name: "Settings" });
     await expect(settingsDialog).toBeVisible();
     await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeVisible();
-    const tenantSettings = settingsDialog.getByRole("group", { name: "Tenant" });
+    const tenantManagement = settingsDialog.getByRole("group", { name: "Settings tenant" });
+    const createTenantButton = tenantManagement.getByRole("button", { name: "Create tenant" });
+    const tenantManagementBox = await tenantManagement.boundingBox();
+    const createTenantButtonBox = await createTenantButton.boundingBox();
+    const tenantSettings = settingsDialog.getByRole("group", { name: "Tenant", exact: true });
     const tenantSettingsBox = await tenantSettings.boundingBox();
     const settingsDialogBox = await settingsDialog.boundingBox();
-    if (!tenantSettingsBox || !settingsDialogBox) {
-      throw new Error(`tenant_settings_geometry_missing:${viewport.name}`);
+    if (!tenantManagementBox || !createTenantButtonBox || !tenantSettingsBox || !settingsDialogBox) {
+      throw new Error(`settings_tenant_geometry_missing:${viewport.name}`);
     }
+    expect(tenantManagementBox.x).toBeGreaterThanOrEqual(settingsDialogBox.x);
+    expect(tenantManagementBox.x + tenantManagementBox.width).toBeLessThanOrEqual(
+      settingsDialogBox.x + settingsDialogBox.width,
+    );
+    expect(createTenantButtonBox.x).toBeGreaterThanOrEqual(tenantManagementBox.x);
+    expect(createTenantButtonBox.x + createTenantButtonBox.width).toBeLessThanOrEqual(
+      tenantManagementBox.x + tenantManagementBox.width,
+    );
     expect(tenantSettingsBox.height).toBeLessThanOrEqual(tenantSettingsRowMaxHeight);
     expect(tenantSettingsBox.x).toBeGreaterThanOrEqual(settingsDialogBox.x);
     expect(tenantSettingsBox.x + tenantSettingsBox.width).toBeLessThanOrEqual(
@@ -3234,20 +3219,6 @@ async function copiedText(page) {
 
 /**
  * @param {import("@playwright/test").Page} page
- * @param {string} tenantID
- * @returns {Promise<void>}
- */
-async function navigateTenantHistory(page, tenantID) {
-  await page.evaluate((selectedTenantID) => {
-    const tenantURL = new URL(window.location.href);
-    tenantURL.searchParams.set("tenant", selectedTenantID);
-    window.history.pushState({}, "", tenantURL);
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  }, tenantID);
-}
-
-/**
- * @param {import("@playwright/test").Page} page
  * @returns {Promise<{
  *   overlayZIndex: number,
  *   headerZIndex: number,
@@ -3507,14 +3478,14 @@ async function installUsageResponse(page, status, usage = managementUsage("30d")
  * @returns {string}
  */
 function usageRequestPattern() {
-  return `${baseURL}/api/management/tenants/*/usage?interval=*`;
+  return `${baseURL}/api/management/usage?interval=*`;
 }
 
 /**
  * @returns {string}
  */
 function usageFailuresRequestPattern() {
-  return `${baseURL}/api/management/tenants/*/usage/failures?*`;
+  return `${baseURL}/api/management/usage/failures?*`;
 }
 
 /**
@@ -3535,7 +3506,7 @@ async function installUsageFailuresResponse(page, response) {
 
 /**
  * @param {import("@playwright/test").Page} page
- * @param {{ profiles?: object[], usageRequests?: Record<string, number>, admin?: boolean }} [options]
+ * @param {{ profiles?: object[], usageRequests?: Record<string, number>, accountUsageRequests?: number, admin?: boolean }} [options]
  * @returns {Promise<{
  *   order: string[],
  *   profiles: Map<string, any>,
@@ -3726,6 +3697,20 @@ async function installMultiTenantRoutes(page, options = {}) {
           };
         }),
       },
+    });
+  });
+
+  await page.route(usageRequestPattern(), async (route) => {
+    const requestURL = new URL(route.request().url());
+    const interval = requestURL.searchParams.get("interval") || "";
+    const accountRequests = options.accountUsageRequests ?? state.order.reduce(
+      (total, tenantID) => total + (options.usageRequests?.[tenantID] ?? (tenantID === "tenant_1" ? 37 : 7)),
+      0,
+    );
+    state.requests.push({ method: route.request().method(), path: requestURL.pathname });
+    await route.fulfill({
+      headers: { "Cache-Control": "no-store" },
+      json: managementUsage(interval, { requests: accountRequests }),
     });
   });
 
@@ -4338,6 +4323,8 @@ function managementUsageFailures(interval, count, nextCursor = "", offset = 0) {
   const failures = Array.from({ length: count }, (_, index) => {
     const template = failureTemplates[(offset + index) % failureTemplates.length];
     return {
+      tenant_id: (offset + index) % 2 === 0 ? "tenant_1" : "tenant_2",
+      tenant_name: (offset + index) % 2 === 0 ? "Default" : "Research",
       occurred_at: new Date(Date.UTC(2026, 6, 25, 12, 0, 0) - ((offset + index) * 1_000)).toISOString(),
       ...template,
       ...(index === 0 && offset === 0
