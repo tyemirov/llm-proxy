@@ -163,8 +163,7 @@ management:
   jwt_signing_key: "${LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY}"
   jwt_issuer: "${LLM_PROXY_MANAGEMENT_JWT_ISSUER}"
   session_cookie_name: "${LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME}"
-  database_dialect: "${LLM_PROXY_MANAGEMENT_DATABASE_DIALECT}"
-  database_dsn: "${LLM_PROXY_MANAGEMENT_DATABASE_DSN}"
+  database_path: "${LLM_PROXY_MANAGEMENT_DATABASE_PATH}"
   provider_key_encryption_key: "${LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY}"
   management_api_origin: "${LLM_PROXY_MANAGEMENT_API_ORIGIN}"
   proxy_origin: "${LLM_PROXY_MANAGEMENT_PROXY_ORIGIN}"
@@ -670,8 +669,7 @@ Required hosted values are profile-specific:
 | `management.jwt_signing_key` | Internal signing key used to validate the TAuth session cookie. |
 | `management.jwt_issuer` | JWT issuer, normally `tauth`. |
 | `management.session_cookie_name` | Exact app/environment TAuth session cookie name. |
-| `management.database_dialect` | Required GORM SQL dialect for management persistence. Supported values are `postgres` and `sqlite`; SQLite uses the pure-Go GORM driver so `CGO_ENABLED=0` builds remain valid. |
-| `management.database_dsn` | Required DSN passed to the selected GORM dialect for tenant-owned provider keys, defaults, generated-secret digests, and usage events. |
+| `management.database_path` | Required SQLite database location for tenant-owned provider keys, defaults, generated-secret digests, and usage events. Persistence uses the pure-Go GORM SQLite driver so `CGO_ENABLED=0` builds remain valid. |
 | `management.provider_key_encryption_key` | Required base64-encoded 32-byte key used for AES-GCM encryption of tenant-owned provider API keys at rest. Generate with `openssl rand -base64 32` and store it with backend deployment secrets. |
 | `management.management_api_origin` | Browser-facing management API origin served from `/config-ui.yaml` under `llmProxy.managementApiOrigin`. |
 | `management.proxy_origin` | Browser-facing public proxy origin served from `/config-ui.yaml` under `llmProxy.proxyOrigin` for generated examples. |
@@ -716,11 +714,9 @@ client-key request remains retryable through Create key.
 
 Signed-in users also choose each provider's text model and provider-specific
 system prompt, choose routing defaults, and replace or revoke llm-proxy client
-keys. Management mode requires
-`management.database_dialect` and `management.database_dsn` so signups, enabled
+keys. Management mode requires `management.database_path` so signups, enabled
 providers, defaults, generated secret digests, and usage events survive restarts
-in a GORM-managed database. `postgres` uses a Postgres DSN, while `sqlite` uses
-a SQLite database path or SQLite DSN. The packaged management config uses
+in a GORM-managed SQLite database at the configured location. The packaged management config uses
 strict expandable placeholders for the hosted profile values; define every
 `LLM_PROXY_MANAGEMENT_*` key in the API runtime environment. Local `make up`
 projects those values from `configs/.env.local` into the ignored, API-scoped
@@ -864,10 +860,8 @@ as one bounded startup transaction:
 1. Drain every old llm-proxy instance and take an operator-owned database
    backup. Never run the old and new binaries against the same database during
    this migration.
-2. Exercise the exact migration on disposable boundaries with `make go-test`
-   for SQLite and `make test-management-postgres` for PostgreSQL. Supplying
-   `LLM_PROXY_TEST_POSTGRES_DSN` uses that disposable database; otherwise the
-   target starts and removes its own loopback-only PostgreSQL container.
+2. Exercise the exact SQLite migration on a disposable database through the
+   repository `make ci` gate.
 3. Start one new instance. Preflight reads all legacy tenant, provider-key, and
    usage rows before opening the mutation transaction. It rejects missing
    tables, unclaimed `static-config:` owners, blank or duplicate owners and
@@ -926,7 +920,7 @@ Then configure GitHub Pages for this repository:
    `/.mprlab-release.json` marker at the public origin.
 4. Configure real backend deployment secrets outside the Pages artifact:
    `LLM_PROXY_MANAGEMENT_ADMIN_EMAILS`, `LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY`,
-   `LLM_PROXY_MANAGEMENT_DATABASE_DSN`,
+   `LLM_PROXY_MANAGEMENT_DATABASE_PATH`,
    and `LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY`.
 5. Do not store browser runtime config in the Pages branch. Production browser
    config is served only by `https://llm-proxy-api.mprlab.com/config-ui.yaml`
