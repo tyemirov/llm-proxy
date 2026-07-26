@@ -86,16 +86,12 @@ management:
   provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   management_api_origin: "https://llm-proxy-api.example"
   proxy_origin: "https://llm-proxy-api.example"
-  legacy_token_migration:
-    tenant_id: legacy
-    owner_email: "${P411_LEGACY_TOKEN_OWNER_EMAIL}"
 `+completeProvidersYAML(providerValues))
 	writeTestDotEnv(t, tempDir, `
 P411_TAUTH_JWT_SIGNING_KEY=tauth-signing-key
 P411_MANAGEMENT_DATABASE_DIALECT=sqlite
 P411_MANAGEMENT_DATABASE_DSN=postgres://llm-proxy.example/management
 P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
-P411_LEGACY_TOKEN_OWNER_EMAIL=Legacy.Owner@Example.com
 `)
 
 	var capturedConfiguration proxy.Configuration
@@ -177,9 +173,6 @@ P411_LEGACY_TOKEN_OWNER_EMAIL=Legacy.Owner@Example.com
 	}
 	if capturedConfiguration.Management.ManagementAPIOrigin != "https://llm-proxy-api.example" || capturedConfiguration.Management.ProxyOrigin != "https://llm-proxy-api.example" {
 		t.Fatalf("management api origins=%q %q", capturedConfiguration.Management.ManagementAPIOrigin, capturedConfiguration.Management.ProxyOrigin)
-	}
-	if capturedConfiguration.Management.LegacyTokenMigration.TenantID != "legacy" || capturedConfiguration.Management.LegacyTokenMigration.OwnerEmail != "legacy.owner@example.com" {
-		t.Fatalf("legacy migration=%+v", capturedConfiguration.Management.LegacyTokenMigration)
 	}
 	if capturedConfiguration.GeminiKey != "" {
 		t.Fatalf("geminiKey=%q", capturedConfiguration.GeminiKey)
@@ -484,7 +477,6 @@ LLM_PROXY_MANAGEMENT_DATABASE_DSN=llm-proxy-management.sqlite
 LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 LLM_PROXY_MANAGEMENT_API_ORIGIN=https://llm-proxy-api.mprlab.com
 LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
-LLM_PROXY_MANAGEMENT_LEGACY_TOKEN_OWNER_EMAIL=owner@example.invalid
 `)
 
 	var capturedConfiguration proxy.Configuration
@@ -528,9 +520,6 @@ LLM_PROXY_MANAGEMENT_LEGACY_TOKEN_OWNER_EMAIL=owner@example.invalid
 	}
 	if capturedConfiguration.Management.ManagementAPIOrigin != "https://llm-proxy-api.mprlab.com" || capturedConfiguration.Management.ProxyOrigin != "https://llm-proxy-api.mprlab.com" {
 		t.Fatalf("management api origins=%q %q", capturedConfiguration.Management.ManagementAPIOrigin, capturedConfiguration.Management.ProxyOrigin)
-	}
-	if capturedConfiguration.Management.LegacyTokenMigration.TenantID != "default" || capturedConfiguration.Management.LegacyTokenMigration.OwnerEmail != "owner@example.invalid" {
-		t.Fatalf("legacy migration=%+v", capturedConfiguration.Management.LegacyTokenMigration)
 	}
 	if len(capturedConfiguration.Tenants) != 0 || capturedConfiguration.OpenAIKey != "" || capturedConfiguration.MetaKey != "" {
 		t.Fatalf("packaged management static credentials tenants=%d openai=%q meta=%q", len(capturedConfiguration.Tenants), capturedConfiguration.OpenAIKey, capturedConfiguration.MetaKey)

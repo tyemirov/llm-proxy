@@ -77,32 +77,26 @@ type tenantConfiguration struct {
 }
 
 type managementConfiguration struct {
-	Enabled                  bool                              `mapstructure:"enabled"`
-	PublicOrigin             string                            `mapstructure:"public_origin"`
-	UIDescription            string                            `mapstructure:"ui_description"`
-	UIOrigins                []string                          `mapstructure:"ui_origins"`
-	AdminEmails              []string                          `mapstructure:"admin_emails"`
-	TAuthURL                 string                            `mapstructure:"tauth_url"`
-	TAuthTenantID            string                            `mapstructure:"tauth_tenant_id"`
-	GoogleClientID           string                            `mapstructure:"google_client_id"`
-	LoginPath                string                            `mapstructure:"login_path"`
-	LogoutPath               string                            `mapstructure:"logout_path"`
-	NoncePath                string                            `mapstructure:"nonce_path"`
-	SessionPath              string                            `mapstructure:"session_path"`
-	JWTSigningKey            string                            `mapstructure:"jwt_signing_key"`
-	JWTIssuer                string                            `mapstructure:"jwt_issuer"`
-	SessionCookieName        string                            `mapstructure:"session_cookie_name"`
-	DatabaseDialect          string                            `mapstructure:"database_dialect"`
-	DatabaseDSN              string                            `mapstructure:"database_dsn"`
-	ProviderKeyEncryptionKey string                            `mapstructure:"provider_key_encryption_key"`
-	ManagementAPIOrigin      string                            `mapstructure:"management_api_origin"`
-	ProxyOrigin              string                            `mapstructure:"proxy_origin"`
-	LegacyTokenMigration     legacyTokenMigrationConfiguration `mapstructure:"legacy_token_migration"`
-}
-
-type legacyTokenMigrationConfiguration struct {
-	TenantID   string `mapstructure:"tenant_id"`
-	OwnerEmail string `mapstructure:"owner_email"`
+	Enabled                  bool     `mapstructure:"enabled"`
+	PublicOrigin             string   `mapstructure:"public_origin"`
+	UIDescription            string   `mapstructure:"ui_description"`
+	UIOrigins                []string `mapstructure:"ui_origins"`
+	AdminEmails              []string `mapstructure:"admin_emails"`
+	TAuthURL                 string   `mapstructure:"tauth_url"`
+	TAuthTenantID            string   `mapstructure:"tauth_tenant_id"`
+	GoogleClientID           string   `mapstructure:"google_client_id"`
+	LoginPath                string   `mapstructure:"login_path"`
+	LogoutPath               string   `mapstructure:"logout_path"`
+	NoncePath                string   `mapstructure:"nonce_path"`
+	SessionPath              string   `mapstructure:"session_path"`
+	JWTSigningKey            string   `mapstructure:"jwt_signing_key"`
+	JWTIssuer                string   `mapstructure:"jwt_issuer"`
+	SessionCookieName        string   `mapstructure:"session_cookie_name"`
+	DatabaseDialect          string   `mapstructure:"database_dialect"`
+	DatabaseDSN              string   `mapstructure:"database_dsn"`
+	ProviderKeyEncryptionKey string   `mapstructure:"provider_key_encryption_key"`
+	ManagementAPIOrigin      string   `mapstructure:"management_api_origin"`
+	ProxyOrigin              string   `mapstructure:"proxy_origin"`
 }
 
 type tenantDefaultsConfig struct {
@@ -385,10 +379,6 @@ func managementProxyConfiguration(configuration managementConfiguration) proxy.M
 		ProviderKeyEncryptionKey: configuration.ProviderKeyEncryptionKey,
 		ManagementAPIOrigin:      configuration.ManagementAPIOrigin,
 		ProxyOrigin:              configuration.ProxyOrigin,
-		LegacyTokenMigration: proxy.LegacyTokenMigrationConfiguration{
-			TenantID:   configuration.LegacyTokenMigration.TenantID,
-			OwnerEmail: configuration.LegacyTokenMigration.OwnerEmail,
-		},
 	}
 }
 
