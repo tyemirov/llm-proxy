@@ -1892,7 +1892,7 @@
         "properties": {
           "api_key": {
             "type": "string",
-            "minLength": 1
+            "description": "A replacement provider key. Send an empty string to retain the tenant's existing credential while updating its provider model or system prompt; an empty value is rejected when no credential exists."
           },
           "text_model": {
             "type": "string",

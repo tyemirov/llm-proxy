@@ -99,7 +99,7 @@ Constraint: every post in the `Post` column is under 300 characters.
 | 45 | 2026-08-19 | AM | Unowned management tokens should not stay global. LLM Proxy rejects static-config owners until the configured email completes the one-time account claim. |
 | 45 | 2026-08-19 | PM | New user signups should survive restarts. LLM Proxy persists managed tenants, provider settings, secret digests, and usage through GORM. |
 | 46 | 2026-08-20 | AM | You should not need raw SQL for normal tenant management. LLM Proxy keeps management persistence behind GORM model APIs. |
-| 46 | 2026-08-20 | PM | SQLite is useful for local management mode, Postgres for hosted mode. LLM Proxy supports both configured GORM dialects. |
+| 46 | 2026-08-20 | PM | Management persistence should stay portable across environments without exposing SQL. LLM Proxy opens SQLite through GORM at the configured database path. |
 | 47 | 2026-08-21 | AM | AI platform work gets brittle when config comes from flags, env, and files at once. LLM Proxy uses YAML as the service config and env only for placeholder expansion. |
 | 47 | 2026-08-21 | PM | Operators need strict config loading, not surprise defaults. LLM Proxy rejects unknown YAML keys and missing required placeholders before serving traffic. |
 | 48 | 2026-08-22 | AM | A provider model list is business data, not client code. LLM Proxy keeps provider model catalogs in config so apps can stay unchanged. |
