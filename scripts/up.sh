@@ -14,6 +14,7 @@ compose_project="llm-proxy-local"
 local_stack_started="0"
 local_stack_ready="0"
 local_frontend_origin="http://localhost:4179"
+local_api_origin="http://localhost:8080"
 expected_running_services=$'api\nfrontend\ntauth'
 
 fail() {
@@ -122,8 +123,7 @@ prepare_local_environment() {
   write_scoped_local_environment "${frontend_environment_path}" \
     "GHTTP_SERVE_PORT" \
     "GHTTP_SERVE_DIRECTORY" \
-    "GHTTP_SERVE_NO_MARKDOWN" \
-    "GHTTP_SERVE_PROXIES"
+    "GHTTP_SERVE_NO_MARKDOWN"
   write_scoped_local_environment "${api_environment_path}" \
     "LLM_PROXY_MANAGEMENT_ENABLED" \
     "LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN" \
@@ -131,7 +131,6 @@ prepare_local_environment() {
     "LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN" \
     "LLM_PROXY_MANAGEMENT_UI_DESCRIPTION" \
     "LLM_PROXY_MANAGEMENT_ADMIN_EMAILS" \
-    "LLM_PROXY_MANAGEMENT_TAUTH_URL" \
     "LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID" \
     "LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID" \
     "LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH" \
@@ -240,19 +239,20 @@ else
   fail "local orchestration failed to start with status ${compose_exit_status}"
 fi
 
-wait_for_http_status "ghttp static frontend" "200" "http://127.0.0.1:4179/"
-wait_for_http_status "ghttp runtime configuration" "200" "http://127.0.0.1:4179/config-ui.yaml"
-wait_for_http_status "LLM Proxy API boundary" "403" "http://127.0.0.1:8080/?prompt=ready"
-wait_for_http_status "TAuth session boundary" "204" "http://127.0.0.1:8082/auth/session" --header "Origin: ${local_frontend_origin}" --header "X-Requested-With: XMLHttpRequest"
-wait_for_http_status "LLM Proxy management API boundary" "401" "http://127.0.0.1:8080/api/management/account" --header "Origin: ${local_frontend_origin}"
+wait_for_http_status "ghttp static frontend" "200" "${local_frontend_origin}/"
+wait_for_http_status "ghttp runtime configuration" "200" "${local_frontend_origin}/config-ui.yaml"
+wait_for_http_status "LLM Proxy API boundary" "403" "${local_api_origin}/?prompt=ready"
+wait_for_http_status "TAuth session through ghttp" "204" "${local_frontend_origin}/auth/session" --header "Origin: ${local_frontend_origin}" --header "X-Requested-With: XMLHttpRequest"
+wait_for_http_status "TAuth nonce through ghttp" "200" "${local_frontend_origin}/auth/nonce" --request POST --header "Origin: ${local_frontend_origin}" --header "X-Requested-With: XMLHttpRequest"
+wait_for_http_status "LLM Proxy management API boundary" "401" "${local_api_origin}/api/management/account" --header "Origin: ${local_frontend_origin}"
 local_stack_ready="1"
 
 echo
 echo "LLM Proxy local orchestration is ready."
 echo "Static UI: ${local_frontend_origin}/"
-echo "API: http://localhost:8080/"
-echo "TAuth: http://localhost:8082/"
+echo "API: ${local_api_origin}/"
+echo "TAuth: ${local_frontend_origin}/auth/ (ghttp to TAuth)"
 echo "Runtime config: ${local_frontend_origin}/config-ui.yaml (ghttp to API)"
-echo "Readiness contracts: static=200, config=200, API=403 without a key, TAuth session=204, management API=401 without a session."
+echo "Readiness contracts: static=200, config=200, API=403 without a key, same-origin TAuth session=204 and nonce=200, management API=401 without a session."
 
 compose logs --follow --no-color

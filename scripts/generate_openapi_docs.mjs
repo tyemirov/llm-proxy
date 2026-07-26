@@ -152,16 +152,20 @@ function renderOperation(document, item) {
   const requestProperties = requestSchema ? objectValue(requestSchema.properties || {}, `${item.operationId}.properties`) : {};
   const requiredProperties = new Set(requestSchema ? stringArray(requestSchema.required || [], `${item.operationId}.required`) : []);
   const responses = objectValue(operation.responses, `${item.operationId}.responses`);
+  const descriptionMarkup = operation.description
+    ? `\n        <p>${escapeHTML(String(operation.description))}</p>`
+    : "";
+  const requiredContentTypeMarkup = operation["x-llm-proxy-required-request-content-type"]
+    ? `\n        <p class="api-security"><strong>Required Content-Type:</strong> <code>${escapeHTML(String(operation["x-llm-proxy-required-request-content-type"]))}</code></p>`
+    : "";
   return `<section class="api-operation" id="operation-${escapeAttribute(item.operationId)}">
         <header class="api-operation-heading">
           <span class="api-method api-method-${item.method}">${escapeHTML(item.method.toUpperCase())}</span>
           <code>${escapeHTML(item.path)}</code>
           <span class="api-operation-id">${escapeHTML(item.operationId)}</span>
         </header>
-        <h2>${escapeHTML(String(operation.summary || item.operationId))}</h2>
-        ${operation.description ? `<p>${escapeHTML(String(operation.description))}</p>` : ""}
-        <p class="api-security"><strong>Authentication:</strong> ${escapeHTML(operationSecurity(document, operation))}</p>
-        ${operation["x-llm-proxy-required-request-content-type"] ? `<p class="api-security"><strong>Required Content-Type:</strong> <code>${escapeHTML(String(operation["x-llm-proxy-required-request-content-type"]))}</code></p>` : ""}
+        <h2>${escapeHTML(String(operation.summary || item.operationId))}</h2>${descriptionMarkup}
+        <p class="api-security"><strong>Authentication:</strong> ${escapeHTML(operationSecurity(document, operation))}</p>${requiredContentTypeMarkup}
         ${renderParameterTable(document, parameters)}
         ${renderRequestFields(document, requestProperties, requiredProperties)}
         ${renderResponses(document, responses)}

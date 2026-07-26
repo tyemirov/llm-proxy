@@ -530,37 +530,63 @@ if (!this.hasSecret) {
       "Management usage stores metadata and excludes prompts, transcripts, responses, provider keys, and tenant secrets.",
     ],
   }),
-  page({
+  evidencedPage({
     slug: "managed-tenant-usage-dashboard",
-    modifiedDate: "2026-07-25",
     category: "Usage",
     primaryKeyword: "managed tenant usage dashboard",
-    title: "Managed tenant usage dashboard for LLM requests",
-    description: "Show signed-in users selectable usage summaries plus safe, tenant-scoped failed-request details.",
+    title: "Account-wide managed tenant usage dashboard for LLMs",
+    description: "See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.",
     audience: "Teams giving users self-service AI access while keeping usage visible.",
-    problem: "A key-management portal is incomplete if users cannot see whether their managed proxy traffic is succeeding or which providers and models they use.",
-    solution: "LLM Proxy's authenticated landing screen combines aggregate usage with safe failure metadata for the signed-in user's selected workspace.",
+    problem: "A multi-tenant key-management portal is incomplete when its default dashboard hides every tenant except one or implies that selecting a tenant activates it.",
+    solution: "LLM Proxy's authenticated Usage Overview defaults to account-wide aggregates across every owned tenant, with an independent tenant filter and safe scope-bound failure details.",
+    quickVerdict: "Every tenant remains independently routable. Usage opens on All tenants and 30 days, while Settings has its own editor-only tenant selector.",
     steps: [
       "Enable management mode and generated-secret routing.",
-      "Send proxy requests with the generated tenant secret.",
+      "Send proxy requests through any owned tenant's generated secret; each tenant remains operational independently.",
       "Record canonical outcome metadata for managed-tenant requests without storing request or provider-error content.",
-      "Select all, 30d, 7d, or 1d through GET /api/management/tenants/:tenant_id/usage?interval=<interval> and the dashboard UI.",
-      "When failures exist, open N failed requests and page through GET /api/management/tenants/:tenant_id/usage/failures for the same interval.",
+      "Open Usage Overview on All tenants and 30 days, or use the Usage tenant selector immediately before ALL to narrow the report.",
+      "Read account-wide totals from GET /api/management/usage or one tenant from GET /api/management/tenants/:tenant_id/usage.",
+      "When failures exist, open N failed requests; account-wide rows include safe tenant context and tenant-scoped rows do not repeat it.",
     ],
     features: [
-      ["Selectable totals", "ALL, 30 days, 7 days, and 1 day replace requests, tokens, success rate, providers, and models together.", "Users can compare the same surfaces at useful time scales."],
+      ["All-tenant default", "The default All tenants and 30 days selections populate requests, tokens, success rate, providers, models, statuses, and buckets together.", "The first dashboard snapshot represents every owned tenant rather than the oldest one."],
+      ["Independent selectors", "Settings tenant chooses only the editor; Usage tenant chooses only the report.", "Changing provider settings for one tenant cannot silently narrow the usage dashboard."],
       ["Safe failure vocabulary", "Rows distinguish validation, payload size, rate limit, unavailable, timeout, and upstream failures with canonical codes.", "A failed request is not automatically labeled a provider failure."],
-      ["Snapshot pagination", "Newest-first pages retain one opaque snapshot and expose only time, route, status, outcome, and latency metadata.", "Prompts, responses, provider bodies, free-form errors, and credentials never enter the dialog."],
+      ["Scope-bound pagination", "Newest-first cursors remain bound to All tenants or one exact tenant.", "Prompts, responses, provider bodies, free-form errors, and credentials never enter the dialog."],
     ],
     examples: [
-      ["10 failures from 22 requests", "A 55% success rate links to ten rows whose outcome labels separate client validation from runtime and provider failures."],
-      ["Status breakdown", "A user compares 400, 429, 502, 503, and 504 counts before opening individual metadata rows."],
-      ["Selected-interval investigation", "Changing from 30 days to 1 day invalidates the old dialog request so stale rows cannot cross intervals or workspaces."],
+      ["Portfolio overview", "A user sees the combined request and token totals for every owned tenant without making one browser request per tenant."],
+      ["Tenant investigation", "Selecting Research narrows every usage surface and failure row to that tenant while Settings can remain on Default."],
+      ["Scope-safe failure review", "Changing from All tenants to one tenant invalidates the old dialog request so stale rows and cursors cannot cross scopes."],
     ],
     limitations: [
       "Usage is recorded for managed tenants using generated secrets.",
       "Failure rows are operational metadata, not reconstructed provider error messages or a billing system.",
       "Administrators receive aggregate summaries only; per-event rows remain owner-only.",
+    ],
+    repoExample: {
+      source: "README.md",
+      code: `GET /api/management/usage?interval=30d
+GET /api/management/tenants/:tenant_id/usage?interval=30d`,
+      verifiedOn: "2026-07-26",
+    },
+    faq: [
+      {
+        question: "Does selecting a tenant activate or deactivate it?",
+        answer: "No. Every owned tenant remains independently routable through its own generated secret; the Settings and Usage selectors only choose an editor or report scope.",
+      },
+      {
+        question: "What does Usage Overview show by default?",
+        answer: "It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary.",
+      },
+      {
+        question: "Does changing the Settings tenant change Usage Overview?",
+        answer: "No. Settings tenant and Usage tenant are independent; changing the Settings tenant does not change the Usage tenant filter.",
+      },
+      {
+        question: "What tenant data appears in account-wide failure rows?",
+        answer: "Only the safe opaque tenant ID and current display name are added. Credentials, prompts, responses, provider bodies, and free-form errors remain excluded.",
+      },
     ],
   }),
   page({
