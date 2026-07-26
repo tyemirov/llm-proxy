@@ -25,6 +25,53 @@ already satisfied; recurring maintenance remains scheduled work.
 
 ## BugFixes
 
+- [x] [B072] (P1) {F014,B071} Preserve legacy SQLite index names through the ownership migration.
+  Goal:
+  Let `make up` start against an existing pre-F014 SQLite volume without
+  deleting tenant, provider-key, or usage data.
+
+  Problem:
+  The deployed one-workspace schema contains
+  `idx_managed_tenant_records_secret_digest` and
+  `idx_managed_usage_created_at`. SQLite keeps those global index names when
+  GORM renames the legacy tables, so creating the current tables fails with
+  `index ... already exists`. The disposable migration fixture omitted the
+  historical index tags and therefore did not reproduce the real volume.
+
+  Requirements:
+  - Make the disposable legacy SQLite fixture reproduce the exact historical
+    tenant and usage indexes from the pre-F014 GORM models.
+  - Inside the existing all-or-nothing migration transaction, rename only the
+    two colliding legacy indexes through the GORM Migrator before renaming
+    tables and creating the current schema. Do not add raw SQL or delete data.
+  - Prove the current schema receives its canonical indexes and every injected
+    migration failure restores the legacy tables and original index names.
+  - Update the migration runbook, pass the required final `make ci`, then run
+    `make up` against the preserved named volume and verify every readiness
+    boundary.
+
+  Resolved 2026-07-26:
+  The ownership migration now renames the two colliding historical indexes
+  through the GORM Migrator inside its existing transaction before it renames
+  the legacy tables. No runtime raw SQL, alternate database, compatibility
+  path, or data deletion was added.
+
+  The disposable legacy fixture now recreates the exact pre-F014 GORM indexes.
+  Migration coverage proves the current tables receive their canonical index
+  names and every injected failure restores the original legacy table and
+  index shape.
+
+  The pre-change `make ci` baseline reached two existing local-orchestration
+  timing failures after the immediately preceding full gate had passed. The
+  required post-change `make ci` passed static analysis, exact 100% Go
+  coverage, 33 Python tests, package installation, 63 browser scenarios, the
+  TAuth black-box test, 47 release tests, and live-provider preflight.
+
+  `make up` then migrated the preserved named SQLite volume and passed static,
+  runtime-config, API, TAuth-session, and management-session readiness. A
+  normal interrupt removed the containers and network while preserving
+  `llm-proxy-local_llm_proxy_local_data`.
+
 - [x] [B071] (P1) {F014,I029,I031} Restore the SQLite-only GORM management database contract.
   Goal:
   Select the management database by its SQLite location and keep all runtime
