@@ -14,16 +14,237 @@ bodies, resolution notes, and validation records remain in `v0.2.43`.
 
 Triage, 2026-07-25: B069, F014, I029, and I031 are resolved. The selected
 one-issue-at-a-time P1 execution tranche is complete. I027 and P001 are
-independent F014 successors. I032 follows F014
+independent B076 successors. I032 follows B076
 and I027 so its activity-breakdown presentation is added to the final
-tenant-scoped dashboard rather than the obsolete singleton layout. I033 follows
-F014 and I029 so its bounded dashboard freshness contract uses the final
-tenant-scoped endpoint and canonical response headers. M019 is independently
+Usage-scope dashboard rather than an obsolete global active-tenant layout. I033
+follows B076 and I029 so its bounded dashboard freshness contract uses the
+canonical account-wide and tenant-filtered operations and response headers. M019 is independently
 ready because M018 is complete. M013 then M012 resolve the product-context
 governance path. Planning proceeds P002 -> P003 -> P004 -> P005, with M020
 already satisfied; recurring maintenance remains scheduled work.
 
 ## BugFixes
+
+- [!] [B077] (P1) {B069,F014,I029,I031} Publish and activate the merged LLM Proxy contract.
+  Goal:
+  Make the production API and management UI run the same canonical contract
+  that is merged and marked resolved in this repository, with immutable release
+  provenance that can be verified before dependent provider work resumes.
+
+  Evidence:
+  - The production `umna-moma-i-tsar` Creative Director canary selected
+    `gpt-5.6-terra`, reasoning effort `max`, and the explicit 900-second request
+    timeout, then received `HTTP 504` with an empty response body at the
+    source-world review boundary on 2026-07-26.
+  - The current production gateway configuration and deployed Caddy global
+    timeout guards are already 3660 seconds, so the earlier gateway-timeout
+    diagnosis is disproved.
+  - On 2026-07-26, both
+    `ghcr.io/tyemirov/llm-proxy:v0.2.46` and
+    `ghcr.io/tyemirov/llm-proxy:latest` resolve to
+    `sha256:f2593f7a55e6e7bde5f37fe36edaa027fcee96700c48cdcb19c1e3e718b9009c`.
+    That release predates the 2026-07-26 merged F014/I029/I031 management
+    contract and its failure-details implementation.
+  - The live tenant-scoped
+    `GET /api/management/tenants/{tenant_id}/usage/failures` path returns a
+    router-level `404 page not found`, while the merged canonical API defines
+    that operation. The refreshed production management UI likewise lacks the
+    merged failed-request inspection action.
+  - The missing live failure-details operation prevents retrieval of the
+    normalized failure record needed to distinguish an LLM Proxy timeout from
+    an upstream provider or transport 504 without exposing prompts, responses,
+    or raw provider errors.
+
+  Requirements:
+  - Prepare a clean immutable release from committed source that contains the
+    resolved B069, F014, I029, and I031 contracts. Do not publish from the
+    current dirty worktree or fold unresolved B076 work into the release.
+  - Publish the versioned multi-platform container, move `latest` to that exact
+    manifest, and publish the matching generated Pages artifact through the
+    repository-owned release workflow. Record the release tag, source commit,
+    manifest digest, and Pages version as one provenance tuple.
+  - Have the production operator activate that exact release without replacing
+    or reinitializing the existing management SQLite volume. Apply only the
+    forward migrations owned by the released binary.
+  - Verify the backend and Pages surfaces independently. A successful image
+    pull or container recreation is not proof that the API route and browser UI
+    are current.
+  - Do not work around the failure by inflating another timeout, bypassing the
+    public LLM Proxy API, querying private provider state, or retrying the paid
+    F001 canary before release activation is proven.
+
+  Deliverables:
+  - A versioned release and matching `latest` image containing the merged
+    request-timeout, tenant-management, OpenAPI, and normalized failure-details
+    contracts.
+  - A matching published management UI and a production activation receipt
+    containing the immutable source/tag/digest tuple.
+  - Read-only post-deploy evidence for the canonical health, timeout-header,
+    tenant failure-details, and management UI boundaries.
+
+  Validation:
+  - Prove the version tag and `latest` resolve to the same newly published
+    manifest and that the manifest was built from the recorded source commit.
+  - Prove an unauthenticated request to the tenant failure-details operation
+    reaches the authentication boundary rather than returning router-level 404,
+    then prove an authenticated owner can read the safe normalized failure page.
+  - Prove the production UI exposes the failed-request action and reads the same
+    canonical operation without credentials, prompts, responses, transcripts,
+    or raw provider errors entering the DOM.
+  - Re-run one Creative Director source-world canary with Terra/max and the
+    explicit 900-second request timeout. Use its normalized usage/failure record
+    to classify any subsequent provider failure before resuming the full F001
+    batch.
+
+  Blocked: production release publication and activation are operator-owned;
+  F001 provider execution remains stopped until the new immutable release,
+  backend route, and matching Pages UI are all verified live.
+
+- [x] [B076] (P1) {F014,I029,I031} Separate active tenants from Settings and Usage selection.
+  Goal:
+  Keep every owned tenant simultaneously operational while making Settings the
+  sole tenant-management surface and making Usage Overview an account-wide
+  report by default with an independent tenant filter.
+
+  Problem:
+  F014 introduced one global `active tenant` that simultaneously chooses the
+  Settings profile, Usage Overview scope, URL workspace, and tenant lifecycle
+  target. The toolbar therefore implies that only one tenant is active, exposes
+  tenant management outside Settings, and makes the default usage report show
+  only the oldest tenant. The product contract is instead that every tenant's
+  secret remains active independently; UI selection chooses only what the user
+  is editing or reporting.
+
+  Requirements:
+  - Delete the global active-tenant toolbar, `Active tenant` copy, immutable-id
+    banner, create action, and URL/history-owned workspace contract. Do not add
+    an activation flag, status, server-side selected tenant, compatibility
+    query, or fallback selection path. Every tenant remains independently
+    routable through its own generated secret.
+  - Put tenant selection and `Create tenant` inside Settings with the existing
+    rename, guarded delete, client key, provider settings, defaults, and request
+    examples. The Settings tenant is an editor context only. Switching it must
+    preserve the unsaved-edit decision, clear one-time/revealed credentials,
+    and never change Usage Overview's filter.
+  - Add one accessible Usage tenant selector immediately left of the ordered
+    `ALL`, `30 days`, `7 days`, and `1 day` interval controls. Its first option
+    is `All tenants`, it defaults to that option on every authenticated
+    workspace load, and the interval independently continues to default to
+    `30 days`. Refresh and interval changes retain the Usage tenant selection.
+  - Add canonical owner-only `GET /api/management/usage` and
+    `GET /api/management/usage/failures` operations for all owned tenants.
+    Preserve the existing tenant-scoped operations for an explicitly selected
+    tenant; these are distinct canonical scopes, not aliases or fallback
+    reads. Require the same exact interval and failure pagination query
+    contracts and return `Cache-Control: no-store`.
+  - Compute owner-wide usage in the database/store boundary from every usage
+    row whose tenant belongs to the authenticated owner, using one captured
+    server timestamp. Preserve exact bucket, provider, model, status, token,
+    success, and request aggregation; calculate average latency from the
+    complete event set rather than averaging tenant averages. Never fetch each
+    tenant from the browser and combine partial responses.
+  - Make the existing failed-request action follow the Usage selector.
+    Owner-wide pages use one stable newest-first snapshot/cursor across all
+    owned tenants and add only the owning tenant's safe id and display name to
+    each row. Tenant-scoped pages retain their current safe shape. Bind cursors
+    to their exact owner-wide or tenant scope so they cannot cross scopes.
+  - Keep Settings and Usage request identity/cancellation independent. A late
+    profile, usage, failure, create, rename, or delete response cannot overwrite
+    another Settings tenant or Usage scope. Deleting the tenant currently used
+    by the Usage filter resets that filter to `All tenants` and refreshes the
+    owner-wide snapshot; other deletions retain the current filter.
+  - Preserve the account/tenant persistence model, owner isolation, final
+    tenant guard, admin aggregate-only boundary, mandatory setup behavior,
+    credential secrecy, semantic components, centralized copy, focus handling,
+    and unclipped desktop/mobile layout.
+  - Update the canonical OpenAPI source, README, implementation documentation,
+    generator-owned public usage resource, and unresolved F014-dependent issue
+    wording to distinguish `Settings tenant`, `Usage tenant`, and `All tenants`
+    from operational tenant activity. Do not hand-edit a generated artifact.
+
+  Validation:
+  - Add real management-router and OpenAPI scenarios proving exact owner-wide
+    totals/buckets/breakdowns, weighted latency, all-time bounds, empty usage,
+    strict queries, no-store headers, owner isolation, distinct tenant scope,
+    stable scope-bound failure pagination, safe tenant context, and absence of
+    credentials, prompts, responses, raw errors, or other owners' data.
+  - Add Playwright scenarios proving the missing global toolbar, Settings-only
+    lifecycle controls, default `All tenants` plus `30 days`, selector placement
+    immediately before `ALL`, scope-preserving Refresh/interval behavior,
+    independent Settings and Usage selections, creation/deletion behavior,
+    stale-response rejection, failure drill-down scope, keyboard/screen-reader
+    semantics, and desktop/mobile geometry.
+  - Extend the real TAuth black-box flow to prove the default owner-wide
+    dashboard includes two independently routable tenants while Settings can
+    manage either without changing the report.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last code edit.
+
+  Resolved 2026-07-26:
+  The global active-tenant toolbar and URL/history workspace state are removed.
+  Tenant selection and creation now live in Settings as an editor-only context,
+  while Usage Overview independently defaults to `All tenants` and `30 days`
+  with its tenant selector immediately before the interval controls. Every
+  tenant secret remains independently routable.
+
+  Canonical owner-wide usage and failure operations now aggregate every owned
+  tenant at the database boundary under one captured time/snapshot contract.
+  Tenant-scoped operations remain distinct; all-tenant failure rows add only
+  safe tenant attribution, and opaque cursors cannot cross scopes. OpenAPI,
+  README, implementation guidance, generated public resources, and dependent
+  backlog wording now describe the same forward-only contract.
+
+  The required pre-change and post-change `make ci` runs pass. Exact-coverage Go
+  scenarios, 63 Playwright scenarios, and the real TAuth black-box prove
+  aggregation, isolation, simultaneous routing, independent Settings and Usage
+  selection, stale-response rejection, failure pagination, accessibility, and
+  desktop/mobile layout.
+
+- [x] [B075] (P1) {F014} Keep local browser authentication on the ghttp front door.
+  Goal:
+  Make the canonical `make up` browser login path reach the TAuth container
+  regardless of unrelated host processes.
+
+  Problem:
+  The local runtime config publishes `http://localhost:8082` while Compose
+  binds TAuth only on IPv4 `127.0.0.1:8082`. An unrelated process can own the
+  IPv6 `localhost` listener on that port. The browser then reaches that process,
+  receives no TAuth CORS headers, and cannot restore a session or request a
+  nonce even though `make up` reports ready because readiness checks IPv4
+  directly.
+
+  Requirements:
+  - Keep production's explicit split-origin contract unchanged.
+  - Publish the ghttp `http://localhost:4179` front door as the local TAuth URL
+    and proxy `/auth/*` plus `/me` to TAuth on the Compose network.
+  - Remove the host TAuth port from the canonical local topology so it cannot
+    conflict with unrelated IPv4 or IPv6 listeners.
+  - Verify static, config, API, same-origin session, nonce, and management API
+    boundaries through the exact `localhost` origins used by the browser.
+  - Keep aggregate local environment files out of containers and retain
+    service-scoped secret ownership.
+  - Prove the operational contract, the real Compose stack, and the browser
+    login bootstrap, then pass the required final `make ci`.
+
+  Resolved 2026-07-26:
+  Local browser authentication now stays on the ghttp front door. Compose owns
+  the canonical `/auth/*` and `/me` proxy mappings plus the browser-facing
+  `tauthUrl`, so stale ignored local environment entries cannot restore the
+  obsolete direct-port topology. TAuth remains internal to the Compose network
+  and production's split-origin configuration is unchanged.
+
+  `make up` now verifies the exact `localhost` URLs used by the browser,
+  including `GET /auth/session` and `POST /auth/nonce`. The real stack reached
+  ready with session `204`, nonce `200`, anonymous management `401`, and no
+  host TAuth port. Reloading the real local UI and activating **Sign in**
+  produced a same-origin nonce request in TAuth without the prior CORS or
+  `:8082` browser requests.
+
+  The required pre-change and post-change `make ci` runs pass. The final run
+  follows the last tracked edit and passes static analysis, exact 100% Go
+  coverage, 33 Python tests, package installation, 63 browser scenarios, the
+  TAuth black-box test, 47 release tests, and live-provider preflight.
 
 - [x] [B074] (P1) {F014} Make tenant context and lifecycle controls compact.
   Goal:
@@ -469,12 +690,12 @@ already satisfied; recurring maintenance remains scheduled work.
 
 ## Improvements
 
-- [ ] [I033] (P2) {F014,I029} Keep the visible tenant usage dashboard automatically fresh.
+- [ ] [I033] (P2) {B076,I029} Keep the visible Usage Overview automatically fresh.
   Goal:
-  Let a user returning to an unattended selected-tenant usage dashboard see
-  current activity without having to discover and press Refresh. Provide a
-  bounded, observable near-real-time freshness contract rather than claiming a
-  push-based real-time feed.
+  Let a user returning to an unattended account-wide or tenant-filtered Usage
+  Overview see current activity without having to discover and press Refresh.
+  Provide a bounded, observable near-real-time freshness contract rather than
+  claiming a push-based real-time feed.
 
   Evidence:
   - The current dashboard loads usage at authenticated-workspace startup and on
@@ -484,58 +705,63 @@ already satisfied; recurring maintenance remains scheduled work.
   - The current refresh path clears the rendered summary after a request error.
     That is safe for a newly selected interval, but an automatic refresh would
     turn a true prior snapshot into misleading zeroes after a transient failure.
-  - The existing usage GET uses the browser's default cache behavior, and the
-    current usage handler does not send the `Cache-Control: no-store` protection
-    already used by sensitive management responses.
-  - F014 replaces the singleton endpoint with selected-tenant usage routes, and
-    I029 makes their headers and response behavior one canonical HTTP contract.
+  - The usage client still uses the browser's default cache behavior. B076
+    established `Cache-Control: no-store` on both the account-wide and
+    tenant-filtered summary operations, but foreground revalidation also needs
+    an explicit browser request-cache contract.
+  - B076 separates the `Usage tenant` scope from the `Settings tenant`; I029
+    makes both usage scopes' headers and response behavior one canonical HTTP
+    contract.
 
   Requirements:
-  - Implement only after F014 and I029, against the canonical selected-tenant
-    usage operation. Do not retain the singleton route, add a second polling
-    endpoint, introduce WebSocket/SSE/service-worker push infrastructure, or
-    add a browser-stored freshness preference. This issue is foreground
-    revalidation of the existing aggregate snapshot, not a streaming product.
+  - Implement only after B076 and I029, against the canonical account-wide and
+    tenant-filtered usage operations. Do not add a second polling endpoint,
+    introduce WebSocket/SSE/service-worker push infrastructure, or add a
+    browser-stored freshness preference. This issue is foreground revalidation
+    of the existing aggregate snapshot, not a streaming product.
   - Define one centralized `USAGE_FRESHNESS_MILLISECONDS` budget of 60 seconds.
     It is a user-facing maximum ordinary age while the usage view is visible,
-    not an arbitrary retry or transport timeout. The authenticated selected-
-    tenant usage view revalidates no more often than that budget, and a return
-    from a hidden page revalidates immediately when the accepted snapshot is
-    older than the same budget or absent. Hidden tabs, the admin dashboard, and
+    not an arbitrary retry or transport timeout. The authenticated selected
+    Usage scope revalidates no more often than that budget, and a return from a
+    hidden page revalidates immediately when the accepted snapshot is older
+    than the same budget or absent. Hidden tabs, the admin dashboard, and
     signed-out/error workspaces perform no periodic usage request.
   - Maintain exactly one scheduled usage revalidation and at most one in-flight
-    usage request for the active tenant/interval. Schedule the next foreground
+    usage request for the selected Usage scope and interval. Schedule the next foreground
     revalidation only after the current request settles; do not use overlapping
     interval callbacks or a hot retry loop. Cancel/invalidate scheduled work on
-    logout, workspace reset, tenant or interval change, dashboard-view change,
-    and page teardown. Resume only after the final active usage context is
+    logout, authentication reset, Usage tenant or interval change,
+    dashboard-view change, and page teardown. Resume only after the final Usage context is
     established.
-  - Reuse F014's tenant, interval, workspace, and request-identity guards. An
-    automatic or visibility-triggered response can update only the still-active
-    tenant and interval; it must not overwrite a newer manual refresh, tenant
-    switch, interval selection, authentication reset, or local I032 breakdown
-    presentation choice. A manual Refresh may request immediate revalidation
-    but must join the same single-request lifecycle and reschedule freshness.
+  - Reuse B076's Usage scope, interval, and request-identity guards. An
+    automatic or visibility-triggered response can update only the still-selected
+    Usage tenant scope and interval; it must not overwrite a newer manual
+    refresh, Usage tenant selection, interval selection, authentication reset,
+    Settings tenant change, or local I032 breakdown presentation choice. A
+    manual Refresh may request immediate revalidation but must join the same
+    single-request lifecycle and reschedule freshness.
   - Track and visibly expose the receipt time of the last accepted usage
     snapshot using centralized copy and semantic time markup. Do not announce a
     success toast every minute. Distinguish a current snapshot, an in-progress
     refresh, and a stale snapshot accessibly, without presenting browser-clock
     metadata as server event time.
-  - Preserve a successfully rendered snapshot when a same-tenant/same-interval
+  - Preserve a successfully rendered snapshot when a same-scope/same-interval
     manual, automatic, or return-to-visible refresh fails. Mark it stale and
     provide a clear retry path; do not replace its counts, charts, breakdowns,
     or I032 view with empty/zero data. Keep the current clear-before-load rule
-    for a changed tenant or interval so one tenant's data can never appear as
-    another tenant's. An initial load with no prior accepted snapshot retains
+    for a changed Usage tenant or interval so one scope's data can never appear
+    as another scope's. An initial load with no prior accepted snapshot retains
     the explicit empty/error state rather than fabricating a last-updated time.
-  - Make every canonical tenant usage response and the browser usage fetch
-    uncacheable (`Cache-Control: no-store` and `cache: "no-store"` respectively)
-    so a revalidation cannot be satisfied by a stale private cache. Record the
-    response header in `docs/openapi.yaml` and its HTTP conformance coverage;
-    do not change the JSON payload merely to transport client receipt time.
+  - Preserve `Cache-Control: no-store` on every canonical account-wide and
+    tenant-filtered usage response and make the browser usage fetch explicitly
+    uncacheable with `cache: "no-store"` so revalidation cannot be satisfied by
+    a stale private cache. Do not change the JSON payload merely to transport
+    client receipt time.
   - Keep the refresh scope to aggregate usage metadata already authorized for
-    the selected tenant. Do not poll or reveal generated secrets, provider keys,
-    prompts, responses, transcripts, audio names, other tenants, or aggregate
+    the selected Usage scope. The `All tenants` scope may include only the
+    authenticated owner's tenants; an explicit tenant may include only that
+    tenant. Do not poll or reveal generated secrets, provider keys, prompts,
+    responses, transcripts, audio names, another owner's tenants, or aggregate
     administrator facts. Continue to make `connected provider` state I027-owned
     rather than inferring it from refreshed historical activity.
   - Update README, CHANGELOG.md, `docs/implementation/provider-routing-plan.md`,
@@ -549,7 +775,7 @@ already satisfied; recurring maintenance remains scheduled work.
   Deliverables:
   - One typed usage-refresh reason/lifecycle contract, central freshness budget,
     visibility-aware single scheduler, cache-safe usage client request, and
-    race-safe selected-tenant state integration.
+    race-safe Usage-scope state integration.
   - A compact accessible last-updated/loading/stale status and retry behavior
     that preserves a valid current-context snapshot across refresh failures.
   - Canonical no-store response-header documentation/conformance plus updated
@@ -557,17 +783,17 @@ already satisfied; recurring maintenance remains scheduled work.
     persistence schema, or client-library API.
 
   Validation:
-  - Add real management-router coverage proving the selected-tenant usage
-    response carries `Cache-Control: no-store` and the OpenAPI contract accepts
-    that header without changing its aggregate JSON shape.
+  - Preserve real management-router and OpenAPI coverage proving both canonical
+    Usage scopes carry `Cache-Control: no-store` without changing their
+    aggregate JSON shape.
   - Add Playwright scenarios with controlled time and page visibility for the
     initial load, one-minute foreground revalidation, no hidden/admin polling,
     stale-on-return immediate revalidation, one in-flight request, manual
-    Refresh coordination, timer cleanup on logout/tenant/interval/view changes,
-    and stale-response rejection across tenant and interval races.
+    Refresh coordination, timer cleanup on logout/Usage-tenant/interval/view
+    changes, and stale-response rejection across scope and interval races.
   - Prove a failed refresh after a successful snapshot preserves its exact data
     and marks it stale, while a successful later refresh updates counts and the
-    receipt timestamp; prove a new tenant/interval never retains prior data.
+    receipt timestamp; prove a new Usage scope/interval never retains prior data.
     Cover keyboard/screen-reader status, narrow layouts, no browser storage,
     no success-notice spam, and absence of sensitive values from DOM/network
     payloads beyond the existing usage contract.
@@ -575,12 +801,12 @@ already satisfied; recurring maintenance remains scheduled work.
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
 
-- [ ] [I032] (P2) {F014,I027} Switch provider/model activity breakdowns between bar graphs and segmented disks.
+- [ ] [I032] (P2) {B076,I027} Switch provider/model activity breakdowns between bar graphs and segmented disks.
   Goal:
   Let a signed-in user choose one clear presentation for both the selected
-  tenant's Provider usage and Model usage activity breakdowns, while preserving
-  the selected interval, exact request counts, and the distinction between
-  historical activity and currently connected providers.
+  Usage scope's Provider usage and Model usage activity breakdowns, while
+  preserving the Usage tenant, interval, exact request counts, and the
+  distinction between historical activity and currently connected providers.
 
   Evidence:
   - The current usage summary already returns deterministically ordered
@@ -590,14 +816,14 @@ already satisfied; recurring maintenance remains scheduled work.
   - The summary has time buckets only for total requests and tokens. It has no
     provider- or model-specific time series, so `Graph` must mean the ranked
     horizontal-bar display rather than a new trend chart.
-  - F014 replaces the singleton management/usage route with selected-tenant
-    APIs. I027 then establishes the final dashboard layout and explicitly
+  - B076 establishes canonical account-wide and explicitly tenant-filtered
+    Usage scopes. I027 then establishes the final dashboard layout and explicitly
     reserves provider/model breakdowns for historical selected-period activity,
     rather than current `has_key` connection state.
 
   Requirements:
-  - Implement only after F014 and I027, against the canonical selected-tenant
-    usage response. Do not add a presentation-specific endpoint, response
+  - Implement only after B076 and I027, against the canonical response for the
+    selected Usage scope. Do not add a presentation-specific endpoint, response
     field, server persistence, URL parameter, tenant setting, browser storage,
     or client-library change.
     If final implementation exposes a genuinely missing data field, file and
@@ -608,10 +834,10 @@ already satisfied; recurring maintenance remains scheduled work.
     Switching a mode changes both panels together so their distributions remain
     directly comparable.
   - Keep the choice local to the mounted authenticated dashboard. It survives
-    interval selection, Refresh, and an F014 tenant switch, but resets on
-    authentication/workspace reset and a full page reload. A mode change is a
+    interval selection, Refresh, and Usage tenant selection, but resets on
+    authentication reset and a full page reload. A mode change is a
     pure presentation action: it must not fetch, mutate the selected interval
-    or usage snapshot, or weaken F014's request-identity/stale-response rules.
+    or Usage tenant, or weaken B076's request-identity/stale-response rules.
   - Build every disk from the same ordered `providers[].data.requests` or
     `models[].data.requests` data that Graph renders. The percentage denominator
     is the complete source breakdown total, never token counts or the largest
@@ -635,7 +861,7 @@ already satisfied; recurring maintenance remains scheduled work.
     single-choice control), and keep labels/counts/shares available to assistive
     technology without a tooltip. Validate desktop and narrow layouts without
     clipping, overlap, or horizontal overflow.
-  - Keep the scope to the selected user's activity dashboard. I027's connected
+  - Keep the scope to the authenticated user's Usage Overview. I027's connected
     provider widgets remain a separate `has_key` projection; an inactive
     connected provider and historical activity for a disconnected provider must
     retain their existing meanings. Do not add this control to the aggregate
@@ -653,7 +879,7 @@ already satisfied; recurring maintenance remains scheduled work.
   Deliverables:
   - One typed local presentation-mode contract, pure provider/model distribution
     transform, shared selector, semantic bar/disk renderings, responsive styles,
-    and centralized copy in the tenant dashboard.
+    and centralized copy in Usage Overview.
   - A legible, deterministic SVG disk/legend treatment that preserves all
     request counts and makes any `Other` aggregation explicit.
   - Updated README, CHANGELOG.md, implementation documentation, generator-owned
@@ -665,9 +891,9 @@ already satisfied; recurring maintenance remains scheduled work.
     default Graph mode, keyboard selection of Segmented disk, simultaneous
     changes to provider and model panels, visible names/counts/shares, and no
     additional usage request when the presentation changes.
-  - Exercise interval changes, Refresh, tenant switching, loading/failure, and
+  - Exercise interval changes, Refresh, Usage tenant selection, loading/failure, and
     out-of-order response scenarios; prove the local mode remains selected only
-    where specified and never presents a stale tenant or interval snapshot.
+    where specified and never presents a stale Usage scope or interval snapshot.
   - Cover zero, one, and many-category distributions, including deterministic
     `Other` aggregation, exact request-count conservation, share totals of 100
     percent, Graph access to every source category, non-color-only semantics,
@@ -906,26 +1132,32 @@ already satisfied; recurring maintenance remains scheduled work.
     live-provider harness preflight. Live publication verification remains
     user-owned after production deployment.
 
-- [ ] [I027] (P1) {F014} Redesign the user dashboard around connected-provider widgets.
+- [ ] [I027] (P1) {B076} Redesign the user dashboard around connected-provider widgets.
   Goal:
   Make the authenticated dashboard answer, at a glance, which upstream
-  providers the current tenant has connected. Preserve usage reporting as a
-  separate measure of activity so an unused connected provider remains visible
-  and historical traffic never implies that a provider is still connected.
+  providers the selected Usage scope has connected. Preserve usage reporting as
+  a separate measure of activity so an unused connected provider remains
+  visible and historical traffic never implies that a provider is still
+  connected.
 
   Dependencies:
-  - F014 replaces the singular profile and usage contracts with selected-tenant
-    APIs. Build the widgets against that canonical tenant-scoped boundary rather
-    than implementing and immediately replacing a singleton-profile join.
+  - B076 makes Usage account-wide by default and gives it an independent tenant
+    filter. Build the widgets against that final scope contract: one explicitly
+    selected Usage tenant shows that tenant's connections, while `All tenants`
+    shows tenant-labelled connections across all owned tenants. The Settings
+    tenant must not silently control the dashboard projection.
 
   Requirements:
-  - Define a connected provider solely as an entry in the current authenticated
-    management profile whose canonical `has_key` value is `true`. Do not infer
-    connection from catalog membership, aliases, routing defaults, local
-    environment credentials, or a provider's presence in historical usage.
+  - Define a connected provider solely from canonical authenticated profile
+    data whose `has_key` value is `true`. Do not infer connection from catalog
+    membership, aliases, routing defaults, local environment credentials, or a
+    provider's presence in historical usage.
   - Add a prominent `Connected providers` section to the user usage dashboard
-    and render exactly one widget for each connected provider, in the
-    deterministic order returned by the management profile. Do not hard-code
+    and render exactly one widget for each tenant/provider connection in the
+    selected Usage scope. An explicit tenant uses that profile's deterministic
+    provider order. `All tenants` groups connections by account tenant order and
+    then provider order, labels every group with tenant name and opaque ID, and
+    does not merge the same provider across two tenants. Do not hard-code
     provider names or duplicate provider-registration state in the browser.
   - Give each widget a concise, consistent summary: the profile label,
     `Connected` status, saved text model, declared text/dictation capabilities,
@@ -934,34 +1166,39 @@ already satisfied; recurring maintenance remains scheduled work.
     render with zero activity; a usage-load failure must render as unavailable,
     not as a false zero or a disconnected provider.
   - Add a provider-specific `Manage` action that opens Settings with that exact
-    provider selected. It must not reveal a key, invoke the key-reveal endpoint,
-    or alter provider/default settings merely by opening the editor.
+    tenant and provider selected without changing the Usage tenant filter. It
+    must not reveal a key, invoke the key-reveal endpoint, or alter
+    provider/default settings merely by opening the editor.
   - Replace the ambiguous usage-derived `Providers` summary metric with a
-    `Connected providers` count derived from the same `has_key` projection.
+    `Connected providers` count derived from the same scope-correct `has_key`
+    projection. Under `All tenants`, count tenant/provider connections rather
+    than deduplicated provider IDs.
     Keep provider/model usage breakdowns explicitly labeled as activity for the
     selected reporting period, including historical rows for providers that are
     no longer connected.
   - Render a purposeful empty state when no providers are connected, with one
     action that opens Settings. The state must coexist with mandatory onboarding
     and must not create a path around its persisted-key requirements.
-  - Keep the widgets synchronized with the profile: a successful provider-key
-    autosave adds its widget, a successful removal removes it, failed mutations
-    leave the current projection unchanged, and dashboard refresh reloads both
-    current profile state and usage. Never let an out-of-order response restore
-    stale connection state.
+  - Keep the widgets synchronized with canonical profile state: a successful
+    provider-key autosave adds its widget, a successful removal removes it,
+    failed mutations leave the current projection unchanged, and dashboard
+    refresh reloads both connection state and usage for the selected Usage
+    scope. Never let an out-of-order response restore stale connection state.
   - Treat widgets as non-secret metadata. Never render provider API keys,
     masked-key suffixes, client keys, system prompts, or credential-bearing
     values in widget text, attributes, accessible names, or browser storage.
   - Use semantic headings and per-provider articles, unique accessible action
     names such as `Manage OpenAI`, full keyboard operation, and a responsive
     grid that remains aligned without horizontal overflow on narrow screens.
-    Keep the provider widgets confined to the current user's dashboard; the
+    Keep the provider widgets confined to the current user's owned tenants; the
     admin dashboard must not project another tenant's provider credentials or
     connection state.
-  - Consume the existing management-profile and usage contracts unless a
-    demonstrated missing field requires one canonical contract change. Do not
-    add a parallel provider-registration endpoint, cached shadow state,
-    compatibility aliases, or fallback matching.
+  - Add one canonical owner-wide safe connection projection because the account
+    summary does not contain provider `has_key` facts and the browser must not
+    fan out profile requests under `All tenants`. Preserve the existing tenant
+    profile as the canonical explicitly selected-tenant projection. Do not add
+    cached shadow state, compatibility aliases, fallback matching, or expose
+    masked/raw key material in the owner-wide response.
   - Update dashboard and self-service documentation so `connected provider` and
     `active provider` have explicit, non-overlapping meanings.
 
@@ -969,23 +1206,26 @@ already satisfied; recurring maintenance remains scheduled work.
   - Add the connected-provider widget grid, connected count, provider-specific
     Settings navigation, empty/error states, and responsive styling to the user
     dashboard.
-  - Add one derived presentation model that joins profile providers to usage by
-    exact canonical ID while keeping registration authoritative to `has_key`.
+  - Add the owner-wide safe connection projection plus one derived presentation
+    model that joins tenant/provider connections to usage by exact canonical IDs
+    while keeping registration authoritative to `has_key`.
   - Update first-party frontend types, copy, documentation, and rendered-browser
     coverage for the final dashboard contract.
 
   Validation:
-  - Add Playwright scenarios for zero, one, and multiple connected providers;
-    deterministic widget order; a connected provider with zero activity; an
-    unconnected provider with historical activity; exact model/capability and
-    usage rendering; and the connected-provider count.
+  - Add Playwright scenarios for `All tenants` and one explicit Usage tenant;
+    zero, one, and multiple connected providers; duplicate provider IDs in two
+    tenants; deterministic grouping/order; a connected provider with zero
+    activity; an unconnected provider with historical activity; exact
+    model/capability and usage rendering; and the connected-provider count.
   - Prove successful key autosave/removal and dashboard refresh update the
     widgets, while rejected or out-of-order requests do not mutate the visible
     projection and usage failure leaves connection state intact with activity
     marked unavailable.
-  - Prove each `Manage` action selects the intended provider without a reveal or
-    mutation request, no secret-bearing value reaches the rendered dashboard or
-    browser storage, and admin/user dashboard switching preserves isolation.
+  - Prove each `Manage` action selects the intended Settings tenant and provider
+    without changing the Usage tenant or making a reveal/mutation request, no
+    secret-bearing value reaches the rendered dashboard or browser storage, and
+    admin/user dashboard switching preserves isolation.
   - Cover keyboard navigation, accessible names, and desktop/narrow viewport
     layout without overlap or horizontal overflow.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
@@ -1040,7 +1280,8 @@ already satisfied; recurring maintenance remains scheduled work.
   deployment dependency, and M013 waits for B069 so future product-context
   documents cannot omit the resulting timeout contract. Selected the
   sequential P1 tranche B069 -> F014 -> I029; I031 is the resulting convergence
-  item, while I027 and P001 remain independent F014 successors. Planning
+  item, while I027 and P001 now follow B076's independent Settings and Usage
+  selectors. Planning
   entries remain open but deferred under the repository workflow.
 - [ ] [M003R] (P2) Architecture and policy review.
   Goal:
@@ -1277,20 +1518,22 @@ already satisfied; recurring maintenance remains scheduled work.
 ## Planning
 *do not implement yet*
 
-- [ ] [P001] (P1) {F014} Design a tenant-scoped provider, model, and key-acquisition onboarding flow.
+- [ ] [P001] (P1) {B076} Design a tenant-scoped provider, model, and key-acquisition onboarding flow.
   Goal:
   Let a signed-in managed user complete one clear text-routing setup: select a
   supported provider, select one of that provider's supported text models, and
   either paste an existing provider API key or open that provider's official
   key-acquisition page in a new window before returning to paste it. A completed
-  setup must make the chosen provider/model the active tenant's usable text
+  setup must make the chosen provider/model the Settings tenant's usable text
   route without asking the user to reconcile separate provider, default, and
   client-secret forms.
 
   Requirements:
-  - Build the flow on the canonical F014 active-tenant context. It must read and
-    write only the selected tenant; another tenant or user must never inherit a
-    provider key, model choice, in-progress form value, or completion state.
+  - Build the flow inside Settings on B076's editor-only `Settings tenant`
+    context. It must read and write only that selected tenant and must not change
+    the independent `Usage tenant` filter; another tenant or user must never
+    inherit a provider key, model choice, in-progress form value, or completion
+    state.
   - Serve provider labels, text-model choices, capabilities, and the verified
     official credential-acquisition URL from one validated provider catalog.
     Do not hard-code provider/model lists or provider registration URLs in the
