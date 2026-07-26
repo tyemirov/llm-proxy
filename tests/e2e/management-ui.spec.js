@@ -1124,7 +1124,8 @@ test("failed-request details expose 10 of 22 requests as safe, focus-managed met
     { status_code: 200, requests: 12 },
     { status_code: 400, requests: 3 },
     { status_code: 429, requests: 2 },
-    { status_code: 502, requests: 5 },
+    { status_code: 499, requests: 1 },
+    { status_code: 502, requests: 4 },
   ];
   await installAssetRoutes(page);
   await installManagementRoutes(page);
@@ -1146,7 +1147,7 @@ test("failed-request details expose 10 of 22 requests as safe, focus-managed met
   await expect(dialog).toHaveAttribute("aria-busy", "false");
   await expect(closeButton).toBeFocused();
   await expect(dialog.getByRole("heading", { name: "Status breakdown" })).toBeVisible();
-  await expect(dialog.locator("usage-failure-status")).toHaveCount(3);
+  await expect(dialog.locator("usage-failure-status")).toHaveCount(4);
   await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("400");
   await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("Bad request");
   await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("3");
@@ -1155,6 +1156,8 @@ test("failed-request details expose 10 of 22 requests as safe, focus-managed met
   await expect(dialog.locator("usage-failure-row").first()).toContainText("502 Upstream error");
   await expect(dialog.locator("usage-failure-row").first()).toContainText("Upstream error");
   await expect(dialog.locator("usage-failure-row").first()).toContainText("245 ms");
+  await expect(dialog.locator("usage-failure-status").filter({ hasText: "499" })).toContainText("Client closed request");
+  await expect(dialog.locator("usage-failure-row").filter({ hasText: "499 Client closed request" })).toContainText("Request timeout");
   await expect(dialog).not.toContainText("raw-provider-body");
   await expect(dialog).not.toContainText("sk-never-render");
   await expect(dialog).not.toContainText("private prompt");
@@ -4271,6 +4274,14 @@ function managementUsageFailures(interval, count, nextCursor = "", offset = 0) {
       status_code: 413,
       outcome_code: "payload_too_large",
       latency_ms: 2,
+    },
+    {
+      endpoint: "text",
+      provider: "deepseek",
+      model: "deepseek-chat",
+      status_code: 499,
+      outcome_code: "request_timeout",
+      latency_ms: 17,
     },
   ];
   const failures = Array.from({ length: count }, (_, index) => {
