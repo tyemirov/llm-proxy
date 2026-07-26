@@ -69,7 +69,7 @@
             <h2>How it works</h2>
             <ol class="resource-steps">
               <li>Drain old service instances and take an operator-owned database backup.</li>
-<li>Exercise SQLite and PostgreSQL migration scenarios through the repository test targets.</li>
+<li>Exercise the SQLite migration scenario through the repository test targets.</li>
 <li>Start one new instance so preflight and the bounded schema-version transaction run once.</li>
 <li>Verify account, workspace, secret, provider, routing, and usage isolation before adding capacity.</li>
             </ol>
@@ -124,8 +124,8 @@
 
 
                     <section class="resource-card">
-                      <h3>PostgreSQL verification</h3>
-                      <p>The same ownership, encryption, usage, and rollback contract runs against a disposable PostgreSQL service.</p>
+                      <h3>Configured path verification</h3>
+                      <p>The real startup path opens and migrates a disposable SQLite database at the supplied location.</p>
                     </section>
 
 

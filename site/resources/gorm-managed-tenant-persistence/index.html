@@ -68,8 +68,7 @@
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Configure management.database_dialect as postgres or sqlite.</li>
-<li>Configure management.database_dsn for the selected dialect.</li>
+              <li>Configure management.database_path with the SQLite database location.</li>
 <li>Run management mode with the required provider-key encryption key.</li>
 <li>Let GORM model APIs own signup, provider, defaults, secret, and usage state.</li>
             </ol>
@@ -89,9 +88,9 @@
                 <tbody>
 
                         <tr>
-                          <td>Postgres or SQLite</td>
-                          <td>Hosted and local management profiles can use supported GORM dialects.</td>
-                          <td>SQLite uses a pure-Go driver for CGO_DISABLED builds.</td>
+                          <td>SQLite through GORM</td>
+                          <td>Hosted and local management profiles choose the database location with one path.</td>
+                          <td>The pure-Go SQLite driver keeps CGO_DISABLED builds valid.</td>
                         </tr>
 
 
@@ -119,13 +118,13 @@
 
                     <section class="resource-card">
                       <h3>Local development</h3>
-                      <p>A developer uses sqlite with a local ignored database file.</p>
+                      <p>A developer supplies the path to a local ignored SQLite database file.</p>
                     </section>
 
 
                     <section class="resource-card">
                       <h3>Hosted deployment</h3>
-                      <p>Production uses a Postgres DSN supplied through deployment secrets.</p>
+                      <p>The service receives its persistent SQLite database path through deployment configuration.</p>
                     </section>
 
 
@@ -140,8 +139,8 @@
           <section>
             <h2>Objections and limitations</h2>
             <ul class="resource-list">
-              <li>Only postgres and sqlite are documented supported dialects.</li>
-<li>Database outages can affect management state and dashboard access.</li>
+              <li>The current persistence engine is SQLite; other database engines are outside the contract.</li>
+<li>Storage access failures can affect management state and dashboard access.</li>
 <li>Provider transport config and model catalogs still live in config.yml.</li>
             </ul>
           </section>

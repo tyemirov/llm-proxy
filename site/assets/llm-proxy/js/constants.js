@@ -63,6 +63,7 @@ export const USAGE_STATUS_LABELS = Object.freeze({
   400: "Bad request",
   413: "Payload too large",
   429: "Rate limited",
+  499: "Client closed request",
   502: "Upstream error",
   503: "Service unavailable",
   504: "Request timeout",
