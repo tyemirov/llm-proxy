@@ -675,20 +675,19 @@ Required hosted values are profile-specific:
 | `management.proxy_origin` | Browser-facing public proxy origin served from `/config-ui.yaml` under `llmProxy.proxyOrigin` for generated examples. |
 
 After the shared `mpr-ui` shell reports authentication, the frontend loads the
-account through `GET /api/management/account`, then loads the selected workspace
-through `GET /api/management/tenants/:tenant_id`. A new TAuth subject receives
-one `Default` workspace. Each account may create, rename, switch among, and
-delete its own workspaces; deleting the final workspace returns `409 Conflict`.
-The opaque workspace id is persisted in the URL as `tenant=<tenant_id>`.
-An absent parameter selects the oldest workspace and replaces the current
-history entry, while an unknown or foreign id renders an explicit workspace
-error and is never replaced by a fallback selection. History navigation,
-reloads, and independent tabs therefore retain independent selections.
+account through `GET /api/management/account`. A new TAuth subject receives one
+`Default` tenant. Each account may create, rename, select, and delete its own
+tenants; deleting the final tenant returns `409 Conflict`. Every owned tenant is
+operational at the same time: each generated secret independently selects that
+tenant's credentials, defaults, and usage owner. The browser has no global
+active-tenant state, activation flag, or tenant URL parameter.
 
-Every settings and usage operation is nested below the selected workspace.
-Switching while Settings contains unsaved input requires an explicit discard
-confirmation, and switching clears one-time generated secrets and revealed
-provider credentials from browser state. If the selected workspace has no
+Tenant lifecycle and configuration live in Settings. Its `Settings tenant`
+selector chooses only the tenant being edited and `Create tenant` is colocated
+with it. Switching the Settings tenant while the current editor contains
+unsaved input requires an explicit discard confirmation and clears one-time
+generated secrets and revealed provider credentials from browser state. It
+does not change the independent `Usage tenant` filter. If the Settings tenant has no
 llm-proxy client key, the frontend creates one through
 `POST /api/management/tenants/:tenant_id/secrets` and presents the one-time
 value masked in the read-only Key field with explicit Show and Copy actions.
@@ -775,18 +774,23 @@ at read time. The bounded F014 schema migration applies the same validation to
 legacy rows before making any database change; invalid rows stop startup with
 the owner, workspace, endpoint, provider, and model context.
 
-Configured authenticated users land on a usage dashboard. Its ordered `ALL`,
-`30 days`, `7 days`, and `1 day` controls default to `30 days` and replace the
-request and token graphs, total request and token counts, success rate, and
-provider and model breakdowns with one selected snapshot for the active
-workspace. `Refresh` retains that selection. Users whose
+Configured authenticated users land on Usage Overview. An independent `Usage
+tenant` selector sits immediately before the ordered `ALL`, `30 days`, `7
+days`, and `1 day` controls. It defaults to `All tenants`, while the interval
+independently defaults to `30 days`. The account-wide selection aggregates
+requests, tokens, success rate, buckets, status codes, providers, and models
+across every owned tenant. Choosing one tenant narrows the same dashboard
+surfaces to that tenant. `Refresh` and interval changes retain the Usage tenant
+selection, and Settings tenant changes do not affect it. Users whose
 client/provider setup is incomplete enter the mandatory Settings modal instead;
 after setup, the modal remains available from the avatar dropdown. The
 success-rate metric renders an **N failed requests** action only when the selected
 snapshot contains failures. It opens a keyboard- and focus-managed dialog with
 the current non-success status breakdown and newest-first safe failure metadata.
 The dialog retains the active interval, paginates within one opaque snapshot,
-and discards any response made stale by an interval or workspace change. A
+and discards any response made stale by an interval or Usage tenant change. An
+account-wide failure row includes the owning tenant's safe ID and current
+display name; a tenant-scoped row retains the tenant-less safe shape. A
 details error stays inside the dialog and never replaces aggregate dashboard
 data. The
 `Settings` menu item is inserted before `Sign out` through the shared
@@ -812,36 +816,53 @@ masked provider-key strings, generated tenant secrets, secret digests, prompts,
 audio names, transcripts, or model responses. Authenticated non-admin users get
 `403 Forbidden` from admin-only APIs.
 
+`GET /api/management/usage?interval=all|30d|7d|1d` returns one summary across
+every tenant owned by the authenticated TAuth subject.
 `GET /api/management/tenants/:tenant_id/usage?interval=all|30d|7d|1d` returns
-dashboard data only when the selected workspace belongs to the authenticated
-TAuth subject. `interval` is required exactly once; a missing, repeated, or
-unknown value returns `400`. The response contains
+the same summary shape for one explicitly selected owned tenant. These are
+distinct canonical scopes; neither is an alias or browser-side fan-out.
+`interval` is required exactly once; a missing, repeated, or unknown value
+returns `400`. Both responses carry `Cache-Control: no-store` and contain
 the selected `interval`, its `bucket_unit`, `totals`, ordered generic `buckets`,
 and provider, model, and status-code breakdowns; the user endpoint has no
 `period_days` or `daily` fields. `1d` uses 24 hourly buckets, `7d` and `30d` use
 7 and 30 daily buckets, and each finite interval is an exact trailing duration
 ending at one captured server timestamp. `all` includes retained tenant events
 through that timestamp in UTC daily buckets from the earliest event through
-today, or an empty bucket list when the tenant has no events. The administrator
+today, or an empty bucket list when the selected scope has no events. Account
+totals and average latency are calculated from the complete owned event set,
+not from per-tenant summaries. The administrator
 endpoint remains a separate fixed 30-day daily contract.
 
+```text
+GET /api/management/usage?interval=30d
+GET /api/management/tenants/:tenant_id/usage?interval=30d
+```
+
+`GET /api/management/usage/failures?interval=all|30d|7d|1d`
+is the account-wide failure operation. It uses one stable newest-first snapshot
+across all owned tenants and adds only `tenant_id` and `tenant_name` to each safe
+row. Its cursor is bound to the account-wide scope.
 `GET /api/management/tenants/:tenant_id/usage/failures?interval=all|30d|7d|1d`
-is the sole per-event diagnostic operation. It requires exactly one `interval`,
-accepts one optional `limit` from 1 through 100 (default 25) and one optional
-opaque `cursor`, and rejects missing, repeated, malformed, or unknown query
-fields with `400`. The authenticated owner and selected workspace scope every
-page; missing and foreign workspace ids both return `404`. Pages are newest
-first under a stable `(created_at, id)` position and an opaque snapshot boundary.
-Each row contains only `occurred_at`, `endpoint`, `provider`, `model`,
-`status_code`, `outcome_code`, and `latency_ms`. The operation never returns row,
-user, or workspace ids; prompts; responses; audio; transcripts; client secrets;
-provider keys; raw upstream bodies; or free-form errors. The administrator
-surface remains aggregate-only and cannot fetch another owner's rows.
+is the corresponding operation for one explicitly selected tenant; its rows do
+not repeat tenant identity. Both operations require exactly one `interval`,
+accept one optional `limit` from 1 through 100 (default 25) and one optional
+opaque `cursor`, and reject missing, repeated, malformed, or unknown query
+fields with `400`. Missing and foreign tenant ids both return `404`. Pages are
+newest first under a stable `(created_at, id)` position and an opaque snapshot
+boundary; a cursor from one tenant or account-wide scope is rejected in every
+other scope. Safe failure metadata is limited to `occurred_at`, `endpoint`,
+`provider`, `model`, `status_code`, `outcome_code`, and `latency_ms`, plus the
+account-wide tenant fields described above. Neither operation returns row or
+user ids; prompts; responses; audio; transcripts; client secrets; provider
+keys; raw upstream bodies; or free-form errors. The administrator surface
+remains aggregate-only and cannot fetch another owner's rows.
 
 Usage events are recorded only for managed workspaces when they call the public
-proxy endpoints with a generated secret. Every usage query applies the
-authenticated owner id, selected workspace id, and time boundary in the
-database. Stored usage
+proxy endpoints with a generated secret. Account-wide usage queries apply the
+authenticated owner and all owned tenant ids at the database boundary;
+tenant-scoped queries additionally require the explicit tenant id. Every query
+uses one captured time boundary. Stored usage
 metadata includes endpoint, provider, model, status code, success flag, one
 canonical outcome code, latency, and normalized request/response/total token
 counts. Outcome codes are exactly `success`, `invalid_request`,
@@ -962,11 +983,13 @@ and refresh cookies. It then drives the mounted header through the documented
 `MPRUI.testing.authenticate` adapter, which emits the normal authenticated
 lifecycle event and persists MPR UI's session-restore hint. The test proves the
 anonymous/authorized behavior of `/api/management/account`, proves the browser
-makes no protected account or workspace request before MPR UI authentication,
-then hydrates the selected workspace afterward. It creates two workspaces for
-one real TAuth subject, proves their secrets, settings, and usage remain
-isolated, and signs in a second real subject to prove foreign workspace ids
-return `404` without disclosure. It waits for the `mpr-ui@latest` shell plus the
+makes no protected account or tenant request before MPR UI authentication, then
+hydrates the initial Settings tenant and account-wide Usage view afterward. It
+creates two tenants for one real TAuth subject, proves both secrets remain
+independently routable, proves the default account-wide usage and safe
+tenant-attributed failure page include both, and signs in a second real subject
+to prove foreign tenant ids return `404` without disclosure. It waits for the
+`mpr-ui@latest` shell plus the
 dashboard to report the authenticated state, then proves an ordinary reload
 stays authenticated, removes only the access cookie and proves `/auth/session`
 recovers it from the refresh cookie without rendering the signed-out panel, and
@@ -1023,29 +1046,31 @@ the signing key it shares with the API. Only llm-proxy receives the provider-key
 encryption configuration; aggregate dotenv files and live provider smoke-test
 credentials are not injected into auxiliary containers. The API image is built
 from the current source and runs the canonical `configs/config.yml`
-configuration. The stack has three explicit browser-facing endpoints:
+configuration. The stack has two explicit browser-facing endpoints:
 
 - Static UI: `http://localhost:4179/`, served from `site/` by ghttp.
 - Backend API: `http://localhost:8080/`, including the proxy and
   `/api/management/*` endpoints.
-- TAuth: `http://localhost:8082/`, configured for the `llm-proxy` tenant and
-  the backend's `app_session_llm_proxy` cookie contract.
 
-ghttp proxies only `http://localhost:4179/config-ui.yaml` to the API. The
-browser then receives the direct API and TAuth origins from that one runtime
-configuration, matching the production split-origin contract. Use the
-`localhost` UI URL rather than `127.0.0.1`: TAuth's insecure local HTTP cookie
-profile is intentionally scoped to the single `localhost` host.
+ghttp proxies `http://localhost:4179/config-ui.yaml` to the API and the
+same-origin `/auth/*` and `/me` routes to the internal TAuth service. The
+browser receives `http://localhost:4179` as its TAuth origin and the direct API
+origin from that one runtime configuration. Production keeps its explicit
+split-origin topology; local authentication stays on the front door so another
+host process cannot intercept a TAuth port through a different `localhost`
+address family. Use the `localhost` UI URL rather than `127.0.0.1`: TAuth's
+insecure local HTTP cookie profile is intentionally scoped to the single
+`localhost` host.
 
 Compose first completes image pulls/builds and reports all three services
 running through `docker compose up --wait`; only then does the bounded HTTP
 readiness budget begin. Readiness proves static content (`200`), the
 ghttp-served runtime config (`200`), the unauthenticated API boundary (`403`),
-the anonymous TAuth session boundary (`204`), and the unauthenticated management
-API boundary (`401`). It does not call a paid provider. After readiness, Compose
-logs remain attached in the foreground. Use `Ctrl-C` to stop the containers and
-network; the named local data volumes keep local TAuth and management state for
-the next run.
+the same-origin TAuth session (`204`) and nonce (`200`) boundaries, and the
+unauthenticated management API boundary (`401`). It does not call a paid
+provider. After readiness, Compose logs remain attached in the foreground. Use
+`Ctrl-C` to stop the containers and network; the named local data volumes keep
+local TAuth and management state for the next run.
 
 With `management.enabled: false`, set a static tenant's default text
 provider/model to route omitted-provider requests to DeepSeek. Static tenant
@@ -1132,7 +1157,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | Command | Purpose |
 |---------|---------|
 | `npm ci` | Install pinned frontend validation dependencies before running local frontend checks. |
-| `make up` | Build and run the complete local browser orchestration: ghttp static UI on `localhost:4179`, API on `localhost:8080`, and TAuth on `localhost:8082`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
+| `make up` | Build and run the complete local browser orchestration: ghttp static UI and same-origin TAuth routes on `localhost:4179`, plus the API on `localhost:8080`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
 | `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, repository-owned release integration tests, and the non-paid live-harness preflight. |
 | `make test-live-provider-harness` | Generate the temporary static-mode live-test config and verify authenticated routing without an upstream call. |
 | `make test-live-providers` | Generate a complete temporary static-mode config and run live text smoke tests for every provider whose API key is present; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
