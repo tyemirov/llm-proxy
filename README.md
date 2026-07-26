@@ -868,11 +868,12 @@ as one bounded startup transaction:
    workspace ids, duplicate or malformed secret digests, orphan provider or
    usage rows, plaintext or corrupt provider keys, and non-canonical routing
    data.
-4. The transaction renames the three legacy tables, creates explicit user and
-   workspace tables, preserves every opaque tenant id, moves secret digests and
-   routing data, rebinds encrypted provider keys from the prior user id to the
-   workspace id, copies usage rows, verifies counts and values including
-   decryption, writes schema version 1, and removes the bounded legacy tables.
+4. The transaction renames the two colliding legacy GORM indexes and the three
+   legacy tables, creates explicit user and workspace tables, preserves every
+   opaque tenant id, moves secret digests and routing data, rebinds encrypted
+   provider keys from the prior user id to the workspace id, copies usage rows,
+   verifies counts and values including decryption, writes schema version 1,
+   and removes the bounded legacy tables.
 5. Verify account, workspace, provider, secret, routing, and usage behavior
    before adding capacity. A failed stage rolls the transaction back to the
    untouched legacy schema and prevents startup. Correct the source data or
