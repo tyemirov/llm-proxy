@@ -32,9 +32,6 @@ management:
   provider_key_encryption_key: "${LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY}"
   management_api_origin: "${LLM_PROXY_MANAGEMENT_API_ORIGIN}"
   proxy_origin: "${LLM_PROXY_MANAGEMENT_PROXY_ORIGIN}"
-  legacy_token_migration:
-    tenant_id: default
-    owner_email: "${LLM_PROXY_MANAGEMENT_LEGACY_TOKEN_OWNER_EMAIL}"
 providers:
   openai:
     base_url: "https://api.openai.com/v1"
