@@ -1,6 +1,7 @@
 // @ts-check
 
 import { expect, test } from "@playwright/test";
+import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat } from "node:fs/promises";
 import http from "node:http";
@@ -9,8 +10,11 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const siteRoot = path.join(repoRoot, "site");
+const canonicalOpenAPIFile = path.join(repoRoot, "docs/openapi.yaml");
 const configPath = "/config-ui.yaml";
-const managementProviderKeysPath = "/api/management/provider-keys";
+const defaultTenantID = "tenant_1";
+const managementDefaultTenantPath = `/api/management/tenants/${defaultTenantID}`;
+const managementProviderKeysPath = `${managementDefaultTenantPath}/provider-keys`;
 const faviconPath = "/assets/llm-proxy/img/favicon.svg";
 const appIconPath = "/assets/llm-proxy/img/llm-proxy-icon.svg";
 const resourcesPath = "/resources/";
@@ -18,6 +22,8 @@ const representativeResourcePath = "/resources/multi-provider-llm-proxy/";
 const clientAuthenticationResourcePath = "/resources/llm-proxy-client-authentication/";
 const sitemapPath = "/sitemap.xml";
 const robotsPath = "/robots.txt";
+const apiDocumentationPath = "/docs/";
+const openAPIPath = "/openapi.yaml";
 const repositoryUsageURL = "https://github.com/tyemirov/llm-proxy#usage";
 const mprUICSSURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css";
 const mprUIConfigURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js";
@@ -46,8 +52,8 @@ const mimeTypes = Object.freeze({
 const generatedResourcePageCount = 46;
 const seoContentModifiedDate = "2026-07-11";
 const seoCurrentContentModifiedDate = "2026-07-22";
-const seoUsageContentModifiedDate = "2026-07-23";
-const seoClientDocumentationModifiedDate = "2026-07-24";
+const seoUsageContentModifiedDate = "2026-07-25";
+const seoClientDocumentationModifiedDate = "2026-07-25";
 const settingsLayerViewports = Object.freeze([
   { name: "desktop", width: 1280, height: 720 },
   { name: "compact", width: 480, height: 780 },
@@ -88,6 +94,8 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/">');
   expect(html).toContain(`<a href="${clientAuthenticationResourcePath}">Client authentication</a>`);
   expect(html).toContain(`<a href="${resourcesPath}">Browse resources</a>`);
+  expect(html).toContain(`<a href="${apiDocumentationPath}">API reference</a>`);
+  expect(html).toContain(`<a href="${openAPIPath}">OpenAPI schema</a>`);
   expect(html).toContain('<meta name="theme-color" content="#0076c3">');
   expect(html).toContain(`<link rel="icon" type="image/svg+xml" href="${faviconPath}">`);
   expect(html).toContain(`<link rel="apple-touch-icon" href="${appIconPath}">`);
@@ -149,11 +157,15 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
     '<svg class="utility-icon close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">',
   );
   expect(html).not.toContain('x-text="copy.settingsTitle"');
+  expect(html).toContain('<tenant-context-bar x-cloak x-show="account && activeTenantID" aria-label="Tenant context">');
+  expect(html).toContain('x-bind:aria-label="copy.tenantSwitcherLabel"');
+  expect(html).toContain('x-on:change="handleTenantSelection($event)"');
+  expect(html).toContain('x-text="activeTenantID"');
   expect(html).toContain('<client-access-row role="group" x-bind:aria-label="copy.clientKey">');
-  expect(html).not.toContain("client-access-tenant");
-  expect(html).not.toContain("tenantName");
+  expect(html).toContain('<client-access-tenant role="group" x-bind:aria-label="copy.renameTenant">');
+  expect(html).toContain('x-on:input="handleTenantNameInput($event)"');
+  expect(html).toContain('x-on:click="requestTenantDeletion()"');
   expect(html).not.toContain("copy.tenantTitle");
-  expect(html).not.toContain("copy.tenantName");
   expect(html).toContain(
     '<button type="button" class="icon-button client-key-create" x-cloak x-show="!hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.createKey">',
   );
@@ -178,7 +190,6 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain('<rect x="8" y="7" width="10" height="12" rx="1.5"></rect>');
   expect(html).not.toContain("tenant-facts");
   expect(html).not.toContain("secret-output");
-  expect(html).not.toContain("copy.tenantId");
   expect(html).not.toContain("copy.copySecret");
   expect(html).not.toContain("Generated secret");
   expect(html).toContain('x-model="defaults.reasoning_effort"');
@@ -263,6 +274,27 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(appIconSVG).toContain("#4ad3d9");
 });
 
+test("site publishes the exact canonical OpenAPI artifact and its derived reference", async ({ request }) => {
+  const canonicalSource = await readFile(canonicalOpenAPIFile, "utf8");
+  const schemaResponse = await request.get(`${baseURL}${openAPIPath}`);
+  expect(schemaResponse.status()).toBe(httpOK);
+  expect(schemaResponse.headers()["content-type"]).toContain(mimeTypes[".yaml"]);
+  expect(await schemaResponse.text()).toBe(canonicalSource);
+
+  const documentationResponse = await request.get(`${baseURL}${apiDocumentationPath}`);
+  expect(documentationResponse.status()).toBe(httpOK);
+  expect(documentationResponse.headers()["content-type"]).toContain(mimeTypes[".html"]);
+  const documentationHTML = await documentationResponse.text();
+  const sourceDigest = createHash("sha256").update(canonicalSource).digest("hex");
+  expect(documentationHTML).toContain(`<link rel="canonical" href="https://llm-proxy.mprlab.com${apiDocumentationPath}">`);
+  expect(documentationHTML).toContain(`data-openapi-source-sha256="${sourceDigest}"`);
+  expect(documentationHTML).toContain("https://llm-proxy-api.mprlab.com");
+  expect(documentationHTML).toContain('id="operation-postV2Messages"');
+  expect(documentationHTML).toContain("<code>reasoning_effort</code>");
+  expect(documentationHTML).toContain(`href="${openAPIPath}"`);
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(19);
+});
+
 test("SEO resource pages are crawlable from the public site", async ({ request }) => {
   const hubResponse = await request.get(`${baseURL}${resourcesPath}`);
   expect(hubResponse.status()).toBe(httpOK);
@@ -272,6 +304,8 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
   expect(hubHTML).toContain('<script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>');
   expect(hubHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/">');
   expect(hubHTML).toContain('"@type":"CollectionPage"');
+  expect(hubHTML).toContain(`href="${apiDocumentationPath}"`);
+  expect(hubHTML).toContain(`href="${openAPIPath}"`);
   expect(hubHTML).toContain(`href="${representativeResourcePath}"`);
   expect(hubHTML).toContain(`href="${clientAuthenticationResourcePath}"`);
   const resourceLinks = hubHTML.match(/href="\/resources\/[^"]+\/"/g) || [];
@@ -285,7 +319,7 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
   expect(pageHTML).toContain('<script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>');
   expect(pageHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/">');
   expect(pageHTML).toContain('"@type":"FAQPage"');
-  expect(pageHTML).toContain('<a class="resource-button" href="/">Open LLM Proxy</a>');
+  expect(pageHTML).toContain(`<a class="resource-button" href="${apiDocumentationPath}">Open API reference</a>`);
   expect(pageHTML).toContain('href="/resources/openai-claude-gemini-one-endpoint/"');
   expect(pageHTML).toContain(`"dateModified":"${seoContentModifiedDate}"`);
 });
@@ -347,7 +381,9 @@ test("SEO usage resource documents selectable tenant intervals", async ({ reques
   const pageHTML = await response.text();
   expect(pageHTML).toContain(`"dateModified":"${seoUsageContentModifiedDate}"`);
   expect(pageHTML).toContain("ALL, 30 days, 7 days, and 1 day");
-  expect(pageHTML).toContain("GET /api/management/usage?interval=&lt;interval&gt;");
+  expect(pageHTML).toContain(
+    "GET /api/management/tenants/:tenant_id/usage?interval=&lt;interval&gt;",
+  );
 });
 
 test("SEO management resources document required onboarding and secret-safe examples", async ({ request }) => {
@@ -404,14 +440,15 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
   expect(sitemapResponse.headers()["content-type"]).toContain(mimeTypes[".xml"]);
   const sitemapXML = await sitemapResponse.text();
   const sitemapLocations = sitemapXML.match(/<loc>/g) || [];
-  expect(sitemapLocations).toHaveLength(generatedResourcePageCount + 2);
+  expect(sitemapLocations).toHaveLength(generatedResourcePageCount + 3);
   expect(sitemapXML).toContain("<loc>https://llm-proxy.mprlab.com/</loc>");
   expect(sitemapXML).toContain("<loc>https://llm-proxy.mprlab.com/resources/</loc>");
+  expect(sitemapXML).toContain(`<loc>https://llm-proxy.mprlab.com${apiDocumentationPath}</loc>`);
   expect(sitemapXML).toContain(
     "<loc>https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/</loc>",
   );
   const sitemapModificationDates = sitemapXML.match(/<lastmod>[^<]+<\/lastmod>/g) || [];
-  expect(sitemapModificationDates).toHaveLength(generatedResourcePageCount + 2);
+  expect(sitemapModificationDates).toHaveLength(generatedResourcePageCount + 3);
   expect(new Set(sitemapModificationDates)).toEqual(
     new Set([
       `<lastmod>${seoContentModifiedDate}</lastmod>`,
@@ -440,6 +477,364 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
   expect(robotsText).toContain("Sitemap: https://llm-proxy.mprlab.com/sitemap.xml");
 });
 
+test("tenant URL context selects and atomically switches isolated workspaces", async ({ page }) => {
+  await installAssetRoutes(page);
+  const tenantProfiles = {
+    tenant_1: managementProfile(false, true),
+    tenant_2: managementProfile(false, true),
+  };
+  tenantProfiles.tenant_1.tenant.name = "Default";
+  tenantProfiles.tenant_2.tenant.id = "tenant_2";
+  tenantProfiles.tenant_2.tenant.name = "Research";
+  tenantProfiles.tenant_2.tenant.defaults.model = "gpt-5.6";
+
+  await page.route(`${baseURL}/api/management/account`, async (route) => {
+    await route.fulfill({
+      headers: { "Cache-Control": "no-store" },
+      json: {
+        user: {
+          id: "user_1",
+          email: "owner@example.com",
+          display_name: "Owner",
+          is_admin: false,
+        },
+        tenants: [
+          {
+            id: "tenant_1",
+            name: "Default",
+            has_secret: true,
+            created_at: "2026-07-01T00:00:00Z",
+            updated_at: "2026-07-01T00:00:00Z",
+          },
+          {
+            id: "tenant_2",
+            name: "Research",
+            has_secret: true,
+            created_at: "2026-07-02T00:00:00Z",
+            updated_at: "2026-07-02T00:00:00Z",
+          },
+        ],
+      },
+    });
+  });
+  await page.route(`${baseURL}/api/management/tenants/**`, async (route) => {
+    const requestURL = new URL(route.request().url());
+    const pathParts = requestURL.pathname.split("/");
+    const tenantID = pathParts[4];
+    const tenantProfile = tenantProfiles[tenantID];
+    if (!tenantProfile) {
+      await route.fulfill({ status: 404 });
+      return;
+    }
+    if (pathParts[5] === "usage") {
+      const interval = requestURL.searchParams.get("interval") || "30d";
+      await route.fulfill({
+        json: managementUsage(interval, { requests: tenantID === "tenant_2" ? 7 : 37 }),
+      });
+      return;
+    }
+    await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: tenantProfile });
+  });
+
+  await page.goto(`${baseURL}/?tenant=tenant_2`);
+
+  const switcher = page.locator("tenant-switcher");
+  await expect(switcher.getByRole("combobox", { name: "Active tenant" })).toHaveValue("tenant_2");
+  await expect(switcher.getByText("tenant_2", { exact: true })).toBeVisible();
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
+
+  await switcher.getByRole("combobox", { name: "Active tenant" }).selectOption("tenant_1");
+  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_1`);
+  await expect(switcher.getByText("tenant_1", { exact: true })).toBeVisible();
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
+});
+
+test("tenant selection defaults to the oldest tenant and follows reload and browser history", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page);
+
+  await page.goto(baseURL);
+
+  const tenantSelector = page.getByRole("combobox", { name: "Active tenant" });
+  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_1`);
+  await expect(tenantSelector).toHaveValue("tenant_1");
+  await tenantSelector.selectOption("tenant_2");
+  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_2`);
+  await page.reload();
+  await expect(tenantSelector).toHaveValue("tenant_2");
+  await page.goBack();
+  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_1`);
+  await expect(tenantSelector).toHaveValue("tenant_1");
+  await page.goForward();
+  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_2`);
+  await expect(tenantSelector).toHaveValue("tenant_2");
+});
+
+test("an invalid tenant URL renders an explicit workspace error without fallback hydration", async ({ page }) => {
+  await installAssetRoutes(page);
+  const managementState = await installMultiTenantRoutes(page);
+
+  await page.goto(`${baseURL}/?tenant=tenant_missing`);
+
+  await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toBeVisible();
+  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("The tenant in this URL is unavailable.");
+  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_missing`);
+  expect(managementState.requests).toEqual([{ method: "GET", path: "/api/management/account" }]);
+});
+
+test("tenant lifecycle is keyboard accessible, responsive, and guards the final tenant", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  await installAssetRoutes(page);
+  const managementState = await installMultiTenantRoutes(page, {
+    profiles: [managementTenantProfile("tenant_1", "Default")],
+  });
+
+  await page.goto(baseURL);
+
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const tenantSettings = settingsDialog.getByRole("group", { name: "Rename tenant" });
+  await expect(tenantSettings.getByRole("button", { name: "Delete tenant" })).toBeDisabled();
+  await expect(tenantSettings.getByText("Your final tenant cannot be deleted.")).toBeVisible();
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
+
+  const createTenantButton = page.getByRole("button", { name: "Create tenant" });
+  await createTenantButton.focus();
+  await page.keyboard.press("Enter");
+  const createDialog = page.getByRole("dialog", { name: "Create tenant" });
+  const createName = createDialog.getByRole("textbox", { name: "Tenant name" });
+  await expect(createName).toBeFocused();
+  await createDialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(createDialog.getByRole("alert")).toHaveText("Enter a tenant name with 1–80 visible characters.");
+  await createName.fill("default");
+  await createDialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(createDialog.getByRole("alert")).toHaveText("A tenant with that name already exists.");
+  await createName.fill("Research");
+  await createDialog.getByRole("button", { name: "Create", exact: true }).click();
+
+  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_2`);
+  await expect(page.getByRole("combobox", { name: "Active tenant" })).toHaveValue("tenant_2");
+  await expect(settingsDialog).toBeVisible();
+  const tenantName = tenantSettings.getByRole("textbox", { name: "Tenant name" });
+  await tenantName.fill("Research Lab");
+  await tenantSettings.getByRole("button", { name: "Save name" }).click();
+  await expect(page.getByRole("combobox", { name: "Active tenant" }).locator("option:checked")).toHaveText("Research Lab");
+
+  await tenantSettings.getByRole("button", { name: "Delete tenant" }).click();
+  const deleteDialog = page.getByRole("alertdialog", { name: "Delete “Research Lab”?" });
+  await expect(deleteDialog.getByText("Research Lab", { exact: true })).toBeVisible();
+  await expect(deleteDialog).toContainText("This permanently deletes the tenant");
+  await deleteDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(deleteDialog).toBeHidden();
+  await tenantSettings.getByRole("button", { name: "Delete tenant" }).click();
+  await deleteDialog.getByRole("button", { name: "Delete", exact: true }).click();
+
+  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_1`);
+  await expect(page.getByRole("combobox", { name: "Active tenant" })).toHaveValue("tenant_1");
+  expect(managementState.order).toEqual(["tenant_1"]);
+  const tenantBarBox = await page.locator("tenant-context-bar").boundingBox();
+  if (!tenantBarBox) {
+    throw new Error("tenant_context_bar_missing");
+  }
+  expect(tenantBarBox.x).toBeGreaterThanOrEqual(0);
+  expect(tenantBarBox.x + tenantBarBox.width).toBeLessThanOrEqual(390);
+});
+
+test("tenant switching requires discard and clears one-time and revealed credentials", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page);
+  let releaseProviderSave;
+  const providerSaveReleased = new Promise((resolve) => {
+    releaseProviderSave = resolve;
+  });
+  let providerSaveStarted;
+  const providerSaveRequested = new Promise((resolve) => {
+    providerSaveStarted = resolve;
+  });
+  await page.route(`${baseURL}/api/management/tenants/tenant_1/provider-keys/openai`, async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.fallback();
+      return;
+    }
+    providerSaveStarted();
+    await providerSaveReleased;
+    await route.fallback();
+  });
+
+  await page.goto(`${baseURL}/?tenant=tenant_1`);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const clientAccess = settingsDialog.getByRole("group", { name: "Key" });
+  const providerEditor = settingsDialog.locator("provider-editor");
+
+  await clientAccess.getByRole("button", { name: "Replace key" }).click();
+  await clientAccess.getByRole("button", { name: "Show key", exact: true }).click();
+  await expect(clientAccess.getByRole("textbox", { name: "Key", exact: true })).toHaveValue("llmp_tenant_1_generated");
+  await providerEditor.getByRole("button", { name: "Show key", exact: true }).click();
+  await expect(providerEditor.getByRole("textbox", { name: "OpenAI API key" })).toHaveValue("sk-tenant_1-openai");
+  await providerEditor.getByRole("textbox", { name: "System prompt" }).fill("Unsaved tenant one prompt");
+  await page.keyboard.press("Tab");
+  await providerSaveRequested;
+
+  await page.getByRole("combobox", { name: "Active tenant" }).selectOption("tenant_2");
+  const discardDialog = page.getByRole("alertdialog", { name: "Discard unsaved changes?" });
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole("button", { name: "Stay" }).click();
+  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_1`);
+  await expect(providerEditor.getByRole("textbox", { name: "System prompt" })).toHaveValue("Unsaved tenant one prompt");
+
+  await page.getByRole("combobox", { name: "Active tenant" }).selectOption("tenant_2");
+  await discardDialog.getByRole("button", { name: "Discard and switch" }).click();
+  releaseProviderSave();
+  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_2`);
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
+  await expect(page.locator("body")).not.toContainText("llmp_tenant_1_generated");
+  await expect(page.locator("body")).not.toContainText("sk-tenant_1-openai");
+  expect(await browserStorageContains(page, "llmp_tenant_1_generated")).toBe(false);
+  expect(await browserStorageContains(page, "sk-tenant_1-openai")).toBe(false);
+});
+
+test("concurrent tabs keep independent tenant URL and workspace state", async ({ context, page }) => {
+  const secondPage = await context.newPage();
+  await installAssetRoutes(page);
+  await installAssetRoutes(secondPage);
+  await installMultiTenantRoutes(page);
+  await installMultiTenantRoutes(secondPage);
+
+  await Promise.all([
+    page.goto(`${baseURL}/?tenant=tenant_1`),
+    secondPage.goto(`${baseURL}/?tenant=tenant_2`),
+  ]);
+
+  await expect(page.getByRole("combobox", { name: "Active tenant" })).toHaveValue("tenant_1");
+  await expect(secondPage.getByRole("combobox", { name: "Active tenant" })).toHaveValue("tenant_2");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
+  await expect(secondPage.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
+  await page.getByRole("combobox", { name: "Active tenant" }).selectOption("tenant_2");
+  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_2`);
+  await expect(secondPage).toHaveURL(`${baseURL}/?tenant=tenant_2`);
+  await expect(secondPage.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
+});
+
+test("late tenant usage cannot overwrite a newer URL-selected tenant", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page);
+  let releaseFirstUsage;
+  const firstUsageReleased = new Promise((resolve) => {
+    releaseFirstUsage = resolve;
+  });
+  let firstUsageStarted;
+  const firstUsageRequested = new Promise((resolve) => {
+    firstUsageStarted = resolve;
+  });
+  await page.route(`${baseURL}/api/management/tenants/tenant_1/usage?interval=*`, async (route) => {
+    firstUsageStarted();
+    await firstUsageReleased;
+    await route.fallback();
+  });
+
+  await page.goto(`${baseURL}/?tenant=tenant_1`);
+  await firstUsageRequested;
+  await navigateTenantHistory(page, "tenant_2");
+  releaseFirstUsage();
+
+  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_2`);
+  await expect(page.getByRole("combobox", { name: "Active tenant" })).toHaveValue("tenant_2");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
+  await page.waitForTimeout(50);
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
+});
+
+test("late tenant lifecycle responses cannot select or overwrite another tenant", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page);
+  const delayedCreateProfile = managementTenantProfile("tenant_3", "Late Create");
+  let releaseCreate;
+  const createReleased = new Promise((resolve) => {
+    releaseCreate = resolve;
+  });
+  let createStarted;
+  const createRequested = new Promise((resolve) => {
+    createStarted = resolve;
+  });
+  await page.route(`${baseURL}/api/management/tenants`, async (route) => {
+    createStarted();
+    await createReleased;
+    await route.fulfill({ status: 201, json: delayedCreateProfile }).catch(() => {});
+  });
+
+  await page.goto(`${baseURL}/?tenant=tenant_1`);
+  await page.getByRole("button", { name: "Create tenant" }).click();
+  await page.getByRole("dialog", { name: "Create tenant" }).getByRole("textbox", { name: "Tenant name" }).fill("Late Create");
+  await page.getByRole("dialog", { name: "Create tenant" }).getByRole("button", { name: "Create", exact: true }).click();
+  await createRequested;
+  await navigateTenantHistory(page, "tenant_2");
+  releaseCreate();
+  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_2`);
+  await expect(page.getByRole("combobox", { name: "Active tenant" }).locator("option")).toHaveCount(2);
+
+  let releaseRename;
+  const renameReleased = new Promise((resolve) => {
+    releaseRename = resolve;
+  });
+  let renameStarted;
+  const renameRequested = new Promise((resolve) => {
+    renameStarted = resolve;
+  });
+  await page.route(`${baseURL}/api/management/tenants/tenant_2`, async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.fallback();
+      return;
+    }
+    renameStarted();
+    await renameReleased;
+    const renamedProfile = managementTenantProfile("tenant_2", "Late Rename");
+    await route.fulfill({ json: renamedProfile }).catch(() => {});
+  });
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const tenantSettings = settingsDialog.getByRole("group", { name: "Rename tenant" });
+  await tenantSettings.getByRole("textbox", { name: "Tenant name" }).fill("Late Rename");
+  await tenantSettings.getByRole("button", { name: "Save name" }).click();
+  await renameRequested;
+  await navigateTenantHistory(page, "tenant_1");
+  await page.getByRole("alertdialog", { name: "Discard unsaved changes?" }).getByRole("button", { name: "Discard and switch" }).click();
+  releaseRename();
+  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_1`);
+  await expect(page.getByRole("combobox", { name: "Active tenant" }).locator('option[value="tenant_2"]')).toHaveText("Research");
+
+  await page.getByRole("combobox", { name: "Active tenant" }).selectOption("tenant_2");
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  let releaseDelete;
+  const deleteReleased = new Promise((resolve) => {
+    releaseDelete = resolve;
+  });
+  let deleteStarted;
+  const deleteRequested = new Promise((resolve) => {
+    deleteStarted = resolve;
+  });
+  await page.route(`${baseURL}/api/management/tenants/tenant_2`, async (route) => {
+    if (route.request().method() !== "DELETE") {
+      await route.fallback();
+      return;
+    }
+    deleteStarted();
+    await deleteReleased;
+    await route.fulfill({ status: 204, body: "" }).catch(() => {});
+  });
+  await settingsDialog.getByRole("group", { name: "Rename tenant" }).getByRole("button", { name: "Delete tenant" }).click();
+  await page.getByRole("alertdialog", { name: /Delete/ }).getByRole("button", { name: "Delete", exact: true }).click();
+  await deleteRequested;
+  await navigateTenantHistory(page, "tenant_1");
+  releaseDelete();
+  await expect(page).toHaveURL(`${baseURL}/?tenant=tenant_1`);
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
+});
+
 test("dashboard shows usage and settings opens from avatar menu before sign out", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page);
@@ -447,7 +842,7 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await page.goto(baseURL);
 
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
-  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("37");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
   await expect(page.locator("usage-card").filter({ hasText: "Tokens" }).locator("strong")).toHaveText("12,345");
   await expect(page.locator("usage-card").filter({ hasText: "Success rate" }).locator("strong")).toHaveText("95%");
   await expect(page.locator("usage-chart-panel").first().locator("polyline")).toHaveAttribute("points", /,/);
@@ -577,7 +972,7 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
   const requestedIntervals = [];
   page.on("request", (request) => {
     const requestURL = new URL(request.url());
-    if (requestURL.pathname === "/api/management/usage") {
+    if (requestURL.pathname === `${managementDefaultTenantPath}/usage`) {
       requestedIntervals.push(requestURL.searchParams.get("interval"));
     }
   });
@@ -617,7 +1012,7 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
       "aria-pressed",
       "true",
     );
-    await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText(
+    await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText(
       interval.requests.toLocaleString("en-US"),
     );
     await expect(page.locator("usage-card").filter({ hasText: "Tokens" }).locator("strong")).toHaveText(
@@ -633,6 +1028,7 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
     await expect(page.locator("usage-breakdown").nth(1)).toContainText(
       interval.id === "30d" ? "gpt-4.1" : `model-${interval.id}`,
     );
+    await expect(page.getByRole("button", { name: /failed request/ })).toHaveCount(interval.id === "30d" ? 1 : 0);
   }
 
   const selectedInterval = usageIntervals.at(-1);
@@ -687,7 +1083,7 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
     }
     await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeDisabled();
     await expect(sevenDayButton).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("0");
+    await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
     await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
     await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
       const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
@@ -698,12 +1094,12 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
       void applicationState.selectUsageInterval("1d");
     });
     await expect(intervalGroup.getByRole("button", { name: "1 day" })).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("1");
+    await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("1");
   } finally {
     releaseSevenDayResponse();
   }
   await page.waitForLoadState("networkidle");
-  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("1");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("1");
 
   await page.unroute(usageRequestPattern());
   await page.route(usageRequestPattern(), async (route) => {
@@ -712,8 +1108,196 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.getByText("Request failed")).toBeVisible();
   await expect(intervalGroup.getByRole("button", { name: "1 day" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("0");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
   await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
+});
+
+test("failed-request details expose 10 of 22 requests as safe, focus-managed metadata on desktop and mobile", async ({ page }) => {
+  const usage = managementUsage("30d", {
+    requests: 22,
+    successful_requests: 12,
+    failed_requests: 10,
+    text_requests: 20,
+    dictation_requests: 2,
+  });
+  usage.status_codes = [
+    { status_code: 200, requests: 12 },
+    { status_code: 400, requests: 3 },
+    { status_code: 429, requests: 2 },
+    { status_code: 502, requests: 5 },
+  ];
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await installUsageResponse(page, httpOK, usage);
+  await installUsageFailuresResponse(page, managementUsageFailures("30d", 10));
+
+  await page.goto(baseURL);
+
+  const successRateCard = page.locator("usage-card").filter({ hasText: "Success rate" });
+  await expect(successRateCard.locator("strong")).toHaveText("55%");
+  const failureAction = successRateCard.getByRole("button", { name: "10 failed requests" });
+  await expect(failureAction).toBeVisible();
+  await failureAction.click();
+
+  const dialog = page.getByRole("dialog", { name: "Failed request details" });
+  const closeButton = dialog.getByRole("button", { name: "Close failed request details" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
+  await expect(dialog).toHaveAttribute("aria-busy", "false");
+  await expect(closeButton).toBeFocused();
+  await expect(dialog.getByRole("heading", { name: "Status breakdown" })).toBeVisible();
+  await expect(dialog.locator("usage-failure-status")).toHaveCount(3);
+  await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("400");
+  await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("Bad request");
+  await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("3");
+  await expect(dialog.locator("usage-failure-row")).toHaveCount(10);
+  await expect(dialog.locator("usage-failure-row").first()).toContainText("V2");
+  await expect(dialog.locator("usage-failure-row").first()).toContainText("502 Upstream error");
+  await expect(dialog.locator("usage-failure-row").first()).toContainText("Upstream error");
+  await expect(dialog.locator("usage-failure-row").first()).toContainText("245 ms");
+  await expect(dialog).not.toContainText("raw-provider-body");
+  await expect(dialog).not.toContainText("sk-never-render");
+  await expect(dialog).not.toContainText("private prompt");
+  const browserStorageText = await page.evaluate(() => {
+    const storageValues = [];
+    for (const storage of [localStorage, sessionStorage]) {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        storageValues.push(key || "", key ? storage.getItem(key) || "" : "");
+      }
+    }
+    return storageValues.join("\n");
+  });
+  expect(browserStorageText).not.toContain("raw-provider-body");
+  expect(browserStorageText).not.toContain("sk-never-render");
+  expect(browserStorageText).not.toContain("private prompt");
+
+  await closeButton.press("Tab");
+  await expect(closeButton).toBeFocused();
+
+  await page.setViewportSize({ width: 390, height: 780 });
+  const dialogBox = await dialog.boundingBox();
+  if (!dialogBox) {
+    throw new Error("usage_failures_dialog_missing");
+  }
+  expect(dialogBox.x).toBeGreaterThanOrEqual(0);
+  expect(dialogBox.y).toBeGreaterThanOrEqual(0);
+  expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(390);
+  expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(780);
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(failureAction).toBeFocused();
+});
+
+test("failed-request pagination preserves metrics across loading and retryable errors", async ({ page }) => {
+  const usage = managementUsage("30d", {
+    requests: 40,
+    successful_requests: 14,
+    failed_requests: 26,
+    text_requests: 38,
+    dictation_requests: 2,
+  });
+  usage.status_codes = [
+    { status_code: 200, requests: 14 },
+    { status_code: 502, requests: 26 },
+  ];
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await installUsageResponse(page, httpOK, usage);
+
+  /** @type {() => void} */
+  let releaseFirstPage = () => {};
+  const firstPageGate = new Promise((resolve) => {
+    releaseFirstPage = () => resolve(undefined);
+  });
+  let failFirstPage = false;
+  await page.route(usageFailuresRequestPattern(), async (route) => {
+    const requestURL = new URL(route.request().url());
+    if (failFirstPage) {
+      await route.fulfill({ status: httpInternalServerError, body: "raw-provider-body sk-never-render" });
+      return;
+    }
+    if (!requestURL.searchParams.has("cursor")) {
+      await firstPageGate;
+      await route.fulfill({ json: managementUsageFailures("30d", 25, "page-2") });
+      return;
+    }
+    expect(requestURL.searchParams.get("cursor")).toBe("page-2");
+    await route.fulfill({ json: managementUsageFailures("30d", 1, "", 25) });
+  });
+
+  await page.goto(baseURL);
+  await page.getByRole("button", { name: "26 failed requests" }).click();
+  const dialog = page.getByRole("dialog", { name: "Failed request details" });
+  await expect(dialog).toHaveAttribute("aria-busy", "true");
+  await expect(dialog.getByText("Loading failed requests")).toBeVisible();
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("40");
+
+  releaseFirstPage();
+  await expect(dialog.locator("usage-failure-row")).toHaveCount(25);
+  const loadMore = dialog.getByRole("button", { name: "Load more" });
+  await expect(loadMore).toBeVisible();
+  await loadMore.click();
+  await expect(dialog.locator("usage-failure-row")).toHaveCount(26);
+  await expect(loadMore).toBeHidden();
+
+  await dialog.getByRole("button", { name: "Close failed request details" }).click();
+  failFirstPage = true;
+  await page.getByRole("button", { name: "26 failed requests" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("Unable to load failed requests");
+  await expect(dialog).not.toContainText("raw-provider-body");
+  await expect(dialog).not.toContainText("sk-never-render");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("40");
+
+  failFirstPage = false;
+  await dialog.getByRole("button", { name: "Retry" }).click();
+  await expect(dialog.locator("usage-failure-row")).toHaveCount(25);
+});
+
+test("failed-request responses cannot cross interval or tenant workspace boundaries", async ({ page }) => {
+  await installAssetRoutes(page);
+  const routeState = await installMultiTenantRoutes(page, {
+    usageRequests: { tenant_1: 22, tenant_2: 7 },
+  });
+  /** @type {() => void} */
+  let releaseFailureResponse = () => {};
+  const failureResponseGate = new Promise((resolve) => {
+    releaseFailureResponse = () => resolve(undefined);
+  });
+  await page.route(usageFailuresRequestPattern(), async (route) => {
+    await failureResponseGate;
+    await route.fulfill({ json: managementUsageFailures("30d", 10) });
+  });
+
+  await page.goto(`${baseURL}?tenant=tenant_1`);
+  await page.getByRole("button", { name: "2 failed requests" }).click();
+  await expect(page.getByRole("dialog", { name: "Failed request details" })).toHaveAttribute("aria-busy", "true");
+
+  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+    const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+    const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+    if (!applicationState) {
+      throw new Error("usage_failures_state_missing");
+    }
+    void applicationState.selectUsageInterval("7d");
+  });
+  await expect(page.getByRole("dialog", { name: "Failed request details" })).toBeHidden();
+  await expect(page.getByRole("button", { name: /failed request/ })).toHaveCount(0);
+
+  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+    const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+    const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+    if (!applicationState) {
+      throw new Error("usage_failures_state_missing");
+    }
+    void applicationState.requestTenantSwitch("tenant_2", "push");
+  });
+  releaseFailureResponse();
+  await expect(page.getByRole("combobox", { name: "Active tenant" })).toHaveValue("tenant_2");
+  await expect(page.locator("tenant-context-identity code")).toHaveText("tenant_2");
+  await expect(page.getByRole("dialog", { name: "Failed request details" })).toBeHidden();
+  expect(routeState.requests.some((request) => request.path === "/api/management/tenants/tenant_2")).toBe(true);
 });
 
 test("provider selection autosaves its exact editor while transient removal stays local", async ({ page }) => {
@@ -893,7 +1477,7 @@ test("failed provider autosave preserves its editor and blocks provider switchin
   await expect(providerKeyInput).toHaveValue(editedProviderKey);
 });
 
-test("late provider autosave responses cannot repopulate a cleared session", async ({ page }) => {
+test("session cleanup cancels provider autosaves before they can repopulate state", async ({ page }) => {
   const lateProviderKey = "sk-anthropic-late-autosave";
   let releaseProviderSave;
   const providerSaveReleased = new Promise((resolve) => {
@@ -926,11 +1510,8 @@ test("late provider autosave responses cannot repopulate a cleared session", asy
     document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
   });
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
-  const providerSaveResponse = page.waitForResponse(
-    (response) => response.url() === providerKeyEndpointURL("anthropic") && response.request().method() === "PUT",
-  );
   releaseProviderSave();
-  await providerSaveResponse;
+  await page.waitForTimeout(50);
   await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Authentication required");
   await expect(page.locator("body")).not.toContainText(lateProviderKey);
   expect(await browserStorageContains(page, lateProviderKey)).toBe(false);
@@ -1199,7 +1780,7 @@ test("short saved provider keys use a generic mask", async ({ page }) => {
 test("routing defaults autosave complete provider and model pairs without a manual action", async ({ page }) => {
   const defaultsMutations = [];
   page.on("request", (request) => {
-    if (request.url() === `${baseURL}/api/management/defaults`) {
+    if (request.url() === `${baseURL}${managementDefaultTenantPath}/defaults`) {
       defaultsMutations.push(request.postDataJSON());
     }
   });
@@ -1264,7 +1845,7 @@ test("routing defaults autosave complete provider and model pairs without a manu
   await expect(page.locator("notification-region")).toHaveText("Defaults saved");
   await expect(defaultsForm).not.toHaveAttribute("aria-busy", "true");
 
-  const reloadedProfileResponse = page.waitForResponse(`${baseURL}/api/management/profile`);
+  const reloadedProfileResponse = page.waitForResponse(`${baseURL}${managementDefaultTenantPath}`);
   await page.reload();
   expect((await reloadedProfileResponse).status()).toBe(httpOK);
   expect(await (await reloadedProfileResponse).json()).toMatchObject({
@@ -1295,7 +1876,7 @@ test("routing-default autosave queues newer edits without resetting the provider
   });
   await installAssetRoutes(page);
   await installManagementRoutes(page, { providerKeys: { openai: revealedProviderKey } });
-  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
     defaultsMutations.push(route.request().postDataJSON());
     if (defaultsMutations.length === 1) {
       firstDefaultsSaveStarted();
@@ -1369,7 +1950,7 @@ test("provider and routing autosaves serialize whole-profile mutations in both d
     }
     await route.fallback();
   });
-  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
     defaultsMutations.push(route.request().postDataJSON());
     if (defaultsMutations.length === 2) {
       secondDefaultsSaveStarted();
@@ -1414,7 +1995,7 @@ test("provider and routing autosaves serialize whole-profile mutations in both d
   await expect(defaultTextProvider).toHaveValue("openai");
   await expect(page.locator("notification-region")).toHaveText("Provider settings saved");
 
-  const reloadedProfileResponse = page.waitForResponse(`${baseURL}/api/management/profile`);
+  const reloadedProfileResponse = page.waitForResponse(`${baseURL}${managementDefaultTenantPath}`);
   await page.reload();
   const reloadedProfile = await (await reloadedProfileResponse).json();
   expect(reloadedProfile.tenant.defaults).toMatchObject({ provider: "openai", model: "gpt-4.1" });
@@ -1435,7 +2016,7 @@ test("Settings close waits for the current routing-default autosave", async ({ p
   });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
-  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
     defaultsSaveStarted();
     await defaultsSaveReleased;
     await route.fallback();
@@ -1459,7 +2040,7 @@ test("failed routing-default autosave retains edits and blocks Settings close", 
   let defaultsSaveRequestCount = 0;
   await installAssetRoutes(page);
   await installManagementRoutes(page);
-  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
     defaultsSaveRequestCount += 1;
     await route.fulfill({ status: httpInternalServerError, body: "request_failed" });
   });
@@ -1484,7 +2065,7 @@ test("failed routing-default autosave retains edits and blocks Settings close", 
   await expect(textModel).toHaveValue("deepseek-chat");
 });
 
-test("late routing-default autosave responses cannot repopulate a cleared session", async ({ page }) => {
+test("session cleanup cancels routing-default autosaves before they can repopulate state", async ({ page }) => {
   let releaseDefaultsSave;
   const defaultsSaveReleased = new Promise((resolve) => {
     releaseDefaultsSave = resolve;
@@ -1495,7 +2076,7 @@ test("late routing-default autosave responses cannot repopulate a cleared sessio
   });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
-  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
     defaultsSaveStarted();
     await defaultsSaveReleased;
     await route.fallback();
@@ -1511,9 +2092,8 @@ test("late routing-default autosave responses cannot repopulate a cleared sessio
     document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
   });
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
-  const defaultsSaveResponse = page.waitForResponse(`${baseURL}/api/management/defaults`);
   releaseDefaultsSave();
-  await defaultsSaveResponse;
+  await page.waitForTimeout(50);
   await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Authentication required");
   await expect(page.locator('option[value="deepseek"]')).toHaveCount(0);
 });
@@ -1521,7 +2101,7 @@ test("late routing-default autosave responses cannot repopulate a cleared sessio
 test("reasoning effort is exact to the selected text route and the controls remain responsive", async ({ page }) => {
   const defaultsMutations = [];
   page.on("request", (request) => {
-    if (request.url() === `${baseURL}/api/management/defaults`) {
+    if (request.url() === `${baseURL}${managementDefaultTenantPath}/defaults`) {
       defaultsMutations.push(request.postDataJSON());
     }
   });
@@ -1604,7 +2184,7 @@ test("reasoning effort is exact to the selected text route and the controls rema
     expect(box.x + box.width).toBeLessThanOrEqual(390);
   }
 
-  const reloadedProfileResponse = page.waitForResponse(`${baseURL}/api/management/profile`);
+  const reloadedProfileResponse = page.waitForResponse(`${baseURL}${managementDefaultTenantPath}`);
   await page.reload();
   expect((await reloadedProfileResponse).status()).toBe(httpOK);
   await page.getByTestId("avatar-menu").click();
@@ -1636,7 +2216,7 @@ test("invalid persisted routing-default profiles become workspace integrity erro
 test("dashboard loads only after MPR UI authenticates the user", async ({ page }) => {
   const profileRequests = [];
   page.on("request", (request) => {
-    if (request.url() === `${baseURL}/api/management/profile`) {
+    if (request.url() === `${baseURL}${managementDefaultTenantPath}`) {
       profileRequests.push(request);
     }
   });
@@ -1650,14 +2230,14 @@ test("dashboard loads only after MPR UI authenticates the user", async ({ page }
   await page.evaluate(() => window.__llmProxyMprAuthenticate());
 
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
-  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("37");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
   expect(profileRequests).toHaveLength(1);
 });
 
 test("startup reconciles MPR UI authentication after the lifecycle event has passed", async ({ page }) => {
   const profileRequests = [];
   page.on("request", (request) => {
-    if (request.url() === `${baseURL}/api/management/profile`) {
+    if (request.url() === `${baseURL}${managementDefaultTenantPath}`) {
       profileRequests.push(request);
     }
   });
@@ -1706,10 +2286,10 @@ test("fresh authenticated users receive one client key and must add a provider k
   let defaultsRequestCount = 0;
   const providerMutations = [];
   page.on("request", (request) => {
-    if (request.url() === `${baseURL}/api/management/secrets` && request.method() === "POST") {
+    if (request.url() === `${baseURL}${managementDefaultTenantPath}/secrets` && request.method() === "POST") {
       secretRequestCount += 1;
     }
-    if (request.url() === `${baseURL}/api/management/defaults`) {
+    if (request.url() === `${baseURL}${managementDefaultTenantPath}/defaults`) {
       defaultsRequestCount += 1;
     }
     if (request.url() === providerKeyEndpointURL("openai") && request.method() === "PUT") {
@@ -1791,7 +2371,7 @@ test("fresh authenticated users receive one client key and must add a provider k
 test("configured users reach the dashboard without reopening Settings or generating a key", async ({ page }) => {
   let secretRequestCount = 0;
   page.on("request", (request) => {
-    if (request.url() === `${baseURL}/api/management/secrets` && request.method() === "POST") {
+    if (request.url() === `${baseURL}${managementDefaultTenantPath}/secrets` && request.method() === "POST") {
       secretRequestCount += 1;
     }
   });
@@ -1841,7 +2421,7 @@ test("failed automatic client-key creation stays locked and retries through Crea
   let secretRequestCount = 0;
   await installAssetRoutes(page);
   await installManagementRoutes(page, { hasSecret: false });
-  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/secrets`, async (route) => {
     secretRequestCount += 1;
     if (secretRequestCount === 1) {
       await route.fulfill({ status: httpInternalServerError, body: "request_failed" });
@@ -1888,7 +2468,7 @@ test("Settings remains locked while automatic client-key creation is pending", a
   });
   await installAssetRoutes(page);
   await installManagementRoutes(page, { hasSecret: false });
-  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/secrets`, async (route) => {
     generatedSecretRequested();
     await secretResponseReady;
     await route.fulfill({
@@ -1926,7 +2506,7 @@ test("Settings keeps a replacement client key available when close is requested 
   });
   await installAssetRoutes(page);
   await installManagementRoutes(page, { generatedSecret: replacementSecret });
-  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/secrets`, async (route) => {
     if (route.request().method() !== "POST") {
       await route.fallback();
       return;
@@ -1949,7 +2529,7 @@ test("Settings keeps a replacement client key available when close is requested 
   await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeDisabled();
 
   const replacementResponse = page.waitForResponse(
-    (response) => response.url() === `${baseURL}/api/management/secrets` && response.request().method() === "POST",
+    (response) => response.url() === `${baseURL}${managementDefaultTenantPath}/secrets` && response.request().method() === "POST",
   );
   releaseSecretReplacement();
   await replacementResponse;
@@ -1984,7 +2564,7 @@ test("pending revocation and last-provider removal enforce mandatory Settings be
   });
   await installAssetRoutes(page);
   await installManagementRoutes(page, { savedProviderIDs: ["openai"] });
-  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/secrets`, async (route) => {
     if (route.request().method() !== "DELETE") {
       await route.fallback();
       return;
@@ -2031,7 +2611,7 @@ test("pending revocation and last-provider removal enforce mandatory Settings be
   await expect(settingsDialog).toBeVisible();
 });
 
-test("late generated client keys cannot restore after session cleanup", async ({ page }) => {
+test("session cleanup cancels generated client keys before they can restore state", async ({ page }) => {
   const lateGeneratedSecret = "llmp_test_late_session_secret";
   const currentGeneratedSecret = "llmp_test_current_session_secret";
   let secretRequestCount = 0;
@@ -2045,7 +2625,7 @@ test("late generated client keys cannot restore after session cleanup", async ({
   });
   await installAssetRoutes(page);
   await installManagementRoutes(page, { hasSecret: false });
-  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/secrets`, async (route) => {
     secretRequestCount += 1;
     if (secretRequestCount > 1) {
       await route.fulfill({
@@ -2075,11 +2655,8 @@ test("late generated client keys cannot restore after session cleanup", async ({
     document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
   });
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
-  const generatedSecretResponse = page.waitForResponse(
-    (response) => response.url() === `${baseURL}/api/management/secrets` && response.request().method() === "POST",
-  );
   fulfillSecretResponse();
-  await generatedSecretResponse;
+  await page.waitForTimeout(50);
   await expect(page.locator("body")).not.toContainText(lateGeneratedSecret);
   expect(await browserStorageContains(page, lateGeneratedSecret)).toBe(false);
 
@@ -2384,7 +2961,7 @@ test("management notices auto-dismiss after ten seconds and replacement notices 
   const notificationRegion = page.locator("#llm-proxy-header notification-region");
   const notice = notificationRegion.locator(".notice");
   const refresh = page.getByRole("button", { name: "Refresh" });
-  const requests = page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong");
+  const requests = page.locator("usage-metrics usage-card").first().locator("strong");
   await expect(notice).toHaveText("Workspace loaded");
   await page.clock.fastForward(9_000);
   await expect(notificationRegion).toBeVisible();
@@ -2490,7 +3067,7 @@ test("settings stays reachable when usage summary fails", async ({ page }) => {
   await page.goto(baseURL);
 
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
-  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("0");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
   await expect(page.getByText("Request failed")).toBeVisible();
 
   await page.getByTestId("avatar-menu").click();
@@ -2504,7 +3081,7 @@ test("usage refresh clears stale metrics when summary reload fails", async ({ pa
 
   await page.goto(baseURL);
 
-  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("37");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
   await page.unroute(usageRequestPattern());
   await page.route(usageRequestPattern(), async (route) => {
     await route.fulfill({ status: httpInternalServerError, json: { error: "usage_failed" } });
@@ -2512,7 +3089,7 @@ test("usage refresh clears stale metrics when summary reload fails", async ({ pa
   await page.getByRole("button", { name: "Refresh" }).click();
 
   await expect(page.getByText("Request failed")).toBeVisible();
-  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("0");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
   await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
 });
 
@@ -2529,10 +3106,18 @@ test("admin menu opens all users dashboard", async ({ page }) => {
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
   await expect(page.getByRole("heading", { name: "All users" })).toBeVisible();
-  await expect(page.locator("admin-user-card").filter({ hasText: "owner@example.com" })).toContainText("37");
+  const ownerCard = page.locator("admin-user-card").filter({ hasText: "owner@example.com" });
+  await expect(ownerCard).toContainText("2 tenants");
+  await expect(ownerCard.locator("admin-tenant-card")).toHaveCount(2);
+  await expect(ownerCard).toContainText("Default");
+  await expect(ownerCard).toContainText("Research");
+  await expect(ownerCard).toContainText("37");
+  await expect(ownerCard).toContainText("5");
   await expect(page.locator("admin-user-card").filter({ hasText: "teammate@example.com" })).toContainText("0");
   await expect(page.locator("admin-dashboard")).not.toContainText("sk-");
   await expect(page.locator("admin-dashboard")).not.toContainText("masked_key");
+  await expect(page.getByRole("button", { name: /failed request/ })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Failed request details" })).toHaveCount(0);
 });
 
 /**
@@ -2591,6 +3176,20 @@ async function installClipboardMock(page) {
  */
 async function copiedText(page) {
   return page.evaluate(() => window.__llmProxyCopiedText || "");
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {string} tenantID
+ * @returns {Promise<void>}
+ */
+async function navigateTenantHistory(page, tenantID) {
+  await page.evaluate((selectedTenantID) => {
+    const tenantURL = new URL(window.location.href);
+    tenantURL.searchParams.set("tenant", selectedTenantID);
+    window.history.pushState({}, "", tenantURL);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, tenantID);
 }
 
 /**
@@ -2854,7 +3453,232 @@ async function installUsageResponse(page, status, usage = managementUsage("30d")
  * @returns {string}
  */
 function usageRequestPattern() {
-  return `${baseURL}/api/management/usage?interval=*`;
+  return `${baseURL}/api/management/tenants/*/usage?interval=*`;
+}
+
+/**
+ * @returns {string}
+ */
+function usageFailuresRequestPattern() {
+  return `${baseURL}/api/management/tenants/*/usage/failures?*`;
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {object} response
+ * @returns {Promise<void>}
+ */
+async function installUsageFailuresResponse(page, response) {
+  await page.route(usageFailuresRequestPattern(), async (route) => {
+    const requestURL = new URL(route.request().url());
+    expect(requestURL.searchParams.get("interval")).toBe(response.interval);
+    expect(requestURL.searchParams.get("limit")).toBe("25");
+    expect(requestURL.searchParams.getAll("interval")).toHaveLength(1);
+    expect(requestURL.searchParams.getAll("limit")).toHaveLength(1);
+    await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: response });
+  });
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {{ profiles?: object[], usageRequests?: Record<string, number>, admin?: boolean }} [options]
+ * @returns {Promise<{
+ *   order: string[],
+ *   profiles: Map<string, any>,
+ *   providerKeys: Map<string, Record<string, string>>,
+ *   requests: Array<{ method: string, path: string }>
+ * }>}
+ */
+async function installMultiTenantRoutes(page, options = {}) {
+  const initialProfiles = options.profiles || [
+    managementTenantProfile("tenant_1", "Default"),
+    managementTenantProfile("tenant_2", "Research"),
+  ];
+  const state = {
+    order: initialProfiles.map((profile) => profile.tenant.id),
+    profiles: new Map(initialProfiles.map((profile) => [profile.tenant.id, profile])),
+    providerKeys: new Map(initialProfiles.map((profile) => [
+      profile.tenant.id,
+      {
+        openai: `sk-${profile.tenant.id}-openai`,
+        deepseek: `sk-${profile.tenant.id}-deepseek`,
+        meta: `sk-${profile.tenant.id}-meta`,
+      },
+    ])),
+    requests: [],
+  };
+  let createdTenantSequence = initialProfiles.length + 1;
+  const tenantRoutePattern = new RegExp(`${baseURL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/api/management/tenants/[^/]+(?:/.*)?$`);
+
+  await page.route(tenantRoutePattern, async (route) => {
+    const request = route.request();
+    const requestURL = new URL(request.url());
+    const path = requestURL.pathname;
+    state.requests.push({ method: request.method(), path });
+    const relativePath = path.slice("/api/management/tenants/".length);
+    const [tenantID, resource, providerID, action] = relativePath.split("/");
+    const profile = state.profiles.get(tenantID);
+    if (!profile) {
+      await route.fulfill({ status: 404 });
+      return;
+    }
+    if (!resource) {
+      if (request.method() === "GET") {
+        await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+        return;
+      }
+      if (request.method() === "PUT") {
+        const { name } = request.postDataJSON();
+        if (state.order.some((candidateID) => (
+          candidateID !== tenantID &&
+          state.profiles.get(candidateID).tenant.name.toLocaleLowerCase("en-US") === String(name).trim().toLocaleLowerCase("en-US")
+        ))) {
+          await route.fulfill({ status: 409, body: "managed_tenant_name_conflict" });
+          return;
+        }
+        profile.tenant.name = String(name).trim();
+        profile.tenant.updated_at = "2026-07-25T12:00:00Z";
+        await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+        return;
+      }
+      if (request.method() === "DELETE") {
+        if (state.order.length === 1) {
+          await route.fulfill({ status: 409, body: "managed_final_tenant_deletion" });
+          return;
+        }
+        state.order = state.order.filter((candidateID) => candidateID !== tenantID);
+        state.profiles.delete(tenantID);
+        state.providerKeys.delete(tenantID);
+        await route.fulfill({ status: 204, body: "" });
+        return;
+      }
+    }
+    if (resource === "usage" && !providerID && request.method() === "GET") {
+      const interval = requestURL.searchParams.get("interval") || "";
+      await route.fulfill({
+        json: managementUsage(interval, {
+          requests: options.usageRequests?.[tenantID] ?? (tenantID === "tenant_1" ? 37 : 7),
+        }),
+      });
+      return;
+    }
+    if (resource === "secrets") {
+      if (request.method() === "POST") {
+        profile.tenant.has_secret = true;
+        await route.fulfill({
+          headers: { "Cache-Control": "no-store" },
+          json: { secret: `llmp_${tenantID}_generated`, profile },
+        });
+        return;
+      }
+      if (request.method() === "DELETE") {
+        profile.tenant.has_secret = false;
+        await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+        return;
+      }
+    }
+    if (resource === "defaults" && request.method() === "PUT") {
+      profile.tenant.defaults = request.postDataJSON();
+      await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+      return;
+    }
+    if (resource === "provider-keys") {
+      const provider = profile.providers.find((candidateProvider) => candidateProvider.id === providerID);
+      if (!provider) {
+        await route.fulfill({ status: 404 });
+        return;
+      }
+      const providerKeys = state.providerKeys.get(tenantID);
+      if (action === "reveal" && request.method() === "POST") {
+        if (!provider.has_key || !providerKeys[providerID]) {
+          await route.fulfill({ status: 404 });
+          return;
+        }
+        await route.fulfill({
+          headers: { "Cache-Control": "no-store" },
+          json: { api_key: providerKeys[providerID] },
+        });
+        return;
+      }
+      if (!action && request.method() === "PUT") {
+        const settings = request.postDataJSON();
+        if (settings.api_key) {
+          providerKeys[providerID] = settings.api_key;
+        }
+        provider.has_key = true;
+        provider.masked_key = "saved";
+        provider.text_model = settings.text_model;
+        provider.system_prompt = settings.system_prompt;
+        await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+        return;
+      }
+      if (!action && request.method() === "DELETE") {
+        delete providerKeys[providerID];
+        provider.has_key = false;
+        delete provider.masked_key;
+        await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+        return;
+      }
+    }
+    await route.fulfill({ status: httpInternalServerError });
+  });
+
+  await page.route(`${baseURL}/api/management/tenants`, async (route) => {
+    const request = route.request();
+    state.requests.push({ method: request.method(), path: new URL(request.url()).pathname });
+    if (request.method() !== "POST") {
+      await route.fulfill({ status: 405 });
+      return;
+    }
+    const name = String(request.postDataJSON().name || "").trim();
+    if (state.order.some((tenantID) => (
+      state.profiles.get(tenantID).tenant.name.toLocaleLowerCase("en-US") === name.toLocaleLowerCase("en-US")
+    ))) {
+      await route.fulfill({ status: 409, body: "managed_tenant_name_conflict" });
+      return;
+    }
+    const tenantID = `tenant_${createdTenantSequence}`;
+    createdTenantSequence += 1;
+    const profile = managementTenantProfile(tenantID, name, false);
+    for (const provider of profile.providers) {
+      provider.has_key = false;
+      delete provider.masked_key;
+    }
+    state.order.push(tenantID);
+    state.profiles.set(tenantID, profile);
+    state.providerKeys.set(tenantID, {});
+    await route.fulfill({ status: 201, headers: { "Cache-Control": "no-store" }, json: profile });
+  });
+
+  await page.route(`${baseURL}/api/management/account`, async (route) => {
+    state.requests.push({ method: route.request().method(), path: new URL(route.request().url()).pathname });
+    await route.fulfill({
+      headers: { "Cache-Control": "no-store" },
+      json: {
+        user: {
+          id: "user_1",
+          email: "owner@example.com",
+          display_name: "Owner",
+          is_admin: options.admin || false,
+        },
+        tenants: state.order.map((tenantID) => {
+          const tenant = state.profiles.get(tenantID).tenant;
+          return {
+            id: tenant.id,
+            name: tenant.name,
+            has_secret: tenant.has_secret,
+            created_at: tenant.created_at,
+            updated_at: tenant.updated_at,
+          };
+        }),
+      },
+    });
+  });
+
+  await page.route(`${baseURL}/api/management/admin/users`, async (route) => {
+    await route.fulfill({ json: managementAdminUsers() });
+  });
+  return state;
 }
 
 /**
@@ -2903,7 +3727,27 @@ async function installManagementRoutes(page, options = {}) {
     });
     profile.tenant.defaults.provider = "anthropic";
   }
-  await page.route(`${baseURL}/api/management/profile`, async (route) => {
+  await page.route(`${baseURL}/api/management/account`, async (route) => {
+    await route.fulfill({
+      headers: { "Cache-Control": "no-store" },
+      json: {
+        user: {
+          id: "user_1",
+          email: "owner@example.com",
+          display_name: "Owner",
+          is_admin: options.admin || false,
+        },
+        tenants: [{
+          id: profile.tenant.id,
+          name: profile.tenant.name,
+          has_secret: profile.tenant.has_secret,
+          created_at: profile.tenant.created_at,
+          updated_at: profile.tenant.updated_at,
+        }],
+      },
+    });
+  });
+  await page.route(`${baseURL}${managementDefaultTenantPath}`, async (route) => {
     const profileStatus = profileStatuses.length > 0 ? profileStatuses.shift() : options.profileStatus;
     if (profileStatus && profileStatus !== httpOK) {
       await route.fulfill({ status: profileStatus, body: options.profileError || "authentication_required" });
@@ -2923,7 +3767,7 @@ async function installManagementRoutes(page, options = {}) {
   await page.route(`${baseURL}/api/management/admin/users`, async (route) => {
     await route.fulfill({ json: managementAdminUsers() });
   });
-  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/secrets`, async (route) => {
     if (route.request().method() === "POST") {
       profile.tenant.has_secret = true;
       await route.fulfill({
@@ -2938,7 +3782,7 @@ async function installManagementRoutes(page, options = {}) {
     profile.tenant.has_secret = false;
     await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
   });
-	await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+	await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
     const defaults = /** @type {typeof profile.tenant.defaults} */ (route.request().postDataJSON());
     profile.tenant.defaults = defaults;
 		await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
@@ -3032,6 +3876,11 @@ async function staticSiteHandler(request, response) {
     response.end(`llmProxy:\n  managementApiOrigin: ${baseURL}\n  proxyOrigin: ${baseURL}\n`);
     return;
   }
+  if (requestURL.pathname === openAPIPath) {
+    response.writeHead(200, { "Content-Type": mimeTypes[".yaml"] });
+    createReadStream(canonicalOpenAPIFile).pipe(response);
+    return;
+  }
 
   const routePath =
     requestURL.pathname === "/" || requestURL.pathname.endsWith("/")
@@ -3068,15 +3917,12 @@ async function staticSiteHandler(request, response) {
  */
 function managementProfile(isAdmin = false, hasSecret = true) {
   return {
-    user: {
-      id: "user_1",
-      email: "owner@example.com",
-      display_name: "Owner",
-      is_admin: isAdmin,
-    },
     tenant: {
       id: "tenant_1",
+      name: "Default",
       has_secret: hasSecret,
+      created_at: "2026-07-01T00:00:00Z",
+      updated_at: "2026-07-01T00:00:00Z",
       defaults: {
         provider: "openai",
         model: "gpt-4.1",
@@ -3200,6 +4046,19 @@ function managementProfile(isAdmin = false, hasSecret = true) {
 }
 
 /**
+ * @param {string} tenantID
+ * @param {string} name
+ * @param {boolean} [hasSecret]
+ * @returns {object}
+ */
+function managementTenantProfile(tenantID, name, hasSecret = true) {
+  const profile = managementProfile(false, hasSecret);
+  profile.tenant.id = tenantID;
+  profile.tenant.name = name;
+  return profile;
+}
+
+/**
  * @returns {object}
  */
 function managementAdminUsers() {
@@ -3213,13 +4072,33 @@ function managementAdminUsers() {
           display_name: "Owner",
           is_admin: true,
         },
-        tenant: {
-          id: "tenant_1",
-          has_secret: true,
-          created_at: "2026-06-01T00:00:00Z",
-          updated_at: "2026-06-29T00:00:00Z",
-        },
-        usage: managementAdminUsage(),
+        tenant_count: 2,
+        tenants: [
+          {
+            id: "tenant_1",
+            name: "Default",
+            has_secret: true,
+            created_at: "2026-06-01T00:00:00Z",
+            updated_at: "2026-06-29T00:00:00Z",
+            usage: managementAdminUsage(),
+          },
+          {
+            id: "tenant_3",
+            name: "Research",
+            has_secret: false,
+            created_at: "2026-06-15T00:00:00Z",
+            updated_at: "2026-06-20T00:00:00Z",
+            usage: {
+              ...managementAdminUsage(),
+              totals: usageAggregate({
+                requests: 5,
+                successful_requests: 4,
+                failed_requests: 1,
+                total_tokens: 500,
+              }),
+            },
+          },
+        ],
       },
       {
         user: {
@@ -3228,19 +4107,21 @@ function managementAdminUsers() {
           display_name: "Teammate",
           is_admin: false,
         },
-        tenant: {
+        tenant_count: 1,
+        tenants: [{
           id: "tenant_2",
+          name: "Default",
           has_secret: false,
           created_at: "2026-06-10T00:00:00Z",
           updated_at: "2026-06-10T00:00:00Z",
-        },
-        usage: {
-          ...managementAdminUsage(),
-          totals: usageAggregate(),
-          providers: [],
-          models: [],
-          status_codes: [],
-        },
+          usage: {
+            ...managementAdminUsage(),
+            totals: usageAggregate(),
+            providers: [],
+            models: [],
+            status_codes: [],
+          },
+        }],
       },
     ],
   };
@@ -3331,6 +4212,85 @@ function managementUsage(interval = "30d", totalOverrides = {}) {
       { status_code: 200, requests: isDefaultInterval ? 35 : intervalFixture.requests },
       ...(isDefaultInterval ? [{ status_code: 502, requests: 2 }] : []),
     ],
+  };
+}
+
+/**
+ * @param {string} interval
+ * @param {number} count
+ * @param {string} [nextCursor]
+ * @param {number} [offset]
+ * @returns {object}
+ */
+function managementUsageFailures(interval, count, nextCursor = "", offset = 0) {
+  const failureTemplates = [
+    {
+      endpoint: "v2",
+      provider: "openai",
+      model: "gpt-4.1",
+      status_code: 502,
+      outcome_code: "upstream_error",
+      latency_ms: 245,
+    },
+    {
+      endpoint: "text",
+      provider: "",
+      model: "",
+      status_code: 400,
+      outcome_code: "invalid_request",
+      latency_ms: 3,
+    },
+    {
+      endpoint: "dictation",
+      provider: "openai",
+      model: "gpt-4o-mini-transcribe",
+      status_code: 429,
+      outcome_code: "rate_limited",
+      latency_ms: 81,
+    },
+    {
+      endpoint: "v2",
+      provider: "meta",
+      model: "muse-spark-1.1",
+      status_code: 503,
+      outcome_code: "service_unavailable",
+      latency_ms: 9,
+    },
+    {
+      endpoint: "text",
+      provider: "deepseek",
+      model: "deepseek-chat",
+      status_code: 504,
+      outcome_code: "request_timeout",
+      latency_ms: 1_000,
+    },
+    {
+      endpoint: "v2",
+      provider: "openai",
+      model: "gpt-4.1",
+      status_code: 413,
+      outcome_code: "payload_too_large",
+      latency_ms: 2,
+    },
+  ];
+  const failures = Array.from({ length: count }, (_, index) => {
+    const template = failureTemplates[(offset + index) % failureTemplates.length];
+    return {
+      occurred_at: new Date(Date.UTC(2026, 6, 25, 12, 0, 0) - ((offset + index) * 1_000)).toISOString(),
+      ...template,
+      ...(index === 0 && offset === 0
+        ? {
+            provider_error: "raw-provider-body",
+            credential: "sk-never-render",
+            prompt: "private prompt",
+          }
+        : {}),
+    };
+  });
+  return {
+    interval,
+    failures,
+    ...(nextCursor ? { next_cursor: nextCursor } : {}),
   };
 }
 

@@ -175,7 +175,7 @@ case "${arguments}" in
   *"http://127.0.0.1:8082/auth/session"*)
     status=204
     ;;
-  *"http://127.0.0.1:8080/api/management/profile"*)
+  *"http://127.0.0.1:8080/api/management/account"*)
     status=401
     builtin printf '%s\n' ready >"${CURL_READY_CAPTURE:?}"
     ;;
@@ -280,7 +280,7 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		"http://127.0.0.1:4179/config-ui.yaml",
 		"http://127.0.0.1:8080/?prompt=ready",
 		"http://127.0.0.1:8082/auth/session",
-		"http://127.0.0.1:8080/api/management/profile",
+		"http://127.0.0.1:8080/api/management/account",
 	} {
 		if !strings.Contains(string(curlArguments), expectedURL) {
 			testingInstance.Fatalf("make up did not verify %s: %s", expectedURL, curlArguments)
@@ -338,7 +338,6 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		"LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY",
 		"LLM_PROXY_MANAGEMENT_API_ORIGIN",
 		"LLM_PROXY_MANAGEMENT_PROXY_ORIGIN",
-		"LLM_PROXY_MANAGEMENT_LEGACY_TOKEN_OWNER_EMAIL",
 	})
 	assertOperationalEnvironmentKeys(testingInstance, filepath.Join(fixtureRoot, "configs", ".env.tauth.local"), []string{
 		"TAUTH_CONFIG_FILE",
