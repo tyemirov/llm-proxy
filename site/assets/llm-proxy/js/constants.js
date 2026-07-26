@@ -41,6 +41,32 @@ export const USAGE_INTERVALS = Object.freeze([
 ]);
 
 export const DEFAULT_USAGE_INTERVAL = "30d";
+export const USAGE_FAILURE_PAGE_LIMIT = 25;
+
+export const USAGE_ENDPOINT_LABELS = Object.freeze({
+  text: "Text",
+  v2: "V2",
+  dictation: "Dictation",
+});
+
+export const USAGE_OUTCOME_LABELS = Object.freeze({
+  success: "Success",
+  invalid_request: "Invalid request",
+  payload_too_large: "Payload too large",
+  rate_limited: "Rate limited",
+  service_unavailable: "Service unavailable",
+  request_timeout: "Request timeout",
+  upstream_error: "Upstream error",
+});
+
+export const USAGE_STATUS_LABELS = Object.freeze({
+  400: "Bad request",
+  413: "Payload too large",
+  429: "Rate limited",
+  502: "Upstream error",
+  503: "Service unavailable",
+  504: "Request timeout",
+});
 
 export const WORKSPACE_INTEGRITY_ERROR = "workspace_integrity_error";
 export const ROUTING_DEFAULTS_INVALID_ERROR = "managed_routing_defaults_invalid";
@@ -79,6 +105,32 @@ export const COPY = Object.freeze({
   signedOutTitle: "Sign in to manage LLM Proxy keys",
   profileErrorEyebrow: "Workspace",
   profileErrorTitle: "Unable to load key workspace",
+  tenantSwitcherLabel: "Active tenant",
+  tenantID: "Tenant ID",
+  createTenant: "Create tenant",
+  createTenantTitle: "Create tenant",
+  tenantName: "Tenant name",
+  tenantNameHint: "Use 1–80 visible characters. Names must be unique in your account.",
+  tenantNameInvalid: "Enter a tenant name with 1–80 visible characters.",
+  tenantNameConflict: "A tenant with that name already exists.",
+  cancelCreateTenant: "Cancel",
+  confirmCreateTenant: "Create",
+  renameTenant: "Rename tenant",
+  saveTenantName: "Save name",
+  deleteTenant: "Delete tenant",
+  deleteTenantTitle: "Delete tenant?",
+  deleteTenantDescription: "This permanently deletes the tenant, its client key, provider settings, and usage history.",
+  deleteTenantConfirmation: "Delete",
+  cancelDeleteTenant: "Cancel",
+  finalTenantDeletion: "Your final tenant cannot be deleted.",
+  discardTenantChangesTitle: "Discard unsaved changes?",
+  discardTenantChangesDescription: "Switching tenants discards unsaved Settings edits.",
+  stayOnTenant: "Stay",
+  discardAndSwitchTenant: "Discard and switch",
+  invalidTenantURL: "The tenant in this URL is unavailable.",
+  tenantCreated: "Tenant created",
+  tenantRenamed: "Tenant renamed",
+  tenantDeleted: "Tenant deleted",
   dashboardEyebrow: "Dashboard",
   dashboardTitle: "Usage overview",
   adminDashboardEyebrow: "Admin",
@@ -96,6 +148,23 @@ export const COPY = Object.freeze({
   usageByModel: "Model usage",
   usageInterval: "Usage interval",
   usageEmpty: "No usage recorded",
+  usageFailuresTitle: "Failed request details",
+  usageFailuresDescription: "Failure metadata for the selected tenant and usage interval. Prompts, responses, provider errors, and credentials are never included.",
+  usageFailuresStatusBreakdown: "Status breakdown",
+  usageFailuresOccurredAt: "Occurred",
+  usageFailuresEndpoint: "Endpoint",
+  usageFailuresProvider: "Provider",
+  usageFailuresModel: "Model",
+  usageFailuresStatus: "Status",
+  usageFailuresOutcome: "Outcome",
+  usageFailuresLatency: "Latency",
+  usageFailuresNotResolved: "Not resolved",
+  usageFailuresLoading: "Loading failed requests",
+  usageFailuresEmpty: "No failed requests in this interval",
+  usageFailuresError: "Unable to load failed requests",
+  usageFailuresRetry: "Retry",
+  usageFailuresLoadMore: "Load more",
+  closeUsageFailures: "Close failed request details",
   adminEmpty: "No managed users",
   adminTenant: "Tenant",
   adminSecret: "Secret",

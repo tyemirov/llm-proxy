@@ -43,9 +43,14 @@ llm-proxy-key-management textarea {
 
 llm-proxy-key-management,
 workspace-surface,
+tenant-context-bar,
+tenant-switcher,
+tenant-context-identity,
 client-access-row,
 client-access-key,
+client-access-tenant,
 client-key-row,
+tenant-settings-actions,
 defaults-editor,
 dashboard-actions,
 usage-dashboard,
@@ -57,9 +62,17 @@ usage-breakdown,
 usage-row-list,
 usage-row,
 usage-bar,
+usage-failures-overlay,
+usage-failures-dialog,
+usage-failures-body,
+usage-failure-status-list,
+usage-failure-status,
+usage-failure-list,
+usage-failure-row,
 admin-dashboard,
 admin-user-list,
 admin-user-card,
+admin-tenant-card,
 example-list,
 request-example,
 provider-editor,
@@ -68,11 +81,102 @@ provider-key-field,
 provider-key-input,
 provider-removal-overlay,
 provider-removal-dialog,
+tenant-delete-overlay,
+tenant-delete-dialog,
+tenant-dialog-overlay,
+tenant-dialog,
 settings-overlay,
 settings-modal,
 settings-body,
 settings-section {
   display: block;
+}
+
+tenant-context-bar {
+  width: min(960px, calc(100vw - 24px));
+  box-sizing: border-box;
+  margin: 0.5rem auto 0;
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-panel-strong);
+  padding: 0.55rem 0.65rem;
+}
+
+tenant-switcher {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(10rem, 1.5fr) auto;
+  align-items: end;
+  gap: 0.6rem;
+}
+
+tenant-switcher label {
+  display: grid;
+  gap: 0.2rem;
+}
+
+tenant-switcher .eyebrow {
+  margin: 0;
+}
+
+tenant-context-identity {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+  color: var(--llm-muted);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+tenant-context-identity code {
+  overflow: hidden;
+  color: var(--llm-subtle);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+tenant-context-bar select,
+tenant-context-bar button {
+  min-height: 32px;
+  box-sizing: border-box;
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-bg);
+  color: var(--llm-text);
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+tenant-context-bar select {
+  width: 100%;
+  padding: 0.38rem 0.5rem;
+}
+
+tenant-context-bar button {
+  cursor: pointer;
+  padding: 0 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+tenant-context-bar button:hover:not(:disabled) {
+  border-color: var(--llm-accent);
+}
+
+tenant-context-bar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+tenant-context-bar select:focus-visible,
+tenant-context-bar button:focus-visible {
+  outline: 2px solid var(--llm-accent);
+  outline-offset: 2px;
 }
 
 #llm-proxy-header .mpr-header__actions {
@@ -279,6 +383,24 @@ usage-card strong {
   line-height: 1;
 }
 
+.usage-failure-action {
+  min-height: 0;
+  justify-self: start;
+  border: 0;
+  background: transparent;
+  color: var(--llm-danger);
+  padding: 0;
+  font-size: 0.7rem;
+  text-decoration: underline;
+  text-underline-offset: 0.16rem;
+}
+
+llm-proxy-key-management .usage-failure-action:hover:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+  color: #ff8177;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -408,6 +530,27 @@ admin-user-card header span {
   font-size: 0.68rem;
 }
 
+admin-tenant-card {
+  display: grid;
+  gap: 0.45rem;
+  border-top: 1px solid var(--llm-border);
+  padding-top: 0.55rem;
+}
+
+admin-tenant-card header h3,
+admin-tenant-card header code {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+admin-tenant-card header code {
+  color: var(--llm-muted);
+  font-size: 0.68rem;
+}
+
 .admin-user-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -490,6 +633,45 @@ h3 {
   margin-bottom: 0.15rem;
   font-size: 0.86rem;
   font-weight: 600;
+}
+
+client-access-tenant {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.3rem 0.55rem;
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-panel-strong);
+  padding: 0.55rem 0.65rem;
+}
+
+client-access-tenant > label,
+client-access-tenant > .field-hint,
+client-access-tenant > .field-error {
+  grid-column: 1;
+}
+
+client-access-tenant > .field-hint,
+client-access-tenant > .field-error {
+  margin: 0;
+  font-size: 0.7rem;
+}
+
+.field-hint {
+  color: var(--llm-muted);
+}
+
+.field-error {
+  color: #ff8177;
+}
+
+tenant-settings-actions {
+  display: flex;
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  align-self: end;
+  gap: 0.4rem;
 }
 
 client-access-row {
@@ -658,6 +840,14 @@ llm-proxy-key-management button:disabled {
   opacity: 0.52;
 }
 
+llm-proxy-key-management button:focus-visible,
+llm-proxy-key-management input:focus-visible,
+llm-proxy-key-management select:focus-visible,
+llm-proxy-key-management textarea:focus-visible {
+  outline: 2px solid var(--llm-accent);
+  outline-offset: 2px;
+}
+
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -808,6 +998,7 @@ provider-settings-fields > label select,
   font-size: 0.65rem;
 }
 
+usage-failures-overlay,
 settings-overlay {
   position: fixed;
   inset: 0;
@@ -818,6 +1009,148 @@ settings-overlay {
   box-sizing: border-box;
   background: rgba(8, 10, 12, 0.78);
   padding: 0.75rem;
+}
+
+usage-failures-dialog {
+  display: flex;
+  width: min(900px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--llm-border-strong);
+  border-radius: 8px;
+  background: var(--llm-panel-strong);
+  box-shadow: var(--llm-shadow);
+}
+
+.usage-failures-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--llm-border);
+  padding: 0.75rem 0.85rem;
+}
+
+.usage-failures-header .eyebrow,
+.usage-failures-header h2 {
+  margin: 0;
+}
+
+.usage-failures-header h2 {
+  font-size: 1rem;
+}
+
+usage-failures-body {
+  display: grid;
+  gap: 0.65rem;
+  overflow: auto;
+  padding: 0.75rem 0.85rem;
+}
+
+.usage-failures-description,
+.usage-failures-loading,
+.usage-failures-empty,
+.usage-failures-error p {
+  margin: 0;
+  color: var(--llm-muted);
+  font-size: 0.78rem;
+}
+
+.usage-failure-statuses {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.usage-failure-statuses h3 {
+  margin: 0;
+  font-size: 0.72rem;
+}
+
+usage-failure-status-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+usage-failure-status {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(204, 75, 75, 0.4);
+  border-radius: 999px;
+  background: rgba(204, 75, 75, 0.08);
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
+}
+
+usage-failure-status span {
+  color: var(--llm-subtle);
+}
+
+usage-failure-status b {
+  color: var(--llm-danger);
+}
+
+.usage-failures-loading,
+.usage-failures-empty,
+.usage-failures-error {
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-panel);
+  padding: 0.6rem;
+}
+
+.usage-failures-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  border-color: rgba(204, 75, 75, 0.5);
+}
+
+usage-failure-list {
+  display: grid;
+  gap: 0.4rem;
+}
+
+usage-failure-row {
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-panel);
+  padding: 0.5rem;
+}
+
+usage-failure-row dl {
+  display: grid;
+  grid-template-columns: 1.6fr 0.65fr 0.9fr 1.2fr 1fr 1fr 0.7fr;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+usage-failure-row dl > div {
+  min-width: 0;
+}
+
+usage-failure-row dt {
+  color: var(--llm-muted);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+usage-failure-row dd {
+  margin: 0.1rem 0 0;
+  color: var(--llm-subtle);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+
+.usage-failures-footer {
+  display: flex;
+  justify-content: center;
 }
 
 settings-modal {
@@ -832,7 +1165,9 @@ settings-modal {
   box-shadow: var(--llm-shadow);
 }
 
-provider-removal-overlay {
+provider-removal-overlay,
+tenant-delete-overlay,
+tenant-dialog-overlay {
   position: fixed;
   inset: 0;
   z-index: calc(var(--llm-z-settings-overlay) + 1);
@@ -844,7 +1179,13 @@ provider-removal-overlay {
   padding: 0.75rem;
 }
 
-provider-removal-dialog {
+tenant-dialog-overlay {
+  z-index: calc(var(--llm-z-settings-overlay) + 2);
+}
+
+provider-removal-dialog,
+tenant-delete-dialog,
+tenant-dialog {
   display: grid;
   width: min(420px, calc(100vw - 24px));
   gap: 0.65rem;
@@ -856,13 +1197,40 @@ provider-removal-dialog {
 }
 
 provider-removal-dialog h3,
-provider-removal-dialog p {
+provider-removal-dialog p,
+tenant-delete-dialog h3,
+tenant-delete-dialog p,
+tenant-dialog h2,
+tenant-dialog p {
   margin-bottom: 0;
 }
 
-provider-removal-dialog p {
+provider-removal-dialog p,
+tenant-delete-dialog p,
+tenant-dialog p {
   color: var(--llm-muted);
   font-size: 0.78rem;
+}
+
+tenant-delete-dialog p {
+  display: grid;
+  gap: 0.25rem;
+}
+
+tenant-delete-dialog p strong {
+  color: var(--llm-text);
+  overflow-wrap: anywhere;
+}
+
+tenant-dialog form {
+  display: grid;
+  gap: 0.65rem;
+}
+
+tenant-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
 }
 
 .provider-removal-actions {
@@ -1023,6 +1391,22 @@ settings-section,
     padding-top: 0.55rem;
   }
 
+  tenant-context-bar {
+    width: min(100% - 18px, 960px);
+  }
+
+  tenant-switcher {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  tenant-switcher label {
+    grid-column: 1 / -1;
+  }
+
+  tenant-context-identity {
+    align-self: center;
+  }
+
   .llm-grid,
   usage-metrics,
   .dashboard-grid,
@@ -1065,6 +1449,30 @@ settings-section,
     padding: 11px;
   }
 
+  usage-failures-overlay {
+    align-items: stretch;
+    padding: 11px;
+  }
+
+  usage-failures-dialog {
+    width: 100%;
+    max-height: calc(100dvh - 22px);
+  }
+
+  usage-failure-row dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  usage-failure-row dl > div:first-child,
+  usage-failure-row dl > div:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+
+  .usage-failures-error {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   settings-modal {
     width: 100%;
     max-height: calc(100dvh - 22px);
@@ -1072,6 +1480,22 @@ settings-section,
 
   settings-body {
     padding: 0.55rem;
+  }
+
+  client-access-tenant {
+    grid-template-columns: 1fr;
+  }
+
+  client-access-tenant > label,
+  client-access-tenant > .field-hint,
+  client-access-tenant > .field-error,
+  tenant-settings-actions {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  tenant-settings-actions {
+    flex-wrap: wrap;
   }
 
   .settings-form-wide {

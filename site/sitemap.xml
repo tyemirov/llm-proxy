@@ -6,7 +6,11 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/</loc>
-    <lastmod>2026-07-24</lastmod>
+    <lastmod>2026-07-25</lastmod>
+  </url>
+  <url>
+    <loc>https://llm-proxy.mprlab.com/docs/</loc>
+    <lastmod>2026-07-25</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/</loc>
@@ -30,7 +34,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/canonical-v2-chat-messages-api/</loc>
-    <lastmod>2026-07-24</lastmod>
+    <lastmod>2026-07-25</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/large-prompt-json-post/</loc>
@@ -70,7 +74,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/</loc>
-    <lastmod>2026-07-23</lastmod>
+    <lastmod>2026-07-25</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/admin-usage-visibility-without-secrets/</loc>
@@ -101,8 +105,8 @@
     <lastmod>2026-07-11</lastmod>
   </url>
   <url>
-    <loc>https://llm-proxy.mprlab.com/resources/static-to-managed-tenant-migration/</loc>
-    <lastmod>2026-07-11</lastmod>
+    <loc>https://llm-proxy.mprlab.com/resources/multi-workspace-ownership-migration/</loc>
+    <lastmod>2026-07-25</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/gorm-managed-tenant-persistence/</loc>
@@ -110,19 +114,19 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/</loc>
-    <lastmod>2026-07-24</lastmod>
+    <lastmod>2026-07-25</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/</loc>
-    <lastmod>2026-07-24</lastmod>
+    <lastmod>2026-07-25</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/python-client-v2-only-llm-proxy/</loc>
-    <lastmod>2026-07-24</lastmod>
+    <lastmod>2026-07-25</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/installable-llm-proxy-cli/</loc>
-    <lastmod>2026-07-24</lastmod>
+    <lastmod>2026-07-25</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/llm-response-formats-json-xml-csv-text/</loc>

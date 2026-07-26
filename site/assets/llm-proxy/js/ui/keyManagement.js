@@ -10,16 +10,25 @@ import {
   NOTICE_AUTO_DISMISS_MILLISECONDS,
   NOTICE_KINDS,
   ROUTING_DEFAULTS_INVALID_ERROR,
+  USAGE_ENDPOINT_LABELS,
+  USAGE_FAILURE_PAGE_LIMIT,
   USAGE_INTERVALS,
+  USAGE_OUTCOME_LABELS,
+  USAGE_STATUS_LABELS,
   WORKSPACE_INTEGRITY_ERROR,
 } from "../constants.js";
 import {
+  createTenant as requestCreateTenant,
+  deleteTenant as requestDeleteTenant,
   fetchAdminUsers,
-  fetchProfile,
+  fetchAccount,
+  fetchTenant,
+  fetchUsageFailures,
   fetchUsageSummary,
   generateSecret as requestGeneratedSecret,
   loadFrontendRuntimeConfig,
   removeProviderKey as requestRemoveProviderKey,
+  renameTenant as requestRenameTenant,
   revealProviderKey as requestRevealProviderKey,
   revokeSecret as requestRevokeSecret,
   saveProviderKey as requestSaveProviderKey,
@@ -51,6 +60,8 @@ const MASKED_PROVIDER_KEY_PREFIX = "****";
 const MASKED_PROVIDER_KEY_FINAL_CHARACTER_COUNT = 4;
 const MASKED_CLIENT_KEY = "••••••••••••";
 const SAVED_PROVIDER_KEY_MASK = "saved";
+const TENANT_QUERY_PARAMETER = "tenant";
+const TENANT_NAME_MAXIMUM_CHARACTERS = 80;
 
 /**
  * @param {string} keyValue
@@ -78,7 +89,12 @@ export function createKeyManagement() {
     selectedUsageInterval: DEFAULT_USAGE_INTERVAL,
     usageLoading: false,
     usageLoadVersion: 0,
-    /** @type {import("../types.d.js").ManagementProfile | null} */
+    /** @type {import("../types.d.js").ManagementAccount | null} */
+    account: null,
+    /** @type {import("../types.d.js").ManagementTenantSummary[]} */
+    tenants: [],
+    activeTenantID: EMPTY_STRING,
+    /** @type {import("../types.d.js").ManagementTenantProfile | null} */
     profile: null,
     /** @type {import("../types.d.js").FrontendRuntimeConfig | null} */
     runtimeConfig: null,
@@ -104,17 +120,46 @@ export function createKeyManagement() {
     defaults: emptyDefaults(),
     /** @type {import("../types.d.js").ManagementUsageSummary} */
     usage: emptyUsageSummary(DEFAULT_USAGE_INTERVAL),
+    usageFailuresOpen: false,
+    usageFailuresLoading: false,
+    usageFailuresError: EMPTY_STRING,
+    usageFailuresLoadVersion: 0,
+    /** @type {import("../types.d.js").ManagementUsageFailure[]} */
+    usageFailures: [],
+    usageFailuresNextCursor: EMPTY_STRING,
     /** @type {import("../types.d.js").ManagementAdminUser[]} */
     adminUsers: [],
     /** @type {Promise<void> | null} */
-    profileLoadPromise: null,
+    workspaceLoadPromise: null,
     workspaceVersion: 0,
+    /** @type {AbortController | null} */
+    accountRequestController: null,
+    /** @type {AbortController | null} */
+    tenantLifetimeController: null,
+    /** @type {AbortController | null} */
+    tenantRequestController: null,
+    /** @type {AbortController | null} */
+    usageRequestController: null,
+    /** @type {AbortController | null} */
+    usageFailuresRequestController: null,
     generatedSecret: EMPTY_STRING,
     generatedSecretVisible: false,
     generatedSecretVersion: 0,
     settingsOpen: false,
     settingsClosePending: false,
     usageExamplesOpen: false,
+    tenantNameDraft: EMPTY_STRING,
+    tenantNameDirty: false,
+    tenantNameError: EMPTY_STRING,
+    createTenantDialogOpen: false,
+    createTenantName: EMPTY_STRING,
+    createTenantError: EMPTY_STRING,
+    createTenantPending: false,
+    deleteTenantConfirmationOpen: false,
+    deleteTenantPending: false,
+    discardTenantChangesOpen: false,
+    pendingTenantID: EMPTY_STRING,
+    pendingTenantHistoryMode: "push",
     notice: {
       kind: NOTICE_KINDS.INFO,
       message: EMPTY_STRING,
@@ -140,7 +185,39 @@ export function createKeyManagement() {
       document.addEventListener(EVENTS.USER_MENU_ITEM, (event) => {
         this.handleUserMenuItem(event);
       });
+      window.addEventListener("popstate", () => {
+        this.handleTenantHistoryNavigation();
+      });
       void this.start();
+    },
+
+    get activeTenant() {
+      return this.tenants.find((tenant) => tenant.id === this.activeTenantID) || null;
+    },
+
+    get activeTenantName() {
+      return this.activeTenant ? this.activeTenant.name : EMPTY_STRING;
+    },
+
+    get canDeleteActiveTenant() {
+      return this.tenants.length > 1;
+    },
+
+    get hasUnsavedSettingsChanges() {
+      return Boolean(
+        this.settingsOpen &&
+        (
+          this.tenantNameDirty ||
+          this.providerEditorSession.dirty ||
+          this.providerAutosavePending ||
+          this.routingDefaultsDirty ||
+          this.routingDefaultsAutosavePending
+        )
+      );
+    },
+
+    get deleteTenantTitle() {
+      return this.activeTenant ? `Delete “${this.activeTenant.name}”?` : COPY.deleteTenantTitle;
     },
 
     get hasSecret() {
@@ -174,7 +251,7 @@ export function createKeyManagement() {
     },
 
     get isAdmin() {
-      return Boolean(this.profile && this.profile.user.is_admin);
+      return Boolean(this.account && this.account.user.is_admin);
     },
 
     get dashboardEyebrow() {
@@ -329,6 +406,46 @@ export function createKeyManagement() {
       return formatNumber(this.usage.providers.length);
     },
 
+    get hasUsageFailures() {
+      return this.usage.totals.failed_requests > 0;
+    },
+
+    get usageFailuresActionCopy() {
+      const failureCount = this.usage.totals.failed_requests;
+      const noun = failureCount === 1 ? "failed request" : "failed requests";
+      return `${formatNumber(failureCount)} ${noun}`;
+    },
+
+    get usageFailuresIntervalLabel() {
+      const interval = this.usageIntervals.find((candidate) => candidate.id === this.selectedUsageInterval);
+      if (!interval) {
+        throw new Error(`usage_interval_invalid:${this.selectedUsageInterval}`);
+      }
+      return interval.label;
+    },
+
+    get usageFailureStatusRows() {
+      return this.usage.status_codes
+        .filter((status) => status.status_code >= 400)
+        .map((status) => ({
+          statusCode: status.status_code,
+          label: usageStatusLabel(status.status_code),
+          requests: formatNumber(status.requests),
+        }));
+    },
+
+    get usageFailureRows() {
+      return this.usageFailures.map((failure) => usageFailurePresentation(failure));
+    },
+
+    get hasLoadedUsageFailures() {
+      return this.usageFailures.length > 0;
+    },
+
+    get canLoadMoreUsageFailures() {
+      return Boolean(this.usageFailuresNextCursor);
+    },
+
     get usageRequestPolyline() {
       return usagePolyline(this.usage, USAGE_METRICS.REQUESTS);
     },
@@ -469,15 +586,15 @@ export function createKeyManagement() {
       }
     },
 
-    async loadProfile() {
-      if (this.profileLoadPromise) {
-        return this.profileLoadPromise;
+    async loadWorkspace() {
+      if (this.workspaceLoadPromise) {
+        return this.workspaceLoadPromise;
       }
-      this.profileLoadPromise = this.loadProfileOnce();
+      this.workspaceLoadPromise = this.loadWorkspaceOnce();
       try {
-        await this.profileLoadPromise;
+        await this.workspaceLoadPromise;
       } finally {
-        this.profileLoadPromise = null;
+        this.workspaceLoadPromise = null;
       }
     },
 
@@ -486,20 +603,78 @@ export function createKeyManagement() {
         return;
       }
       this.authState = AUTH_STATES.LOADING;
-      await this.loadProfile();
+      await this.loadWorkspace();
       if (this.authState === AUTH_STATES.LOADING && readMprUIAuthStatus() === AUTH_STATES.AUTHENTICATED) {
-        await this.loadProfile();
+        await this.loadWorkspace();
       }
     },
 
-    async loadProfileOnce() {
+    async loadWorkspaceOnce() {
       const workspaceVersion = this.workspaceVersion;
+      if (this.accountRequestController) {
+        this.accountRequestController.abort();
+      }
+      const accountRequestController = new AbortController();
+      this.accountRequestController = accountRequestController;
       this.busy = true;
       try {
-        const loadedProfile = await fetchProfile();
+        const loadedAccount = await fetchAccount(accountRequestController.signal);
         if (!this.canApplyAuthenticatedWorkspace(workspaceVersion)) {
           return;
         }
+        assertManagementAccount(loadedAccount);
+        this.account = loadedAccount;
+        this.tenants = loadedAccount.tenants;
+        applyUserMenuItems(Boolean(loadedAccount.user.is_admin));
+        const requestedTenantID = tenantIDFromURL();
+        if (requestedTenantID && !this.tenants.some((tenant) => tenant.id === requestedTenantID)) {
+          this.clearTenantWorkspaceState();
+          this.authState = AUTH_STATES.ERROR;
+          this.setNotice(NOTICE_KINDS.ERROR, COPY.invalidTenantURL);
+          return;
+        }
+        this.activeTenantID = requestedTenantID || this.tenants[0].id;
+        this.replaceTenantLifetimeController();
+        if (!requestedTenantID) {
+          this.writeTenantURL(this.activeTenantID, "replace");
+        }
+        await this.hydrateActiveTenant(null, workspaceVersion);
+      } catch (requestError) {
+        if (!isAbortError(requestError) && this.canApplyAuthenticatedWorkspace(workspaceVersion)) {
+          this.clearAuthenticatedState();
+          this.authState = AUTH_STATES.ERROR;
+          this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+        }
+      } finally {
+        if (this.accountRequestController === accountRequestController) {
+          this.accountRequestController = null;
+        }
+        this.busy = false;
+        dispatchManagementReady();
+      }
+    },
+
+    /**
+     * @param {import("../types.d.js").ManagementTenantProfile | null} prefetchedProfile
+     * @param {number} workspaceVersion
+     */
+    async hydrateActiveTenant(prefetchedProfile, workspaceVersion) {
+      const tenantID = this.activeTenantID;
+      if (this.tenantRequestController) {
+        this.tenantRequestController.abort();
+      }
+      if (this.usageRequestController) {
+        this.usageRequestController.abort();
+      }
+      const tenantRequestController = new AbortController();
+      this.tenantRequestController = tenantRequestController;
+      this.clearTenantWorkspaceState();
+      try {
+        const loadedProfile = prefetchedProfile || await fetchTenant(tenantID, tenantRequestController.signal);
+        if (!this.canApplyTenantWorkspace(workspaceVersion, tenantID)) {
+          return;
+        }
+        assertManagementTenantProfile(loadedProfile, tenantID);
         this.applyProfile(loadedProfile);
         this.authState = AUTH_STATES.AUTHENTICATED;
         this.setNotice(NOTICE_KINDS.SUCCESS, COPY.profileLoaded);
@@ -509,19 +684,20 @@ export function createKeyManagement() {
         if (!this.hasSecret) {
           await this.requestAndApplyGeneratedSecret();
         }
-        if (!this.canApplyAuthenticatedWorkspace(workspaceVersion) || this.authState !== AUTH_STATES.AUTHENTICATED) {
+        if (!this.canApplyTenantWorkspace(workspaceVersion, tenantID) || this.authState !== AUTH_STATES.AUTHENTICATED) {
           return;
         }
         await this.loadUsageForAuthenticatedProfile();
       } catch (requestError) {
-        if (this.canApplyAuthenticatedWorkspace(workspaceVersion)) {
-          this.clearAuthenticatedState();
+        if (!isAbortError(requestError) && this.canApplyTenantWorkspace(workspaceVersion, tenantID)) {
+          this.clearTenantWorkspaceState();
           this.authState = AUTH_STATES.ERROR;
           this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
         }
       } finally {
-        this.busy = false;
-        dispatchManagementReady();
+        if (this.tenantRequestController === tenantRequestController) {
+          this.tenantRequestController = null;
+        }
       }
     },
 
@@ -534,6 +710,356 @@ export function createKeyManagement() {
         this.workspaceVersion === workspaceVersion &&
         readMprUIAuthStatus() === AUTH_STATES.AUTHENTICATED
       );
+    },
+
+    /**
+     * @param {number} workspaceVersion
+     * @param {string} tenantID
+     * @returns {boolean}
+     */
+    canApplyTenantWorkspace(workspaceVersion, tenantID) {
+      return this.canApplyAuthenticatedWorkspace(workspaceVersion) && this.activeTenantID === tenantID;
+    },
+
+    replaceTenantLifetimeController() {
+      if (this.tenantLifetimeController) {
+        this.tenantLifetimeController.abort();
+      }
+      this.tenantLifetimeController = new AbortController();
+    },
+
+    /**
+     * @param {"push" | "replace"} mode
+     */
+    writeTenantURL(tenantID, mode) {
+      const tenantURL = new URL(window.location.href);
+      tenantURL.searchParams.set(TENANT_QUERY_PARAMETER, tenantID);
+      window.history[`${mode}State`]({}, EMPTY_STRING, tenantURL);
+    },
+
+    handleTenantHistoryNavigation() {
+      if (!this.account) {
+        return;
+      }
+      const requestedTenantID = tenantIDFromURL();
+      if (!requestedTenantID || !this.tenants.some((tenant) => tenant.id === requestedTenantID)) {
+        this.workspaceVersion += 1;
+        this.replaceTenantLifetimeController();
+        this.clearTenantWorkspaceState();
+        this.activeTenantID = EMPTY_STRING;
+        this.authState = AUTH_STATES.ERROR;
+        this.setNotice(NOTICE_KINDS.ERROR, COPY.invalidTenantURL);
+        return;
+      }
+      if (requestedTenantID === this.activeTenantID) {
+        return;
+      }
+      void this.requestTenantSwitch(requestedTenantID, "none");
+    },
+
+    /** @param {Event} event */
+    handleTenantSelection(event) {
+      const tenantSelect = /** @type {HTMLSelectElement} */ (event.target);
+      void this.requestTenantSwitch(tenantSelect.value, "push");
+    },
+
+    /**
+     * @param {string} tenantID
+     * @param {"push" | "replace" | "none"} historyMode
+     */
+    async requestTenantSwitch(tenantID, historyMode) {
+      if (!this.tenants.some((tenant) => tenant.id === tenantID)) {
+        this.clearTenantWorkspaceState();
+        this.activeTenantID = EMPTY_STRING;
+        this.authState = AUTH_STATES.ERROR;
+        this.setNotice(NOTICE_KINDS.ERROR, COPY.invalidTenantURL);
+        return;
+      }
+      if (tenantID === this.activeTenantID) {
+        this.restoreTenantSelector();
+        return;
+      }
+      if (this.hasUnsavedSettingsChanges) {
+        this.pendingTenantID = tenantID;
+        this.pendingTenantHistoryMode = historyMode;
+        this.discardTenantChangesOpen = true;
+        this.$nextTick(() => {
+          this.$refs.discardTenantStay.focus();
+        });
+        return;
+      }
+      await this.switchTenant(tenantID, historyMode);
+    },
+
+    restoreTenantSelector() {
+      this.$nextTick(() => {
+        if (this.$refs.tenantSelector) {
+          this.$refs.tenantSelector.value = this.activeTenantID;
+        }
+      });
+    },
+
+    cancelTenantSwitch() {
+      const historyMode = this.pendingTenantHistoryMode;
+      this.discardTenantChangesOpen = false;
+      this.pendingTenantID = EMPTY_STRING;
+      this.pendingTenantHistoryMode = "push";
+      if (historyMode === "none" && this.activeTenantID) {
+        this.writeTenantURL(this.activeTenantID, "replace");
+      }
+      this.restoreTenantSelector();
+    },
+
+    async confirmTenantSwitch() {
+      const tenantID = this.pendingTenantID;
+      const historyMode = this.pendingTenantHistoryMode;
+      this.discardTenantChangesOpen = false;
+      this.pendingTenantID = EMPTY_STRING;
+      this.pendingTenantHistoryMode = "push";
+      this.discardLocalTenantEdits();
+      await this.switchTenant(tenantID, historyMode);
+    },
+
+    /**
+     * @param {string} tenantID
+     * @param {"push" | "replace" | "none"} historyMode
+     * @param {import("../types.d.js").ManagementTenantProfile | null} [prefetchedProfile]
+     */
+    async switchTenant(tenantID, historyMode, prefetchedProfile = null) {
+      this.workspaceVersion += 1;
+      const workspaceVersion = this.workspaceVersion;
+      if (this.tenantRequestController) {
+        this.tenantRequestController.abort();
+      }
+      if (this.usageRequestController) {
+        this.usageRequestController.abort();
+      }
+      this.replaceTenantLifetimeController();
+      this.clearGeneratedSecret();
+      this.clearProviderKeyMaterial();
+      this.dismissProviderKeyRemovalConfirmation();
+      this.deleteTenantConfirmationOpen = false;
+      this.createTenantDialogOpen = false;
+      this.createTenantName = EMPTY_STRING;
+      this.createTenantError = EMPTY_STRING;
+      this.discardTenantChangesOpen = false;
+      this.pendingTenantID = EMPTY_STRING;
+      this.settingsOpen = false;
+      this.activeTenantID = tenantID;
+      if (historyMode !== "none") {
+        this.writeTenantURL(tenantID, historyMode);
+      }
+      this.authState = AUTH_STATES.LOADING;
+      this.busy = true;
+      try {
+        await this.hydrateActiveTenant(prefetchedProfile, workspaceVersion);
+      } finally {
+        if (this.workspaceVersion === workspaceVersion) {
+          this.busy = false;
+        }
+        dispatchManagementReady();
+      }
+    },
+
+    openCreateTenantDialog() {
+      this.createTenantName = EMPTY_STRING;
+      this.createTenantError = EMPTY_STRING;
+      this.createTenantDialogOpen = true;
+      this.$nextTick(() => {
+        this.$refs.createTenantName.focus();
+      });
+    },
+
+    closeCreateTenantDialog() {
+      if (this.createTenantPending) {
+        return;
+      }
+      this.createTenantDialogOpen = false;
+      this.createTenantName = EMPTY_STRING;
+      this.createTenantError = EMPTY_STRING;
+      this.$nextTick(() => {
+        if (this.$refs.createTenantButton) {
+          this.$refs.createTenantButton.focus();
+        }
+      });
+    },
+
+    /** @param {KeyboardEvent} event */
+    trapCreateTenantFocus(event) {
+      trapDialogFocus(event, this.$refs.createTenantDialog);
+    },
+
+    /** @param {KeyboardEvent} event */
+    trapDiscardTenantFocus(event) {
+      trapDialogFocus(event, this.$refs.discardTenantDialog);
+    },
+
+    /** @param {KeyboardEvent} event */
+    trapDeleteTenantFocus(event) {
+      trapDialogFocus(event, this.$refs.deleteTenantDialog);
+    },
+
+    /** @param {Event} event */
+    handleCreateTenantNameInput(event) {
+      this.createTenantName = /** @type {HTMLInputElement} */ (event.target).value;
+      this.createTenantError = EMPTY_STRING;
+    },
+
+    async submitCreateTenant() {
+      let name;
+      try {
+        name = validatedTenantName(this.createTenantName);
+      } catch {
+        this.createTenantError = COPY.tenantNameInvalid;
+        return;
+      }
+      const workspaceVersion = this.workspaceVersion;
+      const lifetimeController = this.tenantLifetimeController;
+      if (!lifetimeController) {
+        return;
+      }
+      this.createTenantPending = true;
+      try {
+        const createdProfile = await requestCreateTenant(name, lifetimeController.signal);
+        if (
+          !this.canApplyAuthenticatedWorkspace(workspaceVersion) ||
+          this.tenantLifetimeController !== lifetimeController ||
+          !this.createTenantDialogOpen
+        ) {
+          return;
+        }
+        assertManagementTenantProfile(createdProfile, createdProfile.tenant.id);
+        const createdSummary = tenantSummaryFromProfile(createdProfile);
+        this.tenants = [...this.tenants, createdSummary];
+        this.account = { ...this.account, tenants: this.tenants };
+        this.createTenantDialogOpen = false;
+        this.createTenantName = EMPTY_STRING;
+        await this.switchTenant(createdSummary.id, "push", createdProfile);
+        if (this.activeTenantID === createdSummary.id && this.authState === AUTH_STATES.AUTHENTICATED) {
+          this.setNotice(NOTICE_KINDS.SUCCESS, COPY.tenantCreated);
+        }
+      } catch (requestError) {
+        if (!isAbortError(requestError) && this.tenantLifetimeController === lifetimeController) {
+          this.createTenantError = requestError && requestError.status === 409
+            ? COPY.tenantNameConflict
+            : profileFailureMessage(requestError);
+        }
+      } finally {
+        this.createTenantPending = false;
+      }
+    },
+
+    /** @param {Event} event */
+    handleTenantNameInput(event) {
+      this.tenantNameDraft = /** @type {HTMLInputElement} */ (event.target).value;
+      this.tenantNameDirty = this.tenantNameDraft !== this.activeTenantName;
+      this.tenantNameError = EMPTY_STRING;
+    },
+
+    async saveTenantName() {
+      let name;
+      try {
+        name = validatedTenantName(this.tenantNameDraft);
+      } catch {
+        this.tenantNameError = COPY.tenantNameInvalid;
+        return;
+      }
+      const tenantID = this.activeTenantID;
+      const workspaceVersion = this.workspaceVersion;
+      const lifetimeController = this.tenantLifetimeController;
+      if (!lifetimeController || !this.tenantNameDirty) {
+        return;
+      }
+      this.busy = true;
+      try {
+        await this.enqueueProfileMutation(workspaceVersion, async () => {
+          const updatedProfile = await requestRenameTenant(tenantID, name, lifetimeController.signal);
+          if (!this.canApplyTenantWorkspace(workspaceVersion, tenantID)) {
+            return false;
+          }
+          assertManagementTenantProfile(updatedProfile, tenantID);
+          this.tenants = this.tenants.map((tenant) => (
+            tenant.id === tenantID ? tenantSummaryFromProfile(updatedProfile) : tenant
+          ));
+          this.account = { ...this.account, tenants: this.tenants };
+          this.tenantNameDraft = updatedProfile.tenant.name;
+          this.tenantNameDirty = false;
+          this.applyProfile(
+            updatedProfile,
+            this.providerEditorSession.dirty || this.providerAutosavePending,
+            this.routingDefaultsDirty || this.routingDefaultsAutosavePending,
+          );
+          this.setNotice(NOTICE_KINDS.SUCCESS, COPY.tenantRenamed);
+          return true;
+        });
+      } catch (requestError) {
+        if (!isAbortError(requestError) && this.canApplyTenantWorkspace(workspaceVersion, tenantID)) {
+          this.tenantNameError = requestError && requestError.status === 409
+            ? COPY.tenantNameConflict
+            : profileFailureMessage(requestError);
+        }
+      } finally {
+        this.busy = false;
+      }
+    },
+
+    requestTenantDeletion() {
+      if (!this.canDeleteActiveTenant) {
+        this.setNotice(NOTICE_KINDS.ERROR, COPY.finalTenantDeletion);
+        return;
+      }
+      this.deleteTenantConfirmationOpen = true;
+      this.$nextTick(() => {
+        this.$refs.deleteTenantCancel.focus();
+      });
+    },
+
+    cancelTenantDeletion() {
+      this.deleteTenantConfirmationOpen = false;
+      this.$nextTick(() => {
+        if (this.$refs.deleteTenantButton) {
+          this.$refs.deleteTenantButton.focus();
+        }
+      });
+    },
+
+    async confirmTenantDeletion() {
+      const deletedTenantID = this.activeTenantID;
+      const lifetimeController = this.tenantLifetimeController;
+      if (!lifetimeController || !this.canDeleteActiveTenant) {
+        return;
+      }
+      this.deleteTenantPending = true;
+      try {
+        await requestDeleteTenant(deletedTenantID, lifetimeController.signal);
+        if (this.activeTenantID !== deletedTenantID || this.tenantLifetimeController !== lifetimeController) {
+          return;
+        }
+        this.tenants = this.tenants.filter((tenant) => tenant.id !== deletedTenantID);
+        this.account = { ...this.account, tenants: this.tenants };
+        this.deleteTenantConfirmationOpen = false;
+        await this.switchTenant(this.tenants[0].id, "replace");
+        if (this.authState === AUTH_STATES.AUTHENTICATED) {
+          this.setNotice(NOTICE_KINDS.SUCCESS, COPY.tenantDeleted);
+        }
+      } catch (requestError) {
+        if (!isAbortError(requestError) && this.activeTenantID === deletedTenantID) {
+          this.setNotice(
+            NOTICE_KINDS.ERROR,
+            requestError && requestError.status === 409 ? COPY.finalTenantDeletion : profileFailureMessage(requestError),
+          );
+        }
+      } finally {
+        this.deleteTenantPending = false;
+      }
+    },
+
+    discardLocalTenantEdits() {
+      this.providerEditorSession.dirty = false;
+      this.routingDefaultsDirty = false;
+      this.tenantNameDraft = this.activeTenantName;
+      this.tenantNameDirty = false;
+      this.tenantNameError = EMPTY_STRING;
     },
 
     setUnauthenticated() {
@@ -569,9 +1095,135 @@ export function createKeyManagement() {
       if (!this.usageIntervals.some((candidate) => candidate.id === interval)) {
         throw new Error(`usage_interval_invalid:${interval}`);
       }
+      this.clearUsageFailures(false);
       this.selectedUsageInterval = interval;
       this.usage = emptyUsageSummary(interval);
       await this.loadUsageSummary(false);
+    },
+
+    openUsageFailures() {
+      if (!this.hasUsageFailures || this.dashboardView !== DASHBOARD_VIEWS.USAGE) {
+        return;
+      }
+      this.clearUsageFailures(false);
+      this.usageFailuresOpen = true;
+      this.$nextTick(() => {
+        this.$refs.usageFailuresClose.focus();
+      });
+      void this.loadUsageFailuresPage(false);
+    },
+
+    closeUsageFailures() {
+      this.clearUsageFailures(true);
+    },
+
+    /** @param {KeyboardEvent} event */
+    trapUsageFailuresFocus(event) {
+      trapDialogFocus(event, this.$refs.usageFailuresDialog);
+    },
+
+    async retryUsageFailures() {
+      await this.loadUsageFailuresPage(this.hasLoadedUsageFailures);
+    },
+
+    async loadMoreUsageFailures() {
+      await this.loadUsageFailuresPage(true);
+    },
+
+    /**
+     * @param {boolean} append
+     */
+    async loadUsageFailuresPage(append) {
+      if (!this.usageFailuresOpen) {
+        return;
+      }
+      const cursor = append ? this.usageFailuresNextCursor : EMPTY_STRING;
+      if (append && !cursor) {
+        return;
+      }
+      const workspaceVersion = this.workspaceVersion;
+      const tenantID = this.activeTenantID;
+      const interval = this.selectedUsageInterval;
+      const loadVersion = this.usageFailuresLoadVersion + 1;
+      this.usageFailuresLoadVersion = loadVersion;
+      if (this.usageFailuresRequestController) {
+        this.usageFailuresRequestController.abort();
+      }
+      const requestController = new AbortController();
+      this.usageFailuresRequestController = requestController;
+      this.usageFailuresLoading = true;
+      this.usageFailuresError = EMPTY_STRING;
+      try {
+        const response = await fetchUsageFailures(
+          tenantID,
+          interval,
+          USAGE_FAILURE_PAGE_LIMIT,
+          cursor,
+          requestController.signal,
+        );
+        if (!this.canApplyUsageFailures(workspaceVersion, tenantID, loadVersion, interval)) {
+          return;
+        }
+        const page = normalizedUsageFailurePage(response, interval);
+        this.usageFailures = append ? [...this.usageFailures, ...page.failures] : page.failures;
+        this.usageFailuresNextCursor = page.next_cursor || EMPTY_STRING;
+      } catch (requestError) {
+        if (
+          !isAbortError(requestError) &&
+          this.canApplyUsageFailures(workspaceVersion, tenantID, loadVersion, interval)
+        ) {
+          this.usageFailuresError = COPY.usageFailuresError;
+        }
+      } finally {
+        if (this.usageFailuresRequestController === requestController) {
+          this.usageFailuresRequestController = null;
+        }
+        if (this.canApplyUsageFailures(workspaceVersion, tenantID, loadVersion, interval)) {
+          this.usageFailuresLoading = false;
+        }
+      }
+    },
+
+    /**
+     * @param {number} workspaceVersion
+     * @param {string} tenantID
+     * @param {number} loadVersion
+     * @param {import("../types.d.js").UsageInterval} interval
+     * @returns {boolean}
+     */
+    canApplyUsageFailures(workspaceVersion, tenantID, loadVersion, interval) {
+      return (
+        this.usageFailuresOpen &&
+        this.workspaceVersion === workspaceVersion &&
+        this.activeTenantID === tenantID &&
+        this.usageFailuresLoadVersion === loadVersion &&
+        this.selectedUsageInterval === interval &&
+        this.authState === AUTH_STATES.AUTHENTICATED
+      );
+    },
+
+    /**
+     * @param {boolean} restoreFocus
+     */
+    clearUsageFailures(restoreFocus) {
+      const restoreActionFocus = restoreFocus && this.usageFailuresOpen && this.hasUsageFailures;
+      if (this.usageFailuresRequestController) {
+        this.usageFailuresRequestController.abort();
+        this.usageFailuresRequestController = null;
+      }
+      this.usageFailuresLoadVersion += 1;
+      this.usageFailuresOpen = false;
+      this.usageFailuresLoading = false;
+      this.usageFailuresError = EMPTY_STRING;
+      this.usageFailures = [];
+      this.usageFailuresNextCursor = EMPTY_STRING;
+      if (restoreActionFocus) {
+        this.$nextTick(() => {
+          if (this.$refs.usageFailuresAction) {
+            this.$refs.usageFailuresAction.focus();
+          }
+        });
+      }
     },
 
     /**
@@ -579,29 +1231,46 @@ export function createKeyManagement() {
      */
     async loadUsageSummary(showSuccessNotice) {
       const workspaceVersion = this.workspaceVersion;
+      const tenantID = this.activeTenantID;
       const interval = this.selectedUsageInterval;
       const loadVersion = this.usageLoadVersion + 1;
       this.usageLoadVersion = loadVersion;
+      if (this.usageRequestController) {
+        this.usageRequestController.abort();
+      }
+      const usageRequestController = new AbortController();
+      this.usageRequestController = usageRequestController;
       this.usageLoading = true;
       try {
-        const usage = await fetchUsageSummary(interval);
-        if (!this.canApplyUsageSummary(workspaceVersion, loadVersion, interval)) {
+        const usage = await fetchUsageSummary(tenantID, interval, usageRequestController.signal);
+        if (!this.canApplyUsageSummary(workspaceVersion, tenantID, loadVersion, interval)) {
           return;
         }
         if (usage.interval !== interval) {
           throw new Error(WORKSPACE_INTEGRITY_ERROR);
         }
         this.usage = usage;
+        if (!this.hasUsageFailures) {
+          this.clearUsageFailures(false);
+        }
         if (showSuccessNotice) {
           this.setNotice(NOTICE_KINDS.SUCCESS, COPY.usageRefreshed);
         }
-      } catch {
-        if (this.canApplyUsageSummary(workspaceVersion, loadVersion, interval)) {
+      } catch (requestError) {
+        if (!isAbortError(requestError) && this.canApplyUsageSummary(workspaceVersion, tenantID, loadVersion, interval)) {
+          this.clearUsageFailures(false);
           this.usage = emptyUsageSummary(interval);
           this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
         }
       } finally {
-        if (this.workspaceVersion === workspaceVersion && this.usageLoadVersion === loadVersion) {
+        if (this.usageRequestController === usageRequestController) {
+          this.usageRequestController = null;
+        }
+        if (
+          this.workspaceVersion === workspaceVersion &&
+          this.activeTenantID === tenantID &&
+          this.usageLoadVersion === loadVersion
+        ) {
           this.usageLoading = false;
         }
       }
@@ -609,13 +1278,15 @@ export function createKeyManagement() {
 
     /**
      * @param {number} workspaceVersion
+     * @param {string} tenantID
      * @param {number} loadVersion
      * @param {import("../types.d.js").UsageInterval} interval
      * @returns {boolean}
      */
-    canApplyUsageSummary(workspaceVersion, loadVersion, interval) {
+    canApplyUsageSummary(workspaceVersion, tenantID, loadVersion, interval) {
       return (
         this.workspaceVersion === workspaceVersion &&
+        this.activeTenantID === tenantID &&
         this.usageLoadVersion === loadVersion &&
         this.selectedUsageInterval === interval &&
         this.authState === AUTH_STATES.AUTHENTICATED
@@ -659,6 +1330,7 @@ export function createKeyManagement() {
       if (!this.isAdmin) {
         return;
       }
+      this.clearUsageFailures(false);
       this.dashboardView = DASHBOARD_VIEWS.ADMIN;
       await this.refreshAdminUsers();
     },
@@ -668,6 +1340,7 @@ export function createKeyManagement() {
     },
 
     openSettings() {
+      this.clearUsageFailures(false);
       this.usageExamplesOpen = false;
       this.dismissProviderKeyRemovalConfirmation();
       this.settingsOpen = true;
@@ -837,17 +1510,26 @@ export function createKeyManagement() {
       }
       const revealProviderID = provider.id;
       const revealVersion = this.providerEditorSession.revealVersion + 1;
+      const tenantID = this.activeTenantID;
+      const workspaceVersion = this.workspaceVersion;
+      const lifetimeController = this.tenantLifetimeController;
+      if (!lifetimeController) {
+        return;
+      }
       this.providerEditorSession.revealVersion = revealVersion;
       this.providerEditorSession.revealPending = true;
       try {
-        const revealResponse = await requestRevealProviderKey(revealProviderID);
-        if (!this.canApplyProviderKeyReveal(revealProviderID, revealVersion)) {
+        const revealResponse = await requestRevealProviderKey(tenantID, revealProviderID, lifetimeController.signal);
+        if (!this.canApplyProviderKeyReveal(tenantID, workspaceVersion, revealProviderID, revealVersion)) {
           return;
         }
         this.providerEditorSession.keyInput = revealResponse.api_key;
         this.providerEditorSession.keyVisible = true;
       } catch (requestError) {
-        if (this.canApplyProviderKeyReveal(revealProviderID, revealVersion)) {
+        if (
+          !isAbortError(requestError) &&
+          this.canApplyProviderKeyReveal(tenantID, workspaceVersion, revealProviderID, revealVersion)
+        ) {
           this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
         }
       } finally {
@@ -858,12 +1540,16 @@ export function createKeyManagement() {
     },
 
     /**
+     * @param {string} tenantID
+     * @param {number} workspaceVersion
      * @param {string} providerID
      * @param {number} revealVersion
      */
-    canApplyProviderKeyReveal(providerID, revealVersion) {
+    canApplyProviderKeyReveal(tenantID, workspaceVersion, providerID, revealVersion) {
       return (
         this.settingsOpen &&
+        this.activeTenantID === tenantID &&
+        this.workspaceVersion === workspaceVersion &&
         this.selectedProviderID === providerID &&
         this.providerEditorSession.revealVersion === revealVersion
       );
@@ -999,14 +1685,21 @@ export function createKeyManagement() {
         const revealVersion = editorSession.revealVersion;
         const editVersion = editorSession.editVersion;
         const workspaceVersion = this.workspaceVersion;
+        const tenantID = this.activeTenantID;
+        const lifetimeController = this.tenantLifetimeController;
+        if (!lifetimeController) {
+          return false;
+        }
         editorSession.dirty = false;
         try {
           const profileApplied = await this.enqueueProfileMutation(workspaceVersion, async () => {
             const updatedProfile = await requestSaveProviderKey(
+              tenantID,
               providerID,
               apiKey,
               editorSession.textModel,
               editorSession.systemPrompt,
+              lifetimeController.signal,
             );
             if (!this.canApplyProviderAutosave(providerID, revealVersion, workspaceVersion)) {
               return false;
@@ -1056,8 +1749,16 @@ export function createKeyManagement() {
      * @param {import("../types.d.js").ProviderProfile} provider
      */
     async removeProviderKey(provider) {
+      const tenantID = this.activeTenantID;
+      const lifetimeController = this.tenantLifetimeController;
+      if (!lifetimeController) {
+        return;
+      }
       try {
-        await this.runProfileMutation(async () => requestRemoveProviderKey(provider.id), COPY.providerKeyRemoved);
+        await this.runProfileMutation(
+          async () => requestRemoveProviderKey(tenantID, provider.id, lifetimeController.signal),
+          COPY.providerKeyRemoved,
+        );
       } finally {
         this.clearProviderKeyMaterial();
       }
@@ -1088,10 +1789,15 @@ export function createKeyManagement() {
         const defaults = { ...this.defaults };
         const editVersion = this.routingDefaultsEditVersion;
         const workspaceVersion = this.workspaceVersion;
+        const tenantID = this.activeTenantID;
+        const lifetimeController = this.tenantLifetimeController;
+        if (!lifetimeController) {
+          return false;
+        }
         this.routingDefaultsDirty = false;
         try {
           const profileApplied = await this.enqueueProfileMutation(workspaceVersion, async () => {
-            const updatedProfile = await requestUpdateDefaults(defaults);
+            const updatedProfile = await requestUpdateDefaults(tenantID, defaults, lifetimeController.signal);
             if (!this.canApplyRoutingDefaultsAutosave(workspaceVersion)) {
               return false;
             }
@@ -1135,9 +1841,14 @@ export function createKeyManagement() {
     async generateAndApplySecret() {
       const generatedSecretVersion = this.generatedSecretVersion;
       const workspaceVersion = this.workspaceVersion;
+      const tenantID = this.activeTenantID;
+      const lifetimeController = this.tenantLifetimeController;
+      if (!lifetimeController) {
+        return false;
+      }
       try {
         const profileApplied = await this.enqueueProfileMutation(workspaceVersion, async () => {
-          const secretResponse = await requestGeneratedSecret();
+          const secretResponse = await requestGeneratedSecret(tenantID, lifetimeController.signal);
           if (!this.canApplyGeneratedSecret(generatedSecretVersion)) {
             return false;
           }
@@ -1189,8 +1900,16 @@ export function createKeyManagement() {
     },
 
     async revokeSecret() {
+      const tenantID = this.activeTenantID;
+      const lifetimeController = this.tenantLifetimeController;
+      if (!lifetimeController) {
+        return;
+      }
       const keyRevoked = await this.runClientKeyMutation(
-        async () => this.runProfileMutation(async () => requestRevokeSecret(), COPY.keyRevoked),
+        async () => this.runProfileMutation(
+          async () => requestRevokeSecret(tenantID, lifetimeController.signal),
+          COPY.keyRevoked,
+        ),
       );
       if (keyRevoked) {
         this.clearGeneratedSecret();
@@ -1294,7 +2013,7 @@ export function createKeyManagement() {
     },
 
     /**
-     * @param {() => Promise<import("../types.d.js").ManagementProfile>} mutation
+     * @param {() => Promise<import("../types.d.js").ManagementTenantProfile>} mutation
      * @param {string} successMessage
      * @returns {Promise<boolean>}
      */
@@ -1379,11 +2098,12 @@ export function createKeyManagement() {
     },
 
     /**
-     * @param {import("../types.d.js").ManagementProfile} nextProfile
+     * @param {import("../types.d.js").ManagementTenantProfile} nextProfile
      * @param {boolean} [preserveProviderEditor]
      * @param {boolean} [preserveRoutingDefaults]
      */
     applyProfile(nextProfile, preserveProviderEditor = false, preserveRoutingDefaults = false) {
+      assertManagementTenantProfile(nextProfile, this.activeTenantID);
       const defaults = createWorkspaceRoutingDefaults(nextProfile);
       const profileApplicationVersion = this.profileApplicationVersion + 1;
       this.profileApplicationVersion = profileApplicationVersion;
@@ -1393,8 +2113,10 @@ export function createKeyManagement() {
       }
       this.dismissProviderKeyRemovalConfirmation();
       this.profile = nextProfile;
-      applyUserMenuItems(Boolean(nextProfile.user.is_admin));
       this.providers = nextProfile.providers;
+      if (!this.tenantNameDirty) {
+        this.tenantNameDraft = nextProfile.tenant.name;
+      }
       if (!preserveRoutingDefaults) {
         this.defaults.provider = defaults.provider;
         this.defaults.model = defaults.model;
@@ -1424,12 +2146,11 @@ export function createKeyManagement() {
       }
     },
 
-    clearAuthenticatedState() {
-      this.workspaceVersion += 1;
+    clearTenantWorkspaceState() {
       this.profileApplicationVersion += 1;
       this.usageLoadVersion += 1;
       this.usageLoading = false;
-      this.selectedUsageInterval = DEFAULT_USAGE_INTERVAL;
+      this.clearUsageFailures(false);
       this.providerAutosavePromise = null;
       this.providerAutosavePending = false;
       this.routingDefaultsAutosavePromise = null;
@@ -1437,18 +2158,60 @@ export function createKeyManagement() {
       this.routingDefaultsDirty = false;
       this.routingDefaultsEditVersion += 1;
       this.clientKeyMutationPromise = null;
+      this.profileMutationTail = Promise.resolve();
       this.profileMutationFailureVersion = 0;
       this.settingsClosePending = false;
-      this.clearNotice();
       this.dismissProviderKeyRemovalConfirmation();
       this.profile = null;
       this.providers = [];
       this.replaceProviderEditorSession(EMPTY_STRING);
       this.defaults = emptyDefaults();
-      this.usage = emptyUsageSummary(DEFAULT_USAGE_INTERVAL);
-      this.adminUsers = [];
+      this.usage = emptyUsageSummary(this.selectedUsageInterval);
       this.clearGeneratedSecret();
+      this.tenantNameDraft = EMPTY_STRING;
+      this.tenantNameDirty = false;
+      this.tenantNameError = EMPTY_STRING;
+      this.usageExamplesOpen = false;
+    },
+
+    clearAuthenticatedState() {
+      this.workspaceVersion += 1;
+      if (this.accountRequestController) {
+        this.accountRequestController.abort();
+        this.accountRequestController = null;
+      }
+      if (this.tenantRequestController) {
+        this.tenantRequestController.abort();
+        this.tenantRequestController = null;
+      }
+      if (this.usageRequestController) {
+        this.usageRequestController.abort();
+        this.usageRequestController = null;
+      }
+      if (this.usageFailuresRequestController) {
+        this.usageFailuresRequestController.abort();
+        this.usageFailuresRequestController = null;
+      }
+      if (this.tenantLifetimeController) {
+        this.tenantLifetimeController.abort();
+        this.tenantLifetimeController = null;
+      }
+      this.selectedUsageInterval = DEFAULT_USAGE_INTERVAL;
+      this.clearNotice();
+      this.clearTenantWorkspaceState();
+      this.account = null;
+      this.tenants = [];
+      this.activeTenantID = EMPTY_STRING;
+      this.adminUsers = [];
       this.settingsOpen = false;
+      this.createTenantDialogOpen = false;
+      this.createTenantName = EMPTY_STRING;
+      this.createTenantError = EMPTY_STRING;
+      this.createTenantPending = false;
+      this.deleteTenantConfirmationOpen = false;
+      this.deleteTenantPending = false;
+      this.discardTenantChangesOpen = false;
+      this.pendingTenantID = EMPTY_STRING;
       this.dashboardView = DASHBOARD_VIEWS.USAGE;
       applyUserMenuItems(false);
     },
@@ -1462,27 +2225,27 @@ export function createKeyManagement() {
     },
 
     /**
-     * @param {import("../types.d.js").ManagementAdminUser} adminUser
+     * @param {{ usage: import("../types.d.js").ManagementAdminUsageSummary }} adminTenant
      * @returns {string}
      */
-    adminUserRequests(adminUser) {
-      return formatNumber(adminUser.usage.totals.requests);
+    adminTenantRequests(adminTenant) {
+      return formatNumber(adminTenant.usage.totals.requests);
     },
 
     /**
-     * @param {import("../types.d.js").ManagementAdminUser} adminUser
+     * @param {{ usage: import("../types.d.js").ManagementAdminUsageSummary }} adminTenant
      * @returns {string}
      */
-    adminUserTokens(adminUser) {
-      return formatNumber(adminUser.usage.totals.total_tokens);
+    adminTenantTokens(adminTenant) {
+      return formatNumber(adminTenant.usage.totals.total_tokens);
     },
 
     /**
-     * @param {import("../types.d.js").ManagementAdminUser} adminUser
+     * @param {{ usage: import("../types.d.js").ManagementAdminUsageSummary }} adminTenant
      * @returns {string}
      */
-    adminUserSuccessRate(adminUser) {
-      return successRateLabel(adminUser.usage.totals);
+    adminTenantSuccessRate(adminTenant) {
+      return successRateLabel(adminTenant.usage.totals);
     },
 
     /**
@@ -1514,6 +2277,138 @@ export function createKeyManagement() {
       this.notice = { kind: NOTICE_KINDS.INFO, message: EMPTY_STRING };
     },
   };
+}
+
+/**
+ * @param {KeyboardEvent} event
+ * @param {HTMLElement} dialog
+ */
+function trapDialogFocus(event, dialog) {
+  const focusableControls = [...dialog.querySelectorAll(
+    'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )].filter((control) => control.getClientRects().length > 0);
+  const firstControl = focusableControls[0];
+  const lastControl = focusableControls[focusableControls.length - 1];
+  if (event.shiftKey && document.activeElement === firstControl) {
+    event.preventDefault();
+    lastControl.focus();
+    return;
+  }
+  if (!event.shiftKey && document.activeElement === lastControl) {
+    event.preventDefault();
+    firstControl.focus();
+  }
+}
+
+/**
+ * @param {import("../types.d.js").ManagementUsageFailurePage} response
+ * @param {import("../types.d.js").UsageInterval} interval
+ * @returns {import("../types.d.js").ManagementUsageFailurePage}
+ */
+function normalizedUsageFailurePage(response, interval) {
+  if (!response || response.interval !== interval || !Array.isArray(response.failures)) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  if (response.next_cursor !== undefined && (typeof response.next_cursor !== "string" || !response.next_cursor)) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  return {
+    interval,
+    failures: response.failures.map((failure) => normalizedUsageFailure(failure)),
+    ...(response.next_cursor ? { next_cursor: response.next_cursor } : {}),
+  };
+}
+
+/**
+ * @param {import("../types.d.js").ManagementUsageFailure} failure
+ * @returns {import("../types.d.js").ManagementUsageFailure}
+ */
+function normalizedUsageFailure(failure) {
+  const occurredAt = new Date(failure.occurred_at);
+  if (
+    !failure ||
+    typeof failure.occurred_at !== "string" ||
+    Number.isNaN(occurredAt.valueOf()) ||
+    typeof failure.endpoint !== "string" ||
+    !hasLabel(USAGE_ENDPOINT_LABELS, failure.endpoint) ||
+    typeof failure.provider !== "string" ||
+    typeof failure.model !== "string" ||
+    !Number.isInteger(failure.status_code) ||
+    !hasLabel(USAGE_STATUS_LABELS, String(failure.status_code)) ||
+    typeof failure.outcome_code !== "string" ||
+    failure.outcome_code === "success" ||
+    !hasLabel(USAGE_OUTCOME_LABELS, failure.outcome_code) ||
+    !Number.isInteger(failure.latency_ms) ||
+    failure.latency_ms < 0
+  ) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  return {
+    occurred_at: failure.occurred_at,
+    endpoint: failure.endpoint,
+    provider: failure.provider,
+    model: failure.model,
+    status_code: failure.status_code,
+    outcome_code: failure.outcome_code,
+    latency_ms: failure.latency_ms,
+  };
+}
+
+/**
+ * @param {import("../types.d.js").ManagementUsageFailure} failure
+ * @returns {{
+ *   occurredAt: string,
+ *   endpoint: string,
+ *   provider: string,
+ *   model: string,
+ *   status: string,
+ *   outcome: string,
+ *   latency: string
+ * }}
+ */
+function usageFailurePresentation(failure) {
+  return {
+    occurredAt: new Intl.DateTimeFormat("en-US", {
+      dateStyle: "medium",
+      timeStyle: "medium",
+      timeZone: "UTC",
+    }).format(new Date(failure.occurred_at)),
+    endpoint: usageLabel(USAGE_ENDPOINT_LABELS, failure.endpoint),
+    provider: failure.provider || COPY.usageFailuresNotResolved,
+    model: failure.model || COPY.usageFailuresNotResolved,
+    status: `${failure.status_code} ${usageStatusLabel(failure.status_code)}`,
+    outcome: usageLabel(USAGE_OUTCOME_LABELS, failure.outcome_code),
+    latency: `${formatNumber(failure.latency_ms)} ms`,
+  };
+}
+
+/**
+ * @param {number} statusCode
+ * @returns {string}
+ */
+function usageStatusLabel(statusCode) {
+  return usageLabel(USAGE_STATUS_LABELS, String(statusCode));
+}
+
+/**
+ * @param {Readonly<Record<string, string>>} labels
+ * @param {string} value
+ * @returns {boolean}
+ */
+function hasLabel(labels, value) {
+  return Object.prototype.hasOwnProperty.call(labels, value);
+}
+
+/**
+ * @param {Readonly<Record<string, string>>} labels
+ * @param {string} value
+ * @returns {string}
+ */
+function usageLabel(labels, value) {
+  if (!hasLabel(labels, value)) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  return labels[value];
 }
 
 /**
@@ -1553,7 +2448,7 @@ function emptyDefaults() {
 }
 
 /**
- * @param {import("../types.d.js").ManagementProfile} profile
+ * @param {import("../types.d.js").ManagementTenantProfile} profile
  * @returns {import("../types.d.js").TenantDefaults}
  */
 function createWorkspaceRoutingDefaults(profile) {
@@ -1677,6 +2572,112 @@ function profileProvider(providers, providerID) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
   return provider;
+}
+
+/**
+ * @param {import("../types.d.js").ManagementAccount} account
+ */
+function assertManagementAccount(account) {
+  if (
+    !account ||
+    !account.user ||
+    typeof account.user.id !== "string" ||
+    account.user.id === EMPTY_STRING ||
+    typeof account.user.is_admin !== "boolean" ||
+    !Array.isArray(account.tenants) ||
+    account.tenants.length === 0
+  ) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+  const tenantIDs = new Set();
+  const tenantNames = new Set();
+  for (const tenant of account.tenants) {
+    if (
+      !tenant ||
+      typeof tenant.id !== "string" ||
+      tenant.id === EMPTY_STRING ||
+      typeof tenant.name !== "string" ||
+      tenant.name === EMPTY_STRING ||
+      typeof tenant.has_secret !== "boolean" ||
+      typeof tenant.created_at !== "string" ||
+      typeof tenant.updated_at !== "string" ||
+      tenantIDs.has(tenant.id) ||
+      tenantNames.has(tenant.name.toLocaleLowerCase("en-US"))
+    ) {
+      throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    }
+    tenantIDs.add(tenant.id);
+    tenantNames.add(tenant.name.toLocaleLowerCase("en-US"));
+  }
+}
+
+/**
+ * @param {import("../types.d.js").ManagementTenantProfile} profile
+ * @param {string} tenantID
+ */
+function assertManagementTenantProfile(profile, tenantID) {
+  if (
+    !profile ||
+    !profile.tenant ||
+    profile.tenant.id !== tenantID ||
+    typeof profile.tenant.name !== "string" ||
+    profile.tenant.name === EMPTY_STRING ||
+    typeof profile.tenant.has_secret !== "boolean" ||
+    typeof profile.tenant.created_at !== "string" ||
+    typeof profile.tenant.updated_at !== "string" ||
+    !Array.isArray(profile.providers) ||
+    !profile.proxy ||
+    typeof profile.proxy.text_path !== "string" ||
+    typeof profile.proxy.v2_path !== "string" ||
+    typeof profile.proxy.dictation_path !== "string"
+  ) {
+    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  }
+}
+
+/**
+ * @param {import("../types.d.js").ManagementTenantProfile} profile
+ * @returns {import("../types.d.js").ManagementTenantSummary}
+ */
+function tenantSummaryFromProfile(profile) {
+  return {
+    id: profile.tenant.id,
+    name: profile.tenant.name,
+    has_secret: profile.tenant.has_secret,
+    created_at: profile.tenant.created_at,
+    updated_at: profile.tenant.updated_at,
+  };
+}
+
+/**
+ * @returns {string}
+ */
+function tenantIDFromURL() {
+  return new URL(window.location.href).searchParams.get(TENANT_QUERY_PARAMETER) || EMPTY_STRING;
+}
+
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+function validatedTenantName(value) {
+  const name = value.trim();
+  if (
+    name === EMPTY_STRING ||
+    Array.from(name).length > TENANT_NAME_MAXIMUM_CHARACTERS ||
+    /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(name)
+  ) {
+    throw new Error("managed_tenant_name_invalid");
+  }
+  return name;
+}
+
+/**
+ * @param {unknown} requestError
+ * @returns {boolean}
+ */
+function isAbortError(requestError) {
+  return requestError instanceof DOMException && requestError.name === "AbortError";
 }
 
 /**

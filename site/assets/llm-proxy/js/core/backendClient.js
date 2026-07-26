@@ -23,18 +23,94 @@ export class BackendClientError extends Error {
 }
 
 /**
- * @returns {Promise<import("../types.d.js").ManagementProfile>}
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<import("../types.d.js").ManagementAccount>}
  */
-export function fetchProfile() {
-  return requestJSON(`${MANAGEMENT_BASE_PATH}/profile`, { method: "GET" });
+export function fetchAccount(signal) {
+  return requestJSON(`${MANAGEMENT_BASE_PATH}/account`, { method: "GET", signal });
 }
 
 /**
+ * @param {string} tenantID
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
+ */
+export function fetchTenant(tenantID, signal) {
+  return requestJSON(managementTenantPath(tenantID), { method: "GET", signal });
+}
+
+/**
+ * @param {string} name
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
+ */
+export function createTenant(name, signal) {
+  return requestJSON(`${MANAGEMENT_BASE_PATH}/tenants`, {
+    method: "POST",
+    body: { name },
+    signal,
+  });
+}
+
+/**
+ * @param {string} tenantID
+ * @param {string} name
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
+ */
+export function renameTenant(tenantID, name, signal) {
+  return requestJSON(managementTenantPath(tenantID), {
+    method: "PUT",
+    body: { name },
+    signal,
+  });
+}
+
+/**
+ * @param {string} tenantID
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<void>}
+ */
+export function deleteTenant(tenantID, signal) {
+  return requestJSON(managementTenantPath(tenantID), {
+    method: "DELETE",
+    signal,
+  });
+}
+
+/**
+ * @param {string} tenantID
  * @param {import("../types.d.js").UsageInterval} interval
+ * @param {AbortSignal} [signal]
  * @returns {Promise<import("../types.d.js").ManagementUsageSummary>}
  */
-export function fetchUsageSummary(interval) {
-  return requestJSON(`${MANAGEMENT_BASE_PATH}/usage?interval=${encodeURIComponent(interval)}`, { method: "GET" });
+export function fetchUsageSummary(tenantID, interval, signal) {
+  return requestJSON(`${managementTenantPath(tenantID)}/usage?interval=${encodeURIComponent(interval)}`, {
+    method: "GET",
+    signal,
+  });
+}
+
+/**
+ * @param {string} tenantID
+ * @param {import("../types.d.js").UsageInterval} interval
+ * @param {number} limit
+ * @param {string} cursor
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<import("../types.d.js").ManagementUsageFailurePage>}
+ */
+export function fetchUsageFailures(tenantID, interval, limit, cursor, signal) {
+  const query = new URLSearchParams({
+    interval,
+    limit: String(limit),
+  });
+  if (cursor) {
+    query.set("cursor", cursor);
+  }
+  return requestJSON(`${managementTenantPath(tenantID)}/usage/failures?${query}`, {
+    method: "GET",
+    signal,
+  });
 }
 
 /**
@@ -45,58 +121,78 @@ export function fetchAdminUsers() {
 }
 
 /**
+ * @param {string} tenantID
  * @param {string} provider
  * @param {string} apiKey
  * @param {string} textModel
  * @param {string} systemPrompt
- * @returns {Promise<import("../types.d.js").ManagementProfile>}
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
  */
-export function saveProviderKey(provider, apiKey, textModel, systemPrompt) {
-  return requestJSON(`${MANAGEMENT_BASE_PATH}/provider-keys/${encodeURIComponent(provider)}`, {
+export function saveProviderKey(tenantID, provider, apiKey, textModel, systemPrompt, signal) {
+  return requestJSON(`${managementTenantPath(tenantID)}/provider-keys/${encodeURIComponent(provider)}`, {
     method: "PUT",
     body: { api_key: apiKey, text_model: textModel, system_prompt: systemPrompt },
+    signal,
   });
 }
 
 /**
+ * @param {string} tenantID
  * @param {string} provider
- * @returns {Promise<import("../types.d.js").ManagementProfile>}
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
  */
-export function removeProviderKey(provider) {
-  return requestJSON(`${MANAGEMENT_BASE_PATH}/provider-keys/${encodeURIComponent(provider)}`, { method: "DELETE" });
+export function removeProviderKey(tenantID, provider, signal) {
+  return requestJSON(`${managementTenantPath(tenantID)}/provider-keys/${encodeURIComponent(provider)}`, {
+    method: "DELETE",
+    signal,
+  });
 }
 
 /**
+ * @param {string} tenantID
  * @param {string} provider
+ * @param {AbortSignal} [signal]
  * @returns {Promise<import("../types.d.js").ProviderKeyReveal>}
  */
-export function revealProviderKey(provider) {
-  return requestJSON(`${MANAGEMENT_BASE_PATH}/provider-keys/${encodeURIComponent(provider)}/reveal`, { method: "POST" });
-}
-
-/**
- * @param {import("../types.d.js").TenantDefaults} defaults
- * @returns {Promise<import("../types.d.js").ManagementProfile>}
- */
-export function updateDefaults(defaults) {
-  return requestJSON(`${MANAGEMENT_BASE_PATH}/defaults`, {
-    method: "PUT",
-    body: defaults,
+export function revealProviderKey(tenantID, provider, signal) {
+  return requestJSON(`${managementTenantPath(tenantID)}/provider-keys/${encodeURIComponent(provider)}/reveal`, {
+    method: "POST",
+    signal,
   });
 }
 
 /**
- * @returns {Promise<import("../types.d.js").SecretResponse>}
+ * @param {string} tenantID
+ * @param {import("../types.d.js").TenantDefaults} defaults
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
  */
-export function generateSecret() {
-  return requestJSON(`${MANAGEMENT_BASE_PATH}/secrets`, { method: "POST" });
+export function updateDefaults(tenantID, defaults, signal) {
+  return requestJSON(`${managementTenantPath(tenantID)}/defaults`, {
+    method: "PUT",
+    body: defaults,
+    signal,
+  });
 }
 
 /**
- * @returns {Promise<import("../types.d.js").ManagementProfile>}
+ * @param {string} tenantID
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<import("../types.d.js").SecretResponse>}
  */
-export function revokeSecret() {
-  return requestJSON(`${MANAGEMENT_BASE_PATH}/secrets`, { method: "DELETE" });
+export function generateSecret(tenantID, signal) {
+  return requestJSON(`${managementTenantPath(tenantID)}/secrets`, { method: "POST", signal });
+}
+
+/**
+ * @param {string} tenantID
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
+ */
+export function revokeSecret(tenantID, signal) {
+  return requestJSON(`${managementTenantPath(tenantID)}/secrets`, { method: "DELETE", signal });
 }
 
 /**
@@ -119,7 +215,7 @@ export function loadFrontendRuntimeConfig() {
 
 /**
  * @param {string} path
- * @param {{ method: string, body?: unknown }} options
+ * @param {{ method: string, body?: unknown, signal?: AbortSignal }} options
  * @returns {Promise<any>}
  */
 async function requestJSON(path, options) {
@@ -128,6 +224,7 @@ async function requestJSON(path, options) {
     method: options.method,
     credentials: "include",
     headers: {},
+    signal: options.signal,
   };
   if (options.method !== "GET") {
     requestInit.headers = { [HEADER_CONTENT_TYPE]: MIME_JSON };
@@ -139,7 +236,18 @@ async function requestJSON(path, options) {
   if (!response.ok) {
     throw new BackendClientError(await response.text(), response.status);
   }
+  if (response.status === 204) {
+    return undefined;
+  }
   return response.json();
+}
+
+/**
+ * @param {string} tenantID
+ * @returns {string}
+ */
+function managementTenantPath(tenantID) {
+  return `${MANAGEMENT_BASE_PATH}/tenants/${encodeURIComponent(tenantID)}`;
 }
 
 /**

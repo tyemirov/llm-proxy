@@ -28,6 +28,8 @@
       <header class="resource-shell resource-topbar">
         <a class="resource-brand" href="/">LLM Proxy</a>
         <nav aria-label="Resource navigation">
+          <a href="/docs/">API reference</a>
+          <a href="/openapi.yaml">OpenAPI</a>
           <a href="/resources/">Resources</a>
           <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
           <a href="/">Main page</a>
@@ -48,7 +50,7 @@
             <p class="resource-deck">Track managed-tenant usage signals while excluding prompt, transcript, audio, response, and secret content.</p>
             <p class="resource-audience">Teams that need AI usage visibility without making the usage store a sensitive content log.</p>
             <div class="resource-actions">
-              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-button" href="/docs/">Open API reference</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
             </div>
           </header>
@@ -67,9 +69,9 @@
             <h2>How it works</h2>
             <ol class="resource-steps">
               <li>Authenticate managed proxy requests with generated tenant secrets.</li>
-<li>Record endpoint, provider, model, status code, success flag, latency, and token counts.</li>
+<li>Record endpoint, provider, model, status, success, canonical outcome code, latency, and token counts.</li>
 <li>Exclude prompts, audio, transcripts, responses, tenant secrets, and provider keys from usage events.</li>
-<li>Expose aggregated summaries through user and admin dashboards.</li>
+<li>Expose aggregate summaries to users and admins, and safe per-failure metadata only to the owning user.</li>
             </ol>
           </section>
 
@@ -87,23 +89,23 @@
                 <tbody>
 
                         <tr>
-                          <td>Metadata-only events</td>
-                          <td>Usage records describe routing and status, not request content.</td>
-                          <td>Dashboards can work without prompt storage.</td>
+                          <td>Canonical outcomes</td>
+                          <td>Every event stores one bounded code such as invalid_request, rate_limited, request_timeout, or upstream_error.</td>
+                          <td>Dashboards do not persist raw error strings.</td>
                         </tr>
 
 
                         <tr>
                           <td>Tenant isolation</td>
-                          <td>Signed-in users see their own usage summary.</td>
-                          <td>Admins get summaries without sensitive content.</td>
+                          <td>Signed-in owners can inspect their own safe failure rows.</td>
+                          <td>Admins remain aggregate-only and foreign workspace ids return the same not-found response.</td>
                         </tr>
 
 
                         <tr>
-                          <td>Provider/model breakdown</td>
-                          <td>Aggregates show where traffic went.</td>
-                          <td>Operators can inspect patterns without reading prompts.</td>
+                          <td>Bounded diagnostic rows</td>
+                          <td>Failure pages contain only occurred_at, endpoint, provider, model, status_code, outcome_code, and latency_ms.</td>
+                          <td>Operational investigation does not become content export.</td>
                         </tr>
 
                 </tbody>
@@ -128,8 +130,8 @@
 
 
                     <section class="resource-card">
-                      <h3>Error trend</h3>
-                      <p>Status-code buckets reveal failures without storing responses.</p>
+                      <h3>Historical migration</h3>
+                      <p>Existing status codes receive normalized outcome codes without reconstructing old provider messages.</p>
                     </section>
 
             </div>
@@ -212,13 +214,15 @@
 
           <section class="resource-final-cta">
             <h2>Use this pattern in LLM Proxy</h2>
-            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
-            <a class="resource-button" href="/">Open the main page</a>
+            <p>Start from the canonical API reference, then use the management surface when the workflow needs tenant or provider configuration.</p>
+            <a class="resource-button" href="/docs/">Open API reference</a>
           </section>
         </article>
       </main>
       <footer class="resource-shell resource-footer">
         <a href="/">LLM Proxy main page</a>
+        <a href="/docs/">API reference</a>
+        <a href="/openapi.yaml">OpenAPI schema</a>
         <a href="/resources/">Resource hub</a>
         <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
         <a href="/sitemap.xml">Sitemap</a>
