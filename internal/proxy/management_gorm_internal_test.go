@@ -16,32 +16,18 @@ import (
 func TestManagedTenantGORMInitializationEdges(t *testing.T) {
 	cipher := internalManagedProviderKeyCipher()
 	providers := internalManagementProviderRegistry()
-	if _, dialectorError := managementDatabaseDialector(ManagementConfiguration{
-		DatabaseDialect: "mysql",
-		DatabaseDSN:     "mysql://example",
-	}); !errors.Is(dialectorError, errManagedTenantStoreOpen) {
-		t.Fatalf("unsupported dialect error=%v", dialectorError)
-	}
-	if _, databaseError := newGORMManagedTenantDatabase(ManagementConfiguration{
-		DatabaseDialect: "mysql",
-		DatabaseDSN:     "mysql://example",
-	}, cipher, providers); !errors.Is(databaseError, errManagedTenantStoreOpen) {
-		t.Fatalf("unsupported database error=%v", databaseError)
-	}
 	customDialector := sqlite.Open(":memory:")
-	resolvedDialector, dialectorError := managementDatabaseDialector(ManagementConfiguration{DatabaseDialector: customDialector})
-	if dialectorError != nil || resolvedDialector != customDialector {
-		t.Fatalf("custom dialector=%v error=%v", resolvedDialector, dialectorError)
+	resolvedDialector := managementDatabaseDialector(ManagementConfiguration{DatabaseDialector: customDialector})
+	if resolvedDialector != customDialector {
+		t.Fatalf("custom dialector=%v", resolvedDialector)
 	}
 	if _, databaseError := newGORMManagedTenantDatabase(ManagementConfiguration{
-		DatabaseDialect: ManagementDatabaseDialectPostgres,
-		DatabaseDSN:     "postgres://%",
+		DatabasePath: filepath.Join(t.TempDir(), "missing", "management.sqlite"),
 	}, cipher, providers); !errors.Is(databaseError, errManagedTenantStoreOpen) {
 		t.Fatalf("open error=%v", databaseError)
 	}
 	if _, databaseError := newGORMManagedTenantDatabase(ManagementConfiguration{
-		DatabaseDialect: ManagementDatabaseDialectSQLite,
-		DatabaseDSN:     "failing-auto-migrate",
+		DatabasePath: "failing-auto-migrate",
 		DatabaseDialector: failingManagedAutoMigrateDialector{
 			Dialector: sqlite.Open(":memory:"),
 		},
@@ -304,8 +290,7 @@ func TestManagedTenantGORMLowLevelMutationEdges(t *testing.T) {
 func newCanonicalGORMFixture(t *testing.T, now time.Time) *gormManagedTenantDatabase {
 	t.Helper()
 	database, databaseError := newGORMManagedTenantDatabase(ManagementConfiguration{
-		DatabaseDialect: ManagementDatabaseDialectSQLite,
-		DatabaseDSN:     filepath.Join(t.TempDir(), "canonical.db"),
+		DatabasePath: filepath.Join(t.TempDir(), "canonical.db"),
 	}, internalManagedProviderKeyCipher(), internalManagementProviderRegistry())
 	if databaseError != nil {
 		t.Fatalf("open canonical database: %v", databaseError)

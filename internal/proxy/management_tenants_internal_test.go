@@ -6,14 +6,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/glebarez/sqlite"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -97,7 +95,7 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 	}
 
 	database, databaseError := newGORMManagedTenantDatabase(
-		ManagementConfiguration{DatabaseDialect: ManagementDatabaseDialectSQLite, DatabaseDSN: databasePath, DatabaseDialector: sqlite.Open(databasePath)},
+		ManagementConfiguration{DatabasePath: databasePath, DatabaseDialector: sqlite.Open(databasePath)},
 		providerKeyCipher,
 		providers,
 	)
@@ -155,137 +153,6 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 	}
 }
 
-func TestManagedTenantPostgresOwnershipMigrationPreservesRebindsAndRollsBack(t *testing.T) {
-	databaseDSN := strings.TrimSpace(os.Getenv("LLM_PROXY_TEST_POSTGRES_DSN"))
-	if databaseDSN == "" {
-		t.Skip("LLM_PROXY_TEST_POSTGRES_DSN is required for the disposable PostgreSQL migration scenario")
-	}
-	providerKeyCipher := internalManagedProviderKeyCipher()
-	providers := internalManagementProviderRegistry()
-	legacyDatabase := openLegacyManagedTenantDatabaseWithDialector(t, postgres.Open(databaseDSN))
-	resetManagedTenantTestTables(t, legacyDatabase)
-	legacyDatabase = openLegacyManagedTenantDatabaseWithDialector(t, postgres.Open(databaseDSN))
-	fixedTime := time.Date(2026, 7, 25, 13, 0, 0, 0, time.UTC)
-	firstDigest := sha256.Sum256([]byte("llmp_postgres_first"))
-	secondDigest := sha256.Sum256([]byte("llmp_postgres_second"))
-	firstTenant := legacyManagedTenantRecord{
-		UserID: "postgres-first-user", UserEmail: "first@example.com", TenantID: "postgres-first",
-		SecretDigest: hex.EncodeToString(firstDigest[:]), CreatedAt: fixedTime, UpdatedAt: fixedTime.Add(time.Minute),
-	}
-	firstTenant.applyDefaults(defaultManagedRoutingDefaults())
-	secondTenant := legacyManagedTenantRecord{
-		UserID: "postgres-second-user", UserEmail: "second@example.com", TenantID: "postgres-second",
-		SecretDigest: hex.EncodeToString(secondDigest[:]), CreatedAt: fixedTime.Add(time.Hour), UpdatedAt: fixedTime.Add(2 * time.Hour),
-	}
-	secondTenant.applyDefaults(defaultManagedRoutingDefaults())
-	if createError := legacyDatabase.Table(managedTenantTable).Create(&[]legacyManagedTenantRecord{firstTenant, secondTenant}).Error; createError != nil {
-		t.Fatalf("seed PostgreSQL legacy tenants: %v", createError)
-	}
-	firstCiphertext, firstEncryptionError := providerKeyCipher.encrypt(
-		bytes.NewReader(make([]byte, providerKeyCipher.aeadCipher.NonceSize())),
-		firstTenant.UserID,
-		ProviderNameOpenAI,
-		"sk-postgres-first",
-	)
-	if firstEncryptionError != nil {
-		t.Fatalf("encrypt PostgreSQL first key: %v", firstEncryptionError)
-	}
-	secondCiphertext, secondEncryptionError := providerKeyCipher.encrypt(
-		bytes.NewReader(bytes.Repeat([]byte{1}, providerKeyCipher.aeadCipher.NonceSize())),
-		secondTenant.UserID,
-		ProviderNameOpenAI,
-		"sk-postgres-second",
-	)
-	if secondEncryptionError != nil {
-		t.Fatalf("encrypt PostgreSQL second key: %v", secondEncryptionError)
-	}
-	if createError := legacyDatabase.Table(managedProviderKeyTable).Create(&[]legacyManagedProviderAPIKeyRecord{
-		{UserID: firstTenant.UserID, ProviderID: ProviderNameOpenAI, EncryptedAPIKey: firstCiphertext, TextModel: ModelNameGPT41, CreatedAt: fixedTime, UpdatedAt: fixedTime.Add(time.Minute)},
-		{UserID: secondTenant.UserID, ProviderID: ProviderNameOpenAI, EncryptedAPIKey: secondCiphertext, TextModel: ModelNameGPT41, CreatedAt: fixedTime.Add(time.Hour), UpdatedAt: fixedTime.Add(2 * time.Hour)},
-	}).Error; createError != nil {
-		t.Fatalf("seed PostgreSQL legacy provider keys: %v", createError)
-	}
-	if createError := legacyDatabase.Table(managedUsageEventTable).Create(&[]legacyManagedUsageEventRecord{
-		{ID: 41, UserID: firstTenant.UserID, TenantID: firstTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: http.StatusOK, Success: true, TotalTokens: 8, CreatedAt: fixedTime.Add(3 * time.Hour)},
-		{ID: 73, UserID: secondTenant.UserID, TenantID: secondTenant.TenantID, Endpoint: usageEndpointDictation, ProviderID: ProviderNameOpenAI, ModelID: DefaultDictationModel, StatusCode: http.StatusBadGateway, CreatedAt: fixedTime.Add(4 * time.Hour)},
-	}).Error; createError != nil {
-		t.Fatalf("seed PostgreSQL legacy usage: %v", createError)
-	}
-
-	database, databaseError := newGORMManagedTenantDatabase(
-		ManagementConfiguration{DatabaseDialect: ManagementDatabaseDialectPostgres, DatabaseDSN: databaseDSN},
-		providerKeyCipher,
-		providers,
-	)
-	if databaseError != nil {
-		t.Fatalf("migrate PostgreSQL database: %v", databaseError)
-	}
-	if managedTableHasColumn(database.database.Migrator(), managedTenantTable, "user_id") ||
-		!managedTableHasColumn(database.database.Migrator(), managedTenantTable, "owner_user_id") ||
-		managedTableHasColumn(database.database.Migrator(), managedProviderKeyTable, "user_id") ||
-		managedTableHasColumn(database.database.Migrator(), managedUsageEventTable, "user_id") {
-		t.Fatalf("PostgreSQL migration retained obsolete ownership columns")
-	}
-	for _, expectation := range []struct {
-		userID   string
-		tenantID string
-		apiKey   string
-	}{
-		{userID: firstTenant.UserID, tenantID: firstTenant.TenantID, apiKey: "sk-postgres-first"},
-		{userID: secondTenant.UserID, tenantID: secondTenant.TenantID, apiKey: "sk-postgres-second"},
-	} {
-		record, queryError := database.tenantByOwnerAndID(expectation.userID, expectation.tenantID)
-		if queryError != nil {
-			t.Fatalf("load PostgreSQL migrated tenant %s: %v", expectation.tenantID, queryError)
-		}
-		if record.Name != "Default" || len(record.ProviderAPIKeys) != 1 {
-			t.Fatalf("PostgreSQL migrated tenant=%+v", record)
-		}
-		apiKey, decryptionError := providerKeyCipher.decrypt(record.ProviderAPIKeys[0])
-		if decryptionError != nil || apiKey != expectation.apiKey {
-			t.Fatalf("PostgreSQL tenant=%s key=%q error=%v", expectation.tenantID, apiKey, decryptionError)
-		}
-	}
-	var usageRecords []managedUsageEventRecord
-	if queryError := database.database.Order("id").Find(&usageRecords).Error; queryError != nil {
-		t.Fatalf("load PostgreSQL migrated usage: %v", queryError)
-	}
-	if len(usageRecords) != 2 || usageRecords[0].ID != 41 || usageRecords[0].TotalTokens != 8 || usageRecords[1].ID != 73 {
-		t.Fatalf("PostgreSQL migrated usage=%+v", usageRecords)
-	}
-	if initializeError := initializeManagedTenantSchema(database.database, providerKeyCipher, providers); initializeError != nil {
-		t.Fatalf("reopen current PostgreSQL schema: %v", initializeError)
-	}
-
-	resetManagedTenantTestTables(t, database.database)
-	rollbackDatabase := openLegacyManagedTenantDatabaseWithDialector(t, postgres.Open(databaseDSN))
-	rollbackTenant := legacyManagedTenantRecord{
-		UserID: "postgres-rollback-user", TenantID: "postgres-rollback", CreatedAt: fixedTime, UpdatedAt: fixedTime,
-	}
-	rollbackTenant.applyDefaults(defaultManagedRoutingDefaults())
-	if createError := rollbackDatabase.Table(managedTenantTable).Create(&rollbackTenant).Error; createError != nil {
-		t.Fatalf("seed PostgreSQL rollback tenant: %v", createError)
-	}
-	if createError := rollbackDatabase.Table(managedProviderKeyTable).Create(&legacyManagedProviderAPIKeyRecord{
-		UserID: rollbackTenant.UserID, ProviderID: ProviderNameOpenAI, EncryptedAPIKey: "corrupt",
-		TextModel: ModelNameGPT41, CreatedAt: fixedTime, UpdatedAt: fixedTime,
-	}).Error; createError != nil {
-		t.Fatalf("seed PostgreSQL rollback provider key: %v", createError)
-	}
-	_, migrationError := newGORMManagedTenantDatabase(
-		ManagementConfiguration{DatabaseDialect: ManagementDatabaseDialectPostgres, DatabaseDSN: databaseDSN},
-		providerKeyCipher,
-		providers,
-	)
-	if migrationError == nil || !strings.Contains(migrationError.Error(), errManagedProviderKeyDecryption.Error()) {
-		t.Fatalf("PostgreSQL rollback migration error=%v", migrationError)
-	}
-	rollbackMigrator := rollbackDatabase.Migrator()
-	if !managedTableHasColumn(rollbackMigrator, managedTenantTable, "user_id") || rollbackMigrator.HasTable(managedUserTable) {
-		t.Fatalf("failed PostgreSQL migration mutated schema")
-	}
-}
-
 func managedColumnNames(columns []gorm.ColumnType) []string {
 	names := make([]string, 0, len(columns))
 	for _, column := range columns {
@@ -340,7 +207,7 @@ func TestManagedTenantSQLiteOwnershipMigrationRollsBackInvalidData(t *testing.T)
 			}
 
 			_, migrationError := newGORMManagedTenantDatabase(
-				ManagementConfiguration{DatabaseDialect: ManagementDatabaseDialectSQLite, DatabaseDSN: databasePath, DatabaseDialector: sqlite.Open(databasePath)},
+				ManagementConfiguration{DatabasePath: databasePath, DatabaseDialector: sqlite.Open(databasePath)},
 				providerKeyCipher,
 				internalManagementProviderRegistry(),
 			)
@@ -368,8 +235,7 @@ func TestManagedTenantSchemaRejectsUnknownVersion(t *testing.T) {
 	providers := internalManagementProviderRegistry()
 	database, databaseError := newGORMManagedTenantDatabase(
 		ManagementConfiguration{
-			DatabaseDialect:   ManagementDatabaseDialectSQLite,
-			DatabaseDSN:       databasePath,
+			DatabasePath:      databasePath,
 			DatabaseDialector: sqlite.Open(databasePath),
 		},
 		providerKeyCipher,
@@ -413,28 +279,6 @@ func openLegacyManagedTenantDatabaseWithDialector(t *testing.T, dialector gorm.D
 		}
 	}
 	return database
-}
-
-func resetManagedTenantTestTables(t *testing.T, database *gorm.DB) {
-	t.Helper()
-	for _, tableName := range []string{
-		managedProviderKeyTable,
-		managedUsageEventTable,
-		managedTenantTable,
-		managedUserTable,
-		managedSchemaMigrationTable,
-		legacyProviderKeyMigrationTable,
-		legacyUsageEventMigrationTable,
-		legacyTenantMigrationTable,
-		obsoleteRoutingMigrationTable,
-		obsoleteStaticMigrationTable,
-	} {
-		if database.Migrator().HasTable(tableName) {
-			if dropError := database.Migrator().DropTable(tableName); dropError != nil {
-				t.Fatalf("drop disposable migration table %s: %v", tableName, dropError)
-			}
-		}
-	}
 }
 
 func internalManagementProviderRegistry() *providerRegistry {

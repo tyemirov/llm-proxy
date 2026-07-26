@@ -1020,8 +1020,8 @@ func TestManagementConfigurationValidationRequiresBackendAuthFields(t *testing.T
 
 	configuration = managementConfigurationWithDatabasePath(proxy.Configuration{}, "")
 	_, buildError = buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
-	if buildError == nil || !strings.Contains(buildError.Error(), "management.database_dsn") {
-		t.Fatalf("BuildRouter error=%v want missing management.database_dsn", buildError)
+	if buildError == nil || !strings.Contains(buildError.Error(), "management.database_path") {
+		t.Fatalf("BuildRouter error=%v want missing management.database_path", buildError)
 	}
 
 	configuration = managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "store.db"))
@@ -1036,20 +1036,6 @@ func TestManagementConfigurationValidationRequiresBackendAuthFields(t *testing.T
 	_, buildError = buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
 	if buildError == nil || !strings.Contains(buildError.Error(), "management.ui_origins") {
 		t.Fatalf("BuildRouter error=%v want blank management.ui_origins", buildError)
-	}
-
-	configuration = managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "store.db"))
-	configuration.Management.DatabaseDialect = "mysql"
-	_, buildError = buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
-	if buildError == nil || !strings.Contains(buildError.Error(), "management.database_dialect") {
-		t.Fatalf("BuildRouter error=%v want unsupported management.database_dialect", buildError)
-	}
-
-	configuration = managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "store.db"))
-	configuration.Management.DatabaseDialect = " "
-	_, buildError = buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
-	if buildError == nil || !strings.Contains(buildError.Error(), "management.database_dialect") {
-		t.Fatalf("BuildRouter error=%v want missing management.database_dialect", buildError)
 	}
 
 	configuration = managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "store.db"))
@@ -1075,11 +1061,9 @@ func TestManagementConfigurationValidationRequiresBackendAuthFields(t *testing.T
 
 }
 
-func TestManagementSQLiteDialectOpensConfiguredDatabase(t *testing.T) {
+func TestManagementOpensConfiguredDatabasePath(t *testing.T) {
 	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
 	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
-	configuration.Management.DatabaseDialect = proxy.ManagementDatabaseDialectSQLite
-	configuration.Management.DatabaseDSN = databasePath
 	configuration.Management.DatabaseDialector = nil
 	router, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
 	if buildError != nil {
@@ -1793,10 +1777,8 @@ func newManagementRouterWithDatabasePath(t *testing.T, configuration proxy.Confi
 }
 
 func managementConfigurationWithDatabasePath(configuration proxy.Configuration, databasePath string) proxy.Configuration {
-	databaseDSN := "sqlite-test-management"
 	var databaseDialector gorm.Dialector = sqlite.Open(databasePath)
 	if databasePath == "" {
-		databaseDSN = ""
 		databaseDialector = nil
 	}
 	configuration.Management = proxy.ManagementConfiguration{
@@ -1814,8 +1796,7 @@ func managementConfigurationWithDatabasePath(configuration proxy.Configuration, 
 		SessionPath:              "/auth/session",
 		JWTSigningKey:            testManagementSigningKey,
 		SessionCookieName:        testManagementCookieName,
-		DatabaseDialect:          proxy.ManagementDatabaseDialectSQLite,
-		DatabaseDSN:              databaseDSN,
+		DatabasePath:             databasePath,
 		ProviderKeyEncryptionKey: testManagementProviderKeyEncryptionKey,
 		ManagementAPIOrigin:      "http://localhost:8080",
 		ProxyOrigin:              "http://localhost:8080",

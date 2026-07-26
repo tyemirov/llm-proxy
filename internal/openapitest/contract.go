@@ -622,6 +622,15 @@ func (contract *Contract) validateValue(schema map[string]any, value any, contex
 				return fmt.Errorf("%w: %s must be at least %d", errInvalidContract, context, minimum)
 			}
 		}
+		if rawMaximum, hasMaximum := resolvedSchema["maximum"].(json.Number); hasMaximum {
+			maximum, maximumError := rawMaximum.Int64()
+			if maximumError != nil {
+				return fmt.Errorf("%w: %s maximum: %v", errInvalidContract, context, maximumError)
+			}
+			if integerValue > maximum {
+				return fmt.Errorf("%w: %s must be at most %d", errInvalidContract, context, maximum)
+			}
+		}
 		return nil
 	case "boolean":
 		if _, ok := value.(bool); !ok {

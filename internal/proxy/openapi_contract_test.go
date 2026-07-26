@@ -164,6 +164,18 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	router.ServeHTTP(providerKeyResponse, providerKeyRequest)
 	assertOpenAPIResponse(t, contract, "/api/management/tenants/{tenant_id}/provider-keys/{provider}", http.MethodPut, providerKeyResponse)
 
+	retainedProviderKeyBody := []byte(managementProviderKeyRequestBody(t, "", proxy.ModelNameDeepSeekV4Flash, "Retain the existing key."))
+	retainedProviderKeyRequest := authenticatedJSONRequest(
+		http.MethodPut,
+		tenantPath+"/provider-keys/deepseek",
+		string(retainedProviderKeyBody),
+		sessionCookie,
+	)
+	assertOpenAPIRequest(t, contract, "/api/management/tenants/{tenant_id}/provider-keys/{provider}", retainedProviderKeyRequest, retainedProviderKeyBody)
+	retainedProviderKeyResponse := httptest.NewRecorder()
+	router.ServeHTTP(retainedProviderKeyResponse, retainedProviderKeyRequest)
+	assertOpenAPIResponse(t, contract, "/api/management/tenants/{tenant_id}/provider-keys/{provider}", http.MethodPut, retainedProviderKeyResponse)
+
 	secretBody := []byte(`{}`)
 	secretRequest := authenticatedJSONRequest(http.MethodPost, tenantPath+"/secrets", string(secretBody), sessionCookie)
 	assertOpenAPIRequest(t, contract, "/api/management/tenants/{tenant_id}/secrets", secretRequest, secretBody)
@@ -216,6 +228,30 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	failuresResponse := httptest.NewRecorder()
 	router.ServeHTTP(failuresResponse, failuresRequest)
 	assertOpenAPIResponse(t, contract, "/api/management/tenants/{tenant_id}/usage/failures", http.MethodGet, failuresResponse)
+
+	overLimitFailuresRequest := httptest.NewRequest(http.MethodGet, tenantPath+"/usage/failures?interval=30d&limit=101", nil)
+	overLimitFailuresRequest.AddCookie(sessionCookie)
+	validationError := contract.ValidateRequest(
+		"/api/management/tenants/{tenant_id}/usage/failures",
+		overLimitFailuresRequest.Method,
+		overLimitFailuresRequest,
+		nil,
+	)
+	if validationError == nil || !strings.Contains(validationError.Error(), "must be at most 100") {
+		t.Fatalf("over-limit OpenAPI validation error=%v", validationError)
+	}
+	overLimitFailuresResponse := httptest.NewRecorder()
+	router.ServeHTTP(overLimitFailuresResponse, overLimitFailuresRequest)
+	if overLimitFailuresResponse.Code != http.StatusBadRequest {
+		t.Fatalf("over-limit status=%d body=%q", overLimitFailuresResponse.Code, overLimitFailuresResponse.Body.String())
+	}
+	assertOpenAPIResponse(
+		t,
+		contract,
+		"/api/management/tenants/{tenant_id}/usage/failures",
+		http.MethodGet,
+		overLimitFailuresResponse,
+	)
 }
 
 func assertOpenAPIRequest(t *testing.T, contract *openapitest.Contract, path string, request *http.Request, body []byte) {

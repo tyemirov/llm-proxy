@@ -21,7 +21,6 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/tyemirov/llm-proxy/internal/constants"
 	"golang.org/x/sync/semaphore"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -411,11 +410,7 @@ func managedProviderKeyAssociatedData(tenantID string, providerIdentifier string
 }
 
 func newGORMManagedTenantDatabase(configuration ManagementConfiguration, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) (*gormManagedTenantDatabase, error) {
-	dialector, dialectorError := managementDatabaseDialector(configuration)
-	if dialectorError != nil {
-		return nil, dialectorError
-	}
-	database, openError := gorm.Open(dialector, &gorm.Config{TranslateError: true})
+	database, openError := gorm.Open(managementDatabaseDialector(configuration), &gorm.Config{TranslateError: true})
 	if openError != nil {
 		return nil, fmt.Errorf("%w: %v", errManagedTenantStoreOpen, openError)
 	}
@@ -425,20 +420,11 @@ func newGORMManagedTenantDatabase(configuration ManagementConfiguration, provide
 	return &gormManagedTenantDatabase{database: database}, nil
 }
 
-func managementDatabaseDialector(configuration ManagementConfiguration) (gorm.Dialector, error) {
+func managementDatabaseDialector(configuration ManagementConfiguration) gorm.Dialector {
 	if configuration.DatabaseDialector != nil {
-		return configuration.DatabaseDialector, nil
+		return configuration.DatabaseDialector
 	}
-	databaseDialect := strings.ToLower(strings.TrimSpace(configuration.DatabaseDialect))
-	dialectors := map[string]func(string) gorm.Dialector{
-		ManagementDatabaseDialectPostgres: postgres.Open,
-		ManagementDatabaseDialectSQLite:   sqlite.Open,
-	}
-	dialectorFactory, supportedDialect := dialectors[databaseDialect]
-	if !supportedDialect {
-		return nil, fmt.Errorf("%w: field=management.database_dialect value=%s", errManagedTenantStoreOpen, databaseDialect)
-	}
-	return dialectorFactory(configuration.DatabaseDSN), nil
+	return sqlite.Open(configuration.DatabasePath)
 }
 
 func migrateCurrentManagedSchema(database *gorm.DB) error {

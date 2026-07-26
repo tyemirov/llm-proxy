@@ -2,6 +2,7 @@ package proxy_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -298,6 +299,25 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 		t.Fatalf("refreshed page=%+v", refreshedPage)
 	}
 
+	callerContext, cancelCaller := context.WithCancel(context.Background())
+	cancelCaller()
+	canceledRequest := httptest.NewRequest(
+		http.MethodGet,
+		"/?key="+secretQuery+"&prompt=caller-canceled",
+		nil,
+	).WithContext(callerContext)
+	canceledResponse := httptest.NewRecorder()
+	router.ServeHTTP(canceledResponse, canceledRequest)
+	if canceledResponse.Code != 499 {
+		t.Fatalf("canceled status=%d body=%q", canceledResponse.Code, canceledResponse.Body.String())
+	}
+	canceledPage := requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 1, "")
+	if len(canceledPage.Failures) != 1 ||
+		canceledPage.Failures[0].StatusCode != 499 ||
+		canceledPage.Failures[0].OutcomeCode != "request_timeout" {
+		t.Fatalf("canceled page=%+v", canceledPage)
+	}
+
 	successRequest := httptest.NewRequest(http.MethodGet, "/?key="+secretQuery+"&prompt=success", nil)
 	successResponse := httptest.NewRecorder()
 	router.ServeHTTP(successResponse, successRequest)
@@ -338,6 +358,7 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 		"service_unavailable",
 		"request_timeout",
 		"invalid_request",
+		"request_timeout",
 		"success",
 	}
 	if !reflect.DeepEqual(actualOutcomes, expectedOutcomes) {

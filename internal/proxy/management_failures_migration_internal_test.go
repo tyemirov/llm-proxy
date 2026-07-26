@@ -3,7 +3,6 @@ package proxy
 import (
 	"errors"
 	"net/http"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -11,7 +10,6 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -209,21 +207,6 @@ func TestManagedUsageOutcomeSQLiteMigrationRollsBackStageFailures(t *testing.T) 
 			}
 		})
 	}
-}
-
-func TestManagedUsageOutcomePostgresMigrationBackfillsCanonicalCodesAndIndex(t *testing.T) {
-	databaseDSN := strings.TrimSpace(os.Getenv("LLM_PROXY_TEST_POSTGRES_DSN"))
-	if databaseDSN == "" {
-		t.Skip("LLM_PROXY_TEST_POSTGRES_DSN is required for the disposable PostgreSQL migration scenario")
-	}
-	database, openError := gorm.Open(postgres.Open(databaseDSN), &gorm.Config{})
-	if openError != nil {
-		t.Fatalf("open PostgreSQL fixture: %v", openError)
-	}
-	resetManagedTenantTestTables(t, database)
-	t.Cleanup(func() { resetManagedTenantTestTables(t, database) })
-	seedManagedUsageSchemaOne(t, database)
-	assertManagedUsageOutcomeMigration(t, database)
 }
 
 type failingManagedUsageMigrationDialector struct {
