@@ -285,44 +285,47 @@ func (database *fakeManagedTenantDatabase) createUsageEvent(_ context.Context, r
 	return nil
 }
 
-func (database *fakeManagedTenantDatabase) earliestUsageEventByTenantIDThrough(tenantID string, periodEnd time.Time) (time.Time, error) {
+func (database *fakeManagedTenantDatabase) earliestUsageEventByTenantIDsThrough(tenantIDs []string, periodEnd time.Time) (time.Time, error) {
 	if database.earliestUsageEventError != nil {
 		return time.Time{}, database.earliestUsageEventError
 	}
 	database.usageEventsQueryPeriodEnd = periodEnd
 	database.usageEventsQueryMode = "all"
+	tenantIDSet := stringSet(tenantIDs)
 	var earliest time.Time
 	for _, record := range database.usageEvents {
-		if record.TenantID == tenantID && !record.CreatedAt.After(periodEnd) && (earliest.IsZero() || record.CreatedAt.Before(earliest)) {
+		if tenantIDSet[record.TenantID] && !record.CreatedAt.After(periodEnd) && (earliest.IsZero() || record.CreatedAt.Before(earliest)) {
 			earliest = record.CreatedAt
 		}
 	}
 	return earliest, nil
 }
 
-func (database *fakeManagedTenantDatabase) streamUsageEventsByTenantIDBetween(tenantID string, periodStart time.Time, periodEnd time.Time, visit managedUsageEventVisitor) error {
+func (database *fakeManagedTenantDatabase) streamUsageEventsByTenantIDsBetween(tenantIDs []string, periodStart time.Time, periodEnd time.Time, visit managedUsageEventVisitor) error {
 	if database.streamUsageEventsError != nil {
 		return database.streamUsageEventsError
 	}
 	database.usageEventsQueryPeriodStart = periodStart
 	database.usageEventsQueryPeriodEnd = periodEnd
 	database.usageEventsQueryMode = "finite"
+	tenantIDSet := stringSet(tenantIDs)
 	for _, record := range database.usageEvents {
-		if record.TenantID == tenantID && !record.CreatedAt.Before(periodStart) && !record.CreatedAt.After(periodEnd) {
+		if tenantIDSet[record.TenantID] && !record.CreatedAt.Before(periodStart) && !record.CreatedAt.After(periodEnd) {
 			visit(record)
 		}
 	}
 	return nil
 }
 
-func (database *fakeManagedTenantDatabase) streamUsageEventsByTenantIDThrough(tenantID string, periodEnd time.Time, visit managedUsageEventVisitor) error {
+func (database *fakeManagedTenantDatabase) streamUsageEventsByTenantIDsThrough(tenantIDs []string, periodEnd time.Time, visit managedUsageEventVisitor) error {
 	if database.streamUsageEventsError != nil {
 		return database.streamUsageEventsError
 	}
 	database.usageEventsQueryPeriodEnd = periodEnd
 	database.usageEventsQueryMode = "all"
+	tenantIDSet := stringSet(tenantIDs)
 	for _, record := range database.usageEvents {
-		if record.TenantID == tenantID && !record.CreatedAt.After(periodEnd) {
+		if tenantIDSet[record.TenantID] && !record.CreatedAt.After(periodEnd) {
 			visit(record)
 		}
 	}
@@ -344,26 +347,35 @@ func (database *fakeManagedTenantDatabase) usageEventsSince(periodStart time.Tim
 }
 
 func (database *fakeManagedTenantDatabase) usageFailuresByOwnerAndTenant(ownerUserID string, tenantID string, query managedUsageFailureRecordQuery) ([]managedUsageFailureRecord, uint, error) {
-	if database.usageFailuresError != nil {
-		return nil, 0, database.usageFailuresError
-	}
 	tenantRecord, found := database.tenantsByID[tenantID]
 	if !found || tenantRecord.OwnerUserID != ownerUserID {
 		return nil, 0, gorm.ErrRecordNotFound
 	}
+	records, resolvedSnapshotID, recordsError := database.usageFailuresByTenantIDs([]string{tenantID}, query)
+	for recordIndex := range records {
+		records[recordIndex].failure.tenantName = tenantRecord.Name
+	}
+	return records, resolvedSnapshotID, recordsError
+}
+
+func (database *fakeManagedTenantDatabase) usageFailuresByTenantIDs(tenantIDs []string, query managedUsageFailureRecordQuery) ([]managedUsageFailureRecord, uint, error) {
+	if database.usageFailuresError != nil {
+		return nil, 0, database.usageFailuresError
+	}
+	tenantIDSet := stringSet(tenantIDs)
 	var resolvedSnapshotID uint
 	if query.snapshotID != nil {
 		resolvedSnapshotID = *query.snapshotID
 	} else {
 		for _, record := range database.usageEvents {
-			if record.TenantID == tenantID && !record.CreatedAt.After(query.snapshotAt) && record.ID > resolvedSnapshotID {
+			if tenantIDSet[record.TenantID] && !record.CreatedAt.After(query.snapshotAt) && record.ID > resolvedSnapshotID {
 				resolvedSnapshotID = record.ID
 			}
 		}
 	}
 	usageRecords := make([]managedUsageEventRecord, 0, query.limit)
 	for _, record := range database.usageEvents {
-		if record.TenantID != tenantID || record.Success || record.ID > resolvedSnapshotID || record.CreatedAt.After(query.snapshotAt) {
+		if !tenantIDSet[record.TenantID] || record.Success || record.ID > resolvedSnapshotID || record.CreatedAt.After(query.snapshotAt) {
 			continue
 		}
 		if query.periodStart != nil && record.CreatedAt.Before(*query.periodStart) {
@@ -393,6 +405,7 @@ func (database *fakeManagedTenantDatabase) usageFailuresByOwnerAndTenant(ownerUs
 		records = append(records, managedUsageFailureRecord{
 			recordID: record.ID,
 			failure: managedUsageFailure{
+				tenantIdentifier:    record.TenantID,
 				occurredAt:          record.CreatedAt.UTC(),
 				endpoint:            record.Endpoint,
 				providerIdentifier:  record.ProviderID,
@@ -404,6 +417,14 @@ func (database *fakeManagedTenantDatabase) usageFailuresByOwnerAndTenant(ownerUs
 		})
 	}
 	return records, resolvedSnapshotID, nil
+}
+
+func stringSet(values []string) map[string]bool {
+	valueSet := make(map[string]bool, len(values))
+	for _, value := range values {
+		valueSet[value] = true
+	}
+	return valueSet
 }
 
 func (database *fakeManagedTenantDatabase) tenantsForOwner(ownerUserID string) []managedTenantRecord {

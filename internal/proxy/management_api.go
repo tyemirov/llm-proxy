@@ -152,6 +152,12 @@ type managementUsageFailuresResponse struct {
 	NextCursor string                           `json:"next_cursor,omitempty"`
 }
 
+type managementAccountUsageFailuresResponse struct {
+	Interval   string                                  `json:"interval"`
+	Failures   []managementAccountUsageFailureResponse `json:"failures"`
+	NextCursor string                                  `json:"next_cursor,omitempty"`
+}
+
 type managementUsageFailureResponse struct {
 	OccurredAt          string `json:"occurred_at"`
 	Endpoint            string `json:"endpoint"`
@@ -160,6 +166,12 @@ type managementUsageFailureResponse struct {
 	StatusCode          int    `json:"status_code"`
 	OutcomeCode         string `json:"outcome_code"`
 	LatencyMilliseconds int64  `json:"latency_ms"`
+}
+
+type managementAccountUsageFailureResponse struct {
+	TenantID   string `json:"tenant_id"`
+	TenantName string `json:"tenant_name"`
+	managementUsageFailureResponse
 }
 
 type managementAdminUsageSummaryResponse struct {
@@ -269,6 +281,8 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	managementGroup.Use(service.sessionMiddleware())
 	managementGroup.Use(service.managementMutationMiddleware())
 	managementGroup.GET(managementAccountPath, service.accountHandler())
+	managementGroup.GET(managementUsagePath, service.accountUsageHandler())
+	managementGroup.GET(managementUsageFailuresPath, service.accountUsageFailuresHandler())
 	managementGroup.POST(managementTenantsPath, service.createTenantHandler())
 	managementGroup.GET(managementAdminUsersPath, service.adminUsersHandler())
 
@@ -477,15 +491,8 @@ func (service *managementService) usageHandler() gin.HandlerFunc {
 		if !identifierValid {
 			return
 		}
-		query := ginContext.Request.URL.Query()
-		intervalValues, intervalExists := query["interval"]
-		if len(query) != 1 || !intervalExists || len(intervalValues) != 1 {
-			ginContext.String(http.StatusBadRequest, errManagedUsageIntervalInvalid.Error())
-			return
-		}
-		interval, intervalError := newUsageInterval(intervalValues[0])
-		if intervalError != nil {
-			ginContext.String(http.StatusBadRequest, intervalError.Error())
+		interval, intervalValid := managementUsageInterval(ginContext)
+		if !intervalValid {
 			return
 		}
 		principal := managementPrincipalFromContext(ginContext)
@@ -494,6 +501,23 @@ func (service *managementService) usageHandler() gin.HandlerFunc {
 			writeManagementStoreError(ginContext, summaryError)
 			return
 		}
+		ginContext.Header(headerCacheControl, cacheControlNoStore)
+		ginContext.JSON(http.StatusOK, managementUsageSummary(summary))
+	}
+}
+
+func (service *managementService) accountUsageHandler() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		interval, intervalValid := managementUsageInterval(ginContext)
+		if !intervalValid {
+			return
+		}
+		summary, summaryError := service.store.accountUsageSummary(managementPrincipalFromContext(ginContext), interval)
+		if summaryError != nil {
+			writeManagementStoreError(ginContext, summaryError)
+			return
+		}
+		ginContext.Header(headerCacheControl, cacheControlNoStore)
 		ginContext.JSON(http.StatusOK, managementUsageSummary(summary))
 	}
 }
@@ -504,7 +528,7 @@ func (service *managementService) usageFailuresHandler() gin.HandlerFunc {
 		if !identifierValid {
 			return
 		}
-		query, queryError := newManagedUsageFailureQuery(ginContext.Request.URL.Query())
+		query, queryError := newManagedUsageFailureQuery(ginContext.Request.URL.Query(), tenantIdentifier.string())
 		if queryError != nil {
 			ginContext.String(http.StatusBadRequest, queryError.Error())
 			return
@@ -517,6 +541,38 @@ func (service *managementService) usageFailuresHandler() gin.HandlerFunc {
 		ginContext.Header(headerCacheControl, cacheControlNoStore)
 		ginContext.JSON(http.StatusOK, managementUsageFailuresResponseFor(page))
 	}
+}
+
+func (service *managementService) accountUsageFailuresHandler() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		query, queryError := newManagedUsageFailureQuery(ginContext.Request.URL.Query(), managedUsageAllTenantsScope)
+		if queryError != nil {
+			ginContext.String(http.StatusBadRequest, queryError.Error())
+			return
+		}
+		page, pageError := service.store.accountUsageFailures(managementPrincipalFromContext(ginContext), query)
+		if pageError != nil {
+			writeManagementStoreError(ginContext, pageError)
+			return
+		}
+		ginContext.Header(headerCacheControl, cacheControlNoStore)
+		ginContext.JSON(http.StatusOK, managementAccountUsageFailuresResponseFor(page))
+	}
+}
+
+func managementUsageInterval(ginContext *gin.Context) (usageInterval, bool) {
+	query := ginContext.Request.URL.Query()
+	intervalValues, intervalExists := query["interval"]
+	if len(query) != 1 || !intervalExists || len(intervalValues) != 1 {
+		ginContext.String(http.StatusBadRequest, errManagedUsageIntervalInvalid.Error())
+		return "", false
+	}
+	interval, intervalError := newUsageInterval(intervalValues[0])
+	if intervalError != nil {
+		ginContext.String(http.StatusBadRequest, intervalError.Error())
+		return "", false
+	}
+	return interval, true
 }
 
 func (service *managementService) adminUsersHandler() gin.HandlerFunc {
@@ -885,20 +941,40 @@ func managementUsageSummary(summary managedUsageSummary) managementUsageSummaryR
 func managementUsageFailuresResponseFor(page managedUsageFailurePage) managementUsageFailuresResponse {
 	failures := make([]managementUsageFailureResponse, 0, len(page.failures))
 	for _, failure := range page.failures {
-		failures = append(failures, managementUsageFailureResponse{
-			OccurredAt:          failure.occurredAt.UTC().Format(time.RFC3339Nano),
-			Endpoint:            failure.endpoint,
-			Provider:            failure.providerIdentifier,
-			Model:               failure.modelIdentifier,
-			StatusCode:          failure.statusCode,
-			OutcomeCode:         string(failure.outcomeCode),
-			LatencyMilliseconds: failure.latencyMilliseconds,
-		})
+		failures = append(failures, managementUsageFailureResponseFor(failure))
 	}
 	return managementUsageFailuresResponse{
 		Interval:   string(page.interval),
 		Failures:   failures,
 		NextCursor: page.nextCursor,
+	}
+}
+
+func managementAccountUsageFailuresResponseFor(page managedUsageFailurePage) managementAccountUsageFailuresResponse {
+	failures := make([]managementAccountUsageFailureResponse, 0, len(page.failures))
+	for _, failure := range page.failures {
+		failures = append(failures, managementAccountUsageFailureResponse{
+			TenantID:                       failure.tenantIdentifier,
+			TenantName:                     failure.tenantName,
+			managementUsageFailureResponse: managementUsageFailureResponseFor(failure),
+		})
+	}
+	return managementAccountUsageFailuresResponse{
+		Interval:   string(page.interval),
+		Failures:   failures,
+		NextCursor: page.nextCursor,
+	}
+}
+
+func managementUsageFailureResponseFor(failure managedUsageFailure) managementUsageFailureResponse {
+	return managementUsageFailureResponse{
+		OccurredAt:          failure.occurredAt.UTC().Format(time.RFC3339Nano),
+		Endpoint:            failure.endpoint,
+		Provider:            failure.providerIdentifier,
+		Model:               failure.modelIdentifier,
+		StatusCode:          failure.statusCode,
+		OutcomeCode:         string(failure.outcomeCode),
+		LatencyMilliseconds: failure.latencyMilliseconds,
 	}
 }
 

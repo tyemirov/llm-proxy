@@ -37,6 +37,18 @@ type managementUsageFailureTestItem struct {
 	LatencyMS   int64  `json:"latency_ms"`
 }
 
+type managementAccountUsageFailuresTestResponse struct {
+	Interval   string                                  `json:"interval"`
+	Failures   []managementAccountUsageFailureTestItem `json:"failures"`
+	NextCursor string                                  `json:"next_cursor"`
+}
+
+type managementAccountUsageFailureTestItem struct {
+	TenantID   string `json:"tenant_id"`
+	TenantName string `json:"tenant_name"`
+	managementUsageFailureTestItem
+}
+
 func TestManagementUsageFailuresRejectsInvalidQueriesAndEnforcesTenantOwnership(t *testing.T) {
 	router := newManagementRouter(t, proxy.Configuration{})
 	ownerCookie := managementSessionCookie(t, "failure-owner")
@@ -119,6 +131,94 @@ func TestManagementUsageFailuresRejectsInvalidQueriesAndEnforcesTenantOwnership(
 		if supportedPayload.Interval != supportedInterval || len(supportedPayload.Failures) != 0 {
 			t.Fatalf("interval=%s payload=%+v", supportedInterval, supportedPayload)
 		}
+	}
+}
+
+func TestManagementAccountUsageFailuresAggregateOwnedTenantsAndBindCursorsToScope(t *testing.T) {
+	router := newManagementRouter(t, proxy.Configuration{})
+	ownerCookie := managementSessionCookie(t, "account-failure-owner")
+	otherOwnerCookie := managementSessionCookie(t, "account-failure-other-owner")
+	account := requestManagementAccount(t, router, ownerCookie)
+	firstTenantID := account.Tenants[0].ID
+	firstTenantName := account.Tenants[0].Name
+	secondTenant := createManagementTenant(t, router, ownerCookie, "Second")
+	secondTenantID := secondTenant.Tenant.ID
+	otherAccount := requestManagementAccount(t, router, otherOwnerCookie)
+	otherTenantID := otherAccount.Tenants[0].ID
+
+	firstSecret := generateManagementTenantSecret(t, router, ownerCookie, firstTenantID)
+	secondSecret := generateManagementTenantSecret(t, router, ownerCookie, secondTenantID)
+	otherSecret := generateManagementTenantSecret(t, router, otherOwnerCookie, otherTenantID)
+	recordInvalidRequest := func(secret string) {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(secret)+"&prompt=invalid&max_tokens=0", nil)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("invalid request status=%d body=%q", response.Code, response.Body.String())
+		}
+	}
+	recordInvalidRequest(firstSecret)
+	recordInvalidRequest(secondSecret)
+	recordInvalidRequest(firstSecret)
+	recordInvalidRequest(otherSecret)
+
+	firstPage := requestManagementAccountUsageFailures(t, router, ownerCookie, "30d", 1, "")
+	if firstPage.Interval != "30d" || len(firstPage.Failures) != 1 || firstPage.NextCursor == "" {
+		t.Fatalf("first account page=%+v", firstPage)
+	}
+	if failure := firstPage.Failures[0]; failure.TenantID != firstTenantID || failure.TenantName != firstTenantName || failure.OutcomeCode != "invalid_request" {
+		t.Fatalf("first account failure=%+v", failure)
+	}
+	secondPage := requestManagementAccountUsageFailures(t, router, ownerCookie, "30d", 1, firstPage.NextCursor)
+	if len(secondPage.Failures) != 1 || secondPage.NextCursor == "" {
+		t.Fatalf("second account page=%+v", secondPage)
+	}
+	if failure := secondPage.Failures[0]; failure.TenantID != secondTenantID || failure.TenantName != "Second" || failure.OutcomeCode != "invalid_request" {
+		t.Fatalf("second account failure=%+v", failure)
+	}
+	thirdPage := requestManagementAccountUsageFailures(t, router, ownerCookie, "30d", 1, secondPage.NextCursor)
+	if len(thirdPage.Failures) != 1 || thirdPage.NextCursor != "" || thirdPage.Failures[0].TenantID != firstTenantID {
+		t.Fatalf("third account page=%+v", thirdPage)
+	}
+	for _, page := range []managementAccountUsageFailuresTestResponse{firstPage, secondPage, thirdPage} {
+		for _, failure := range page.Failures {
+			if failure.TenantID == otherTenantID {
+				t.Fatalf("account failures leaked other owner's tenant: %+v", failure)
+			}
+		}
+	}
+
+	firstTenantPath := managementTenantTestPath(firstTenantID, "")
+	tenantPage := requestManagementUsageFailures(t, router, ownerCookie, firstTenantPath, "30d", 1, "")
+	if len(tenantPage.Failures) != 1 || tenantPage.NextCursor == "" {
+		t.Fatalf("tenant page=%+v", tenantPage)
+	}
+	for _, crossScopePath := range []string{
+		firstTenantPath + "/usage/failures?interval=30d&limit=1&cursor=" + url.QueryEscape(firstPage.NextCursor),
+		"/api/management/usage/failures?interval=30d&limit=1&cursor=" + url.QueryEscape(tenantPage.NextCursor),
+	} {
+		request := httptest.NewRequest(http.MethodGet, crossScopePath, nil)
+		request.AddCookie(ownerCookie)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("cross-scope cursor path=%q status=%d body=%q", crossScopePath, response.Code, response.Body.String())
+		}
+	}
+
+	invalidQueryRequest := httptest.NewRequest(http.MethodGet, "/api/management/usage/failures?interval=30d&unknown=value", nil)
+	invalidQueryRequest.AddCookie(ownerCookie)
+	invalidQueryResponse := httptest.NewRecorder()
+	router.ServeHTTP(invalidQueryResponse, invalidQueryRequest)
+	if invalidQueryResponse.Code != http.StatusBadRequest {
+		t.Fatalf("account invalid query status=%d body=%q", invalidQueryResponse.Code, invalidQueryResponse.Body.String())
+	}
+	unauthorizedRequest := httptest.NewRequest(http.MethodGet, "/api/management/usage/failures?interval=30d", nil)
+	unauthorizedResponse := httptest.NewRecorder()
+	router.ServeHTTP(unauthorizedResponse, unauthorizedRequest)
+	if unauthorizedResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("account unauthorized status=%d body=%q", unauthorizedResponse.Code, unauthorizedResponse.Body.String())
 	}
 }
 
@@ -415,6 +515,46 @@ func requestManagementUsageFailures(t *testing.T, router http.Handler, sessionCo
 	var payload managementUsageFailuresTestResponse
 	if decodeError := json.Unmarshal(response.Body.Bytes(), &payload); decodeError != nil {
 		t.Fatalf("decode failures: %v", decodeError)
+	}
+	return payload
+}
+
+func requestManagementAccountUsageFailures(t *testing.T, router http.Handler, sessionCookie *http.Cookie, interval string, limit int, cursor string) managementAccountUsageFailuresTestResponse {
+	t.Helper()
+	query := url.Values{"interval": []string{interval}, "limit": []string{strconv.Itoa(limit)}}
+	if cursor != "" {
+		query.Set("cursor", cursor)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/management/usage/failures?"+query.Encode(), nil)
+	request.AddCookie(sessionCookie)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("account failures status=%d body=%q", response.Code, response.Body.String())
+	}
+	if response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("account failures cache-control=%q want=no-store", response.Header().Get("Cache-Control"))
+	}
+	var rawPayload struct {
+		Failures []map[string]json.RawMessage `json:"failures"`
+	}
+	if decodeError := json.Unmarshal(response.Body.Bytes(), &rawPayload); decodeError != nil {
+		t.Fatalf("decode raw account failures: %v", decodeError)
+	}
+	for _, rawFailure := range rawPayload.Failures {
+		actualFields := make([]string, 0, len(rawFailure))
+		for fieldName := range rawFailure {
+			actualFields = append(actualFields, fieldName)
+		}
+		sort.Strings(actualFields)
+		expectedFields := []string{"endpoint", "latency_ms", "model", "occurred_at", "outcome_code", "provider", "status_code", "tenant_id", "tenant_name"}
+		if !reflect.DeepEqual(actualFields, expectedFields) {
+			t.Fatalf("account failure fields=%v want=%v", actualFields, expectedFields)
+		}
+	}
+	var payload managementAccountUsageFailuresTestResponse
+	if decodeError := json.Unmarshal(response.Body.Bytes(), &payload); decodeError != nil {
+		t.Fatalf("decode account failures: %v", decodeError)
 	}
 	return payload
 }

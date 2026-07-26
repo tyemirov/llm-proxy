@@ -120,6 +120,16 @@ func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("usage store status=%d", response.Code)
 	}
+	response = executeInternalManagementHandler(service.accountUsageHandler(), http.MethodGet, "/api/management/usage?interval=30d", "", nil, principal)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("account usage store status=%d", response.Code)
+	}
+	service, database = newSeededService()
+	database.usageFailuresError = errInternalTestDatabase
+	response = executeInternalManagementHandler(service.accountUsageFailuresHandler(), http.MethodGet, "/api/management/usage/failures?interval=30d", "", nil, principal)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("account usage failures store status=%d", response.Code)
+	}
 
 	service, _ = newSeededService()
 	response = executeInternalManagementHandler(service.adminUsersHandler(), http.MethodGet, "/api/management/admin/users", "", nil, principal)

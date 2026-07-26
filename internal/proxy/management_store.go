@@ -58,7 +58,10 @@ const (
 	obsoleteStaticMigrationTable    = "managed_static_config_migration_records"
 	obsoleteRoutingMigrationTable   = "managed_routing_defaults_migration_records"
 	legacyStaticTenantUserIDPrefix  = "static-config:"
+	managedUsageIDColumn            = "id"
+	managedUsageTenantIDColumn      = "tenant_id"
 	managedUsageCreatedAtColumn     = "created_at"
+	managedUsageSuccessColumn       = "success"
 	managedUsageOutcomeCodeColumn   = "outcome_code"
 	managedSchemaVersionColumn      = "version"
 	managedUsageFailurePageIndex    = "idx_managed_usage_failure_page"
@@ -177,11 +180,12 @@ type managedTenantDatabase interface {
 	saveProviderKey(ownerUserID string, record managedProviderAPIKeyRecord, updatedAt time.Time) error
 	deleteProviderKey(ownerUserID string, tenantID string, providerID string, updatedAt time.Time) error
 	createUsageEvent(requestContext context.Context, record managedUsageEventRecord) error
-	earliestUsageEventByTenantIDThrough(tenantID string, periodEnd time.Time) (time.Time, error)
-	streamUsageEventsByTenantIDBetween(tenantID string, periodStart time.Time, periodEnd time.Time, visit managedUsageEventVisitor) error
-	streamUsageEventsByTenantIDThrough(tenantID string, periodEnd time.Time, visit managedUsageEventVisitor) error
+	earliestUsageEventByTenantIDsThrough(tenantIDs []string, periodEnd time.Time) (time.Time, error)
+	streamUsageEventsByTenantIDsBetween(tenantIDs []string, periodStart time.Time, periodEnd time.Time, visit managedUsageEventVisitor) error
+	streamUsageEventsByTenantIDsThrough(tenantIDs []string, periodEnd time.Time, visit managedUsageEventVisitor) error
 	usageEventsSince(periodStart time.Time) ([]managedUsageEventRecord, error)
 	usageFailuresByOwnerAndTenant(ownerUserID string, tenantID string, query managedUsageFailureRecordQuery) ([]managedUsageFailureRecord, uint, error)
+	usageFailuresByTenantIDs(tenantIDs []string, query managedUsageFailureRecordQuery) ([]managedUsageFailureRecord, uint, error)
 }
 
 type gormManagedTenantDatabase struct {
@@ -1141,10 +1145,10 @@ func (database *gormManagedTenantDatabase) createUsageEvent(requestContext conte
 	return database.database.WithContext(requestContext).Create(&record).Error
 }
 
-func (database *gormManagedTenantDatabase) earliestUsageEventByTenantIDThrough(tenantID string, periodEnd time.Time) (time.Time, error) {
+func (database *gormManagedTenantDatabase) earliestUsageEventByTenantIDsThrough(tenantIDs []string, periodEnd time.Time) (time.Time, error) {
 	var records []managedUsageEventRecord
 	queryResult := database.database.
-		Where(&managedUsageEventRecord{TenantID: tenantID}).
+		Where(clause.IN{Column: clause.Column{Name: managedUsageTenantIDColumn}, Values: stringInterfaceValues(tenantIDs)}).
 		Where(clause.Lte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: periodEnd}).
 		Order("created_at, id").
 		Limit(1).
@@ -1155,19 +1159,27 @@ func (database *gormManagedTenantDatabase) earliestUsageEventByTenantIDThrough(t
 	return records[0].CreatedAt, nil
 }
 
-func (database *gormManagedTenantDatabase) streamUsageEventsByTenantIDBetween(tenantID string, periodStart time.Time, periodEnd time.Time, visit managedUsageEventVisitor) error {
+func (database *gormManagedTenantDatabase) streamUsageEventsByTenantIDsBetween(tenantIDs []string, periodStart time.Time, periodEnd time.Time, visit managedUsageEventVisitor) error {
 	query := database.database.
-		Where(&managedUsageEventRecord{TenantID: tenantID}).
+		Where(clause.IN{Column: clause.Column{Name: managedUsageTenantIDColumn}, Values: stringInterfaceValues(tenantIDs)}).
 		Where(clause.Gte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: periodStart}).
 		Where(clause.Lte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: periodEnd})
 	return database.streamUsageEvents(query, visit)
 }
 
-func (database *gormManagedTenantDatabase) streamUsageEventsByTenantIDThrough(tenantID string, periodEnd time.Time, visit managedUsageEventVisitor) error {
+func (database *gormManagedTenantDatabase) streamUsageEventsByTenantIDsThrough(tenantIDs []string, periodEnd time.Time, visit managedUsageEventVisitor) error {
 	query := database.database.
-		Where(&managedUsageEventRecord{TenantID: tenantID}).
+		Where(clause.IN{Column: clause.Column{Name: managedUsageTenantIDColumn}, Values: stringInterfaceValues(tenantIDs)}).
 		Where(clause.Lte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: periodEnd})
 	return database.streamUsageEvents(query, visit)
+}
+
+func stringInterfaceValues(values []string) []interface{} {
+	interfaceValues := make([]interface{}, 0, len(values))
+	for _, value := range values {
+		interfaceValues = append(interfaceValues, value)
+	}
+	return interfaceValues
 }
 
 func (database *gormManagedTenantDatabase) streamUsageEvents(query *gorm.DB, visit managedUsageEventVisitor) error {
@@ -1190,82 +1202,112 @@ func (database *gormManagedTenantDatabase) usageEventsSince(periodStart time.Tim
 }
 
 func (database *gormManagedTenantDatabase) usageFailuresByOwnerAndTenant(ownerUserID string, tenantID string, query managedUsageFailureRecordQuery) ([]managedUsageFailureRecord, uint, error) {
-	records := make([]managedUsageFailureRecord, 0, query.limit)
+	var records []managedUsageFailureRecord
 	var resolvedSnapshotID uint
 	transactionError := database.database.Transaction(func(transaction *gorm.DB) error {
 		var tenantRecord managedTenantRecord
 		if tenantError := transaction.
-			Select("tenant_id").
+			Select(managedUsageTenantIDColumn, "name").
 			Where(&managedTenantRecord{OwnerUserID: ownerUserID, TenantID: tenantID}).
 			First(&tenantRecord).
 			Error; tenantError != nil {
 			return tenantError
 		}
-
-		if query.snapshotID != nil {
-			resolvedSnapshotID = *query.snapshotID
-		} else {
-			var snapshotRecords []managedUsageEventRecord
-			snapshotError := transaction.
-				Select("id").
-				Where(&managedUsageEventRecord{TenantID: tenantID}).
-				Where(clause.Lte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: query.snapshotAt}).
-				Order("id DESC").
-				Limit(1).
-				Find(&snapshotRecords).
-				Error
-			if snapshotError != nil {
-				return snapshotError
-			}
-			if len(snapshotRecords) != 0 {
-				resolvedSnapshotID = snapshotRecords[0].ID
-			}
-		}
-
-		usageQuery := transaction.
-			Where(&managedUsageEventRecord{TenantID: tenantID, Success: false}).
-			Where(clause.Lte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: query.snapshotAt}).
-			Where(clause.Lte{Column: clause.Column{Name: "id"}, Value: resolvedSnapshotID})
-		if query.periodStart != nil {
-			usageQuery = usageQuery.Where(clause.Gte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: *query.periodStart})
-		}
-		if query.position != nil {
-			usageQuery = usageQuery.Where(
-				"(created_at < ?) OR (created_at = ? AND id < ?)",
-				query.position.occurredAt,
-				query.position.occurredAt,
-				query.position.recordID,
-			)
-		}
-		var usageRecords []managedUsageEventRecord
-		if recordsError := usageQuery.
-			Order("created_at DESC, id DESC").
-			Limit(query.limit).
-			Find(&usageRecords).
-			Error; recordsError != nil {
+		var recordsError error
+		records, resolvedSnapshotID, recordsError = usageFailuresByTenantIDsInTransaction(
+			transaction,
+			[]string{tenantID},
+			query,
+		)
+		if recordsError != nil {
 			return recordsError
 		}
-		for _, record := range usageRecords {
-			outcomeCode, outcomeError := newManagedUsageOutcomeCode(string(record.OutcomeCode))
-			if outcomeError != nil {
-				return fmt.Errorf("%w: table=%s id=%d: %v", errManagedTenantStorePersist, managedUsageEventTable, record.ID, outcomeError)
-			}
-			records = append(records, managedUsageFailureRecord{
-				recordID: record.ID,
-				failure: managedUsageFailure{
-					occurredAt:          record.CreatedAt.UTC(),
-					endpoint:            record.Endpoint,
-					providerIdentifier:  record.ProviderID,
-					modelIdentifier:     record.ModelID,
-					statusCode:          record.StatusCode,
-					outcomeCode:         outcomeCode,
-					latencyMilliseconds: record.LatencyMilliseconds,
-				},
-			})
+		for recordIndex := range records {
+			records[recordIndex].failure.tenantName = tenantRecord.Name
 		}
 		return nil
 	})
 	return records, resolvedSnapshotID, transactionError
+}
+
+func (database *gormManagedTenantDatabase) usageFailuresByTenantIDs(tenantIDs []string, query managedUsageFailureRecordQuery) ([]managedUsageFailureRecord, uint, error) {
+	var records []managedUsageFailureRecord
+	var resolvedSnapshotID uint
+	transactionError := database.database.Transaction(func(transaction *gorm.DB) error {
+		var recordsError error
+		records, resolvedSnapshotID, recordsError = usageFailuresByTenantIDsInTransaction(transaction, tenantIDs, query)
+		return recordsError
+	})
+	return records, resolvedSnapshotID, transactionError
+}
+
+func usageFailuresByTenantIDsInTransaction(transaction *gorm.DB, tenantIDs []string, query managedUsageFailureRecordQuery) ([]managedUsageFailureRecord, uint, error) {
+	resolvedSnapshotID := uint(0)
+	if query.snapshotID != nil {
+		resolvedSnapshotID = *query.snapshotID
+	} else {
+		var snapshotRecords []managedUsageEventRecord
+		snapshotError := transaction.
+			Select(managedUsageIDColumn).
+			Where(clause.IN{Column: clause.Column{Name: managedUsageTenantIDColumn}, Values: stringInterfaceValues(tenantIDs)}).
+			Where(clause.Lte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: query.snapshotAt}).
+			Order("id DESC").
+			Limit(1).
+			Find(&snapshotRecords).
+			Error
+		if snapshotError != nil {
+			return nil, 0, snapshotError
+		}
+		if len(snapshotRecords) != 0 {
+			resolvedSnapshotID = snapshotRecords[0].ID
+		}
+	}
+
+	usageQuery := transaction.
+		Where(clause.IN{Column: clause.Column{Name: managedUsageTenantIDColumn}, Values: stringInterfaceValues(tenantIDs)}).
+		Where(clause.Eq{Column: clause.Column{Name: managedUsageSuccessColumn}, Value: false}).
+		Where(clause.Lte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: query.snapshotAt}).
+		Where(clause.Lte{Column: clause.Column{Name: managedUsageIDColumn}, Value: resolvedSnapshotID})
+	if query.periodStart != nil {
+		usageQuery = usageQuery.Where(clause.Gte{Column: clause.Column{Name: managedUsageCreatedAtColumn}, Value: *query.periodStart})
+	}
+	if query.position != nil {
+		usageQuery = usageQuery.Where(
+			"(created_at < ?) OR (created_at = ? AND id < ?)",
+			query.position.occurredAt,
+			query.position.occurredAt,
+			query.position.recordID,
+		)
+	}
+	var usageRecords []managedUsageEventRecord
+	if recordsError := usageQuery.
+		Order("created_at DESC, id DESC").
+		Limit(query.limit).
+		Find(&usageRecords).
+		Error; recordsError != nil {
+		return nil, 0, recordsError
+	}
+	records := make([]managedUsageFailureRecord, 0, len(usageRecords))
+	for _, record := range usageRecords {
+		outcomeCode, outcomeError := newManagedUsageOutcomeCode(string(record.OutcomeCode))
+		if outcomeError != nil {
+			return nil, 0, fmt.Errorf("%w: table=%s id=%d: %v", errManagedTenantStorePersist, managedUsageEventTable, record.ID, outcomeError)
+		}
+		records = append(records, managedUsageFailureRecord{
+			recordID: record.ID,
+			failure: managedUsageFailure{
+				tenantIdentifier:    record.TenantID,
+				occurredAt:          record.CreatedAt.UTC(),
+				endpoint:            record.Endpoint,
+				providerIdentifier:  record.ProviderID,
+				modelIdentifier:     record.ModelID,
+				statusCode:          record.StatusCode,
+				outcomeCode:         outcomeCode,
+				latencyMilliseconds: record.LatencyMilliseconds,
+			},
+		})
+	}
+	return records, resolvedSnapshotID, nil
 }
 
 func (store *managedTenantStore) account(principal managementPrincipal) (managedAccountSnapshot, error) {

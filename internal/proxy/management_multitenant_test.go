@@ -117,12 +117,15 @@ func TestManagementTenantLifecycleAndIsolation(t *testing.T) {
 		t.Fatalf("duplicate tenant status=%d body=%q", duplicateResponse.Code, duplicateResponse.Body.String())
 	}
 
-	unscopedUsageRequest := httptest.NewRequest(http.MethodGet, "/api/management/usage?interval=30d", nil)
-	unscopedUsageRequest.AddCookie(ownerCookie)
-	unscopedUsageResponse := httptest.NewRecorder()
-	router.ServeHTTP(unscopedUsageResponse, unscopedUsageRequest)
-	if unscopedUsageResponse.Code != http.StatusNotFound {
-		t.Fatalf("unscoped usage status=%d body=%q", unscopedUsageResponse.Code, unscopedUsageResponse.Body.String())
+	accountUsageRequest := httptest.NewRequest(http.MethodGet, "/api/management/usage?interval=30d", nil)
+	accountUsageRequest.AddCookie(ownerCookie)
+	accountUsageResponse := httptest.NewRecorder()
+	router.ServeHTTP(accountUsageResponse, accountUsageRequest)
+	if accountUsageResponse.Code != http.StatusOK {
+		t.Fatalf("account usage status=%d body=%q", accountUsageResponse.Code, accountUsageResponse.Body.String())
+	}
+	if accountUsageResponse.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("account usage cache-control=%q want=no-store", accountUsageResponse.Header().Get("Cache-Control"))
 	}
 
 	scopedUsageRequest := httptest.NewRequest(http.MethodGet, "/api/management/tenants/"+createdTenantID+"/usage?interval=30d", nil)
@@ -215,6 +218,14 @@ func TestManagementTenantConfigurationSecretAndUsageIsolation(t *testing.T) {
 		if usage.Totals.Requests != 1 {
 			t.Fatalf("tenant=%s requests=%d want=1", tenantID, usage.Totals.Requests)
 		}
+	}
+	accountUsage := requestManagementAccountUsage(t, router, ownerCookie)
+	if accountUsage.Totals.Requests != 2 {
+		t.Fatalf("account requests=%d want=2", accountUsage.Totals.Requests)
+	}
+	otherOwnerUsage := requestManagementAccountUsage(t, router, otherOwnerCookie)
+	if otherOwnerUsage.Totals.Requests != 0 {
+		t.Fatalf("other owner requests=%d want=0", otherOwnerUsage.Totals.Requests)
 	}
 
 	foreignRevealRequest := authenticatedProviderKeyRevealRequest(
@@ -360,9 +371,31 @@ func requestManagementTenantUsage(t *testing.T, router http.Handler, sessionCook
 	if response.Code != http.StatusOK {
 		t.Fatalf("usage tenant=%s status=%d body=%q", tenantID, response.Code, response.Body.String())
 	}
+	if response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("usage tenant=%s cache-control=%q want=no-store", tenantID, response.Header().Get("Cache-Control"))
+	}
 	var payload managementTenantUsageTestResponse
 	if decodeError := json.Unmarshal(response.Body.Bytes(), &payload); decodeError != nil {
 		t.Fatalf("decode usage: %v", decodeError)
+	}
+	return payload
+}
+
+func requestManagementAccountUsage(t *testing.T, router http.Handler, sessionCookie *http.Cookie) managementTenantUsageTestResponse {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodGet, "/api/management/usage?interval=30d", nil)
+	request.AddCookie(sessionCookie)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("account usage status=%d body=%q", response.Code, response.Body.String())
+	}
+	if response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("account usage cache-control=%q want=no-store", response.Header().Get("Cache-Control"))
+	}
+	var payload managementTenantUsageTestResponse
+	if decodeError := json.Unmarshal(response.Body.Bytes(), &payload); decodeError != nil {
+		t.Fatalf("decode account usage: %v", decodeError)
 	}
 	return payload
 }

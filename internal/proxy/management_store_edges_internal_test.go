@@ -631,6 +631,24 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	if summary, summaryError := store.usageSummary(principal, identifier, usageIntervalThirtyDay); summaryError != nil || summary.totals.requests != 1 {
 		t.Fatalf("usage summary=%+v error=%v", summary, summaryError)
 	}
+	database.userByIDErrors = []error{errInternalTestDatabase}
+	if _, summaryError := store.accountUsageSummary(principal, usageIntervalThirtyDay); !errors.Is(summaryError, errManagedTenantStorePersist) {
+		t.Fatalf("account usage summary error=%v", summaryError)
+	}
+	accountFailureQuery := managedUsageFailureQuery{
+		interval: usageIntervalThirtyDay,
+		scope:    managedUsageAllTenantsScope,
+		limit:    managedUsageFailureDefaultLimit,
+	}
+	database.userByIDErrors = []error{errInternalTestDatabase}
+	if _, failuresError := store.accountUsageFailures(principal, accountFailureQuery); !errors.Is(failuresError, errManagedTenantStorePersist) {
+		t.Fatalf("account usage failures account error=%v", failuresError)
+	}
+	database.usageFailuresError = errInternalTestDatabase
+	if _, failuresError := store.accountUsageFailures(principal, accountFailureQuery); !errors.Is(failuresError, errManagedTenantStorePersist) {
+		t.Fatalf("account usage failures error=%v", failuresError)
+	}
+	database.usageFailuresError = nil
 
 	database.usersError = errInternalTestDatabase
 	if _, adminError := store.adminUsersSummary(); !errors.Is(adminError, errManagedTenantStorePersist) {

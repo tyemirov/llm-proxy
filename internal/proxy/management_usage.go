@@ -29,13 +29,14 @@ const (
 	usageBucketUnitDay     = usageBucketUnit("day")
 	usageBucketUnitHour    = usageBucketUnit("hour")
 
-	managedUsageFailureCursorVersion = 1
+	managedUsageFailureCursorVersion = 2
 	managedUsageFailureDefaultLimit  = 25
 	managedUsageFailureMaximumLimit  = 100
 	managedUsagePersistenceTimeout   = 5 * time.Second
 	usageFailureIntervalQuery        = "interval"
 	usageFailureLimitQuery           = "limit"
 	usageFailureCursorQuery          = "cursor"
+	managedUsageAllTenantsScope      = "all-tenants"
 
 	managedUsageOutcomeSuccess            = managedUsageOutcomeCode("success")
 	managedUsageOutcomeInvalidRequest     = managedUsageOutcomeCode("invalid_request")
@@ -70,12 +71,14 @@ type managedUsageEvent struct {
 
 type managedUsageFailureQuery struct {
 	interval usageInterval
+	scope    string
 	limit    int
 	cursor   *managedUsageFailureCursor
 }
 
 type managedUsageFailureCursor struct {
 	interval   usageInterval
+	scope      string
 	snapshotAt time.Time
 	snapshotID uint
 	positionAt time.Time
@@ -85,6 +88,7 @@ type managedUsageFailureCursor struct {
 type managedUsageFailureCursorPayload struct {
 	Version    int    `json:"v"`
 	Interval   string `json:"i"`
+	Scope      string `json:"o"`
 	SnapshotAt string `json:"s"`
 	SnapshotID uint   `json:"x"`
 	PositionAt string `json:"p"`
@@ -111,6 +115,8 @@ type managedUsageFailurePage struct {
 }
 
 type managedUsageFailure struct {
+	tenantIdentifier    string
+	tenantName          string
 	occurredAt          time.Time
 	endpoint            string
 	providerIdentifier  string
@@ -226,7 +232,10 @@ func newManagedUsageOutcomeCode(value string) (managedUsageOutcomeCode, error) {
 	}
 }
 
-func newManagedUsageFailureQuery(queryValues url.Values) (managedUsageFailureQuery, error) {
+func newManagedUsageFailureQuery(queryValues url.Values, scope string) (managedUsageFailureQuery, error) {
+	if strings.TrimSpace(scope) == constants.EmptyString {
+		return managedUsageFailureQuery{}, fmt.Errorf("%w: scope", errManagedUsageFailureQuery)
+	}
 	for queryName := range queryValues {
 		switch queryName {
 		case usageFailureIntervalQuery, usageFailureLimitQuery, usageFailureCursorQuery:
@@ -258,16 +267,16 @@ func newManagedUsageFailureQuery(queryValues url.Values) (managedUsageFailureQue
 		if len(cursorValues) != 1 || strings.TrimSpace(cursorValues[0]) == constants.EmptyString {
 			return managedUsageFailureQuery{}, fmt.Errorf("%w: cursor", errManagedUsageFailureQuery)
 		}
-		parsedCursor, cursorError := newManagedUsageFailureCursor(cursorValues[0], interval)
+		parsedCursor, cursorError := newManagedUsageFailureCursor(cursorValues[0], interval, scope)
 		if cursorError != nil {
 			return managedUsageFailureQuery{}, cursorError
 		}
 		cursor = &parsedCursor
 	}
-	return managedUsageFailureQuery{interval: interval, limit: limit, cursor: cursor}, nil
+	return managedUsageFailureQuery{interval: interval, scope: scope, limit: limit, cursor: cursor}, nil
 }
 
-func newManagedUsageFailureCursor(rawCursor string, expectedInterval usageInterval) (managedUsageFailureCursor, error) {
+func newManagedUsageFailureCursor(rawCursor string, expectedInterval usageInterval, expectedScope string) (managedUsageFailureCursor, error) {
 	cursorBytes, decodeError := base64.RawURLEncoding.DecodeString(rawCursor)
 	if decodeError != nil {
 		return managedUsageFailureCursor{}, fmt.Errorf("%w: cursor_encoding: %v", errManagedUsageFailureQuery, decodeError)
@@ -282,7 +291,7 @@ func newManagedUsageFailureCursor(rawCursor string, expectedInterval usageInterv
 	if trailingError := decoder.Decode(&trailingValue); !errors.Is(trailingError, io.EOF) {
 		return managedUsageFailureCursor{}, fmt.Errorf("%w: cursor_trailing", errManagedUsageFailureQuery)
 	}
-	if payload.Version != managedUsageFailureCursorVersion || payload.Interval != string(expectedInterval) ||
+	if payload.Version != managedUsageFailureCursorVersion || payload.Interval != string(expectedInterval) || payload.Scope != expectedScope ||
 		payload.SnapshotID == 0 || payload.PositionID == 0 || payload.PositionID > payload.SnapshotID {
 		return managedUsageFailureCursor{}, fmt.Errorf("%w: cursor_fields", errManagedUsageFailureQuery)
 	}
@@ -296,6 +305,7 @@ func newManagedUsageFailureCursor(rawCursor string, expectedInterval usageInterv
 	}
 	cursor := managedUsageFailureCursor{
 		interval:   expectedInterval,
+		scope:      expectedScope,
 		snapshotAt: snapshotAt.UTC(),
 		snapshotID: payload.SnapshotID,
 		positionAt: positionAt.UTC(),
@@ -310,6 +320,7 @@ func newManagedUsageFailureCursor(rawCursor string, expectedInterval usageInterv
 func (cursor managedUsageFailureCursor) encoded() string {
 	payload := `{"v":` + strconv.Itoa(managedUsageFailureCursorVersion) +
 		`,"i":` + strconv.Quote(string(cursor.interval)) +
+		`,"o":` + strconv.Quote(cursor.scope) +
 		`,"s":` + strconv.Quote(cursor.snapshotAt.UTC().Format(time.RFC3339Nano)) +
 		`,"x":` + strconv.FormatUint(uint64(cursor.snapshotID), 10) +
 		`,"p":` + strconv.Quote(cursor.positionAt.UTC().Format(time.RFC3339Nano)) +
@@ -391,29 +402,100 @@ func (store *managedTenantStore) usageSummary(principal managementPrincipal, ten
 	if recordError != nil {
 		return managedUsageSummary{}, managedTenantQueryError(principal.userID, tenantIdentifier.string(), recordError)
 	}
+	return store.usageSummaryByTenantIDs(
+		[]string{record.TenantID},
+		interval,
+		timestamp,
+		"tenant_id="+record.TenantID,
+	)
+}
+
+func (store *managedTenantStore) accountUsageSummary(principal managementPrincipal, interval usageInterval) (managedUsageSummary, error) {
+	store.mutex.Lock()
+	accountRecord, accountError := store.ensureUserLocked(principal)
+	timestamp := store.now()
+	store.mutex.Unlock()
+	if accountError != nil {
+		return managedUsageSummary{}, accountError
+	}
+	tenantIDs := managedTenantRecordIDs(accountRecord.Tenants)
+	return store.usageSummaryByTenantIDs(
+		tenantIDs,
+		interval,
+		timestamp,
+		"user_id="+principal.userID,
+	)
+}
+
+func (store *managedTenantStore) usageSummaryByTenantIDs(tenantIDs []string, interval usageInterval, timestamp time.Time, subject string) (managedUsageSummary, error) {
 	windowDuration, _, _, finite := interval.finiteWindow()
 	var earliestUsageEvent time.Time
 	var recordsError error
 	if !finite {
-		earliestUsageEvent, recordsError = store.database.earliestUsageEventByTenantIDThrough(record.TenantID, timestamp)
+		earliestUsageEvent, recordsError = store.database.earliestUsageEventByTenantIDsThrough(tenantIDs, timestamp)
 	}
 	if recordsError != nil {
-		return managedUsageSummary{}, fmt.Errorf("%w: tenant_id=%s: %v", errManagedTenantStorePersist, record.TenantID, recordsError)
+		return managedUsageSummary{}, fmt.Errorf("%w: %s: %v", errManagedTenantStorePersist, subject, recordsError)
 	}
 	accumulator := newManagedUsageSummaryAccumulator(interval, timestamp, earliestUsageEvent)
 	if finite {
-		recordsError = store.database.streamUsageEventsByTenantIDBetween(record.TenantID, timestamp.Add(-windowDuration), timestamp, accumulator.apply)
+		recordsError = store.database.streamUsageEventsByTenantIDsBetween(tenantIDs, timestamp.Add(-windowDuration), timestamp, accumulator.apply)
 	} else {
-		recordsError = store.database.streamUsageEventsByTenantIDThrough(record.TenantID, timestamp, accumulator.apply)
+		recordsError = store.database.streamUsageEventsByTenantIDsThrough(tenantIDs, timestamp, accumulator.apply)
 	}
 	if recordsError != nil {
-		return managedUsageSummary{}, fmt.Errorf("%w: tenant_id=%s: %v", errManagedTenantStorePersist, record.TenantID, recordsError)
+		return managedUsageSummary{}, fmt.Errorf("%w: %s: %v", errManagedTenantStorePersist, subject, recordsError)
 	}
 	return accumulator.summary(), nil
 }
 
+func managedTenantRecordIDs(records []managedTenantRecord) []string {
+	tenantIDs := make([]string, 0, len(records))
+	for _, record := range records {
+		tenantIDs = append(tenantIDs, record.TenantID)
+	}
+	return tenantIDs
+}
+
 func (store *managedTenantStore) usageFailures(principal managementPrincipal, tenantIdentifier managedTenantIdentifier, query managedUsageFailureQuery) (managedUsageFailurePage, error) {
+	snapshotAt, recordQuery := managedUsageFailureRecordQueryFor(query, store.now().UTC())
+	records, resolvedSnapshotID, recordsError := store.database.usageFailuresByOwnerAndTenant(
+		principal.userID,
+		tenantIdentifier.string(),
+		recordQuery,
+	)
+	if recordsError != nil {
+		return managedUsageFailurePage{}, managedTenantQueryError(principal.userID, tenantIdentifier.string(), recordsError)
+	}
+	return managedUsageFailurePageFor(records, resolvedSnapshotID, query, snapshotAt), nil
+}
+
+func (store *managedTenantStore) accountUsageFailures(principal managementPrincipal, query managedUsageFailureQuery) (managedUsageFailurePage, error) {
+	store.mutex.Lock()
+	accountRecord, accountError := store.ensureUserLocked(principal)
 	snapshotAt := store.now().UTC()
+	store.mutex.Unlock()
+	if accountError != nil {
+		return managedUsageFailurePage{}, accountError
+	}
+	tenantIDs := managedTenantRecordIDs(accountRecord.Tenants)
+	tenantNames := make(map[string]string, len(accountRecord.Tenants))
+	for _, tenantRecord := range accountRecord.Tenants {
+		tenantNames[tenantRecord.TenantID] = tenantRecord.Name
+	}
+	snapshotAt, recordQuery := managedUsageFailureRecordQueryFor(query, snapshotAt)
+	records, resolvedSnapshotID, recordsError := store.database.usageFailuresByTenantIDs(tenantIDs, recordQuery)
+	if recordsError != nil {
+		return managedUsageFailurePage{}, fmt.Errorf("%w: user_id=%s: %v", errManagedTenantStorePersist, principal.userID, recordsError)
+	}
+	for recordIndex := range records {
+		records[recordIndex].failure.tenantName = tenantNames[records[recordIndex].failure.tenantIdentifier]
+	}
+	return managedUsageFailurePageFor(records, resolvedSnapshotID, query, snapshotAt), nil
+}
+
+func managedUsageFailureRecordQueryFor(query managedUsageFailureQuery, currentTime time.Time) (time.Time, managedUsageFailureRecordQuery) {
+	snapshotAt := currentTime
 	var snapshotID *uint
 	var position *managedUsageFailurePosition
 	if query.cursor != nil {
@@ -430,20 +512,16 @@ func (store *managedTenantStore) usageFailures(principal managementPrincipal, te
 		periodStartValue := snapshotAt.Add(-windowDuration)
 		periodStart = &periodStartValue
 	}
-	records, resolvedSnapshotID, recordsError := store.database.usageFailuresByOwnerAndTenant(
-		principal.userID,
-		tenantIdentifier.string(),
-		managedUsageFailureRecordQuery{
-			periodStart: periodStart,
-			snapshotAt:  snapshotAt,
-			snapshotID:  snapshotID,
-			position:    position,
-			limit:       query.limit + 1,
-		},
-	)
-	if recordsError != nil {
-		return managedUsageFailurePage{}, managedTenantQueryError(principal.userID, tenantIdentifier.string(), recordsError)
+	return snapshotAt, managedUsageFailureRecordQuery{
+		periodStart: periodStart,
+		snapshotAt:  snapshotAt,
+		snapshotID:  snapshotID,
+		position:    position,
+		limit:       query.limit + 1,
 	}
+}
+
+func managedUsageFailurePageFor(records []managedUsageFailureRecord, resolvedSnapshotID uint, query managedUsageFailureQuery, snapshotAt time.Time) managedUsageFailurePage {
 	hasNextPage := len(records) > query.limit
 	if hasNextPage {
 		records = records[:query.limit]
@@ -457,6 +535,7 @@ func (store *managedTenantStore) usageFailures(principal managementPrincipal, te
 		positionRecord := records[len(records)-1]
 		cursor := managedUsageFailureCursor{
 			interval:   query.interval,
+			scope:      query.scope,
 			snapshotAt: snapshotAt,
 			snapshotID: resolvedSnapshotID,
 			positionAt: positionRecord.failure.occurredAt,
@@ -464,7 +543,7 @@ func (store *managedTenantStore) usageFailures(principal managementPrincipal, te
 		}
 		page.nextCursor = cursor.encoded()
 	}
-	return page, nil
+	return page
 }
 
 func (store *managedTenantStore) adminUsersSummary() ([]managedAdminUserSnapshot, error) {

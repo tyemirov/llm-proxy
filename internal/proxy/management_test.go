@@ -1368,7 +1368,14 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 		}
 	}
 
-	for _, invalidPath := range []string{userOneTenantPath + "/usage", userOneTenantPath + "/usage?interval=unknown", userOneTenantPath + "/usage?interval=1d&interval=7d"} {
+	for _, invalidPath := range []string{
+		"/api/management/usage",
+		"/api/management/usage?interval=unknown",
+		"/api/management/usage?interval=1d&interval=7d",
+		userOneTenantPath + "/usage",
+		userOneTenantPath + "/usage?interval=unknown",
+		userOneTenantPath + "/usage?interval=1d&interval=7d",
+	} {
 		invalidRequest := httptest.NewRequest(http.MethodGet, invalidPath, nil)
 		invalidRequest.AddCookie(userOneCookie)
 		invalidResponse := httptest.NewRecorder()
@@ -1945,12 +1952,15 @@ type managementAdminUsersTestResponse struct {
 
 func requestManagementUsage(t *testing.T, router http.Handler, sessionCookie *http.Cookie, interval string) managementUsageTestResponse {
 	t.Helper()
-	request := httptest.NewRequest(http.MethodGet, managementDefaultTenantTestPath(t, router, sessionCookie, "/usage")+"?interval="+url.QueryEscape(interval), nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/management/usage?interval="+url.QueryEscape(interval), nil)
 	request.AddCookie(sessionCookie)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("usage status=%d body=%s", response.Code, response.Body.String())
+	}
+	if response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("usage cache control=%q want=no-store", response.Header().Get("Cache-Control"))
 	}
 	var contractFields map[string]json.RawMessage
 	if decodeError := json.Unmarshal(response.Body.Bytes(), &contractFields); decodeError != nil {
