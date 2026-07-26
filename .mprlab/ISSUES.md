@@ -25,6 +25,27 @@ already satisfied; recurring maintenance remains scheduled work.
 
 ## BugFixes
 
+- [ ] [B073] (P1) {B070,F014,I031} Migrate persisted caller-cancellation usage outcomes.
+  Goal:
+  Let existing management databases containing valid caller-cancellation
+  usage rows start and migrate to the canonical outcome schema.
+
+  Problem:
+  Runtime usage recording already persists caller cancellation as status `499`
+  with outcome `request_timeout`, but the bounded historical mapper accepts
+  only status `504` for that outcome. A persisted schema-1 or pre-F014 `499`
+  row therefore fails migration preflight and prevents router startup.
+
+  Requirements:
+  - Map historical status `499` to `request_timeout` through the existing
+    canonical caller-cancellation status constant.
+  - Exercise persisted `499` rows through both the schema-1-to-2 and pre-F014
+    SQLite startup migration paths while retaining rejection of unknown
+    historical statuses.
+  - Document that caller cancellation `499` and proxy-budget expiry `504`
+    share the normalized `request_timeout` outcome.
+  - Pass the required post-edit `make ci`.
+
 - [x] [B072] (P1) {F014,B071} Preserve legacy SQLite index names through the ownership migration.
   Goal:
   Let `make up` start against an existing pre-F014 SQLite volume without
