@@ -92,8 +92,7 @@ type managementConfiguration struct {
 	JWTSigningKey            string   `mapstructure:"jwt_signing_key"`
 	JWTIssuer                string   `mapstructure:"jwt_issuer"`
 	SessionCookieName        string   `mapstructure:"session_cookie_name"`
-	DatabaseDialect          string   `mapstructure:"database_dialect"`
-	DatabaseDSN              string   `mapstructure:"database_dsn"`
+	DatabasePath             string   `mapstructure:"database_path"`
 	ProviderKeyEncryptionKey string   `mapstructure:"provider_key_encryption_key"`
 	ManagementAPIOrigin      string   `mapstructure:"management_api_origin"`
 	ProxyOrigin              string   `mapstructure:"proxy_origin"`
@@ -374,8 +373,7 @@ func managementProxyConfiguration(configuration managementConfiguration) proxy.M
 		JWTSigningKey:            configuration.JWTSigningKey,
 		JWTIssuer:                configuration.JWTIssuer,
 		SessionCookieName:        configuration.SessionCookieName,
-		DatabaseDialect:          configuration.DatabaseDialect,
-		DatabaseDSN:              configuration.DatabaseDSN,
+		DatabasePath:             configuration.DatabasePath,
 		ProviderKeyEncryptionKey: configuration.ProviderKeyEncryptionKey,
 		ManagementAPIOrigin:      configuration.ManagementAPIOrigin,
 		ProxyOrigin:              configuration.ProxyOrigin,

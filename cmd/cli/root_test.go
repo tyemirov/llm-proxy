@@ -81,16 +81,14 @@ management:
   jwt_signing_key: "${P411_TAUTH_JWT_SIGNING_KEY}"
   jwt_issuer: "tauth"
   session_cookie_name: "llm_proxy_session"
-  database_dialect: "${P411_MANAGEMENT_DATABASE_DIALECT}"
-  database_dsn: "${P411_MANAGEMENT_DATABASE_DSN}"
+  database_path: "${P411_MANAGEMENT_DATABASE_PATH}"
   provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   management_api_origin: "https://llm-proxy-api.example"
   proxy_origin: "https://llm-proxy-api.example"
 `+completeProvidersYAML(providerValues))
 	writeTestDotEnv(t, tempDir, `
 P411_TAUTH_JWT_SIGNING_KEY=tauth-signing-key
-P411_MANAGEMENT_DATABASE_DIALECT=sqlite
-P411_MANAGEMENT_DATABASE_DSN=postgres://llm-proxy.example/management
+P411_MANAGEMENT_DATABASE_PATH=/var/lib/llm-proxy/management.sqlite
 P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 `)
 
@@ -162,11 +160,8 @@ P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlh
 	if capturedConfiguration.Management.SessionCookieName != "llm_proxy_session" {
 		t.Fatalf("management cookie name=%q", capturedConfiguration.Management.SessionCookieName)
 	}
-	if capturedConfiguration.Management.DatabaseDialect != proxy.ManagementDatabaseDialectSQLite {
-		t.Fatalf("management database dialect=%q", capturedConfiguration.Management.DatabaseDialect)
-	}
-	if capturedConfiguration.Management.DatabaseDSN != "postgres://llm-proxy.example/management" {
-		t.Fatalf("management database dsn=%q", capturedConfiguration.Management.DatabaseDSN)
+	if capturedConfiguration.Management.DatabasePath != "/var/lib/llm-proxy/management.sqlite" {
+		t.Fatalf("management database path=%q", capturedConfiguration.Management.DatabasePath)
 	}
 	if capturedConfiguration.Management.ProviderKeyEncryptionKey != "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=" {
 		t.Fatalf("management provider key encryption key=%q", capturedConfiguration.Management.ProviderKeyEncryptionKey)
@@ -311,39 +306,6 @@ server:
 	}
 }
 
-func TestRootCommandRejectsUnsupportedManagementDatabaseDialect(t *testing.T) {
-	tempDir := t.TempDir()
-	configPath := writeTestConfig(t, tempDir, `
-management:
-  enabled: true
-  public_origin: "https://llm-proxy.example"
-  ui_description: "LLM Proxy"
-  ui_origins:
-    - "https://llm-proxy.example"
-  tauth_url: "https://tauth.example"
-  tauth_tenant_id: "llm-proxy"
-  google_client_id: "google-client-id"
-  login_path: "/auth/google"
-  logout_path: "/auth/logout"
-  nonce_path: "/auth/nonce"
-  session_path: "/auth/session"
-  jwt_signing_key: "tauth-signing-key"
-  jwt_issuer: "tauth"
-  session_cookie_name: "llm_proxy_session"
-  database_dialect: "mysql"
-  database_dsn: "mysql://llm-proxy.example/management"
-  provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
-  management_api_origin: "https://llm-proxy-api.example"
-  proxy_origin: "https://llm-proxy-api.example"
-`+completeLiteralProvidersYAML())
-	withServeProxy(t, failingServeProxy(t))
-
-	executeError := executeRootCommand(t, "--config", configPath)
-	if executeError == nil || !strings.Contains(executeError.Error(), "management.database_dialect") {
-		t.Fatalf("error=%v want unsupported management database dialect", executeError)
-	}
-}
-
 func TestRootCommandUsesDefaultTenantProvidersFromConfigFile(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir, `
@@ -424,8 +386,7 @@ func TestRootCommandRejectsPlaceholderDefaultSyntax(t *testing.T) {
 	configPath := writeTestConfig(t, tempDir, `
 management:
   enabled: false
-  database_dialect: "${P411_MISSING_MANAGEMENT_DATABASE_DIALECT:-sqlite}"
-  database_dsn: "${P411_MISSING_MANAGEMENT_DATABASE_DSN:-management.sqlite}"
+  database_path: "${P411_MISSING_MANAGEMENT_DATABASE_PATH:-management.sqlite}"
   provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 tenants:
   - id: default
@@ -439,7 +400,7 @@ tenants:
 	withServeProxy(t, failingServeProxy(t))
 
 	executeError := executeRootCommand(t, "--config", configPath)
-	if executeError == nil || !strings.Contains(executeError.Error(), "config_placeholder_missing: names=P411_MISSING_MANAGEMENT_DATABASE_DIALECT:-sqlite,P411_MISSING_MANAGEMENT_DATABASE_DSN:-management.sqlite") {
+	if executeError == nil || !strings.Contains(executeError.Error(), "config_placeholder_missing: names=P411_MISSING_MANAGEMENT_DATABASE_PATH:-management.sqlite") {
 		t.Fatalf("error=%v want default placeholder syntax rejected", executeError)
 	}
 }
@@ -472,8 +433,7 @@ LLM_PROXY_MANAGEMENT_TAUTH_SESSION_PATH=/auth/session
 LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY=packaged-tauth-signing-key
 LLM_PROXY_MANAGEMENT_JWT_ISSUER=tauth
 LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME=app_session_llm_proxy
-LLM_PROXY_MANAGEMENT_DATABASE_DIALECT=sqlite
-LLM_PROXY_MANAGEMENT_DATABASE_DSN=llm-proxy-management.sqlite
+LLM_PROXY_MANAGEMENT_DATABASE_PATH=llm-proxy-management.sqlite
 LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 LLM_PROXY_MANAGEMENT_API_ORIGIN=https://llm-proxy-api.mprlab.com
 LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
@@ -504,11 +464,8 @@ LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
 	if capturedConfiguration.Management.JWTSigningKey != "packaged-tauth-signing-key" {
 		t.Fatalf("jwt signing key=%q", capturedConfiguration.Management.JWTSigningKey)
 	}
-	if capturedConfiguration.Management.DatabaseDialect != proxy.ManagementDatabaseDialectSQLite {
-		t.Fatalf("database dialect=%q", capturedConfiguration.Management.DatabaseDialect)
-	}
-	if capturedConfiguration.Management.DatabaseDSN != "llm-proxy-management.sqlite" {
-		t.Fatalf("database dsn=%q", capturedConfiguration.Management.DatabaseDSN)
+	if capturedConfiguration.Management.DatabasePath != "llm-proxy-management.sqlite" {
+		t.Fatalf("database path=%q", capturedConfiguration.Management.DatabasePath)
 	}
 	if capturedConfiguration.Management.ProviderKeyEncryptionKey != "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=" {
 		t.Fatalf("provider key encryption key=%q", capturedConfiguration.Management.ProviderKeyEncryptionKey)
@@ -640,8 +597,7 @@ management:
   jwt_signing_key: "tauth-signing-key"
   jwt_issuer: "tauth"
   session_cookie_name: "llm_proxy_session"
-  database_dialect: "sqlite"
-  database_dsn: "management.sqlite"
+  database_path: "management.sqlite"
   provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   management_api_origin: "https://llm-proxy-api.example"
   proxy_origin: "https://llm-proxy-api.example"
