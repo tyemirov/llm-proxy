@@ -828,6 +828,7 @@ export function revokeSecret() {
     ],
     features: [
       ["Fail-closed preflight", "Missing tables, static owners, duplicates, malformed secrets, orphan rows, plaintext keys, corrupt ciphertext, and invalid routing data stop startup before mutation.", "Invalid data never becomes a partial migration."],
+      ["SQLite index continuity", "Colliding legacy GORM index names move inside the same transaction before current tables are created.", "Preserved volumes migrate without deleting tenant or usage data."],
       ["Tenant and usage continuity", "Opaque tenant ids, secret digests, routing defaults, timestamps, and every usage event are preserved.", "Existing client secrets continue to identify the same workspace."],
       ["Provider key re-encryption", "Provider ciphertext is decrypted under the prior user binding and re-encrypted with the preserved tenant id as AES-GCM associated data.", "Each key becomes workspace-bound."],
     ],
