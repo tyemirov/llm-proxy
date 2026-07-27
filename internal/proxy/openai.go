@@ -120,6 +120,7 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 type openAIResponseSnapshot struct {
 	identifier            string
 	status                string
+	incompleteReason      string
 	text                  string
 	usage                 *tokenUsage
 	hasFinalMessage       bool
@@ -129,10 +130,15 @@ type openAIResponseSnapshot struct {
 func newOpenAIResponseSnapshot(responseBytes []byte) (openAIResponseSnapshot, error) {
 	var decodedObject map[string]any
 	decodeError := json.Unmarshal(responseBytes, &decodedObject)
+	incompleteReason := constants.EmptyString
+	if incompleteDetails, ok := decodedObject["incomplete_details"].(map[string]any); ok {
+		incompleteReason = utils.GetString(incompleteDetails, "reason")
+	}
 	usage, usageError := parseResponsesTokenUsage(responseBytes)
 	responseSnapshot := openAIResponseSnapshot{
 		identifier:            utils.GetString(decodedObject, jsonFieldID),
 		status:                utils.GetString(decodedObject, jsonFieldStatus),
+		incompleteReason:      incompleteReason,
 		text:                  extractTextFromAny(responseBytes),
 		usage:                 usage,
 		hasFinalMessage:       hasFinalMessage(responseBytes),
@@ -178,18 +184,20 @@ func (client *OpenAIClient) resolveOpenAIResponse(parentContext context.Context,
 		return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 	}
 	if !responseSnapshot.isPending() {
-		return textGenerationResult{usage: responseSnapshot.usage}, errors.New(errorOpenAIAPI)
+		return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 	}
 	if utils.IsBlank(responseSnapshot.identifier) {
 		return textGenerationResult{usage: responseSnapshot.usage}, errors.New(errorOpenAIAPI)
 	}
 	finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, responseSnapshot.identifier, responseSnapshot.usage, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, structuredLogger)
 	if pollError != nil {
-		structuredLogger.Errorw(
-			logEventOpenAIPollError,
-			logFieldID, responseSnapshot.identifier,
-			constants.LogFieldError, pollError,
-		)
+		if !errors.Is(pollError, errProviderOutputLimitReached) {
+			structuredLogger.Errorw(
+				logEventOpenAIPollError,
+				logFieldID, responseSnapshot.identifier,
+				constants.LogFieldError, pollError,
+			)
+		}
 		return finalGeneration, openAIStageError(pollError)
 	}
 	return finalGeneration, nil
@@ -201,8 +209,13 @@ func (client *OpenAIClient) resolveTerminalOpenAIResponse(parentContext context.
 		return client.resolveCompleteOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 	case statusCancelled, statusFailed:
 		return textGenerationResult{usage: responseSnapshot.usage}, errors.New(errorOpenAIFailedStatus)
+	case statusIncomplete:
+		if responseSnapshot.incompleteReason != "max_output_tokens" {
+			return textGenerationResult{usage: responseSnapshot.usage}, fmt.Errorf("%w: Responses incomplete reason=%s", ErrProviderAPI, responseSnapshot.incompleteReason)
+		}
+		return responseSnapshot.generation(), errProviderOutputLimitReached
 	}
-	return textGenerationResult{usage: responseSnapshot.usage}, ErrUpstreamIncomplete
+	return textGenerationResult{usage: responseSnapshot.usage}, errors.New(errorOpenAIAPI)
 }
 
 func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
@@ -220,11 +233,13 @@ func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.
 		finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, continuedResponseID, nil, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, structuredLogger)
 		finalGeneration.usage = mergeTokenUsage(responseSnapshot.usage, finalGeneration.usage)
 		if pollError != nil {
-			structuredLogger.Errorw(
-				logEventOpenAIPollError,
-				logFieldID, continuedResponseID,
-				constants.LogFieldError, pollError,
-			)
+			if !errors.Is(pollError, errProviderOutputLimitReached) {
+				structuredLogger.Errorw(
+					logEventOpenAIPollError,
+					logFieldID, continuedResponseID,
+					constants.LogFieldError, pollError,
+				)
+			}
 			return finalGeneration, openAIStageError(pollError)
 		}
 		return finalGeneration, nil
@@ -236,7 +251,7 @@ func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.
 }
 
 func openAIStageError(stageError error) error {
-	if errors.Is(stageError, context.Canceled) || errors.Is(stageError, context.DeadlineExceeded) || errors.Is(stageError, ErrUpstreamIncomplete) {
+	if errors.Is(stageError, context.Canceled) || errors.Is(stageError, context.DeadlineExceeded) || errors.Is(stageError, errProviderOutputLimitReached) {
 		return stageError
 	}
 	return errors.New(errorOpenAIAPI)
@@ -373,18 +388,17 @@ type searchAction struct {
 	Query string `json:"query"`
 }
 
-// joinParts creates a single string by joining the trimmed text from each
-// provided content part using a line break when multiple parts contain text.
+// joinParts creates a single string from visible content while preserving each
+// part's boundary whitespace for the completion coordinator.
 func joinParts(parts []contentPart) string {
 	var builder strings.Builder
 	for _, part := range parts {
 		if part.Type == outputPartType || part.Type == textPartType {
-			text := strings.TrimSpace(part.Text)
-			if text != constants.EmptyString {
+			if !utils.IsBlank(part.Text) {
 				if builder.Len() > 0 {
 					builder.WriteString(constants.LineBreak)
 				}
-				builder.WriteString(text)
+				builder.WriteString(part.Text)
 			}
 		}
 	}

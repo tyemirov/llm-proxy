@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"github.com/tyemirov/llm-proxy/internal/proxy"
@@ -49,11 +50,12 @@ type managementAccountUsageFailureTestItem struct {
 	managementUsageFailureTestItem
 }
 
-func TestOpenAIResponsesRequireCompletedStatusAtPublicV2Boundary(testingInstance *testing.T) {
+func TestOpenAIResponsesCompleteTruncatedOutputAndRecordOneSuccessAtPublicV2Boundary(testingInstance *testing.T) {
 	const (
 		incompletePrompt = "b080-incomplete"
 		completedPrompt  = "b080-completed"
 		partialText      = "provider-truncated partial text"
+		completionText   = " and recovered suffix"
 		completedText    = "complete response text"
 	)
 	upstreamRequestCount := 0
@@ -66,6 +68,8 @@ func TestOpenAIResponsesRequireCompletedStatusAtPublicV2Boundary(testingInstance
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
 		switch {
+		case bytes.Contains(requestBody, []byte(incompletePrompt)) && bytes.Contains(requestBody, []byte("Return only the missing suffix")):
+			_, _ = responseWriter.Write([]byte(`{"id":"b080-recovered-response","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"` + completionText + `"}]}],"usage":{"input_tokens":5,"output_tokens":7,"total_tokens":12}}`))
 		case bytes.Contains(requestBody, []byte(incompletePrompt)):
 			_, _ = responseWriter.Write([]byte(`{"id":"b080-incomplete-response","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"` + partialText + `"}]}],"usage":{"input_tokens":1599,"output_tokens":2048,"total_tokens":3647}}`))
 		case bytes.Contains(requestBody, []byte(completedPrompt)):
@@ -100,16 +104,13 @@ func TestOpenAIResponsesRequireCompletedStatusAtPublicV2Boundary(testingInstance
 	}
 
 	incompleteResponse := requestV2(incompletePrompt, 2048)
-	if incompleteResponse.Code != http.StatusBadGateway || incompleteResponse.Body.String() != proxy.ErrUpstreamIncomplete.Error() {
+	if incompleteResponse.Code != http.StatusOK || incompleteResponse.Body.String() != partialText+completionText {
 		testingInstance.Fatalf("incomplete status=%d body=%q", incompleteResponse.Code, incompleteResponse.Body.String())
 	}
-	if strings.Contains(incompleteResponse.Body.String(), partialText) {
-		testingInstance.Fatalf("incomplete response leaked partial text: %q", incompleteResponse.Body.String())
-	}
-	for _, tokenHeader := range []string{testHeaderLLMProxyRequestTokens, testHeaderLLMProxyResponseTokens, testHeaderLLMProxyTotalTokens} {
-		if incompleteResponse.Header().Get(tokenHeader) != "" {
-			testingInstance.Fatalf("incomplete response exposed %s=%q", tokenHeader, incompleteResponse.Header().Get(tokenHeader))
-		}
+	if incompleteResponse.Header().Get(testHeaderLLMProxyRequestTokens) != "1604" ||
+		incompleteResponse.Header().Get(testHeaderLLMProxyResponseTokens) != "2055" ||
+		incompleteResponse.Header().Get(testHeaderLLMProxyTotalTokens) != "3659" {
+		testingInstance.Fatalf("recovered token headers=%v", incompleteResponse.Header())
 	}
 
 	completedResponse := requestV2(completedPrompt, 2048)
@@ -121,8 +122,8 @@ func TestOpenAIResponsesRequireCompletedStatusAtPublicV2Boundary(testingInstance
 		completedResponse.Header().Get(testHeaderLLMProxyTotalTokens) != "18" {
 		testingInstance.Fatalf("completed token headers=%v", completedResponse.Header())
 	}
-	if upstreamRequestCount != 2 {
-		testingInstance.Fatalf("upstream requests=%d want=2", upstreamRequestCount)
+	if upstreamRequestCount != 3 {
+		testingInstance.Fatalf("upstream requests=%d want=3", upstreamRequestCount)
 	}
 
 	type persistedOpenAIUsageEvent struct {
@@ -150,7 +151,7 @@ func TestOpenAIResponsesRequireCompletedStatusAtPublicV2Boundary(testingInstance
 		testingInstance.Fatalf("load OpenAI usage events: %v", queryError)
 	}
 	expectedUsageEvents := []persistedOpenAIUsageEvent{
-		{Endpoint: "v2", Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT41, StatusCode: http.StatusBadGateway, Success: false, OutcomeCode: "upstream_error", RequestTokens: 1599, ResponseTokens: 2048, TotalTokens: 3647},
+		{Endpoint: "v2", Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT41, StatusCode: http.StatusOK, Success: true, OutcomeCode: "success", RequestTokens: 1604, ResponseTokens: 2055, TotalTokens: 3659},
 		{Endpoint: "v2", Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT41, StatusCode: http.StatusOK, Success: true, OutcomeCode: "success", RequestTokens: 7, ResponseTokens: 11, TotalTokens: 18},
 	}
 	if !reflect.DeepEqual(usageEvents, expectedUsageEvents) {
@@ -158,17 +159,23 @@ func TestOpenAIResponsesRequireCompletedStatusAtPublicV2Boundary(testingInstance
 	}
 }
 
-func TestOpenAIPolledFailureKeepsLatestUsageSnapshotAtPublicV2Boundary(testingInstance *testing.T) {
+func TestOpenAIPolledIncompleteUsesLatestSnapshotThenCompletesAtPublicV2Boundary(testingInstance *testing.T) {
 	const (
 		responseIdentifier = "b080-polled-usage"
 		partialText        = "polled provider-truncated partial text"
 	)
 	upstreamRequestCount := 0
+	postRequestCount := 0
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		upstreamRequestCount++
 		responseWriter.Header().Set("Content-Type", "application/json")
 		switch {
 		case request.Method == http.MethodPost:
+			postRequestCount++
+			if postRequestCount == 2 {
+				_, _ = responseWriter.Write([]byte(`{"id":"b085-polled-complete","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":" recovered suffix"}]}],"usage":{"input_tokens":5,"output_tokens":7,"total_tokens":12}}`))
+				return
+			}
 			_, _ = responseWriter.Write([]byte(`{"id":"` + responseIdentifier + `","status":"queued","usage":{"input_tokens":11,"output_tokens":13,"total_tokens":24}}`))
 		case request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/"+responseIdentifier):
 			_, _ = responseWriter.Write([]byte(`{"id":"` + responseIdentifier + `","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"` + partialText + `"}]}],"usage":{"input_tokens":17,"output_tokens":19,"total_tokens":36}}`))
@@ -190,19 +197,16 @@ func TestOpenAIPolledFailureKeepsLatestUsageSnapshotAtPublicV2Boundary(testingIn
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
-	if response.Code != http.StatusBadGateway || response.Body.String() != proxy.ErrUpstreamIncomplete.Error() {
+	if response.Code != http.StatusOK || response.Body.String() != partialText+" recovered suffix" {
 		testingInstance.Fatalf("status=%d body=%q", response.Code, response.Body.String())
 	}
-	if strings.Contains(response.Body.String(), partialText) {
-		testingInstance.Fatalf("response leaked partial text: %q", response.Body.String())
+	if response.Header().Get(testHeaderLLMProxyRequestTokens) != "22" ||
+		response.Header().Get(testHeaderLLMProxyResponseTokens) != "26" ||
+		response.Header().Get(testHeaderLLMProxyTotalTokens) != "48" {
+		testingInstance.Fatalf("token headers=%v", response.Header())
 	}
-	for _, tokenHeader := range []string{testHeaderLLMProxyRequestTokens, testHeaderLLMProxyResponseTokens, testHeaderLLMProxyTotalTokens} {
-		if response.Header().Get(tokenHeader) != "" {
-			testingInstance.Fatalf("response exposed %s=%q", tokenHeader, response.Header().Get(tokenHeader))
-		}
-	}
-	if upstreamRequestCount != 2 {
-		testingInstance.Fatalf("upstream requests=%d want=2", upstreamRequestCount)
+	if upstreamRequestCount != 3 {
+		testingInstance.Fatalf("upstream requests=%d want=3", upstreamRequestCount)
 	}
 
 	type persistedUsageEvent struct {
@@ -227,32 +231,49 @@ func TestOpenAIPolledFailureKeepsLatestUsageSnapshotAtPublicV2Boundary(testingIn
 		testingInstance.Fatalf("load usage events: %v", queryError)
 	}
 	expectedUsageEvents := []persistedUsageEvent{{
-		StatusCode:     http.StatusBadGateway,
-		Success:        false,
-		OutcomeCode:    "upstream_error",
-		RequestTokens:  17,
-		ResponseTokens: 19,
-		TotalTokens:    36,
+		StatusCode:     http.StatusOK,
+		Success:        true,
+		OutcomeCode:    "success",
+		RequestTokens:  22,
+		ResponseTokens: 26,
+		TotalTokens:    48,
 	}}
 	if !reflect.DeepEqual(usageEvents, expectedUsageEvents) {
 		testingInstance.Fatalf("usage events=%+v want=%+v", usageEvents, expectedUsageEvents)
 	}
 }
 
-func TestProviderCompletionSignalsRejectPartialTextAndRetainUsageAtPublicV2Boundary(testingInstance *testing.T) {
+func TestProviderCompletionSignalsRecoverPartialTextAndAggregateUsageAtPublicV2Boundary(testingInstance *testing.T) {
 	const (
 		chatPartialText      = "chat completion partial text"
 		geminiPartialText    = "gemini partial text"
 		anthropicPartialText = "anthropic partial text"
+		completionText       = " recovered suffix"
 	)
+	upstreamRequestCounts := map[string]int{}
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.Header().Set("Content-Type", "application/json")
 		switch {
 		case request.URL.Path == "/chat/completions":
+			upstreamRequestCounts["chat"]++
+			if upstreamRequestCounts["chat"] == 2 {
+				_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"` + completionText + `"},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":7,"total_tokens":12}}`))
+				return
+			}
 			_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"` + chatPartialText + `"},"finish_reason":"length"}],"usage":{"prompt_tokens":31,"completion_tokens":47,"total_tokens":78}}`))
 		case strings.HasSuffix(request.URL.Path, ":generateContent"):
+			upstreamRequestCounts["gemini"]++
+			if upstreamRequestCounts["gemini"] == 2 {
+				_, _ = responseWriter.Write([]byte(`{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"` + completionText + `"}]}}],"usageMetadata":{"promptTokenCount":5,"candidatesTokenCount":7,"totalTokenCount":12}}`))
+				return
+			}
 			_, _ = responseWriter.Write([]byte(`{"candidates":[{"finishReason":"MAX_TOKENS","content":{"parts":[{"text":"` + geminiPartialText + `"}]}}],"usageMetadata":{"promptTokenCount":41,"candidatesTokenCount":53,"totalTokenCount":94}}`))
 		case request.URL.Path == "/v1/messages":
+			upstreamRequestCounts["anthropic"]++
+			if upstreamRequestCounts["anthropic"] == 2 {
+				_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"` + completionText + `"}],"stop_reason":"end_turn","usage":{"input_tokens":7,"output_tokens":9}}`))
+				return
+			}
 			_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"` + anthropicPartialText + `"}],"stop_reason":"max_tokens","usage":{"input_tokens":59,"output_tokens":61}}`))
 		default:
 			http.NotFound(responseWriter, request)
@@ -309,16 +330,8 @@ func TestProviderCompletionSignalsRejectPartialTextAndRetainUsageAtPublicV2Bound
 		request.Header.Set("Content-Type", "application/json")
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, request)
-		if response.Code != http.StatusBadGateway {
+		if response.Code != http.StatusOK || response.Body.String() != testCase.partialText+completionText {
 			testingInstance.Fatalf("provider=%s status=%d body=%q", testCase.provider, response.Code, response.Body.String())
-		}
-		if strings.Contains(response.Body.String(), testCase.partialText) {
-			testingInstance.Fatalf("provider=%s leaked partial text: %q", testCase.provider, response.Body.String())
-		}
-		for _, tokenHeader := range []string{testHeaderLLMProxyRequestTokens, testHeaderLLMProxyResponseTokens, testHeaderLLMProxyTotalTokens} {
-			if response.Header().Get(tokenHeader) != "" {
-				testingInstance.Fatalf("provider=%s exposed %s=%q", testCase.provider, tokenHeader, response.Header().Get(tokenHeader))
-			}
 		}
 	}
 
@@ -347,10 +360,96 @@ func TestProviderCompletionSignalsRejectPartialTextAndRetainUsageAtPublicV2Bound
 		testingInstance.Fatalf("load provider usage events: %v", queryError)
 	}
 	expectedUsageEvents := []persistedProviderUsageEvent{
-		{Endpoint: "v2", Provider: proxy.ProviderNameDeepSeek, Model: proxy.ModelNameDeepSeekV4Flash, StatusCode: http.StatusBadGateway, Success: false, OutcomeCode: "upstream_error", RequestTokens: 31, ResponseTokens: 47, TotalTokens: 78},
-		{Endpoint: "v2", Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini25Flash, StatusCode: http.StatusBadGateway, Success: false, OutcomeCode: "upstream_error", RequestTokens: 41, ResponseTokens: 53, TotalTokens: 94},
-		{Endpoint: "v2", Provider: proxy.ProviderNameAnthropic, Model: proxy.ModelNameClaudeSonnet46, StatusCode: http.StatusBadGateway, Success: false, OutcomeCode: "upstream_error", RequestTokens: 59, ResponseTokens: 61, TotalTokens: 120},
+		{Endpoint: "v2", Provider: proxy.ProviderNameDeepSeek, Model: proxy.ModelNameDeepSeekV4Flash, StatusCode: http.StatusOK, Success: true, OutcomeCode: "success", RequestTokens: 36, ResponseTokens: 54, TotalTokens: 90},
+		{Endpoint: "v2", Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini25Flash, StatusCode: http.StatusOK, Success: true, OutcomeCode: "success", RequestTokens: 46, ResponseTokens: 60, TotalTokens: 106},
+		{Endpoint: "v2", Provider: proxy.ProviderNameAnthropic, Model: proxy.ModelNameClaudeSonnet46, StatusCode: http.StatusOK, Success: true, OutcomeCode: "success", RequestTokens: 66, ResponseTokens: 70, TotalTokens: 136},
 	}
+	if !reflect.DeepEqual(usageEvents, expectedUsageEvents) {
+		testingInstance.Fatalf("usage events=%+v want=%+v", usageEvents, expectedUsageEvents)
+	}
+}
+
+func TestCompletionCoordinatorDeadlineRecordsAccumulatedUsageAsOneTimeout(testingInstance *testing.T) {
+	upstreamRequestCount := 0
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		upstreamRequestCount++
+		if upstreamRequestCount == 1 {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"partial text"},"finish_reason":"length"}],"usage":{"prompt_tokens":3,"completion_tokens":5,"total_tokens":8}}`))
+			return
+		}
+		select {
+		case <-request.Context().Done():
+		case <-time.After(750 * time.Millisecond):
+		}
+	}))
+	defer upstreamServer.Close()
+
+	databasePath := filepath.Join(testingInstance.TempDir(), "completion-timeout.db")
+	router := newManagementRouterWithDatabasePath(testingInstance, proxy.Configuration{DeepSeekBaseURL: upstreamServer.URL}, databasePath)
+	ownerCookie := managementSessionCookie(testingInstance, "completion-timeout-owner")
+	tenantIdentifier := managementDefaultTenantTestID(testingInstance, router, ownerCookie)
+	saveProviderRequest := authenticatedJSONRequest(
+		http.MethodPut,
+		managementTenantTestPath(tenantIdentifier, "/provider-keys/"+proxy.ProviderNameDeepSeek),
+		managementProviderKeyRequestBody(testingInstance, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash, ""),
+		ownerCookie,
+	)
+	saveProviderResponse := httptest.NewRecorder()
+	router.ServeHTTP(saveProviderResponse, saveProviderRequest)
+	if saveProviderResponse.Code != http.StatusOK {
+		testingInstance.Fatalf("save DeepSeek provider status=%d body=%q", saveProviderResponse.Code, saveProviderResponse.Body.String())
+	}
+	secret := generateManagementTenantSecret(testingInstance, router, ownerCookie, tenantIdentifier)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/v2?key="+url.QueryEscape(secret)+"&provider="+proxy.ProviderNameDeepSeek,
+		bytes.NewBufferString(`{"messages":[{"role":"user","content":"complete before the deadline"}]}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(llmproxycontract.HeaderRequestTimeoutSeconds, "1")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusGatewayTimeout || !strings.Contains(response.Body.String(), `"code":"request_timeout"`) {
+		testingInstance.Fatalf("status=%d body=%q", response.Code, response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), "partial text") {
+		testingInstance.Fatalf("timeout leaked partial text: %q", response.Body.String())
+	}
+	if upstreamRequestCount != 2 {
+		testingInstance.Fatalf("upstream requests=%d want=2", upstreamRequestCount)
+	}
+
+	type persistedTimeoutUsageEvent struct {
+		StatusCode     int    `gorm:"column:status_code"`
+		Success        bool   `gorm:"column:success"`
+		OutcomeCode    string `gorm:"column:outcome_code"`
+		RequestTokens  int    `gorm:"column:request_tokens"`
+		ResponseTokens int    `gorm:"column:response_tokens"`
+		TotalTokens    int    `gorm:"column:total_tokens"`
+	}
+	database, openError := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+	if openError != nil {
+		testingInstance.Fatalf("open usage database: %v", openError)
+	}
+	var usageEvents []persistedTimeoutUsageEvent
+	if queryError := database.
+		Table("managed_usage_event_records").
+		Select("status_code", "success", "outcome_code", "request_tokens", "response_tokens", "total_tokens").
+		Order("id").
+		Find(&usageEvents).
+		Error; queryError != nil {
+		testingInstance.Fatalf("load timeout usage events: %v", queryError)
+	}
+	expectedUsageEvents := []persistedTimeoutUsageEvent{{
+		StatusCode:     http.StatusGatewayTimeout,
+		Success:        false,
+		OutcomeCode:    "request_timeout",
+		RequestTokens:  3,
+		ResponseTokens: 5,
+		TotalTokens:    8,
+	}}
 	if !reflect.DeepEqual(usageEvents, expectedUsageEvents) {
 		testingInstance.Fatalf("usage events=%+v want=%+v", usageEvents, expectedUsageEvents)
 	}

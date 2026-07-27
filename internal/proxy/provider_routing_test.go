@@ -101,7 +101,9 @@ func TestProviderRoutingUsesConfiguredOpenAIURLsForTextAndDictation(t *testing.T
 
 func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
 	var capturedPayload map[string]any
+	requestCount := 0
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		requestCount++
 		if request.Method != http.MethodPost {
 			t.Fatalf("method=%s want=%s", request.Method, http.MethodPost)
 		}
@@ -119,6 +121,10 @@ func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
 			t.Fatalf("unmarshal body: %v", unmarshalError)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
+		if requestCount == 1 {
+			_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"deepseek partial "},"finish_reason":"length"}]}`))
+			return
+		}
 		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"deepseek ok"},"finish_reason":"stop"}]}`))
 	}))
 	defer upstreamServer.Close()
@@ -151,14 +157,18 @@ func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
 	}
-	if strings.TrimSpace(responseRecorder.Body.String()) != "deepseek ok" {
-		t.Fatalf("body=%q want=%q", responseRecorder.Body.String(), "deepseek ok")
+	if strings.TrimSpace(responseRecorder.Body.String()) != "deepseek partial deepseek ok" {
+		t.Fatalf("body=%q want=%q", responseRecorder.Body.String(), "deepseek partial deepseek ok")
 	}
 	if capturedPayload["model"] != proxy.ModelNameDeepSeekV4Flash {
 		t.Fatalf("model=%v want=%s", capturedPayload["model"], proxy.ModelNameDeepSeekV4Flash)
 	}
 	if _, exists := capturedPayload["max_tokens"]; exists {
 		t.Fatalf("max_tokens must be omitted by default: %v", capturedPayload)
+	}
+	messages, messagesOK := capturedPayload["messages"].([]any)
+	if !messagesOK || len(messages) != 3 {
+		t.Fatalf("continuation messages=%v", capturedPayload["messages"])
 	}
 }
 
@@ -185,7 +195,9 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
 			var capturedPayload map[string]any
+			requestCount := 0
 			upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+				requestCount++
 				if request.Method != http.MethodPost {
 					subTest.Fatalf("method=%s want=%s", request.Method, http.MethodPost)
 				}
@@ -203,6 +215,10 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 					subTest.Fatalf("unmarshal body: %v", unmarshalError)
 				}
 				responseWriter.Header().Set("Content-Type", "application/json")
+				if requestCount == 1 {
+					_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"catalog partial "},"finish_reason":"length"}]}`))
+					return
+				}
 				_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"current compatible model ok"},"finish_reason":"stop"}]}`))
 			}))
 			subTest.Cleanup(upstreamServer.Close)
@@ -246,6 +262,12 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 			if responseRecorder.Code != http.StatusOK {
 				subTest.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
 			}
+			if responseRecorder.Body.String() != "catalog partial current compatible model ok" {
+				subTest.Fatalf("body=%q", responseRecorder.Body.String())
+			}
+			if requestCount != 2 {
+				subTest.Fatalf("upstream requests=%d want=2", requestCount)
+			}
 			if capturedPayload["model"] != testCase.model {
 				subTest.Fatalf("model=%v want=%s", capturedPayload["model"], testCase.model)
 			}
@@ -256,6 +278,10 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 				if _, present := capturedPayload[forbiddenField]; present {
 					subTest.Fatalf("payload unexpectedly contained %s: %v", forbiddenField, capturedPayload)
 				}
+			}
+			messages, messagesOK := capturedPayload["messages"].([]any)
+			if !messagesOK || len(messages) != 3 {
+				subTest.Fatalf("continuation messages=%v", capturedPayload["messages"])
 			}
 		})
 	}
@@ -366,6 +392,10 @@ func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testin
 		}
 		capturedRequests = append(capturedRequests, capturedMetaRequest{payload: payload})
 		responseWriter.Header().Set("Content-Type", "application/json")
+		if len(capturedRequests)%2 == 1 {
+			_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"meta partial "},"finish_reason":"length"}]}`))
+			return
+		}
 		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"meta ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}}`))
 	}))
 	defer upstreamServer.Close()
@@ -446,7 +476,7 @@ func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testin
 			if decodeError := json.Unmarshal(responseRecorder.Body.Bytes(), &response); decodeError != nil {
 				subTest.Fatalf("decode response: %v", decodeError)
 			}
-			if response.Model != proxy.ModelNameMuseSpark11 || response.Response != "meta ok" {
+			if response.Model != proxy.ModelNameMuseSpark11 || response.Response != "meta partial meta ok" {
 				subTest.Fatalf("response=%+v", response)
 			}
 			if response.Usage.RequestTokens != 11 || response.Usage.ResponseTokens != 7 || response.Usage.TotalTokens != 18 {
@@ -455,26 +485,41 @@ func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testin
 		})
 	}
 
-	if len(capturedRequests) != len(testCases) {
-		t.Fatalf("captured requests=%d want=%d", len(capturedRequests), len(testCases))
+	if len(capturedRequests) != len(testCases)*2 {
+		t.Fatalf("captured requests=%d want=%d", len(capturedRequests), len(testCases)*2)
 	}
-	for requestIndex, capturedRequest := range capturedRequests {
-		if capturedRequest.payload["model"] != proxy.ModelNameMuseSpark11 {
-			t.Fatalf("request %d model=%v want=%s", requestIndex, capturedRequest.payload["model"], proxy.ModelNameMuseSpark11)
+	for testCaseIndex, testCase := range testCases {
+		initialRequest := capturedRequests[testCaseIndex*2]
+		continuationRequest := capturedRequests[testCaseIndex*2+1]
+		for requestIndex, capturedRequest := range []capturedMetaRequest{initialRequest, continuationRequest} {
+			if capturedRequest.payload["model"] != proxy.ModelNameMuseSpark11 {
+				t.Fatalf("request %d.%d model=%v want=%s", testCaseIndex, requestIndex, capturedRequest.payload["model"], proxy.ModelNameMuseSpark11)
+			}
+			if capturedRequest.payload["max_completion_tokens"] != float64(321) {
+				t.Fatalf("request %d.%d max_completion_tokens=%v", testCaseIndex, requestIndex, capturedRequest.payload["max_completion_tokens"])
+			}
+			if _, deprecatedFieldPresent := capturedRequest.payload["max_tokens"]; deprecatedFieldPresent {
+				t.Fatalf("request %d.%d must not use deprecated Meta max_tokens: %v", testCaseIndex, requestIndex, capturedRequest.payload)
+			}
 		}
-		if capturedRequest.payload["max_completion_tokens"] != float64(321) {
-			t.Fatalf("request %d max_completion_tokens=%v", requestIndex, capturedRequest.payload["max_completion_tokens"])
+		initialMessages, initialMessagesOK := initialRequest.payload["messages"].([]any)
+		if !initialMessagesOK || len(initialMessages) != 1 {
+			t.Fatalf("request %d initial messages=%v", testCaseIndex, initialRequest.payload["messages"])
 		}
-		if _, deprecatedFieldPresent := capturedRequest.payload["max_tokens"]; deprecatedFieldPresent {
-			t.Fatalf("request %d must not use deprecated Meta max_tokens: %v", requestIndex, capturedRequest.payload)
+		initialMessage, initialMessageOK := initialMessages[0].(map[string]any)
+		if !initialMessageOK || initialMessage["role"] != "user" || initialMessage["content"] != testCase.expectedPrompt {
+			t.Fatalf("request %d initial message=%v", testCaseIndex, initialMessages[0])
 		}
-		messages, messagesOK := capturedRequest.payload["messages"].([]any)
-		if !messagesOK || len(messages) != 1 {
-			t.Fatalf("request %d messages=%v", requestIndex, capturedRequest.payload["messages"])
+		continuationMessages, continuationMessagesOK := continuationRequest.payload["messages"].([]any)
+		if !continuationMessagesOK || len(continuationMessages) != 3 {
+			t.Fatalf("request %d continuation messages=%v", testCaseIndex, continuationRequest.payload["messages"])
 		}
-		message, messageOK := messages[0].(map[string]any)
-		if !messageOK || message["role"] != "user" || message["content"] != testCases[requestIndex].expectedPrompt {
-			t.Fatalf("request %d message=%v", requestIndex, messages[0])
+		assistantMessage, assistantMessageOK := continuationMessages[1].(map[string]any)
+		instructionMessage, instructionMessageOK := continuationMessages[2].(map[string]any)
+		instructionContent, instructionContentOK := instructionMessage["content"].(string)
+		if !assistantMessageOK || assistantMessage["role"] != "assistant" || assistantMessage["content"] != "meta partial " ||
+			!instructionMessageOK || instructionMessage["role"] != "user" || !instructionContentOK || !strings.Contains(instructionContent, "missing suffix") {
+			t.Fatalf("request %d continuation transcript=%v", testCaseIndex, continuationMessages)
 		}
 	}
 }
@@ -1015,6 +1060,59 @@ func TestProviderRoutingSupportsGeminiGenerateContent(t *testing.T) {
 	}
 	assertGeminiContentsOmitThought(t, capturedPayload["contents"])
 	assertGeminiContentOmitsThought(t, capturedPayload["systemInstruction"], "systemInstruction")
+}
+
+func TestProviderRoutingIncreasesKnownGeminiBudgetAfterEmptyMaxTokensResponse(t *testing.T) {
+	var capturedPayloads []map[string]any
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		requestBytes, _ := io.ReadAll(request.Body)
+		var payload map[string]any
+		_ = json.Unmarshal(requestBytes, &payload)
+		capturedPayloads = append(capturedPayloads, payload)
+		responseWriter.Header().Set("Content-Type", "application/json")
+		if len(capturedPayloads) == 1 {
+			_, _ = responseWriter.Write([]byte(`{"candidates":[{"finishReason":"MAX_TOKENS","content":{"parts":[]}}]}`))
+			return
+		}
+		_, _ = responseWriter.Write([]byte(`{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"gemini recovered"}]}}]}`))
+	}))
+	defer upstreamServer.Close()
+
+	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
+		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:             TestAPIKey,
+		GeminiKey:             testGeminiKey,
+		GeminiBaseURL:         upstreamServer.URL,
+		LogLevel:              proxy.LogLevelInfo,
+		WorkerCount:           1,
+		QueueSize:             1,
+		RequestTimeoutSeconds: TestTimeout,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/?key="+TestSecret+"&prompt=hello&provider="+proxy.ProviderNameGemini+"&model="+proxy.ModelNameGemini25Flash+"&max_tokens=1000",
+		nil,
+	)
+	responseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(responseRecorder, request)
+	if responseRecorder.Code != http.StatusOK || responseRecorder.Body.String() != "gemini recovered" {
+		t.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	if len(capturedPayloads) != 2 {
+		t.Fatalf("payloads=%d want=2", len(capturedPayloads))
+	}
+	generationConfig, generationConfigOK := capturedPayloads[1]["generationConfig"].(map[string]any)
+	if !generationConfigOK || generationConfig["maxOutputTokens"] != float64(2000) {
+		t.Fatalf("continuation generationConfig=%v", capturedPayloads[1]["generationConfig"])
+	}
+	contents, contentsOK := capturedPayloads[1]["contents"].([]any)
+	if !contentsOK || len(contents) != 2 {
+		t.Fatalf("continuation contents=%v", capturedPayloads[1]["contents"])
+	}
 }
 
 func TestProviderRoutingUsesGeminiDefaultModelForJSONPosts(t *testing.T) {
@@ -2015,7 +2113,7 @@ func TestProviderRoutingMapsGeminiProviderErrors(t *testing.T) {
 		{name: "malformed json", statusCode: http.StatusOK, body: `{`, wantStatus: http.StatusBadGateway},
 		{name: "negative usage", statusCode: http.StatusOK, body: `{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"bad usage"}]}}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":-1}}`, wantStatus: http.StatusBadGateway},
 		{name: "missing finish reason", statusCode: http.StatusOK, body: `{"candidates":[{"content":{"parts":[{"text":"unfinished text"}]}}]}`, wantStatus: http.StatusBadGateway},
-		{name: "max tokens finish reason", statusCode: http.StatusOK, body: `{"candidates":[{"finishReason":"MAX_TOKENS","content":{"parts":[{"text":"partial text"}]}}]}`, wantStatus: http.StatusBadGateway},
+		{name: "safety finish reason", statusCode: http.StatusOK, body: `{"candidates":[{"finishReason":"SAFETY","content":{"parts":[{"text":"filtered text"}]}}]}`, wantStatus: http.StatusBadGateway},
 		{name: "missing text", statusCode: http.StatusOK, body: `{"candidates":[{"finishReason":"STOP","content":{"parts":[{}]}}]}`, wantStatus: http.StatusBadGateway},
 	}
 	for _, testCase := range testCases {
@@ -2124,7 +2222,7 @@ func TestProviderRoutingMapsAnthropicProviderErrors(t *testing.T) {
 		{name: "malformed json", statusCode: http.StatusOK, body: `{`, wantStatus: http.StatusBadGateway},
 		{name: "negative usage", statusCode: http.StatusOK, body: `{"content":[{"type":"text","text":"bad usage"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":-1}}`, wantStatus: http.StatusBadGateway},
 		{name: "missing stop reason", statusCode: http.StatusOK, body: `{"content":[{"type":"text","text":"unfinished text"}]}`, wantStatus: http.StatusBadGateway},
-		{name: "max tokens stop reason", statusCode: http.StatusOK, body: `{"content":[{"type":"text","text":"partial text"}],"stop_reason":"max_tokens"}`, wantStatus: http.StatusBadGateway},
+		{name: "refusal stop reason", statusCode: http.StatusOK, body: `{"content":[{"type":"text","text":"refused text"}],"stop_reason":"refusal"}`, wantStatus: http.StatusBadGateway},
 		{name: "paused turn stop reason", statusCode: http.StatusOK, body: `{"content":[{"type":"text","text":"intermediate text"}],"stop_reason":"pause_turn"}`, wantStatus: http.StatusBadGateway},
 		{name: "missing text", statusCode: http.StatusOK, body: `{"content":[{"type":"tool_use","text":"not visible"}],"stop_reason":"end_turn"}`, wantStatus: http.StatusBadGateway},
 	}

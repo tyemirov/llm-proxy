@@ -500,7 +500,7 @@ func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRoute
 	generation, requestError := upstreamProviders.generateText(ginContext.Request.Context(), chatRequest, structuredLogger)
 	if requestError != nil {
 		if requestContextEnded(ginContext) {
-			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), ginContext.Writer.Status(), nil, requestStart)
+			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), ginContext.Writer.Status(), generation.usage, requestStart)
 			return
 		}
 		markRequestOutcome(ginContext, requestFailureOutcome(requestError), managedRequestFailureOutcome(requestError))
@@ -510,7 +510,7 @@ func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRoute
 		return
 	}
 	if requestContextEnded(ginContext) {
-		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), ginContext.Writer.Status(), nil, requestStart)
+		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), ginContext.Writer.Status(), generation.usage, requestStart)
 		return
 	}
 	completeChatRequest(ginContext, chatRequest, generation, requestTenant, usageEndpoint, managedTenants, structuredLogger, requestStart)
@@ -520,7 +520,7 @@ func completeChatRequest(ginContext *gin.Context, chatRequest chatRequestParamet
 	mime := preferredMime(ginContext)
 	formattedBody, contentType := formatResponse(generation.text, mime, chatRequest, generation.usage)
 	if requestContextEnded(ginContext) {
-		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), ginContext.Writer.Status(), nil, requestStart)
+		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), ginContext.Writer.Status(), generation.usage, requestStart)
 		return
 	}
 	markRequestOutcome(ginContext, requestOutcomeSuccess, managedUsageOutcomeSuccess)

@@ -2,9 +2,15 @@ package proxy
 
 import (
 	"context"
+	"errors"
+	"strings"
+	"time"
 
+	"github.com/tyemirov/llm-proxy/internal/utils"
 	"go.uber.org/zap"
 )
+
+const completionContinuationInstruction = "Continue exactly where the previous response stopped. Return only the missing suffix without repeating any completed text."
 
 type providerRouter struct {
 	openAIClient    *OpenAIClient
@@ -23,6 +29,34 @@ func newProviderRouter(openAIClient *OpenAIClient, chatClient *openAICompatibleC
 }
 
 func (router *providerRouter) generateText(requestContext context.Context, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	originalMessages := request.messages
+	accumulatedText := strings.Builder{}
+	var accumulatedUsage *tokenUsage
+	for {
+		generation, generationError := router.generateTextAttempt(requestContext, request, structuredLogger)
+		accumulatedText.WriteString(generation.text)
+		accumulatedUsage = mergeTokenUsage(accumulatedUsage, generation.usage)
+		if !errors.Is(generationError, errProviderOutputLimitReached) {
+			return textGenerationResult{
+				text:  strings.TrimSpace(accumulatedText.String()),
+				usage: accumulatedUsage,
+			}, generationError
+		}
+
+		request.messages = completionContinuationMessages(originalMessages, accumulatedText.String())
+		request.maxTokens = continuationMaxTokens(request.maxTokens, request.model, generation.text)
+		select {
+		case <-time.After(responsePollInterval):
+		case <-requestContext.Done():
+			return textGenerationResult{
+				text:  strings.TrimSpace(accumulatedText.String()),
+				usage: accumulatedUsage,
+			}, requestContext.Err()
+		}
+	}
+}
+
+func (router *providerRouter) generateTextAttempt(requestContext context.Context, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if request.provider.textTransport == textTransportOpenAIResponses {
 		return router.openAIClient.openAIRequest(
 			requestContext,
@@ -67,6 +101,25 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 		request.provider.chatTokenLimitParameter,
 		structuredLogger,
 	)
+}
+
+func completionContinuationMessages(originalMessages chatMessages, accumulatedText string) chatMessages {
+	continuationMessages := append(chatMessages(nil), originalMessages...)
+	if !utils.IsBlank(accumulatedText) {
+		continuationMessages = append(continuationMessages, chatMessage{role: chatRoleAssistant, content: accumulatedText})
+	}
+	return append(continuationMessages, chatMessage{role: chatRoleUser, content: completionContinuationInstruction})
+}
+
+func continuationMaxTokens(currentMaxTokens *int, model textModelDefinition, latestText string) *int {
+	if !utils.IsBlank(latestText) || !model.hasOutputTokenLimit {
+		return currentMaxTokens
+	}
+	nextMaxTokens := model.outputTokenLimit
+	if currentMaxTokens != nil && *currentMaxTokens < model.outputTokenLimit && *currentMaxTokens <= model.outputTokenLimit/2 {
+		nextMaxTokens = *currentMaxTokens * 2
+	}
+	return &nextMaxTokens
 }
 
 func (router *providerRouter) transcribeAudio(requestContext context.Context, request dictationRequestParameters, structuredLogger *zap.SugaredLogger) (string, error) {

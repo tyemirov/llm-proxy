@@ -19,6 +19,7 @@ const (
 	anthropicVersionValue           = "2023-06-01"
 	anthropicStopReasonEndTurn      = "end_turn"
 	anthropicStopReasonStopSequence = "stop_sequence"
+	anthropicStopReasonMaxTokens    = "max_tokens"
 )
 
 type anthropicMessagesClient struct {
@@ -121,24 +122,27 @@ func parseAnthropicMessagesResponse(responseBytes []byte) (textGenerationResult,
 		return textGenerationResult{}, usageError
 	}
 	generation := textGenerationResult{usage: usage}
-	stopReason := response.StopReason
-	if strings.TrimSpace(stopReason) == constants.EmptyString {
-		return generation, fmt.Errorf("%w: anthropic Messages missing stop_reason", ErrProviderAPI)
-	}
-	if stopReason != anthropicStopReasonEndTurn && stopReason != anthropicStopReasonStopSequence {
-		return generation, fmt.Errorf("%w: anthropic Messages stop_reason=%s", ErrProviderAPI, strings.TrimSpace(stopReason))
-	}
 	var textBuilder strings.Builder
 	for _, contentBlock := range response.Content {
 		if contentBlock.Type == textPartType && strings.TrimSpace(contentBlock.Text) != constants.EmptyString {
 			textBuilder.WriteString(contentBlock.Text)
 		}
 	}
-	trimmedText := strings.TrimSpace(textBuilder.String())
-	if trimmedText == constants.EmptyString {
+	visibleText := textBuilder.String()
+	stopReason := strings.TrimSpace(response.StopReason)
+	if stopReason == constants.EmptyString {
+		return generation, fmt.Errorf("%w: anthropic Messages missing stop_reason", ErrProviderAPI)
+	}
+	if stopReason == anthropicStopReasonMaxTokens {
+		return textGenerationResult{text: visibleText, usage: usage}, errProviderOutputLimitReached
+	}
+	if stopReason != anthropicStopReasonEndTurn && stopReason != anthropicStopReasonStopSequence {
+		return generation, fmt.Errorf("%w: anthropic Messages stop_reason=%s", ErrProviderAPI, stopReason)
+	}
+	if utils.IsBlank(visibleText) {
 		return generation, fmt.Errorf("%w: anthropic Messages returned no text", ErrProviderAPI)
 	}
-	return textGenerationResult{text: trimmedText, usage: usage}, nil
+	return textGenerationResult{text: visibleText, usage: usage}, nil
 }
 
 func parseAnthropicTokenUsage(usage *upstreamTokenUsage) (*tokenUsage, error) {
