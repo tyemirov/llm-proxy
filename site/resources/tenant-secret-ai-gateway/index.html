@@ -71,7 +71,7 @@
               <li>Create a tenant in static config or through the management UI.</li>
 <li>Generate or configure a tenant secret for the client.</li>
 <li>Use the same key parameter across GET, POST, /v2, and /dictate.</li>
-<li>Revoke or regenerate the secret when access should change.</li>
+<li>Replace the secret or delete its owning managed tenant when access should change.</li>
             </ol>
           </section>
 
@@ -104,7 +104,7 @@
 
                         <tr>
                           <td>403 boundary</td>
-                          <td>Missing, invalid, or revoked tenant secrets return forbidden responses.</td>
+                          <td>Missing, invalid, or replaced tenant secrets return forbidden responses.</td>
                           <td>Callers do not receive tenant discovery details.</td>
                         </tr>
 
@@ -124,8 +124,8 @@
 
 
                     <section class="resource-card">
-                      <h3>Access revocation</h3>
-                      <p>A generated secret can be revoked so future proxy calls with that secret stop working.</p>
+                      <h3>Key replacement</h3>
+                      <p>Replacing a generated secret immediately stops the prior value from authenticating future proxy calls.</p>
                     </section>
 
 
@@ -198,9 +198,9 @@
                     </a>
 
 
-                    <a class="resource-related" href="/resources/generated-secret-rotation-and-revocation/">
+                    <a class="resource-related" href="/resources/generated-secret-rotation/">
                       <span>Security</span>
-                      <strong>Generated LLM Proxy secret rotation and revocation</strong>
+                      <strong>Rotate generated LLM Proxy client keys with confidence</strong>
                     </a>
 
 

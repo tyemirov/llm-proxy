@@ -43,16 +43,9 @@ llm-proxy-key-management textarea {
 
 llm-proxy-key-management,
 workspace-surface,
-tenant-management,
-client-access-row,
+tenant-access-row,
 client-access-key,
-client-access-tenant,
-tenant-identity,
-tenant-identity-copy,
-tenant-name-editor,
-tenant-name-actions,
 client-key-row,
-tenant-settings-actions,
 defaults-editor,
 dashboard-actions,
 usage-dashboard,
@@ -585,87 +578,40 @@ h3 {
   font-weight: 600;
 }
 
-client-access-tenant {
+tenant-access-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "tenant rename key key-action delete create";
+  grid-template-columns: minmax(150px, 0.85fr) auto minmax(210px, 1.35fr) auto auto auto;
   align-items: center;
-  gap: 0.35rem 0.55rem;
+  gap: 0.4rem;
   border: 1px solid var(--llm-border);
   border-radius: 6px;
   background: var(--llm-panel-strong);
   padding: 0.45rem 0.55rem;
 }
 
-tenant-management {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 0.45rem;
-  border: 1px solid var(--llm-border);
-  border-radius: 6px;
-  background: var(--llm-panel-strong);
-  padding: 0.45rem 0.55rem;
-}
-
-tenant-management label {
-  min-width: 0;
+.tenant-selector-control {
+  grid-area: tenant;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.4rem;
+  min-width: 0;
 }
 
-tenant-management .eyebrow {
+.tenant-selector-control .eyebrow {
   margin: 0;
 }
 
-tenant-management .tenant-create {
-  white-space: nowrap;
+.tenant-rename {
+  grid-area: rename;
 }
 
-tenant-identity {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.45rem;
+.tenant-create {
+  grid-area: create;
 }
 
-tenant-identity > .eyebrow {
-  margin: 0;
-}
-
-tenant-identity-copy {
-  display: grid;
-  min-width: 0;
-  gap: 0.05rem;
-}
-
-tenant-identity-copy strong,
-tenant-identity-copy code {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-tenant-identity-copy strong {
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-tenant-identity-copy code {
-  color: var(--llm-muted);
-  font-size: 0.65rem;
-}
-
-.tenant-protection-chip {
-  border: 1px solid var(--llm-border);
-  border-radius: 999px;
-  color: var(--llm-muted);
-  padding: 0.12rem 0.4rem;
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+.tenant-delete {
+  grid-area: delete;
 }
 
 .field-hint {
@@ -676,50 +622,14 @@ tenant-identity-copy code {
   color: #ff8177;
 }
 
-tenant-settings-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
 .tenant-delete .material-symbols-outlined {
   display: block;
   font-size: 1.125rem;
   line-height: 1;
 }
 
-tenant-name-editor {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.3rem 0.45rem;
-}
-
-tenant-name-actions {
-  display: flex;
-  gap: 0.35rem;
-}
-
-tenant-name-editor > .field-hint,
-tenant-name-editor > .field-error {
-  grid-column: 1 / -1;
-  margin: 0;
-  font-size: 0.7rem;
-}
-
-client-access-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.55rem;
-  border: 1px solid var(--llm-border);
-  border-radius: 6px;
-  background: var(--llm-panel-strong);
-  padding: 0.55rem 0.65rem;
-}
-
 client-access-key {
+  grid-area: key;
   display: grid;
   min-width: 0;
   grid-template-columns: auto minmax(0, 1fr);
@@ -734,7 +644,7 @@ client-access-key > .eyebrow {
 client-key-row {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) repeat(3, 30px);
+  grid-template-columns: minmax(0, 1fr) repeat(2, 30px);
   align-items: center;
   gap: 0.35rem;
 }
@@ -748,7 +658,9 @@ client-key-row input {
   margin: 0;
   color: var(--llm-muted);
   font-size: 0.76rem;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .client-key-visibility-toggle,
@@ -759,7 +671,6 @@ client-key-row input {
 }
 
 .client-key-visibility-toggle .material-symbols-outlined,
-.client-key-revoke .material-symbols-outlined,
 .client-key-replace .material-symbols-outlined {
   display: block;
   font-size: 1.125rem;
@@ -774,12 +685,9 @@ client-key-row input {
   stroke-linejoin: round;
 }
 
-.client-key-revoke {
-  grid-column: -2;
-}
-
 .client-key-create,
 .client-key-replace {
+  grid-area: key-action;
   align-self: center;
   white-space: nowrap;
 }
@@ -1504,33 +1412,24 @@ settings-section,
     padding: 0.55rem;
   }
 
-  tenant-identity {
-    gap: 0.35rem;
+  tenant-access-row {
+    grid-template-areas:
+      "tenant tenant tenant rename"
+      "key key-action delete create";
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
   }
 
-  tenant-management {
-    grid-template-columns: 1fr;
-  }
-
-  tenant-management .tenant-create {
-    justify-self: end;
-  }
-
-  tenant-name-editor {
-    grid-template-columns: 1fr;
-  }
-
-  tenant-name-actions {
-    justify-content: flex-end;
-  }
-
-  client-access-row {
-    grid-template-columns: 1fr;
+  .tenant-access-action-label {
+    display: none;
   }
 
   .client-key-create,
-  .client-key-replace {
-    justify-self: end;
+  .client-key-replace,
+  .tenant-create {
+    width: 30px;
+    min-width: 30px;
+    justify-content: center;
+    padding: 0;
   }
 
   .settings-form-wide {

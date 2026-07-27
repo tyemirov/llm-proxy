@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Generated LLM Proxy secret rotation and revocation</title>
-    <meta name="description" content="Automatically create a missing LLM Proxy client key, show it once, store only its digest, and support explicit rotation and revocation.">
-    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/generated-secret-rotation-and-revocation/">
-    <meta property="og:title" content="Generated LLM Proxy secret rotation and revocation">
-    <meta property="og:description" content="Automatically create a missing LLM Proxy client key, show it once, store only its digest, and support explicit rotation and revocation.">
+    <title>Rotate generated LLM Proxy client keys with confidence</title>
+    <meta name="description" content="Automatically create a missing LLM Proxy client key, show it once, store only its digest, and replace it through an explicit confirmed rotation.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/generated-secret-rotation/">
+    <meta property="og:title" content="Rotate generated LLM Proxy client keys with confidence">
+    <meta property="og:description" content="Automatically create a missing LLM Proxy client key, show it once, store only its digest, and replace it through an explicit confirmed rotation.">
     <meta property="og:type" content="article">
-    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/generated-secret-rotation-and-revocation/">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/generated-secret-rotation/">
     <meta name="twitter:card" content="summary">
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
@@ -18,9 +18,9 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Generated LLM Proxy secret rotation and revocation","description":"Automatically create a missing LLM Proxy client key, show it once, store only its digest, and support explicit rotation and revocation.","url":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation-and-revocation/","datePublished":"2026-07-06","dateModified":"2026-07-22","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation-and-revocation/","about":["LLM Proxy","Security","generated LLM proxy secret rotation"]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Generated LLM Proxy secret rotation and revocation","item":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation-and-revocation/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"When does LLM Proxy create a client key?","acceptedAnswer":{"@type":"Answer","text":"The management UI creates one after authentication when the current profile reports that no client key exists. A configured profile does not trigger another creation request."}},{"@type":"Question","name":"Can the raw generated client key be retrieved later?","acceptedAnswer":{"@type":"Answer","text":"No. The raw value is presented once in a masked, read-only field, while the backend stores only the digest used to authenticate proxy requests."}},{"@type":"Question","name":"What does revoking the client key affect?","acceptedAnswer":{"@type":"Answer","text":"Revocation stops that client key from authenticating public proxy requests. It does not remove or rotate separately stored upstream provider credentials."}},{"@type":"Question","name":"Do request examples embed the generated key?","acceptedAnswer":{"@type":"Answer","text":"No. Examples retain the <generated-secret> placeholder so the one-time raw value does not enter page markup or copied example commands."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Keep provider API keys server-side for LLM apps, which covers server-side provider API keys."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Rotate generated LLM Proxy client keys with confidence","description":"Automatically create a missing LLM Proxy client key, show it once, store only its digest, and replace it through an explicit confirmed rotation.","url":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation/","datePublished":"2026-07-06","dateModified":"2026-07-26","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation/","about":["LLM Proxy","Security","generated LLM proxy secret rotation"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Rotate generated LLM Proxy client keys with confidence","item":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"When does LLM Proxy create a client key?","acceptedAnswer":{"@type":"Answer","text":"The management UI creates one after authentication when the current profile reports that no client key exists. A configured profile does not trigger another creation request."}},{"@type":"Question","name":"Can the raw generated client key be retrieved later?","acceptedAnswer":{"@type":"Answer","text":"No. The raw value is presented once in a masked, read-only field, while the backend stores only the digest used to authenticate proxy requests."}},{"@type":"Question","name":"What does replacing the client key affect?","acceptedAnswer":{"@type":"Answer","text":"Replacement immediately stops the prior client key from authenticating public proxy requests. It does not remove or rotate separately stored upstream provider credentials."}},{"@type":"Question","name":"Do request examples embed the generated key?","acceptedAnswer":{"@type":"Answer","text":"No. Examples retain the <generated-secret> placeholder so the one-time raw value does not enter page markup or copied example commands."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Keep provider API keys server-side for LLM apps, which covers server-side provider API keys."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="resource-page">
@@ -41,17 +41,17 @@
           <span>/</span>
           <a href="/resources/">Resources</a>
           <span>/</span>
-          <span>Generated LLM Proxy secret rotation and revocation</span>
+          <span>Rotate generated LLM Proxy client keys with confidence</span>
         </nav>
         <article>
           <header class="resource-hero">
             <p class="eyebrow">Security</p>
-            <h1>Generated LLM Proxy secret rotation and revocation</h1>
-            <p class="resource-deck">Automatically create a missing LLM Proxy client key, show it once, store only its digest, and support explicit rotation and revocation.</p>
+            <h1>Rotate generated LLM Proxy client keys with confidence</h1>
+            <p class="resource-deck">Automatically create a missing LLM Proxy client key, show it once, store only its digest, and replace it through an explicit confirmed rotation.</p>
             <p class="resource-audience">Teams that want self-service client access without permanent retrievable secrets.</p>
             <aside class="resource-verdict" aria-label="Quick verdict">
               <strong>Quick verdict</strong>
-              <p>Use the automatically created client key once, then replace or revoke it without rotating the separate upstream provider credentials.</p>
+              <p>Use the automatically created client key once, then confirm replacement when access changes without rotating the separate upstream provider credentials.</p>
             </aside>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
@@ -61,12 +61,12 @@
 
           <section>
             <h2>The problem</h2>
-            <p>Long-lived client secrets become harder to control when users can retrieve old raw values or when revocation requires operator edits.</p>
+            <p>Long-lived client secrets become harder to control when users can retrieve old raw values or when rotation requires operator edits.</p>
           </section>
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy generates tenant secrets, returns them once, stores only SHA-256 digests, and supports revocation through authenticated management APIs.</p>
+            <p>LLM Proxy generates tenant secrets, returns them once, stores only SHA-256 digests, and replaces a current value through one authenticated management operation.</p>
           </section>
 
           <section>
@@ -75,7 +75,7 @@
               <li>Open Settings after signing in.</li>
 <li>Copy the one-time client key created automatically for a profile that does not have one.</li>
 <li>Use the generated secret in public proxy request examples.</li>
-<li>Revoke or regenerate the secret when access should change.</li>
+<li>Confirm Replace key when access should change, then copy the one-time replacement.</li>
             </ol>
           </section>
 
@@ -100,9 +100,9 @@
 
 
                         <tr>
-                          <td>Immediate revocation</td>
-                          <td>Revoked secrets stop authenticating future public proxy requests.</td>
-                          <td>Access can be cut without provider-key rotation.</td>
+                          <td>Immediate replacement</td>
+                          <td>The prior secret stops authenticating as soon as its replacement is stored.</td>
+                          <td>Access can be rotated without provider-key rotation.</td>
                         </tr>
 
 
@@ -129,7 +129,7 @@
 
                     <section class="resource-card">
                       <h3>Compromised client</h3>
-                      <p>A user revokes the generated secret and creates a replacement.</p>
+                      <p>A user confirms replacement, copies the new secret once, and updates the authorized client.</p>
                     </section>
 
 
@@ -146,7 +146,7 @@
             <ul class="resource-list">
               <li>If the one-time value is lost, the user must generate a new secret.</li>
 <li>Tenant secrets remain application credentials and need normal secret handling.</li>
-<li>Revocation affects proxy authentication; it does not revoke upstream provider keys.</li>
+<li>A client key cannot be deleted independently; delete the owning non-final tenant when the whole tenant should be removed.</li>
             </ul>
           </section>
 
@@ -154,12 +154,8 @@
             <h2>Repository evidence</h2>
             <pre class="usage-snippet"><code>export function generateSecret() {
   return requestJSON(`${MANAGEMENT_BASE_PATH}/secrets`, { method: &quot;POST&quot; });
-}
-
-export function revokeSecret() {
-  return requestJSON(`${MANAGEMENT_BASE_PATH}/secrets`, { method: &quot;DELETE&quot; });
 }</code></pre>
-            <p>Verified 2026-07-22 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>site/assets/llm-proxy/js/core/backendClient.js</code>.</p>
+            <p>Verified 2026-07-26 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>site/assets/llm-proxy/js/core/backendClient.js</code>.</p>
           </section>
 
           <section>
@@ -179,8 +175,8 @@ export function revokeSecret() {
 
 
                     <details>
-                      <summary>What does revoking the client key affect?</summary>
-                      <p>Revocation stops that client key from authenticating public proxy requests. It does not remove or rotate separately stored upstream provider credentials.</p>
+                      <summary>What does replacing the client key affect?</summary>
+                      <p>Replacement immediately stops the prior client key from authenticating public proxy requests. It does not remove or rotate separately stored upstream provider credentials.</p>
                     </details>
 
 

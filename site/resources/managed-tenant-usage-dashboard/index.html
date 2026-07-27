@@ -20,7 +20,7 @@
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Account-wide managed tenant usage dashboard for LLMs","description":"See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.","url":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","datePublished":"2026-07-06","dateModified":"2026-07-26","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","about":["LLM Proxy","Usage","managed tenant usage dashboard"]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Account-wide managed tenant usage dashboard for LLMs","item":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Does selecting a tenant activate or deactivate it?","acceptedAnswer":{"@type":"Answer","text":"No. Every owned tenant remains independently routable through its own generated secret; the Settings and Usage selectors only choose an editor or report scope."}},{"@type":"Question","name":"What does Usage Overview show by default?","acceptedAnswer":{"@type":"Answer","text":"It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary."}},{"@type":"Question","name":"Does changing the Settings tenant change Usage Overview?","acceptedAnswer":{"@type":"Answer","text":"No. Settings tenant and Usage tenant are independent; changing the Settings tenant does not change the Usage tenant filter."}},{"@type":"Question","name":"What tenant data appears in account-wide failure rows?","acceptedAnswer":{"@type":"Answer","text":"Only the safe opaque tenant ID and current display name are added. Credentials, prompts, responses, provider bodies, and free-form errors remain excluded."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Normalized token usage metadata across providers, which covers normalized token usage metadata."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Does selecting a tenant activate or deactivate it?","acceptedAnswer":{"@type":"Answer","text":"No. Every owned tenant remains independently routable through its own generated secret; the Settings and Usage selectors only choose an editor or report scope."}},{"@type":"Question","name":"What does Usage Overview show by default?","acceptedAnswer":{"@type":"Answer","text":"It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary."}},{"@type":"Question","name":"Does changing the Tenant control in Settings change Usage Overview?","acceptedAnswer":{"@type":"Answer","text":"No. The Tenant control in Settings and the Usage tenant control are independent; changing one does not change the other."}},{"@type":"Question","name":"What tenant data appears in account-wide failure rows?","acceptedAnswer":{"@type":"Answer","text":"Only the safe opaque tenant ID and current display name are added. Credentials, prompts, responses, provider bodies, and free-form errors remain excluded."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Normalized token usage metadata across providers, which covers normalized token usage metadata."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="resource-page">
@@ -103,7 +103,7 @@
 
                         <tr>
                           <td>Independent selectors</td>
-                          <td>Settings tenant chooses only the editor; Usage tenant chooses only the report.</td>
+                          <td>The Tenant control in Settings chooses only the editor; Usage tenant chooses only the report.</td>
                           <td>Changing provider settings for one tenant cannot silently narrow the usage dashboard.</td>
                         </tr>
 
@@ -183,8 +183,8 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d</code></pre>
 
 
                     <details>
-                      <summary>Does changing the Settings tenant change Usage Overview?</summary>
-                      <p>No. Settings tenant and Usage tenant are independent; changing the Settings tenant does not change the Usage tenant filter.</p>
+                      <summary>Does changing the Tenant control in Settings change Usage Overview?</summary>
+                      <p>No. The Tenant control in Settings and the Usage tenant control are independent; changing one does not change the other.</p>
                     </details>
 
 

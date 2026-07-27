@@ -32,7 +32,6 @@ import {
   removeProviderKey as requestRemoveProviderKey,
   renameTenant as requestRenameTenant,
   revealProviderKey as requestRevealProviderKey,
-  revokeSecret as requestRevokeSecret,
   saveProviderKey as requestSaveProviderKey,
   updateDefaults as requestUpdateDefaults,
 } from "../core/backendClient.js?v=20260727";
@@ -156,9 +155,11 @@ export function createKeyManagement() {
     settingsClosePending: false,
     usageExamplesOpen: false,
     tenantNameDraft: EMPTY_STRING,
-    tenantNameEditing: false,
+    tenantRenameDialogOpen: false,
     tenantNameDirty: false,
     tenantNameError: EMPTY_STRING,
+    clientKeyReplacementConfirmationOpen: false,
+    clientKeyReplacementPending: false,
     createTenantDialogOpen: false,
     createTenantName: EMPTY_STRING,
     createTenantError: EMPTY_STRING,
@@ -790,6 +791,8 @@ export function createKeyManagement() {
       this.clearGeneratedSecret();
       this.clearProviderKeyMaterial();
       this.dismissProviderKeyRemovalConfirmation();
+      this.dismissClientKeyReplacementConfirmation();
+      this.resetTenantNameEdit();
       this.deleteTenantConfirmationOpen = false;
       this.createTenantDialogOpen = false;
       this.createTenantName = EMPTY_STRING;
@@ -844,6 +847,44 @@ export function createKeyManagement() {
     /** @param {KeyboardEvent} event */
     trapDeleteTenantFocus(event) {
       trapDialogFocus(event, this.$refs.deleteTenantDialog);
+    },
+
+    /** @param {KeyboardEvent} event */
+    trapRenameTenantFocus(event) {
+      trapDialogFocus(event, this.$refs.tenantRenameDialog);
+    },
+
+    /** @param {KeyboardEvent} event */
+    trapClientKeyReplacementFocus(event) {
+      trapDialogFocus(event, this.$refs.clientKeyReplacementDialog);
+    },
+
+    handleSettingsEscape() {
+      if (this.createTenantDialogOpen) {
+        this.closeCreateTenantDialog();
+        return;
+      }
+      if (this.discardTenantChangesOpen) {
+        this.cancelTenantSwitch();
+        return;
+      }
+      if (this.tenantRenameDialogOpen) {
+        this.cancelTenantNameEdit();
+        return;
+      }
+      if (this.clientKeyReplacementConfirmationOpen) {
+        this.cancelClientKeyReplacement();
+        return;
+      }
+      if (this.deleteTenantConfirmationOpen) {
+        this.cancelTenantDeletion();
+        return;
+      }
+      if (this.providerRemovalConfirmationOpen) {
+        this.cancelProviderKeyRemoval();
+        return;
+      }
+      this.closeSettings();
     },
 
     /** @param {Event} event */
@@ -907,7 +948,7 @@ export function createKeyManagement() {
       this.tenantNameDraft = this.settingsTenantName;
       this.tenantNameDirty = false;
       this.tenantNameError = EMPTY_STRING;
-      this.tenantNameEditing = true;
+      this.tenantRenameDialogOpen = true;
       this.$nextTick(() => {
         this.$refs.tenantNameInput.focus();
       });
@@ -915,12 +956,15 @@ export function createKeyManagement() {
 
     resetTenantNameEdit() {
       this.tenantNameDraft = this.settingsTenantName;
-      this.tenantNameEditing = false;
+      this.tenantRenameDialogOpen = false;
       this.tenantNameDirty = false;
       this.tenantNameError = EMPTY_STRING;
     },
 
     cancelTenantNameEdit() {
+      if (this.busy) {
+        return;
+      }
       this.resetTenantNameEdit();
       this.$nextTick(() => {
         this.$refs.tenantRenameButton.focus();
@@ -955,7 +999,7 @@ export function createKeyManagement() {
           ));
           this.account = { ...this.account, tenants: this.tenants };
           this.tenantNameDraft = updatedProfile.tenant.name;
-          this.tenantNameEditing = false;
+          this.tenantRenameDialogOpen = false;
           this.tenantNameDirty = false;
           this.applyProfile(
             updatedProfile,
@@ -995,6 +1039,9 @@ export function createKeyManagement() {
     },
 
     cancelTenantDeletion() {
+      if (this.deleteTenantPending) {
+        return;
+      }
       this.deleteTenantConfirmationOpen = false;
       this.$nextTick(() => {
         if (this.$refs.deleteTenantButton) {
@@ -1346,6 +1393,7 @@ export function createKeyManagement() {
       this.clearUsageFailures(false);
       this.usageExamplesOpen = false;
       this.dismissProviderKeyRemovalConfirmation();
+      this.dismissClientKeyReplacementConfirmation();
       this.resetTenantNameEdit();
       this.settingsOpen = true;
       requestAnimationFrame(() => {
@@ -1387,6 +1435,7 @@ export function createKeyManagement() {
           return;
         }
         this.dismissProviderKeyRemovalConfirmation();
+        this.dismissClientKeyReplacementConfirmation();
         this.clearProviderKeyMaterial();
         this.clearGeneratedSecret();
         this.resetTenantNameEdit();
@@ -1839,11 +1888,19 @@ export function createKeyManagement() {
       );
     },
 
-    async requestAndApplyGeneratedSecret() {
-      return this.runClientKeyMutation(async () => this.generateAndApplySecret());
+    /**
+     * @param {string} [successMessage]
+     * @returns {Promise<boolean>}
+     */
+    async requestAndApplyGeneratedSecret(successMessage = COPY.keyGenerated) {
+      return this.runClientKeyMutation(async () => this.generateAndApplySecret(successMessage));
     },
 
-    async generateAndApplySecret() {
+    /**
+     * @param {string} successMessage
+     * @returns {Promise<boolean>}
+     */
+    async generateAndApplySecret(successMessage) {
       const generatedSecretVersion = this.generatedSecretVersion;
       const workspaceVersion = this.workspaceVersion;
       const tenantID = this.settingsTenantID;
@@ -1864,7 +1921,7 @@ export function createKeyManagement() {
             this.providerEditorSession.dirty || this.providerAutosavePending,
             this.routingDefaultsDirty || this.routingDefaultsAutosavePending,
           );
-          this.setNotice(NOTICE_KINDS.SUCCESS, COPY.keyGenerated);
+          this.setNotice(NOTICE_KINDS.SUCCESS, successMessage);
           return true;
         });
         return Boolean(profileApplied);
@@ -1895,30 +1952,65 @@ export function createKeyManagement() {
       }
     },
 
-    async generateSecret() {
+    /**
+     * @param {string} [successMessage]
+     * @returns {Promise<boolean>}
+     */
+    async generateSecret(successMessage = COPY.keyGenerated) {
       this.busy = true;
       try {
-        await this.requestAndApplyGeneratedSecret();
+        return await this.requestAndApplyGeneratedSecret(successMessage);
       } finally {
         this.busy = false;
       }
     },
 
-    async revokeSecret() {
-      const tenantID = this.settingsTenantID;
-      const lifetimeController = this.tenantLifetimeController;
-      if (!lifetimeController) {
+    requestClientKeyReplacement() {
+      if (!this.hasSecret || this.clientKeyReplacementPending) {
         return;
       }
-      const keyRevoked = await this.runClientKeyMutation(
-        async () => this.runProfileMutation(
-          async () => requestRevokeSecret(tenantID, lifetimeController.signal),
-          COPY.keyRevoked,
-        ),
-      );
-      if (keyRevoked) {
-        this.clearGeneratedSecret();
-        this.focusSettingsRequirement();
+      this.clientKeyReplacementConfirmationOpen = true;
+      this.$nextTick(() => {
+        this.$refs.clientKeyReplacementCancel.focus();
+      });
+    },
+
+    dismissClientKeyReplacementConfirmation() {
+      this.clientKeyReplacementConfirmationOpen = false;
+    },
+
+    cancelClientKeyReplacement() {
+      if (this.clientKeyReplacementPending) {
+        return;
+      }
+      this.dismissClientKeyReplacementConfirmation();
+      this.$nextTick(() => {
+        if (this.$refs.clientKeyReplaceButton) {
+          this.$refs.clientKeyReplaceButton.focus();
+        }
+      });
+    },
+
+    async confirmClientKeyReplacement() {
+      if (!this.hasSecret || this.clientKeyReplacementPending) {
+        return;
+      }
+      this.clientKeyReplacementPending = true;
+      try {
+        const keyReplaced = await this.generateSecret(COPY.keyReplaced);
+        if (!keyReplaced) {
+          return;
+        }
+        this.dismissClientKeyReplacementConfirmation();
+        this.$nextTick(() => {
+          requestAnimationFrame(() => {
+            if (this.$refs.clientKeyCopyButton) {
+              this.$refs.clientKeyCopyButton.focus();
+            }
+          });
+        });
+      } finally {
+        this.clientKeyReplacementPending = false;
       }
     },
 
@@ -2164,13 +2256,15 @@ export function createKeyManagement() {
       this.profileMutationFailureVersion = 0;
       this.settingsClosePending = false;
       this.dismissProviderKeyRemovalConfirmation();
+      this.dismissClientKeyReplacementConfirmation();
+      this.clientKeyReplacementPending = false;
       this.profile = null;
       this.providers = [];
       this.replaceProviderEditorSession(EMPTY_STRING);
       this.defaults = emptyDefaults();
       this.clearGeneratedSecret();
       this.tenantNameDraft = EMPTY_STRING;
-      this.tenantNameEditing = false;
+      this.tenantRenameDialogOpen = false;
       this.tenantNameDirty = false;
       this.tenantNameError = EMPTY_STRING;
       this.usageExamplesOpen = false;

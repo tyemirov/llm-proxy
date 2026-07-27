@@ -398,7 +398,7 @@
               x-cloak
               x-show="settingsOpen"
               x-on:click.self="closeSettings()"
-              x-on:keydown.escape.window="deleteTenantConfirmationOpen ? cancelTenantDeletion() : (providerRemovalConfirmationOpen ? cancelProviderKeyRemoval() : closeSettings())"
+              x-on:keydown.escape.window="handleSettingsEscape()"
               role="presentation"
             >
               <settings-modal
@@ -407,7 +407,7 @@
                 aria-modal="true"
                 aria-labelledby="settings-title"
                 x-bind:aria-describedby="settingsRequired ? 'settings-requirement' : null"
-                x-bind:inert="providerRemovalConfirmationOpen || deleteTenantConfirmationOpen"
+                x-bind:inert="providerRemovalConfirmationOpen || tenantRenameDialogOpen || clientKeyReplacementConfirmationOpen || deleteTenantConfirmationOpen || createTenantDialogOpen || discardTenantChangesOpen"
                 x-on:keydown.tab="trapSettingsFocus($event)"
               >
                 <header class="settings-header">
@@ -432,15 +432,15 @@
                 ></p>
 
                 <settings-body>
-                  <tenant-management role="group" x-bind:aria-label="copy.settingsTenant">
-                    <label>
-                      <span class="eyebrow" x-text="copy.settingsTenant"></span>
+                  <tenant-access-row role="group" x-bind:aria-label="copy.tenantAccess">
+                    <label class="tenant-selector-control">
+                      <span class="eyebrow" x-text="copy.tenantContext"></span>
                       <select
                         x-ref="settingsTenantSelector"
                         x-bind:value="settingsTenantID"
                         x-on:change="handleSettingsTenantSelection($event)"
                         x-bind:disabled="settingsControlsDisabled"
-                        x-bind:aria-label="copy.settingsTenant"
+                        x-bind:aria-label="copy.tenantContext"
                       >
                         <template x-for="tenant in tenants" x-bind:key="tenant.id">
                           <option x-bind:value="tenant.id" x-bind:selected="tenant.id === settingsTenantID" x-text="tenant.name"></option>
@@ -449,89 +449,81 @@
                     </label>
                     <button
                       type="button"
+                      class="tenant-rename"
+                      x-ref="tenantRenameButton"
+                      x-on:click="beginTenantNameEdit()"
+                      x-bind:disabled="settingsControlsDisabled"
+                      x-text="copy.renameTenantAction"
+                    ></button>
+                    <client-access-key>
+                      <span class="eyebrow" x-text="copy.clientKey"></span>
+                      <client-key-row>
+                        <input id="generated-client-key" type="text" readonly x-cloak x-show="hasGeneratedSecret" x-bind:value="generatedSecretValue" x-bind:aria-label="copy.clientKey">
+                        <p class="client-key-state" x-cloak x-show="hasSecret && !hasGeneratedSecret" x-text="copy.clientKeyRetained"></p>
+                        <p class="client-key-state" x-cloak x-show="!hasSecret" x-text="copy.clientKeyMissing"></p>
+                        <button type="button" class="icon-only client-key-visibility-toggle" x-ref="clientKeyVisibilityButton" x-cloak x-show="hasGeneratedSecret" x-on:click="toggleGeneratedSecretVisibility()" x-bind:disabled="settingsControlsDisabled" x-bind:title="generatedSecretVisibilityActionCopy" x-bind:aria-label="generatedSecretVisibilityActionCopy" x-bind:aria-pressed="generatedSecretVisible">
+                          <span class="material-symbols-outlined" x-show="!generatedSecretVisible" aria-hidden="true">visibility</span>
+                          <span class="material-symbols-outlined" x-show="generatedSecretVisible" aria-hidden="true">visibility_off</span>
+                        </button>
+                        <button type="button" class="icon-only client-key-copy" x-ref="clientKeyCopyButton" x-cloak x-show="hasGeneratedSecret" x-on:click="copyGeneratedSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.copyClientKey" x-bind:aria-label="copy.copyClientKey">
+                          <svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
+                            <rect x="6" y="5" width="10" height="12" rx="1.5"></rect>
+                            <rect x="8" y="7" width="10" height="12" rx="1.5"></rect>
+                          </svg>
+                        </button>
+                      </client-key-row>
+                    </client-access-key>
+                    <button
+                      type="button"
+                      class="icon-button client-key-create"
+                      x-cloak
+                      x-show="!hasSecret"
+                      x-on:click="generateSecret()"
+                      x-bind:disabled="settingsControlsDisabled"
+                      x-bind:title="copy.createKey"
+                      x-bind:aria-label="copy.createKey"
+                    >
+                      <span aria-hidden="true">+</span>
+                      <span class="tenant-access-action-label" x-text="copy.createKey"></span>
+                    </button>
+                    <button
+                      type="button"
+                      class="icon-button client-key-replace"
+                      x-ref="clientKeyReplaceButton"
+                      x-cloak
+                      x-show="hasSecret"
+                      x-on:click="requestClientKeyReplacement()"
+                      x-bind:disabled="settingsControlsDisabled"
+                      x-bind:title="copy.replaceKey"
+                      x-bind:aria-label="copy.replaceKey"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">key</span>
+                      <span class="tenant-access-action-label" x-text="copy.replaceKey"></span>
+                    </button>
+                    <button
+                      type="button"
+                      class="icon-only danger tenant-delete"
+                      x-ref="deleteTenantButton"
+                      x-on:click="requestTenantDeletion()"
+                      x-bind:disabled="settingsControlsDisabled || !canDeleteSettingsTenant"
+                      x-bind:title="canDeleteSettingsTenant ? copy.deleteTenant : copy.finalTenantDeletion"
+                      x-bind:aria-label="copy.deleteTenant"
+                      x-bind:aria-describedby="!canDeleteSettingsTenant ? 'final-tenant-deletion' : null"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                    </button>
+                    <button
+                      type="button"
                       class="icon-button tenant-create"
                       x-ref="createTenantButton"
                       x-on:click="openCreateTenantDialog()"
                       x-bind:disabled="settingsControlsDisabled"
+                      x-bind:title="copy.createTenant"
                       x-bind:aria-label="copy.createTenant"
                     >
                       <span aria-hidden="true">+</span>
-                      <span x-text="copy.createTenant"></span>
+                      <span class="tenant-access-action-label" x-text="copy.createTenant"></span>
                     </button>
-                  </tenant-management>
-
-                  <client-access-tenant role="group" x-bind:aria-label="copy.tenantContext">
-                    <tenant-identity x-cloak x-show="!tenantNameEditing">
-                      <span class="eyebrow" x-text="copy.tenantContext"></span>
-                      <tenant-identity-copy>
-                        <strong x-text="settingsTenantName"></strong>
-                        <code x-text="settingsTenantID"></code>
-                      </tenant-identity-copy>
-                      <span
-                        class="tenant-protection-chip"
-                        x-cloak
-                        x-show="!canDeleteSettingsTenant"
-                        x-text="copy.onlyTenant"
-                      ></span>
-                    </tenant-identity>
-                    <tenant-settings-actions x-cloak x-show="!tenantNameEditing">
-                      <button
-                        type="button"
-                        x-ref="tenantRenameButton"
-                        x-on:click="beginTenantNameEdit()"
-                        x-bind:disabled="settingsControlsDisabled"
-                        x-text="copy.renameTenantAction"
-                      ></button>
-                      <button
-                        type="button"
-                        class="icon-only danger tenant-delete"
-                        x-ref="deleteTenantButton"
-                        x-on:click="requestTenantDeletion()"
-                        x-bind:disabled="settingsControlsDisabled || !canDeleteSettingsTenant"
-                        x-bind:title="canDeleteSettingsTenant ? copy.deleteTenant : copy.finalTenantDeletion"
-                        x-bind:aria-label="copy.deleteTenant"
-                        x-bind:aria-describedby="!canDeleteSettingsTenant ? 'final-tenant-deletion' : null"
-                      >
-                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
-                      </button>
-                    </tenant-settings-actions>
-                    <tenant-name-editor
-                      x-cloak
-                      x-show="tenantNameEditing"
-                      role="group"
-                      x-bind:aria-label="copy.renameTenant"
-                    >
-                      <label for="tenant-name-input">
-                        <span class="visually-hidden" x-text="copy.tenantName"></span>
-                        <input
-                          id="tenant-name-input"
-                          x-ref="tenantNameInput"
-                          type="text"
-                          maxlength="80"
-                          x-bind:value="tenantNameDraft"
-                          x-on:input="handleTenantNameInput($event)"
-                          x-bind:disabled="settingsControlsDisabled"
-                          x-bind:aria-invalid="tenantNameError ? 'true' : 'false'"
-                          x-bind:aria-describedby="tenantNameError ? 'tenant-name-error' : 'tenant-name-hint'"
-                        >
-                      </label>
-                      <tenant-name-actions>
-                        <button
-                          type="button"
-                          x-on:click="cancelTenantNameEdit()"
-                          x-bind:disabled="settingsControlsDisabled"
-                          x-text="copy.cancelTenantName"
-                        ></button>
-                        <button
-                          type="button"
-                          x-on:click="saveTenantName()"
-                          x-bind:disabled="settingsControlsDisabled || !tenantNameDirty"
-                          x-text="copy.saveTenantName"
-                        ></button>
-                      </tenant-name-actions>
-                      <p id="tenant-name-hint" class="field-hint" x-text="copy.tenantNameHint"></p>
-                      <p id="tenant-name-error" class="field-error" x-show="tenantNameError" x-text="tenantNameError" role="alert"></p>
-                    </tenant-name-editor>
                     <p
                       id="final-tenant-deletion"
                       class="visually-hidden"
@@ -539,39 +531,7 @@
                       x-show="!canDeleteSettingsTenant"
                       x-text="copy.finalTenantDeletion"
                     ></p>
-                  </client-access-tenant>
-
-                  <client-access-row role="group" x-bind:aria-label="copy.clientKey">
-                    <client-access-key>
-                      <span class="eyebrow" x-text="copy.clientKey"></span>
-                      <client-key-row>
-                        <input id="generated-client-key" type="text" readonly x-cloak x-show="hasGeneratedSecret" x-bind:value="generatedSecretValue" x-bind:aria-label="copy.clientKey">
-                        <p class="client-key-state" x-cloak x-show="hasSecret && !hasGeneratedSecret" x-text="copy.clientKeyRetained"></p>
-                        <p class="client-key-state" x-cloak x-show="!hasSecret" x-text="copy.clientKeyMissing"></p>
-                        <button type="button" class="icon-only client-key-visibility-toggle" x-cloak x-show="hasGeneratedSecret" x-on:click="toggleGeneratedSecretVisibility()" x-bind:disabled="settingsControlsDisabled" x-bind:title="generatedSecretVisibilityActionCopy" x-bind:aria-label="generatedSecretVisibilityActionCopy" x-bind:aria-pressed="generatedSecretVisible">
-                          <span class="material-symbols-outlined" x-show="!generatedSecretVisible" aria-hidden="true">visibility</span>
-                          <span class="material-symbols-outlined" x-show="generatedSecretVisible" aria-hidden="true">visibility_off</span>
-                        </button>
-                        <button type="button" class="icon-only client-key-copy" x-cloak x-show="hasGeneratedSecret" x-on:click="copyGeneratedSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.copyClientKey" x-bind:aria-label="copy.copyClientKey">
-                        <svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
-                          <rect x="6" y="5" width="10" height="12" rx="1.5"></rect>
-                          <rect x="8" y="7" width="10" height="12" rx="1.5"></rect>
-                        </svg>
-                        </button>
-                        <button type="button" class="icon-only danger client-key-revoke" x-cloak x-show="hasSecret" x-on:click="revokeSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.revokeKey" x-bind:aria-label="copy.revokeKey">
-                          <span class="material-symbols-outlined" aria-hidden="true">delete</span>
-                        </button>
-                      </client-key-row>
-                    </client-access-key>
-                    <button type="button" class="icon-button client-key-create" x-cloak x-show="!hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.createKey">
-                      <span aria-hidden="true">+</span>
-                      <span x-text="copy.createKey"></span>
-                    </button>
-                    <button type="button" class="icon-button client-key-replace" x-cloak x-show="hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.replaceKey" x-bind:aria-label="copy.replaceKey">
-                      <span class="material-symbols-outlined" aria-hidden="true">key</span>
-                      <span class="client-key-replace-label" x-text="copy.replaceKey"></span>
-                    </button>
-                  </client-access-row>
+                  </tenant-access-row>
 
                   <settings-section>
                     <header class="section-header compact">
@@ -734,6 +694,74 @@
                   </footer>
                 </provider-removal-dialog>
               </provider-removal-overlay>
+              <tenant-dialog-overlay
+                class="tenant-rename-overlay"
+                x-cloak
+                x-show="tenantRenameDialogOpen"
+                x-on:click.self="cancelTenantNameEdit()"
+                role="presentation"
+              >
+                <tenant-dialog
+                  class="tenant-rename-dialog"
+                  x-ref="tenantRenameDialog"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="rename-tenant-title"
+                  x-bind:aria-describedby="tenantNameError ? 'rename-tenant-error' : 'rename-tenant-hint'"
+                  x-on:keydown.escape.stop.prevent="cancelTenantNameEdit()"
+                  x-on:keydown.tab="trapRenameTenantFocus($event)"
+                >
+                  <form x-on:submit.prevent="saveTenantName()">
+                    <h2 id="rename-tenant-title" x-text="copy.renameTenant"></h2>
+                    <label for="rename-tenant-name">
+                      <span x-text="copy.tenantName"></span>
+                      <input
+                        id="rename-tenant-name"
+                        x-ref="tenantNameInput"
+                        type="text"
+                        maxlength="80"
+                        autocomplete="off"
+                        x-bind:value="tenantNameDraft"
+                        x-on:input="handleTenantNameInput($event)"
+                        x-bind:disabled="settingsControlsDisabled"
+                        x-bind:aria-invalid="tenantNameError ? 'true' : 'false'"
+                      >
+                    </label>
+                    <p id="rename-tenant-hint" class="field-hint" x-text="copy.tenantNameHint"></p>
+                    <p id="rename-tenant-error" class="field-error" x-show="tenantNameError" x-text="tenantNameError" role="alert"></p>
+                    <footer>
+                      <button type="button" x-ref="tenantRenameCancel" x-on:click="cancelTenantNameEdit()" x-bind:disabled="settingsControlsDisabled" x-text="copy.cancelTenantName"></button>
+                      <button type="submit" x-bind:disabled="settingsControlsDisabled || !tenantNameDirty" x-text="copy.saveTenantName"></button>
+                    </footer>
+                  </form>
+                </tenant-dialog>
+              </tenant-dialog-overlay>
+              <tenant-dialog-overlay
+                class="client-key-replace-overlay"
+                x-cloak
+                x-show="clientKeyReplacementConfirmationOpen"
+                x-on:click.self="cancelClientKeyReplacement()"
+                role="presentation"
+              >
+                <tenant-dialog
+                  class="client-key-replace-dialog"
+                  x-ref="clientKeyReplacementDialog"
+                  role="alertdialog"
+                  aria-modal="true"
+                  aria-labelledby="replace-client-key-title"
+                  aria-describedby="replace-client-key-description"
+                  x-bind:aria-busy="clientKeyReplacementPending"
+                  x-on:keydown.escape.stop.prevent="cancelClientKeyReplacement()"
+                  x-on:keydown.tab="trapClientKeyReplacementFocus($event)"
+                >
+                  <h2 id="replace-client-key-title" x-text="copy.replaceKeyTitle"></h2>
+                  <p id="replace-client-key-description" x-text="copy.replaceKeyDescription"></p>
+                  <footer>
+                    <button type="button" x-ref="clientKeyReplacementCancel" x-on:click="cancelClientKeyReplacement()" x-bind:disabled="clientKeyReplacementPending" x-text="copy.cancelReplaceKey"></button>
+                    <button type="button" x-ref="clientKeyReplacementConfirm" x-on:click="confirmClientKeyReplacement()" x-bind:disabled="clientKeyReplacementPending" x-text="copy.confirmReplaceKey"></button>
+                  </footer>
+                </tenant-dialog>
+              </tenant-dialog-overlay>
               <tenant-delete-overlay
                 x-cloak
                 x-show="deleteTenantConfirmationOpen"
@@ -779,7 +807,6 @@
           x-cloak
           x-show="createTenantDialogOpen"
           x-on:click.self="closeCreateTenantDialog()"
-          x-on:keydown.escape.window="createTenantDialogOpen && closeCreateTenantDialog()"
           role="presentation"
         >
           <tenant-dialog
@@ -819,7 +846,6 @@
         <tenant-dialog-overlay
           x-cloak
           x-show="discardTenantChangesOpen"
-          x-on:keydown.escape.window="discardTenantChangesOpen && cancelTenantSwitch()"
           role="presentation"
         >
           <tenant-dialog

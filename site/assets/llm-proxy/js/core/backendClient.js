@@ -220,15 +220,6 @@ export function generateSecret(tenantID, signal) {
 }
 
 /**
- * @param {string} tenantID
- * @param {AbortSignal} [signal]
- * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
- */
-export function revokeSecret(tenantID, signal) {
-  return requestJSON(`${managementTenantPath(tenantID)}/secrets`, { method: "DELETE", signal });
-}
-
-/**
  * @returns {Promise<import("../types.d.js").FrontendRuntimeConfig>}
  */
 export function loadFrontendRuntimeConfig() {

@@ -10,7 +10,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/docs/</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/</loc>
@@ -34,7 +34,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/canonical-v2-chat-messages-api/</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/large-prompt-json-post/</loc>
@@ -89,8 +89,8 @@
     <lastmod>2026-07-11</lastmod>
   </url>
   <url>
-    <loc>https://llm-proxy.mprlab.com/resources/generated-secret-rotation-and-revocation/</loc>
-    <lastmod>2026-07-22</lastmod>
+    <loc>https://llm-proxy.mprlab.com/resources/generated-secret-rotation/</loc>
+    <lastmod>2026-07-26</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/encrypted-provider-key-storage/</loc>
@@ -114,19 +114,19 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/python-client-v2-only-llm-proxy/</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/installable-llm-proxy-cli/</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/llm-response-formats-json-xml-csv-text/</loc>
