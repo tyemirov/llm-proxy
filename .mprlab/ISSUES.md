@@ -100,6 +100,61 @@ already satisfied; recurring maintenance remains scheduled work.
   F001 provider execution remains stopped until the new immutable release,
   backend route, and matching Pages UI are all verified live.
 
+- [x] [B078] (P1) {F014,B075} Fail visibly when the management application runtime is blocked.
+  Goal:
+  Make local browser startup terminate in either the management application or
+  an actionable error instead of leaving the MPR authentication transition
+  visible forever.
+
+  Problem:
+  The local ghttp frontend publishes no cache policy and every application
+  module has an unversioned URL. Chrome can therefore combine modules cached
+  before B076 with current files from the mounted working tree. The observed
+  page loaded current `keyManagement.js` with an older `backendClient.js` that
+  did not export `fetchAccountUsageFailures`, so module linking failed before
+  the application entrypoint evaluated. MPR UI authenticated independently,
+  but LLM Proxy never mounted Alpine, requested the management account, or
+  dispatched `llm-proxy:management-ready`; the user remained on
+  `Opening LLM Proxy` indefinitely.
+
+  Requirements:
+  - Revise the complete first-party module graph once so browser copies cached
+    before the local cache policy cannot mix with current files.
+  - Serve the local browser surface with `Cache-Control: no-store` so an
+    ordinary reload cannot combine stale and current ES modules while `make up`
+    is mounted to the working tree. Revise the entry-module URL once to evict
+    browser copies cached before that policy existed.
+  - Keep the pinned Alpine 3.13.5 jsDelivr module as the single canonical
+    dependency. Do not add a fallback CDN, compatibility loader, bundled copy,
+    retry loop, or timeout.
+  - Guard application-module linking and Alpine loading so a rejected runtime
+    renders a semantic error surface with the exact allow-and-reload recovery
+    action.
+  - Complete the MPR UI transition after the failure surface is ready, without
+    issuing a protected management request or reinterpreting the MPR UI
+    authentication state.
+  - Preserve the current authenticated, unauthenticated, and already-settled
+    authentication lifecycle when Alpine loads.
+  - Add black-box rendered-browser coverage for an incompatible cached
+    first-party module and a rejected Alpine request. Prove both show the
+    recovery state and emit the management-ready completion event.
+  - Document that `make up` service readiness cannot override a browser-side
+    block and identify the exact CDN origin that local Chrome must allow.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last tracked edit.
+
+  Resolved 2026-07-26:
+  The local frontend now disables browser caching and uses one revised URL
+  across the complete first-party ES-module graph, preventing the observed
+  current-`keyManagement.js`/stale-`backendClient.js` link failure. A separate
+  startup guard owns application-link and pinned-Alpine failures, renders the
+  semantic allow-and-reload surface, and completes the existing MPR UI
+  transition without a protected management request. The 65-scenario rendered
+  browser suite passes, including both failure boundaries, and clean reloads in
+  real Chrome and the in-app browser reach the signed-out application with
+  `data-llm-proxy-application="ready"` and no startup error.
+
 - [x] [B076] (P1) {F014,I029,I031} Separate active tenants from Settings and Usage selection.
   Goal:
   Keep every owned tenant simultaneously operational while making Settings the
