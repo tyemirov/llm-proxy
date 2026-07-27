@@ -68,6 +68,10 @@ already satisfied; recurring maintenance remains scheduled work.
   - Poll an OpenAI response id only from the adapter's explicit background
     lifecycle and documented `queued` or `in_progress` states. Reject missing
     and unknown states instead of treating every non-terminal value as pending.
+  - Treat usage reported across observations of one OpenAI response id as
+    cumulative snapshots: retain the newest nonempty snapshot instead of
+    summing it with earlier observations. Sum usage only across a genuinely
+    distinct synthesis response id.
   - Define complete success for the shared Chat Completions adapter as
     `finish_reason=stop`, Gemini as `finishReason=STOP`, and Anthropic Messages
     as `stop_reason=end_turn` or `stop_sequence`. Reject missing, truncated,
@@ -107,6 +111,9 @@ already satisfied; recurring maintenance remains scheduled work.
     provider-reported token counts in failed managed usage.
   - Prove unknown OpenAI states with ids do not trigger polling and that
     documented `queued` and `in_progress` states still poll to completion.
+  - Prove repeated usage snapshots for one polled OpenAI response id retain the
+    latest exact counts on both success and managed failure instead of
+    double-counting earlier snapshots.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
@@ -125,6 +132,8 @@ already satisfied; recurring maintenance remains scheduled work.
     generic or durable provider-job queue was invented for synchronous routes.
   - Failed managed usage retains available provider-reported token counts
     without exposing token headers, prompts, responses, or raw provider bodies.
+    Repeated observations of one OpenAI response id replace its cumulative usage
+    snapshot; only a separately created synthesis response is additive.
   - Public `POST /v2` coverage proves the exact OpenAI
     `1599/2048/3647` incomplete case and representative Chat, Gemini, and
     Anthropic partial cases return `502`; completed responses and documented

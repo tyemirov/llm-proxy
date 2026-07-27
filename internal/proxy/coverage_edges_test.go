@@ -829,7 +829,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 				var requestPayload map[string]any
 				_ = json.Unmarshal(requestBytes, &requestPayload)
 				if requestPayload["previous_response_id"] == nil {
-					_, _ = responseWriter.Write([]byte(`{"id":"needs_synthesis","status":"completed","output":[{"type":"web_search_call","action":{"query":"weather"}}]}`))
+					_, _ = responseWriter.Write([]byte(`{"id":"needs_synthesis","status":"completed","output":[{"type":"web_search_call","action":{"query":"weather"}}],"usage":{"input_tokens":6,"output_tokens":1,"total_tokens":7}}`))
 					return
 				}
 				synthesisPayload = requestPayload
@@ -842,9 +842,22 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}, defaults)
 		queryParameters := url.Values{}
 		queryParameters.Set("max_tokens", "222")
-		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusOK || body != "synthesized" {
-			subTest.Fatalf("status=%d body=%q", statusCode, body)
+		queryParameters.Set("key", TestSecret)
+		queryParameters.Set("prompt", TestPrompt)
+		request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusOK || responseRecorder.Body.String() != "synthesized" {
+			subTest.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "6" {
+			subTest.Fatalf("request tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens))
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "1" {
+			subTest.Fatalf("response tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens))
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "7" {
+			subTest.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
 		}
 		if synthesisPayload["max_output_tokens"] != float64(222) {
 			subTest.Fatalf("synthesis max_output_tokens=%v payload=%v", synthesisPayload["max_output_tokens"], synthesisPayload)
@@ -901,12 +914,12 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("queued response surfaces final poll token usage", func(subTest *testing.T) {
+	t.Run("queued response uses latest final poll token usage snapshot", func(subTest *testing.T) {
 		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			switch {
 			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
-				_, _ = responseWriter.Write([]byte(`{"id":"queued","status":"queued"}`))
+				_, _ = responseWriter.Write([]byte(`{"id":"queued","status":"queued","usage":{"input_tokens":5,"output_tokens":2,"total_tokens":7}}`))
 			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/queued":
 				_, _ = responseWriter.Write([]byte(`{"status":"completed","output_text":"poll usage","usage":{"input_tokens":8,"output_tokens":3,"total_tokens":11}}`))
 			default:
@@ -961,6 +974,44 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 			subTest.Fatalf("response tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens))
 		}
 		if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "7" {
+			subTest.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
+		}
+	})
+
+	t.Run("queued response keeps latest intermediate usage when terminal poll omits usage", func(subTest *testing.T) {
+		pollCount := 0
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			switch {
+			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				_, _ = responseWriter.Write([]byte(`{"id":"queued","status":"queued","usage":{"input_tokens":2,"output_tokens":1,"total_tokens":3}}`))
+			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/queued":
+				pollCount++
+				if pollCount == 1 {
+					_, _ = responseWriter.Write([]byte(`{"id":"queued","status":"in_progress","usage":{"input_tokens":8,"output_tokens":3,"total_tokens":11}}`))
+					return
+				}
+				_, _ = responseWriter.Write([]byte(`{"id":"queued","status":"completed","output_text":"intermediate usage"}`))
+			default:
+				http.NotFound(responseWriter, httpRequest)
+			}
+		})
+		queryParameters := url.Values{}
+		queryParameters.Set("key", TestSecret)
+		queryParameters.Set("prompt", TestPrompt)
+		request := httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil)
+		responseRecorder := httptest.NewRecorder()
+		router.ServeHTTP(responseRecorder, request)
+		if responseRecorder.Code != http.StatusOK || responseRecorder.Body.String() != "intermediate usage" {
+			subTest.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens) != "8" {
+			subTest.Fatalf("request tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyRequestTokens))
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens) != "3" {
+			subTest.Fatalf("response tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyResponseTokens))
+		}
+		if responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens) != "11" {
 			subTest.Fatalf("total tokens header=%q", responseRecorder.Header().Get(testHeaderLLMProxyTotalTokens))
 		}
 	})

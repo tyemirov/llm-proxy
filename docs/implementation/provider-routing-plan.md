@@ -218,10 +218,13 @@ Only `status=completed` is a successful terminal response.
 `status=incomplete`, including `reason=max_output_tokens`, returns the
 canonical `502` upstream failure without partial text, continuation, or another
 paid generation; any reported token usage remains attached only to the failed
-normalized usage event. Callers use one normal `GET /`, `POST /`, or
-`POST /v2` request and receive a complete formatted answer or a non-2xx
-response; there is no streaming, client-side polling, durable provider-job
-queue, or later resume contract.
+normalized usage event. Usage objects observed while polling one response id
+are cumulative snapshots, so the newest nonempty snapshot replaces earlier
+observations. Usage is summed only when completed-response synthesis creates a
+distinct response id. Callers use one normal `GET /`, `POST /`, or `POST /v2`
+request and receive a complete formatted answer or a non-2xx response; there is
+no streaming, client-side polling, durable provider-job queue, or later resume
+contract.
 
 All other current text transports are synchronous and validate their native
 completion evidence before returning text. The shared OpenAI-compatible Chat

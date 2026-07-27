@@ -183,8 +183,7 @@ func (client *OpenAIClient) resolveOpenAIResponse(parentContext context.Context,
 	if utils.IsBlank(responseSnapshot.identifier) {
 		return textGenerationResult{usage: responseSnapshot.usage}, errors.New(errorOpenAIAPI)
 	}
-	finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, responseSnapshot.identifier, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, structuredLogger)
-	finalGeneration.usage = mergeTokenUsage(responseSnapshot.usage, finalGeneration.usage)
+	finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, responseSnapshot.identifier, responseSnapshot.usage, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, structuredLogger)
 	if pollError != nil {
 		structuredLogger.Errorw(
 			logEventOpenAIPollError,
@@ -218,7 +217,7 @@ func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.
 			)
 			return textGenerationResult{}, openAIStageError(synthErr)
 		}
-		finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, continuedResponseID, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, structuredLogger)
+		finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, continuedResponseID, nil, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, structuredLogger)
 		finalGeneration.usage = mergeTokenUsage(responseSnapshot.usage, finalGeneration.usage)
 		if pollError != nil {
 			structuredLogger.Errorw(
@@ -294,22 +293,26 @@ func (client *OpenAIClient) startContinuationResponse(parentContext context.Cont
 }
 
 // pollResponseUntilDone repeatedly fetches a response until it is complete or the request context expires.
-func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context, openAIKey string, responseIdentifier string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context, openAIKey string, responseIdentifier string, latestUsage *tokenUsage, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	for {
 		responseSnapshot, responseComplete, fetchError := client.fetchResponseByID(parentContext, openAIKey, responseIdentifier, structuredLogger)
+		if responseSnapshot.usage != nil {
+			latestUsage = responseSnapshot.usage
+		}
 		if fetchError != nil {
 			if parentContext.Err() != nil {
-				return textGenerationResult{}, parentContext.Err()
+				return textGenerationResult{usage: latestUsage}, parentContext.Err()
 			}
-			return textGenerationResult{usage: responseSnapshot.usage}, fetchError
+			return textGenerationResult{usage: latestUsage}, fetchError
 		}
 		if responseComplete {
+			responseSnapshot.usage = latestUsage
 			return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 		}
 		select {
 		case <-time.After(responsePollInterval):
 		case <-parentContext.Done():
-			return textGenerationResult{}, parentContext.Err()
+			return textGenerationResult{usage: latestUsage}, parentContext.Err()
 		}
 	}
 }

@@ -158,6 +158,87 @@ func TestOpenAIResponsesRequireCompletedStatusAtPublicV2Boundary(testingInstance
 	}
 }
 
+func TestOpenAIPolledFailureKeepsLatestUsageSnapshotAtPublicV2Boundary(testingInstance *testing.T) {
+	const (
+		responseIdentifier = "b080-polled-usage"
+		partialText        = "polled provider-truncated partial text"
+	)
+	upstreamRequestCount := 0
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		upstreamRequestCount++
+		responseWriter.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodPost:
+			_, _ = responseWriter.Write([]byte(`{"id":"` + responseIdentifier + `","status":"queued","usage":{"input_tokens":11,"output_tokens":13,"total_tokens":24}}`))
+		case request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/"+responseIdentifier):
+			_, _ = responseWriter.Write([]byte(`{"id":"` + responseIdentifier + `","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"` + partialText + `"}]}],"usage":{"input_tokens":17,"output_tokens":19,"total_tokens":36}}`))
+		default:
+			http.NotFound(responseWriter, request)
+		}
+	}))
+	defer upstreamServer.Close()
+
+	databasePath := filepath.Join(testingInstance.TempDir(), "openai-polled-usage.db")
+	router := newManagementRouterWithDatabasePath(testingInstance, proxy.Configuration{OpenAIBaseURL: upstreamServer.URL}, databasePath)
+	ownerCookie := managementSessionCookie(testingInstance, "openai-polled-usage-owner")
+	tenantIdentifier := managementDefaultTenantTestID(testingInstance, router, ownerCookie)
+	saveManagementProviderKey(testingInstance, router, ownerCookie, tenantIdentifier, testManagementOpenAIKey, proxy.ModelNameGPT41, "")
+	secret := generateManagementTenantSecret(testingInstance, router, ownerCookie, tenantIdentifier)
+
+	requestBody := bytes.NewBufferString(`{"messages":[{"role":"user","content":"poll this response"}],"max_tokens":2048}`)
+	request := httptest.NewRequest(http.MethodPost, "/v2?key="+url.QueryEscape(secret), requestBody)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusBadGateway || response.Body.String() != proxy.ErrUpstreamIncomplete.Error() {
+		testingInstance.Fatalf("status=%d body=%q", response.Code, response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), partialText) {
+		testingInstance.Fatalf("response leaked partial text: %q", response.Body.String())
+	}
+	for _, tokenHeader := range []string{testHeaderLLMProxyRequestTokens, testHeaderLLMProxyResponseTokens, testHeaderLLMProxyTotalTokens} {
+		if response.Header().Get(tokenHeader) != "" {
+			testingInstance.Fatalf("response exposed %s=%q", tokenHeader, response.Header().Get(tokenHeader))
+		}
+	}
+	if upstreamRequestCount != 2 {
+		testingInstance.Fatalf("upstream requests=%d want=2", upstreamRequestCount)
+	}
+
+	type persistedUsageEvent struct {
+		StatusCode     int    `gorm:"column:status_code"`
+		Success        bool   `gorm:"column:success"`
+		OutcomeCode    string `gorm:"column:outcome_code"`
+		RequestTokens  int    `gorm:"column:request_tokens"`
+		ResponseTokens int    `gorm:"column:response_tokens"`
+		TotalTokens    int    `gorm:"column:total_tokens"`
+	}
+	database, openError := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+	if openError != nil {
+		testingInstance.Fatalf("open usage database: %v", openError)
+	}
+	var usageEvents []persistedUsageEvent
+	if queryError := database.
+		Table("managed_usage_event_records").
+		Select("status_code", "success", "outcome_code", "request_tokens", "response_tokens", "total_tokens").
+		Order("id").
+		Find(&usageEvents).
+		Error; queryError != nil {
+		testingInstance.Fatalf("load usage events: %v", queryError)
+	}
+	expectedUsageEvents := []persistedUsageEvent{{
+		StatusCode:     http.StatusBadGateway,
+		Success:        false,
+		OutcomeCode:    "upstream_error",
+		RequestTokens:  17,
+		ResponseTokens: 19,
+		TotalTokens:    36,
+	}}
+	if !reflect.DeepEqual(usageEvents, expectedUsageEvents) {
+		testingInstance.Fatalf("usage events=%+v want=%+v", usageEvents, expectedUsageEvents)
+	}
+}
+
 func TestProviderCompletionSignalsRejectPartialTextAndRetainUsageAtPublicV2Boundary(testingInstance *testing.T) {
 	const (
 		chatPartialText      = "chat completion partial text"
