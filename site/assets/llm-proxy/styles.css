@@ -228,6 +228,31 @@ settings-section {
   background: var(--llm-panel-strong);
 }
 
+.runtime-failure[hidden] {
+  display: none;
+}
+
+.runtime-failure {
+  margin-bottom: 0.5rem;
+}
+
+.runtime-failure:focus {
+  outline: 2px solid var(--llm-accent);
+  outline-offset: 2px;
+}
+
+.runtime-failure-copy {
+  max-width: 680px;
+  margin: 0.35rem 0 0.75rem;
+  color: var(--llm-subtle);
+  font-size: 0.78rem;
+}
+
+.runtime-failure .resource-button {
+  width: fit-content;
+  cursor: pointer;
+}
+
 workspace-surface {
   display: grid;
   gap: 0.5rem;

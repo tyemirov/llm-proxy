@@ -99,7 +99,27 @@ export const MPR_UI = Object.freeze({
   YAML_LOADER_MISSING: "llm_proxy_yaml_loader_missing",
 });
 
+export const RUNTIME_UI = Object.freeze({
+  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260727",
+  APPLICATION_MODULE_ID: "llm-proxy-application-module",
+  APPLICATION_MODULE_MISSING: "llm_proxy_application_module_missing",
+  APPLICATION_READY_ATTRIBUTE: "data-llm-proxy-application",
+  FAILURE_DESCRIPTION_ID: "llm-proxy-runtime-failure-description",
+  FAILURE_EYEBROW_ID: "llm-proxy-runtime-failure-eyebrow",
+  FAILURE_RELOAD_ID: "llm-proxy-runtime-failure-reload",
+  FAILURE_SURFACE_ID: "llm-proxy-runtime-failure",
+  FAILURE_SURFACE_MISSING: "llm_proxy_runtime_failure_surface_missing",
+  FAILURE_TITLE_ID: "llm-proxy-runtime-failure-title",
+  GUARD_READY_ATTRIBUTE: "data-llm-proxy-startup-guard",
+  STARTUP_ERROR_ATTRIBUTE: "data-llm-proxy-startup-error",
+  TRANSITION_COMPLETION_FAILED_ATTRIBUTE: "data-mpr-transition-completion-failed",
+});
+
 export const COPY = Object.freeze({
+  runtimeFailureEyebrow: "Application startup",
+  runtimeFailureTitle: "Unable to open LLM Proxy",
+  runtimeFailureDescription: "Your browser could not load the current application files. Allow this site and cdn.jsdelivr.net in browser controls, then reload.",
+  runtimeFailureReload: "Reload LLM Proxy",
   loadingEyebrow: "Session",
   loadingTitle: "Loading key workspace",
   signedOutEyebrow: "Authentication",

@@ -26,7 +26,8 @@
       type="application/json"
       data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
     ></script>
-    <script type="module" src="/assets/llm-proxy/js/app.js"></script>
+    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260727"></script>
+    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260727"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body x-data="llmProxyKeyManagement" x-init="init()">
@@ -53,6 +54,22 @@
     </mpr-header>
 
     <main class="llm-proxy-main">
+      <section
+        id="llm-proxy-runtime-failure"
+        class="llm-panel runtime-failure"
+        role="alert"
+        aria-live="assertive"
+        aria-labelledby="llm-proxy-runtime-failure-title"
+        aria-describedby="llm-proxy-runtime-failure-description"
+        tabindex="-1"
+        hidden
+      >
+        <p id="llm-proxy-runtime-failure-eyebrow" class="eyebrow"></p>
+        <h1 id="llm-proxy-runtime-failure-title"></h1>
+        <p id="llm-proxy-runtime-failure-description" class="runtime-failure-copy"></p>
+        <button id="llm-proxy-runtime-failure-reload" class="resource-button" type="button"></button>
+      </section>
+
       <llm-proxy-key-management x-bind:data-auth-state="authState">
         <section class="llm-panel" x-cloak x-show="authState === states.loading">
           <p class="eyebrow" x-text="copy.loadingEyebrow"></p>

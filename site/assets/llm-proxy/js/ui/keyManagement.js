@@ -16,7 +16,7 @@ import {
   USAGE_OUTCOME_LABELS,
   USAGE_STATUS_LABELS,
   WORKSPACE_INTEGRITY_ERROR,
-} from "../constants.js";
+} from "../constants.js?v=20260727";
 import {
   createTenant as requestCreateTenant,
   deleteTenant as requestDeleteTenant,
@@ -35,7 +35,7 @@ import {
   revokeSecret as requestRevokeSecret,
   saveProviderKey as requestSaveProviderKey,
   updateDefaults as requestUpdateDefaults,
-} from "../core/backendClient.js";
+} from "../core/backendClient.js?v=20260727";
 import {
   emptyUsageSummary,
   modelRows,
@@ -44,8 +44,13 @@ import {
   usagePolyline,
   USAGE_CHART,
   USAGE_METRICS,
-} from "./usagePresentation.js";
-import { applyUserMenuItems, readMprUIAuthStatus, waitForMprUIAutoOrchestrationReady } from "../core/mprShell.js";
+} from "./usagePresentation.js?v=20260727";
+import {
+  applyUserMenuItems,
+  readMprUIAuthStatus,
+  waitForMprUIAutoOrchestrationReady,
+} from "../core/mprShell.js?v=20260727";
+import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260727";
 
 const EMPTY_SECRET_PLACEHOLDER = "<generated-secret>";
 const EMPTY_STRING = "";
@@ -2714,11 +2719,6 @@ function profileFailureMessage(requestError) {
     return COPY.workspaceIntegrityError;
   }
   return COPY.requestFailed;
-}
-
-async function dispatchManagementReady() {
-  await waitForMprUIAutoOrchestrationReady();
-  document.dispatchEvent(new CustomEvent(EVENTS.MANAGEMENT_READY));
 }
 
 /**
