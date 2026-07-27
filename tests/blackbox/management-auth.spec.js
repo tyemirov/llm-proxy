@@ -183,7 +183,7 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
 
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await expect(settingsDialog).toBeVisible();
-  await expect(settingsDialog.getByRole("combobox", { name: "Settings tenant" })).toHaveValue(firstTenantID);
+  await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue(firstTenantID);
   await expect(settingsDialog.getByRole("button", { name: "Create tenant" })).toBeVisible();
   await expect(settingsDialog.getByRole("alert")).toHaveText(
     "Add at least one provider API key before leaving Settings.",
@@ -191,7 +191,7 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   const clientKeyInput = settingsDialog.getByRole("textbox", { name: "Key", exact: true });
   await expect(clientKeyInput).toHaveValue("••••••••••••");
   await expect(clientKeyInput).toHaveAttribute("readonly", "");
-  await settingsDialog.locator("client-access-row").getByRole("button", { name: "Show key", exact: true }).click();
+  await settingsDialog.locator("tenant-access-row").getByRole("button", { name: "Show key", exact: true }).click();
   await expect(clientKeyInput).toHaveValue(/^llmp_/);
 
   const providerEditor = settingsDialog.locator("provider-editor");

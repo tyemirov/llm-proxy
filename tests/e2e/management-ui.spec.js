@@ -34,7 +34,7 @@ const httpInternalServerError = 500;
 const noticeClockPauseLeadMilliseconds = 5_000;
 const noticeClockPreDeadlineAdvanceMilliseconds = 4_000;
 const noticeClockPostDeadlineAdvanceMilliseconds = 2_000;
-const tenantSettingsRowMaxHeight = 64;
+const tenantAccessDesktopMaxHeight = 64;
 const usageIntervals = Object.freeze([
   { id: "all", label: "ALL", requests: 91, totalTokens: 91_000, providerCount: 1 },
   { id: "30d", label: "30 days", requests: 37, totalTokens: 12_345, providerCount: 2 },
@@ -53,8 +53,9 @@ const mimeTypes = Object.freeze({
 const generatedResourcePageCount = 46;
 const seoContentModifiedDate = "2026-07-11";
 const seoCurrentContentModifiedDate = "2026-07-22";
+const seoMigrationContentModifiedDate = "2026-07-25";
 const seoUsageContentModifiedDate = "2026-07-26";
-const seoClientDocumentationModifiedDate = "2026-07-25";
+const seoClientDocumentationModifiedDate = "2026-07-26";
 const settingsLayerViewports = Object.freeze([
   { name: "desktop", width: 1280, height: 720 },
   { name: "compact", width: 480, height: 780 },
@@ -167,31 +168,31 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain('x-bind:aria-label="copy.usageTenant"');
   expect(html).toContain('x-on:change="handleUsageTenantSelection($event)"');
   expect(html).toContain('x-text="copy.allTenants"');
-  expect(html).toContain('<tenant-management role="group" x-bind:aria-label="copy.settingsTenant">');
+  expect(html).toContain('<tenant-access-row role="group" x-bind:aria-label="copy.tenantAccess">');
   expect(html).toContain('x-on:change="handleSettingsTenantSelection($event)"');
-  expect(html).toContain('x-text="settingsTenantID"');
-  expect(html).toContain('<client-access-row role="group" x-bind:aria-label="copy.clientKey">');
-  expect(html).toContain('<client-access-tenant role="group" x-bind:aria-label="copy.tenantContext">');
+  expect(html).toContain('x-bind:aria-label="copy.tenantContext"');
+  expect(html).toContain("<client-access-key>");
+  expect(html).not.toContain("tenant-management");
+  expect(html).not.toContain("client-access-tenant");
+  expect(html).not.toContain('x-text="settingsTenantID"');
   expect(html).toContain('x-on:click="beginTenantNameEdit()"');
   expect(html).toContain('x-on:click="cancelTenantNameEdit()"');
   expect(html).toContain('x-on:input="handleTenantNameInput($event)"');
   expect(html).toContain('x-on:click="requestTenantDeletion()"');
+  expect(html).toContain('class="tenant-rename-dialog"');
+  expect(html).toContain('class="client-key-replace-dialog"');
   expect(html).not.toContain("copy.tenantTitle");
-  expect(html).toContain(
-    '<button type="button" class="icon-button client-key-create" x-cloak x-show="!hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.createKey">',
-  );
-  expect(html).toContain(
-    '<button type="button" class="icon-button client-key-replace" x-cloak x-show="hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.replaceKey" x-bind:aria-label="copy.replaceKey">',
-  );
+  expect(html).toContain('class="icon-button client-key-create"');
+  expect(html).toContain('x-show="!hasSecret"');
+  expect(html).toContain('class="icon-button client-key-replace"');
+  expect(html).toContain('x-on:click="requestClientKeyReplacement()"');
   expect(html).toContain('<span class="material-symbols-outlined" aria-hidden="true">key</span>');
-  expect(html).toContain('<span class="client-key-replace-label" x-text="copy.replaceKey"></span>');
+  expect(html).toContain('<span class="tenant-access-action-label" x-text="copy.replaceKey"></span>');
   expect(html).not.toContain("recycle-icon");
-  expect(html).toContain(
-    '<button type="button" class="icon-only client-key-copy" x-cloak x-show="hasGeneratedSecret" x-on:click="copyGeneratedSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.copyClientKey" x-bind:aria-label="copy.copyClientKey">',
-  );
-  expect(html).toContain(
-    '<button type="button" class="icon-only danger client-key-revoke" x-cloak x-show="hasSecret" x-on:click="revokeSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.revokeKey" x-bind:aria-label="copy.revokeKey">',
-  );
+  expect(html).toContain('class="icon-only client-key-copy"');
+  expect(html).toContain('x-on:click="copyGeneratedSecret()"');
+  expect(html).not.toContain("client-key-revoke");
+  expect(html).not.toContain("revokeSecret()");
   expect(html).toContain('<span class="material-symbols-outlined" x-show="!generatedSecretVisible" aria-hidden="true">visibility</span>');
   expect(html).toContain('<span class="material-symbols-outlined" x-show="generatedSecretVisible" aria-hidden="true">visibility_off</span>');
   expect(html).toContain(
@@ -297,13 +298,15 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
   expect(documentationResponse.headers()["content-type"]).toContain(mimeTypes[".html"]);
   const documentationHTML = await documentationResponse.text();
   const sourceDigest = createHash("sha256").update(canonicalSource).digest("hex");
+  expect(canonicalSource).not.toContain("deleteManagementTenantSecret");
   expect(documentationHTML).toContain(`<link rel="canonical" href="https://llm-proxy.mprlab.com${apiDocumentationPath}">`);
   expect(documentationHTML).toContain(`data-openapi-source-sha256="${sourceDigest}"`);
   expect(documentationHTML).toContain("https://llm-proxy-api.mprlab.com");
   expect(documentationHTML).toContain('id="operation-postV2Messages"');
+  expect(documentationHTML).not.toContain('id="operation-deleteManagementTenantSecret"');
   expect(documentationHTML).toContain("<code>reasoning_effort</code>");
   expect(documentationHTML).toContain(`href="${openAPIPath}"`);
-  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(21);
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(20);
 });
 
 test("SEO resource pages are crawlable from the public site", async ({ request }) => {
@@ -406,18 +409,21 @@ test("SEO management resources document required onboarding and secret-safe exam
       title: "Self-service LLM key management for internal teams",
       copy: "creates a missing client key after authentication, autosaves provider settings, and keeps Settings open",
       faqQuestion: "What lets a user leave Settings?",
+      modifiedDate: seoCurrentContentModifiedDate,
     },
     {
-      slug: "generated-secret-rotation-and-revocation",
-      title: "Generated LLM Proxy secret rotation and revocation",
+      slug: "generated-secret-rotation",
+      title: "Rotate generated LLM Proxy client keys with confidence",
       copy: "Request examples retain the &lt;generated-secret&gt; placeholder after creation.",
       faqQuestion: "Can the raw generated client key be retrieved later?",
+      modifiedDate: seoClientDocumentationModifiedDate,
     },
     {
       slug: "copyable-llm-curl-examples",
       title: "Copyable LLM curl examples from current profile data",
       copy: "Examples always use &lt;generated-secret&gt;, including after automatic client-key creation.",
       faqQuestion: "Can copying an example expose the raw generated key?",
+      modifiedDate: seoCurrentContentModifiedDate,
     },
   ];
   for (const resourceExpectation of resourceExpectations) {
@@ -427,14 +433,14 @@ test("SEO management resources document required onboarding and secret-safe exam
     expect(pageHTML).toContain(
       `<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/${resourceExpectation.slug}/">`,
     );
-    expect(pageHTML).toContain(`"dateModified":"${seoCurrentContentModifiedDate}"`);
+    expect(pageHTML).toContain(`"dateModified":"${resourceExpectation.modifiedDate}"`);
     expect(pageHTML).toContain(`<title>${resourceExpectation.title}</title>`);
     expect(resourceExpectation.title.length).toBeGreaterThanOrEqual(50);
     expect(resourceExpectation.title.length).toBeLessThanOrEqual(60);
     expect(pageHTML).toContain(resourceExpectation.copy);
     expect(pageHTML).toContain("<strong>Quick verdict</strong>");
     expect(pageHTML).toContain("<h2>Repository evidence</h2>");
-    expect(pageHTML).toContain(`Verified ${seoCurrentContentModifiedDate}`);
+    expect(pageHTML).toContain(`Verified ${resourceExpectation.modifiedDate}`);
     expect(pageHTML).toContain('href="https://github.com/tyemirov" rel="author"');
     expect(pageHTML).toContain(`<summary>${resourceExpectation.faqQuestion}</summary>`);
     expect(pageHTML).not.toContain("Does this page claim provider performance or pricing advantages?");
@@ -466,6 +472,7 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
     new Set([
       `<lastmod>${seoContentModifiedDate}</lastmod>`,
       `<lastmod>${seoCurrentContentModifiedDate}</lastmod>`,
+      `<lastmod>${seoMigrationContentModifiedDate}</lastmod>`,
       `<lastmod>${seoUsageContentModifiedDate}</lastmod>`,
       `<lastmod>${seoClientDocumentationModifiedDate}</lastmod>`,
     ]),
@@ -479,6 +486,10 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
   expect(sitemapXML).toContain(
     `<loc>https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/</loc>\n    <lastmod>${seoClientDocumentationModifiedDate}</lastmod>`,
   );
+  expect(sitemapXML).toContain(
+    `<loc>https://llm-proxy.mprlab.com/resources/generated-secret-rotation/</loc>\n    <lastmod>${seoClientDocumentationModifiedDate}</lastmod>`,
+  );
+  expect(sitemapXML).not.toContain("generated-secret-rotation-and-revocation");
   expect(sitemapXML).not.toContain("config-ui.yaml");
   expect(sitemapXML).not.toContain("llm-proxy-config.json");
 
@@ -506,13 +517,14 @@ test("usage defaults to all tenants while tenant management lives in Settings", 
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Settings tenant" });
+  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Tenant" });
   await expect(settingsTenantSelector).toHaveValue("tenant_1");
   await expect(settingsDialog.getByRole("button", { name: "Create tenant" })).toBeVisible();
-  await expect(settingsDialog.getByRole("group", { name: "Tenant", exact: true }).getByText("tenant_1", { exact: true })).toBeVisible();
+  await expect(settingsTenantSelector.locator("option:checked")).toHaveText("Default");
+  await expect(settingsDialog.getByRole("group", { name: "Tenant access" })).not.toContainText("tenant_1");
 });
 
-test("Settings tenant and Usage tenant selections remain independent", async ({ page }) => {
+test("the Tenant control in Settings and Usage tenant selection remain independent", async ({ page }) => {
   await installAssetRoutes(page);
   await installMultiTenantRoutes(page);
 
@@ -520,10 +532,10 @@ test("Settings tenant and Usage tenant selections remain independent", async ({ 
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Settings tenant" });
+  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Tenant" });
   await settingsTenantSelector.selectOption("tenant_2");
   await expect(settingsTenantSelector).toHaveValue("tenant_2");
-  await expect(settingsDialog.getByRole("group", { name: "Tenant", exact: true }).getByText("Research", { exact: true })).toBeVisible();
+  await expect(settingsTenantSelector.locator("option:checked")).toHaveText("Research");
   await settingsDialog.getByRole("button", { name: "Close" }).click();
 
   const usageTenantSelector = page.getByRole("combobox", { name: "Usage tenant" });
@@ -534,7 +546,7 @@ test("Settings tenant and Usage tenant selections remain independent", async ({ 
 
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
-  await expect(settingsDialog.getByRole("combobox", { name: "Settings tenant" })).toHaveValue("tenant_2");
+  await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_2");
   await expect(page).toHaveURL(baseURL);
 });
 
@@ -548,7 +560,7 @@ test("obsolete tenant query parameters do not choose Settings or Usage state", a
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
-  await expect(page.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Settings tenant" })).toHaveValue("tenant_1");
+  await expect(page.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_1");
   await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toHaveCount(0);
 });
 
@@ -564,19 +576,21 @@ test("tenant lifecycle is keyboard accessible, responsive, and guards the final 
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const tenantSettings = settingsDialog.getByRole("group", { name: "Tenant", exact: true });
-  const renameTenantButton = tenantSettings.getByRole("button", { name: "Rename" });
-  const deleteTenantButton = tenantSettings.getByRole("button", { name: "Delete tenant" });
-  await expect(tenantSettings.getByText("Default", { exact: true })).toBeVisible();
-  await expect(tenantSettings.getByText("tenant_1", { exact: true })).toBeVisible();
-  await expect(tenantSettings.getByText("Only tenant", { exact: true })).toBeVisible();
+  const tenantAccess = settingsDialog.getByRole("group", { name: "Tenant access" });
+  const settingsTenantSelector = tenantAccess.getByRole("combobox", { name: "Tenant" });
+  const renameTenantButton = tenantAccess.getByRole("button", { name: "Rename" });
+  const deleteTenantButton = tenantAccess.getByRole("button", { name: "Delete tenant" });
+  await expect(settingsTenantSelector.locator("option:checked")).toHaveText("Default");
+  await expect(tenantAccess).not.toContainText("tenant_1");
   await expect(deleteTenantButton).toBeDisabled();
   await expect(deleteTenantButton).toHaveAttribute("aria-describedby", "final-tenant-deletion");
+  await expect(deleteTenantButton).toHaveAttribute("title", "Your final tenant cannot be deleted.");
   await renameTenantButton.click();
-  const initialTenantName = tenantSettings.getByRole("textbox", { name: "Tenant name" });
+  const initialRenameDialog = page.getByRole("dialog", { name: "Rename tenant" });
+  const initialTenantName = initialRenameDialog.getByRole("textbox", { name: "Tenant name" });
   await expect(initialTenantName).toBeFocused();
-  await tenantSettings.getByRole("button", { name: "Cancel" }).click();
-  await expect(initialTenantName).toBeHidden();
+  await initialRenameDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(initialRenameDialog).toBeHidden();
   await expect(renameTenantButton).toBeFocused();
 
   const createTenantButton = settingsDialog.getByRole("button", { name: "Create tenant" });
@@ -594,16 +608,20 @@ test("tenant lifecycle is keyboard accessible, responsive, and guards the final 
   await createDialog.getByRole("button", { name: "Create", exact: true }).click();
 
   await expect(page).toHaveURL(baseURL);
-  await expect(settingsDialog.getByRole("combobox", { name: "Settings tenant" })).toHaveValue("tenant_2");
+  await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_2");
   await expect(settingsDialog).toBeVisible();
   await renameTenantButton.click();
-  const tenantName = tenantSettings.getByRole("textbox", { name: "Tenant name" });
+  const renameDialog = page.getByRole("dialog", { name: "Rename tenant" });
+  const tenantName = renameDialog.getByRole("textbox", { name: "Tenant name" });
+  await tenantName.fill("Default");
+  await renameDialog.getByRole("button", { name: "Save name" }).click();
+  await expect(renameDialog.getByRole("alert")).toHaveText("A tenant with that name already exists.");
+  await expect(renameDialog).toBeVisible();
   await tenantName.fill("Research Lab");
-  await tenantSettings.getByRole("button", { name: "Save name" }).click();
+  await renameDialog.getByRole("button", { name: "Save name" }).click();
   await expect(renameTenantButton).toBeFocused();
-  await expect(tenantName).toBeHidden();
-  await expect(tenantSettings.getByText("Research Lab", { exact: true })).toBeVisible();
-  await expect(settingsDialog.getByRole("combobox", { name: "Settings tenant" }).locator("option:checked")).toHaveText("Research Lab");
+  await expect(renameDialog).toBeHidden();
+  await expect(settingsDialog.getByRole("combobox", { name: "Tenant" }).locator("option:checked")).toHaveText("Research Lab");
 
   await deleteTenantButton.click();
   const deleteDialog = page.getByRole("alertdialog", { name: "Delete “Research Lab”?" });
@@ -615,15 +633,15 @@ test("tenant lifecycle is keyboard accessible, responsive, and guards the final 
   await deleteDialog.getByRole("button", { name: "Delete", exact: true }).click();
 
   await expect(page).toHaveURL(baseURL);
-  await expect(settingsDialog.getByRole("combobox", { name: "Settings tenant" })).toHaveValue("tenant_1");
+  await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_1");
   await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
   expect(managementState.order).toEqual(["tenant_1"]);
-  const tenantManagementBox = await settingsDialog.locator("tenant-management").boundingBox();
-  if (!tenantManagementBox) {
-    throw new Error("tenant_management_missing");
+  const tenantAccessBox = await tenantAccess.boundingBox();
+  if (!tenantAccessBox) {
+    throw new Error("tenant_access_missing");
   }
-  expect(tenantManagementBox.x).toBeGreaterThanOrEqual(0);
-  expect(tenantManagementBox.x + tenantManagementBox.width).toBeLessThanOrEqual(390);
+  expect(tenantAccessBox.x).toBeGreaterThanOrEqual(0);
+  expect(tenantAccessBox.x + tenantAccessBox.width).toBeLessThanOrEqual(390);
 });
 
 test("tenant switching requires discard and clears one-time and revealed credentials", async ({ page }) => {
@@ -651,10 +669,11 @@ test("tenant switching requires discard and clears one-time and revealed credent
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const clientAccess = settingsDialog.getByRole("group", { name: "Key" });
+  const clientAccess = settingsDialog.getByRole("group", { name: "Tenant access" });
   const providerEditor = settingsDialog.locator("provider-editor");
 
   await clientAccess.getByRole("button", { name: "Replace key" }).click();
+  await page.getByRole("alertdialog", { name: "Replace client key?" }).getByRole("button", { name: "Replace key" }).click();
   await clientAccess.getByRole("button", { name: "Show key", exact: true }).click();
   await expect(clientAccess.getByRole("textbox", { name: "Key", exact: true })).toHaveValue("llmp_tenant_1_generated");
   await providerEditor.getByRole("button", { name: "Show key", exact: true }).click();
@@ -663,7 +682,7 @@ test("tenant switching requires discard and clears one-time and revealed credent
   await page.keyboard.press("Tab");
   await providerSaveRequested;
 
-  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Settings tenant" });
+  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Tenant" });
   await settingsTenantSelector.selectOption("tenant_2");
   const discardDialog = page.getByRole("alertdialog", { name: "Discard unsaved changes?" });
   await expect(discardDialog).toBeVisible();
@@ -702,10 +721,10 @@ test("concurrent tabs keep independent Settings and Usage tenant state", async (
 
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
-  await page.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Settings tenant" }).selectOption("tenant_2");
+  await page.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Tenant" }).selectOption("tenant_2");
   await secondPage.getByTestId("avatar-menu").click();
   await secondPage.getByTestId("avatar-menu-item").getByText("Settings").click();
-  await expect(secondPage.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Settings tenant" })).toHaveValue("tenant_1");
+  await expect(secondPage.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_1");
   await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("tenant_1");
   await expect(secondPage.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("tenant_2");
 });
@@ -776,7 +795,7 @@ test("late tenant lifecycle responses cannot select or overwrite another tenant"
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Settings tenant" });
+  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Tenant" });
   await settingsDialog.getByRole("button", { name: "Create tenant" }).click();
   await page.getByRole("dialog", { name: "Create tenant" }).getByRole("textbox", { name: "Tenant name" }).fill("Late Create");
   await page.getByRole("dialog", { name: "Create tenant" }).getByRole("button", { name: "Create", exact: true }).click();
@@ -812,12 +831,14 @@ test("late tenant lifecycle responses cannot select or overwrite another tenant"
     const renamedProfile = managementTenantProfile("tenant_2", "Late Rename");
     await route.fulfill({ json: renamedProfile }).catch(() => {});
   });
-  const tenantSettings = settingsDialog.getByRole("group", { name: "Tenant", exact: true });
-  await tenantSettings.getByRole("button", { name: "Rename" }).click();
-  const tenantNameEditor = tenantSettings.getByRole("group", { name: "Rename tenant" });
+  const tenantAccess = settingsDialog.getByRole("group", { name: "Tenant access" });
+  await tenantAccess.getByRole("button", { name: "Rename" }).click();
+  const tenantNameEditor = page.getByRole("dialog", { name: "Rename tenant" });
   await tenantNameEditor.getByRole("textbox", { name: "Tenant name" }).fill("Late Rename");
   await tenantNameEditor.getByRole("button", { name: "Save name" }).click();
   await renameRequested;
+  await page.keyboard.press("Escape");
+  await expect(tenantNameEditor).toBeVisible();
   await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
     const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
     const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
@@ -861,20 +882,17 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(closeSettingsButton).toHaveText("");
   await expect(closeSettingsButton.locator("svg.close-icon path")).toHaveCount(2);
   await expect(settingsDialog.getByRole("heading", { name: "Client access" })).toHaveCount(0);
-  const clientAccessRow = settingsDialog.getByRole("group", { name: "Key" });
-  await expect(settingsDialog.locator("settings-body > client-access-row")).toHaveCount(1);
-  await expect(settingsDialog.locator("settings-section client-access-row")).toHaveCount(0);
-  await expect(clientAccessRow.locator("client-access-tenant")).toHaveCount(0);
-  await expect(clientAccessRow).not.toContainText("Tenant");
-  await expect(clientAccessRow).not.toContainText("Default");
-  await expect(clientAccessRow).toContainText(
-    "This key is saved and can’t be shown again. Replace it to create and copy a new key.",
-  );
-  const replaceKeyButton = clientAccessRow.getByRole("button", { name: "Replace key" });
+  const tenantAccessRow = settingsDialog.getByRole("group", { name: "Tenant access" });
+  await expect(settingsDialog.locator("settings-body > tenant-access-row")).toHaveCount(1);
+  await expect(settingsDialog.locator("settings-section tenant-access-row")).toHaveCount(0);
+  await expect(tenantAccessRow.locator("client-access-tenant")).toHaveCount(0);
+  await expect(tenantAccessRow.getByRole("combobox", { name: "Tenant" }).locator("option:checked")).toHaveText("Default");
+  await expect(tenantAccessRow).toContainText("Saved; replace to reveal a new key.");
+  const replaceKeyButton = tenantAccessRow.getByRole("button", { name: "Replace key" });
   await expect(replaceKeyButton.locator(".material-symbols-outlined")).toHaveText("key");
-  await expect(replaceKeyButton.locator(".client-key-replace-label")).toHaveText("Replace key");
+  await expect(replaceKeyButton.locator(".tenant-access-action-label")).toHaveText("Replace key");
   await expect(replaceKeyButton.locator("svg")).toHaveCount(0);
-  await expect(clientAccessRow.getByRole("button", { name: "Revoke key" })).toBeVisible();
+  await expect(tenantAccessRow.getByRole("button", { name: "Revoke key" })).toHaveCount(0);
   await expect(settingsDialog.getByRole("heading", { name: "Routing defaults" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Request examples" })).toBeVisible();
   const requestExamplesSection = settingsDialog.locator(".usage-examples-section");
@@ -2390,7 +2408,7 @@ test("fresh authenticated users receive one client key and must add a provider k
   const clientKeyInput = settingsDialog.getByRole("textbox", { name: "Key", exact: true });
   await expect(clientKeyInput).toHaveValue("••••••••••••");
   await expect(clientKeyInput).toHaveAttribute("readonly", "");
-  await settingsDialog.locator("client-access-row").getByRole("button", { name: "Show key", exact: true }).click();
+  await settingsDialog.locator("tenant-access-row").getByRole("button", { name: "Show key", exact: true }).click();
   await expect(clientKeyInput).toHaveValue(generatedSecret);
   expect(await clientKeyInput.evaluate((inputElement) => inputElement.outerHTML)).not.toContain(generatedSecret);
   await settingsDialog.getByRole("button", { name: "Copy key", exact: true }).click();
@@ -2475,7 +2493,7 @@ test("automatically generated client keys never enter request examples", async (
   const providerV2Example = settingsDialog.locator('request-example[data-example-id="provider-v2"] .usage-snippet');
   await expect(defaultTextExample).toContainText("key=<generated-secret>");
   await expect(providerV2Example).toContainText("key=<generated-secret>");
-  await expect(settingsDialog.locator("client-access-row").getByRole("textbox", { name: "Key", exact: true })).not.toHaveValue(
+  await expect(settingsDialog.locator("tenant-access-row").getByRole("textbox", { name: "Key", exact: true })).not.toHaveValue(
     generatedSecret,
   );
   await expect(defaultTextExample).toContainText("key=<generated-secret>");
@@ -2567,7 +2585,7 @@ test("Settings remains locked while automatic client-key creation is pending", a
   await expect(settingsDialog).toBeHidden();
 });
 
-test("Settings keeps a replacement client key available when close is requested during rotation", async ({ page }) => {
+test("Settings stays inert and keeps a replacement client key available during rotation", async ({ page }) => {
   const replacementSecret = "llmp_test_pending_replacement";
   let releaseSecretReplacement;
   const secretReplacementReleased = new Promise((resolve) => {
@@ -2593,13 +2611,24 @@ test("Settings keeps a replacement client key available when close is requested 
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const clientAccessRow = settingsDialog.locator("client-access-row");
+  const tenantAccessRow = settingsDialog.locator("tenant-access-row");
+  const replaceKeyButton = tenantAccessRow.getByRole("button", { name: "Replace key" });
 
-  await clientAccessRow.getByRole("button", { name: "Replace key" }).click();
+  await replaceKeyButton.click();
+  const replacementDialog = page.getByRole("alertdialog", { name: "Replace client key?" });
+  await expect(replacementDialog).toContainText(
+    "The current key will stop working immediately. Copy the replacement now; it cannot be shown again.",
+  );
+  await replacementDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(replacementDialog).toBeHidden();
+  await expect(replaceKeyButton).toBeFocused();
+  await replaceKeyButton.click();
+  await replacementDialog.getByRole("button", { name: "Replace key" }).click();
   await secretReplacementRequested;
   await page.keyboard.press("Escape");
   await expect(settingsDialog).toBeVisible();
-  await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeDisabled();
+  await expect(replacementDialog).toBeVisible();
+  expect(await settingsDialog.evaluate((dialogElement) => dialogElement.inert)).toBe(true);
 
   const replacementResponse = page.waitForResponse(
     (response) => response.url() === `${baseURL}${managementDefaultTenantPath}/secrets` && response.request().method() === "POST",
@@ -2607,10 +2636,11 @@ test("Settings keeps a replacement client key available when close is requested 
   releaseSecretReplacement();
   await replacementResponse;
   await expect(settingsDialog).toBeVisible();
+  await expect(replacementDialog).toBeHidden();
   await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeEnabled();
-  const clientKeyInput = clientAccessRow.getByRole("textbox", { name: "Key", exact: true });
+  const clientKeyInput = tenantAccessRow.getByRole("textbox", { name: "Key", exact: true });
   await expect(clientKeyInput).toHaveValue("••••••••••••");
-  await clientAccessRow.getByRole("button", { name: "Show key", exact: true }).click();
+  await tenantAccessRow.getByRole("button", { name: "Show key", exact: true }).click();
   await expect(clientKeyInput).toHaveValue(replacementSecret);
   expect(await browserStorageContains(page, replacementSecret)).toBe(false);
 
@@ -2618,15 +2648,7 @@ test("Settings keeps a replacement client key available when close is requested 
   await expect(settingsDialog).toBeHidden();
 });
 
-test("pending revocation and last-provider removal enforce mandatory Settings before close", async ({ page }) => {
-  let releaseRevocation;
-  const revocationReleased = new Promise((resolve) => {
-    releaseRevocation = resolve;
-  });
-  let revocationStarted;
-  const revocationRequested = new Promise((resolve) => {
-    revocationStarted = resolve;
-  });
+test("pending last-provider removal enforces mandatory Settings before close", async ({ page }) => {
   let releaseProviderRemoval;
   const providerRemovalReleased = new Promise((resolve) => {
     releaseProviderRemoval = resolve;
@@ -2637,15 +2659,6 @@ test("pending revocation and last-provider removal enforce mandatory Settings be
   });
   await installAssetRoutes(page);
   await installManagementRoutes(page, { savedProviderIDs: ["openai"] });
-  await page.route(`${baseURL}${managementDefaultTenantPath}/secrets`, async (route) => {
-    if (route.request().method() !== "DELETE") {
-      await route.fallback();
-      return;
-    }
-    revocationStarted();
-    await revocationReleased;
-    await route.fallback();
-  });
   await page.route(providerKeyEndpointURL("openai"), async (route) => {
     if (route.request().method() !== "DELETE") {
       await route.fallback();
@@ -2661,18 +2674,6 @@ test("pending revocation and last-provider removal enforce mandatory Settings be
   await page.getByTestId("avatar-menu-item").nth(0).click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   const closeSettings = settingsDialog.getByRole("button", { name: "Close" });
-  const clientAccessRow = settingsDialog.locator("client-access-row");
-
-  await clientAccessRow.getByRole("button", { name: "Revoke key" }).click();
-  await revocationRequested;
-  await closeSettings.click();
-  await expect(settingsDialog).toBeVisible();
-  releaseRevocation();
-  await expect(settingsDialog.getByRole("alert")).toHaveText("Create a client key before leaving Settings.");
-  await expect(settingsDialog).toBeVisible();
-
-  await settingsDialog.getByRole("button", { name: "Create key" }).click();
-  await expect(settingsDialog.getByRole("alert")).toBeHidden();
   const providerEditor = settingsDialog.locator("provider-editor");
   await providerEditor.getByRole("button", { name: "Remove provider key and settings" }).click();
   await page.getByRole("alertdialog", { name: "Remove provider key?" }).getByRole("button", { name: "Remove key" }).click();
@@ -2737,12 +2738,12 @@ test("session cleanup cancels generated client keys before they can restore stat
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   await expect(settingsDialog).toBeVisible();
   expect(secretRequestCount).toBe(2);
-  await settingsDialog.locator("client-access-row").getByRole("button", { name: "Show key", exact: true }).click();
+  await settingsDialog.locator("tenant-access-row").getByRole("button", { name: "Show key", exact: true }).click();
   await expect(settingsDialog.getByRole("textbox", { name: "Key", exact: true })).toHaveValue(currentGeneratedSecret);
   await expect(settingsDialog).not.toContainText(lateGeneratedSecret);
 });
 
-test("new client keys stay left-aligned and read-only while supporting key actions", async ({ page }) => {
+test("tenant access stays compact while one-time client keys support confirmed replacement", async ({ page }) => {
   const generatedSecret = "llmp_test_generated_secret";
   await installClipboardMock(page);
   await installAssetRoutes(page);
@@ -2755,21 +2756,30 @@ test("new client keys stay left-aligned and read-only while supporting key actio
     const settingsDialog = page.getByRole("dialog", { name: "Settings" });
     await expect(settingsDialog).toBeVisible();
 
-    const clientAccessRow = settingsDialog.locator("client-access-row");
-    const clientKey = clientAccessRow.locator("client-access-key");
+    const tenantAccessRow = settingsDialog.getByRole("group", { name: "Tenant access" });
+    const tenantSelector = tenantAccessRow.getByRole("combobox", { name: "Tenant" });
+    const renameTenantButton = tenantAccessRow.getByRole("button", { name: "Rename" });
+    const deleteTenantButton = tenantAccessRow.getByRole("button", { name: "Delete tenant" });
+    const createTenantButton = tenantAccessRow.getByRole("button", { name: "Create tenant" });
+    const clientKey = tenantAccessRow.locator("client-access-key");
     const keyLabel = clientKey.locator(".eyebrow");
     const clientKeyRow = clientKey.locator("client-key-row");
-    const clientKeyInput = clientAccessRow.getByRole("textbox", { name: "Key", exact: true });
-    const visibilityButton = clientAccessRow.getByRole("button", { name: "Show key", exact: true });
-    const copyButton = clientAccessRow.getByRole("button", { name: "Copy key", exact: true });
-    const revokeButton = clientAccessRow.getByRole("button", { name: "Revoke key", exact: true });
+    const clientKeyInput = tenantAccessRow.getByRole("textbox", { name: "Key", exact: true });
+    const visibilityButton = tenantAccessRow.getByRole("button", { name: "Show key", exact: true });
+    const copyButton = tenantAccessRow.getByRole("button", { name: "Copy key", exact: true });
     const copyIcon = copyButton.locator("svg.copy-icon");
     const visibilitySymbols = visibilityButton.locator(".material-symbols-outlined");
+    const replaceKeyButton = tenantAccessRow.getByRole("button", { name: "Replace key", exact: true });
+    const replaceKeyIcon = replaceKeyButton.locator(".material-symbols-outlined");
+    const replaceKeyLabel = replaceKeyButton.locator(".tenant-access-action-label");
+    const createTenantLabel = createTenantButton.locator(".tenant-access-action-label");
+    await expect(tenantSelector.locator("option:checked")).toHaveText("Default");
+    await expect(renameTenantButton).toBeVisible();
+    await expect(deleteTenantButton).toBeDisabled();
+    await expect(createTenantButton).toBeVisible();
+    await expect(tenantAccessRow.getByRole("button", { name: "Revoke key" })).toHaveCount(0);
     await expect(clientKeyInput).toHaveValue("••••••••••••");
     await expect(clientKeyInput).toHaveAttribute("readonly", "");
-    const replaceKeyButton = clientAccessRow.getByRole("button", { name: "Replace key", exact: true });
-    const replaceKeyIcon = replaceKeyButton.locator(".material-symbols-outlined");
-    const replaceKeyLabel = replaceKeyButton.locator(".client-key-replace-label");
     await expect(replaceKeyButton).toBeVisible();
     await expect(replaceKeyButton).toHaveClass(/icon-button/);
     await expect(replaceKeyButton).toHaveAttribute("title", "Replace key");
@@ -2778,14 +2788,19 @@ test("new client keys stay left-aligned and read-only while supporting key actio
     await expect(replaceKeyIcon).toHaveText("key");
     await expect(replaceKeyIcon).toBeVisible();
     await expect(replaceKeyLabel).toHaveText("Replace key");
-    await expect(replaceKeyLabel).toBeVisible();
+    if (viewport.name === "desktop") {
+      await expect(replaceKeyLabel).toBeVisible();
+      await expect(createTenantLabel).toBeVisible();
+    } else {
+      await expect(replaceKeyLabel).toBeHidden();
+      await expect(createTenantLabel).toBeHidden();
+    }
     await expect(visibilityButton).toHaveAttribute("aria-pressed", "false");
     await expect(visibilitySymbols).toHaveCount(2);
     await expect(visibilitySymbols.nth(0)).toHaveText("visibility");
     await expect(visibilitySymbols.nth(0)).toBeVisible();
     await expect(visibilitySymbols.nth(1)).toHaveText("visibility_off");
     await expect(visibilitySymbols.nth(1)).toBeHidden();
-    await expect(revokeButton.locator(".material-symbols-outlined")).toHaveText("delete");
     await expect(copyButton).toHaveAttribute("title", "Copy key");
     await expect(copyIcon).toHaveCount(1);
     await expect(copyIcon).toHaveAttribute("aria-hidden", "true");
@@ -2812,58 +2827,93 @@ test("new client keys stay left-aligned and read-only while supporting key actio
     expect(copyButtonBox.x).toBeGreaterThanOrEqual(settingsDialogBox.x);
     expect(copyButtonBox.x + copyButtonBox.width).toBeLessThanOrEqual(settingsDialogBox.x + settingsDialogBox.width);
 
-    const clientAccessRowBox = await clientAccessRow.boundingBox();
+    const tenantAccessRowBox = await tenantAccessRow.boundingBox();
+    const tenantSelectorBox = await tenantSelector.boundingBox();
+    const renameTenantButtonBox = await renameTenantButton.boundingBox();
+    const deleteTenantButtonBox = await deleteTenantButton.boundingBox();
+    const createTenantButtonBox = await createTenantButton.boundingBox();
     const clientKeyBox = await clientKey.boundingBox();
     const clientKeyInputBox = await clientKeyInput.boundingBox();
     const replaceKeyButtonBox = await replaceKeyButton.boundingBox();
     const replaceKeyIconBox = await replaceKeyIcon.boundingBox();
-    const replaceKeyLabelBox = await replaceKeyLabel.boundingBox();
     const keyLabelBox = await keyLabel.boundingBox();
     const clientKeyRowBox = await clientKeyRow.boundingBox();
     if (
-      !clientAccessRowBox ||
+      !tenantAccessRowBox ||
+      !tenantSelectorBox ||
+      !renameTenantButtonBox ||
+      !deleteTenantButtonBox ||
+      !createTenantButtonBox ||
       !clientKeyBox ||
       !clientKeyInputBox ||
       !replaceKeyButtonBox ||
       !replaceKeyIconBox ||
-      !replaceKeyLabelBox ||
       !keyLabelBox ||
       !clientKeyRowBox
     ) {
       throw new Error(`client_access_geometry_missing:${viewport.name}`);
     }
-    expect(clientKeyBox.x).toBeGreaterThan(clientAccessRowBox.x);
-    expect(clientKeyBox.x - clientAccessRowBox.x).toBeLessThanOrEqual(12);
-    expect(keyLabelBox.x).toBe(clientKeyBox.x);
+    expect(tenantAccessRowBox.x).toBeGreaterThanOrEqual(settingsDialogBox.x);
+    expect(tenantAccessRowBox.x + tenantAccessRowBox.width).toBeLessThanOrEqual(
+      settingsDialogBox.x + settingsDialogBox.width,
+    );
+    for (const controlBox of [
+      tenantSelectorBox,
+      renameTenantButtonBox,
+      clientKeyBox,
+      replaceKeyButtonBox,
+      deleteTenantButtonBox,
+      createTenantButtonBox,
+    ]) {
+      expect(controlBox.x).toBeGreaterThanOrEqual(tenantAccessRowBox.x);
+      expect(controlBox.x + controlBox.width).toBeLessThanOrEqual(
+        tenantAccessRowBox.x + tenantAccessRowBox.width,
+      );
+    }
+    expect(clientKeyBox.x).toBeGreaterThan(tenantAccessRowBox.x);
     expect(keyLabelBox.x + keyLabelBox.width).toBeLessThanOrEqual(clientKeyRowBox.x);
     expect(
       Math.abs(keyLabelBox.y + keyLabelBox.height / 2 - (clientKeyRowBox.y + clientKeyRowBox.height / 2)),
     ).toBeLessThanOrEqual(1);
     if (viewport.name === "desktop") {
+      expect(tenantAccessRowBox.height).toBeLessThanOrEqual(tenantAccessDesktopMaxHeight);
       expect(clientKeyInputBox.x + clientKeyInputBox.width).toBeLessThanOrEqual(replaceKeyButtonBox.x);
-      expect(
-        Math.abs(
-          clientKeyInputBox.y + clientKeyInputBox.height / 2 -
-            (replaceKeyButtonBox.y + replaceKeyButtonBox.height / 2),
-        ),
-      ).toBeLessThanOrEqual(1);
+      const desktopControlCenters = [
+        tenantSelectorBox,
+        renameTenantButtonBox,
+        clientKeyInputBox,
+        replaceKeyButtonBox,
+        deleteTenantButtonBox,
+        createTenantButtonBox,
+      ].map((box) => box.y + box.height / 2);
+      expect(Math.max(...desktopControlCenters) - Math.min(...desktopControlCenters)).toBeLessThanOrEqual(2);
+      expect(replaceKeyButtonBox.width).toBeGreaterThan(30);
     } else {
-      expect(clientKeyRowBox.y + clientKeyRowBox.height).toBeLessThanOrEqual(replaceKeyButtonBox.y);
+      expect(tenantAccessRowBox.height).toBeLessThanOrEqual(92);
+      expect(
+        Math.abs(tenantSelectorBox.y + tenantSelectorBox.height / 2 - (renameTenantButtonBox.y + renameTenantButtonBox.height / 2)),
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(clientKeyRowBox.y + clientKeyRowBox.height / 2 - (replaceKeyButtonBox.y + replaceKeyButtonBox.height / 2)),
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(clientKeyRowBox.y + clientKeyRowBox.height / 2 - (deleteTenantButtonBox.y + deleteTenantButtonBox.height / 2)),
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(clientKeyRowBox.y + clientKeyRowBox.height / 2 - (createTenantButtonBox.y + createTenantButtonBox.height / 2)),
+      ).toBeLessThanOrEqual(1);
+      expect(tenantSelectorBox.y + tenantSelectorBox.height).toBeLessThanOrEqual(clientKeyRowBox.y);
+      expect(replaceKeyButtonBox.width).toBe(30);
     }
-    expect(replaceKeyButtonBox.width).toBeGreaterThan(30);
     expect(replaceKeyButtonBox.width).toBeLessThanOrEqual(120);
     expect(replaceKeyIconBox.x).toBeGreaterThanOrEqual(replaceKeyButtonBox.x);
-    expect(replaceKeyLabelBox.x).toBeGreaterThan(replaceKeyIconBox.x + replaceKeyIconBox.width);
-    expect(replaceKeyLabelBox.x + replaceKeyLabelBox.width).toBeLessThanOrEqual(
-      replaceKeyButtonBox.x + replaceKeyButtonBox.width,
-    );
     expect(replaceKeyButtonBox.x + replaceKeyButtonBox.width).toBeLessThanOrEqual(
-      clientAccessRowBox.x + clientAccessRowBox.width,
+      tenantAccessRowBox.x + tenantAccessRowBox.width,
     );
 
     await visibilityButton.click();
     await expect(clientKeyInput).toHaveValue(generatedSecret);
-    const hideKeyButton = clientAccessRow.getByRole("button", { name: "Hide key", exact: true });
+    const hideKeyButton = tenantAccessRow.getByRole("button", { name: "Hide key", exact: true });
     await expect(hideKeyButton).toHaveAttribute("aria-pressed", "true");
     expect(await clientKeyInput.evaluate((inputElement) => inputElement.outerHTML)).not.toContain(generatedSecret);
     await expect(settingsDialog.locator("example-list")).not.toContainText(generatedSecret);
@@ -2880,29 +2930,21 @@ test("new client keys stay left-aligned and read-only while supporting key actio
 
     await page.getByTestId("avatar-menu").click();
     await page.getByTestId("avatar-menu-item").nth(0).click();
-    await expect(
-      clientAccessRow.getByText("This key is saved and can’t be shown again. Replace it to create and copy a new key."),
-    ).toBeVisible();
+    await expect(tenantAccessRow.getByText("Saved; replace to reveal a new key.")).toBeVisible();
     await expect(clientKeyInput).toBeHidden();
-    await expect(clientAccessRow.getByRole("button", { name: "Show key", exact: true })).toBeHidden();
-    await expect(clientAccessRow.getByRole("button", { name: "Copy key", exact: true })).toBeHidden();
-    await expect(revokeButton).toBeVisible();
+    await expect(tenantAccessRow.getByRole("button", { name: "Show key", exact: true })).toBeHidden();
+    await expect(tenantAccessRow.getByRole("button", { name: "Copy key", exact: true })).toBeHidden();
 
     await replaceKeyButton.click();
+    const replacementDialog = page.getByRole("alertdialog", { name: "Replace client key?" });
+    await expect(replacementDialog).toBeVisible();
+    await expect(replacementDialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+    await replacementDialog.getByRole("button", { name: "Replace key" }).click();
+    await expect(replacementDialog).toBeHidden();
     await expect(clientKeyInput).toBeVisible();
     await expect(clientKeyInput).toHaveValue("••••••••••••");
-    await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Key created");
-    await revokeButton.click();
-    await expect(clientAccessRow.getByText("No key created")).toBeVisible();
-    await expect(revokeButton).toBeHidden();
-    const createKeyButton = settingsDialog.getByRole("button", { name: "Create key" });
-    await expect(createKeyButton).toBeVisible();
-    await expect(settingsDialog.getByRole("alert")).toHaveText("Create a client key before leaving Settings.");
-    await settingsDialog.getByRole("button", { name: "Close" }).click();
-    await expect(settingsDialog).toBeVisible();
-    await createKeyButton.click();
-    await expect(clientKeyInput).toHaveValue("••••••••••••");
-    await expect(settingsDialog.getByRole("alert")).toBeHidden();
+    await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Key replaced");
+    await expect(copyButton).toBeFocused();
   }
 });
 
@@ -2949,28 +2991,21 @@ test("settings modal overlays MPR header and footer layers", async ({ page }) =>
     const settingsDialog = page.getByRole("dialog", { name: "Settings" });
     await expect(settingsDialog).toBeVisible();
     await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeVisible();
-    const tenantManagement = settingsDialog.getByRole("group", { name: "Settings tenant" });
-    const createTenantButton = tenantManagement.getByRole("button", { name: "Create tenant" });
-    const tenantManagementBox = await tenantManagement.boundingBox();
+    const tenantAccess = settingsDialog.getByRole("group", { name: "Tenant access" });
+    const createTenantButton = tenantAccess.getByRole("button", { name: "Create tenant" });
+    const tenantAccessBox = await tenantAccess.boundingBox();
     const createTenantButtonBox = await createTenantButton.boundingBox();
-    const tenantSettings = settingsDialog.getByRole("group", { name: "Tenant", exact: true });
-    const tenantSettingsBox = await tenantSettings.boundingBox();
     const settingsDialogBox = await settingsDialog.boundingBox();
-    if (!tenantManagementBox || !createTenantButtonBox || !tenantSettingsBox || !settingsDialogBox) {
+    if (!tenantAccessBox || !createTenantButtonBox || !settingsDialogBox) {
       throw new Error(`settings_tenant_geometry_missing:${viewport.name}`);
     }
-    expect(tenantManagementBox.x).toBeGreaterThanOrEqual(settingsDialogBox.x);
-    expect(tenantManagementBox.x + tenantManagementBox.width).toBeLessThanOrEqual(
+    expect(tenantAccessBox.x).toBeGreaterThanOrEqual(settingsDialogBox.x);
+    expect(tenantAccessBox.x + tenantAccessBox.width).toBeLessThanOrEqual(
       settingsDialogBox.x + settingsDialogBox.width,
     );
-    expect(createTenantButtonBox.x).toBeGreaterThanOrEqual(tenantManagementBox.x);
+    expect(createTenantButtonBox.x).toBeGreaterThanOrEqual(tenantAccessBox.x);
     expect(createTenantButtonBox.x + createTenantButtonBox.width).toBeLessThanOrEqual(
-      tenantManagementBox.x + tenantManagementBox.width,
-    );
-    expect(tenantSettingsBox.height).toBeLessThanOrEqual(tenantSettingsRowMaxHeight);
-    expect(tenantSettingsBox.x).toBeGreaterThanOrEqual(settingsDialogBox.x);
-    expect(tenantSettingsBox.x + tenantSettingsBox.width).toBeLessThanOrEqual(
-      settingsDialogBox.x + settingsDialogBox.width,
+      tenantAccessBox.x + tenantAccessBox.width,
     );
 
     const layerFacts = await settingsLayerFacts(page);
@@ -3678,11 +3713,6 @@ async function installMultiTenantRoutes(page, options = {}) {
           headers: { "Cache-Control": "no-store" },
           json: { secret: `llmp_${tenantID}_generated`, profile },
         });
-        return;
-      }
-      if (request.method() === "DELETE") {
-        profile.tenant.has_secret = false;
-        await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
         return;
       }
     }
