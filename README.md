@@ -699,8 +699,9 @@ that client key and at least one persisted managed provider key. Only
 provider-key draft or a credential in local dotenv configuration does not.
 The selected provider's API key, default model, and system prompt autosave when
 the user leaves a changed field, switches providers, or closes Settings. A
-successful first provider-key autosave unlocks Settings without changing
-routing defaults, and Settings remains open until the user closes it explicitly.
+successful first provider-key autosave unlocks Settings and atomically
+establishes eligible routing defaults. Settings remains open until the user
+closes it explicitly.
 Text and dictation provider/model defaults plus reasoning effort autosave on
 selection, while the tenant system prompt autosaves when the user leaves the
 changed field. Settings serializes every mutation that returns a complete
@@ -724,7 +725,9 @@ in a GORM-managed SQLite database at the configured location. The packaged manag
 strict expandable placeholders for the hosted profile values; define every
 `LLM_PROXY_MANAGEMENT_*` key in the API runtime environment. Local `make up`
 projects those values from `configs/.env.local` into the ignored, API-scoped
-`configs/.env.api.local`. Placeholders without matching values fail startup.
+`configs/.env.api.local`. Both files are ignored; tracked environment examples
+are documentation only and never participate in runtime configuration.
+Placeholders without matching values fail startup.
 The runtime config file is never mutated for user signup, provider enablement,
 or usage tracking, and database access must stay on GORM model APIs without raw
 SQL. Generated secrets continue to authenticate the public proxy endpoints with the same
@@ -753,22 +756,35 @@ immediately makes future public proxy requests with the prior value return
 `403`. Deleting a non-final tenant removes its secret digest with the rest of
 the tenant-owned state.
 
-Managed routing defaults contain two required, canonical provider/model pairs:
-one for text and one for dictation, plus a route-bound `reasoning_effort`.
-`PUT /api/management/tenants/:tenant_id/defaults` resolves the supplied text
-pair before validating
-the effort. Empty is the explicit unset value; a nonempty value must be in that
-exact route's declared list. A blank model, unknown provider, unsupported
-dictation provider, cross-provider model, or incompatible effort returns `400
-managed_routing_defaults_invalid` before any default is persisted.
+Managed routing defaults contain complete canonical provider/model pairs plus a
+route-bound `reasoning_effort`. A provider is eligible only while that tenant
+has a saved API key for it. The text pair is both empty only when no provider
+key is saved. The dictation pair is both empty when none of the keyed providers
+supports dictation; in that state the Settings controls are disabled and no
+default dictation example is shown. Saving or removing a provider key preserves
+an eligible current default and otherwise selects the first eligible provider
+by canonical provider id, using that provider's saved text model or configured
+dictation default model. The key mutation and both reconciled routing pairs are
+one database transaction, so a profile never exposes a default whose key was
+removed.
 
-The profile exposes capability data only as
+`PUT /api/management/tenants/:tenant_id/defaults` accepts only these eligible
+complete pairs and resolves the supplied text pair before validating the
+effort. Empty is the explicit unset effort value; a nonempty value must be in
+that exact route's declared list. A partial pair, unkeyed or unknown provider,
+unsupported dictation provider, cross-provider model, or incompatible effort
+returns `400 managed_routing_defaults_invalid` before any default is persisted.
+
+The profile exposes key eligibility through `providers[].has_key` and
+capability data only as
 `providers[].text_models[].reasoning_effort`; it has no global option list or
-provider-level capability. The Settings form keeps Text provider, Text model,
-and Reasoning effort in one desktop row, clears an incompatible saved value on
-a model change, reports `Not supported` for routes without a declaration, and
-autosaves every routing-default change without a separate action. The browser
-rejects malformed profile data instead of repairing it. Public
+provider-level reasoning capability. The Settings routing selectors contain
+only keyed providers; dictation additionally requires declared dictation
+support. The form keeps Text provider, Text model, and Reasoning effort in one
+desktop row, clears an incompatible saved value on a model change, reports `Not
+supported` for routes without a declaration, and autosaves every
+routing-default change without a separate action. The browser rejects malformed
+profile data instead of repairing it. Public
 `GET /` accepts optional query `reasoning_effort`; JSON `POST /` and `POST /v2`
 accept the same optional field in their bodies. When omitted, the saved tenant
 default remains authoritative. An explicit value must be nonblank and exactly
@@ -776,10 +792,13 @@ supported by the resolved provider/model route, otherwise the proxy returns
 `400` before an upstream call.
 
 Management startup requires every persisted routing field to be canonical and
-catalog-valid. It never infers or repairs a provider, model, or reasoning effort
-at read time. The bounded F014 schema migration applies the same validation to
-legacy rows before making any database change; invalid rows stop startup with
-the owner, workspace, endpoint, provider, and model context.
+catalog-valid and every nonempty provider default to have the tenant's saved
+key. It never infers or repairs a provider, model, or reasoning effort at read
+time. The bounded schema-version-3 migration performs the one-time reconciliation
+of older managed defaults against saved provider keys, preserves tenant
+timestamps, verifies the result, and records the new version in one
+transaction. Invalid keys, models, or routing data stop startup with the owner,
+workspace, endpoint, provider, and model context.
 
 Configured authenticated users land on Usage Overview. An independent `Usage
 tenant` selector sits immediately before the ordered `ALL`, `30 days`, `7
@@ -917,6 +936,16 @@ tenant/success/time/id failure-page index in one transaction. Historical
 diagnostics therefore contain normalized, status-derived codes, never
 reconstructed raw error messages.
 
+The bounded schema-version-3 migration preflights every managed provider key
+and canonical routing pair. For each tenant it preserves currently eligible
+defaults, otherwise selects the first keyed text provider and first keyed
+dictation-capable provider by canonical provider id, and clears the corresponding
+pair when no provider is eligible. It writes the reconciled defaults without
+changing tenant timestamps, verifies every row against its decrypted saved
+keys, and records schema version 3 in the same transaction. Reopening a
+version-3 database validates this invariant and rejects drift instead of
+repairing it at read time.
+
 Server/runtime settings, backend auth validation settings, provider base URLs,
 transcription URLs, model catalogs, and browser-facing MPR UI/TAuth bootstrap
 settings remain config-file-owned. The GitHub Pages artifact is only the static
@@ -1044,16 +1073,24 @@ Run the canonical local browser stack:
 make up
 ```
 
-`make up` creates the ignored local profile from
-`configs/.env.local.example` when needed, generates its local TAuth signing
-key and provider-key encryption key once, and writes ignored, service-scoped
-environment projections for ghttp, llm-proxy, and TAuth. ghttp receives only
-its `GHTTP_*` inputs. TAuth receives only its server and tenant inputs, including
-the signing key it shares with the API. Only llm-proxy receives the provider-key
-encryption configuration; aggregate dotenv files and live provider smoke-test
-credentials are not injected into auxiliary containers. The API image is built
-from the current source and runs the canonical `configs/config.yml`
-configuration. The stack has two explicit browser-facing endpoints:
+Before the first run, explicitly create the ignored private
+`configs/.env.local`, populate it with real local values, and set mode `0600`.
+The tracked `configs/.env.local.example` and `configs/.env.sample` files are
+field-name documentation with deliberately unrealistic values; never copy or
+source them as runtime configuration. `make up` fails before contacting Docker
+when the private file is absent. When the real file uses the explicit
+`__GENERATE_ON_FIRST_MAKE_UP__` marker for its local TAuth signing key or
+provider-key encryption key, `make up` generates that value once. It then
+writes ignored, service-scoped environment projections for ghttp, llm-proxy,
+and TAuth.
+
+ghttp receives only its `GHTTP_*` inputs. TAuth receives only its server and
+tenant inputs, including the signing key it shares with the API. Only llm-proxy
+receives the provider-key encryption configuration; aggregate dotenv files and
+live provider smoke-test credentials are not injected into auxiliary
+containers. The API image is built from the current source and runs the
+canonical `configs/config.yml` configuration. The stack has two explicit
+browser-facing endpoints:
 
 - Static UI: `http://localhost:4179/`, served from `site/` by ghttp.
 - Backend API: `http://localhost:8080/`, including the proxy and
@@ -1176,7 +1213,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | Command | Purpose |
 |---------|---------|
 | `npm ci` | Install pinned frontend validation dependencies before running local frontend checks. |
-| `make up` | Build and run the complete local browser orchestration: ghttp static UI and same-origin TAuth routes on `localhost:4179`, plus the API on `localhost:8080`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
+| `make up` | Require the ignored private `configs/.env.local`, then build and run the complete local browser orchestration: ghttp static UI and same-origin TAuth routes on `localhost:4179`, plus the API on `localhost:8080`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
 | `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, repository-owned release integration tests, and the non-paid live-harness preflight. |
 | `make test-live-provider-harness` | Generate the temporary static-mode live-test config and verify authenticated routing without an upstream call. |
 | `make test-live-providers` | Generate a complete temporary static-mode config and run live text smoke tests for every provider whose API key is present; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
@@ -1909,7 +1946,8 @@ and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-mo
 * `200 OK` - success
 * `400 Bad Request` - missing/invalid parameters, invalid request timeout, invalid multipart audio form, unknown provider/model, or unsupported provider capability. Invalid timeout headers return `{"error":{"code":"invalid_request_timeout","max_request_timeout_seconds":M}}`.
 * `403 Forbidden` - missing or invalid `key`
-* `413 Payload Too Large` - JSON prompt body exceeds `max_prompt_bytes`
+* `413 Payload Too Large` - JSON prompt body exceeds `max_prompt_bytes`, or
+  dictation audio exceeds `max_input_audio_bytes`
 * `429 Too Many Requests` - upstream provider rate limit
 * `503 Service Unavailable` - selected provider credential is unavailable because that non-default provider is disabled or missing its API key
 * `504 Gateway Timeout` - the accepted proxy work budget expired; the response is `{"error":{"code":"request_timeout","request_timeout_seconds":N}}`
