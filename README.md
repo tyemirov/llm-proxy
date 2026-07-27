@@ -682,13 +682,15 @@ operational at the same time: each generated secret independently selects that
 tenant's credentials, defaults, and usage owner. The browser has no global
 active-tenant state, activation flag, or tenant URL parameter.
 
-Tenant lifecycle and configuration live in Settings. Its `Settings tenant`
-selector chooses only the tenant being edited and `Create tenant` is colocated
-with it. Switching the Settings tenant while the current editor contains
-unsaved input requires an explicit discard confirmation and clears one-time
-generated secrets and revealed provider credentials from browser state. It
-does not change the independent `Usage tenant` filter. If the Settings tenant has no
-llm-proxy client key, the frontend creates one through
+Tenant lifecycle and configuration live in Settings. One compact `Tenant
+access` row contains the `Tenant` selector, modal Rename, client-key state and
+one-time reveal/copy controls, confirmed Replace key, confirmed Delete tenant,
+and Create tenant. The selected tenant is only the current Settings editor
+context; it is not an activation state. Switching it while the current editor
+contains unsaved input requires an explicit discard confirmation and clears
+one-time generated secrets and revealed provider credentials from browser
+state. It does not change the independent `Usage tenant` filter. If the
+selected tenant has no llm-proxy client key, the frontend creates one through
 `POST /api/management/tenants/:tenant_id/secrets` and presents the one-time
 value masked in the read-only Key field with explicit Show and Copy actions.
 Settings opens automatically and cannot be dismissed until the profile has both
@@ -703,17 +705,20 @@ Text and dictation provider/model defaults plus reasoning effort autosave on
 selection, while the tenant system prompt autosaves when the user leaves the
 changed field. Settings serializes every mutation that returns a complete
 management profile, including provider and routing-default autosaves, provider
-removal, and client-key creation, replacement, or revocation. A close request
+removal, and client-key creation or replacement. A close request
 locks the controls and waits for the mutations already in progress. If a client
 key is created or replaced during that wait, Settings stays open so the one-time
 value can be copied before a second explicit close. A failed save retains the
-edited values for retry. Revoking the client key or removing the last managed
-provider key makes Settings mandatory again, while a failed automatic
-client-key request remains retryable through Create key.
+edited values for retry. Removing the last managed provider key makes Settings
+mandatory again, while a failed automatic client-key request remains retryable
+through Create key.
 
 Signed-in users also choose each provider's text model and provider-specific
-system prompt, choose routing defaults, and replace or revoke llm-proxy client
-keys. Management mode requires `management.database_path` so signups, enabled
+system prompt, choose routing defaults, and replace llm-proxy client keys after
+confirming that the prior value stops working immediately. A client key cannot
+be deleted independently; access is rotated through replacement or removed
+with the owning non-final tenant. Management mode requires
+`management.database_path` so signups, enabled
 providers, defaults, generated secret digests, and usage events survive restarts
 in a GORM-managed SQLite database at the configured location. The packaged management config uses
 strict expandable placeholders for the hosted profile values; define every
@@ -743,8 +748,10 @@ provider keys only inside the runtime
 path that routes requests to upstream providers and the explicit owner reveal action,
 so this protects database dumps, backups, and direct storage access; it is not a user-only decryption or
 zero-knowledge guarantee. Generated tenant secrets are returned once and the
-database retains only their SHA-256 digest. Revoking a generated secret
-immediately makes future public proxy requests with that secret return `403`.
+database retains only their SHA-256 digest. Replacing a generated secret
+immediately makes future public proxy requests with the prior value return
+`403`. Deleting a non-final tenant removes its secret digest with the rest of
+the tenant-owned state.
 
 Managed routing defaults contain two required, canonical provider/model pairs:
 one for text and one for dictation, plus a route-bound `reasoning_effort`.
@@ -781,7 +788,7 @@ independently defaults to `30 days`. The account-wide selection aggregates
 requests, tokens, success rate, buckets, status codes, providers, and models
 across every owned tenant. Choosing one tenant narrows the same dashboard
 surfaces to that tenant. `Refresh` and interval changes retain the Usage tenant
-selection, and Settings tenant changes do not affect it. Users whose
+selection, and changes to the Tenant control in Settings do not affect it. Users whose
 client/provider setup is incomplete enter the mandatory Settings modal instead;
 after setup, the modal remains available from the avatar dropdown. The
 success-rate metric renders an **N failed requests** action only when the selected
@@ -984,7 +991,7 @@ and refresh cookies. It then drives the mounted header through the documented
 lifecycle event and persists MPR UI's session-restore hint. The test proves the
 anonymous/authorized behavior of `/api/management/account`, proves the browser
 makes no protected account or tenant request before MPR UI authentication, then
-hydrates the initial Settings tenant and account-wide Usage view afterward. It
+hydrates the initial tenant selected in Settings and account-wide Usage view afterward. It
 creates two tenants for one real TAuth subject, proves both secrets remain
 independently routable, proves the default account-wide usage and safe
 tenant-attributed failure page include both, and signs in a second real subject
