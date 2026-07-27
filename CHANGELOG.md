@@ -11,6 +11,89 @@ All notable changes to this project will be documented in this file.
 - Keep response construction and managed-usage persistence under request cancellation, classify queue saturation as `proxy_overload`, reject explicit null timeout configuration, and synchronize Python client distribution metadata at `0.2.0`.
 - Make deployment pass the app-owned maximum request budget into the gateway contract verifier, which rejects outer response guards that cannot outwait it.
 
+## [v0.2.47] - 2026-07-27
+
+- Merge pull request #226 from tyemirov/gix/support-multi-tenant-management-api-and-publish
+- docs: update OpenAPI source SHA-256 in API reference index page
+- test: add finish_reason to mock response in management routing test
+- docs: update issue log for regenerated API reference and OpenAI completion fix
+- Merge pull request #227 from tyemirov/bugfix/B080-reject-incomplete-openai-responses
+- Merge branch 'gix/support-multi-tenant-management-api-and-publish' into bugfix/B080-reject-incomplete-openai-responses
+- test: expand UI and integration tests for system prompt and provider editor interactions
+- fix(ui): restrict routing defaults to keyed providers only
+- chore(up.sh): require explicit local .env, remove auto-generation logic
+- fix: validate routing defaults against per-tenant managed provider settings
+- docs: update provider-routing and dictation plans for new default eligibility
+- docs: update .env.example and .env.sample to clarify non-operational usage
+- docs: clarify managed defaults, schema migration, local env, and size limits
+- docs(issues): document resolved env, routing, dictation, and UI prompt issues
+- test(openai): prove polled usage snapshot replaces earlier counts
+- fix: reject incomplete provider responses with partial text
+- test: update management UI/tenant e2e assertions for revised tenant access UX
+- refactor(ui): replace tenant revoke with confirmable client key replacement
+- docs(security): update generated secret rotation to emphasize replacement
+- refactor: remove explicit secret revocation endpoint and related tests
+- docs: update client secret rotation wording and remove revoke endpoint from OpenAPI
+- docs: clarify Settings tenant/key/secret behavior and rotation lifecycle
+- docs(issues): add B080 to track incomplete OpenAI response rejection
+- test: add e2e coverage for critical application asset failures in UI
+- feat(ui): add runtime failure handling for application startup errors
+- test: update management UI asset expectations for versioned JS bundles
+- docs: clarify application startup guard and CDN dependency handling
+- chore(dev-env): add default Cache-Control:no-store response header in compose
+- docs: clarify behavior for module caching and Alpine CDN failures in README
+- docs(ISSUES): document visible failure for blocked management app runtime
+- test: update management UI tests for dedicated usage/settings tenant selectors
+- feat(ui): add all-tenant usage/failure views and decouple settings tenant
+- refactor(scripts): improve usage dashboard docs and local up checks
+- feat(management): add account-level usage failures endpoint and tests
+- feat: add account-wide usage endpoints and docs for multi-tenant dashboards
+- chore(dev): update docker-compose.local.yml for improved proxy config and env vars
+- chore(config): remove unused variables from .env.local.example
+- docs: update README for account-wide usage, tenant model, and local auth changes
+- docs(ISSUES): clarify B076 scope, add B077 guidance, update dependent issues
+- test: expand tenant settings, toolbar, and key action layout assertions
+- feat(ui): implement inline tenant identity, rename, and protection chip UI
+- docs(issues): resolve tenant context and outcome migration issues
+- fix(proxy): treat statusClientClosedRequest as request timeout outcome
+- docs: update outcome code mapping for historical HTTP status `499`
+- docs: clarify schema migration handling for status 499 and 504
+- docs(issues): add migration plan for persisted caller-cancellation outcomes
+- docs(migration): add note on SQLite index continuity and preserved volumes
+- docs(seo): add SQLite index continuity to migration feature list
+- test: validate legacy index renames and migration rollback safety
+- docs: clarify F014 index rename and rollback requirements in routing plan
+- docs: clarify migration step to include legacy GORM index renaming in README
+- docs(issues): document SQLite index migration bugfix and resolution
+- test: add 499 status code coverage for management UI and update DB env vars
+- docs: update documentation for SQLite-only persistence and clarify API contract
+- refactor(management): remove PostgreSQL migration support and update docs
+- refactor: remove deprecated Postgres support from management persistence
+- chore: remove unused postgres and test module dependencies from go.sum
+- chore: remove unused postgres driver and indirect dependencies from go.mod
+- docs: update management persistence references to SQLite and clarify API key param
+- refactor(config): consolidate DB dialect and DSN into database_path env var
+- refactor(cli): simplify management config to use database_path only
+- docs: update README to reflect SQLite-only management persistence config
+- chore(makefile): remove legacy test-management-postgres target and script references
+- docs(issues): record SQLite-only GORM contract and mgmt bugfixes, update migration/history to drop Postgres references
+- ci: remove Postgres service and env from test workflow
+- test: expand multi-tenant and user auth scenarios for management API
+- feat(ui): add multi-tenant key management and usage failure insights
+- feat: add OpenAPI contract publishing and API reference generation scripts
+- test: validate Python client v2 requests against canonical OpenAPI contract
+- test: validate Go client requests and responses against OpenAPI contract
+- chore: update frontend:lint script to check OpenAPI doc generation
+- test: add OpenAPI contract conformance checks for CLI v2 exchange
+- test: add openapi contract test package and validate contract loading
+- docs: update provider-routing-plan for F014 workspace/account migration
+- chore(config): remove legacy_token_migration from management config
+- refactor(cli): remove legacy_token_migration configuration handling
+- docs: update README for F014 multi-workspace, OpenAPI, and usage failures
+- build(makefile): add management postgres and OpenAPI pages tests to test target
+- docs(issues): mark B069, F014, I029, I031 as resolved with completion details
+- ci: add PostgreSQL 17 test service and DSN for integration tests
+
 ## [v0.2.46] - 2026-07-25
 
 - docs(issues): add I033 to specify automatic tenant usage dashboard freshness
