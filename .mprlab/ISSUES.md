@@ -25,6 +25,61 @@ already satisfied; recurring maintenance remains scheduled work.
 
 ## BugFixes
 
+- [ ] [B080] (P1) Reject incomplete OpenAI responses that contain partial text
+  Goal:
+  Make every successful OpenAI Responses API result terminal and complete so
+  callers never receive a provider-truncated prefix as an HTTP 200 response.
+
+  Evidence:
+  - Fruits of the Quill Story Plan generation failed in production at
+    `2026-07-27 00:14:16 UTC` after its strict JSON decoder reported
+    `unexpected EOF`.
+  - The matching LLM Proxy usage row recorded `response_tokens=2048`,
+    `total_tokens=3647`, `status_code=200`, and `success=1`. The caller's exact
+    2048-token output budget was exhausted, but LLM Proxy classified the
+    incomplete result as successful.
+  - `resolveIncompleteOpenAIResponse` currently returns
+    `responseSnapshot.generation()` whenever an incomplete response contains
+    nonblank text, bypassing the existing incomplete-response error path.
+  - Multiple production rows reached the same exact 2048-token cap, so this is
+    a repeatable transport-contract defect rather than an isolated malformed
+    model response.
+  - This issue is the upstream owner for the dependent Story Service correction
+    tracked as `story-generator` B007.
+
+  Requirements:
+  - Define HTTP success for the OpenAI Responses adapter as a provider response
+    whose terminal status is complete. An upstream `status=incomplete` must
+    never return partial text, an HTTP 2xx response, or a successful usage
+    event merely because text is nonblank.
+  - Map every incomplete terminal response, including
+    `incomplete_details.reason=max_output_tokens`, to the canonical upstream
+    failure response and status. Do not expose the provider body or partial
+    generated text.
+  - Remove hidden continuation or synthesis of incomplete output. The caller's
+    explicit `max_tokens` value remains the upper bound for that request and
+    must not trigger an undisclosed additional paid generation.
+  - Record the request as unsuccessful with the canonical upstream failure
+    outcome while retaining safe normalized metadata and available token usage;
+    never persist prompts, responses, or raw provider errors.
+  - Update the canonical OpenAPI and provider-routing documentation in the same
+    change so HTTP 200 continues to mean a complete response at every public
+    text endpoint.
+  - Include B080 in the next immutable release prepared by B077. Production
+    activation remains operator-owned.
+
+  Validation:
+  - Exercise the real public `POST /v2` handler against a fake OpenAI endpoint
+    that returns HTTP 200, `status=incomplete`, nonempty partial output,
+    `reason=max_output_tokens`, and exact token usage.
+  - Prove the proxy returns the canonical non-2xx upstream failure, emits no
+    partial generated text, and records a failed normalized usage event with
+    the provider-reported token counts.
+  - Prove a terminal completed OpenAI response still returns its exact text and
+    successful usage record.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
 - [!] [B077] (P1) {B069,F014,I029,I031} Publish and activate the merged LLM Proxy contract.
   Goal:
   Make the production API and management UI run the same canonical contract
@@ -99,6 +154,75 @@ already satisfied; recurring maintenance remains scheduled work.
   Blocked: production release publication and activation are operator-owned;
   F001 provider execution remains stopped until the new immutable release,
   backend route, and matching Pages UI are all verified live.
+
+- [x] [B079] (P1) {B074,B076,F014} Consolidate tenant and client-key lifecycle into one Settings row.
+  Goal:
+  Make the selected Settings tenant and its client key one compact, logical
+  control surface without exposing a standalone key-deletion state.
+
+  Problem:
+  Settings currently repeats the selected tenant across a selector row and a
+  separate identity row, then separates the same tenant's client key into a
+  third row. Rename expands inline, key replacement happens without an
+  explicit invalidation confirmation, and the client key has a revoke action
+  even though the intended lifecycle is replacement or deletion of the owning
+  tenant.
+
+  Requirements:
+  - Replace the Settings-tenant selector, tenant identity row, and client-key
+    row with one semantic compact row containing the selected tenant dropdown,
+    Rename, key state and one-time reveal/copy controls, confirmed Replace key,
+    confirmed Delete tenant, and Create tenant.
+  - Treat the selected dropdown value as the current Settings editor context;
+    do not add another active-tenant state, activation flag, URL parameter,
+    immutable-id banner, or compatibility selection path. Preserve the
+    independent Usage tenant filter and simultaneous operability of every
+    tenant.
+  - Move rename into a keyboard- and focus-managed modal with canonical
+    validation and conflict feedback. Preserve the unsaved-Settings discard
+    decision when switching tenants.
+  - Require confirmation before replacing an existing client key. State that
+    the prior key stops working immediately, then preserve the one-time masked
+    reveal, Show, Copy, close guard, stale-response isolation, and retryable
+    Create key state after an automatic creation failure.
+  - Remove standalone client-key revocation from the browser, management
+    router, OpenAPI contract, persistence surface, documentation, and tests.
+    Provider API-key removal remains a separate provider-settings contract.
+  - Keep final-tenant deletion disabled with an accessible explanation and
+    retain the named deletion confirmation, complete tenant cleanup, Usage
+    filter reset, and deterministic next-tenant selection.
+  - Keep the row on one line at desktop width and use one bounded responsive
+    wrap on narrow screens. Preserve semantic custom elements, centralized
+    copy, visible focus, keyboard operation, and unclipped modal geometry.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last tracked edit.
+
+  Validation:
+  - Exercise selection independence, modal rename success/conflict/cancel,
+    confirmed key replacement and cancellation, one-time key reveal/copy,
+    missing-key retry, final-tenant protection, confirmed tenant deletion, and
+    stale-response isolation through the rendered Playwright interface.
+  - Prove the real management router and canonical OpenAPI inventory no longer
+    expose `DELETE /api/management/tenants/{tenant_id}/secrets`.
+  - Prove the combined row remains contained and ordered across desktop,
+    compact, and mobile viewports.
+
+  Resolved 2026-07-26:
+  - Replaced the repeated tenant selector, identity, and key rows with one
+    semantic `Tenant access` row. Desktop stays on one line; narrow screens
+    preserve the same control order in one bounded two-line wrap.
+  - Moved rename and client-key replacement into focus-managed dialogs,
+    centralized nested Escape handling, retained one-time reveal/copy and
+    missing-key retry behavior, and kept final-tenant deletion protected.
+  - Removed standalone client-key revocation from the browser, management
+    router/store, canonical OpenAPI inventory, generated API reference,
+    current documentation/resources, mocks, and tests. Replacement now proves
+    immediate invalidation of the prior key; tenant deletion remains the only
+    other client-key removal path.
+  - Extended rendered Playwright coverage for rename validation/conflict,
+    replacement confirmation/cancellation/pending state, selection
+    independence, lifecycle cleanup, and desktop/compact/mobile geometry.
 
 - [x] [B078] (P1) {F014,B075} Fail visibly when the management application runtime is blocked.
   Goal:
