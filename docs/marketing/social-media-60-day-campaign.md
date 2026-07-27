@@ -19,7 +19,7 @@ Constraint: every post in the `Post` column is under 300 characters.
 | 5 | 2026-07-10 | AM | Testing a cheaper model should be a request change, not a code fork. LLM Proxy lets callers choose `provider` and `model` without changing the client integration. |
 | 5 | 2026-07-10 | PM | Upstream APIs return different token metadata. LLM Proxy normalizes request, response, and total token usage into common headers and JSON fields. |
 | 6 | 2026-07-11 | AM | Your team wants AI access, but not shared secrets in Slack. LLM Proxy's management UI lets signed-in users generate their own proxy secrets. |
-| 6 | 2026-07-11 | PM | Rotating a user-facing LLM secret should not touch provider keys. LLM Proxy stores generated tenant secrets separately and lets revocation block future calls. |
+| 6 | 2026-07-11 | PM | Rotating a user-facing LLM secret should not touch provider keys. LLM Proxy replaces the tenant secret and invalidates the prior key immediately. |
 | 7 | 2026-07-12 | AM | A database backup should not expose raw provider credentials. LLM Proxy encrypts managed provider API keys at rest before persistence. |
 | 7 | 2026-07-12 | PM | Security claims need precision. LLM Proxy protects stored provider keys from direct DB exposure while still decrypting them only on the runtime path that calls providers. |
 | 8 | 2026-07-13 | AM | Teams lose time copying half-right curl commands. LLM Proxy's management UI shows copyable default and selected-provider examples for real client access. |

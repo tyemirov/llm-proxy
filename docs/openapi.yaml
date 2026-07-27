@@ -987,47 +987,6 @@
             "$ref": "#/components/responses/ManagementInternalError"
           }
         }
-      },
-      "delete": {
-        "operationId": "deleteManagementTenantSecret",
-        "summary": "Revoke the tenant client secret",
-        "tags": [
-          "Management"
-        ],
-        "security": [
-          {
-            "TAuthSession": []
-          }
-        ],
-        "x-llm-proxy-required-request-content-type": "application/json",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/TenantID"
-          },
-          {
-            "$ref": "#/components/parameters/OptionalOrigin"
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/TenantProfileSuccess"
-          },
-          "401": {
-            "$ref": "#/components/responses/ManagementUnauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/ManagementForbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/ManagementNotFound"
-          },
-          "415": {
-            "$ref": "#/components/responses/ManagementUnsupportedMediaType"
-          },
-          "500": {
-            "$ref": "#/components/responses/ManagementInternalError"
-          }
-        }
       }
     }
   },
