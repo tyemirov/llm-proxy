@@ -653,7 +653,7 @@ func TestManagementRoutingDefaultsFollowSavedProviderKeys(t *testing.T) {
 			t.Fatalf("authorization=%q", authorizationHeader)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"keyed default ok"}}]}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"keyed default ok"},"finish_reason":"stop"}]}`))
 	}))
 	defer upstreamServer.Close()
 
