@@ -119,7 +119,7 @@ func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
 			t.Fatalf("unmarshal body: %v", unmarshalError)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"deepseek ok"}}]}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"deepseek ok"},"finish_reason":"stop"}]}`))
 	}))
 	defer upstreamServer.Close()
 
@@ -177,6 +177,7 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 		{name: "Moonshot Kimi K3", provider: proxy.ProviderNameMoonshot, model: "kimi-k3", tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
 		{name: "Moonshot Kimi K2.7 Code", provider: proxy.ProviderNameMoonshot, model: "kimi-k2.7-code", tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
 		{name: "MiniMax M2.7", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27, tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
+		{name: "SiliconFlow DeepSeek R1", provider: proxy.ProviderNameSiliconFlow, model: "deepseek-ai/DeepSeek-R1", tokenParameterField: "max_tokens", expectedAPIKey: testSiliconFlowKey},
 		{name: "Zhipu GLM 5.2", provider: proxy.ProviderNameZhipu, model: "glm-5.2", tokenParameterField: "max_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
 		{name: "Grok 4.5", provider: proxy.ProviderNameGrok, model: "grok-4.5", tokenParameterField: "max_tokens"},
 		{name: "Grok 4.20 reasoning", provider: proxy.ProviderNameGrok, model: "grok-4.20-0309-reasoning", tokenParameterField: "max_tokens"},
@@ -202,7 +203,7 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 					subTest.Fatalf("unmarshal body: %v", unmarshalError)
 				}
 				responseWriter.Header().Set("Content-Type", "application/json")
-				_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"current compatible model ok"}}]}`))
+				_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"current compatible model ok"},"finish_reason":"stop"}]}`))
 			}))
 			subTest.Cleanup(upstreamServer.Close)
 
@@ -217,6 +218,8 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 				MoonshotBaseURL:       upstreamServer.URL,
 				MiniMaxKey:            "sk-minimax",
 				MiniMaxBaseURL:        upstreamServer.URL,
+				SiliconFlowKey:        testSiliconFlowKey,
+				SiliconFlowBaseURL:    upstreamServer.URL,
 				ZhipuKey:              testZhipuKey,
 				ZhipuBaseURL:          upstreamServer.URL,
 				GrokKey:               testGrokKey,
@@ -363,7 +366,7 @@ func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testin
 		}
 		capturedRequests = append(capturedRequests, capturedMetaRequest{payload: payload})
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"meta ok"}}],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"meta ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18}}`))
 	}))
 	defer upstreamServer.Close()
 
@@ -501,7 +504,7 @@ func TestProviderRoutingUsesConfiguredTextModelCatalog(t *testing.T) {
 			t.Fatalf("unmarshal body: %v", unmarshalError)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"configured model ok"}}]}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"configured model ok"},"finish_reason":"stop"}]}`))
 	}))
 	defer upstreamServer.Close()
 
@@ -728,7 +731,7 @@ func TestProviderRoutingTranslatesMaxTokensForOpenAICompatibleChat(t *testing.T)
 			t.Fatalf("unmarshal body: %v", unmarshalError)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"deepseek cap ok"}}]}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"deepseek cap ok"},"finish_reason":"stop"}]}`))
 	}))
 	defer upstreamServer.Close()
 
@@ -777,7 +780,7 @@ func TestProviderRoutingSupportsMessagesJSONPostForOpenAICompatibleChat(t *testi
 			t.Fatalf("unmarshal body: %v", unmarshalError)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"chat messages ok"}}],"usage":{"prompt_tokens":8,"completion_tokens":3,"total_tokens":11}}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"chat messages ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":8,"completion_tokens":3,"total_tokens":11}}`))
 	}))
 	defer upstreamServer.Close()
 
@@ -867,7 +870,7 @@ func TestProviderRoutingSupportsMessagesJSONPostForOpenAICompatibleChat(t *testi
 func TestProviderRoutingSurfacesChatCompletionTokenUsage(t *testing.T) {
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"chat usage ok"}}],"usage":{"prompt_tokens":11,"completion_tokens":4}}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"chat usage ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":11,"completion_tokens":4}}`))
 	}))
 	defer upstreamServer.Close()
 
@@ -1379,7 +1382,7 @@ func TestProviderRoutingSupportsAnthropicMessages(t *testing.T) {
 			t.Fatalf("unmarshal body: %v", unmarshalError)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"claude ok"}],"usage":{"input_tokens":17,"output_tokens":6}}`))
+		_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"claude ok"}],"stop_reason":"end_turn","usage":{"input_tokens":17,"output_tokens":6}}`))
 	}))
 	defer upstreamServer.Close()
 
@@ -1476,7 +1479,7 @@ func TestProviderRoutingAnthropicDefaultMaxTokensByModel(t *testing.T) {
 					subTest.Fatalf("unmarshal body: %v", unmarshalError)
 				}
 				responseWriter.Header().Set("Content-Type", "application/json")
-				_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"claude default max ok"}]}`))
+				_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"claude default max ok"}],"stop_reason":"stop_sequence"}`))
 			}))
 			defer upstreamServer.Close()
 
@@ -1525,7 +1528,7 @@ func TestProviderRoutingTranslatesMaxTokensForAnthropicMessages(t *testing.T) {
 			t.Fatalf("unmarshal body: %v", unmarshalError)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"claude cap ok"}]}`))
+		_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"claude cap ok"}],"stop_reason":"end_turn"}`))
 	}))
 	defer upstreamServer.Close()
 
@@ -1575,7 +1578,7 @@ func TestProviderRoutingSupportsGrokChatCompletions(t *testing.T) {
 			t.Fatalf("unmarshal body: %v", unmarshalError)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"grok ok"}}],"usage":{"prompt_tokens":9,"completion_tokens":4,"total_tokens":13}}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"grok ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":9,"completion_tokens":4,"total_tokens":13}}`))
 	}))
 	defer upstreamServer.Close()
 
@@ -2119,8 +2122,11 @@ func TestProviderRoutingMapsAnthropicProviderErrors(t *testing.T) {
 		{name: "rate limited", statusCode: http.StatusTooManyRequests, body: `{}`, wantStatus: http.StatusTooManyRequests},
 		{name: "provider api failure", statusCode: http.StatusInternalServerError, body: `{}`, wantStatus: http.StatusBadGateway},
 		{name: "malformed json", statusCode: http.StatusOK, body: `{`, wantStatus: http.StatusBadGateway},
-		{name: "negative usage", statusCode: http.StatusOK, body: `{"content":[{"type":"text","text":"bad usage"}],"usage":{"input_tokens":1,"output_tokens":-1}}`, wantStatus: http.StatusBadGateway},
-		{name: "missing text", statusCode: http.StatusOK, body: `{"content":[{"type":"tool_use","text":"not visible"}]}`, wantStatus: http.StatusBadGateway},
+		{name: "negative usage", statusCode: http.StatusOK, body: `{"content":[{"type":"text","text":"bad usage"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":-1}}`, wantStatus: http.StatusBadGateway},
+		{name: "missing stop reason", statusCode: http.StatusOK, body: `{"content":[{"type":"text","text":"unfinished text"}]}`, wantStatus: http.StatusBadGateway},
+		{name: "max tokens stop reason", statusCode: http.StatusOK, body: `{"content":[{"type":"text","text":"partial text"}],"stop_reason":"max_tokens"}`, wantStatus: http.StatusBadGateway},
+		{name: "paused turn stop reason", statusCode: http.StatusOK, body: `{"content":[{"type":"text","text":"intermediate text"}],"stop_reason":"pause_turn"}`, wantStatus: http.StatusBadGateway},
+		{name: "missing text", statusCode: http.StatusOK, body: `{"content":[{"type":"tool_use","text":"not visible"}],"stop_reason":"end_turn"}`, wantStatus: http.StatusBadGateway},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {

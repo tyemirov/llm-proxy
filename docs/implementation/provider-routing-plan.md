@@ -215,10 +215,31 @@ OpenAI `request_profile` values select stable payload shapes:
 - `openai_responses_reasoning_tools`
 
 Every OpenAI Responses text request includes `background: true` and
-`store: true`; the proxy polls the returned response id server-side until a
-terminal status or the request's effective ingress-owned budget. Callers use
-one normal `GET /`, `POST /`, or `POST /v2` request and receive the final
-formatted answer; there is no streaming or client-side polling contract.
+`store: true`. A nonblank response id is polled server-side only for the
+documented `queued` and `in_progress` pending states or for a proxy-initiated
+stored background synthesis. Documented terminal states are resolved
+immediately, and missing or unknown states are rejected rather than guessed.
+Only `status=completed` is a successful terminal response.
+`status=incomplete`, including `reason=max_output_tokens`, returns the
+canonical `502` upstream failure without partial text, continuation, or another
+paid generation; any reported token usage remains attached only to the failed
+normalized usage event. Usage objects observed while polling one response id
+are cumulative snapshots, so the newest nonempty snapshot replaces earlier
+observations. Usage is summed only when completed-response synthesis creates a
+distinct response id. Callers use one normal `GET /`, `POST /`, or `POST /v2`
+request and receive a complete formatted answer or a non-2xx response; there is
+no streaming, client-side polling, durable provider-job queue, or later resume
+contract.
+
+All other current text transports are synchronous and validate their native
+completion evidence before returning text. The shared OpenAI-compatible Chat
+Completions adapter requires `finish_reason=stop`; Gemini
+`generateContent` requires `finishReason=STOP`; Anthropic Messages requires
+`stop_reason=end_turn` or `stop_sequence`. Missing, truncated,
+tool/intermediate, refused, or unknown reasons return `502` without partial
+text. Provider-specific deferred, batch, and asynchronous APIs are separate
+transports outside the configured routes; an arbitrary response `id` never
+activates generic polling.
 
 Bundled clients intentionally expose only the canonical `POST /v2` text
 contract. The installable Go CLI maps prompt flags or stdin into v2 `system` and
@@ -295,8 +316,9 @@ endpoint, provider, and model errors.
 client request lifecycles. `server.queue_size` limits the number of additional
 upstream HTTP operations waiting for that shared worker limit. OpenAI
 background-response sleeps between polls do not occupy worker capacity; only the
-actual upstream create, poll, continuation, synthesis, chat, native-provider, or
-dictation HTTP operation does.
+actual upstream create, poll, completed-response synthesis, chat,
+native-provider, or dictation HTTP operation does. The admission queue does not
+persist provider job ids and does not implement retry or resume semantics.
 
 `server.upstream_rate_limits` is enforced by the same shared HTTP client for
 text and dictation. Each rule is a strict rolling-window budget keyed by exact
@@ -379,16 +401,19 @@ When the selected Usage snapshot contains failures, the success-rate card expose
 - `429`: upstream provider rate limiting.
 - `503`: registered non-default provider credential is unavailable, so the selected provider is disabled until its API key is configured.
 - `504`: the overall proxy request timed out before the selected upstream provider returned a final result.
-- `502`: other upstream provider failure.
+- `502`: upstream provider failure, including OpenAI Responses
+  `status=incomplete`, Chat Completions non-`stop` finish reasons, Gemini
+  non-`STOP` finish reasons, and Anthropic non-complete stop reasons; partial
+  provider text is never returned.
 
 ## Implementation Notes
 
 - Provider/model validation happens at the HTTP edge through a provider registry built from the configured model catalogs.
-- OpenAI keeps the existing Responses API adapter and derives Responses and Models URLs from `providers.openai.base_url`; audio transcription uses `providers.openai.transcriptions_url`.
-- Non-OpenAI text providers use a shared OpenAI-compatible Chat Completions adapter.
+- OpenAI keeps the existing Responses API adapter and derives Responses and Models URLs from `providers.openai.base_url`; audio transcription uses `providers.openai.transcriptions_url`. The adapter accepts text only from `status=completed`, polls only the documented pending states, and rejects failed, cancelled, incomplete, missing, or unknown states.
+- Non-OpenAI text providers use a shared OpenAI-compatible Chat Completions adapter. It requires `finish_reason=stop` before returning content or reasoning text.
 - Meta uses the shared OpenAI-compatible Chat Completions adapter against `providers.meta.base_url`; its proxy contract is text-only and has no Responses fallback.
-- Anthropic uses a native Messages adapter, translating proxy `system` messages to the top-level Anthropic `system` parameter and `user`/`assistant` messages to Anthropic `messages[]`.
-- Gemini uses a native generateContent adapter against `providers.gemini.base_url`.
+- Anthropic uses a native Messages adapter, translating proxy `system` messages to the top-level Anthropic `system` parameter and `user`/`assistant` messages to Anthropic `messages[]`; only `end_turn` and `stop_sequence` are complete text stops.
+- Gemini uses a native generateContent adapter against `providers.gemini.base_url`; only `STOP` is a complete text finish reason.
 - Grok uses the shared OpenAI-compatible Chat Completions adapter against `providers.grok.base_url`.
 - OpenAI-compatible chat providers receive validated and sorted `messages[]` as provider-supported `role` and `content` items.
 - OpenAI Responses payload shape comes from the selected configured model's stable `request_profile`; model-specific web-search support comes from the selected model catalog entry. OpenAI Responses text calls run in background mode with stored responses so long provider work can be polled by llm-proxy while the caller waits on one REST request.
@@ -402,6 +427,14 @@ When the selected Usage snapshot contains failures, the success-rate card expose
 Black-box router tests cover:
 
 - OpenAI omitted-provider regression.
+- OpenAI completed-only success and incomplete-response rejection through the
+  public `POST /v2` handler, including safe failed usage counts and no hidden
+  continuation.
+- OpenAI polling only for documented pending states, with missing and unknown
+  states rejected without another provider call.
+- Shared Chat Completions, Gemini, and Anthropic partial-response rejection
+  through public `POST /v2`, including retained failed usage counts and no
+  client-visible token headers or partial text.
 - Explicit Meta Muse Spark 1.1 routing through `GET /`, compatibility `POST /`, and canonical `POST /v2`.
 - Unsupported Meta `web_search` and dictation paths.
 - Explicit DeepSeek chat-completions routing.

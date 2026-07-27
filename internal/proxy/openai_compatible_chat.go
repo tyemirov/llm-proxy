@@ -36,7 +36,8 @@ type chatCompletionResponse struct {
 }
 
 type chatCompletionChoice struct {
-	Message chatCompletionResponseMessage `json:"message"`
+	Message      chatCompletionResponseMessage `json:"message"`
+	FinishReason string                        `json:"finish_reason"`
 }
 
 type chatCompletionResponseMessage struct {
@@ -83,7 +84,7 @@ func (client *openAICompatibleChatClient) generateText(parentContext context.Con
 	}
 	generation, parseError := parseChatCompletionResponse(responseBytes)
 	if parseError != nil {
-		return textGenerationResult{}, parseError
+		return generation, parseError
 	}
 	return generation, nil
 }
@@ -105,7 +106,15 @@ func parseChatCompletionResponse(responseBytes []byte) (textGenerationResult, er
 	if usageError != nil {
 		return textGenerationResult{}, usageError
 	}
+	generation := textGenerationResult{usage: usage}
 	for _, choice := range response.Choices {
+		finishReason := choice.FinishReason
+		if strings.TrimSpace(finishReason) == constants.EmptyString {
+			return generation, fmt.Errorf("%w: chat completion missing finish_reason", ErrProviderAPI)
+		}
+		if finishReason != finishReasonStop {
+			return generation, fmt.Errorf("%w: chat completion finish_reason=%s", ErrProviderAPI, strings.TrimSpace(finishReason))
+		}
 		trimmedContent := strings.TrimSpace(choice.Message.Content)
 		if trimmedContent != constants.EmptyString {
 			return textGenerationResult{text: trimmedContent, usage: usage}, nil
@@ -115,5 +124,5 @@ func parseChatCompletionResponse(responseBytes []byte) (textGenerationResult, er
 			return textGenerationResult{text: trimmedReasoning, usage: usage}, nil
 		}
 	}
-	return textGenerationResult{}, errors.New(errorProviderNoText)
+	return generation, errors.New(errorProviderNoText)
 }

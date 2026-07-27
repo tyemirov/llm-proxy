@@ -23,7 +23,7 @@ const (
 	openAIKey                      = "sk-test"
 	logLevel                       = "debug"
 	openAIResponsesPath            = "/v1/responses"
-	openAIResponseTemplate         = `{"output_text":"%s"}`
+	openAIResponseTemplate         = `{"status":"completed","output_text":"%s"}`
 	responseTextWithoutTools       = "NO_TOOLS_OK"
 	responseTextWithoutTemperature = "TEMPLESS_OK"
 )

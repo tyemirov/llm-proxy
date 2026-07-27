@@ -506,7 +506,7 @@ func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRoute
 		markRequestOutcome(ginContext, requestFailureOutcome(requestError), managedRequestFailureOutcome(requestError))
 		statusCode := statusCodeForError(requestError)
 		ginContext.String(statusCode, responseMessageForError(requestError))
-		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), statusCode, nil, requestStart)
+		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), statusCode, generation.usage, requestStart)
 		return
 	}
 	if requestContextEnded(ginContext) {

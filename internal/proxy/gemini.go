@@ -107,7 +107,7 @@ func (client *geminiGenerateContentClient) generateText(parentContext context.Co
 	}
 	generation, parseError := parseGeminiGenerateContentResponse(responseBytes)
 	if parseError != nil {
-		return textGenerationResult{}, parseError
+		return generation, parseError
 	}
 	return generation, nil
 }
@@ -149,16 +149,17 @@ func parseGeminiGenerateContentResponse(responseBytes []byte) (textGenerationRes
 	if usageError != nil {
 		return textGenerationResult{}, usageError
 	}
+	generation := textGenerationResult{usage: usage}
 	for _, candidate := range response.Candidates {
 		if finishReasonError := validateGeminiFinishReason(candidate.FinishReason); finishReasonError != nil {
-			return textGenerationResult{}, finishReasonError
+			return generation, finishReasonError
 		}
 		trimmedText := visibleGeminiCandidateText(candidate)
 		if trimmedText != constants.EmptyString {
 			return textGenerationResult{text: trimmedText, usage: usage}, nil
 		}
 	}
-	return textGenerationResult{}, fmt.Errorf("%w: gemini generateContent returned no text", ErrProviderAPI)
+	return generation, fmt.Errorf("%w: gemini generateContent returned no text", ErrProviderAPI)
 }
 
 func validateGeminiFinishReason(reason geminiFinishReason) error {

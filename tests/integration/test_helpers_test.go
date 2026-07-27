@@ -108,7 +108,7 @@ func newOpenAIServer(testingInstance *testing.T, responseText string, captureTar
 				_ = json.Unmarshal(requestBytes, captureTarget)
 			}
 			responseWriter.Header().Set("Content-Type", contentTypeJSON)
-			_, _ = io.WriteString(responseWriter, `{"output_text":"`+responseText+`"}`)
+			_, _ = io.WriteString(responseWriter, `{"status":"completed","output_text":"`+responseText+`"}`)
 		default:
 			http.NotFound(responseWriter, httpRequest)
 		}
@@ -203,7 +203,7 @@ func makeHTTPClient(testingInstance *testing.T, wantWebSearch bool, endpoints *p
 				if wantWebSearch {
 					text = integrationSearchBody
 				}
-				body := `{"output_text":"` + text + `"}`
+				body := `{"status":"completed","output_text":"` + text + `"}`
 				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
 			default:
 				testingInstance.Fatalf(unexpectedRequestFormat, httpRequest.URL.String())

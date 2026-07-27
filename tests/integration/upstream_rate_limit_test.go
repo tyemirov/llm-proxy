@@ -26,7 +26,7 @@ const (
 	rateLimitChatPath                 = "/chat/completions"
 	rateLimitDictationPath            = "/audio/transcriptions"
 	rateLimitResponsesPath            = "/v1/responses"
-	rateLimitTextResponse             = `{"choices":[{"message":{"content":"rate limit text ok"}}]}`
+	rateLimitTextResponse             = `{"choices":[{"message":{"content":"rate limit text ok"},"finish_reason":"stop"}]}`
 	rateLimitDictationResponse        = `{"text":"rate limit dictation ok"}`
 	rateLimitOpenAIResponse           = `{"id":"rate-limit-complete","status":"completed","output_text":"rate limit retry ok"}`
 	rateLimitShortInterval            = 120 * time.Millisecond
