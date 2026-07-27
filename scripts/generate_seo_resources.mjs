@@ -15,7 +15,7 @@ const README_USAGE_URL = `${REPOSITORY_URL}#usage`;
 const API_DOCUMENTATION_PATH = "/docs/";
 const OPENAPI_SCHEMA_PATH = "/openapi.yaml";
 const CLIENT_AUTHENTICATION_RESOURCE_SLUG = "llm-proxy-client-authentication";
-const CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE = "2026-07-25";
+const CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE = "2026-07-26";
 const MIN_PAGE_COUNT = 40;
 const MAX_PAGE_COUNT = 50;
 const canonicalV2Contract = await readCanonicalV2Contract();
@@ -105,16 +105,16 @@ const pages = Object.freeze([
       "Create a tenant in static config or through the management UI.",
       "Generate or configure a tenant secret for the client.",
       "Use the same key parameter across GET, POST, /v2, and /dictate.",
-      "Revoke or regenerate the secret when access should change.",
+      "Replace the secret or delete its owning managed tenant when access should change.",
     ],
     features: [
       ["Single credential surface", "Apps call one proxy secret instead of many provider keys.", "The same secret can protect text and dictation traffic."],
       ["Tenant defaults", "Omitted provider and model values resolve through tenant defaults.", "A caller can stay simple until it needs a per-request override."],
-      ["403 boundary", "Missing, invalid, or revoked tenant secrets return forbidden responses.", "Callers do not receive tenant discovery details."],
+      ["403 boundary", "Missing, invalid, or replaced tenant secrets return forbidden responses.", "Callers do not receive tenant discovery details."],
     ],
     examples: [
       ["Shared app platform", "A platform team provisions tenant secrets for several internal apps while keeping provider credentials central."],
-      ["Access revocation", "A generated secret can be revoked so future proxy calls with that secret stop working."],
+      ["Key replacement", "Replacing a generated secret immediately stops the prior value from authenticating future proxy calls."],
       ["Dictation plus text", "The same tenant-secret model can protect voice transcription and LLM response generation."],
     ],
     limitations: [
@@ -550,7 +550,7 @@ if (!this.hasSecret) {
     ],
     features: [
       ["All-tenant default", "The default All tenants and 30 days selections populate requests, tokens, success rate, providers, models, statuses, and buckets together.", "The first dashboard snapshot represents every owned tenant rather than the oldest one."],
-      ["Independent selectors", "Settings tenant chooses only the editor; Usage tenant chooses only the report.", "Changing provider settings for one tenant cannot silently narrow the usage dashboard."],
+      ["Independent selectors", "The Tenant control in Settings chooses only the editor; Usage tenant chooses only the report.", "Changing provider settings for one tenant cannot silently narrow the usage dashboard."],
       ["Safe failure vocabulary", "Rows distinguish validation, payload size, rate limit, unavailable, timeout, and upstream failures with canonical codes.", "A failed request is not automatically labeled a provider failure."],
       ["Scope-bound pagination", "Newest-first cursors remain bound to All tenants or one exact tenant.", "Prompts, responses, provider bodies, free-form errors, and credentials never enter the dialog."],
     ],
@@ -580,8 +580,8 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d`,
         answer: "It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary.",
       },
       {
-        question: "Does changing the Settings tenant change Usage Overview?",
-        answer: "No. Settings tenant and Usage tenant are independent; changing the Settings tenant does not change the Usage tenant filter.",
+        question: "Does changing the Tenant control in Settings change Usage Overview?",
+        answer: "No. The Tenant control in Settings and the Usage tenant control are independent; changing one does not change the other.",
       },
       {
         question: "What tenant data appears in account-wide failure rows?",
@@ -683,47 +683,43 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d`,
     ],
   }),
   evidencedPage({
-    slug: "generated-secret-rotation-and-revocation",
+    slug: "generated-secret-rotation",
     category: "Security",
     primaryKeyword: "generated LLM proxy secret rotation",
-    title: "Generated LLM Proxy secret rotation and revocation",
-    description: "Automatically create a missing LLM Proxy client key, show it once, store only its digest, and support explicit rotation and revocation.",
+    title: "Rotate generated LLM Proxy client keys with confidence",
+    description: "Automatically create a missing LLM Proxy client key, show it once, store only its digest, and replace it through an explicit confirmed rotation.",
     audience: "Teams that want self-service client access without permanent retrievable secrets.",
-    problem: "Long-lived client secrets become harder to control when users can retrieve old raw values or when revocation requires operator edits.",
-    solution: "LLM Proxy generates tenant secrets, returns them once, stores only SHA-256 digests, and supports revocation through authenticated management APIs.",
+    problem: "Long-lived client secrets become harder to control when users can retrieve old raw values or when rotation requires operator edits.",
+    solution: "LLM Proxy generates tenant secrets, returns them once, stores only SHA-256 digests, and replaces a current value through one authenticated management operation.",
     steps: [
       "Open Settings after signing in.",
       "Copy the one-time client key created automatically for a profile that does not have one.",
       "Use the generated secret in public proxy request examples.",
-      "Revoke or regenerate the secret when access should change.",
+      "Confirm Replace key when access should change, then copy the one-time replacement.",
     ],
     features: [
       ["One-time display", "Generated secrets are shown once after creation.", "The database stores only their digest."],
-      ["Immediate revocation", "Revoked secrets stop authenticating future public proxy requests.", "Access can be cut without provider-key rotation."],
+      ["Immediate replacement", "The prior secret stops authenticating as soon as its replacement is stored.", "Access can be rotated without provider-key rotation."],
       ["Secret-safe examples", "Request examples retain the <generated-secret> placeholder after creation.", "Raw client keys remain confined to the one-time Key field."],
     ],
     examples: [
       ["New app secret", "A developer copies the automatically created client key and substitutes it for the /v2 example placeholder."],
-      ["Compromised client", "A user revokes the generated secret and creates a replacement."],
+      ["Compromised client", "A user confirms replacement, copies the new secret once, and updates the authorized client."],
       ["Provider key unchanged", "Rotating the tenant secret does not require changing the saved provider API key."],
     ],
     limitations: [
       "If the one-time value is lost, the user must generate a new secret.",
       "Tenant secrets remain application credentials and need normal secret handling.",
-      "Revocation affects proxy authentication; it does not revoke upstream provider keys.",
+      "A client key cannot be deleted independently; delete the owning non-final tenant when the whole tenant should be removed.",
     ],
     repoExample: {
       source: "site/assets/llm-proxy/js/core/backendClient.js",
-      verifiedOn: "2026-07-22",
+      verifiedOn: "2026-07-26",
       code: `export function generateSecret() {
   return requestJSON(\`\${MANAGEMENT_BASE_PATH}/secrets\`, { method: "POST" });
-}
-
-export function revokeSecret() {
-  return requestJSON(\`\${MANAGEMENT_BASE_PATH}/secrets\`, { method: "DELETE" });
 }`,
     },
-    quickVerdict: "Use the automatically created client key once, then replace or revoke it without rotating the separate upstream provider credentials.",
+    quickVerdict: "Use the automatically created client key once, then confirm replacement when access changes without rotating the separate upstream provider credentials.",
     faq: [
       {
         question: "When does LLM Proxy create a client key?",
@@ -734,8 +730,8 @@ export function revokeSecret() {
         answer: "No. The raw value is presented once in a masked, read-only field, while the backend stores only the digest used to authenticate proxy requests.",
       },
       {
-        question: "What does revoking the client key affect?",
-        answer: "Revocation stops that client key from authenticating public proxy requests. It does not remove or rotate separately stored upstream provider credentials.",
+        question: "What does replacing the client key affect?",
+        answer: "Replacement immediately stops the prior client key from authenticating public proxy requests. It does not remove or rotate separately stored upstream provider credentials.",
       },
       {
         question: "Do request examples embed the generated key?",
@@ -919,7 +915,7 @@ export function revokeSecret() {
       "Give the client a proxy base URL and tenant secret through its application configuration; the installable CLI accepts flags or LLM_PROXY_BASE_URL and LLM_PROXY_SECRET.",
       "Send canonical POST /v2 messages with the tenant secret in the key query parameter.",
       "Omit provider and model to use the authenticated tenant default, or select a configured provider when the request needs an override.",
-      "Replace or revoke the client key when access changes; future proxy requests with a missing, invalid, or revoked key return 403.",
+      "Confirm replacement when the client key must change; future proxy requests with the prior, missing, or invalid key return 403.",
     ],
     features: [
       ["One public client credential", "The client authenticates to LLM Proxy with a tenant secret instead of an upstream provider key.", "A script sends key=mysecret to /v2 while OpenAI, Gemini, or other provider credentials remain on the server."],
@@ -963,7 +959,7 @@ export function revokeSecret() {
         answer: "Provider API keys belong in server-side runtime configuration or authenticated management storage. Public proxy requests reject provider-key-like fields instead of forwarding them upstream.",
       },
       {
-        question: "What happens when the client key is missing, invalid, or revoked?",
+        question: "What happens when the client key is missing, invalid, or replaced?",
         answer: "The public proxy request returns 403 before it reaches an upstream provider.",
       },
     ],
