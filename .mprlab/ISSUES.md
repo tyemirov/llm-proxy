@@ -25,6 +25,41 @@ already satisfied; recurring maintenance remains scheduled work.
 
 ## BugFixes
 
+- [x] [B084] (P1) {I029} Restore the generated API reference after OpenAPI contract merges.
+  Goal:
+  Keep the committed human-readable API reference derived from the exact
+  canonical OpenAPI source after forward-only branch merges.
+
+  Evidence:
+  - Merge commit `39869d3` combined OpenAPI changes from both parents into
+    `docs/openapi.yaml` but retained `site/docs/index.html` from a parent.
+  - The canonical contract SHA-256 is
+    `796cff4216584bde8fb94cdadee195a0e715d3590a43f407c0f7ba60708b5c78`,
+    while the committed reference records
+    `5a6683d01dc04a10d6e045df3c3c265cd6b66aa43d9f39518ec9ecfa47c39b88`.
+  - The required baseline `make ci` passes Go and Python static checks, then
+    fails frontend lint with `openapi_docs_out_of_date`.
+
+  Requirements:
+  - Regenerate `site/docs/index.html` from the current `docs/openapi.yaml`
+    through the canonical generator.
+  - Do not change the canonical contract, generator, runtime behavior, or add
+    another schema or documentation source.
+
+  Validation:
+  - Verify the reference records the exact canonical source digest.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci` after the last code edit.
+
+  Resolved 2026-07-27:
+  - Regenerated `site/docs/index.html` from the unchanged canonical
+    `docs/openapi.yaml`; its three provenance fields now record the exact
+    `796cff4216584bde8fb94cdadee195a0e715d3590a43f407c0f7ba60708b5c78`
+    source digest.
+  - The full final `make ci` passes after the generated-document check, exact
+    100% Go coverage, Python, rendered-browser, TAuth black-box, release, and
+    live-provider harness gates.
+
 - [x] [B083] (P1) Keep tracked environment examples out of runtime use.
   Goal:
   Preserve sample environment files as deliberately unrealistic documentation
@@ -155,7 +190,7 @@ already satisfied; recurring maintenance remains scheduled work.
     no keyed provider supports it; provider-agnostic API/runtime, migration,
     restart, and rendered-browser coverage verifies the contract.
 
-- [ ] [B080] (P1) Reject incomplete OpenAI responses that contain partial text
+- [x] [B080] (P1) Reject incomplete OpenAI responses that contain partial text
   Goal:
   Make every successful text-provider result complete so callers never receive
   a provider-truncated prefix or intermediate result as an HTTP 200 response,
@@ -270,6 +305,9 @@ already satisfied; recurring maintenance remains scheduled work.
     OpenAI pending-state polling remain successful.
   - The README, canonical OpenAPI, generated API reference, and provider-routing
     documentation describe the same completion and async-ownership contract.
+  - The managed-routing public proxy fixture now returns the required
+    `finish_reason=stop` completed Chat Completions response, and the full final
+    `make ci` passes.
 
 - [!] [B077] (P1) {B069,F014,I029,I031} Publish and activate the merged LLM Proxy contract.
   Goal:
