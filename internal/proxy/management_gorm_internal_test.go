@@ -95,6 +95,29 @@ func TestManagedTenantGORMInitializationEdges(t *testing.T) {
 		t.Fatalf("missing usage index error=%v", initializeError)
 	}
 
+	schemaTwoMissingUsageIndexDatabase, openError := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "schema-two-missing-usage-index.db")), &gorm.Config{})
+	if openError != nil {
+		t.Fatalf("open schema-two missing-index database: %v", openError)
+	}
+	if migrateError := migrateCurrentManagedSchema(schemaTwoMissingUsageIndexDatabase); migrateError != nil {
+		t.Fatalf("migrate schema-two missing-index schema: %v", migrateError)
+	}
+	if createError := schemaTwoMissingUsageIndexDatabase.Create(&managedSchemaMigrationRecord{
+		Version: managedUsageOutcomeSchemaVersion,
+	}).Error; createError != nil {
+		t.Fatalf("seed schema-two missing-index version: %v", createError)
+	}
+	if dropError := schemaTwoMissingUsageIndexDatabase.Migrator().DropIndex(
+		&managedUsageEventRecord{},
+		managedUsageFailurePageIndex,
+	); dropError != nil {
+		t.Fatalf("drop schema-two usage index: %v", dropError)
+	}
+	if initializeError := initializeManagedTenantSchema(schemaTwoMissingUsageIndexDatabase, cipher, providers); !errors.Is(initializeError, errManagedTenantSchemaMigration) ||
+		!strings.Contains(initializeError.Error(), "validate_current_schema") {
+		t.Fatalf("schema-two missing usage index error=%v", initializeError)
+	}
+
 	if managedTableHasColumn(failingManagedColumnTypesMigrator{Migrator: missingVersionDatabase.Migrator()}, managedTenantTable, "owner_user_id") {
 		t.Fatal("column-types error reported a column")
 	}
@@ -259,7 +282,7 @@ func TestManagedTenantGORMLowLevelMutationEdges(t *testing.T) {
 		database := newCanonicalGORMFixture(subTest, now)
 		if saveError := database.saveProviderKey("other", managedProviderAPIKeyRecord{
 			TenantID: "managed-first", ProviderID: ProviderNameOpenAI, EncryptedAPIKey: "cipher",
-		}, now); !errors.Is(saveError, gorm.ErrRecordNotFound) {
+		}, defaultManagedRoutingDefaults(), now); !errors.Is(saveError, gorm.ErrRecordNotFound) {
 			subTest.Fatalf("provider ownership error=%v", saveError)
 		}
 	})
@@ -268,20 +291,20 @@ func TestManagedTenantGORMLowLevelMutationEdges(t *testing.T) {
 		registerManagedGORMError(subTest, database.database, "create_provider", "create", managedProviderKeyTable, errInternalTestDatabase)
 		if saveError := database.saveProviderKey("owner", managedProviderAPIKeyRecord{
 			TenantID: "managed-first", ProviderID: ProviderNameOpenAI, EncryptedAPIKey: "cipher",
-		}, now); !errors.Is(saveError, errInternalTestDatabase) {
+		}, defaultManagedRoutingDefaults(), now); !errors.Is(saveError, errInternalTestDatabase) {
 			subTest.Fatalf("provider record error=%v", saveError)
 		}
 	})
 	t.Run("delete provider ownership query", func(subTest *testing.T) {
 		database := newCanonicalGORMFixture(subTest, now)
-		if deleteError := database.deleteProviderKey("other", "managed-first", ProviderNameOpenAI, now); !errors.Is(deleteError, gorm.ErrRecordNotFound) {
+		if deleteError := database.deleteProviderKey("other", "managed-first", ProviderNameOpenAI, defaultManagedRoutingDefaults(), now); !errors.Is(deleteError, gorm.ErrRecordNotFound) {
 			subTest.Fatalf("provider ownership delete error=%v", deleteError)
 		}
 	})
 	t.Run("delete provider record", func(subTest *testing.T) {
 		database := newCanonicalGORMFixture(subTest, now)
 		registerManagedGORMError(subTest, database.database, "delete_provider", "delete", managedProviderKeyTable, errInternalTestDatabase)
-		if deleteError := database.deleteProviderKey("owner", "managed-first", ProviderNameOpenAI, now); !errors.Is(deleteError, errInternalTestDatabase) {
+		if deleteError := database.deleteProviderKey("owner", "managed-first", ProviderNameOpenAI, defaultManagedRoutingDefaults(), now); !errors.Is(deleteError, errInternalTestDatabase) {
 			subTest.Fatalf("provider record delete error=%v", deleteError)
 		}
 	})

@@ -120,7 +120,7 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).not.toContain("brand-label=");
   expect(html).not.toContain("data:image");
   expect(html).toContain(
-    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=delete,key,visibility,visibility_off&amp;display=block">',
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,key,visibility,visibility_off&amp;display=block">',
   );
   expect(html).toContain(
     '<span class="material-symbols-outlined" x-show="!providerKeyVisible" aria-hidden="true">visibility</span>',
@@ -195,11 +195,8 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).not.toContain("revokeSecret()");
   expect(html).toContain('<span class="material-symbols-outlined" x-show="!generatedSecretVisible" aria-hidden="true">visibility</span>');
   expect(html).toContain('<span class="material-symbols-outlined" x-show="generatedSecretVisible" aria-hidden="true">visibility_off</span>');
-  expect(html).toContain(
-    '<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">',
-  );
-  expect(html).toContain('<rect x="6" y="5" width="10" height="12" rx="1.5"></rect>');
-  expect(html).toContain('<rect x="8" y="7" width="10" height="12" rx="1.5"></rect>');
+  expect(html).toContain('<span class="material-symbols-outlined" aria-hidden="true">content_copy</span>');
+  expect(html).not.toContain('class="copy-icon"');
   expect(html).not.toContain("tenant-facts");
   expect(html).not.toContain("secret-output");
   expect(html).not.toContain("copy.copySecret");
@@ -212,6 +209,15 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain('x-on:change="handleDictationProviderDefaultChange($event)"');
   expect(html).toContain('x-on:change="handleDictationModelDefaultChange($event)"');
   expect(html).toContain('x-on:change="autosaveRoutingDefaults()"');
+  expect(html).toContain('class="settings-form-wide system-prompt-disclosure"');
+  expect(html).toContain('x-bind:open="routingSystemPromptOpen"');
+  expect(html).toContain('x-on:toggle="routingSystemPromptOpen = $event.currentTarget.open"');
+  expect(html).toContain('class="provider-system-prompt system-prompt-disclosure"');
+  expect(html).toContain('x-bind:open="providerSystemPromptOpen"');
+  expect(html).toContain('x-on:toggle="providerSystemPromptOpen = $event.currentTarget.open"');
+  expect(html).toContain('class="system-prompt-disclosure-state"');
+  expect(html).toContain('aria-labelledby="routing-system-prompt-label"');
+  expect(html).toContain('aria-labelledby="provider-system-prompt-label"');
   expect(html).not.toContain("saveDefaults()");
   expect(html).not.toContain('copy.saveDefaults');
   expect(html).toContain('copy.reasoningEffortUnsupported');
@@ -257,6 +263,8 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   const constantsJavaScript = await constantsResponse.text();
   expect(constantsJavaScript).toContain("export const NOTICE_AUTO_DISMISS_MILLISECONDS = 10_000;");
   expect(constantsJavaScript).toContain("Provider settings saved");
+  expect(constantsJavaScript).toContain('systemPromptHidden: "Hidden"');
+  expect(constantsJavaScript).toContain('systemPromptExpanded: "Expanded"');
   expect(constantsJavaScript).not.toContain('saveProviderKey: "Save key"');
   expect(constantsJavaScript).not.toContain('updateProviderKey: "Update key"');
   expect(constantsJavaScript).not.toContain('saveDefaults: "Save defaults"');
@@ -268,6 +276,7 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(stylesheet).toContain("order: -1;");
   expect(stylesheet).not.toContain("shadowRoot");
   expect(stylesheet).not.toContain('.settings-grid-form button[type="submit"]');
+  expect(stylesheet).toContain(".system-prompt-disclosure[open] .system-prompt-summary::after");
 
   const faviconResponse = await request.get(`${baseURL}${faviconPath}`);
   expect(faviconResponse.status()).toBe(httpOK);
@@ -678,6 +687,7 @@ test("tenant switching requires discard and clears one-time and revealed credent
   await expect(clientAccess.getByRole("textbox", { name: "Key", exact: true })).toHaveValue("llmp_tenant_1_generated");
   await providerEditor.getByRole("button", { name: "Show key", exact: true }).click();
   await expect(providerEditor.getByRole("textbox", { name: "OpenAI API key" })).toHaveValue("sk-tenant_1-openai");
+  await providerEditor.locator("summary.system-prompt-summary").click();
   await providerEditor.getByRole("textbox", { name: "System prompt" }).fill("Unsaved tenant one prompt");
   await page.keyboard.press("Tab");
   await providerSaveRequested;
@@ -939,7 +949,7 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(providerRemovalButton).toBeVisible();
   await expect(providerRemovalButton.locator(".material-symbols-outlined")).toHaveText("delete");
   await expect(providerModelSelector).toHaveValue("gpt-4.1");
-  await expect(providerEditor.getByRole("textbox", { name: "System prompt" })).toHaveValue("Use concise answers.");
+  await expect(providerEditor.locator("#provider-system-prompt-input")).toHaveValue("Use concise answers.");
 
   const providerControlBoxes = await Promise.all(
     [providerSelector, providerKeyInput, providerVisibilityButton, providerRemovalButton, providerModelSelector].map((control) =>
@@ -962,7 +972,7 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await providerSelector.selectOption("deepseek");
   await expect(providerEditor.getByRole("textbox", { name: "DeepSeek API key" })).toHaveValue("****5678");
   await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toHaveValue("deepseek-chat");
-  await expect(providerEditor.getByRole("textbox", { name: "System prompt" })).toHaveValue("");
+  await expect(providerEditor.locator("#provider-system-prompt-input")).toHaveValue("");
   await expect(settingsDialog.locator("request-example")).toHaveCount(5);
   await expect(settingsDialog.locator('request-example[data-example-id="provider-text"] .usage-snippet')).toContainText(
     "provider=deepseek",
@@ -983,6 +993,62 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
     "provider=meta",
   );
   await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
+});
+
+test("system prompt editors stay hidden until their labels expand them and reset with context", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page);
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const defaultsForm = settingsDialog.locator(".settings-grid-form");
+  const providerEditor = settingsDialog.locator("provider-editor");
+  const routingDisclosure = defaultsForm.locator("details.system-prompt-disclosure");
+  const providerDisclosure = providerEditor.locator("details.system-prompt-disclosure");
+  const routingSummary = routingDisclosure.locator("summary.system-prompt-summary");
+  const providerSummary = providerDisclosure.locator("summary.system-prompt-summary");
+  const routingPrompt = defaultsForm.locator("#routing-system-prompt-input");
+  const providerPrompt = providerEditor.locator("#provider-system-prompt-input");
+
+  await expect(routingPrompt).toBeHidden();
+  await expect(providerPrompt).toBeHidden();
+  await expect(routingDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
+  await expect(providerDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
+
+  await routingSummary.click();
+  await expect(routingPrompt).toBeVisible();
+  await expect(routingDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Expanded");
+
+  await providerSummary.focus();
+  await page.keyboard.press("Enter");
+  await expect(providerPrompt).toBeVisible();
+  await expect(providerDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Expanded");
+
+  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("deepseek");
+  await expect(providerPrompt).toBeHidden();
+  await expect(providerDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
+
+  await providerSummary.click();
+  await expect(providerPrompt).toBeVisible();
+  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Tenant" });
+  await settingsTenantSelector.selectOption("tenant_2");
+  await expect(settingsTenantSelector).toHaveValue("tenant_2");
+  await expect(routingPrompt).toBeHidden();
+  await expect(providerPrompt).toBeHidden();
+  await expect(routingDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
+  await expect(providerDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
+
+  await routingSummary.click();
+  await providerSummary.click();
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
+  await expect(settingsDialog).toBeHidden();
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  await expect(routingPrompt).toBeHidden();
+  await expect(providerPrompt).toBeHidden();
 });
 
 test("usage intervals load every dashboard surface, remain active on refresh, and fit mobile", async ({ page }) => {
@@ -1453,6 +1519,7 @@ test("Settings close waits for the current provider autosave", async ({ page }) 
   await page.goto(baseURL);
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   const providerEditor = settingsDialog.locator("provider-editor");
+  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
   await providerEditor.getByRole("textbox", { name: "OpenAI API key" }).fill("sk-close-autosave");
   await settingsDialog.getByRole("button", { name: "Close" }).click();
   await providerSaveRequested;
@@ -1635,6 +1702,7 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
     text_model: "gpt-4o-mini",
     system_prompt: "Use concise answers.",
   });
+  await providerEditor.locator("summary.system-prompt-summary").click();
   const providerSystemPrompt = providerEditor.getByRole("textbox", { name: "System prompt" });
   await providerSystemPrompt.fill("Use autosaved provider guidance.");
   await page.keyboard.press("Tab");
@@ -1805,7 +1873,7 @@ test("routing defaults autosave complete provider and model pairs without a manu
     }
   });
   await installAssetRoutes(page);
-  await installManagementRoutes(page);
+  await installManagementRoutes(page, { savedProviderIDs: ["openai", "deepseek", "meta", "grok"] });
 
   await page.goto(baseURL);
   await page.getByTestId("avatar-menu").click();
@@ -1817,7 +1885,8 @@ test("routing defaults autosave complete provider and model pairs without a manu
   const textModel = defaultsForm.getByRole("combobox", { name: "Text model" });
   const dictationProvider = defaultsForm.getByRole("combobox", { name: "Dictation provider" });
   const dictationModel = defaultsForm.getByRole("combobox", { name: "Dictation model" });
-  const systemPrompt = defaultsForm.getByRole("textbox", { name: "System prompt" });
+  const systemPromptDisclosure = defaultsForm.locator("details.system-prompt-disclosure");
+  const systemPrompt = defaultsForm.locator("#routing-system-prompt-input");
 
   await expect(textProvider).toHaveValue("openai");
   await expect(textModel).toHaveValue("gpt-4.1");
@@ -1850,6 +1919,7 @@ test("routing defaults autosave complete provider and model pairs without a manu
     reasoning_effort: "",
   });
 
+  await systemPromptDisclosure.locator("summary.system-prompt-summary").click();
   await systemPrompt.fill("Use tenant-wide autosaved guidance.");
   expect(defaultsMutations).toHaveLength(2);
   await page.keyboard.press("Tab");
@@ -1878,9 +1948,49 @@ test("routing defaults autosave complete provider and model pairs without a manu
   await expect(settingsDialog.getByRole("combobox", { name: "Text model" }).first()).toHaveValue("deepseek-chat");
   await expect(settingsDialog.getByRole("combobox", { name: "Dictation provider" })).toHaveValue("grok");
   await expect(settingsDialog.getByRole("combobox", { name: "Dictation model" })).toHaveValue("xai-stt");
-  await expect(settingsDialog.locator(".settings-grid-form").getByRole("textbox", { name: "System prompt" })).toHaveValue(
+  await expect(settingsDialog.locator("#routing-system-prompt-input")).toHaveValue(
     "Use tenant-wide autosaved guidance.",
   );
+});
+
+test("routing defaults expose only keyed providers and disable unavailable dictation", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { savedProviderIDs: ["deepseek"] });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const defaultsForm = settingsDialog.locator(".settings-grid-form");
+  const textProvider = defaultsForm.getByRole("combobox", { name: "Text provider" });
+  const textModel = defaultsForm.getByRole("combobox", { name: "Text model" });
+  const dictationProvider = defaultsForm.getByRole("combobox", { name: "Dictation provider" });
+  const dictationModel = defaultsForm.getByRole("combobox", { name: "Dictation model" });
+
+  await expect(textProvider).toHaveValue("deepseek");
+  await expect(textProvider.locator("option")).toHaveText(["DeepSeek"]);
+  await expect(textModel).toHaveValue("deepseek-chat");
+  await expect(dictationProvider).toBeDisabled();
+  await expect(dictationModel).toBeDisabled();
+  await expect(dictationProvider).toHaveValue("");
+  await expect(dictationModel).toHaveValue("");
+  await expect(dictationProvider.locator("option")).toHaveText(["Not configured"]);
+  await expect(settingsDialog.getByText("Default dictation", { exact: true })).toHaveCount(0);
+
+  const providerEditor = settingsDialog.locator("provider-editor");
+  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
+  await providerEditor.getByRole("textbox", { name: "OpenAI API key" }).fill("sk-openai-new");
+  await page.keyboard.press("Tab");
+
+  await expect(page.locator("notification-region")).toHaveText("Provider settings saved");
+  await expect(textProvider.locator("option")).toHaveText(["OpenAI", "DeepSeek"]);
+  await expect(textProvider).toHaveValue("deepseek");
+  await expect(dictationProvider).toBeEnabled();
+  await expect(dictationModel).toBeEnabled();
+  await expect(dictationProvider).toHaveValue("openai");
+  await expect(dictationModel).toHaveValue("gpt-4o-mini-transcribe");
+  await expect(settingsDialog.getByText("Default dictation", { exact: true })).toHaveCount(1);
 });
 
 test("routing-default autosave queues newer edits without resetting the provider editor", async ({ page }) => {
@@ -1895,7 +2005,10 @@ test("routing-default autosave queues newer edits without resetting the provider
     firstDefaultsSaveStarted = resolve;
   });
   await installAssetRoutes(page);
-  await installManagementRoutes(page, { providerKeys: { openai: revealedProviderKey } });
+  await installManagementRoutes(page, {
+    providerKeys: { openai: revealedProviderKey },
+    savedProviderIDs: ["openai", "deepseek", "meta", "grok"],
+  });
   await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
     defaultsMutations.push(route.request().postDataJSON());
     if (defaultsMutations.length === 1) {
@@ -1919,6 +2032,7 @@ test("routing-default autosave queues newer edits without resetting the provider
   await defaultsForm.getByRole("combobox", { name: "Text provider" }).selectOption("deepseek");
   await firstDefaultsSaveRequested;
   await defaultsForm.getByRole("combobox", { name: "Dictation provider" }).selectOption("grok");
+  await defaultsForm.locator("summary.system-prompt-summary").click();
   await defaultsForm.getByRole("textbox", { name: "System prompt" }).fill("Keep the latest defaults only.");
   await page.keyboard.press("Tab");
 
@@ -1986,6 +2100,7 @@ test("provider and routing autosaves serialize whole-profile mutations in both d
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   const providerEditor = settingsDialog.locator("provider-editor");
   const providerModel = providerEditor.getByRole("combobox", { name: "Provider default model" });
+  await providerEditor.locator("summary.system-prompt-summary").click();
   const providerPrompt = providerEditor.getByRole("textbox", { name: "System prompt" });
   const defaultsForm = settingsDialog.locator(".settings-grid-form");
   const defaultTextProvider = defaultsForm.getByRole("combobox", { name: "Text provider" });
@@ -2431,6 +2546,9 @@ test("fresh authenticated users receive one client key and must add a provider k
   await expect(setupRequirement).toBeFocused();
 
   const providerEditor = settingsDialog.locator("provider-editor");
+  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
+  const providerSystemPromptSummary = providerEditor.locator("summary.system-prompt-summary");
+  await providerSystemPromptSummary.click();
   const providerSystemPrompt = providerEditor.getByRole("textbox", { name: "System prompt" });
   await providerSystemPrompt.focus();
   await page.keyboard.press("Tab");
@@ -2761,22 +2879,24 @@ test("tenant access stays compact while one-time client keys support confirmed r
     const renameTenantButton = tenantAccessRow.getByRole("button", { name: "Rename" });
     const deleteTenantButton = tenantAccessRow.getByRole("button", { name: "Delete tenant" });
     const createTenantButton = tenantAccessRow.getByRole("button", { name: "Create tenant" });
+    const deleteTenantIcon = deleteTenantButton.locator(".material-symbols-outlined");
+    const createTenantSymbol = createTenantButton.locator(".tenant-create-symbol");
     const clientKey = tenantAccessRow.locator("client-access-key");
     const keyLabel = clientKey.locator(".eyebrow");
     const clientKeyRow = clientKey.locator("client-key-row");
     const clientKeyInput = tenantAccessRow.getByRole("textbox", { name: "Key", exact: true });
     const visibilityButton = tenantAccessRow.getByRole("button", { name: "Show key", exact: true });
     const copyButton = tenantAccessRow.getByRole("button", { name: "Copy key", exact: true });
-    const copyIcon = copyButton.locator("svg.copy-icon");
+    const copyIcon = copyButton.locator(".material-symbols-outlined");
     const visibilitySymbols = visibilityButton.locator(".material-symbols-outlined");
     const replaceKeyButton = tenantAccessRow.getByRole("button", { name: "Replace key", exact: true });
     const replaceKeyIcon = replaceKeyButton.locator(".material-symbols-outlined");
     const replaceKeyLabel = replaceKeyButton.locator(".tenant-access-action-label");
-    const createTenantLabel = createTenantButton.locator(".tenant-access-action-label");
     await expect(tenantSelector.locator("option:checked")).toHaveText("Default");
     await expect(renameTenantButton).toBeVisible();
     await expect(deleteTenantButton).toBeDisabled();
     await expect(createTenantButton).toBeVisible();
+    await expect(tenantAccessRow.locator(".tenant-delete + .tenant-create")).toHaveCount(1);
     await expect(tenantAccessRow.getByRole("button", { name: "Revoke key" })).toHaveCount(0);
     await expect(clientKeyInput).toHaveValue("••••••••••••");
     await expect(clientKeyInput).toHaveAttribute("readonly", "");
@@ -2788,12 +2908,27 @@ test("tenant access stays compact while one-time client keys support confirmed r
     await expect(replaceKeyIcon).toHaveText("key");
     await expect(replaceKeyIcon).toBeVisible();
     await expect(replaceKeyLabel).toHaveText("Replace key");
+    await expect(deleteTenantIcon).toHaveText("delete");
+    await expect(deleteTenantIcon).toHaveAttribute("aria-hidden", "true");
+    await expect(createTenantButton).toHaveClass(/icon-only/);
+    await expect(createTenantButton).not.toHaveClass(/icon-button/);
+    await expect(createTenantButton).toHaveAttribute("title", "Create tenant");
+    await expect(createTenantButton).toHaveAttribute("aria-label", "Create tenant");
+    await expect(createTenantButton.locator(".tenant-access-action-label")).toHaveCount(0);
+    await expect(createTenantSymbol).toHaveText("+");
+    await expect(createTenantSymbol).toHaveAttribute("aria-hidden", "true");
+    await expect(createTenantSymbol).toBeVisible();
+    const deleteTenantIconFontSize = await deleteTenantIcon.evaluate(
+      (iconElement) => Number.parseFloat(window.getComputedStyle(iconElement).fontSize),
+    );
+    const createTenantSymbolFontSize = await createTenantSymbol.evaluate(
+      (symbolElement) => Number.parseFloat(window.getComputedStyle(symbolElement).fontSize),
+    );
+    expect(createTenantSymbolFontSize).toBeGreaterThan(deleteTenantIconFontSize);
     if (viewport.name === "desktop") {
       await expect(replaceKeyLabel).toBeVisible();
-      await expect(createTenantLabel).toBeVisible();
     } else {
       await expect(replaceKeyLabel).toBeHidden();
-      await expect(createTenantLabel).toBeHidden();
     }
     await expect(visibilityButton).toHaveAttribute("aria-pressed", "false");
     await expect(visibilitySymbols).toHaveCount(2);
@@ -2804,9 +2939,9 @@ test("tenant access stays compact while one-time client keys support confirmed r
     await expect(copyButton).toHaveAttribute("title", "Copy key");
     await expect(copyIcon).toHaveCount(1);
     await expect(copyIcon).toHaveAttribute("aria-hidden", "true");
-    await expect(copyIcon).toHaveAttribute("focusable", "false");
-    await expect(copyIcon).toHaveAttribute("viewBox", "0 0 24 24");
-    await expect(copyIcon.locator("rect")).toHaveCount(2);
+    await expect(copyIcon).toHaveText("content_copy");
+    await expect(copyIcon).toBeVisible();
+    await expect(copyButton.locator("svg")).toHaveCount(0);
     await expect(copyButton).not.toContainText("[]");
 
     await copyButton.focus();
@@ -2906,6 +3041,8 @@ test("tenant access stays compact while one-time client keys support confirmed r
       expect(replaceKeyButtonBox.width).toBe(30);
     }
     expect(replaceKeyButtonBox.width).toBeLessThanOrEqual(120);
+    expect(createTenantButtonBox.width).toBe(30);
+    expect(createTenantButtonBox.x).toBeGreaterThanOrEqual(deleteTenantButtonBox.x + deleteTenantButtonBox.width);
     expect(replaceKeyIconBox.x).toBeGreaterThanOrEqual(replaceKeyButtonBox.x);
     expect(replaceKeyButtonBox.x + replaceKeyButtonBox.width).toBeLessThanOrEqual(
       tenantAccessRowBox.x + tenantAccessRowBox.width,
@@ -3748,6 +3885,7 @@ async function installMultiTenantRoutes(page, options = {}) {
         provider.masked_key = "saved";
         provider.text_model = settings.text_model;
         provider.system_prompt = settings.system_prompt;
+        reconcileManagementProfileRoutingDefaults(profile);
         await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
         return;
       }
@@ -3755,6 +3893,7 @@ async function installMultiTenantRoutes(page, options = {}) {
         delete providerKeys[providerID];
         provider.has_key = false;
         delete provider.masked_key;
+        reconcileManagementProfileRoutingDefaults(profile);
         await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
         return;
       }
@@ -3783,6 +3922,7 @@ async function installMultiTenantRoutes(page, options = {}) {
       provider.has_key = false;
       delete provider.masked_key;
     }
+    reconcileManagementProfileRoutingDefaults(profile);
     state.order.push(tenantID);
     state.profiles.set(tenantID, profile);
     state.providerKeys.set(tenantID, {});
@@ -3857,6 +3997,7 @@ async function installManagementRoutes(page, options = {}) {
         delete provider.masked_key;
       }
     }
+    reconcileManagementProfileRoutingDefaults(profile);
   }
   for (const [providerID, maskedKey] of Object.entries(options.maskedKeys || {})) {
     const provider = profile.providers.find((candidateProvider) => candidateProvider.id === providerID);
@@ -3966,6 +4107,7 @@ async function installManagementRoutes(page, options = {}) {
       provider.masked_key = "sk-...saved";
       provider.text_model = providerSettings.text_model;
       provider.system_prompt = providerSettings.system_prompt;
+      reconcileManagementProfileRoutingDefaults(profile);
       await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
       return;
     }
@@ -3973,11 +4115,38 @@ async function installManagementRoutes(page, options = {}) {
       delete providerKeys[providerID];
       provider.has_key = false;
       delete provider.masked_key;
+      reconcileManagementProfileRoutingDefaults(profile);
       await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
       return;
     }
     await route.fulfill({ status: httpInternalServerError });
   });
+}
+
+/**
+ * @param {ReturnType<typeof managementProfile>} profile
+ * @returns {void}
+ */
+function reconcileManagementProfileRoutingDefaults(profile) {
+  const keyedProviders = profile.providers
+    .filter((provider) => provider.has_key)
+    .toSorted((first, second) => first.id.localeCompare(second.id));
+  const currentTextProvider = keyedProviders.find((provider) => provider.id === profile.tenant.defaults.provider);
+  if (!currentTextProvider) {
+    const nextTextProvider = keyedProviders[0];
+    profile.tenant.defaults.provider = nextTextProvider ? nextTextProvider.id : "";
+    profile.tenant.defaults.model = nextTextProvider ? nextTextProvider.text_model : "";
+    profile.tenant.defaults.reasoning_effort = "";
+  }
+  const keyedDictationProviders = keyedProviders.filter((provider) => provider.supports_dictation);
+  const currentDictationProvider = keyedDictationProviders.find(
+    (provider) => provider.id === profile.tenant.defaults.dictation_provider,
+  );
+  if (!currentDictationProvider) {
+    const nextDictationProvider = keyedDictationProviders[0];
+    profile.tenant.defaults.dictation_provider = nextDictationProvider ? nextDictationProvider.id : "";
+    profile.tenant.defaults.dictation_model = nextDictationProvider ? nextDictationProvider.dictation_default_model : "";
+  }
 }
 
 /**

@@ -154,6 +154,8 @@ export function createKeyManagement() {
     settingsOpen: false,
     settingsClosePending: false,
     usageExamplesOpen: false,
+    routingSystemPromptOpen: false,
+    providerSystemPromptOpen: false,
     tenantNameDraft: EMPTY_STRING,
     tenantRenameDialogOpen: false,
     tenantNameDirty: false,
@@ -304,6 +306,14 @@ export function createKeyManagement() {
       return provider ? provider.text_models.map((model) => model.id) : [];
     },
 
+    get keyedTextProviders() {
+      return this.providers.filter((provider) => provider.has_key);
+    },
+
+    get hasKeyedTextProviders() {
+      return this.keyedTextProviders.length > 0;
+    },
+
     /** @returns {import("../types.d.js").ProviderProfile | null} */
     get selectedTextProvider() {
       return this.providers.find((candidateProvider) => candidateProvider.id === this.defaults.provider) || null;
@@ -326,7 +336,11 @@ export function createKeyManagement() {
     },
 
     get dictationProviders() {
-      return this.providers.filter((provider) => provider.supports_dictation);
+      return this.keyedTextProviders.filter((provider) => provider.supports_dictation);
+    },
+
+    get hasDictationProviders() {
+      return this.dictationProviders.length > 0;
     },
 
     get selectedDictationModels() {
@@ -472,11 +486,18 @@ export function createKeyManagement() {
     },
 
     get requestExamples() {
-      const defaultExamples = [
-        createRequestExample(DEFAULT_TEXT_EXAMPLE_ID, COPY.defaultTextExample, this.defaultTextCurl()),
-        createRequestExample(DEFAULT_V2_EXAMPLE_ID, COPY.defaultV2Example, this.defaultV2Curl()),
-        createRequestExample(DEFAULT_DICTATION_EXAMPLE_ID, COPY.defaultDictationExample, this.defaultDictationCurl()),
-      ];
+      const defaultExamples = [];
+      if (this.defaults.provider) {
+        defaultExamples.push(
+          createRequestExample(DEFAULT_TEXT_EXAMPLE_ID, COPY.defaultTextExample, this.defaultTextCurl()),
+          createRequestExample(DEFAULT_V2_EXAMPLE_ID, COPY.defaultV2Example, this.defaultV2Curl()),
+        );
+      }
+      if (this.defaults.dictation_provider) {
+        defaultExamples.push(
+          createRequestExample(DEFAULT_DICTATION_EXAMPLE_ID, COPY.defaultDictationExample, this.defaultDictationCurl()),
+        );
+      }
       if (!this.selectedProvider) {
         return defaultExamples;
       }
@@ -1389,9 +1410,18 @@ export function createKeyManagement() {
       this.dashboardView = DASHBOARD_VIEWS.USAGE;
     },
 
+    /**
+     * @returns {void}
+     */
+    collapseSystemPromptEditors() {
+      this.routingSystemPromptOpen = false;
+      this.providerSystemPromptOpen = false;
+    },
+
     openSettings() {
       this.clearUsageFailures(false);
       this.usageExamplesOpen = false;
+      this.collapseSystemPromptEditors();
       this.dismissProviderKeyRemovalConfirmation();
       this.dismissClientKeyReplacementConfirmation();
       this.resetTenantNameEdit();
@@ -1617,6 +1647,7 @@ export function createKeyManagement() {
      * @param {string} providerID
      */
     replaceProviderEditorSession(providerID) {
+      const providerChanged = providerID !== this.selectedProviderID;
       const provider = providerID === EMPTY_STRING ? null : profileProvider(this.providers, providerID);
       this.providerEditorSession = createProviderEditorSession(
         providerID,
@@ -1624,6 +1655,9 @@ export function createKeyManagement() {
         provider ? provider.text_model : EMPTY_STRING,
         provider ? provider.system_prompt : EMPTY_STRING,
       );
+      if (providerChanged) {
+        this.providerSystemPromptOpen = false;
+      }
     },
 
     clearGeneratedSecret() {
@@ -2224,7 +2258,7 @@ export function createKeyManagement() {
       }
       const nextProviderID = this.providers.some((provider) => provider.id === selectedProviderID)
         ? selectedProviderID
-        : defaults.provider;
+        : defaults.provider || (this.providers[0] ? this.providers[0].id : EMPTY_STRING);
       if (!preserveProviderEditor) {
         this.replaceProviderEditorSession(nextProviderID);
       }
@@ -2268,6 +2302,7 @@ export function createKeyManagement() {
       this.tenantNameDirty = false;
       this.tenantNameError = EMPTY_STRING;
       this.usageExamplesOpen = false;
+      this.collapseSystemPromptEditors();
     },
 
     clearUsageState() {
@@ -2589,16 +2624,34 @@ function createWorkspaceRoutingDefaults(profile) {
   for (const provider of providers) {
     assertProviderCatalog(provider);
   }
-  const textProvider = profileProvider(providers, defaults.provider);
-  const textModel = textProvider.text_models.find((model) => model.id === defaults.model);
-  if (!textModel) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  const keyedTextProviders = providers.filter((provider) => provider.has_key);
+  let textModel = null;
+  if (keyedTextProviders.length === 0) {
+    if (defaults.provider !== EMPTY_STRING || defaults.model !== EMPTY_STRING || defaults.reasoning_effort !== EMPTY_STRING) {
+      throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    }
+  } else {
+    const textProvider = profileProvider(keyedTextProviders, defaults.provider);
+    textModel = textProvider.text_models.find((model) => model.id === defaults.model) || null;
+    if (!textModel) {
+      throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    }
   }
-  const dictationProvider = profileProvider(providers, defaults.dictation_provider);
-  if (!dictationProvider.supports_dictation || !dictationProvider.dictation_models.includes(defaults.dictation_model)) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+  const dictationProviders = keyedTextProviders.filter((provider) => provider.supports_dictation);
+  if (dictationProviders.length === 0) {
+    if (defaults.dictation_provider !== EMPTY_STRING || defaults.dictation_model !== EMPTY_STRING) {
+      throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    }
+  } else {
+    const dictationProvider = profileProvider(dictationProviders, defaults.dictation_provider);
+    if (!dictationProvider.dictation_models.includes(defaults.dictation_model)) {
+      throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    }
   }
-  if (defaults.reasoning_effort !== EMPTY_STRING && !reasoningEffortOptionsForTextModel(textModel).includes(defaults.reasoning_effort)) {
+  if (
+    defaults.reasoning_effort !== EMPTY_STRING &&
+    (!textModel || !reasoningEffortOptionsForTextModel(textModel).includes(defaults.reasoning_effort))
+  ) {
     throw new Error(WORKSPACE_INTEGRITY_ERROR);
   }
   return {
@@ -2635,6 +2688,7 @@ function assertProviderCatalog(provider) {
     !provider ||
     typeof provider.id !== "string" ||
     !provider.id ||
+    typeof provider.has_key !== "boolean" ||
     !Array.isArray(provider.text_models) ||
     !provider.text_models.some((model) => model && model.id === provider.text_default_model)
   ) {

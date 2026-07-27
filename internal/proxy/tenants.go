@@ -57,6 +57,21 @@ type tenantDefaults struct {
 }
 
 func newTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
+	defaults := normalizedTenantDefaults(rawDefaults)
+	if defaults.provider == constants.EmptyString {
+		defaults.provider = DefaultProvider
+	}
+	if defaults.dictationProvider == constants.EmptyString {
+		defaults.dictationProvider = DefaultDictationProvider
+	}
+	return defaults
+}
+
+func newManagedTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
+	return normalizedTenantDefaults(rawDefaults)
+}
+
+func normalizedTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
 	defaults := tenantDefaults{
 		provider:          strings.TrimSpace(rawDefaults.Provider),
 		model:             strings.TrimSpace(rawDefaults.Model),
@@ -65,13 +80,7 @@ func newTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
 		systemPrompt:      rawDefaults.SystemPrompt,
 		reasoningEffort:   rawDefaults.ReasoningEffort,
 	}
-	if defaults.provider == constants.EmptyString {
-		defaults.provider = DefaultProvider
-	}
 	defaults.provider = strings.ToLower(defaults.provider)
-	if defaults.dictationProvider == constants.EmptyString {
-		defaults.dictationProvider = DefaultDictationProvider
-	}
 	defaults.dictationProvider = strings.ToLower(defaults.dictationProvider)
 	return defaults
 }
@@ -88,7 +97,6 @@ type tenant struct {
 	secretDigest     [sha256.Size]byte
 	defaults         tenantDefaults
 	managed          bool
-	providerAPIKeys  map[providerID]string
 	providerSettings map[providerID]managedProviderSettings
 }
 

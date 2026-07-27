@@ -229,7 +229,7 @@ func (database *fakeManagedTenantDatabase) providerKeys() ([]managedProviderAPIK
 	return records, nil
 }
 
-func (database *fakeManagedTenantDatabase) saveProviderKey(ownerUserID string, record managedProviderAPIKeyRecord, updatedAt time.Time) error {
+func (database *fakeManagedTenantDatabase) saveProviderKey(ownerUserID string, record managedProviderAPIKeyRecord, defaults managedRoutingDefaults, updatedAt time.Time) error {
 	if saveError, configured := popFakeError(&database.saveProviderKeyErrors); configured && saveError != nil {
 		return saveError
 	}
@@ -251,12 +251,13 @@ func (database *fakeManagedTenantDatabase) saveProviderKey(ownerUserID string, r
 		providerRecords = append(providerRecords, record)
 	}
 	tenantRecord.ProviderAPIKeys = providerRecords
+	tenantRecord.applyRoutingDefaults(defaults)
 	tenantRecord.UpdatedAt = updatedAt
 	database.tenantsByID[record.TenantID] = cloneManagedTenantRecord(tenantRecord)
 	return nil
 }
 
-func (database *fakeManagedTenantDatabase) deleteProviderKey(ownerUserID string, tenantID string, providerID string, updatedAt time.Time) error {
+func (database *fakeManagedTenantDatabase) deleteProviderKey(ownerUserID string, tenantID string, providerID string, defaults managedRoutingDefaults, updatedAt time.Time) error {
 	if deleteError, configured := popFakeError(&database.deleteProviderKeyErrors); configured && deleteError != nil {
 		return deleteError
 	}
@@ -271,6 +272,7 @@ func (database *fakeManagedTenantDatabase) deleteProviderKey(ownerUserID string,
 		}
 	}
 	tenantRecord.ProviderAPIKeys = providerRecords
+	tenantRecord.applyRoutingDefaults(defaults)
 	tenantRecord.UpdatedAt = updatedAt
 	database.tenantsByID[tenantID] = cloneManagedTenantRecord(tenantRecord)
 	return nil

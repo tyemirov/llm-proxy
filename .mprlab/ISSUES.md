@@ -25,7 +25,137 @@ already satisfied; recurring maintenance remains scheduled work.
 
 ## BugFixes
 
-- [x] [B080] (P1) Reject incomplete provider responses that contain partial text
+- [x] [B083] (P1) Keep tracked environment examples out of runtime use.
+  Goal:
+  Preserve sample environment files as deliberately unrealistic documentation
+  while requiring real runtime values only from ignored private dotenv files.
+
+  Evidence:
+  - `configs/.env.local.example` and `configs/.env.sample` now identify
+    themselves as documentation-only and contain non-operational values.
+  - The prior local startup contract copied the tracked local example into
+    `configs/.env.local`, which allowed documentation to become runtime
+    configuration and contradicted the private-env boundary.
+  - The runtime and orchestration tests now use an explicitly created
+    `configs/.env.local`, but README still documents the obsolete copy behavior.
+
+  Requirements:
+  - Never source, copy, or infer runtime configuration from a tracked sample.
+  - Require the operator to create the ignored real `configs/.env.local`
+    explicitly with private values and mode `0600`.
+  - Fail before Docker startup when the private file is absent.
+  - Keep `configs/.env`, `configs/.env.local`, and generated service-scoped
+    dotenv files ignored and excluded from container build context.
+
+  Validation:
+  - Exercise the missing-private-env failure and the complete local
+    orchestration path through the public `make up` boundary.
+  - Verify both tracked sample files retain the documentation-only banner and
+    deliberately unrealistic values.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last tracked edit.
+
+  Resolved 2026-07-26:
+  - Both tracked examples now remain visibly documentation-only with
+    deliberately unrealistic values and cannot seed local runtime state.
+  - `make up` requires the ignored real `configs/.env.local` before checking
+    Docker, enforces mode `0600`, and creates only ignored service projections.
+  - Operational coverage verifies the sample-file boundary, missing-file
+    failure, generated local secrets, scoped projections, and complete
+    orchestration flow.
+
+- [x] [B082] (P1) {F014} Restore persisted-routing and dictation-size enforcement.
+  Goal:
+  Make management startup reject catalog-invalid persisted state and make the
+  public dictation endpoint enforce its published upload limit.
+
+  Evidence:
+  - Schema-version-2 startup verifies the usage outcome column and index, then
+    returns without validating persisted tenant routing defaults against the
+    active provider/model catalogs.
+  - F014 preflight resolves legacy provider aliases and models but persists the
+    original values, so a noncanonical provider row can survive migration under
+    an identifier the runtime does not use.
+  - `/dictate` maps `http.MaxBytesReader` failures to `400` and does not reject
+    an audio part that exceeds `server.max_input_audio_bytes` while the complete
+    multipart body remains inside its separate overhead allowance, despite the
+    canonical OpenAPI `413` response.
+
+  Requirements:
+  - Validate every current-schema tenant routing default at startup and fail
+    with owner, tenant, endpoint, provider, and model context; never repair or
+    infer persisted routing state.
+  - Reject noncanonical legacy provider and text-model values before the F014
+    migration transaction; persist only exact canonical provider/model
+    identifiers.
+  - Return `413 Payload Too Large` when either the audio part exceeds
+    `server.max_input_audio_bytes` or the bounded multipart reader overflows,
+    and do not call an upstream transcription provider.
+
+  Validation:
+  - Exercise restart through the real router construction boundary with an
+    invalid current-schema tenant, legacy preflight with alias/case variants,
+    and `/dictate` with both audio-part and total-body overflow.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last tracked edit.
+
+  Resolved 2026-07-26:
+  - Current-schema startup now rejects catalog-invalid routing rows, legacy
+    preflight rejects noncanonical provider/model values, and `/dictate`
+    returns `413` for either audio-part or bounded-body overflow.
+  - Router-boundary, migration, and public dictation scenarios cover the
+    corrected contracts.
+
+- [x] [B081] (P1) {F014,B079} Keep managed routing defaults on providers with saved tenant keys.
+  Goal:
+  Ensure every managed routing default is immediately usable by the owning
+  tenant instead of retaining a catalog default for a provider whose API key is
+  absent.
+
+  Requirements:
+  - Treat a saved tenant provider key as a hard eligibility boundary for
+    managed routing defaults. Preserve an existing text or dictation default
+    only while its exact provider remains keyed and supports that endpoint.
+  - When a provider-key save or removal invalidates a default, reconcile it
+    atomically to a deterministic eligible keyed provider. Use the saved
+    provider text model for an automatically selected text route and the
+    catalog dictation default model for an automatically selected dictation
+    route.
+  - Represent an endpoint with no eligible keyed provider as one canonical
+    unset provider/model pair. In particular, disable managed dictation when
+    none of the tenant's keyed providers supports dictation; never retain an
+    unkeyed or unsupported dictation provider as a placeholder.
+  - Restrict the Settings routing selectors to keyed eligible providers and
+    show the unset dictation state explicitly. Do not special-case any provider
+    name, infer credentials from global configuration, or add a read-time
+    fallback.
+  - Migrate existing managed tenants once into the keyed-default contract and
+    reject noncanonical persisted state after migration.
+  - Keep static-configuration tenant defaults unchanged; this contract applies
+    only to managed tenants and their tenant-owned provider keys.
+
+  Validation:
+  - Exercise the real management API and public proxy with arbitrary keyed
+    providers, including a sole text-only provider, multiple eligible
+    providers, removal of the active default, and restart after migration.
+  - Prove Settings exposes only keyed routing candidates, disables dictation
+    with no eligible keyed provider, and re-enables it from the complete
+    profile returned by a successful provider-key mutation.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last tracked edit.
+
+  Resolved 2026-07-26:
+  - Managed defaults now remain on deterministic keyed providers, reconcile
+    atomically with provider-key mutations, and persist one canonical unset
+    pair when no eligible provider exists.
+  - Settings exposes only keyed routing candidates and disables dictation when
+    no keyed provider supports it; provider-agnostic API/runtime, migration,
+    restart, and rendered-browser coverage verifies the contract.
+
+- [ ] [B080] (P1) Reject incomplete OpenAI responses that contain partial text
   Goal:
   Make every successful text-provider result complete so callers never receive
   a provider-truncated prefix or intermediate result as an HTTP 200 response,
@@ -284,6 +414,12 @@ already satisfied; recurring maintenance remains scheduled work.
   - Extended rendered Playwright coverage for rename validation/conflict,
     replacement confirmation/cancellation/pending state, selection
     independence, lifecycle cleanup, and desktop/compact/mobile geometry.
+  - Refined the final tenant-lifecycle action to a large icon-only plus beside
+    the trash action at every viewport while retaining `Create tenant` as its
+    accessible name and tooltip.
+  - Standardized the generated client-key Copy control on the Material Symbols
+    `content_copy` glyph and removed its custom inline SVG while retaining the
+    existing accessible clipboard behavior.
 
 - [x] [B078] (P1) {F014,B075} Fail visibly when the management application runtime is blocked.
   Goal:
@@ -929,6 +1065,35 @@ already satisfied; recurring maintenance remains scheduled work.
   - Kamu F001 can therefore resume with the declared 900-second budget; no retry, direct-provider path, prompt chunking, or tenant mutation is required.
 
 ## Improvements
+
+- [x] [I034] (P2) {B079} Minimize Settings system-prompt editors by default.
+  Goal:
+  Keep tenant-wide and provider-specific system prompts out of the dense
+  Settings layout until a user explicitly asks to edit one.
+
+  Requirements:
+  - Render each system-prompt editor as a semantic disclosure that is collapsed
+    whenever Settings opens and whenever its tenant or provider context changes.
+  - Make the visible System prompt label activate the disclosure through pointer
+    and keyboard input, and show an explicit visible indicator while the field
+    is hidden.
+  - Preserve the existing values, disabled states, serialized mutation
+    behavior, and autosave-on-field-exit contract.
+
+  Validation:
+  - Exercise both disclosures through the rendered browser, including initial
+    hidden state, pointer and keyboard expansion, context-reset behavior, and
+    autosave after editing an expanded field.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last tracked edit.
+
+  Resolved 2026-07-26:
+  - Tenant-wide and provider-specific prompts now use collapsed semantic
+    disclosures with visible `Hidden` and `Expanded` indicators.
+  - Settings-open, tenant-switch, and provider-switch resets preserve values,
+    disabled states, focus behavior, and autosave-on-field-exit semantics.
+  - All 67 rendered-browser scenarios and the real TAuth management flow pass.
 
 - [ ] [I033] (P2) {B076,I029} Keep the visible Usage Overview automatically fresh.
   Goal:

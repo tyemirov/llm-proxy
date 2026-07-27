@@ -195,6 +195,7 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   await expect(clientKeyInput).toHaveValue(/^llmp_/);
 
   const providerEditor = settingsDialog.locator("provider-editor");
+  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
   await providerEditor.getByRole("textbox", { name: "OpenAI API key" }).fill("sk-local-blackbox-provider-key");
   const providerSaveResponsePromise = page.waitForResponse(
     (response) =>

@@ -81,6 +81,70 @@ func TestOperationalHelpCommandsUseBuiltinOutput(testingInstance *testing.T) {
 	}
 }
 
+func TestOperationalEnvironmentExamplesStayDocumentationOnly(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	for _, relativePath := range []string{
+		filepath.Join("configs", ".env.sample"),
+		filepath.Join("configs", ".env.local.example"),
+	} {
+		environmentBytes, readError := os.ReadFile(filepath.Join(repositoryRoot, relativePath))
+		if readError != nil {
+			testingInstance.Fatalf("read environment documentation %s: %v", relativePath, readError)
+		}
+		environmentDocumentation := string(environmentBytes)
+		for _, expectedFragment := range []string{
+			"Documentation only: never source, copy, or use this file as runtime configuration.",
+			"Values are deliberately goofy and non-operational.",
+			".invalid",
+		} {
+			if !strings.Contains(environmentDocumentation, expectedFragment) {
+				testingInstance.Fatalf("environment documentation %s omitted %q: %s", relativePath, expectedFragment, environmentDocumentation)
+			}
+		}
+		for _, forbiddenFragment := range []string{
+			"LLM_PROXY_MANAGEMENT_ENABLED=true",
+			"__GENERATE_ON_FIRST_MAKE_UP__",
+			"localhost",
+			"llm-proxy.mprlab.com",
+		} {
+			if strings.Contains(environmentDocumentation, forbiddenFragment) {
+				testingInstance.Fatalf("environment documentation %s contains runnable value %q: %s", relativePath, forbiddenFragment, environmentDocumentation)
+			}
+		}
+	}
+}
+
+func TestOperationalMakeUpRequiresPrivateLocalEnvironment(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	for _, relativePath := range []string{
+		"Makefile",
+		filepath.Join(operationalScriptsDirectory, "up.sh"),
+	} {
+		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
+	}
+
+	command := exec.Command("make", "up")
+	command.Dir = fixtureRoot
+	output, commandError := command.CombinedOutput()
+	if commandError == nil {
+		testingInstance.Fatalf("make up accepted a missing private environment: %s", output)
+	}
+	localEnvironmentPath := filepath.Join(fixtureRoot, "configs", ".env.local")
+	for _, expectedFragment := range []string{
+		"missing private local environment: " + localEnvironmentPath,
+		"create the ignored real file explicitly with mode 0600",
+		"tracked env examples are documentation only",
+	} {
+		if !strings.Contains(string(output), expectedFragment) {
+			testingInstance.Fatalf("missing-private-env failure omitted %q: %s", expectedFragment, output)
+		}
+	}
+	if _, statError := os.Stat(localEnvironmentPath); !os.IsNotExist(statError) {
+		testingInstance.Fatalf("make up created the private environment instead of rejecting its absence: %v", statError)
+	}
+}
+
 func TestOperationalMakeUpStartsLocalWebOrchestration(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixtureRoot := testingInstance.TempDir()
@@ -90,12 +154,11 @@ func TestOperationalMakeUpStartsLocalWebOrchestration(testingInstance *testing.T
 		"docker-compose.local.yml",
 		filepath.Join(operationalScriptsDirectory, "up.sh"),
 		filepath.Join("configs", "config.yml"),
-		filepath.Join("configs", ".env.sample"),
-		filepath.Join("configs", ".env.local.example"),
 		filepath.Join("configs", "tauth.local.yml"),
 	} {
 		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
 	}
+	writeOperationalLocalEnvironment(testingInstance, fixtureRoot)
 
 	toolDirectory := filepath.Join(fixtureRoot, "tools")
 	realAWKPath, lookupAWKError := exec.LookPath("awk")
@@ -427,11 +490,10 @@ func TestOperationalMakeUpRejectsAnotherProcessReadinessResponse(testingInstance
 		"Makefile",
 		"docker-compose.local.yml",
 		filepath.Join(operationalScriptsDirectory, "up.sh"),
-		filepath.Join("configs", ".env.sample"),
-		filepath.Join("configs", ".env.local.example"),
 	} {
 		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
 	}
+	writeOperationalLocalEnvironment(testingInstance, fixtureRoot)
 
 	toolDirectory := filepath.Join(fixtureRoot, "tools")
 	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "docker"), `#!/usr/bin/env bash
@@ -1301,6 +1363,40 @@ func operationalRepositoryRoot(testingInstance *testing.T) string {
 		testingInstance.Fatalf("resolve repository root: %v", absoluteError)
 	}
 	return repositoryRoot
+}
+
+func writeOperationalLocalEnvironment(testingInstance *testing.T, fixtureRoot string) {
+	testingInstance.Helper()
+	writeOperationalFile(testingInstance, filepath.Join(fixtureRoot, "configs", ".env.local"), `LLM_PROXY_MANAGEMENT_ENABLED=true
+LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN=http://localhost:4179
+LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN=http://localhost:4179
+LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN=http://localhost:4179
+LLM_PROXY_MANAGEMENT_UI_DESCRIPTION=LLM Proxy test
+LLM_PROXY_MANAGEMENT_ADMIN_EMAILS=[]
+LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID=llm-proxy-test
+LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID=424242424242-bananahelmet.apps.googleusercontent.com
+LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH=/auth/google
+LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH=/auth/logout
+LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH=/auth/nonce
+LLM_PROXY_MANAGEMENT_TAUTH_SESSION_PATH=/auth/session
+LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY=__GENERATE_ON_FIRST_MAKE_UP__
+LLM_PROXY_MANAGEMENT_JWT_ISSUER=tauth
+LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME=app_session_llm_proxy_test
+LLM_PROXY_MANAGEMENT_DATABASE_PATH=/data/llm-proxy-management.sqlite
+LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=__GENERATE_ON_FIRST_MAKE_UP__
+LLM_PROXY_MANAGEMENT_API_ORIGIN=http://localhost:8080
+LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=http://localhost:8080
+TAUTH_CONFIG_FILE=/config/tauth.local.yml
+TAUTH_LISTEN_ADDR=:8080
+TAUTH_DATABASE_URL=sqlite:///data/tauth.sqlite
+TAUTH_ENABLE_CORS=true
+TAUTH_CORS_EXCEPTION_1=https://accounts.google.com
+TAUTH_ALLOW_INSECURE_HTTP=true
+LLM_PROXY_LOCAL_TAUTH_REFRESH_COOKIE_NAME=app_refresh_llm_proxy_test
+GHTTP_SERVE_PORT=4179
+GHTTP_SERVE_DIRECTORY=/app/site
+GHTTP_SERVE_NO_MARKDOWN=true
+`, 0o600)
 }
 
 func initializeOperationalGatewayCheckout(testingInstance *testing.T, gatewayDirectory string, remoteName string) {

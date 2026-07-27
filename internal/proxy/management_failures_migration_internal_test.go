@@ -209,6 +209,123 @@ func TestManagedUsageOutcomeSQLiteMigrationRollsBackStageFailures(t *testing.T) 
 	}
 }
 
+func TestManagedKeyedRoutingDefaultsMigrationRejectsStageFailures(t *testing.T) {
+	providerKeyCipher := internalManagedProviderKeyCipher()
+	providers := internalManagementProviderRegistry()
+	now := time.Date(2026, 7, 26, 19, 0, 0, 0, time.UTC)
+	type fixture struct {
+		database *gorm.DB
+		tenant   managedTenantRecord
+	}
+	newFixture := func(subTest *testing.T) fixture {
+		database, openError := gorm.Open(sqlite.Open(filepath.Join(subTest.TempDir(), "keyed-defaults-stage.db")), &gorm.Config{})
+		if openError != nil {
+			subTest.Fatalf("open keyed-defaults fixture: %v", openError)
+		}
+		if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
+			subTest.Fatalf("create keyed-defaults schema: %v", migrationError)
+		}
+		userRecord := managedUserRecord{UserID: "keyed-defaults-owner", CreatedAt: now, UpdatedAt: now}
+		if createError := database.Create(&userRecord).Error; createError != nil {
+			subTest.Fatalf("seed keyed-defaults user: %v", createError)
+		}
+		tenantRecord := fakeTenantRecord(userRecord.UserID, "keyed-defaults-tenant", "Default", now)
+		if createError := database.Create(&tenantRecord).Error; createError != nil {
+			subTest.Fatalf("seed keyed-defaults tenant: %v", createError)
+		}
+		return fixture{database: database, tenant: tenantRecord}
+	}
+	addProvider := func(subTest *testing.T, testFixture fixture, providerIdentifier string, textModel string, encryptedAPIKey string) {
+		if encryptedAPIKey == "" {
+			var encryptionError error
+			encryptedAPIKey, encryptionError = providerKeyCipher.encrypt(
+				strings.NewReader(strings.Repeat("a", providerKeyCipher.aeadCipher.NonceSize())),
+				testFixture.tenant.TenantID,
+				providerIdentifier,
+				"sk-key",
+			)
+			if encryptionError != nil {
+				subTest.Fatalf("encrypt keyed-defaults provider: %v", encryptionError)
+			}
+		}
+		if createError := testFixture.database.Create(&managedProviderAPIKeyRecord{
+			TenantID:        testFixture.tenant.TenantID,
+			ProviderID:      providerIdentifier,
+			EncryptedAPIKey: encryptedAPIKey,
+			TextModel:       textModel,
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}).Error; createError != nil {
+			subTest.Fatalf("seed keyed-defaults provider: %v", createError)
+		}
+	}
+	assertMigrationError := func(subTest *testing.T, migrationError error, want string) {
+		subTest.Helper()
+		if !errors.Is(migrationError, errManagedTenantSchemaMigration) || !strings.Contains(migrationError.Error(), want) {
+			subTest.Fatalf("migration error=%v want=%q", migrationError, want)
+		}
+	}
+
+	t.Run("read tenants", func(subTest *testing.T) {
+		testFixture := newFixture(subTest)
+		registerManagedGORMError(subTest, testFixture.database, "keyed_defaults_read", "query", managedTenantTable, errInternalTestDatabase)
+		assertMigrationError(subTest, migrateManagedKeyedRoutingDefaults(testFixture.database, providerKeyCipher, providers), "operation=read")
+	})
+	t.Run("decrypt provider key", func(subTest *testing.T) {
+		testFixture := newFixture(subTest)
+		addProvider(subTest, testFixture, ProviderNameOpenAI, ModelNameGPT41, "invalid")
+		assertMigrationError(subTest, migrateManagedKeyedRoutingDefaults(testFixture.database, providerKeyCipher, providers), "operation=preflight")
+	})
+	t.Run("invalid defaults", func(subTest *testing.T) {
+		testFixture := newFixture(subTest)
+		if updateError := testFixture.database.Model(&managedTenantRecord{}).
+			Where(&managedTenantRecord{TenantID: testFixture.tenant.TenantID}).
+			Update("default_provider", "missing").
+			Error; updateError != nil {
+			subTest.Fatalf("write invalid defaults: %v", updateError)
+		}
+		assertMigrationError(subTest, migrateManagedKeyedRoutingDefaults(testFixture.database, providerKeyCipher, providers), "operation=preflight")
+	})
+	t.Run("invalid provider settings", func(subTest *testing.T) {
+		testFixture := newFixture(subTest)
+		addProvider(subTest, testFixture, "missing", "missing-model", "")
+		assertMigrationError(subTest, migrateManagedKeyedRoutingDefaults(testFixture.database, providerKeyCipher, providers), "operation=preflight")
+	})
+	t.Run("backfill", func(subTest *testing.T) {
+		testFixture := newFixture(subTest)
+		registerManagedGORMError(subTest, testFixture.database, "keyed_defaults_backfill", "update", managedTenantTable, errInternalTestDatabase)
+		assertMigrationError(subTest, migrateManagedKeyedRoutingDefaults(testFixture.database, providerKeyCipher, providers), "operation=backfill")
+	})
+	t.Run("validation", func(subTest *testing.T) {
+		testFixture := newFixture(subTest)
+		queryCount := 0
+		if callbackError := testFixture.database.Callback().Query().Before("gorm:query").Register(
+			"keyed_defaults_validation",
+			func(callbackDatabase *gorm.DB) {
+				if callbackDatabase.Statement.Table == managedTenantTable {
+					queryCount++
+					if queryCount == 2 {
+						callbackDatabase.AddError(errInternalTestDatabase)
+					}
+				}
+			},
+		); callbackError != nil {
+			subTest.Fatalf("register keyed-defaults validation callback: %v", callbackError)
+		}
+		assertMigrationError(subTest, migrateManagedKeyedRoutingDefaults(testFixture.database, providerKeyCipher, providers), "operation=read")
+	})
+	t.Run("record version", func(subTest *testing.T) {
+		testFixture := newFixture(subTest)
+		registerManagedGORMError(subTest, testFixture.database, "keyed_defaults_record_version", "create", managedSchemaMigrationTable, errInternalTestDatabase)
+		assertMigrationError(subTest, migrateManagedKeyedRoutingDefaults(testFixture.database, providerKeyCipher, providers), "operation=record_version")
+	})
+	t.Run("validate provider decryption", func(subTest *testing.T) {
+		testFixture := newFixture(subTest)
+		addProvider(subTest, testFixture, ProviderNameOpenAI, ModelNameGPT41, "invalid")
+		assertMigrationError(subTest, validateManagedKeyedRoutingDefaults(testFixture.database, providerKeyCipher, providers), "operation=validate")
+	})
+}
+
 type failingManagedUsageMigrationDialector struct {
 	gorm.Dialector
 	stage *string

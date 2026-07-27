@@ -34,6 +34,8 @@ const (
 	formFieldAudio = "audio"
 	formFieldFile  = "file"
 
+	dictationMultipartOverheadBytes = int64(2 * 1024 * 1024)
+
 	contextKeyTenant = "tenant"
 
 	mimeApplicationJSON = "application/json"
@@ -71,6 +73,7 @@ const (
 	errorUnsupportedSystemPrompt    = "unsupported system_prompt parameter"
 	errorInvalidAudioForm           = "invalid audio form"
 	errorMissingAudioFile           = "missing audio file"
+	errorAudioPayloadTooLarge       = "audio payload too large"
 	// errorUpstreamIncomplete indicates that the upstream provider returned an incomplete response.
 	errorUpstreamIncomplete = "OpenAI API error (incomplete response)"
 	// errorUnknownModel indicates that a model identifier is not recognized.

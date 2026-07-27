@@ -5,7 +5,6 @@ set -euo pipefail
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd "${script_directory}/.." && pwd)"
 local_environment_path="${repository_root}/configs/.env.local"
-local_environment_example_path="${repository_root}/configs/.env.local.example"
 frontend_environment_path="${repository_root}/configs/.env.frontend.local"
 api_environment_path="${repository_root}/configs/.env.api.local"
 tauth_environment_path="${repository_root}/configs/.env.tauth.local"
@@ -110,13 +109,13 @@ write_scoped_local_environment() {
   chmod 600 "${destination_path}"
 }
 
+require_private_local_environment() {
+  [[ -f "${local_environment_path}" ]] ||
+    fail "missing private local environment: ${local_environment_path}; create the ignored real file explicitly with mode 0600 (tracked env examples are documentation only)"
+}
+
 prepare_local_environment() {
-  if [[ ! -f "${local_environment_path}" ]]; then
-    [[ -f "${local_environment_example_path}" ]] || fail "missing local environment example: ${local_environment_example_path}"
-    cp "${local_environment_example_path}" "${local_environment_path}"
-    chmod 600 "${local_environment_path}"
-    echo "Created ${local_environment_path} from the tracked example."
-  fi
+  chmod 600 "${local_environment_path}"
   ensure_generated_local_value "LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY" "__GENERATE_ON_FIRST_MAKE_UP__" "48"
   ensure_generated_local_value "LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY" "__GENERATE_ON_FIRST_MAKE_UP__" "32"
 
@@ -222,6 +221,7 @@ trap cleanup EXIT
 trap 'exit 143' HUP TERM
 trap handle_operator_interrupt INT
 
+require_private_local_environment
 command -v docker >/dev/null 2>&1 || fail "Docker Compose is required for make up"
 docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required for make up"
 command -v curl >/dev/null 2>&1 || fail "curl is required to verify local startup"

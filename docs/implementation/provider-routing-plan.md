@@ -12,7 +12,12 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - Omitted `provider` means the authenticated tenant's default provider.
 - `model` keeps its current meaning; omitted `model` means the authenticated tenant's default model when set, otherwise the selected provider's configured default model.
 - A provider with an API key configured must have a configured default text model so provider-selected requests can omit `model` consistently.
-- Managed tenants persist complete canonical text and dictation provider/model pairs. A request that omits the routing fields uses the exact saved text pair; management persistence never substitutes a different provider/model pair at runtime.
+- Managed tenants persist complete canonical provider/model pairs chosen only
+  from providers for which that tenant has a saved API key. The text pair is
+  empty only when no provider key exists; the dictation pair is empty when no
+  keyed provider supports dictation. A request that omits routing fields uses
+  the exact persisted pair, and read-time routing never substitutes another
+  provider or model.
 - Compatibility JSON `POST /` accepts exactly one text input shape: `prompt` for a single user prompt or `messages[]` for an OpenRouter/OpenAI-compatible chat transcript.
 - Canonical JSON `POST /v2` accepts only `messages[]` as the text input shape; request-body `prompt` and `system_prompt` are invalid.
 - `messages[]` items contain `role` and string `content`. Supported roles are `system`, `user`, and `assistant`; at least one `user` message is required.
@@ -275,24 +280,37 @@ omission keeps the existing tenant/provider-default behavior.
 
 ## Managed Routing Defaults
 
-`PUT /api/management/tenants/:tenant_id/defaults` requires both a text
-`provider`/`model` pair, a dictation `dictation_provider`/`dictation_model` pair,
-and an explicit
-`reasoning_effort` value. Empty is the explicit unset value; a nonempty value
-must be in the selected exact text provider/model capability list. The handler
-resolves the text pair before validating effort and constructs all defaults
-before the database write, so a blank, unknown, unsupported, cross-provider
-model, or incompatible effort fails with `400 managed_routing_defaults_invalid`
-and leaves the prior defaults unchanged. The profile response exposes
-capabilities only through `providers[].text_models[]`; it has no provider-level
-capability or global option list. A malformed profile is a workspace-integrity
-failure in the browser, not a UI repair opportunity.
+`PUT /api/management/tenants/:tenant_id/defaults` requires every field and
+accepts only complete text and dictation provider/model pairs. Each nonempty
+pair must name a provider with a saved tenant key; dictation also requires that
+provider's declared dictation capability. The text pair is both empty only when
+the tenant has no provider key, and the dictation pair is both empty only when
+none of its keyed providers supports dictation. `reasoning_effort` is explicit;
+empty means unset and a nonempty value must be in the selected exact text
+provider/model capability list. The handler resolves the text pair before
+validating effort and constructs all defaults before the database write, so a
+partial, unkeyed, unknown, unsupported, cross-provider pair or incompatible
+effort fails with `400 managed_routing_defaults_invalid` and leaves the prior
+defaults unchanged. The profile response exposes key eligibility through
+`providers[].has_key` and capabilities through `providers[].text_models[]`; it
+has no provider-level reasoning capability or global option list. A malformed
+profile is a workspace-integrity failure in the browser, not a UI repair
+opportunity.
 
-Startup requires all persisted pairs to be canonical and valid; it never
-retains a fallback, compatibility read, or runtime repair path. The bounded
-F014 ownership migration validates legacy routing data before its transaction
-and rejects unknown models and unknown or dictation-unsupported providers with
-contextual owner, tenant, endpoint, provider, and model errors.
+Saving or removing a provider key reconciles routing defaults in the same
+database transaction. An eligible current pair is preserved. Otherwise the
+first keyed provider by canonical provider id becomes the text default using
+its saved text model, and the first keyed dictation-capable provider becomes the
+dictation default using its configured dictation model. A missing eligible
+provider clears that pair and also clears reasoning effort when text is unset.
+
+Startup requires all persisted pairs to be canonical, catalog-valid, and backed
+by saved tenant keys; it never retains a fallback, compatibility read, or
+runtime repair path. The bounded schema-version-3 migration applies the same
+deterministic reconciliation once, preserves tenant timestamps, verifies every
+row, and records the version atomically. Unknown models, corrupt keys, and
+unknown or dictation-unsupported providers fail with contextual owner, tenant,
+endpoint, provider, and model errors.
 
 `server.workers` limits concurrent upstream provider HTTP operations, not whole
 client request lifecycles. `server.queue_size` limits the number of additional
@@ -354,6 +372,13 @@ Account state, workspace names, enabled providers, defaults, and generated-secre
 
 Schema version 2 gives every managed usage event one nonblank outcome code chosen at the request/error boundary: `success`, `invalid_request`, `payload_too_large`, `rate_limited`, `service_unavailable`, `request_timeout`, or `upstream_error`. The bounded upgrade maps historical successful rows to `success` and exact `400`, `413`, `429`, `499`, `502`, `503`, and `504` statuses to their canonical failure codes before adding the tenant/success/time/id page index; caller cancellation `499` and proxy-budget expiry `504` both become `request_timeout`. An unsupported historical status rejects startup before mutation. Neither current recording nor migration persists or reconstructs raw provider bodies or free-form error messages.
 
+Schema version 3 makes saved tenant keys the hard eligibility boundary for
+managed routing defaults. Its bounded upgrade decrypts and validates every
+provider record, preserves eligible defaults, deterministically replaces
+ineligible pairs, clears text or dictation when no provider is eligible,
+preserves tenant timestamps, verifies the result, and records version 3 in one
+transaction. Current-version startup rejects any later drift.
+
 Server/runtime settings, backend auth validation, browser-facing MPR UI/TAuth settings, provider base URLs, transcription URLs, and model catalogs remain config-file-owned. Database access must use GORM model APIs without raw SQL. Generated llm-proxy client secrets are returned once and stored as SHA-256 digests. Managed tenants authenticate the same public proxy endpoints with `key=<generated secret>` and use only their own saved provider credentials.
 
 The shared header has one application-owned notification region followed by the MPR-owned identity control in the `aux` slot. Scoped flex ordering keeps every visible notice immediately left of the avatar or Sign in control, and the application clears each notice after 10 seconds; MPR UI remains the only owner of sign-in, session, and avatar-menu behavior.
@@ -364,7 +389,7 @@ The LLM Proxy application startup guard covers the complete versioned first-part
 
 The backend consumes TAuth's published Go `pkg/sessionvalidator` for cookie/JWT validation and adds only llm-proxy's tenant, required-expiry, and principal invariants; no application-owned JWT parser or claims schema exists. The gateway `llm-proxy` target stages both services' runtime inputs, restarts `tauth-api` and `llm-proxy`, and verifies both health checks before Pages activation so signing-key, cookie-name, and cookie-domain changes cannot leave the two runtimes split.
 
-The authenticated management landing view is usage-focused. The browser first loads `GET /api/management/account`; every returned tenant remains operational through its own generated secret, and the browser has no global active-tenant or URL/history selection contract. The independent `Usage tenant` control defaults to `All tenants` immediately before the ordered `ALL`, `30 days`, `7 days`, and `1 day` controls, while the interval defaults to `30 days`. The all-tenant selection calls `GET /api/management/usage?interval=all|30d|7d|1d`; an explicit tenant calls `GET /api/management/tenants/:tenant_id/usage?interval=all|30d|7d|1d`. Both operations require exactly one recognized interval, return `400` for missing, repeated, or unknown values, and carry `Cache-Control: no-store`. The response is the current `interval`, `bucket_unit`, aggregate `totals`, ordered generic `buckets`, and provider, model, and status-code usage for the selected scope; it contains no fixed-period `period_days` or `daily` fields. `1d` uses 24 hourly buckets, `7d` and `30d` use exact trailing-duration daily buckets, and `all` uses UTC daily buckets from the earliest retained event through one captured server timestamp. An empty all-time result has no buckets. Account-wide aggregation runs once at the database boundary across every owned tenant and calculates totals and average latency from the complete event set; the browser never fans out per-tenant summaries. Refresh and interval changes retain the Usage tenant selection, Settings changes do not affect it, loading disables the Usage controls, and request identity prevents a stale scope or interval response from replacing the selected snapshot. The admin API remains a distinct 30-day daily contract. Managed proxy requests record endpoint, provider, model, status, success flag, latency, and normalized token counts only; prompts, audio, transcripts, responses, tenant secrets, and provider API keys are excluded from usage events. Tenant lifecycle, client access, generated secrets, routing defaults, copyable request examples, and provider key controls live in the Settings modal opened from the shared `<mpr-user>` avatar dropdown, where the `Settings` item is inserted before `Sign out`. One compact `Tenant access` row combines the `Tenant` selector, modal Rename, client-key state and one-time reveal/copy actions, confirmed Replace key, confirmed Delete tenant, and Create tenant. The selected tenant is only the Settings editor context. Switching that selector with an unsaved draft requires explicit discard confirmation, clears any raw one-time secret or revealed provider key from browser state, and never changes the Usage tenant. The routing-default form keeps Text provider, Text model, and the selected model's Reasoning effort control on one desktop row. It clears an incompatible effort on a model change, exposes `Not supported` when the route has no capability, and autosaves provider/model/effort selections immediately plus the tenant system prompt on field exit. Settings serializes every mutation that returns a complete tenant profile and locks its controls while a close request waits for in-flight work. A client key created or replaced during that wait keeps Settings open for an explicit later close so its one-time value remains available to copy; removing the last provider key re-enforces mandatory setup; client keys can only be replaced or removed with their owning non-final tenant. Failed edits remain available for retry. Request examples include copyable default text, v2, and dictation commands plus copyable selected-provider text and v2 commands; dictation-capable selected providers also show a provider-specific dictation command. Provider key controls use one selected-provider editor with API key, text model, and system prompt fields because those settings are part of the provider-owned managed routing contract.
+The authenticated management landing view is usage-focused. The browser first loads `GET /api/management/account`; every returned tenant remains operational through its own generated secret, and the browser has no global active-tenant or URL/history selection contract. The independent `Usage tenant` control defaults to `All tenants` immediately before the ordered `ALL`, `30 days`, `7 days`, and `1 day` controls, while the interval defaults to `30 days`. The all-tenant selection calls `GET /api/management/usage?interval=all|30d|7d|1d`; an explicit tenant calls `GET /api/management/tenants/:tenant_id/usage?interval=all|30d|7d|1d`. Both operations require exactly one recognized interval, return `400` for missing, repeated, or unknown values, and carry `Cache-Control: no-store`. The response is the current `interval`, `bucket_unit`, aggregate `totals`, ordered generic `buckets`, and provider, model, and status-code usage for the selected scope; it contains no fixed-period `period_days` or `daily` fields. `1d` uses 24 hourly buckets, `7d` and `30d` use exact trailing-duration daily buckets, and `all` uses UTC daily buckets from the earliest retained event through one captured server timestamp. An empty all-time result has no buckets. Account-wide aggregation runs once at the database boundary across every owned tenant and calculates totals and average latency from the complete event set; the browser never fans out per-tenant summaries. Refresh and interval changes retain the Usage tenant selection, Settings changes do not affect it, loading disables the Usage controls, and request identity prevents a stale scope or interval response from replacing the selected snapshot. The admin API remains a distinct 30-day daily contract. Managed proxy requests record endpoint, provider, model, status, success flag, latency, and normalized token counts only; prompts, audio, transcripts, responses, tenant secrets, and provider API keys are excluded from usage events. Tenant lifecycle, client access, generated secrets, routing defaults, copyable request examples, and provider key controls live in the Settings modal opened from the shared `<mpr-user>` avatar dropdown, where the `Settings` item is inserted before `Sign out`. One compact `Tenant access` row combines the `Tenant` selector, modal Rename, client-key state and one-time reveal/copy actions, confirmed Replace key, confirmed Delete tenant, and Create tenant. The selected tenant is only the Settings editor context. Switching that selector with an unsaved draft requires explicit discard confirmation, clears any raw one-time secret or revealed provider key from browser state, and never changes the Usage tenant. The routing-default form lists only providers with saved tenant keys; its dictation controls are disabled and show `Not configured` when none of those providers supports dictation. It keeps Text provider, Text model, and the selected model's Reasoning effort control on one desktop row, clears an incompatible effort on a model change, exposes `Not supported` when the route has no reasoning capability, and autosaves provider/model/effort selections immediately plus the tenant system prompt on field exit. Tenant-wide and provider-specific system-prompt fields start collapsed behind semantic `System prompt` disclosures with a visible `Hidden` indicator; they expand through pointer or keyboard activation and collapse again when Settings opens or their tenant/provider context changes. Settings serializes every mutation that returns a complete tenant profile and locks its controls while a close request waits for in-flight work. A client key created or replaced during that wait keeps Settings open for an explicit later close so its one-time value remains available to copy; removing the last provider key re-enforces mandatory setup; client keys can only be replaced or removed with their owning non-final tenant. Failed edits remain available for retry. Request examples include copyable default text and v2 commands only when a keyed text default exists, and a default dictation command only when a keyed dictation default exists, plus copyable selected-provider text and v2 commands; dictation-capable selected providers also show a provider-specific dictation command. Provider key controls use one selected-provider editor with API key, text model, and system prompt fields because those settings are part of the provider-owned managed routing contract.
 
 When the selected Usage snapshot contains failures, the success-rate card exposes an **N failed requests** action. Its semantic dialog keeps the selected interval and the summary's non-success status breakdown. `GET /api/management/usage/failures` pages newest-first failures across all owned tenants and adds each row's safe tenant id and current name; `GET /api/management/tenants/:tenant_id/usage/failures` retains the tenant-less row shape for one explicitly selected owned tenant. Both operations require one `interval`, accept one `limit` from 1 through 100 and one opaque `cursor`, return `Cache-Control: no-store`, and paginate against one opaque snapshot using stable event-time/id order. Each cursor is bound to its exact all-tenant or tenant scope and is rejected in every other scope. Apart from the account-wide tenant context, rows contain only event time, endpoint, provider, model, status, canonical outcome code, and latency. Dialog load failures stay local; Usage tenant or interval changes abort and invalidate the request; the admin surface remains aggregate-only.
 
