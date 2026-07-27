@@ -1060,7 +1060,9 @@ split-origin topology; local authentication stays on the front door so another
 host process cannot intercept a TAuth port through a different `localhost`
 address family. Use the `localhost` UI URL rather than `127.0.0.1`: TAuth's
 insecure local HTTP cookie profile is intentionally scoped to the single
-`localhost` host.
+`localhost` host. The local ghttp front door sends `Cache-Control: no-store` so
+an ordinary reload reads one current set of mounted HTML, CSS, and ES modules
+instead of combining files cached from different working-tree states.
 
 Compose first completes image pulls/builds and reports all three services
 running through `docker compose up --wait`; only then does the bounded HTTP
@@ -1071,6 +1073,16 @@ unauthenticated management API boundary (`401`). It does not call a paid
 provider. After readiness, Compose logs remain attached in the foreground. Use
 `Ctrl-C` to stop the containers and network; the named local data volumes keep
 local TAuth and management state for the next run.
+
+Browser startup additionally loads the pinned Alpine 3.13.5 module from
+`https://cdn.jsdelivr.net`. `make up` cannot override a Chrome extension,
+privacy filter, or browser policy that blocks that client-side request. If the
+page reports **Unable to open LLM Proxy**, allow `cdn.jsdelivr.net` for
+`http://localhost:4179` in the blocking browser control and select **Reload LLM
+Proxy**. The same failure screen replaces an incoherent or rejected first-party
+module graph. LLM Proxy does not try another CDN or a bundled fallback; the
+failure screen completes the shared MPR transition without making a protected
+management request.
 
 With `management.enabled: false`, set a static tenant's default text
 provider/model to route omitted-provider requests to DeepSeek. Static tenant
