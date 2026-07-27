@@ -35,8 +35,8 @@ func TestManagedTenantStoreCipherAndSnapshotEdges(t *testing.T) {
 	})
 	if _, storeError := newManagedTenantStore(ManagementConfiguration{
 		ProviderKeyEncryptionKey: testManagedProviderKeyEncryptionKey,
-	}, invalidDefaultsProviders); !errors.Is(storeError, errManagedRoutingDefaultsMigration) {
-		t.Fatalf("invalid default routing error=%v", storeError)
+	}, invalidDefaultsProviders); storeError != nil {
+		t.Fatalf("text-only provider catalog store error=%v", storeError)
 	}
 
 	cipher := internalManagedProviderKeyCipher()
@@ -88,19 +88,10 @@ func TestManagedTenantStoreCipherAndSnapshotEdges(t *testing.T) {
 	if settingsError != nil || settings[newProviderID(ProviderNameOpenAI)].apiKey != "sk-key" || settings[newProviderID(ProviderNameOpenAI)].textModel != ModelNameGPT41 {
 		t.Fatalf("settings=%+v error=%v", settings, settingsError)
 	}
-	providerKeys, providerMapError := store.providerAPIKeyMap([]managedProviderAPIKeyRecord{validRecord})
-	if providerMapError != nil || providerKeys[newProviderID(ProviderNameOpenAI)] != "sk-key" {
-		t.Fatalf("provider keys=%+v error=%v", providerKeys, providerMapError)
-	}
 	if _, settingsError := store.providerSettingsMap([]managedProviderAPIKeyRecord{{
 		TenantID: "tenant", ProviderID: ProviderNameOpenAI, EncryptedAPIKey: "invalid",
 	}}); !errors.Is(settingsError, errManagedProviderKeyDecryption) {
 		t.Fatalf("settings decrypt error=%v", settingsError)
-	}
-	if _, providerMapError := store.providerAPIKeyMap([]managedProviderAPIKeyRecord{{
-		TenantID: "tenant", ProviderID: ProviderNameOpenAI, EncryptedAPIKey: "invalid",
-	}}); !errors.Is(providerMapError, errManagedProviderKeyDecryption) {
-		t.Fatalf("provider map error=%v", providerMapError)
 	}
 
 	now := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
@@ -420,6 +411,7 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	database := newFakeManagedTenantDatabase()
 	identifier := fakeUserWithTenant(database, principal, "managed-default", "Default", now)
 	store := newManagedTenantStoreWithDatabase(database)
+	store.routingDefaults = internalManagementProviderRegistry()
 	store.now = func() time.Time { return now }
 
 	if _, saveError := store.saveProviderKey(principal, "missing", newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantNotFound) {
@@ -438,7 +430,7 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 		t.Fatalf("provider persistence error=%v", saveError)
 	}
 	snapshot, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, "provider system")
-	if saveError != nil || snapshot.providerAPIKeys[newProviderID(ProviderNameOpenAI)] != "sk-key" {
+	if saveError != nil || snapshot.providerSettings[newProviderID(ProviderNameOpenAI)].apiKey != "sk-key" {
 		t.Fatalf("provider snapshot=%+v error=%v", snapshot, saveError)
 	}
 	originalCiphertext := database.tenantsByID[identifier.string()].ProviderAPIKeys[0].EncryptedAPIKey
@@ -653,6 +645,67 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	adminSnapshots, adminError := store.adminUsersSummary()
 	if adminError != nil || len(adminSnapshots) != 2 || adminSnapshots[0].userID != "tauth-second" {
 		t.Fatalf("admin snapshots=%+v error=%v", adminSnapshots, adminError)
+	}
+}
+
+func TestManagedTenantStoreProviderRoutingReconciliationErrors(t *testing.T) {
+	now := time.Date(2026, 7, 26, 20, 0, 0, 0, time.UTC)
+	principal := managementPrincipal{userID: "routing-owner", userEmail: "routing@example.com"}
+	database := newFakeManagedTenantDatabase()
+	identifier := fakeUserWithTenant(database, principal, "routing-default", "Default", now)
+	store := newManagedTenantStoreWithDatabase(database)
+	store.routingDefaults = internalManagementProviderRegistry()
+	store.randomReader = bytes.NewReader(bytes.Repeat([]byte{4}, 512))
+	store.now = func() time.Time { return now }
+
+	record := database.tenantsByID[identifier.string()]
+	record.ProviderAPIKeys = []managedProviderAPIKeyRecord{{
+		TenantID:        record.TenantID,
+		ProviderID:      ProviderNameOpenAI,
+		EncryptedAPIKey: "invalid",
+		TextModel:       ModelNameGPT41,
+	}}
+	database.tenantsByID[identifier.string()] = record
+	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameDeepSeek), "sk-deepseek", ModelNameDeepSeekV4Flash, ""); !errors.Is(saveError, errManagedProviderKeyDecryption) {
+		t.Fatalf("save provider decryption error=%v", saveError)
+	}
+	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedProviderKeyDecryption) {
+		t.Fatalf("remove provider decryption error=%v", removeError)
+	}
+
+	record.ProviderAPIKeys = nil
+	record.DefaultProvider = "missing"
+	record.DefaultModel = ""
+	database.tenantsByID[identifier.string()] = record
+	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
+		t.Fatalf("save invalid defaults error=%v", saveError)
+	}
+	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedRoutingDefaultsInvalid) {
+		t.Fatalf("remove invalid defaults error=%v", removeError)
+	}
+
+	record.DefaultProvider = ""
+	encryptedUnknownKey, encryptionError := store.providerKeyCipher.encrypt(
+		bytes.NewReader(bytes.Repeat([]byte{5}, store.providerKeyCipher.aeadCipher.NonceSize())),
+		record.TenantID,
+		"missing",
+		"sk-missing",
+	)
+	if encryptionError != nil {
+		t.Fatalf("encrypt unknown provider: %v", encryptionError)
+	}
+	record.ProviderAPIKeys = []managedProviderAPIKeyRecord{{
+		TenantID:        record.TenantID,
+		ProviderID:      "missing",
+		EncryptedAPIKey: encryptedUnknownKey,
+		TextModel:       "missing-model",
+	}}
+	database.tenantsByID[identifier.string()] = record
+	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
+		t.Fatalf("save reconciliation error=%v", saveError)
+	}
+	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedRoutingDefaultsInvalid) {
+		t.Fatalf("remove reconciliation error=%v", removeError)
 	}
 }
 

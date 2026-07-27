@@ -19,6 +19,14 @@ import (
 func TestManagedTenantSQLiteMigrationPreflightRejectsMalformedOwnershipData(t *testing.T) {
 	cipher := internalManagedProviderKeyCipher()
 	providers := internalManagementProviderRegistry()
+	dashScopeIdentifier := newProviderID(ProviderNameDashScope)
+	dashScopeDefinition := providers.definitions[dashScopeIdentifier]
+	dashScopeDefinition.defaultTextModel = newModelID(ModelNameDashScopeQwenPlus)
+	dashScopeDefinition.textModels = textModelSet(ModelEndpointCatalog{
+		DefaultModel: ModelNameDashScopeQwenPlus,
+		Models:       []ModelConfiguration{{ID: ModelNameDashScopeQwenPlus}},
+	})
+	providers.definitions[dashScopeIdentifier] = dashScopeDefinition
 	now := time.Date(2026, 7, 25, 17, 0, 0, 0, time.UTC)
 
 	type fixture struct {
@@ -37,22 +45,23 @@ func TestManagedTenantSQLiteMigrationPreflightRejectsMalformedOwnershipData(t *t
 		return fixture{database: database, tenant: tenantRecord}
 	}
 	addProvider := func(subTest *testing.T, testFixture fixture, mutate func(*legacyManagedProviderAPIKeyRecord)) {
-		encryptedKey, encryptionError := cipher.encrypt(
-			bytes.NewReader(bytes.Repeat([]byte{1}, cipher.aeadCipher.NonceSize())),
-			testFixture.tenant.UserID,
-			ProviderNameOpenAI,
-			"sk-key",
-		)
-		if encryptionError != nil {
-			subTest.Fatalf("encrypt provider fixture: %v", encryptionError)
-		}
 		record := legacyManagedProviderAPIKeyRecord{
-			UserID: testFixture.tenant.UserID, ProviderID: ProviderNameOpenAI, EncryptedAPIKey: encryptedKey,
+			UserID: testFixture.tenant.UserID, ProviderID: ProviderNameOpenAI,
 			TextModel: ModelNameGPT41, CreatedAt: now, UpdatedAt: now,
 		}
 		if mutate != nil {
 			mutate(&record)
 		}
+		encryptedKey, encryptionError := cipher.encrypt(
+			bytes.NewReader(bytes.Repeat([]byte{1}, cipher.aeadCipher.NonceSize())),
+			record.UserID,
+			record.ProviderID,
+			"sk-key",
+		)
+		if encryptionError != nil {
+			subTest.Fatalf("encrypt provider fixture: %v", encryptionError)
+		}
+		record.EncryptedAPIKey = encryptedKey
 		if createError := testFixture.database.Table(managedProviderKeyTable).Create(&record).Error; createError != nil {
 			subTest.Fatalf("seed provider fixture: %v", createError)
 		}
@@ -191,6 +200,25 @@ func TestManagedTenantSQLiteMigrationPreflightRejectsMalformedOwnershipData(t *t
 				})
 			},
 			want: "missing-model",
+		},
+		{
+			name: "provider alias",
+			configure: func(subTest *testing.T, testFixture fixture) {
+				addProvider(subTest, testFixture, func(record *legacyManagedProviderAPIKeyRecord) {
+					record.ProviderID = providerAliasQwen
+					record.TextModel = ModelNameDashScopeQwenPlus
+				})
+			},
+			want: "provider=qwen model=qwen-plus reason=not_canonical",
+		},
+		{
+			name: "noncanonical model case",
+			configure: func(subTest *testing.T, testFixture fixture) {
+				addProvider(subTest, testFixture, func(record *legacyManagedProviderAPIKeyRecord) {
+					record.TextModel = strings.ToUpper(ModelNameGPT41)
+				})
+			},
+			want: "provider=openai model=GPT-4.1 reason=not_canonical",
 		},
 		{
 			name: "plaintext provider key",

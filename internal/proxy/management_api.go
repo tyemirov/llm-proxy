@@ -693,7 +693,7 @@ func (service *managementService) updateDefaultsHandler() gin.HandlerFunc {
 			writeManagementStoreError(ginContext, snapshotError)
 			return
 		}
-		if defaultsError := service.validateManagedRoutingDefaults(currentSnapshot.providerAPIKeys, defaults); defaultsError != nil {
+		if defaultsError := service.validateManagedRoutingDefaults(currentSnapshot.providerSettings, defaults); defaultsError != nil {
 			ginContext.String(http.StatusBadRequest, defaultsError.Error())
 			return
 		}
@@ -742,7 +742,7 @@ func (service *managementService) writeTenantProfileResponse(ginContext *gin.Con
 }
 
 func (service *managementService) tenantProfileResponse(snapshot managedTenantSnapshot) (managementTenantProfileResponse, error) {
-	defaults, defaultsError := validatePersistedManagedRoutingDefaults(service.providers, snapshot.defaults)
+	defaults, defaultsError := validatePersistedManagedRoutingDefaults(service.providers, snapshot.providerSettings, snapshot.defaults)
 	if defaultsError != nil {
 		return managementTenantProfileResponse{}, fmt.Errorf("%w: tenant=%s: %w", errManagedRoutingDefaultsInvalid, snapshot.tenantID, defaultsError)
 	}
@@ -857,18 +857,8 @@ func (service *managementService) validateManagedProviderSettings(providerIdenti
 	return nil
 }
 
-func (service *managementService) validateManagedRoutingDefaults(providerAPIKeys map[providerID]string, defaults managedRoutingDefaults) error {
-	requestTenant := tenant{
-		identifier:      tenantID("management-validation"),
-		defaults:        newTenantDefaults(defaults.value()),
-		managed:         true,
-		providerAPIKeys: providerAPIKeys,
-	}
-	validator := newModelValidator(service.providers.forTenant(requestTenant))
-	if _, _, validationError := validator.ResolveText(constants.EmptyString, constants.EmptyString, requestTenant.defaults.provider, requestTenant.defaults.model, false); validationError != nil {
-		return fmt.Errorf("%w: %v", errManagementDefaults, validationError)
-	}
-	if _, _, validationError := validator.ResolveDictation(constants.EmptyString, constants.EmptyString, requestTenant.defaults.dictationProvider, requestTenant.defaults.dictationModel); validationError != nil {
+func (service *managementService) validateManagedRoutingDefaults(providerSettings map[providerID]managedProviderSettings, defaults managedRoutingDefaults) error {
+	if _, validationError := validatePersistedManagedRoutingDefaults(service.providers, providerSettings, defaults.value()); validationError != nil {
 		return fmt.Errorf("%w: %v", errManagementDefaults, validationError)
 	}
 	return nil

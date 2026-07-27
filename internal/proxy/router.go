@@ -537,16 +537,24 @@ func dictateHandler(upstreamProviders *providerRouter, providers *providerRegist
 			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, usageDictationProviderIdentifier(ginContext, requestTenant.defaults), usageDictationModelIdentifier(ginContext, requestTenant.defaults), requestStart)
 			return
 		}
-		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxInputAudioBytes+2*1024*1024)
+		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxInputAudioBytes+dictationMultipartOverheadBytes)
 		if parseError := ginContext.Request.ParseMultipartForm(maxInputAudioBytes); parseError != nil {
 			if requestContextEnded(ginContext) {
 				recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, usageDictationProviderIdentifier(ginContext, requestTenant.defaults), usageDictationModelIdentifier(ginContext, requestTenant.defaults), requestStart)
 				return
 			}
-			ginContext.String(http.StatusBadRequest, errorInvalidAudioForm)
+			statusCode := http.StatusBadRequest
+			responseMessage := errorInvalidAudioForm
+			var maxBytesError *http.MaxBytesError
+			if errors.As(parseError, &maxBytesError) {
+				statusCode = http.StatusRequestEntityTooLarge
+				responseMessage = errorAudioPayloadTooLarge
+			}
+			ginContext.String(statusCode, responseMessage)
 			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, usageDictationProviderIdentifier(ginContext, requestTenant.defaults), usageDictationModelIdentifier(ginContext, requestTenant.defaults), requestStart)
 			return
 		}
+		defer ginContext.Request.MultipartForm.RemoveAll()
 		if rejectClientProviderCredentialsFromForm(ginContext) {
 			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, usageDictationProviderIdentifier(ginContext, requestTenant.defaults), usageDictationModelIdentifier(ginContext, requestTenant.defaults), requestStart)
 			return
@@ -559,6 +567,11 @@ func dictateHandler(upstreamProviders *providerRouter, providers *providerRegist
 			return
 		}
 		defer audioFile.Close()
+		if header.Size > maxInputAudioBytes {
+			ginContext.String(http.StatusRequestEntityTooLarge, errorAudioPayloadTooLarge)
+			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, usageDictationProviderIdentifier(ginContext, requestTenant.defaults), usageDictationModelIdentifier(ginContext, requestTenant.defaults), requestStart)
+			return
+		}
 
 		fileName := "audio.webm"
 		if header != nil {

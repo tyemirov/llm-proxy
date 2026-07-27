@@ -253,11 +253,6 @@ func (registry *providerRegistry) forTenant(requestTenant tenant) *providerRegis
 			if definition.supportsDictation {
 				definition.transcriptionAPIKey = providerSettings.apiKey
 			}
-		} else if apiKey, configured := requestTenant.providerAPIKeys[identifier]; configured {
-			definition.textAPIKey = apiKey
-			if definition.supportsDictation {
-				definition.transcriptionAPIKey = apiKey
-			}
 		}
 		definitions[identifier] = definition
 	}

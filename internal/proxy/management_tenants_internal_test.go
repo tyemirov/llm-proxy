@@ -130,9 +130,10 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 	if firstRecordError != nil {
 		t.Fatalf("load migrated first tenant: %v", firstRecordError)
 	}
+	expectedMigratedDefaults := DefaultTenantDefaults()
 	if firstRecord.Name != "Default" || firstRecord.OwnerUserID != firstTenant.UserID ||
 		managedSecretDigestValue(firstRecord.SecretDigest) != firstTenant.SecretDigest ||
-		firstRecord.defaults() != firstTenant.defaults() ||
+		firstRecord.defaults() != expectedMigratedDefaults ||
 		!firstRecord.CreatedAt.Equal(firstTenant.CreatedAt) || !firstRecord.UpdatedAt.Equal(firstTenant.UpdatedAt) {
 		t.Fatalf("migrated first tenant=%+v", firstRecord)
 	}
@@ -164,6 +165,85 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 	}
 	if initializeError := initializeManagedTenantSchema(database.database, providerKeyCipher, providers); initializeError != nil {
 		t.Fatalf("reopen current schema: %v", initializeError)
+	}
+}
+
+func TestManagedTenantKeyedRoutingDefaultsMigrationReconcilesExistingTenants(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "keyed-routing-defaults.db")
+	database, openError := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+	if openError != nil {
+		t.Fatalf("open SQLite fixture: %v", openError)
+	}
+	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
+		t.Fatalf("create schema two fixture: %v", migrationError)
+	}
+	providers := internalManagementProviderRegistry()
+	providerKeyCipher := internalManagedProviderKeyCipher()
+	now := time.Date(2026, 7, 26, 18, 0, 0, 0, time.UTC)
+	userRecord := managedUserRecord{UserID: "keyed-default-owner", CreatedAt: now, UpdatedAt: now}
+	if createError := database.Create(&userRecord).Error; createError != nil {
+		t.Fatalf("seed user: %v", createError)
+	}
+	legacyDefaults, defaultsError := newManagedRoutingDefaults(providers, DefaultTenantDefaults())
+	if defaultsError != nil {
+		t.Fatalf("legacy defaults: %v", defaultsError)
+	}
+	tenantRecord := managedTenantRecord{
+		TenantID:    "keyed-default-tenant",
+		OwnerUserID: userRecord.UserID,
+		Name:        "Default",
+		NameKey:     "default",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	tenantRecord.applyRoutingDefaults(legacyDefaults)
+	if createError := database.Create(&tenantRecord).Error; createError != nil {
+		t.Fatalf("seed tenant: %v", createError)
+	}
+	encryptedKey, encryptionError := providerKeyCipher.encrypt(
+		bytes.NewReader(bytes.Repeat([]byte{7}, providerKeyCipher.aeadCipher.NonceSize())),
+		tenantRecord.TenantID,
+		ProviderNameDeepSeek,
+		"sk-deepseek",
+	)
+	if encryptionError != nil {
+		t.Fatalf("encrypt provider key: %v", encryptionError)
+	}
+	providerKeyRecord := managedProviderAPIKeyRecord{
+		TenantID:        tenantRecord.TenantID,
+		ProviderID:      ProviderNameDeepSeek,
+		EncryptedAPIKey: encryptedKey,
+		TextModel:       ModelNameDeepSeekV4Flash,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	if createError := database.Create(&providerKeyRecord).Error; createError != nil {
+		t.Fatalf("seed provider key: %v", createError)
+	}
+	if createError := database.Create(&managedSchemaMigrationRecord{Version: managedUsageOutcomeSchemaVersion, AppliedAt: now}).Error; createError != nil {
+		t.Fatalf("seed schema version: %v", createError)
+	}
+
+	if migrationError := initializeManagedTenantSchema(database, providerKeyCipher, providers); migrationError != nil {
+		t.Fatalf("migrate keyed defaults: %v", migrationError)
+	}
+	var migratedTenant managedTenantRecord
+	if queryError := database.Preload("ProviderAPIKeys").Where(&managedTenantRecord{TenantID: tenantRecord.TenantID}).First(&migratedTenant).Error; queryError != nil {
+		t.Fatalf("load migrated tenant: %v", queryError)
+	}
+	expectedDefaults := TenantDefaults{
+		Provider: ProviderNameDeepSeek,
+		Model:    ModelNameDeepSeekV4Flash,
+	}
+	if migratedTenant.defaults() != expectedDefaults || !migratedTenant.UpdatedAt.Equal(now) {
+		t.Fatalf("migrated defaults=%+v updated_at=%s", migratedTenant.defaults(), migratedTenant.UpdatedAt)
+	}
+	var latest managedSchemaMigrationRecord
+	if queryError := database.Order("version DESC").First(&latest).Error; queryError != nil || latest.Version != managedTenantSchemaVersion {
+		t.Fatalf("latest version=%+v error=%v", latest, queryError)
+	}
+	if validationError := initializeManagedTenantSchema(database, providerKeyCipher, providers); validationError != nil {
+		t.Fatalf("reopen keyed defaults schema: %v", validationError)
 	}
 }
 
@@ -311,6 +391,18 @@ func internalManagementProviderRegistry() *providerRegistry {
 				Dictation: ModelEndpointCatalog{
 					DefaultModel: DefaultDictationModel,
 					Models:       []ModelConfiguration{{ID: DefaultDictationModel}},
+				},
+			},
+			ProviderNameDeepSeek: {
+				Text: ModelEndpointCatalog{
+					DefaultModel: ModelNameDeepSeekV4Flash,
+					Models:       []ModelConfiguration{{ID: ModelNameDeepSeekV4Flash}},
+				},
+			},
+			ProviderNameDashScope: {
+				Text: ModelEndpointCatalog{
+					DefaultModel: ModelNameDashScopeQwenPlus,
+					Models:       []ModelConfiguration{{ID: ModelNameDashScopeQwenPlus}},
 				},
 			},
 		},
