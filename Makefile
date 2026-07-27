@@ -27,7 +27,7 @@ GATEWAY_DIR ?=
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-package-install-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox release-test test-live-provider-harness test-live-providers test-live-gemini build clean ci up release container-artifacts pages-artifact publish-release publish pages-deploy deploy
+.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-package-install-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox release-test test-live-provider-harness test-live-providers test-live-gemini live-test build clean ci up release container-artifacts pages-artifact publish-release publish pages-deploy deploy
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -85,6 +85,9 @@ test-live-providers:
 
 test-live-gemini:
 	@GO="$(GO)" ./scripts/test_live_gemini.sh
+
+live-test:
+	@./scripts/live_test.sh
 
 build:
 	mkdir -p $(BIN_DIR)
