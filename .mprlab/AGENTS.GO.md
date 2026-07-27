@@ -72,7 +72,7 @@ Backend guidance for Go code. Follow AGENTS.md for repo-wide policies, documenta
 
 - Core: `spf13/viper`, `spf13/cobra`, `uber/zap`.
 - HTTP: `gin-gonic/gin`, `gin-contrib/cors`.
-- Data: `gorm.io/gorm`, `gorm.io/driver/postgres`, `jackc/pgx/v5`.
+- Data: `gorm.io/gorm`, `github.com/glebarez/sqlite`.
 - Auth/Validation: `golang-jwt/jwt/v5`, `go-playground/validator/v10`.
 - Testing: `stretchr/testify`.
 - Optional: `joho/godotenv`, `prometheus/client_golang`, `robfig/cron/v3`.

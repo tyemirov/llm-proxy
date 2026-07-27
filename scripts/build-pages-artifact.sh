@@ -10,6 +10,7 @@ trap 'rm -rf "${render_directory}"' EXIT
 
 echo "==> [release] Rendering the llm-proxy Pages shell"
 go run ./cmd/cli --site-source "${site_source}" --site-config-url "${pages_config_url}" --render-site-output "${render_directory}/site"
+./scripts/stage-openapi-publication.sh docs/openapi.yaml "${render_directory}/site"
 
 for forbidden_file in config-ui.yaml llm-proxy-config.json; do
   if find "${render_directory}/site" -name "${forbidden_file}" -print -quit | grep -q .; then

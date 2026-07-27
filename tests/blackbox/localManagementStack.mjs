@@ -15,6 +15,7 @@ const sessionCookieName = "app_session_llm_proxy";
 const refreshCookieName = "app_refresh_llm_proxy";
 const tenantID = "llm-proxy";
 const operatorEmail = "operator@example.com";
+const secondOperatorEmail = "second-operator@example.com";
 const operatorPassword = "llm-proxy-local-password";
 const operatorPasswordHash = "$2y$10$1C96ZZ4ykZDQ6QXBoeDi8ONWnf2U7kf5eyY4P2Dm8ntJzBWIsdRS.";
 const jwtSigningKey = "llm-proxy-local-blackbox-signing-key-2026-07-13";
@@ -38,6 +39,7 @@ export const localManagementProfile = Object.freeze({
   sessionCookieName,
   refreshCookieName,
   operatorEmail,
+  secondOperatorEmail,
   operatorPassword,
 });
 
@@ -69,17 +71,6 @@ export async function startLocalManagementStack() {
     if (llmProxyConfig === packagedLLMProxyConfig) {
       throw new Error("llm_proxy_blackbox_port_contract_missing");
     }
-    const legacyMigrationBlock = [
-      "  legacy_token_migration:",
-      "    tenant_id: default",
-      '    owner_email: "${LLM_PROXY_MANAGEMENT_LEGACY_TOKEN_OWNER_EMAIL}"',
-      "",
-    ].join("\n");
-    const configWithoutLegacyMigration = llmProxyConfig.replace(legacyMigrationBlock, "");
-    if (configWithoutLegacyMigration === llmProxyConfig) {
-      throw new Error("llm_proxy_blackbox_legacy_migration_contract_missing");
-    }
-    llmProxyConfig = configWithoutLegacyMigration;
     const llmProxyConfigPath = path.join(temporaryDirectory, "llm-proxy-config.yml");
     await writeFile(llmProxyConfigPath, llmProxyConfig, { mode: 0o600 });
 
@@ -297,6 +288,10 @@ tenants:
           display_name: "Local Operator"
           avatar_url: "${frontendOrigin}/assets/llm-proxy/img/llm-proxy-icon.svg"
           password_hash: "${operatorPasswordHash}"
+        - email: "${secondOperatorEmail}"
+          display_name: "Second Local Operator"
+          avatar_url: "${frontendOrigin}/assets/llm-proxy/img/llm-proxy-icon.svg"
+          password_hash: "${operatorPasswordHash}"
     jwt_signing_key: "${jwtSigningKey}"
     cookie_domain: ""
     session_cookie_name: "${sessionCookieName}"
@@ -327,8 +322,7 @@ function llmProxyEnvironment(frontendOrigin, tAuthOrigin, llmProxyOrigin, tempor
     LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY: jwtSigningKey,
     LLM_PROXY_MANAGEMENT_JWT_ISSUER: "tauth",
     LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME: sessionCookieName,
-    LLM_PROXY_MANAGEMENT_DATABASE_DIALECT: "sqlite",
-    LLM_PROXY_MANAGEMENT_DATABASE_DSN: path.join(temporaryDirectory, "management.sqlite"),
+    LLM_PROXY_MANAGEMENT_DATABASE_PATH: path.join(temporaryDirectory, "management.sqlite"),
     LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY: providerKeyEncryptionKey,
     LLM_PROXY_MANAGEMENT_API_ORIGIN: llmProxyOrigin,
     LLM_PROXY_MANAGEMENT_PROXY_ORIGIN: llmProxyOrigin,

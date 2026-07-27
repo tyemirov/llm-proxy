@@ -12,7 +12,12 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - Omitted `provider` means the authenticated tenant's default provider.
 - `model` keeps its current meaning; omitted `model` means the authenticated tenant's default model when set, otherwise the selected provider's configured default model.
 - A provider with an API key configured must have a configured default text model so provider-selected requests can omit `model` consistently.
-- Managed tenants persist complete canonical text and dictation provider/model pairs. A request that omits the routing fields uses the exact saved text pair; management persistence never substitutes a different provider/model pair at runtime.
+- Managed tenants persist complete canonical provider/model pairs chosen only
+  from providers for which that tenant has a saved API key. The text pair is
+  empty only when no provider key exists; the dictation pair is empty when no
+  keyed provider supports dictation. A request that omits routing fields uses
+  the exact persisted pair, and read-time routing never substitutes another
+  provider or model.
 - Compatibility JSON `POST /` accepts exactly one text input shape: `prompt` for a single user prompt or `messages[]` for an OpenRouter/OpenAI-compatible chat transcript.
 - Canonical JSON `POST /v2` accepts only `messages[]` as the text input shape; request-body `prompt` and `system_prompt` are invalid.
 - `messages[]` items contain `role` and string `content`. Supported roles are `system`, `user`, and `assistant`; at least one `user` message is required.
@@ -131,13 +136,10 @@ Shared config fields:
 - `management.jwt_signing_key`
 - `management.jwt_issuer`
 - `management.session_cookie_name`
-- `management.database_dialect`
-- `management.database_dsn`
+- `management.database_path`
 - `management.provider_key_encryption_key`
 - `management.management_api_origin`
 - `management.proxy_origin`
-- `management.legacy_token_migration.tenant_id`
-- `management.legacy_token_migration.owner_email`
 - `tenants[].id`
 - `tenants[].secret`
 - `tenants[].defaults.provider`
@@ -213,10 +215,31 @@ OpenAI `request_profile` values select stable payload shapes:
 - `openai_responses_reasoning_tools`
 
 Every OpenAI Responses text request includes `background: true` and
-`store: true`; the proxy polls the returned response id server-side until a
-terminal status or the request's effective ingress-owned budget. Callers use
-one normal `GET /`, `POST /`, or `POST /v2` request and receive the final
-formatted answer; there is no streaming or client-side polling contract.
+`store: true`. A nonblank response id is polled server-side only for the
+documented `queued` and `in_progress` pending states or for a proxy-initiated
+stored background synthesis. Documented terminal states are resolved
+immediately, and missing or unknown states are rejected rather than guessed.
+Only `status=completed` is a successful terminal response.
+`status=incomplete`, including `reason=max_output_tokens`, returns the
+canonical `502` upstream failure without partial text, continuation, or another
+paid generation; any reported token usage remains attached only to the failed
+normalized usage event. Usage objects observed while polling one response id
+are cumulative snapshots, so the newest nonempty snapshot replaces earlier
+observations. Usage is summed only when completed-response synthesis creates a
+distinct response id. Callers use one normal `GET /`, `POST /`, or `POST /v2`
+request and receive a complete formatted answer or a non-2xx response; there is
+no streaming, client-side polling, durable provider-job queue, or later resume
+contract.
+
+All other current text transports are synchronous and validate their native
+completion evidence before returning text. The shared OpenAI-compatible Chat
+Completions adapter requires `finish_reason=stop`; Gemini
+`generateContent` requires `finishReason=STOP`; Anthropic Messages requires
+`stop_reason=end_turn` or `stop_sequence`. Missing, truncated,
+tool/intermediate, refused, or unknown reasons return `502` without partial
+text. Provider-specific deferred, batch, and asynchronous APIs are separate
+transports outside the configured routes; an arbitrary response `id` never
+activates generic polling.
 
 Bundled clients intentionally expose only the canonical `POST /v2` text
 contract. The installable Go CLI maps prompt flags or stdin into v2 `system` and
@@ -257,36 +280,45 @@ omission keeps the existing tenant/provider-default behavior.
 
 ## Managed Routing Defaults
 
-`PUT /api/management/defaults` requires both a text `provider`/`model` pair, a
-dictation `dictation_provider`/`dictation_model` pair, and an explicit
-`reasoning_effort` value. Empty is the explicit unset value; a nonempty value
-must be in the selected exact text provider/model capability list. The handler
-resolves the text pair before validating effort and constructs all defaults
-before the database write, so a blank, unknown, unsupported, cross-provider
-model, or incompatible effort fails with `400 managed_routing_defaults_invalid`
-and leaves the prior defaults unchanged. The profile response exposes
-capabilities only through `providers[].text_models[]`; it has no provider-level
-capability or global option list. A malformed profile is a workspace-integrity
-failure in the browser, not a UI repair opportunity.
+`PUT /api/management/tenants/:tenant_id/defaults` requires every field and
+accepts only complete text and dictation provider/model pairs. Each nonempty
+pair must name a provider with a saved tenant key; dictation also requires that
+provider's declared dictation capability. The text pair is both empty only when
+the tenant has no provider key, and the dictation pair is both empty only when
+none of its keyed providers supports dictation. `reasoning_effort` is explicit;
+empty means unset and a nonempty value must be in the selected exact text
+provider/model capability list. The handler resolves the text pair before
+validating effort and constructs all defaults before the database write, so a
+partial, unkeyed, unknown, unsupported, cross-provider pair or incompatible
+effort fails with `400 managed_routing_defaults_invalid` and leaves the prior
+defaults unchanged. The profile response exposes key eligibility through
+`providers[].has_key` and capabilities through `providers[].text_models[]`; it
+has no provider-level reasoning capability or global option list. A malformed
+profile is a workspace-integrity failure in the browser, not a UI repair
+opportunity.
 
-Startup owns a single versioned, transactional migration for previously stored
-management defaults. Version 3 retains an effort only when it is valid for its
-stored text route and converts an invalid nonempty value to the explicit unset
-value; it never derives an effort from a model, provider, profile, or web-search
-state. Before the version marker is written, it repairs only a blank
-model or a model configured for a different provider at the same endpoint by
-selecting the saved provider's configured endpoint default. It rejects unknown
-models and unknown or dictation-unsupported providers with contextual
-tenant, endpoint, provider, and model errors. After the marker exists, all
-persisted pairs must be canonical and valid; startup fails rather than retaining
-a fallback, compatibility read, or runtime repair path.
+Saving or removing a provider key reconciles routing defaults in the same
+database transaction. An eligible current pair is preserved. Otherwise the
+first keyed provider by canonical provider id becomes the text default using
+its saved text model, and the first keyed dictation-capable provider becomes the
+dictation default using its configured dictation model. A missing eligible
+provider clears that pair and also clears reasoning effort when text is unset.
+
+Startup requires all persisted pairs to be canonical, catalog-valid, and backed
+by saved tenant keys; it never retains a fallback, compatibility read, or
+runtime repair path. The bounded schema-version-3 migration applies the same
+deterministic reconciliation once, preserves tenant timestamps, verifies every
+row, and records the version atomically. Unknown models, corrupt keys, and
+unknown or dictation-unsupported providers fail with contextual owner, tenant,
+endpoint, provider, and model errors.
 
 `server.workers` limits concurrent upstream provider HTTP operations, not whole
 client request lifecycles. `server.queue_size` limits the number of additional
 upstream HTTP operations waiting for that shared worker limit. OpenAI
 background-response sleeps between polls do not occupy worker capacity; only the
-actual upstream create, poll, continuation, synthesis, chat, native-provider, or
-dictation HTTP operation does.
+actual upstream create, poll, completed-response synthesis, chat,
+native-provider, or dictation HTTP operation does. The admission queue does not
+persist provider job ids and does not implement retry or resume semantics.
 
 `server.upstream_rate_limits` is enforced by the same shared HTTP client for
 text and dictation. Each rule is a strict rolling-window budget keyed by exact
@@ -332,11 +364,20 @@ MPR UI is the sole browser authentication authority. Application JavaScript list
 
 DNS must leave `llm-proxy.mprlab.com` pointed at GitHub Pages and point `llm-proxy-api.mprlab.com` at the MPR gateway; the gateway route for `llm-proxy.mprlab.com` must be removed or moved so the backend only owns the API hostname. Management APIs under `/api/management` validate the configured TAuth session cookie locally with issuer `tauth` unless `management.jwt_issuer` overrides it.
 
-Provider API keys are accepted only through authenticated management endpoints and encrypted at rest with AES-GCM using the required `management.provider_key_encryption_key`. Normal save, profile, and administrator responses return only masked status. The sole raw-key response is the explicit owner-authenticated `POST /api/management/provider-keys/:provider/reveal` action, which requires the configured management origin and returns `Cache-Control: no-store`. Each provider-key record also stores that provider's selected text model and provider-specific system prompt. Managed text requests that select a provider and omit `model` use the saved provider text model, and provider-selected requests without request-level system instructions use the saved provider system prompt. Existing plaintext provider-key rows are encrypted and cleared during management startup, and existing provider-key rows without a text model are normalized to the current configured provider default model. This is an encrypted-at-rest guarantee for database dumps, backups, and direct storage access, not a user-only decryption or zero-knowledge guarantee.
+Provider API keys are accepted only through authenticated, workspace-scoped management endpoints and encrypted at rest with AES-GCM using the required `management.provider_key_encryption_key`. Normal save, workspace-profile, and administrator responses return only masked status. The sole raw-key response is the explicit owner-authenticated `POST /api/management/tenants/:tenant_id/provider-keys/:provider/reveal` action, which requires the configured management origin and returns `Cache-Control: no-store`. Each provider-key record also stores that provider's selected text model and provider-specific system prompt. Managed text requests that select a provider and omit `model` use the saved provider text model, and provider-selected requests without request-level system instructions use the saved provider system prompt. The bounded F014 migration rejects plaintext or corrupt legacy rows and re-encrypts valid keys with the preserved opaque tenant id as AES-GCM associated data. This is an encrypted-at-rest guarantee for database dumps, backups, and direct storage access, not a user-only decryption or zero-knowledge guarantee.
 
-Management mode requires `management.database_dialect`, `management.database_dsn`, and `management.provider_key_encryption_key`; supported GORM dialects are `postgres` and `sqlite`, with SQLite using a pure-Go GORM driver so `CGO_ENABLED=0` release builds remain valid. Administrators are config-owned through exact `management.admin_emails` entries; public config populates those entries from the plural `${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` YAML flow sequence placeholder so personal admin addresses stay out of the repository while allowing multiple admins. An admin session gets `user.is_admin: true`, an `Admin` avatar-menu item, and `GET /api/management/admin/users` access to all managed users' tenant facts and 30-day usage summaries without provider API keys, masked key values, generated secrets, secret digests, prompts, responses, audio names, or transcripts. Non-admin sessions receive `403` from admin APIs. The packaged management config uses strict expandable `LLM_PROXY_MANAGEMENT_*` placeholders, so local and hosted profiles must define explicit values in the runtime environment or `configs/.env`.
+Management mode requires `management.database_path` and `management.provider_key_encryption_key`; management persistence uses the pure-Go GORM SQLite driver so `CGO_ENABLED=0` release builds remain valid. Administrators are config-owned through exact `management.admin_emails` entries; public config populates those entries from the plural `${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` YAML flow sequence placeholder so personal admin addresses stay out of the repository while allowing multiple admins. An admin session gets `user.is_admin: true`, an `Admin` avatar-menu item, and `GET /api/management/admin/users` access to all managed users' tenant facts and 30-day usage summaries without provider API keys, masked key values, generated secrets, secret digests, prompts, responses, audio names, or transcripts. Non-admin sessions receive `403` from admin APIs. The packaged management config uses strict expandable `LLM_PROXY_MANAGEMENT_*` placeholders, so local and hosted profiles must define explicit values in the runtime environment or `configs/.env`.
 
-Signup state, enabled providers, defaults, and generated-secret digests are persisted through GORM and are never stored by mutating the runtime config file. The old startup importer is retired, and startup removes its obsolete marker table through GORM. If a prior release left exactly one `static-config:<tenant-id>` row, startup requires an exact `management.legacy_token_migration` tenant id and deployment-owned target email; the unowned token returns `403` until that verified email signs in. Drain every old service instance before that email signs in. The first matching management session atomically rekeys the tenant to the TAuth subject, preserves its token digest, defaults, creation time, and all usage events, and re-encrypts provider keys for the new owner id. An empty destination account created by an earlier sign-in is removed inside that transaction before the rekey; a destination with a generated secret, provider settings, or usage returns `409` without partial writes. After production verification, remove the temporary migration config.
+Account state, workspace names, enabled providers, defaults, and generated-secret digests are persisted through GORM and are never stored by mutating the runtime config file. One TAuth subject owns one or more personal workspaces; there is no membership, invitation, role, or shared-workspace model. F014 upgrades the previous one-row-per-user shape as one startup transaction: it preflights all legacy tenant, provider, and usage rows; rejects unclaimed static owners, duplicates, invalid routing or secrets, plaintext/corrupt keys, and orphan rows; renames the two colliding legacy GORM indexes and the old tables; creates explicit user and workspace records; preserves opaque tenant ids and usage; rebinds provider-key encryption to tenant ids; verifies counts, values, and decryption; writes schema version 1; and drops only its bounded legacy tables. Every failed stage rolls back to the untouched legacy schema and original index names and prevents startup.
+
+Schema version 2 gives every managed usage event one nonblank outcome code chosen at the request/error boundary: `success`, `invalid_request`, `payload_too_large`, `rate_limited`, `service_unavailable`, `request_timeout`, or `upstream_error`. The bounded upgrade maps historical successful rows to `success` and exact `400`, `413`, `429`, `499`, `502`, `503`, and `504` statuses to their canonical failure codes before adding the tenant/success/time/id page index; caller cancellation `499` and proxy-budget expiry `504` both become `request_timeout`. An unsupported historical status rejects startup before mutation. Neither current recording nor migration persists or reconstructs raw provider bodies or free-form error messages.
+
+Schema version 3 makes saved tenant keys the hard eligibility boundary for
+managed routing defaults. Its bounded upgrade decrypts and validates every
+provider record, preserves eligible defaults, deterministically replaces
+ineligible pairs, clears text or dictation when no provider is eligible,
+preserves tenant timestamps, verifies the result, and records version 3 in one
+transaction. Current-version startup rejects any later drift.
 
 Server/runtime settings, backend auth validation, browser-facing MPR UI/TAuth settings, provider base URLs, transcription URLs, and model catalogs remain config-file-owned. Database access must use GORM model APIs without raw SQL. Generated llm-proxy client secrets are returned once and stored as SHA-256 digests. Managed tenants authenticate the same public proxy endpoints with `key=<generated secret>` and use only their own saved provider credentials.
 
@@ -344,9 +385,13 @@ The shared header has one application-owned notification region followed by the 
 
 On startup, the `mpr-ui@latest` shell restores the browser session through TAuth `/auth/session` and reports the resulting lifecycle state before LLM Proxy requests protected workspace data. A valid refresh cookie rotates into a new access cookie without exposing the signed-out panel. Ordinary reloads never clear either cookie. The explicit user-menu **Sign out** action is the only application flow that calls `/auth/logout` and clears the session.
 
+The LLM Proxy application startup guard covers the complete versioned first-party module graph and the pinned Alpine module. A module-link failure or browser-side rejection of the one canonical CDN dependency renders the application-owned recovery surface, completes `llm-proxy:management-ready`, and makes no protected management request; it never tries a mirror, bundled copy, retry, or alternate authentication path. The local ghttp surface sends `Cache-Control: no-store`, while one bounded module-graph revision evicts files cached before that policy. MPR UI continues to own the authenticated session and shared transition, while LLM Proxy owns whether its application runtime mounted successfully.
+
 The backend consumes TAuth's published Go `pkg/sessionvalidator` for cookie/JWT validation and adds only llm-proxy's tenant, required-expiry, and principal invariants; no application-owned JWT parser or claims schema exists. The gateway `llm-proxy` target stages both services' runtime inputs, restarts `tauth-api` and `llm-proxy`, and verifies both health checks before Pages activation so signing-key, cookie-name, and cookie-domain changes cannot leave the two runtimes split.
 
-The authenticated management landing view is usage-focused. `GET /api/management/usage?interval=all|30d|7d|1d` requires exactly one recognized interval and returns `400` for missing, repeated, or unknown values. The user response is the current `interval`, `bucket_unit`, aggregate `totals`, ordered generic `buckets`, and provider, model, and status-code usage for the signed-in user's managed tenant; it contains no fixed-period `period_days` or `daily` fields. `1d` uses 24 hourly buckets, `7d` and `30d` use exact trailing-duration daily buckets, and `all` uses UTC daily buckets from the earliest retained tenant event through the one captured server timestamp. An empty all-time result has no buckets. The UI orders its controls as `ALL`, `30 days`, `7 days`, and `1 day`, defaults to `30 days`, replaces every dashboard surface from the selected response, retains the selection on refresh, disables interval/refresh controls while loading, discards stale out-of-order responses, and clears the selected snapshot on failure. Each database query applies the authenticated user id and the selected time boundary; the admin API remains a distinct 30-day daily contract. Managed proxy requests record endpoint, provider, model, status, success flag, latency, and normalized token counts only; prompts, audio, transcripts, responses, tenant secrets, and provider API keys are excluded from usage events. Client access, generated secrets, routing defaults, copyable request examples, and provider key controls live in a large Settings modal opened from the shared `<mpr-user>` avatar dropdown, where the `Settings` item is inserted before `Sign out`. The routing-default form keeps Text provider, Text model, and the selected model's Reasoning effort control on one desktop row. It clears an incompatible effort on a model change, exposes `Not supported` when the route has no capability, and autosaves provider/model/effort selections immediately plus the tenant system prompt on field exit. Settings serializes every mutation that returns a complete management profile and locks its controls while a close request waits for in-flight work. A client key created or replaced during that wait keeps Settings open for an explicit later close so its one-time value remains available to copy; revoking the client key or removing the last provider key re-enforces mandatory setup. Failed edits remain available for retry. Request examples include copyable default text, v2, and dictation commands plus copyable selected-provider text and v2 commands; dictation-capable selected providers also show a provider-specific dictation command. Provider key controls use one selected-provider editor with API key, text model, and system prompt fields because those settings are part of the provider-owned managed routing contract.
+The authenticated management landing view is usage-focused. The browser first loads `GET /api/management/account`; every returned tenant remains operational through its own generated secret, and the browser has no global active-tenant or URL/history selection contract. The independent `Usage tenant` control defaults to `All tenants` immediately before the ordered `ALL`, `30 days`, `7 days`, and `1 day` controls, while the interval defaults to `30 days`. The all-tenant selection calls `GET /api/management/usage?interval=all|30d|7d|1d`; an explicit tenant calls `GET /api/management/tenants/:tenant_id/usage?interval=all|30d|7d|1d`. Both operations require exactly one recognized interval, return `400` for missing, repeated, or unknown values, and carry `Cache-Control: no-store`. The response is the current `interval`, `bucket_unit`, aggregate `totals`, ordered generic `buckets`, and provider, model, and status-code usage for the selected scope; it contains no fixed-period `period_days` or `daily` fields. `1d` uses 24 hourly buckets, `7d` and `30d` use exact trailing-duration daily buckets, and `all` uses UTC daily buckets from the earliest retained event through one captured server timestamp. An empty all-time result has no buckets. Account-wide aggregation runs once at the database boundary across every owned tenant and calculates totals and average latency from the complete event set; the browser never fans out per-tenant summaries. Refresh and interval changes retain the Usage tenant selection, Settings changes do not affect it, loading disables the Usage controls, and request identity prevents a stale scope or interval response from replacing the selected snapshot. The admin API remains a distinct 30-day daily contract. Managed proxy requests record endpoint, provider, model, status, success flag, latency, and normalized token counts only; prompts, audio, transcripts, responses, tenant secrets, and provider API keys are excluded from usage events. Tenant lifecycle, client access, generated secrets, routing defaults, copyable request examples, and provider key controls live in the Settings modal opened from the shared `<mpr-user>` avatar dropdown, where the `Settings` item is inserted before `Sign out`. One compact `Tenant access` row combines the `Tenant` selector, modal Rename, client-key state and one-time reveal/copy actions, confirmed Replace key, confirmed Delete tenant, and Create tenant. The selected tenant is only the Settings editor context. Switching that selector with an unsaved draft requires explicit discard confirmation, clears any raw one-time secret or revealed provider key from browser state, and never changes the Usage tenant. The routing-default form lists only providers with saved tenant keys; its dictation controls are disabled and show `Not configured` when none of those providers supports dictation. It keeps Text provider, Text model, and the selected model's Reasoning effort control on one desktop row, clears an incompatible effort on a model change, exposes `Not supported` when the route has no reasoning capability, and autosaves provider/model/effort selections immediately plus the tenant system prompt on field exit. Tenant-wide and provider-specific system-prompt fields start collapsed behind semantic `System prompt` disclosures with a visible `Hidden` indicator; they expand through pointer or keyboard activation and collapse again when Settings opens or their tenant/provider context changes. Settings serializes every mutation that returns a complete tenant profile and locks its controls while a close request waits for in-flight work. A client key created or replaced during that wait keeps Settings open for an explicit later close so its one-time value remains available to copy; removing the last provider key re-enforces mandatory setup; client keys can only be replaced or removed with their owning non-final tenant. Failed edits remain available for retry. Request examples include copyable default text and v2 commands only when a keyed text default exists, and a default dictation command only when a keyed dictation default exists, plus copyable selected-provider text and v2 commands; dictation-capable selected providers also show a provider-specific dictation command. Provider key controls use one selected-provider editor with API key, text model, and system prompt fields because those settings are part of the provider-owned managed routing contract.
+
+When the selected Usage snapshot contains failures, the success-rate card exposes an **N failed requests** action. Its semantic dialog keeps the selected interval and the summary's non-success status breakdown. `GET /api/management/usage/failures` pages newest-first failures across all owned tenants and adds each row's safe tenant id and current name; `GET /api/management/tenants/:tenant_id/usage/failures` retains the tenant-less row shape for one explicitly selected owned tenant. Both operations require one `interval`, accept one `limit` from 1 through 100 and one opaque `cursor`, return `Cache-Control: no-store`, and paginate against one opaque snapshot using stable event-time/id order. Each cursor is bound to its exact all-tenant or tenant scope and is rejected in every other scope. Apart from the account-wide tenant context, rows contain only event time, endpoint, provider, model, status, canonical outcome code, and latency. Dialog load failures stay local; Usage tenant or interval changes abort and invalidate the request; the admin surface remains aggregate-only.
 
 ## Error Contract
 
@@ -356,16 +401,19 @@ The authenticated management landing view is usage-focused. `GET /api/management
 - `429`: upstream provider rate limiting.
 - `503`: registered non-default provider credential is unavailable, so the selected provider is disabled until its API key is configured.
 - `504`: the overall proxy request timed out before the selected upstream provider returned a final result.
-- `502`: other upstream provider failure.
+- `502`: upstream provider failure, including OpenAI Responses
+  `status=incomplete`, Chat Completions non-`stop` finish reasons, Gemini
+  non-`STOP` finish reasons, and Anthropic non-complete stop reasons; partial
+  provider text is never returned.
 
 ## Implementation Notes
 
 - Provider/model validation happens at the HTTP edge through a provider registry built from the configured model catalogs.
-- OpenAI keeps the existing Responses API adapter and derives Responses and Models URLs from `providers.openai.base_url`; audio transcription uses `providers.openai.transcriptions_url`.
-- Non-OpenAI text providers use a shared OpenAI-compatible Chat Completions adapter.
+- OpenAI keeps the existing Responses API adapter and derives Responses and Models URLs from `providers.openai.base_url`; audio transcription uses `providers.openai.transcriptions_url`. The adapter accepts text only from `status=completed`, polls only the documented pending states, and rejects failed, cancelled, incomplete, missing, or unknown states.
+- Non-OpenAI text providers use a shared OpenAI-compatible Chat Completions adapter. It requires `finish_reason=stop` before returning content or reasoning text.
 - Meta uses the shared OpenAI-compatible Chat Completions adapter against `providers.meta.base_url`; its proxy contract is text-only and has no Responses fallback.
-- Anthropic uses a native Messages adapter, translating proxy `system` messages to the top-level Anthropic `system` parameter and `user`/`assistant` messages to Anthropic `messages[]`.
-- Gemini uses a native generateContent adapter against `providers.gemini.base_url`.
+- Anthropic uses a native Messages adapter, translating proxy `system` messages to the top-level Anthropic `system` parameter and `user`/`assistant` messages to Anthropic `messages[]`; only `end_turn` and `stop_sequence` are complete text stops.
+- Gemini uses a native generateContent adapter against `providers.gemini.base_url`; only `STOP` is a complete text finish reason.
 - Grok uses the shared OpenAI-compatible Chat Completions adapter against `providers.grok.base_url`.
 - OpenAI-compatible chat providers receive validated and sorted `messages[]` as provider-supported `role` and `content` items.
 - OpenAI Responses payload shape comes from the selected configured model's stable `request_profile`; model-specific web-search support comes from the selected model catalog entry. OpenAI Responses text calls run in background mode with stored responses so long provider work can be polled by llm-proxy while the caller waits on one REST request.
@@ -379,6 +427,14 @@ The authenticated management landing view is usage-focused. `GET /api/management
 Black-box router tests cover:
 
 - OpenAI omitted-provider regression.
+- OpenAI completed-only success and incomplete-response rejection through the
+  public `POST /v2` handler, including safe failed usage counts and no hidden
+  continuation.
+- OpenAI polling only for documented pending states, with missing and unknown
+  states rejected without another provider call.
+- Shared Chat Completions, Gemini, and Anthropic partial-response rejection
+  through public `POST /v2`, including retained failed usage counts and no
+  client-visible token headers or partial text.
 - Explicit Meta Muse Spark 1.1 routing through `GET /`, compatibility `POST /`, and canonical `POST /v2`.
 - Unsupported Meta `web_search` and dictation paths.
 - Explicit DeepSeek chat-completions routing.

@@ -9,6 +9,9 @@ services:
         condition: service_started
     env_file:
       - ./configs/.env.frontend.local
+    environment:
+      GHTTP_SERVE_PROXIES: "/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080"
+      GHTTP_SERVE_RESPONSE_HEADERS: "/=Cache-Control:no-store"
     ports:
       - "127.0.0.1:4179:4179"
     volumes:
@@ -22,6 +25,8 @@ services:
     command: ["/usr/local/bin/llm-proxy", "--config", "/app/configs/config.yml"]
     env_file:
       - ./configs/.env.api.local
+    environment:
+      LLM_PROXY_MANAGEMENT_TAUTH_URL: "http://localhost:4179"
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
@@ -33,8 +38,6 @@ services:
     pull_policy: always
     env_file:
       - ./configs/.env.tauth.local
-    ports:
-      - "127.0.0.1:8082:8080"
     volumes:
       - ./configs/tauth.local.yml:/config/tauth.local.yml:ro
       - tauth_local_data:/data

@@ -10,9 +10,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
+	"github.com/tyemirov/llm-proxy/internal/openapitest"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxyclient"
 	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
@@ -79,6 +82,7 @@ func TestConfigMessagesPostURLShapesAuthenticatedV2JSONPostURL(testingInstance *
 func TestClientPostMessagesSendsV2MessagesBody(testingInstance *testing.T) {
 	firstOrder := messageOrder(1)
 	secondOrder := messageOrder(2)
+	contract := loadCanonicalOpenAPIContract(testingInstance)
 	var capturedPath string
 	var capturedTimeout string
 	var capturedBody map[string]any
@@ -92,7 +96,32 @@ func TestClientPostMessagesSendsV2MessagesBody(testingInstance *testing.T) {
 		if decodeError := json.Unmarshal(bodyBytes, &capturedBody); decodeError != nil {
 			testingInstance.Fatalf("decode body: %v", decodeError)
 		}
-		_, _ = responseWriter.Write([]byte("ok"))
+		if validationError := contract.ValidateRequest("/v2", httpRequest.Method, httpRequest, bodyBytes); validationError != nil {
+			testingInstance.Fatalf("Go package request violates OpenAPI: %v", validationError)
+		}
+		contractFields, fieldsError := contract.RequestPropertyNames("/v2", http.MethodPost)
+		if fieldsError != nil {
+			testingInstance.Fatalf("OpenAPI v2 fields: %v", fieldsError)
+		}
+		actualFields := make([]string, 0, len(capturedBody))
+		for fieldName := range capturedBody {
+			actualFields = append(actualFields, fieldName)
+		}
+		sort.Strings(actualFields)
+		if !reflect.DeepEqual(actualFields, contractFields) {
+			testingInstance.Fatalf("Go package v2 fields=%v OpenAPI fields=%v", actualFields, contractFields)
+		}
+		responseBody := []byte("ok")
+		responseHeader := http.Header{}
+		responseHeader.Set("Content-Type", "text/plain; charset=utf-8")
+		responseHeader.Set(llmproxycontract.HeaderRequestTimeoutSeconds, "12")
+		if validationError := contract.ValidateResponse("/v2", http.MethodPost, http.StatusOK, responseHeader, responseBody); validationError != nil {
+			testingInstance.Fatalf("Go package success fixture violates OpenAPI: %v", validationError)
+		}
+		for headerName, headerValues := range responseHeader {
+			responseWriter.Header()[headerName] = headerValues
+		}
+		_, _ = responseWriter.Write(responseBody)
 	}))
 	defer server.Close()
 
@@ -151,6 +180,15 @@ func TestClientPostMessagesSendsV2MessagesBody(testingInstance *testing.T) {
 	if capturedBody["model"] != "deepseek-v4-flash" || capturedBody["web_search"] != true || capturedBody["max_tokens"] != float64(5) || capturedBody["reasoning_effort"] != "high" {
 		testingInstance.Fatalf("body=%v", capturedBody)
 	}
+}
+
+func loadCanonicalOpenAPIContract(testingInstance *testing.T) *openapitest.Contract {
+	testingInstance.Helper()
+	contract, loadError := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if loadError != nil {
+		testingInstance.Fatalf("load canonical OpenAPI contract: %v", loadError)
+	}
+	return contract
 }
 
 func TestClientOmitsModelWhenRequestUsesProviderDefault(testingInstance *testing.T) {
@@ -570,6 +608,7 @@ func TestConfigRejectsModelProfileSourceConflicts(testingInstance *testing.T) {
 }
 
 func TestClientSendsUnknownModelProfilePairToProxy(testingInstance *testing.T) {
+	contract := loadCanonicalOpenAPIContract(testingInstance)
 	profilePath := filepath.Join(testingInstance.TempDir(), "current-model.json")
 	replaceModelProfile(testingInstance, profilePath, `{"provider":"unknown","model":"unknown-model"}`)
 	var capturedProvider string
@@ -584,9 +623,22 @@ func TestClientSendsUnknownModelProfilePairToProxy(testingInstance *testing.T) {
 		if decodeError := json.Unmarshal(bodyBytes, &body); decodeError != nil {
 			testingInstance.Fatalf("decode body: %v", decodeError)
 		}
+		if validationError := contract.ValidateRequest("/v2", httpRequest.Method, httpRequest, bodyBytes); validationError != nil {
+			testingInstance.Fatalf("Go package error request violates OpenAPI: %v", validationError)
+		}
 		capturedModel, _ = body["model"].(string)
+		responseBody := []byte("unknown provider/model pair")
+		responseHeader := http.Header{}
+		responseHeader.Set("Content-Type", "text/plain; charset=utf-8")
+		responseHeader.Set(llmproxycontract.HeaderRequestTimeoutSeconds, "360")
+		if validationError := contract.ValidateResponse("/v2", http.MethodPost, http.StatusBadRequest, responseHeader, responseBody); validationError != nil {
+			testingInstance.Fatalf("Go package error fixture violates OpenAPI: %v", validationError)
+		}
+		for headerName, headerValues := range responseHeader {
+			responseWriter.Header()[headerName] = headerValues
+		}
 		responseWriter.WriteHeader(http.StatusBadRequest)
-		_, _ = responseWriter.Write([]byte("unknown provider/model pair"))
+		_, _ = responseWriter.Write(responseBody)
 	}))
 	defer server.Close()
 

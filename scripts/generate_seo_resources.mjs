@@ -1,7 +1,8 @@
 // @ts-check
 
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { load } from "js-yaml";
 
 const PUBLIC_ORIGIN = "https://llm-proxy.mprlab.com";
 const RESOURCE_ROOT = "site/resources";
@@ -11,10 +12,13 @@ const RESOURCE_DEFAULT_MODIFIED_DATE = "2026-07-11";
 const PRODUCT_NAME = "LLM Proxy";
 const REPOSITORY_URL = "https://github.com/tyemirov/llm-proxy";
 const README_USAGE_URL = `${REPOSITORY_URL}#usage`;
+const API_DOCUMENTATION_PATH = "/docs/";
+const OPENAPI_SCHEMA_PATH = "/openapi.yaml";
 const CLIENT_AUTHENTICATION_RESOURCE_SLUG = "llm-proxy-client-authentication";
-const CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE = "2026-07-24";
+const CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE = "2026-07-26";
 const MIN_PAGE_COUNT = 40;
 const MAX_PAGE_COUNT = 50;
+const canonicalV2Contract = await readCanonicalV2Contract();
 
 const evidence = Object.freeze({
   readme: "README.md",
@@ -101,16 +105,16 @@ const pages = Object.freeze([
       "Create a tenant in static config or through the management UI.",
       "Generate or configure a tenant secret for the client.",
       "Use the same key parameter across GET, POST, /v2, and /dictate.",
-      "Revoke or regenerate the secret when access should change.",
+      "Replace the secret or delete its owning managed tenant when access should change.",
     ],
     features: [
       ["Single credential surface", "Apps call one proxy secret instead of many provider keys.", "The same secret can protect text and dictation traffic."],
       ["Tenant defaults", "Omitted provider and model values resolve through tenant defaults.", "A caller can stay simple until it needs a per-request override."],
-      ["403 boundary", "Missing, invalid, or revoked tenant secrets return forbidden responses.", "Callers do not receive tenant discovery details."],
+      ["403 boundary", "Missing, invalid, or replaced tenant secrets return forbidden responses.", "Callers do not receive tenant discovery details."],
     ],
     examples: [
       ["Shared app platform", "A platform team provisions tenant secrets for several internal apps while keeping provider credentials central."],
-      ["Access revocation", "A generated secret can be revoked so future proxy calls with that secret stop working."],
+      ["Key replacement", "Replacing a generated secret immediately stops the prior value from authenticating future proxy calls."],
       ["Dictation plus text", "The same tenant-secret model can protect voice transcription and LLM response generation."],
     ],
     limitations: [
@@ -124,7 +128,7 @@ const pages = Object.freeze([
     category: "Management UI",
     primaryKeyword: "self-service LLM key management",
     title: "Self-service LLM key management for internal teams",
-    description: "Automatically create a signed-in user's LLM Proxy client key, then autosave one provider API key before they leave Settings.",
+    description: "Select a signed-in user's workspace, create its LLM Proxy client key, and autosave one provider API key before they leave Settings.",
     audience: "Teams that want user-owned AI access without asking operators to edit YAML for every change.",
     problem: "Operator-provisioned AI access does not scale when each user or team needs provider keys, defaults, generated secrets, and examples updated separately.",
     solution: "LLM Proxy includes an optional TAuth-protected management UI that creates a missing client key after authentication, autosaves provider settings, and keeps Settings open until at least one managed provider key persists.",
@@ -164,7 +168,7 @@ if (!this.hasSecret) {
     faq: [
       {
         question: "How does first-run LLM Proxy setup begin?",
-        answer: "After MPR UI reports an authenticated session, the management profile loads and the UI automatically creates a client key when the profile has none.",
+        answer: "After MPR UI reports an authenticated session, the account and selected workspace profile load. The UI automatically creates a client key when that workspace has none.",
       },
       {
         question: "What lets a user leave Settings?",
@@ -220,7 +224,7 @@ if (!this.hasSecret) {
     description: "Send ordered system, user, and assistant messages through one v2 endpoint before provider routing.",
     audience: "Developers who want a stable chat transcript contract instead of provider-specific payloads.",
     problem: "Chat transcript callers can end up building OpenAI, Anthropic, Gemini, and compatible-provider request bodies separately, with different message rules in each client.",
-    solution: "LLM Proxy exposes POST /v2 as the canonical chat endpoint. It accepts messages plus optional model, web_search, max_tokens, and route-bound reasoning_effort, then maps the request to the selected provider.",
+    solution: `LLM Proxy exposes ${canonicalV2Contract.path} as the canonical chat endpoint. Its artifact-defined request fields are ${canonicalV2Contract.fields.join(", ")}, and the proxy maps that shared request to the selected provider.`,
     steps: [
       "Send POST /v2 with messages[] and the tenant key query parameter.",
       "Use system role messages for instructions rather than a body system_prompt.",
@@ -526,36 +530,63 @@ if (!this.hasSecret) {
       "Management usage stores metadata and excludes prompts, transcripts, responses, provider keys, and tenant secrets.",
     ],
   }),
-  page({
+  evidencedPage({
     slug: "managed-tenant-usage-dashboard",
-    modifiedDate: "2026-07-23",
     category: "Usage",
     primaryKeyword: "managed tenant usage dashboard",
-    title: "Managed tenant usage dashboard for LLM requests",
-    description: "Show signed-in users selectable all-time, 30-day, 7-day, and 1-day LLM usage summaries.",
+    title: "Account-wide managed tenant usage dashboard for LLMs",
+    description: "See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.",
     audience: "Teams giving users self-service AI access while keeping usage visible.",
-    problem: "A key-management portal is incomplete if users cannot see whether their managed proxy traffic is succeeding or which providers and models they use.",
-    solution: "LLM Proxy's authenticated landing screen is a usage dashboard for the signed-in user's managed tenant.",
+    problem: "A multi-tenant key-management portal is incomplete when its default dashboard hides every tenant except one or implies that selecting a tenant activates it.",
+    solution: "LLM Proxy's authenticated Usage Overview defaults to account-wide aggregates across every owned tenant, with an independent tenant filter and safe scope-bound failure details.",
+    quickVerdict: "Every tenant remains independently routable. Usage opens on All tenants and 30 days, while Settings has its own editor-only tenant selector.",
     steps: [
       "Enable management mode and generated-secret routing.",
-      "Send proxy requests with the generated tenant secret.",
-      "Record usage metadata for managed-tenant requests.",
-      "Select all, 30d, 7d, or 1d through GET /api/management/usage?interval=<interval> and the dashboard UI.",
+      "Send proxy requests through any owned tenant's generated secret; each tenant remains operational independently.",
+      "Record canonical outcome metadata for managed-tenant requests without storing request or provider-error content.",
+      "Open Usage Overview on All tenants and 30 days, or use the Usage tenant selector immediately before ALL to narrow the report.",
+      "Read account-wide totals from GET /api/management/usage or one tenant from GET /api/management/tenants/:tenant_id/usage.",
+      "When failures exist, open N failed requests; account-wide rows include safe tenant context and tenant-scoped rows do not repeat it.",
     ],
     features: [
-      ["Selectable totals", "ALL, 30 days, 7 days, and 1 day replace requests, tokens, success rate, providers, and models together.", "Users can compare the same surfaces at useful time scales."],
-      ["Interval buckets", "One day renders hourly buckets; longer and all-time views render daily buckets.", "Traffic changes stay legible at each selected scale."],
-      ["Sensitive-data exclusion", "Stored usage excludes prompts, audio, transcripts, responses, tenant secrets, and provider keys.", "Operational metrics do not become a content database."],
+      ["All-tenant default", "The default All tenants and 30 days selections populate requests, tokens, success rate, providers, models, statuses, and buckets together.", "The first dashboard snapshot represents every owned tenant rather than the oldest one."],
+      ["Independent selectors", "The Tenant control in Settings chooses only the editor; Usage tenant chooses only the report.", "Changing provider settings for one tenant cannot silently narrow the usage dashboard."],
+      ["Safe failure vocabulary", "Rows distinguish validation, payload size, rate limit, unavailable, timeout, and upstream failures with canonical codes.", "A failed request is not automatically labeled a provider failure."],
+      ["Scope-bound pagination", "Newest-first cursors remain bound to All tenants or one exact tenant.", "Prompts, responses, provider bodies, free-form errors, and credentials never enter the dialog."],
     ],
     examples: [
-      ["User self-check", "A user sees that recent requests are mostly successful before debugging application code."],
-      ["Provider breakdown", "A team sees whether traffic is going to OpenAI or DeepSeek."],
-      ["Token trend", "The dashboard shows token totals rising after a new workflow launches."],
+      ["Portfolio overview", "A user sees the combined request and token totals for every owned tenant without making one browser request per tenant."],
+      ["Tenant investigation", "Selecting Research narrows every usage surface and failure row to that tenant while Settings can remain on Default."],
+      ["Scope-safe failure review", "Changing from All tenants to one tenant invalidates the old dialog request so stale rows and cursors cannot cross scopes."],
     ],
     limitations: [
       "Usage is recorded for managed tenants using generated secrets.",
-      "The dashboard is not a billing system.",
-      "Persistence requires a configured management database.",
+      "Failure rows are operational metadata, not reconstructed provider error messages or a billing system.",
+      "Administrators receive aggregate summaries only; per-event rows remain owner-only.",
+    ],
+    repoExample: {
+      source: "README.md",
+      code: `GET /api/management/usage?interval=30d
+GET /api/management/tenants/:tenant_id/usage?interval=30d`,
+      verifiedOn: "2026-07-26",
+    },
+    faq: [
+      {
+        question: "Does selecting a tenant activate or deactivate it?",
+        answer: "No. Every owned tenant remains independently routable through its own generated secret; the Settings and Usage selectors only choose an editor or report scope.",
+      },
+      {
+        question: "What does Usage Overview show by default?",
+        answer: "It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary.",
+      },
+      {
+        question: "Does changing the Tenant control in Settings change Usage Overview?",
+        answer: "No. The Tenant control in Settings and the Usage tenant control are independent; changing one does not change the other.",
+      },
+      {
+        question: "What tenant data appears in account-wide failure rows?",
+        answer: "Only the safe opaque tenant ID and current display name are added. Credentials, prompts, responses, provider bodies, and free-form errors remain excluded.",
+      },
     ],
   }),
   page({
@@ -625,23 +656,23 @@ if (!this.hasSecret) {
     category: "Management UI",
     primaryKeyword: "TAuth protected management API",
     title: "TAuth-protected management API for LLM Proxy",
-    description: "Gate tenant, provider key, defaults, usage, and admin APIs behind validated TAuth sessions.",
+    description: "Gate account, workspace, provider key, defaults, usage, and admin APIs behind validated TAuth sessions.",
     audience: "Teams adopting the MPR/TAuth shell for authenticated AI self-service.",
     problem: "Key management APIs need a stronger boundary than a public static page. They must know who is signed in and which tenant that user owns.",
     solution: "LLM Proxy validates configured TAuth session cookies on /api/management/* and returns unauthenticated or forbidden responses for invalid sessions.",
     steps: [
       "Configure TAuth URL, tenant ID, session cookie name, issuer, and signing key.",
       "Serve browser-facing MPR UI/TAuth config through /config-ui.yaml.",
-      "Require authenticated sessions before returning profile, provider, default, secret, usage, or admin data.",
+      "Require authenticated sessions before returning account, workspace, provider, default, secret, usage, or admin data.",
       "Use the shared MPR header, user menu, and footer in the static UI.",
     ],
     features: [
       ["Session validation", "Management APIs validate TAuth session cookies server-side.", "Unauthenticated requests return 401."],
-      ["Tenant ownership", "Signed-in users manage only their own tenant secrets, provider keys, defaults, and examples.", "Tenant data is user-scoped."],
+      ["Workspace ownership", "Signed-in users manage one or more personal workspaces, each with isolated secrets, provider keys, defaults, examples, and usage.", "Foreign workspace ids return 404 without disclosure."],
       ["Admin derivation", "Admin status is derived from configured emails and authenticated session data.", "Admin APIs return 403 for non-admin users."],
     ],
     examples: [
-      ["Profile load", "The static UI calls /api/management/profile after TAuth reports authentication."],
+      ["Account load", "The static UI calls /api/management/account after TAuth reports authentication, then loads /api/management/tenants/:tenant_id for the selected workspace."],
       ["Settings mutation", "Provider key saves and secret generation require JSON content and the public origin."],
       ["Admin dashboard", "A configured admin receives an Admin menu item after profile load."],
     ],
@@ -652,47 +683,43 @@ if (!this.hasSecret) {
     ],
   }),
   evidencedPage({
-    slug: "generated-secret-rotation-and-revocation",
+    slug: "generated-secret-rotation",
     category: "Security",
     primaryKeyword: "generated LLM proxy secret rotation",
-    title: "Generated LLM Proxy secret rotation and revocation",
-    description: "Automatically create a missing LLM Proxy client key, show it once, store only its digest, and support explicit rotation and revocation.",
+    title: "Rotate generated LLM Proxy client keys with confidence",
+    description: "Automatically create a missing LLM Proxy client key, show it once, store only its digest, and replace it through an explicit confirmed rotation.",
     audience: "Teams that want self-service client access without permanent retrievable secrets.",
-    problem: "Long-lived client secrets become harder to control when users can retrieve old raw values or when revocation requires operator edits.",
-    solution: "LLM Proxy generates tenant secrets, returns them once, stores only SHA-256 digests, and supports revocation through authenticated management APIs.",
+    problem: "Long-lived client secrets become harder to control when users can retrieve old raw values or when rotation requires operator edits.",
+    solution: "LLM Proxy generates tenant secrets, returns them once, stores only SHA-256 digests, and replaces a current value through one authenticated management operation.",
     steps: [
       "Open Settings after signing in.",
       "Copy the one-time client key created automatically for a profile that does not have one.",
       "Use the generated secret in public proxy request examples.",
-      "Revoke or regenerate the secret when access should change.",
+      "Confirm Replace key when access should change, then copy the one-time replacement.",
     ],
     features: [
       ["One-time display", "Generated secrets are shown once after creation.", "The database stores only their digest."],
-      ["Immediate revocation", "Revoked secrets stop authenticating future public proxy requests.", "Access can be cut without provider-key rotation."],
+      ["Immediate replacement", "The prior secret stops authenticating as soon as its replacement is stored.", "Access can be rotated without provider-key rotation."],
       ["Secret-safe examples", "Request examples retain the <generated-secret> placeholder after creation.", "Raw client keys remain confined to the one-time Key field."],
     ],
     examples: [
       ["New app secret", "A developer copies the automatically created client key and substitutes it for the /v2 example placeholder."],
-      ["Compromised client", "A user revokes the generated secret and creates a replacement."],
+      ["Compromised client", "A user confirms replacement, copies the new secret once, and updates the authorized client."],
       ["Provider key unchanged", "Rotating the tenant secret does not require changing the saved provider API key."],
     ],
     limitations: [
       "If the one-time value is lost, the user must generate a new secret.",
       "Tenant secrets remain application credentials and need normal secret handling.",
-      "Revocation affects proxy authentication; it does not revoke upstream provider keys.",
+      "A client key cannot be deleted independently; delete the owning non-final tenant when the whole tenant should be removed.",
     ],
     repoExample: {
       source: "site/assets/llm-proxy/js/core/backendClient.js",
-      verifiedOn: "2026-07-22",
+      verifiedOn: "2026-07-26",
       code: `export function generateSecret() {
   return requestJSON(\`\${MANAGEMENT_BASE_PATH}/secrets\`, { method: "POST" });
-}
-
-export function revokeSecret() {
-  return requestJSON(\`\${MANAGEMENT_BASE_PATH}/secrets\`, { method: "DELETE" });
 }`,
     },
-    quickVerdict: "Use the automatically created client key once, then replace or revoke it without rotating the separate upstream provider credentials.",
+    quickVerdict: "Use the automatically created client key once, then confirm replacement when access changes without rotating the separate upstream provider credentials.",
     faq: [
       {
         question: "When does LLM Proxy create a client key?",
@@ -703,8 +730,8 @@ export function revokeSecret() {
         answer: "No. The raw value is presented once in a masked, read-only field, while the backend stores only the digest used to authenticate proxy requests.",
       },
       {
-        question: "What does revoking the client key affect?",
-        answer: "Revocation stops that client key from authenticating public proxy requests. It does not remove or rotate separately stored upstream provider credentials.",
+        question: "What does replacing the client key affect?",
+        answer: "Replacement immediately stops the prior client key from authenticating public proxy requests. It does not remove or rotate separately stored upstream provider credentials.",
       },
       {
         question: "Do request examples embed the generated key?",
@@ -734,7 +761,7 @@ export function revokeSecret() {
     ],
     examples: [
       ["SQLite local profile", "A local management database stores encrypted provider key rows."],
-      ["Postgres hosted profile", "Hosted management state uses the same encrypted key contract."],
+      ["SQLite hosted profile", "A hosted management database at the configured path uses the same encrypted key contract."],
       ["Storage exposure reduction", "A database backup does not contain raw provider API keys."],
     ],
     limitations: [
@@ -806,64 +833,65 @@ export function revokeSecret() {
     ],
   }),
   page({
-    slug: "static-to-managed-tenant-migration",
+    slug: "multi-workspace-ownership-migration",
     category: "Configuration",
-    primaryKeyword: "static to managed tenant migration",
-    title: "Legacy token ownership migration in management mode",
-    description: "Claim one prior static-config token for a verified user account without changing the token or losing usage history.",
-    audience: "Operators retiring the final unowned management-mode token after moving to self-service accounts.",
-    problem: "A token imported by an older release can still belong to a synthetic static-config user, so its real owner cannot see that token's usage after signing in.",
-    solution: "LLM Proxy rejects the unowned token, then atomically replaces any empty account created by an earlier sign-in and rekeys the legacy tenant, encrypted provider settings, and usage events when the configured owner email signs in through TAuth.",
+    modifiedDate: "2026-07-25",
+    primaryKeyword: "multi workspace tenant migration",
+    title: "Transactional multi-workspace ownership migration",
+    description: "Upgrade one-workspace-per-user state into explicit TAuth accounts and isolated personal workspaces without changing opaque tenant ids.",
+    audience: "Operators upgrading an existing management database to the multi-workspace ownership schema.",
+    problem: "The earlier persistence shape coupled one tenant row to one user, so one TAuth subject could not own multiple isolated workspaces.",
+    solution: "LLM Proxy preflights the complete legacy dataset, then atomically creates explicit user and workspace records, preserves tenant ids and usage, and rebinds encrypted provider keys to workspace ownership.",
     steps: [
-      "Configure the exact legacy tenant id and deployment-owned target email.",
-      "Deploy the current binary and drain older service instances before the owner claim.",
-      "Sign in with the configured email and verify the same token plus historical usage.",
-      "Remove the temporary migration config after production verification.",
+      "Drain old service instances and take an operator-owned database backup.",
+      "Exercise the SQLite migration scenario through the repository test targets.",
+      "Start one new instance so preflight and the bounded schema-version transaction run once.",
+      "Verify account, workspace, secret, provider, routing, and usage isolation before adding capacity.",
     ],
     features: [
-      ["Verified owner claim", "Only a live TAuth session whose normalized email matches the configured owner can claim the tenant.", "The migration does not trust stored email alone."],
-      ["Token and usage continuity", "The token digest, tenant defaults, creation time, and every usage event are preserved.", "Existing clients keep their token while the dashboard gains its history."],
-      ["Provider key re-encryption", "Provider ciphertext is decrypted under the synthetic user id and re-encrypted for the TAuth subject inside one GORM transaction.", "Ownership changes without copying invalid ciphertext."],
+      ["Fail-closed preflight", "Missing tables, static owners, duplicates, malformed secrets, orphan rows, plaintext keys, corrupt ciphertext, and invalid routing data stop startup before mutation.", "Invalid data never becomes a partial migration."],
+      ["SQLite index continuity", "Colliding legacy GORM index names move inside the same transaction before current tables are created.", "Preserved volumes migrate without deleting tenant or usage data."],
+      ["Tenant and usage continuity", "Opaque tenant ids, secret digests, routing defaults, timestamps, and every usage event are preserved.", "Existing client secrets continue to identify the same workspace."],
+      ["Provider key re-encryption", "Provider ciphertext is decrypted under the prior user binding and re-encrypted with the preserved tenant id as AES-GCM associated data.", "Each key becomes workspace-bound."],
     ],
     examples: [
-      ["Unowned token before claim", "The legacy token returns 403 instead of continuing as a global system credential."],
-      ["First matching sign-in", "The configured owner opens the management site and receives the existing tenant and usage history."],
-      ["Post-migration cleanup", "Operators remove the temporary owner mapping after verifying the unchanged token in production."],
+      ["SQLite verification", "A disposable legacy database migrates and reopens with explicit user and workspace tables."],
+      ["Configured path verification", "The real startup path opens and migrates a disposable SQLite database at the supplied location."],
+      ["Rollback", "An injected failure at any rename, create, verify, version, or drop stage leaves the legacy schema untouched."],
     ],
     limitations: [
-      "The source must be the one configured static-config tenant; an existing destination is replaceable only when it has no generated secret, provider settings, or usage.",
-      "A populated destination conflict returns 409 without merging or overwriting account state.",
-      "Old service instances must be drained before the owner signs in.",
+      "Unclaimed static-config owners must be resolved before this migration.",
+      "Plaintext or corrupt provider keys are rejected rather than repaired.",
+      "Old and new service versions must not run concurrently against the migration database.",
     ],
   }),
   page({
     slug: "gorm-managed-tenant-persistence",
     category: "Configuration",
     primaryKeyword: "GORM managed tenant persistence",
-    title: "GORM-managed tenant persistence for LLM Proxy",
-    description: "Persist signups, provider settings, generated secret digests, defaults, and usage through GORM.",
+    title: "GORM-managed workspace persistence for LLM Proxy",
+    description: "Persist TAuth accounts, isolated workspaces, provider settings, generated secret digests, defaults, and usage through GORM.",
     audience: "Backend operators deciding how management-mode state is stored.",
     problem: "Self-service management needs persistent tenant state without mutating runtime config files or adding raw SQL paths.",
-    solution: "LLM Proxy stores managed tenants, provider keys, defaults, generated secret digests, and usage events in a GORM-managed database.",
+    solution: "LLM Proxy stores TAuth users, their personal workspaces, provider keys, defaults, generated secret digests, and usage events in a GORM-managed database.",
     steps: [
-      "Configure management.database_dialect as postgres or sqlite.",
-      "Configure management.database_dsn for the selected dialect.",
+      "Configure management.database_path with the SQLite database location.",
       "Run management mode with the required provider-key encryption key.",
       "Let GORM model APIs own signup, provider, defaults, secret, and usage state.",
     ],
     features: [
-      ["Postgres or SQLite", "Hosted and local management profiles can use supported GORM dialects.", "SQLite uses a pure-Go driver for CGO_DISABLED builds."],
+      ["SQLite through GORM", "Hosted and local management profiles choose the database location with one path.", "The pure-Go SQLite driver keeps CGO_DISABLED builds valid."],
       ["No runtime config mutation", "User signup and provider enablement update database state, not config.yml.", "Configuration stays operator-owned."],
       ["Usage event persistence", "Managed request metadata is stored with tenant isolation.", "Dashboards survive restarts."],
     ],
     examples: [
-      ["Local development", "A developer uses sqlite with a local ignored database file."],
-      ["Hosted deployment", "Production uses a Postgres DSN supplied through deployment secrets."],
+      ["Local development", "A developer supplies the path to a local ignored SQLite database file."],
+      ["Hosted deployment", "The service receives its persistent SQLite database path through deployment configuration."],
       ["Usage dashboard", "The dashboard reads aggregate usage from persisted events."],
     ],
     limitations: [
-      "Only postgres and sqlite are documented supported dialects.",
-      "Database outages can affect management state and dashboard access.",
+      "The current persistence engine is SQLite; other database engines are outside the contract.",
+      "Storage access failures can affect management state and dashboard access.",
       "Provider transport config and model catalogs still live in config.yml.",
     ],
   }),
@@ -887,7 +915,7 @@ export function revokeSecret() {
       "Give the client a proxy base URL and tenant secret through its application configuration; the installable CLI accepts flags or LLM_PROXY_BASE_URL and LLM_PROXY_SECRET.",
       "Send canonical POST /v2 messages with the tenant secret in the key query parameter.",
       "Omit provider and model to use the authenticated tenant default, or select a configured provider when the request needs an override.",
-      "Replace or revoke the client key when access changes; future proxy requests with a missing, invalid, or revoked key return 403.",
+      "Confirm replacement when the client key must change; future proxy requests with the prior, missing, or invalid key return 403.",
     ],
     features: [
       ["One public client credential", "The client authenticates to LLM Proxy with a tenant secret instead of an upstream provider key.", "A script sends key=mysecret to /v2 while OpenAI, Gemini, or other provider credentials remain on the server."],
@@ -931,7 +959,7 @@ export function revokeSecret() {
         answer: "Provider API keys belong in server-side runtime configuration or authenticated management storage. Public proxy requests reject provider-key-like fields instead of forwarding them upstream.",
       },
       {
-        question: "What happens when the client key is missing, invalid, or revoked?",
+        question: "What happens when the client key is missing, invalid, or replaced?",
         answer: "The public proxy request returns 403 before it reaches an upstream provider.",
       },
     ],
@@ -1393,19 +1421,19 @@ text = client.post_messages(
     solution: "LLM Proxy records operational metadata for managed-tenant usage while excluding raw content and secret material.",
     steps: [
       "Authenticate managed proxy requests with generated tenant secrets.",
-      "Record endpoint, provider, model, status code, success flag, latency, and token counts.",
+      "Record endpoint, provider, model, status, success, canonical outcome code, latency, and token counts.",
       "Exclude prompts, audio, transcripts, responses, tenant secrets, and provider keys from usage events.",
-      "Expose aggregated summaries through user and admin dashboards.",
+      "Expose aggregate summaries to users and admins, and safe per-failure metadata only to the owning user.",
     ],
     features: [
-      ["Metadata-only events", "Usage records describe routing and status, not request content.", "Dashboards can work without prompt storage."],
-      ["Tenant isolation", "Signed-in users see their own usage summary.", "Admins get summaries without sensitive content."],
-      ["Provider/model breakdown", "Aggregates show where traffic went.", "Operators can inspect patterns without reading prompts."],
+      ["Canonical outcomes", "Every event stores one bounded code such as invalid_request, rate_limited, request_timeout, or upstream_error.", "Dashboards do not persist raw error strings."],
+      ["Tenant isolation", "Signed-in owners can inspect their own safe failure rows.", "Admins remain aggregate-only and foreign workspace ids return the same not-found response."],
+      ["Bounded diagnostic rows", "Failure pages contain only occurred_at, endpoint, provider, model, status_code, outcome_code, and latency_ms.", "Operational investigation does not become content export."],
     ],
     examples: [
       ["Privacy-conscious dashboard", "A user sees request counts and token totals but no prompt body."],
       ["Admin overview", "An admin sees tenant facts and usage summaries without generated secrets."],
-      ["Error trend", "Status-code buckets reveal failures without storing responses."],
+      ["Historical migration", "Existing status codes receive normalized outcome codes without reconstructing old provider messages."],
     ],
     limitations: [
       "Metadata can still be operationally sensitive and should be protected.",
@@ -1498,7 +1526,7 @@ text = client.post_messages(
     ],
     limitations: [
       "Request-level system instructions take precedence over server-injected defaults.",
-      "Provider settings are scoped to the authenticated managed tenant.",
+      "Provider settings are scoped to the selected workspace owned by the authenticated TAuth subject.",
       "Autosave responses return masked key status; raw retrieval requires the separate owner-authenticated reveal action.",
     ],
   }),
@@ -1801,6 +1829,8 @@ function renderResourcePage(resourcePage) {
       <header class="resource-shell resource-topbar">
         <a class="resource-brand" href="/">LLM Proxy</a>
         <nav aria-label="Resource navigation">
+          <a href="${API_DOCUMENTATION_PATH}">API reference</a>
+          <a href="${OPENAPI_SCHEMA_PATH}">OpenAPI</a>
           <a href="/resources/">Resources</a>
           <a href="${README_USAGE_URL}">README</a>
           <a href="/">Main page</a>
@@ -1825,7 +1855,7 @@ function renderResourcePage(resourcePage) {
               <p>${escapeHTML(resourcePage.quickVerdict)}</p>
             </aside>` : ""}
             <div class="resource-actions">
-              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-button" href="${API_DOCUMENTATION_PATH}">Open API reference</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
             </div>
           </header>
@@ -1938,13 +1968,15 @@ function renderResourcePage(resourcePage) {
 
           <section class="resource-final-cta">
             <h2>Use this pattern in LLM Proxy</h2>
-            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
-            <a class="resource-button" href="/">Open the main page</a>
+            <p>Start from the canonical API reference, then use the management surface when the workflow needs tenant or provider configuration.</p>
+            <a class="resource-button" href="${API_DOCUMENTATION_PATH}">Open API reference</a>
           </section>
         </article>
       </main>
       <footer class="resource-shell resource-footer">
         <a href="/">LLM Proxy main page</a>
+        <a href="${API_DOCUMENTATION_PATH}">API reference</a>
+        <a href="${OPENAPI_SCHEMA_PATH}">OpenAPI schema</a>
         <a href="/resources/">Resource hub</a>
         <a href="${README_USAGE_URL}">README</a>
         <a href="/sitemap.xml">Sitemap</a>
@@ -1990,6 +2022,8 @@ function renderHub() {
       <header class="resource-shell resource-topbar">
         <a class="resource-brand" href="/">LLM Proxy</a>
         <nav aria-label="Resource navigation">
+          <a href="${API_DOCUMENTATION_PATH}">API reference</a>
+          <a href="${OPENAPI_SCHEMA_PATH}">OpenAPI</a>
           <a href="/resources/">Resources</a>
           <a href="${README_USAGE_URL}">README</a>
           <a href="/">Main page</a>
@@ -2001,7 +2035,8 @@ function renderHub() {
           <h1>LLM Proxy resource hub</h1>
           <p class="resource-deck">Use-case pages for teams routing text generation, dictation, provider credentials, runtime config, and usage visibility through LLM Proxy.</p>
           <div class="resource-actions">
-            <a class="resource-button" href="/">Open LLM Proxy</a>
+            <a class="resource-button" href="${API_DOCUMENTATION_PATH}">Open API reference</a>
+            <a class="resource-link" href="${OPENAPI_SCHEMA_PATH}">Download OpenAPI</a>
             <a class="resource-link" href="/sitemap.xml">View sitemap</a>
           </div>
         </section>
@@ -2036,6 +2071,8 @@ function renderHub() {
       </main>
       <footer class="resource-shell resource-footer">
         <a href="/">LLM Proxy main page</a>
+        <a href="${API_DOCUMENTATION_PATH}">API reference</a>
+        <a href="${OPENAPI_SCHEMA_PATH}">OpenAPI schema</a>
         <a href="${README_USAGE_URL}">README</a>
         <a href="/sitemap.xml">Sitemap</a>
       </footer>
@@ -2174,6 +2211,7 @@ function renderSitemap() {
   const urls = [
     { loc: `${PUBLIC_ORIGIN}/`, lastmod: RESOURCE_DEFAULT_MODIFIED_DATE },
     { loc: `${PUBLIC_ORIGIN}/resources/`, lastmod: currentResourceModifiedDate },
+    { loc: `${PUBLIC_ORIGIN}${API_DOCUMENTATION_PATH}`, lastmod: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE },
     ...pages.map((resourcePage) => ({ loc: resourcePage.canonical, lastmod: resourcePage.modifiedDate })),
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -2298,10 +2336,10 @@ ${categoryRows}
 
 ## Site Integration And Discoverability
 
-- The main page links to /resources/ through a crawlable anchor in the public HTML.
+- The main page links to /docs/, /openapi.yaml, and /resources/ through crawlable anchors in the public HTML.
 - The /resources/ hub links every generated resource page grouped by category.
-- Every resource page links back to /, /resources/, sitemap.xml, and related resources.
-- sitemap.xml lists /, /resources/, and all ${pages.length} page URLs with the same trailing-slash canonical form used in internal links.
+- Every resource page links to the derived API reference, exact schema, /, /resources/, sitemap.xml, and related resources.
+- sitemap.xml lists /, /docs/, /resources/, and all ${pages.length} page URLs with the same trailing-slash canonical form used in internal links.
 - robots.txt allows crawling and references the sitemap.
 
 ## Evaluation Report
@@ -2322,6 +2360,72 @@ ${categoryRows}
 
 Final decision: Pass.
 `;
+}
+
+/**
+ * @returns {Promise<{ path: string, fields: string[] }>}
+ */
+async function readCanonicalV2Contract() {
+  const rawDocument = load(await readFile("docs/openapi.yaml", "utf8"));
+  const document = openAPIObject(rawDocument, "document");
+  const paths = openAPIObject(document.paths, "paths");
+  for (const [path, rawPathItem] of Object.entries(paths)) {
+    const pathItem = openAPIObject(rawPathItem, `paths.${path}`);
+    for (const rawOperation of Object.values(pathItem)) {
+      if (typeof rawOperation !== "object" || rawOperation === null || Array.isArray(rawOperation)) {
+        continue;
+      }
+      const operation = openAPIObject(rawOperation, `operation ${path}`);
+      if (operation.operationId !== "postV2Messages") {
+        continue;
+      }
+      const requestBody = resolveOpenAPIReference(document, openAPIObject(operation.requestBody, "postV2Messages.requestBody"));
+      const content = openAPIObject(requestBody.content, "postV2Messages.requestBody.content");
+      const jsonMedia = openAPIObject(content["application/json"], "postV2Messages application/json");
+      const schema = resolveOpenAPIReference(document, openAPIObject(jsonMedia.schema, "postV2Messages schema"));
+      const properties = openAPIObject(schema.properties, "postV2Messages properties");
+      const fields = Object.keys(properties);
+      if (!fields.includes("reasoning_effort")) {
+        throw new Error("seo_resource_openapi_reasoning_effort_missing");
+      }
+      return { path, fields };
+    }
+  }
+  throw new Error("seo_resource_openapi_v2_operation_missing");
+}
+
+/**
+ * @param {Record<string, unknown>} document
+ * @param {Record<string, unknown>} value
+ * @returns {Record<string, unknown>}
+ */
+function resolveOpenAPIReference(document, value) {
+  const reference = value.$ref;
+  if (reference === undefined) {
+    return value;
+  }
+  if (typeof reference !== "string" || !reference.startsWith("#/")) {
+    throw new Error(`seo_resource_openapi_reference_invalid: ${String(reference)}`);
+  }
+  /** @type {unknown} */
+  let resolved = document;
+  for (const encodedSegment of reference.slice(2).split("/")) {
+    const segment = encodedSegment.replaceAll("~1", "/").replaceAll("~0", "~");
+    resolved = openAPIObject(resolved, `reference ${reference}`)[segment];
+  }
+  return openAPIObject(resolved, `reference ${reference}`);
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} context
+ * @returns {Record<string, unknown>}
+ */
+function openAPIObject(value, context) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`seo_resource_openapi_object_required: ${context}`);
+  }
+  return /** @type {Record<string, unknown>} */ (value);
 }
 
 /**

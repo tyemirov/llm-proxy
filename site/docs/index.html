@@ -1,0 +1,956 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LLM Proxy HTTP API | LLM Proxy</title>
+    <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
+    <meta name="openapi-source-sha256" content="796cff4216584bde8fb94cdadee195a0e715d3590a43f407c0f7ba60708b5c78">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+  </head>
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="796cff4216584bde8fb94cdadee195a0e715d3590a43f407c0f7ba60708b5c78">
+    <header class="resource-shell resource-topbar">
+      <a class="resource-brand" href="/">LLM Proxy</a>
+      <nav aria-label="API reference navigation">
+        <a href="/docs/" aria-current="page">API reference</a>
+        <a href="/openapi.yaml">OpenAPI schema</a>
+        <a href="/resources/">Resources</a>
+        <a href="https://github.com/tyemirov/llm-proxy/blob/master/docs/openapi.yaml">Source</a>
+      </nav>
+    </header>
+    <main class="resource-shell resource-article api-reference">
+      <section class="resource-hero">
+        <p class="eyebrow">Canonical API contract</p>
+        <h1>LLM Proxy HTTP API</h1>
+        <p class="resource-deck">The sole canonical wire contract for llm-proxy-owned proxy, browser configuration, and management endpoints. Contributors must update this document in the same change as any owned handler or bundled-client wire change. TAuth-owned endpoints are outside this contract.</p>
+        <div class="api-contract-meta" aria-label="Contract provenance">
+          <span>OpenAPI 3.1.0</span>
+          <span>API server https://llm-proxy-api.mprlab.com</span>
+          <span>Source SHA-256 <code>796cff4216584bde8fb94cdadee195a0e715d3590a43f407c0f7ba60708b5c78</code></span>
+        </div>
+        <div class="resource-actions">
+          <a class="resource-button" href="/openapi.yaml">Download exact schema</a>
+          <a class="resource-link" href="https://github.com/tyemirov/llm-proxy/blob/master/docs/openapi.yaml">View committed source</a>
+        </div>
+      </section>
+      <section aria-labelledby="operation-index-title">
+        <h2 id="operation-index-title">Operations</h2>
+        <div class="api-operation-index">
+          <a href="#operation-getText"><span class="api-method api-method-get">GET</span><code>/</code><span>Generate text from a query prompt</span></a>
+<a href="#operation-postText"><span class="api-method api-method-post">POST</span><code>/</code><span>Generate text from a prompt or messages JSON body</span></a>
+<a href="#operation-getManagementAccount"><span class="api-method api-method-get">GET</span><code>/api/management/account</code><span>Read the authenticated user and owned tenant summaries</span></a>
+<a href="#operation-getManagementAdminUsers"><span class="api-method api-method-get">GET</span><code>/api/management/admin/users</code><span>Read the administrative user and tenant usage summary</span></a>
+<a href="#operation-createManagementTenant"><span class="api-method api-method-post">POST</span><code>/api/management/tenants</code><span>Create an owned tenant</span></a>
+<a href="#operation-deleteManagementTenant"><span class="api-method api-method-delete">DELETE</span><code>/api/management/tenants/{tenant_id}</code><span>Delete an owned non-final tenant</span></a>
+<a href="#operation-getManagementTenant"><span class="api-method api-method-get">GET</span><code>/api/management/tenants/{tenant_id}</code><span>Read an owned tenant profile</span></a>
+<a href="#operation-renameManagementTenant"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}</code><span>Rename an owned tenant</span></a>
+<a href="#operation-putManagementTenantDefaults"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}/defaults</code><span>Replace the tenant routing defaults</span></a>
+<a href="#operation-deleteManagementProviderKey"><span class="api-method api-method-delete">DELETE</span><code>/api/management/tenants/{tenant_id}/provider-keys/{provider}</code><span>Remove provider settings and a provider credential</span></a>
+<a href="#operation-putManagementProviderKey"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}/provider-keys/{provider}</code><span>Save provider settings and a provider credential</span></a>
+<a href="#operation-revealManagementProviderKey"><span class="api-method api-method-post">POST</span><code>/api/management/tenants/{tenant_id}/provider-keys/{provider}/reveal</code><span>Reveal one saved provider credential</span></a>
+<a href="#operation-postManagementTenantSecret"><span class="api-method api-method-post">POST</span><code>/api/management/tenants/{tenant_id}/secrets</code><span>Generate and replace the tenant client secret</span></a>
+<a href="#operation-getManagementTenantUsage"><span class="api-method api-method-get">GET</span><code>/api/management/tenants/{tenant_id}/usage</code><span>Read interval-scoped usage for an owned tenant</span></a>
+<a href="#operation-getManagementTenantUsageFailures"><span class="api-method api-method-get">GET</span><code>/api/management/tenants/{tenant_id}/usage/failures</code><span>Read safe failure details for an owned tenant and interval</span></a>
+<a href="#operation-getManagementAccountUsage"><span class="api-method api-method-get">GET</span><code>/api/management/usage</code><span>Read interval-scoped usage across every owned tenant</span></a>
+<a href="#operation-getManagementAccountUsageFailures"><span class="api-method api-method-get">GET</span><code>/api/management/usage/failures</code><span>Read safe failure details across every owned tenant and interval</span></a>
+<a href="#operation-getBrowserConfiguration"><span class="api-method api-method-get">GET</span><code>/config-ui.yaml</code><span>Read the browser runtime configuration</span></a>
+<a href="#operation-postDictation"><span class="api-method api-method-post">POST</span><code>/dictate</code><span>Transcribe an audio upload</span></a>
+<a href="#operation-postV2Messages"><span class="api-method api-method-post">POST</span><code>/v2</code><span>Generate text from canonical messages</span></a>
+        </div>
+      </section>
+      <section class="api-operation" id="operation-getText">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/</code>
+          <span class="api-operation-id">getText</span>
+        </header>
+        <h2>Generate text from a query prompt</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>key</code></td><td>query</td><td>Yes</td><td>string</td><td>Tenant client secret.</td></tr>
+<tr><td><code>prompt</code></td><td>query</td><td>Yes</td><td>string</td><td>User prompt.</td></tr>
+<tr><td><code>provider</code></td><td>query</td><td>No</td><td>string</td><td>Canonical provider identifier. Omission uses the tenant default.</td></tr>
+<tr><td><code>model</code></td><td>query</td><td>No</td><td>string</td><td>Model identifier. Omission uses the resolved provider default.</td></tr>
+<tr><td><code>web_search</code></td><td>query</td><td>No</td><td>string</td><td>Boolean-like query value accepted by the legacy query operation.</td></tr>
+<tr><td><code>system_prompt</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
+<tr><td><code>max_tokens</code></td><td>query</td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>reasoning_effort</code></td><td>query</td><td>No</td><td>string</td><td>Non-blank effort supported by the resolved route. Omission selects the tenant or route default.</td></tr>
+<tr><td><code>format</code></td><td>query</td><td>No</td><td>string</td><td>Preferred response media type. Unknown values select text/plain.</td></tr>
+<tr><td><code>Accept</code></td><td>header</td><td>No</td><td>string</td><td>Response media preference used when format is omitted.</td></tr>
+<tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. HTTP 200 requires the selected transport&#39;s canonical completion signal: OpenAI Responses status=completed, OpenAI-compatible Chat Completions finish_reason=stop, Gemini finishReason=STOP, or Anthropic stop_reason=end_turn|stop_sequence. Incomplete, intermediate, missing, or unknown provider states never return text as success.</td></tr>
+<tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>429</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider is rate limited.</td></tr>
+<tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
+<tr><td><code>502</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider failed or returned an incomplete, intermediate, missing, or unknown completion signal. The response never exposes partial generated text, token-count headers, or the raw provider body; provider-reported usage can still be retained in managed failure accounting.</td></tr>
+<tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected provider is not configured or the bounded request queue is full.</td></tr>
+<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-postText">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/</code>
+          <span class="api-operation-id">postText</span>
+        </header>
+        <h2>Generate text from a prompt or messages JSON body</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>key</code></td><td>query</td><td>Yes</td><td>string</td><td>Tenant client secret.</td></tr>
+<tr><td><code>provider</code></td><td>query</td><td>No</td><td>string</td><td>Canonical provider identifier. Omission uses the tenant default.</td></tr>
+<tr><td><code>model</code></td><td>query</td><td>No</td><td>string</td><td>Model identifier. Omission uses the resolved provider default.</td></tr>
+<tr><td><code>format</code></td><td>query</td><td>No</td><td>string</td><td>Preferred response media type. Unknown values select text/plain.</td></tr>
+<tr><td><code>Accept</code></td><td>header</td><td>No</td><td>string</td><td>Response media preference used when format is omitted.</td></tr>
+<tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>prompt</code></td><td>No</td><td>string</td><td></td></tr>
+<tr><td><code>messages</code></td><td>No</td><td>array&lt;ChatMessage&gt;</td><td></td></tr>
+<tr><td><code>model</code></td><td>No</td><td>string</td><td></td></tr>
+<tr><td><code>web_search</code></td><td>No</td><td>boolean</td><td></td></tr>
+<tr><td><code>system_prompt</code></td><td>No</td><td>string</td><td></td></tr>
+<tr><td><code>max_tokens</code></td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>reasoning_effort</code></td><td>No</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. HTTP 200 requires the selected transport&#39;s canonical completion signal: OpenAI Responses status=completed, OpenAI-compatible Chat Completions finish_reason=stop, Gemini finishReason=STOP, or Anthropic stop_reason=end_turn|stop_sequence. Incomplete, intermediate, missing, or unknown provider states never return text as success.</td></tr>
+<tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>413</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The configured prompt or audio payload limit was exceeded.</td></tr>
+<tr><td><code>429</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider is rate limited.</td></tr>
+<tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
+<tr><td><code>502</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider failed or returned an incomplete, intermediate, missing, or unknown completion signal. The response never exposes partial generated text, token-count headers, or the raw provider body; provider-reported usage can still be retained in managed failure accounting.</td></tr>
+<tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected provider is not configured or the bounded request queue is full.</td></tr>
+<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getManagementAccount">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/account</code>
+          <span class="api-operation-id">getManagementAccount</span>
+        </header>
+        <h2>Read the authenticated user and owned tenant summaries</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Authenticated account snapshot.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getManagementAdminUsers">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/admin/users</code>
+          <span class="api-operation-id">getManagementAdminUsers</span>
+        </header>
+        <h2>Read the administrative user and tenant usage summary</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>none</td><td>Administrative user and tenant usage summary.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-createManagementTenant">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/api/management/tenants</code>
+          <span class="api-operation-id">createManagementTenant</span>
+        </header>
+        <h2>Create an owned tenant</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>name</code></td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>201</code></td><td>application/json</td><td>Cache-Control</td><td>Created tenant profile.</td></tr>
+<tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>409</code></td><td>text/plain</td><td>none</td><td>The requested tenant name conflicts or the final owned tenant cannot be deleted.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-deleteManagementTenant">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-delete">DELETE</span>
+          <code>/api/management/tenants/{tenant_id}</code>
+          <span class="api-operation-id">deleteManagementTenant</span>
+        </header>
+        <h2>Delete an owned non-final tenant</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>204</code></td><td>none</td><td>none</td><td>Tenant deleted.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
+<tr><td><code>409</code></td><td>text/plain</td><td>none</td><td>The requested tenant name conflicts or the final owned tenant cannot be deleted.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getManagementTenant">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/tenants/{tenant_id}</code>
+          <span class="api-operation-id">getManagementTenant</span>
+        </header>
+        <h2>Read an owned tenant profile</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Current tenant profile.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
+<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-renameManagementTenant">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-put">PUT</span>
+          <code>/api/management/tenants/{tenant_id}</code>
+          <span class="api-operation-id">renameManagementTenant</span>
+        </header>
+        <h2>Rename an owned tenant</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>name</code></td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Current tenant profile.</td></tr>
+<tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
+<tr><td><code>409</code></td><td>text/plain</td><td>none</td><td>The requested tenant name conflicts or the final owned tenant cannot be deleted.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-putManagementTenantDefaults">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-put">PUT</span>
+          <code>/api/management/tenants/{tenant_id}/defaults</code>
+          <span class="api-operation-id">putManagementTenantDefaults</span>
+        </header>
+        <h2>Replace the tenant routing defaults</h2>
+        <p>Every nonempty provider/model pair must use a provider for which this tenant has a saved API key. The text pair is empty only when no provider key exists. The dictation pair is empty when no keyed provider supports dictation.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>provider</code></td><td>Yes</td><td>string</td><td>Canonical keyed text-provider id, or empty together with model when the tenant has no saved provider key.</td></tr>
+<tr><td><code>model</code></td><td>Yes</td><td>string</td><td>Canonical model for provider, or empty together with provider when the tenant has no saved provider key.</td></tr>
+<tr><td><code>dictation_provider</code></td><td>Yes</td><td>string</td><td>Canonical keyed dictation-capable provider id, or empty together with dictation_model when no keyed provider supports dictation.</td></tr>
+<tr><td><code>dictation_model</code></td><td>Yes</td><td>string</td><td>Canonical model for dictation_provider, or empty together with dictation_provider when no keyed provider supports dictation.</td></tr>
+<tr><td><code>system_prompt</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>reasoning_effort</code></td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Current tenant profile.</td></tr>
+<tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-deleteManagementProviderKey">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-delete">DELETE</span>
+          <code>/api/management/tenants/{tenant_id}/provider-keys/{provider}</code>
+          <span class="api-operation-id">deleteManagementProviderKey</span>
+        </header>
+        <h2>Remove provider settings and a provider credential</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
+<tr><td><code>provider</code></td><td>path</td><td>Yes</td><td>string</td><td>Canonical provider identifier.</td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Current tenant profile.</td></tr>
+<tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-putManagementProviderKey">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-put">PUT</span>
+          <code>/api/management/tenants/{tenant_id}/provider-keys/{provider}</code>
+          <span class="api-operation-id">putManagementProviderKey</span>
+        </header>
+        <h2>Save provider settings and a provider credential</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
+<tr><td><code>provider</code></td><td>path</td><td>Yes</td><td>string</td><td>Canonical provider identifier.</td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>api_key</code></td><td>Yes</td><td>string</td><td>A replacement provider key. Send an empty string to retain the tenant&#39;s existing credential while updating its provider model or system prompt; an empty value is rejected when no credential exists.</td></tr>
+<tr><td><code>text_model</code></td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>system_prompt</code></td><td>Yes</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Current tenant profile.</td></tr>
+<tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-revealManagementProviderKey">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/api/management/tenants/{tenant_id}/provider-keys/{provider}/reveal</code>
+          <span class="api-operation-id">revealManagementProviderKey</span>
+        </header>
+        <h2>Reveal one saved provider credential</h2>
+        <p>This credentialed action requires the exact configured public Origin in addition to the TAuth session.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
+<tr><td><code>provider</code></td><td>path</td><td>Yes</td><td>string</td><td>Canonical provider identifier.</td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>Yes</td><td>string</td><td>Must exactly match the configured public origin.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The saved provider credential. Never persist or log this response.</td></tr>
+<tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-postManagementTenantSecret">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/api/management/tenants/{tenant_id}/secrets</code>
+          <span class="api-operation-id">postManagementTenantSecret</span>
+        </header>
+        <h2>Generate and replace the tenant client secret</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>The newly generated tenant client secret and current profile. The secret is returned only by this response.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
+<tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
+<tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getManagementTenantUsage">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/tenants/{tenant_id}/usage</code>
+          <span class="api-operation-id">getManagementTenantUsage</span>
+        </header>
+        <h2>Read interval-scoped usage for an owned tenant</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
+<tr><td><code>interval</code></td><td>query</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Usage summary for the exact requested interval and authenticated reporting scope.</td></tr>
+<tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
+<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getManagementTenantUsageFailures">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/tenants/{tenant_id}/usage/failures</code>
+          <span class="api-operation-id">getManagementTenantUsageFailures</span>
+        </header>
+        <h2>Read safe failure details for an owned tenant and interval</h2>
+        <p>Returns a newest-first snapshot page of failed managed proxy events. Rows expose only bounded diagnostic metadata and canonical outcome codes; they never include prompts, responses, provider bodies, free-form errors, credentials, or ownership identifiers. Historical rows use status-derived normalized outcome codes rather than reconstructed error messages.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>tenant_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant identifier from the authenticated account response.</td></tr>
+<tr><td><code>interval</code></td><td>query</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>limit</code></td><td>query</td><td>No</td><td>integer</td><td>Maximum failure rows in this page. Omission selects 25.</td></tr>
+<tr><td><code>cursor</code></td><td>query</td><td>No</td><td>string</td><td>Opaque continuation cursor returned by the preceding page for the same interval and reporting scope.</td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Snapshot page of safe tenant failure details for the exact requested interval.</td></tr>
+<tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
+<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getManagementAccountUsage">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/usage</code>
+          <span class="api-operation-id">getManagementAccountUsage</span>
+        </header>
+        <h2>Read interval-scoped usage across every owned tenant</h2>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>interval</code></td><td>query</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Usage summary for the exact requested interval and authenticated reporting scope.</td></tr>
+<tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getManagementAccountUsageFailures">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/management/usage/failures</code>
+          <span class="api-operation-id">getManagementAccountUsageFailures</span>
+        </header>
+        <h2>Read safe failure details across every owned tenant and interval</h2>
+        <p>Returns a newest-first snapshot page of failed managed proxy events across every tenant owned by the authenticated user. Each row identifies its tenant by opaque ID and current name while exposing only bounded diagnostic metadata and canonical outcome codes. Rows never include prompts, responses, provider bodies, free-form errors, credentials, or another user&#39;s ownership data.</p>
+        <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>interval</code></td><td>query</td><td>Yes</td><td>string</td><td></td></tr>
+<tr><td><code>limit</code></td><td>query</td><td>No</td><td>integer</td><td>Maximum failure rows in this page. Omission selects 25.</td></tr>
+<tr><td><code>cursor</code></td><td>query</td><td>No</td><td>string</td><td>Opaque continuation cursor returned by the preceding page for the same interval and reporting scope.</td></tr>
+<tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Snapshot page of safe failure details across every owned tenant for the exact requested interval.</td></tr>
+<tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
+<tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
+<tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getBrowserConfiguration">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/config-ui.yaml</code>
+          <span class="api-operation-id">getBrowserConfiguration</span>
+        </header>
+        <h2>Read the browser runtime configuration</h2>
+        <p class="api-security"><strong>Authentication:</strong> None</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>Origin</code></td><td>header</td><td>No</td><td>string</td><td>When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/yaml</td><td>Cache-Control</td><td>Current browser runtime configuration.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-postDictation">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/dictate</code>
+          <span class="api-operation-id">postDictation</span>
+        </header>
+        <h2>Transcribe an audio upload</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>key</code></td><td>query</td><td>Yes</td><td>string</td><td>Tenant client secret.</td></tr>
+<tr><td><code>provider</code></td><td>query</td><td>No</td><td>string</td><td>Canonical provider identifier. Omission uses the tenant default.</td></tr>
+<tr><td><code>model</code></td><td>query</td><td>No</td><td>string</td><td>Model identifier. Omission uses the resolved provider default.</td></tr>
+<tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>audio</code></td><td>Yes</td><td>string</td><td>The canonical incoming audio file part.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>Transcription result.</td></tr>
+<tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>413</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The configured prompt or audio payload limit was exceeded.</td></tr>
+<tr><td><code>429</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider is rate limited.</td></tr>
+<tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
+<tr><td><code>502</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider failed or returned an incomplete, intermediate, missing, or unknown completion signal. The response never exposes partial generated text, token-count headers, or the raw provider body; provider-reported usage can still be retained in managed failure accounting.</td></tr>
+<tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected provider is not configured or the bounded request queue is full.</td></tr>
+<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-postV2Messages">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/v2</code>
+          <span class="api-operation-id">postV2Messages</span>
+        </header>
+        <h2>Generate text from canonical messages</h2>
+        <p>The current messages-only operation. `messages` is required. `model`, `web_search`, `max_tokens`, and `reasoning_effort` are optional. Omitting `reasoning_effort` selects the tenant or route default; an explicitly supplied value must be non-blank and supported by the resolved provider/model route. Unsupported route capabilities return the canonical plain-text 400 error response.</p>
+        <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>key</code></td><td>query</td><td>Yes</td><td>string</td><td>Tenant client secret.</td></tr>
+<tr><td><code>provider</code></td><td>query</td><td>No</td><td>string</td><td>Canonical provider identifier. Omission uses the tenant default.</td></tr>
+<tr><td><code>format</code></td><td>query</td><td>No</td><td>string</td><td>Preferred response media type. Unknown values select text/plain.</td></tr>
+<tr><td><code>Accept</code></td><td>header</td><td>No</td><td>string</td><td>Response media preference used when format is omitted.</td></tr>
+<tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>messages</code></td><td>Yes</td><td>array&lt;ChatMessage&gt;</td><td>All messages must have an allowed role and non-blank content, include at least one user message, and either all omit order or all provide unique non-negative order values.</td></tr>
+<tr><td><code>model</code></td><td>No</td><td>string</td><td>Omission selects the resolved provider default.</td></tr>
+<tr><td><code>web_search</code></td><td>No</td><td>boolean</td><td>The resolved route must declare web-search capability when true.</td></tr>
+<tr><td><code>max_tokens</code></td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>reasoning_effort</code></td><td>No</td><td>string</td><td>Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. HTTP 200 requires the selected transport&#39;s canonical completion signal: OpenAI Responses status=completed, OpenAI-compatible Chat Completions finish_reason=stop, Gemini finishReason=STOP, or Anthropic stop_reason=end_turn|stop_sequence. Incomplete, intermediate, missing, or unknown provider states never return text as success.</td></tr>
+<tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>413</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The configured prompt or audio payload limit was exceeded.</td></tr>
+<tr><td><code>429</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider is rate limited.</td></tr>
+<tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
+<tr><td><code>502</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider failed or returned an incomplete, intermediate, missing, or unknown completion signal. The response never exposes partial generated text, token-count headers, or the raw provider body; provider-reported usage can still be retained in managed failure accounting.</td></tr>
+<tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected provider is not configured or the bounded request queue is full.</td></tr>
+<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="resource-shell resource-footer">
+      <a href="/">LLM Proxy main page</a>
+      <a href="/openapi.yaml">Canonical OpenAPI schema</a>
+      <a href="/resources/">Resource hub</a>
+      <a href="/sitemap.xml">Sitemap</a>
+    </footer>
+  </body>
+</html>

@@ -41,8 +41,9 @@ type requestTimeoutBudget struct {
 }
 
 type requestTimeoutState struct {
-	budget  requestTimeoutBudget
-	outcome string
+	budget              requestTimeoutBudget
+	outcome             string
+	managedUsageOutcome managedUsageOutcomeCode
 }
 
 func newRequestTimeoutPolicy(defaultSeconds int, maximumSeconds int) (requestTimeoutPolicy, error) {
@@ -120,8 +121,9 @@ func requestTimeoutHandler(policy requestTimeoutPolicy, structuredLogger *zap.Su
 			}
 		})
 		state := &requestTimeoutState{
-			budget:  budget,
-			outcome: requestOutcomeValidation,
+			budget:              budget,
+			outcome:             requestOutcomeValidation,
+			managedUsageOutcome: managedUsageOutcomeInvalidRequest,
 		}
 		ginContext.Set(contextKeyRequestTimeoutState, state)
 		ginContext.Request = ginContext.Request.WithContext(requestContext)
@@ -151,8 +153,14 @@ func requestTimeoutHandler(policy requestTimeoutPolicy, structuredLogger *zap.Su
 	}
 }
 
-func markRequestOutcome(ginContext *gin.Context, outcome string) {
-	requestTimeoutStateFromContext(ginContext).outcome = outcome
+func markRequestOutcome(ginContext *gin.Context, outcome string, managedOutcome managedUsageOutcomeCode) {
+	state := requestTimeoutStateFromContext(ginContext)
+	state.outcome = outcome
+	state.managedUsageOutcome = managedOutcome
+}
+
+func markManagedUsageOutcome(ginContext *gin.Context, managedOutcome managedUsageOutcomeCode) {
+	requestTimeoutStateFromContext(ginContext).managedUsageOutcome = managedOutcome
 }
 
 func requestFailureOutcome(requestError error) string {
@@ -160,6 +168,19 @@ func requestFailureOutcome(requestError error) string {
 		return requestOutcomeProxyOverload
 	}
 	return requestOutcomeProviderFailure
+}
+
+func managedRequestFailureOutcome(requestError error) managedUsageOutcomeCode {
+	switch {
+	case errors.Is(requestError, ErrProviderRateLimited):
+		return managedUsageOutcomeRateLimited
+	case errors.Is(requestError, ErrProviderNotConfigured), errors.Is(requestError, errQueueFull):
+		return managedUsageOutcomeServiceUnavailable
+	case errors.Is(requestError, context.DeadlineExceeded), errors.Is(requestError, context.Canceled):
+		return managedUsageOutcomeRequestTimeout
+	default:
+		return managedUsageOutcomeUpstreamError
+	}
 }
 
 func requestTimeoutStateFromContext(ginContext *gin.Context) *requestTimeoutState {
@@ -174,10 +195,12 @@ func requestContextEnded(ginContext *gin.Context) bool {
 	}
 	if !errors.Is(requestCause, errRequestTimeoutBudgetExpired) {
 		state.outcome = requestOutcomeCallerCancelled
+		state.managedUsageOutcome = managedUsageOutcomeRequestTimeout
 		ginContext.Status(statusClientClosedRequest)
 		return true
 	}
 	state.outcome = requestOutcomeProxyTimeout
+	state.managedUsageOutcome = managedUsageOutcomeRequestTimeout
 	ginContext.Data(
 		http.StatusGatewayTimeout,
 		mimeApplicationJSON,

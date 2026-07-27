@@ -53,7 +53,7 @@ func makeBlockingHTTPClient(testingInstance *testing.T, endpoints *proxy.Endpoin
 			case <-httpRequest.Context().Done():
 				return nil, httpRequest.Context().Err()
 			case <-releaseResponses:
-				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"output_text":"` + integrationOKBody + `"}`)), Header: make(http.Header)}, nil
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"status":"completed","output_text":"` + integrationOKBody + `"}`)), Header: make(http.Header)}, nil
 			}
 		default:
 			testingInstance.Fatalf(unexpectedRequestFormat, httpRequest.URL.String())

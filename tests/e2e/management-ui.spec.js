@@ -1,6 +1,7 @@
 // @ts-check
 
 import { expect, test } from "@playwright/test";
+import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat } from "node:fs/promises";
 import http from "node:http";
@@ -9,8 +10,11 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const siteRoot = path.join(repoRoot, "site");
+const canonicalOpenAPIFile = path.join(repoRoot, "docs/openapi.yaml");
 const configPath = "/config-ui.yaml";
-const managementProviderKeysPath = "/api/management/provider-keys";
+const defaultTenantID = "tenant_1";
+const managementDefaultTenantPath = `/api/management/tenants/${defaultTenantID}`;
+const managementProviderKeysPath = `${managementDefaultTenantPath}/provider-keys`;
 const faviconPath = "/assets/llm-proxy/img/favicon.svg";
 const appIconPath = "/assets/llm-proxy/img/llm-proxy-icon.svg";
 const resourcesPath = "/resources/";
@@ -18,6 +22,8 @@ const representativeResourcePath = "/resources/multi-provider-llm-proxy/";
 const clientAuthenticationResourcePath = "/resources/llm-proxy-client-authentication/";
 const sitemapPath = "/sitemap.xml";
 const robotsPath = "/robots.txt";
+const apiDocumentationPath = "/docs/";
+const openAPIPath = "/openapi.yaml";
 const repositoryUsageURL = "https://github.com/tyemirov/llm-proxy#usage";
 const mprUICSSURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css";
 const mprUIConfigURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js";
@@ -28,6 +34,7 @@ const httpInternalServerError = 500;
 const noticeClockPauseLeadMilliseconds = 5_000;
 const noticeClockPreDeadlineAdvanceMilliseconds = 4_000;
 const noticeClockPostDeadlineAdvanceMilliseconds = 2_000;
+const tenantAccessDesktopMaxHeight = 64;
 const usageIntervals = Object.freeze([
   { id: "all", label: "ALL", requests: 91, totalTokens: 91_000, providerCount: 1 },
   { id: "30d", label: "30 days", requests: 37, totalTokens: 12_345, providerCount: 2 },
@@ -46,8 +53,9 @@ const mimeTypes = Object.freeze({
 const generatedResourcePageCount = 46;
 const seoContentModifiedDate = "2026-07-11";
 const seoCurrentContentModifiedDate = "2026-07-22";
-const seoUsageContentModifiedDate = "2026-07-23";
-const seoClientDocumentationModifiedDate = "2026-07-24";
+const seoMigrationContentModifiedDate = "2026-07-25";
+const seoUsageContentModifiedDate = "2026-07-26";
+const seoClientDocumentationModifiedDate = "2026-07-26";
 const settingsLayerViewports = Object.freeze([
   { name: "desktop", width: 1280, height: 720 },
   { name: "compact", width: 480, height: 780 },
@@ -88,6 +96,8 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/">');
   expect(html).toContain(`<a href="${clientAuthenticationResourcePath}">Client authentication</a>`);
   expect(html).toContain(`<a href="${resourcesPath}">Browse resources</a>`);
+  expect(html).toContain(`<a href="${apiDocumentationPath}">API reference</a>`);
+  expect(html).toContain(`<a href="${openAPIPath}">OpenAPI schema</a>`);
   expect(html).toContain('<meta name="theme-color" content="#0076c3">');
   expect(html).toContain(`<link rel="icon" type="image/svg+xml" href="${faviconPath}">`);
   expect(html).toContain(`<link rel="apple-touch-icon" href="${appIconPath}">`);
@@ -95,6 +105,10 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
   expect(html).toContain(`<script src="${mprUIConfigURL}"></script>`);
   expect(html).toContain(`data-mpr-ui-bundle-src="${mprUIBundleURL}"`);
+  expect(html).toContain('<script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260727"></script>');
+  expect(html).toContain(
+    '<script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260727"></script>',
+  );
   expect(html).not.toContain("MarcoPoloResearchLab/mpr-ui@v");
   expect(html).not.toContain("tauth.js");
   expect(html).toMatch(/<notification-region\s+slot="aux"[\s\S]*?<mpr-user\s+slot="aux"/);
@@ -106,7 +120,7 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).not.toContain("brand-label=");
   expect(html).not.toContain("data:image");
   expect(html).toContain(
-    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=delete,key,visibility,visibility_off&amp;display=block">',
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,key,visibility,visibility_off&amp;display=block">',
   );
   expect(html).toContain(
     '<span class="material-symbols-outlined" x-show="!providerKeyVisible" aria-hidden="true">visibility</span>',
@@ -149,36 +163,42 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
     '<svg class="utility-icon close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">',
   );
   expect(html).not.toContain('x-text="copy.settingsTitle"');
-  expect(html).toContain('<client-access-row role="group" x-bind:aria-label="copy.clientKey">');
+  expect(html).not.toContain("<tenant-context-bar");
+  expect(html).not.toContain("Active tenant");
+  expect(html).toContain('x-bind:aria-label="copy.usageTenant"');
+  expect(html).toContain('x-on:change="handleUsageTenantSelection($event)"');
+  expect(html).toContain('x-text="copy.allTenants"');
+  expect(html).toContain('<tenant-access-row role="group" x-bind:aria-label="copy.tenantAccess">');
+  expect(html).toContain('x-on:change="handleSettingsTenantSelection($event)"');
+  expect(html).toContain('x-bind:aria-label="copy.tenantContext"');
+  expect(html).toContain("<client-access-key>");
+  expect(html).not.toContain("tenant-management");
   expect(html).not.toContain("client-access-tenant");
-  expect(html).not.toContain("tenantName");
+  expect(html).not.toContain('x-text="settingsTenantID"');
+  expect(html).toContain('x-on:click="beginTenantNameEdit()"');
+  expect(html).toContain('x-on:click="cancelTenantNameEdit()"');
+  expect(html).toContain('x-on:input="handleTenantNameInput($event)"');
+  expect(html).toContain('x-on:click="requestTenantDeletion()"');
+  expect(html).toContain('class="tenant-rename-dialog"');
+  expect(html).toContain('class="client-key-replace-dialog"');
   expect(html).not.toContain("copy.tenantTitle");
-  expect(html).not.toContain("copy.tenantName");
-  expect(html).toContain(
-    '<button type="button" class="icon-button client-key-create" x-cloak x-show="!hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.createKey">',
-  );
-  expect(html).toContain(
-    '<button type="button" class="icon-button client-key-replace" x-cloak x-show="hasSecret" x-on:click="generateSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.replaceKey" x-bind:aria-label="copy.replaceKey">',
-  );
+  expect(html).toContain('class="icon-button client-key-create"');
+  expect(html).toContain('x-show="!hasSecret"');
+  expect(html).toContain('class="icon-button client-key-replace"');
+  expect(html).toContain('x-on:click="requestClientKeyReplacement()"');
   expect(html).toContain('<span class="material-symbols-outlined" aria-hidden="true">key</span>');
-  expect(html).toContain('<span class="client-key-replace-label" x-text="copy.replaceKey"></span>');
+  expect(html).toContain('<span class="tenant-access-action-label" x-text="copy.replaceKey"></span>');
   expect(html).not.toContain("recycle-icon");
-  expect(html).toContain(
-    '<button type="button" class="icon-only client-key-copy" x-cloak x-show="hasGeneratedSecret" x-on:click="copyGeneratedSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.copyClientKey" x-bind:aria-label="copy.copyClientKey">',
-  );
-  expect(html).toContain(
-    '<button type="button" class="icon-only danger client-key-revoke" x-cloak x-show="hasSecret" x-on:click="revokeSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.revokeKey" x-bind:aria-label="copy.revokeKey">',
-  );
+  expect(html).toContain('class="icon-only client-key-copy"');
+  expect(html).toContain('x-on:click="copyGeneratedSecret()"');
+  expect(html).not.toContain("client-key-revoke");
+  expect(html).not.toContain("revokeSecret()");
   expect(html).toContain('<span class="material-symbols-outlined" x-show="!generatedSecretVisible" aria-hidden="true">visibility</span>');
   expect(html).toContain('<span class="material-symbols-outlined" x-show="generatedSecretVisible" aria-hidden="true">visibility_off</span>');
-  expect(html).toContain(
-    '<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">',
-  );
-  expect(html).toContain('<rect x="6" y="5" width="10" height="12" rx="1.5"></rect>');
-  expect(html).toContain('<rect x="8" y="7" width="10" height="12" rx="1.5"></rect>');
+  expect(html).toContain('<span class="material-symbols-outlined" aria-hidden="true">content_copy</span>');
+  expect(html).not.toContain('class="copy-icon"');
   expect(html).not.toContain("tenant-facts");
   expect(html).not.toContain("secret-output");
-  expect(html).not.toContain("copy.tenantId");
   expect(html).not.toContain("copy.copySecret");
   expect(html).not.toContain("Generated secret");
   expect(html).toContain('x-model="defaults.reasoning_effort"');
@@ -189,6 +209,15 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain('x-on:change="handleDictationProviderDefaultChange($event)"');
   expect(html).toContain('x-on:change="handleDictationModelDefaultChange($event)"');
   expect(html).toContain('x-on:change="autosaveRoutingDefaults()"');
+  expect(html).toContain('class="settings-form-wide system-prompt-disclosure"');
+  expect(html).toContain('x-bind:open="routingSystemPromptOpen"');
+  expect(html).toContain('x-on:toggle="routingSystemPromptOpen = $event.currentTarget.open"');
+  expect(html).toContain('class="provider-system-prompt system-prompt-disclosure"');
+  expect(html).toContain('x-bind:open="providerSystemPromptOpen"');
+  expect(html).toContain('x-on:toggle="providerSystemPromptOpen = $event.currentTarget.open"');
+  expect(html).toContain('class="system-prompt-disclosure-state"');
+  expect(html).toContain('aria-labelledby="routing-system-prompt-label"');
+  expect(html).toContain('aria-labelledby="provider-system-prompt-label"');
   expect(html).not.toContain("saveDefaults()");
   expect(html).not.toContain('copy.saveDefaults');
   expect(html).toContain('copy.reasoningEffortUnsupported');
@@ -234,6 +263,8 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   const constantsJavaScript = await constantsResponse.text();
   expect(constantsJavaScript).toContain("export const NOTICE_AUTO_DISMISS_MILLISECONDS = 10_000;");
   expect(constantsJavaScript).toContain("Provider settings saved");
+  expect(constantsJavaScript).toContain('systemPromptHidden: "Hidden"');
+  expect(constantsJavaScript).toContain('systemPromptExpanded: "Expanded"');
   expect(constantsJavaScript).not.toContain('saveProviderKey: "Save key"');
   expect(constantsJavaScript).not.toContain('updateProviderKey: "Update key"');
   expect(constantsJavaScript).not.toContain('saveDefaults: "Save defaults"');
@@ -245,6 +276,7 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(stylesheet).toContain("order: -1;");
   expect(stylesheet).not.toContain("shadowRoot");
   expect(stylesheet).not.toContain('.settings-grid-form button[type="submit"]');
+  expect(stylesheet).toContain(".system-prompt-disclosure[open] .system-prompt-summary::after");
 
   const faviconResponse = await request.get(`${baseURL}${faviconPath}`);
   expect(faviconResponse.status()).toBe(httpOK);
@@ -263,6 +295,29 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(appIconSVG).toContain("#4ad3d9");
 });
 
+test("site publishes the exact canonical OpenAPI artifact and its derived reference", async ({ request }) => {
+  const canonicalSource = await readFile(canonicalOpenAPIFile, "utf8");
+  const schemaResponse = await request.get(`${baseURL}${openAPIPath}`);
+  expect(schemaResponse.status()).toBe(httpOK);
+  expect(schemaResponse.headers()["content-type"]).toContain(mimeTypes[".yaml"]);
+  expect(await schemaResponse.text()).toBe(canonicalSource);
+
+  const documentationResponse = await request.get(`${baseURL}${apiDocumentationPath}`);
+  expect(documentationResponse.status()).toBe(httpOK);
+  expect(documentationResponse.headers()["content-type"]).toContain(mimeTypes[".html"]);
+  const documentationHTML = await documentationResponse.text();
+  const sourceDigest = createHash("sha256").update(canonicalSource).digest("hex");
+  expect(canonicalSource).not.toContain("deleteManagementTenantSecret");
+  expect(documentationHTML).toContain(`<link rel="canonical" href="https://llm-proxy.mprlab.com${apiDocumentationPath}">`);
+  expect(documentationHTML).toContain(`data-openapi-source-sha256="${sourceDigest}"`);
+  expect(documentationHTML).toContain("https://llm-proxy-api.mprlab.com");
+  expect(documentationHTML).toContain('id="operation-postV2Messages"');
+  expect(documentationHTML).not.toContain('id="operation-deleteManagementTenantSecret"');
+  expect(documentationHTML).toContain("<code>reasoning_effort</code>");
+  expect(documentationHTML).toContain(`href="${openAPIPath}"`);
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(20);
+});
+
 test("SEO resource pages are crawlable from the public site", async ({ request }) => {
   const hubResponse = await request.get(`${baseURL}${resourcesPath}`);
   expect(hubResponse.status()).toBe(httpOK);
@@ -272,6 +327,8 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
   expect(hubHTML).toContain('<script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>');
   expect(hubHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/">');
   expect(hubHTML).toContain('"@type":"CollectionPage"');
+  expect(hubHTML).toContain(`href="${apiDocumentationPath}"`);
+  expect(hubHTML).toContain(`href="${openAPIPath}"`);
   expect(hubHTML).toContain(`href="${representativeResourcePath}"`);
   expect(hubHTML).toContain(`href="${clientAuthenticationResourcePath}"`);
   const resourceLinks = hubHTML.match(/href="\/resources\/[^"]+\/"/g) || [];
@@ -285,7 +342,7 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
   expect(pageHTML).toContain('<script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>');
   expect(pageHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/">');
   expect(pageHTML).toContain('"@type":"FAQPage"');
-  expect(pageHTML).toContain('<a class="resource-button" href="/">Open LLM Proxy</a>');
+  expect(pageHTML).toContain(`<a class="resource-button" href="${apiDocumentationPath}">Open API reference</a>`);
   expect(pageHTML).toContain('href="/resources/openai-claude-gemini-one-endpoint/"');
   expect(pageHTML).toContain(`"dateModified":"${seoContentModifiedDate}"`);
 });
@@ -341,13 +398,17 @@ test("SEO reliability pages describe configured upstream rate limits", async ({ 
   }
 });
 
-test("SEO usage resource documents selectable tenant intervals", async ({ request }) => {
+test("SEO usage resource documents account-wide and tenant-filtered intervals", async ({ request }) => {
   const response = await request.get(`${baseURL}/resources/managed-tenant-usage-dashboard/`);
   expect(response.status()).toBe(httpOK);
   const pageHTML = await response.text();
   expect(pageHTML).toContain(`"dateModified":"${seoUsageContentModifiedDate}"`);
-  expect(pageHTML).toContain("ALL, 30 days, 7 days, and 1 day");
-  expect(pageHTML).toContain("GET /api/management/usage?interval=&lt;interval&gt;");
+  expect(pageHTML).toContain("Usage opens on All tenants and 30 days");
+  expect(pageHTML).toContain("Usage tenant selector immediately before ALL");
+  expect(pageHTML).toContain("GET /api/management/usage?interval=30d");
+  expect(pageHTML).toContain(
+    "GET /api/management/tenants/:tenant_id/usage?interval=30d",
+  );
 });
 
 test("SEO management resources document required onboarding and secret-safe examples", async ({ request }) => {
@@ -357,18 +418,21 @@ test("SEO management resources document required onboarding and secret-safe exam
       title: "Self-service LLM key management for internal teams",
       copy: "creates a missing client key after authentication, autosaves provider settings, and keeps Settings open",
       faqQuestion: "What lets a user leave Settings?",
+      modifiedDate: seoCurrentContentModifiedDate,
     },
     {
-      slug: "generated-secret-rotation-and-revocation",
-      title: "Generated LLM Proxy secret rotation and revocation",
+      slug: "generated-secret-rotation",
+      title: "Rotate generated LLM Proxy client keys with confidence",
       copy: "Request examples retain the &lt;generated-secret&gt; placeholder after creation.",
       faqQuestion: "Can the raw generated client key be retrieved later?",
+      modifiedDate: seoClientDocumentationModifiedDate,
     },
     {
       slug: "copyable-llm-curl-examples",
       title: "Copyable LLM curl examples from current profile data",
       copy: "Examples always use &lt;generated-secret&gt;, including after automatic client-key creation.",
       faqQuestion: "Can copying an example expose the raw generated key?",
+      modifiedDate: seoCurrentContentModifiedDate,
     },
   ];
   for (const resourceExpectation of resourceExpectations) {
@@ -378,14 +442,14 @@ test("SEO management resources document required onboarding and secret-safe exam
     expect(pageHTML).toContain(
       `<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/${resourceExpectation.slug}/">`,
     );
-    expect(pageHTML).toContain(`"dateModified":"${seoCurrentContentModifiedDate}"`);
+    expect(pageHTML).toContain(`"dateModified":"${resourceExpectation.modifiedDate}"`);
     expect(pageHTML).toContain(`<title>${resourceExpectation.title}</title>`);
     expect(resourceExpectation.title.length).toBeGreaterThanOrEqual(50);
     expect(resourceExpectation.title.length).toBeLessThanOrEqual(60);
     expect(pageHTML).toContain(resourceExpectation.copy);
     expect(pageHTML).toContain("<strong>Quick verdict</strong>");
     expect(pageHTML).toContain("<h2>Repository evidence</h2>");
-    expect(pageHTML).toContain(`Verified ${seoCurrentContentModifiedDate}`);
+    expect(pageHTML).toContain(`Verified ${resourceExpectation.modifiedDate}`);
     expect(pageHTML).toContain('href="https://github.com/tyemirov" rel="author"');
     expect(pageHTML).toContain(`<summary>${resourceExpectation.faqQuestion}</summary>`);
     expect(pageHTML).not.toContain("Does this page claim provider performance or pricing advantages?");
@@ -404,18 +468,20 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
   expect(sitemapResponse.headers()["content-type"]).toContain(mimeTypes[".xml"]);
   const sitemapXML = await sitemapResponse.text();
   const sitemapLocations = sitemapXML.match(/<loc>/g) || [];
-  expect(sitemapLocations).toHaveLength(generatedResourcePageCount + 2);
+  expect(sitemapLocations).toHaveLength(generatedResourcePageCount + 3);
   expect(sitemapXML).toContain("<loc>https://llm-proxy.mprlab.com/</loc>");
   expect(sitemapXML).toContain("<loc>https://llm-proxy.mprlab.com/resources/</loc>");
+  expect(sitemapXML).toContain(`<loc>https://llm-proxy.mprlab.com${apiDocumentationPath}</loc>`);
   expect(sitemapXML).toContain(
     "<loc>https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/</loc>",
   );
   const sitemapModificationDates = sitemapXML.match(/<lastmod>[^<]+<\/lastmod>/g) || [];
-  expect(sitemapModificationDates).toHaveLength(generatedResourcePageCount + 2);
+  expect(sitemapModificationDates).toHaveLength(generatedResourcePageCount + 3);
   expect(new Set(sitemapModificationDates)).toEqual(
     new Set([
       `<lastmod>${seoContentModifiedDate}</lastmod>`,
       `<lastmod>${seoCurrentContentModifiedDate}</lastmod>`,
+      `<lastmod>${seoMigrationContentModifiedDate}</lastmod>`,
       `<lastmod>${seoUsageContentModifiedDate}</lastmod>`,
       `<lastmod>${seoClientDocumentationModifiedDate}</lastmod>`,
     ]),
@@ -429,6 +495,10 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
   expect(sitemapXML).toContain(
     `<loc>https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/</loc>\n    <lastmod>${seoClientDocumentationModifiedDate}</lastmod>`,
   );
+  expect(sitemapXML).toContain(
+    `<loc>https://llm-proxy.mprlab.com/resources/generated-secret-rotation/</loc>\n    <lastmod>${seoClientDocumentationModifiedDate}</lastmod>`,
+  );
+  expect(sitemapXML).not.toContain("generated-secret-rotation-and-revocation");
   expect(sitemapXML).not.toContain("config-ui.yaml");
   expect(sitemapXML).not.toContain("llm-proxy-config.json");
 
@@ -440,6 +510,361 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
   expect(robotsText).toContain("Sitemap: https://llm-proxy.mprlab.com/sitemap.xml");
 });
 
+test("usage defaults to all tenants while tenant management lives in Settings", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page);
+
+  await page.goto(baseURL);
+
+  const usageTenantSelector = page.getByRole("combobox", { name: "Usage tenant" });
+  await expect(usageTenantSelector).toHaveValue("");
+  await expect(usageTenantSelector.locator("option:checked")).toHaveText("All tenants");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
+  await expect(page.locator("tenant-context-bar")).toHaveCount(0);
+  await expect(page.getByText("Active tenant", { exact: true })).toHaveCount(0);
+
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Tenant" });
+  await expect(settingsTenantSelector).toHaveValue("tenant_1");
+  await expect(settingsDialog.getByRole("button", { name: "Create tenant" })).toBeVisible();
+  await expect(settingsTenantSelector.locator("option:checked")).toHaveText("Default");
+  await expect(settingsDialog.getByRole("group", { name: "Tenant access" })).not.toContainText("tenant_1");
+});
+
+test("the Tenant control in Settings and Usage tenant selection remain independent", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page);
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Tenant" });
+  await settingsTenantSelector.selectOption("tenant_2");
+  await expect(settingsTenantSelector).toHaveValue("tenant_2");
+  await expect(settingsTenantSelector.locator("option:checked")).toHaveText("Research");
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
+
+  const usageTenantSelector = page.getByRole("combobox", { name: "Usage tenant" });
+  await expect(usageTenantSelector).toHaveValue("");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
+  await usageTenantSelector.selectOption("tenant_1");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
+
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_2");
+  await expect(page).toHaveURL(baseURL);
+});
+
+test("obsolete tenant query parameters do not choose Settings or Usage state", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page);
+
+  await page.goto(`${baseURL}/?tenant=tenant_2`);
+
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  await expect(page.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_1");
+  await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toHaveCount(0);
+});
+
+test("tenant lifecycle is keyboard accessible, responsive, and guards the final tenant", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  await installAssetRoutes(page);
+  const managementState = await installMultiTenantRoutes(page, {
+    profiles: [managementTenantProfile("tenant_1", "Default")],
+  });
+
+  await page.goto(baseURL);
+
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const tenantAccess = settingsDialog.getByRole("group", { name: "Tenant access" });
+  const settingsTenantSelector = tenantAccess.getByRole("combobox", { name: "Tenant" });
+  const renameTenantButton = tenantAccess.getByRole("button", { name: "Rename" });
+  const deleteTenantButton = tenantAccess.getByRole("button", { name: "Delete tenant" });
+  await expect(settingsTenantSelector.locator("option:checked")).toHaveText("Default");
+  await expect(tenantAccess).not.toContainText("tenant_1");
+  await expect(deleteTenantButton).toBeDisabled();
+  await expect(deleteTenantButton).toHaveAttribute("aria-describedby", "final-tenant-deletion");
+  await expect(deleteTenantButton).toHaveAttribute("title", "Your final tenant cannot be deleted.");
+  await renameTenantButton.click();
+  const initialRenameDialog = page.getByRole("dialog", { name: "Rename tenant" });
+  const initialTenantName = initialRenameDialog.getByRole("textbox", { name: "Tenant name" });
+  await expect(initialTenantName).toBeFocused();
+  await initialRenameDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(initialRenameDialog).toBeHidden();
+  await expect(renameTenantButton).toBeFocused();
+
+  const createTenantButton = settingsDialog.getByRole("button", { name: "Create tenant" });
+  await createTenantButton.focus();
+  await page.keyboard.press("Enter");
+  const createDialog = page.getByRole("dialog", { name: "Create tenant" });
+  const createName = createDialog.getByRole("textbox", { name: "Tenant name" });
+  await expect(createName).toBeFocused();
+  await createDialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(createDialog.getByRole("alert")).toHaveText("Enter a tenant name with 1–80 visible characters.");
+  await createName.fill("default");
+  await createDialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(createDialog.getByRole("alert")).toHaveText("A tenant with that name already exists.");
+  await createName.fill("Research");
+  await createDialog.getByRole("button", { name: "Create", exact: true }).click();
+
+  await expect(page).toHaveURL(baseURL);
+  await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_2");
+  await expect(settingsDialog).toBeVisible();
+  await renameTenantButton.click();
+  const renameDialog = page.getByRole("dialog", { name: "Rename tenant" });
+  const tenantName = renameDialog.getByRole("textbox", { name: "Tenant name" });
+  await tenantName.fill("Default");
+  await renameDialog.getByRole("button", { name: "Save name" }).click();
+  await expect(renameDialog.getByRole("alert")).toHaveText("A tenant with that name already exists.");
+  await expect(renameDialog).toBeVisible();
+  await tenantName.fill("Research Lab");
+  await renameDialog.getByRole("button", { name: "Save name" }).click();
+  await expect(renameTenantButton).toBeFocused();
+  await expect(renameDialog).toBeHidden();
+  await expect(settingsDialog.getByRole("combobox", { name: "Tenant" }).locator("option:checked")).toHaveText("Research Lab");
+
+  await deleteTenantButton.click();
+  const deleteDialog = page.getByRole("alertdialog", { name: "Delete “Research Lab”?" });
+  await expect(deleteDialog.getByText("Research Lab", { exact: true })).toBeVisible();
+  await expect(deleteDialog).toContainText("This permanently deletes the tenant");
+  await deleteDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(deleteDialog).toBeHidden();
+  await deleteTenantButton.click();
+  await deleteDialog.getByRole("button", { name: "Delete", exact: true }).click();
+
+  await expect(page).toHaveURL(baseURL);
+  await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_1");
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
+  expect(managementState.order).toEqual(["tenant_1"]);
+  const tenantAccessBox = await tenantAccess.boundingBox();
+  if (!tenantAccessBox) {
+    throw new Error("tenant_access_missing");
+  }
+  expect(tenantAccessBox.x).toBeGreaterThanOrEqual(0);
+  expect(tenantAccessBox.x + tenantAccessBox.width).toBeLessThanOrEqual(390);
+});
+
+test("tenant switching requires discard and clears one-time and revealed credentials", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page);
+  let releaseProviderSave;
+  const providerSaveReleased = new Promise((resolve) => {
+    releaseProviderSave = resolve;
+  });
+  let providerSaveStarted;
+  const providerSaveRequested = new Promise((resolve) => {
+    providerSaveStarted = resolve;
+  });
+  await page.route(`${baseURL}/api/management/tenants/tenant_1/provider-keys/openai`, async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.fallback();
+      return;
+    }
+    providerSaveStarted();
+    await providerSaveReleased;
+    await route.fallback();
+  });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const clientAccess = settingsDialog.getByRole("group", { name: "Tenant access" });
+  const providerEditor = settingsDialog.locator("provider-editor");
+
+  await clientAccess.getByRole("button", { name: "Replace key" }).click();
+  await page.getByRole("alertdialog", { name: "Replace client key?" }).getByRole("button", { name: "Replace key" }).click();
+  await clientAccess.getByRole("button", { name: "Show key", exact: true }).click();
+  await expect(clientAccess.getByRole("textbox", { name: "Key", exact: true })).toHaveValue("llmp_tenant_1_generated");
+  await providerEditor.getByRole("button", { name: "Show key", exact: true }).click();
+  await expect(providerEditor.getByRole("textbox", { name: "OpenAI API key" })).toHaveValue("sk-tenant_1-openai");
+  await providerEditor.locator("summary.system-prompt-summary").click();
+  await providerEditor.getByRole("textbox", { name: "System prompt" }).fill("Unsaved tenant one prompt");
+  await page.keyboard.press("Tab");
+  await providerSaveRequested;
+
+  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Tenant" });
+  await settingsTenantSelector.selectOption("tenant_2");
+  const discardDialog = page.getByRole("alertdialog", { name: "Discard unsaved changes?" });
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole("button", { name: "Stay" }).click();
+  await expect(settingsTenantSelector).toHaveValue("tenant_1");
+  await expect(providerEditor.getByRole("textbox", { name: "System prompt" })).toHaveValue("Unsaved tenant one prompt");
+
+  await settingsTenantSelector.selectOption("tenant_2");
+  await discardDialog.getByRole("button", { name: "Discard and switch" }).click();
+  releaseProviderSave();
+  await expect(settingsTenantSelector).toHaveValue("tenant_2");
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
+  await expect(page.locator("body")).not.toContainText("llmp_tenant_1_generated");
+  await expect(page.locator("body")).not.toContainText("sk-tenant_1-openai");
+  expect(await browserStorageContains(page, "llmp_tenant_1_generated")).toBe(false);
+  expect(await browserStorageContains(page, "sk-tenant_1-openai")).toBe(false);
+});
+
+test("concurrent tabs keep independent Settings and Usage tenant state", async ({ context, page }) => {
+  const secondPage = await context.newPage();
+  await installAssetRoutes(page);
+  await installAssetRoutes(secondPage);
+  await installMultiTenantRoutes(page);
+  await installMultiTenantRoutes(secondPage);
+
+  await Promise.all([
+    page.goto(baseURL),
+    secondPage.goto(baseURL),
+  ]);
+
+  await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("tenant_1");
+  await secondPage.getByRole("combobox", { name: "Usage tenant" }).selectOption("tenant_2");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
+  await expect(secondPage.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
+
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  await page.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Tenant" }).selectOption("tenant_2");
+  await secondPage.getByTestId("avatar-menu").click();
+  await secondPage.getByTestId("avatar-menu-item").getByText("Settings").click();
+  await expect(secondPage.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_1");
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("tenant_1");
+  await expect(secondPage.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("tenant_2");
+});
+
+test("late tenant usage cannot overwrite a newer Usage tenant selection", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page);
+  let releaseFirstUsage;
+  const firstUsageReleased = new Promise((resolve) => {
+    releaseFirstUsage = resolve;
+  });
+  let firstUsageStarted;
+  const firstUsageRequested = new Promise((resolve) => {
+    firstUsageStarted = resolve;
+  });
+  await page.route(`${baseURL}/api/management/tenants/tenant_1/usage?interval=*`, async (route) => {
+    firstUsageStarted();
+    await firstUsageReleased;
+    await route.fallback();
+  });
+
+  await page.goto(baseURL);
+  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+    const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+    const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+    if (!applicationState) {
+      throw new Error("usage_tenant_state_missing");
+    }
+    void applicationState.handleUsageTenantSelection({ target: { value: "tenant_1" } });
+  });
+  await firstUsageRequested;
+  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+    const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+    const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+    if (!applicationState) {
+      throw new Error("usage_tenant_state_missing");
+    }
+    void applicationState.handleUsageTenantSelection({ target: { value: "tenant_2" } });
+  });
+  releaseFirstUsage();
+
+  await expect(page).toHaveURL(baseURL);
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("tenant_2");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
+  await page.waitForTimeout(50);
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
+});
+
+test("late tenant lifecycle responses cannot select or overwrite another tenant", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page);
+  const delayedCreateProfile = managementTenantProfile("tenant_3", "Late Create");
+  let releaseCreate;
+  const createReleased = new Promise((resolve) => {
+    releaseCreate = resolve;
+  });
+  let createStarted;
+  const createRequested = new Promise((resolve) => {
+    createStarted = resolve;
+  });
+  await page.route(`${baseURL}/api/management/tenants`, async (route) => {
+    createStarted();
+    await createReleased;
+    await route.fulfill({ status: 201, json: delayedCreateProfile }).catch(() => {});
+  });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Tenant" });
+  await settingsDialog.getByRole("button", { name: "Create tenant" }).click();
+  await page.getByRole("dialog", { name: "Create tenant" }).getByRole("textbox", { name: "Tenant name" }).fill("Late Create");
+  await page.getByRole("dialog", { name: "Create tenant" }).getByRole("button", { name: "Create", exact: true }).click();
+  await createRequested;
+  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+    const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+    const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+    if (!applicationState) {
+      throw new Error("settings_tenant_state_missing");
+    }
+    void applicationState.requestSettingsTenantSwitch("tenant_2");
+  });
+  releaseCreate();
+  await expect(settingsTenantSelector).toHaveValue("tenant_2");
+  await expect(settingsTenantSelector.locator("option")).toHaveCount(2);
+  await expect(settingsDialog).not.toContainText("Late Create");
+
+  let releaseRename;
+  const renameReleased = new Promise((resolve) => {
+    releaseRename = resolve;
+  });
+  let renameStarted;
+  const renameRequested = new Promise((resolve) => {
+    renameStarted = resolve;
+  });
+  await page.route(`${baseURL}/api/management/tenants/tenant_2`, async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.fallback();
+      return;
+    }
+    renameStarted();
+    await renameReleased;
+    const renamedProfile = managementTenantProfile("tenant_2", "Late Rename");
+    await route.fulfill({ json: renamedProfile }).catch(() => {});
+  });
+  const tenantAccess = settingsDialog.getByRole("group", { name: "Tenant access" });
+  await tenantAccess.getByRole("button", { name: "Rename" }).click();
+  const tenantNameEditor = page.getByRole("dialog", { name: "Rename tenant" });
+  await tenantNameEditor.getByRole("textbox", { name: "Tenant name" }).fill("Late Rename");
+  await tenantNameEditor.getByRole("button", { name: "Save name" }).click();
+  await renameRequested;
+  await page.keyboard.press("Escape");
+  await expect(tenantNameEditor).toBeVisible();
+  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+    const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+    const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+    if (!applicationState) {
+      throw new Error("settings_tenant_state_missing");
+    }
+    void applicationState.requestSettingsTenantSwitch("tenant_1");
+  });
+  await page.getByRole("alertdialog", { name: "Discard unsaved changes?" }).getByRole("button", { name: "Discard and switch" }).click();
+  releaseRename();
+  await expect(settingsTenantSelector).toHaveValue("tenant_1");
+  await expect(settingsTenantSelector.locator('option[value="tenant_2"]')).toHaveText("Research");
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
+});
+
 test("dashboard shows usage and settings opens from avatar menu before sign out", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page);
@@ -447,7 +872,7 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await page.goto(baseURL);
 
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
-  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("37");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
   await expect(page.locator("usage-card").filter({ hasText: "Tokens" }).locator("strong")).toHaveText("12,345");
   await expect(page.locator("usage-card").filter({ hasText: "Success rate" }).locator("strong")).toHaveText("95%");
   await expect(page.locator("usage-chart-panel").first().locator("polyline")).toHaveAttribute("points", /,/);
@@ -467,20 +892,17 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(closeSettingsButton).toHaveText("");
   await expect(closeSettingsButton.locator("svg.close-icon path")).toHaveCount(2);
   await expect(settingsDialog.getByRole("heading", { name: "Client access" })).toHaveCount(0);
-  const clientAccessRow = settingsDialog.getByRole("group", { name: "Key" });
-  await expect(settingsDialog.locator("settings-body > client-access-row")).toHaveCount(1);
-  await expect(settingsDialog.locator("settings-section client-access-row")).toHaveCount(0);
-  await expect(clientAccessRow.locator("client-access-tenant")).toHaveCount(0);
-  await expect(clientAccessRow).not.toContainText("Tenant");
-  await expect(clientAccessRow).not.toContainText("Default");
-  await expect(clientAccessRow).toContainText(
-    "This key is saved and can’t be shown again. Replace it to create and copy a new key.",
-  );
-  const replaceKeyButton = clientAccessRow.getByRole("button", { name: "Replace key" });
+  const tenantAccessRow = settingsDialog.getByRole("group", { name: "Tenant access" });
+  await expect(settingsDialog.locator("settings-body > tenant-access-row")).toHaveCount(1);
+  await expect(settingsDialog.locator("settings-section tenant-access-row")).toHaveCount(0);
+  await expect(tenantAccessRow.locator("client-access-tenant")).toHaveCount(0);
+  await expect(tenantAccessRow.getByRole("combobox", { name: "Tenant" }).locator("option:checked")).toHaveText("Default");
+  await expect(tenantAccessRow).toContainText("Saved; replace to reveal a new key.");
+  const replaceKeyButton = tenantAccessRow.getByRole("button", { name: "Replace key" });
   await expect(replaceKeyButton.locator(".material-symbols-outlined")).toHaveText("key");
-  await expect(replaceKeyButton.locator(".client-key-replace-label")).toHaveText("Replace key");
+  await expect(replaceKeyButton.locator(".tenant-access-action-label")).toHaveText("Replace key");
   await expect(replaceKeyButton.locator("svg")).toHaveCount(0);
-  await expect(clientAccessRow.getByRole("button", { name: "Revoke key" })).toBeVisible();
+  await expect(tenantAccessRow.getByRole("button", { name: "Revoke key" })).toHaveCount(0);
   await expect(settingsDialog.getByRole("heading", { name: "Routing defaults" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Request examples" })).toBeVisible();
   const requestExamplesSection = settingsDialog.locator(".usage-examples-section");
@@ -527,7 +949,7 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(providerRemovalButton).toBeVisible();
   await expect(providerRemovalButton.locator(".material-symbols-outlined")).toHaveText("delete");
   await expect(providerModelSelector).toHaveValue("gpt-4.1");
-  await expect(providerEditor.getByRole("textbox", { name: "System prompt" })).toHaveValue("Use concise answers.");
+  await expect(providerEditor.locator("#provider-system-prompt-input")).toHaveValue("Use concise answers.");
 
   const providerControlBoxes = await Promise.all(
     [providerSelector, providerKeyInput, providerVisibilityButton, providerRemovalButton, providerModelSelector].map((control) =>
@@ -550,7 +972,7 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await providerSelector.selectOption("deepseek");
   await expect(providerEditor.getByRole("textbox", { name: "DeepSeek API key" })).toHaveValue("****5678");
   await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toHaveValue("deepseek-chat");
-  await expect(providerEditor.getByRole("textbox", { name: "System prompt" })).toHaveValue("");
+  await expect(providerEditor.locator("#provider-system-prompt-input")).toHaveValue("");
   await expect(settingsDialog.locator("request-example")).toHaveCount(5);
   await expect(settingsDialog.locator('request-example[data-example-id="provider-text"] .usage-snippet')).toContainText(
     "provider=deepseek",
@@ -571,6 +993,62 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
     "provider=meta",
   );
   await expect(settingsDialog.locator('request-example[data-example-id="provider-dictation"]')).toHaveCount(0);
+});
+
+test("system prompt editors stay hidden until their labels expand them and reset with context", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installMultiTenantRoutes(page);
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const defaultsForm = settingsDialog.locator(".settings-grid-form");
+  const providerEditor = settingsDialog.locator("provider-editor");
+  const routingDisclosure = defaultsForm.locator("details.system-prompt-disclosure");
+  const providerDisclosure = providerEditor.locator("details.system-prompt-disclosure");
+  const routingSummary = routingDisclosure.locator("summary.system-prompt-summary");
+  const providerSummary = providerDisclosure.locator("summary.system-prompt-summary");
+  const routingPrompt = defaultsForm.locator("#routing-system-prompt-input");
+  const providerPrompt = providerEditor.locator("#provider-system-prompt-input");
+
+  await expect(routingPrompt).toBeHidden();
+  await expect(providerPrompt).toBeHidden();
+  await expect(routingDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
+  await expect(providerDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
+
+  await routingSummary.click();
+  await expect(routingPrompt).toBeVisible();
+  await expect(routingDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Expanded");
+
+  await providerSummary.focus();
+  await page.keyboard.press("Enter");
+  await expect(providerPrompt).toBeVisible();
+  await expect(providerDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Expanded");
+
+  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("deepseek");
+  await expect(providerPrompt).toBeHidden();
+  await expect(providerDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
+
+  await providerSummary.click();
+  await expect(providerPrompt).toBeVisible();
+  const settingsTenantSelector = settingsDialog.getByRole("combobox", { name: "Tenant" });
+  await settingsTenantSelector.selectOption("tenant_2");
+  await expect(settingsTenantSelector).toHaveValue("tenant_2");
+  await expect(routingPrompt).toBeHidden();
+  await expect(providerPrompt).toBeHidden();
+  await expect(routingDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
+  await expect(providerDisclosure.locator(".system-prompt-disclosure-state")).toHaveText("Hidden");
+
+  await routingSummary.click();
+  await providerSummary.click();
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
+  await expect(settingsDialog).toBeHidden();
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").getByText("Settings").click();
+  await expect(routingPrompt).toBeHidden();
+  await expect(providerPrompt).toBeHidden();
 });
 
 test("usage intervals load every dashboard surface, remain active on refresh, and fit mobile", async ({ page }) => {
@@ -617,7 +1095,7 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
       "aria-pressed",
       "true",
     );
-    await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText(
+    await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText(
       interval.requests.toLocaleString("en-US"),
     );
     await expect(page.locator("usage-card").filter({ hasText: "Tokens" }).locator("strong")).toHaveText(
@@ -633,6 +1111,7 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
     await expect(page.locator("usage-breakdown").nth(1)).toContainText(
       interval.id === "30d" ? "gpt-4.1" : `model-${interval.id}`,
     );
+    await expect(page.getByRole("button", { name: /failed request/ })).toHaveCount(interval.id === "30d" ? 1 : 0);
   }
 
   const selectedInterval = usageIntervals.at(-1);
@@ -687,7 +1166,7 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
     }
     await expect(page.getByRole("button", { name: "Refresh", exact: true })).toBeDisabled();
     await expect(sevenDayButton).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("0");
+    await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
     await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
     await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
       const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
@@ -698,12 +1177,12 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
       void applicationState.selectUsageInterval("1d");
     });
     await expect(intervalGroup.getByRole("button", { name: "1 day" })).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("1");
+    await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("1");
   } finally {
     releaseSevenDayResponse();
   }
   await page.waitForLoadState("networkidle");
-  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("1");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("1");
 
   await page.unroute(usageRequestPattern());
   await page.route(usageRequestPattern(), async (route) => {
@@ -712,8 +1191,199 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.getByText("Request failed")).toBeVisible();
   await expect(intervalGroup.getByRole("button", { name: "1 day" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("0");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
   await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
+});
+
+test("failed-request details expose 10 of 22 requests as safe, focus-managed metadata on desktop and mobile", async ({ page }) => {
+  const usage = managementUsage("30d", {
+    requests: 22,
+    successful_requests: 12,
+    failed_requests: 10,
+    text_requests: 20,
+    dictation_requests: 2,
+  });
+  usage.status_codes = [
+    { status_code: 200, requests: 12 },
+    { status_code: 400, requests: 3 },
+    { status_code: 429, requests: 2 },
+    { status_code: 499, requests: 1 },
+    { status_code: 502, requests: 4 },
+  ];
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await installUsageResponse(page, httpOK, usage);
+  await installUsageFailuresResponse(page, managementUsageFailures("30d", 10));
+
+  await page.goto(baseURL);
+
+  const successRateCard = page.locator("usage-card").filter({ hasText: "Success rate" });
+  await expect(successRateCard.locator("strong")).toHaveText("55%");
+  const failureAction = successRateCard.getByRole("button", { name: "10 failed requests" });
+  await expect(failureAction).toBeVisible();
+  await failureAction.click();
+
+  const dialog = page.getByRole("dialog", { name: "Failed request details" });
+  const closeButton = dialog.getByRole("button", { name: "Close failed request details" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
+  await expect(dialog).toHaveAttribute("aria-busy", "false");
+  await expect(closeButton).toBeFocused();
+  await expect(dialog.getByRole("heading", { name: "Status breakdown" })).toBeVisible();
+  await expect(dialog.locator("usage-failure-status")).toHaveCount(4);
+  await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("400");
+  await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("Bad request");
+  await expect(dialog.locator("usage-failure-status").nth(0)).toContainText("3");
+  await expect(dialog.locator("usage-failure-row")).toHaveCount(10);
+  await expect(dialog.locator("usage-failure-row").first()).toContainText("Default · tenant_1");
+  await expect(dialog.locator("usage-failure-row").first()).toContainText("V2");
+  await expect(dialog.locator("usage-failure-row").first()).toContainText("502 Upstream error");
+  await expect(dialog.locator("usage-failure-row").first()).toContainText("Upstream error");
+  await expect(dialog.locator("usage-failure-row").first()).toContainText("245 ms");
+  await expect(dialog.locator("usage-failure-status").filter({ hasText: "499" })).toContainText("Client closed request");
+  await expect(dialog.locator("usage-failure-row").filter({ hasText: "499 Client closed request" })).toContainText("Request timeout");
+  await expect(dialog).not.toContainText("raw-provider-body");
+  await expect(dialog).not.toContainText("sk-never-render");
+  await expect(dialog).not.toContainText("private prompt");
+  const browserStorageText = await page.evaluate(() => {
+    const storageValues = [];
+    for (const storage of [localStorage, sessionStorage]) {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        storageValues.push(key || "", key ? storage.getItem(key) || "" : "");
+      }
+    }
+    return storageValues.join("\n");
+  });
+  expect(browserStorageText).not.toContain("raw-provider-body");
+  expect(browserStorageText).not.toContain("sk-never-render");
+  expect(browserStorageText).not.toContain("private prompt");
+
+  await closeButton.press("Tab");
+  await expect(closeButton).toBeFocused();
+
+  await page.setViewportSize({ width: 390, height: 780 });
+  const dialogBox = await dialog.boundingBox();
+  if (!dialogBox) {
+    throw new Error("usage_failures_dialog_missing");
+  }
+  expect(dialogBox.x).toBeGreaterThanOrEqual(0);
+  expect(dialogBox.y).toBeGreaterThanOrEqual(0);
+  expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(390);
+  expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(780);
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(failureAction).toBeFocused();
+});
+
+test("failed-request pagination preserves metrics across loading and retryable errors", async ({ page }) => {
+  const usage = managementUsage("30d", {
+    requests: 40,
+    successful_requests: 14,
+    failed_requests: 26,
+    text_requests: 38,
+    dictation_requests: 2,
+  });
+  usage.status_codes = [
+    { status_code: 200, requests: 14 },
+    { status_code: 502, requests: 26 },
+  ];
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await installUsageResponse(page, httpOK, usage);
+
+  /** @type {() => void} */
+  let releaseFirstPage = () => {};
+  const firstPageGate = new Promise((resolve) => {
+    releaseFirstPage = () => resolve(undefined);
+  });
+  let failFirstPage = false;
+  await page.route(usageFailuresRequestPattern(), async (route) => {
+    const requestURL = new URL(route.request().url());
+    if (failFirstPage) {
+      await route.fulfill({ status: httpInternalServerError, body: "raw-provider-body sk-never-render" });
+      return;
+    }
+    if (!requestURL.searchParams.has("cursor")) {
+      await firstPageGate;
+      await route.fulfill({ json: managementUsageFailures("30d", 25, "page-2") });
+      return;
+    }
+    expect(requestURL.searchParams.get("cursor")).toBe("page-2");
+    await route.fulfill({ json: managementUsageFailures("30d", 1, "", 25) });
+  });
+
+  await page.goto(baseURL);
+  await page.getByRole("button", { name: "26 failed requests" }).click();
+  const dialog = page.getByRole("dialog", { name: "Failed request details" });
+  await expect(dialog).toHaveAttribute("aria-busy", "true");
+  await expect(dialog.getByText("Loading failed requests")).toBeVisible();
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("40");
+
+  releaseFirstPage();
+  await expect(dialog.locator("usage-failure-row")).toHaveCount(25);
+  const loadMore = dialog.getByRole("button", { name: "Load more" });
+  await expect(loadMore).toBeVisible();
+  await loadMore.click();
+  await expect(dialog.locator("usage-failure-row")).toHaveCount(26);
+  await expect(loadMore).toBeHidden();
+
+  await dialog.getByRole("button", { name: "Close failed request details" }).click();
+  failFirstPage = true;
+  await page.getByRole("button", { name: "26 failed requests" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("Unable to load failed requests");
+  await expect(dialog).not.toContainText("raw-provider-body");
+  await expect(dialog).not.toContainText("sk-never-render");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("40");
+
+  failFirstPage = false;
+  await dialog.getByRole("button", { name: "Retry" }).click();
+  await expect(dialog.locator("usage-failure-row")).toHaveCount(25);
+});
+
+test("failed-request responses cannot cross interval or Usage tenant boundaries", async ({ page }) => {
+  await installAssetRoutes(page);
+  const routeState = await installMultiTenantRoutes(page, {
+    usageRequests: { tenant_1: 22, tenant_2: 7 },
+  });
+  /** @type {() => void} */
+  let releaseFailureResponse = () => {};
+  const failureResponseGate = new Promise((resolve) => {
+    releaseFailureResponse = () => resolve(undefined);
+  });
+  await page.route(usageFailuresRequestPattern(), async (route) => {
+    await failureResponseGate;
+    await route.fulfill({ json: managementUsageFailures("30d", 10) });
+  });
+
+  await page.goto(baseURL);
+  await page.getByRole("button", { name: "2 failed requests" }).click();
+  await expect(page.getByRole("dialog", { name: "Failed request details" })).toHaveAttribute("aria-busy", "true");
+
+  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+    const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+    const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+    if (!applicationState) {
+      throw new Error("usage_failures_state_missing");
+    }
+    void applicationState.selectUsageInterval("7d");
+  });
+  await expect(page.getByRole("dialog", { name: "Failed request details" })).toBeHidden();
+  await expect(page.getByRole("button", { name: /failed request/ })).toHaveCount(0);
+
+  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+    const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+    const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+    if (!applicationState) {
+      throw new Error("usage_failures_state_missing");
+    }
+    void applicationState.handleUsageTenantSelection({ target: { value: "tenant_2" } });
+  });
+  releaseFailureResponse();
+  await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("tenant_2");
+  await expect(page.getByRole("dialog", { name: "Failed request details" })).toBeHidden();
+  expect(routeState.requests.some((request) => request.path === "/api/management/tenants/tenant_2/usage")).toBe(true);
 });
 
 test("provider selection autosaves its exact editor while transient removal stays local", async ({ page }) => {
@@ -849,6 +1519,7 @@ test("Settings close waits for the current provider autosave", async ({ page }) 
   await page.goto(baseURL);
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   const providerEditor = settingsDialog.locator("provider-editor");
+  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
   await providerEditor.getByRole("textbox", { name: "OpenAI API key" }).fill("sk-close-autosave");
   await settingsDialog.getByRole("button", { name: "Close" }).click();
   await providerSaveRequested;
@@ -893,7 +1564,7 @@ test("failed provider autosave preserves its editor and blocks provider switchin
   await expect(providerKeyInput).toHaveValue(editedProviderKey);
 });
 
-test("late provider autosave responses cannot repopulate a cleared session", async ({ page }) => {
+test("session cleanup cancels provider autosaves before they can repopulate state", async ({ page }) => {
   const lateProviderKey = "sk-anthropic-late-autosave";
   let releaseProviderSave;
   const providerSaveReleased = new Promise((resolve) => {
@@ -926,11 +1597,8 @@ test("late provider autosave responses cannot repopulate a cleared session", asy
     document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
   });
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
-  const providerSaveResponse = page.waitForResponse(
-    (response) => response.url() === providerKeyEndpointURL("anthropic") && response.request().method() === "PUT",
-  );
   releaseProviderSave();
-  await providerSaveResponse;
+  await page.waitForTimeout(50);
   await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Authentication required");
   await expect(page.locator("body")).not.toContainText(lateProviderKey);
   expect(await browserStorageContains(page, lateProviderKey)).toBe(false);
@@ -1034,6 +1702,7 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
     text_model: "gpt-4o-mini",
     system_prompt: "Use concise answers.",
   });
+  await providerEditor.locator("summary.system-prompt-summary").click();
   const providerSystemPrompt = providerEditor.getByRole("textbox", { name: "System prompt" });
   await providerSystemPrompt.fill("Use autosaved provider guidance.");
   await page.keyboard.press("Tab");
@@ -1199,12 +1868,12 @@ test("short saved provider keys use a generic mask", async ({ page }) => {
 test("routing defaults autosave complete provider and model pairs without a manual action", async ({ page }) => {
   const defaultsMutations = [];
   page.on("request", (request) => {
-    if (request.url() === `${baseURL}/api/management/defaults`) {
+    if (request.url() === `${baseURL}${managementDefaultTenantPath}/defaults`) {
       defaultsMutations.push(request.postDataJSON());
     }
   });
   await installAssetRoutes(page);
-  await installManagementRoutes(page);
+  await installManagementRoutes(page, { savedProviderIDs: ["openai", "deepseek", "meta", "grok"] });
 
   await page.goto(baseURL);
   await page.getByTestId("avatar-menu").click();
@@ -1216,7 +1885,8 @@ test("routing defaults autosave complete provider and model pairs without a manu
   const textModel = defaultsForm.getByRole("combobox", { name: "Text model" });
   const dictationProvider = defaultsForm.getByRole("combobox", { name: "Dictation provider" });
   const dictationModel = defaultsForm.getByRole("combobox", { name: "Dictation model" });
-  const systemPrompt = defaultsForm.getByRole("textbox", { name: "System prompt" });
+  const systemPromptDisclosure = defaultsForm.locator("details.system-prompt-disclosure");
+  const systemPrompt = defaultsForm.locator("#routing-system-prompt-input");
 
   await expect(textProvider).toHaveValue("openai");
   await expect(textModel).toHaveValue("gpt-4.1");
@@ -1249,6 +1919,7 @@ test("routing defaults autosave complete provider and model pairs without a manu
     reasoning_effort: "",
   });
 
+  await systemPromptDisclosure.locator("summary.system-prompt-summary").click();
   await systemPrompt.fill("Use tenant-wide autosaved guidance.");
   expect(defaultsMutations).toHaveLength(2);
   await page.keyboard.press("Tab");
@@ -1264,7 +1935,7 @@ test("routing defaults autosave complete provider and model pairs without a manu
   await expect(page.locator("notification-region")).toHaveText("Defaults saved");
   await expect(defaultsForm).not.toHaveAttribute("aria-busy", "true");
 
-  const reloadedProfileResponse = page.waitForResponse(`${baseURL}/api/management/profile`);
+  const reloadedProfileResponse = page.waitForResponse(`${baseURL}${managementDefaultTenantPath}`);
   await page.reload();
   expect((await reloadedProfileResponse).status()).toBe(httpOK);
   expect(await (await reloadedProfileResponse).json()).toMatchObject({
@@ -1277,9 +1948,49 @@ test("routing defaults autosave complete provider and model pairs without a manu
   await expect(settingsDialog.getByRole("combobox", { name: "Text model" }).first()).toHaveValue("deepseek-chat");
   await expect(settingsDialog.getByRole("combobox", { name: "Dictation provider" })).toHaveValue("grok");
   await expect(settingsDialog.getByRole("combobox", { name: "Dictation model" })).toHaveValue("xai-stt");
-  await expect(settingsDialog.locator(".settings-grid-form").getByRole("textbox", { name: "System prompt" })).toHaveValue(
+  await expect(settingsDialog.locator("#routing-system-prompt-input")).toHaveValue(
     "Use tenant-wide autosaved guidance.",
   );
+});
+
+test("routing defaults expose only keyed providers and disable unavailable dictation", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { savedProviderIDs: ["deepseek"] });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const defaultsForm = settingsDialog.locator(".settings-grid-form");
+  const textProvider = defaultsForm.getByRole("combobox", { name: "Text provider" });
+  const textModel = defaultsForm.getByRole("combobox", { name: "Text model" });
+  const dictationProvider = defaultsForm.getByRole("combobox", { name: "Dictation provider" });
+  const dictationModel = defaultsForm.getByRole("combobox", { name: "Dictation model" });
+
+  await expect(textProvider).toHaveValue("deepseek");
+  await expect(textProvider.locator("option")).toHaveText(["DeepSeek"]);
+  await expect(textModel).toHaveValue("deepseek-chat");
+  await expect(dictationProvider).toBeDisabled();
+  await expect(dictationModel).toBeDisabled();
+  await expect(dictationProvider).toHaveValue("");
+  await expect(dictationModel).toHaveValue("");
+  await expect(dictationProvider.locator("option")).toHaveText(["Not configured"]);
+  await expect(settingsDialog.getByText("Default dictation", { exact: true })).toHaveCount(0);
+
+  const providerEditor = settingsDialog.locator("provider-editor");
+  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
+  await providerEditor.getByRole("textbox", { name: "OpenAI API key" }).fill("sk-openai-new");
+  await page.keyboard.press("Tab");
+
+  await expect(page.locator("notification-region")).toHaveText("Provider settings saved");
+  await expect(textProvider.locator("option")).toHaveText(["OpenAI", "DeepSeek"]);
+  await expect(textProvider).toHaveValue("deepseek");
+  await expect(dictationProvider).toBeEnabled();
+  await expect(dictationModel).toBeEnabled();
+  await expect(dictationProvider).toHaveValue("openai");
+  await expect(dictationModel).toHaveValue("gpt-4o-mini-transcribe");
+  await expect(settingsDialog.getByText("Default dictation", { exact: true })).toHaveCount(1);
 });
 
 test("routing-default autosave queues newer edits without resetting the provider editor", async ({ page }) => {
@@ -1294,8 +2005,11 @@ test("routing-default autosave queues newer edits without resetting the provider
     firstDefaultsSaveStarted = resolve;
   });
   await installAssetRoutes(page);
-  await installManagementRoutes(page, { providerKeys: { openai: revealedProviderKey } });
-  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+  await installManagementRoutes(page, {
+    providerKeys: { openai: revealedProviderKey },
+    savedProviderIDs: ["openai", "deepseek", "meta", "grok"],
+  });
+  await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
     defaultsMutations.push(route.request().postDataJSON());
     if (defaultsMutations.length === 1) {
       firstDefaultsSaveStarted();
@@ -1318,6 +2032,7 @@ test("routing-default autosave queues newer edits without resetting the provider
   await defaultsForm.getByRole("combobox", { name: "Text provider" }).selectOption("deepseek");
   await firstDefaultsSaveRequested;
   await defaultsForm.getByRole("combobox", { name: "Dictation provider" }).selectOption("grok");
+  await defaultsForm.locator("summary.system-prompt-summary").click();
   await defaultsForm.getByRole("textbox", { name: "System prompt" }).fill("Keep the latest defaults only.");
   await page.keyboard.press("Tab");
 
@@ -1369,7 +2084,7 @@ test("provider and routing autosaves serialize whole-profile mutations in both d
     }
     await route.fallback();
   });
-  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
     defaultsMutations.push(route.request().postDataJSON());
     if (defaultsMutations.length === 2) {
       secondDefaultsSaveStarted();
@@ -1385,6 +2100,7 @@ test("provider and routing autosaves serialize whole-profile mutations in both d
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   const providerEditor = settingsDialog.locator("provider-editor");
   const providerModel = providerEditor.getByRole("combobox", { name: "Provider default model" });
+  await providerEditor.locator("summary.system-prompt-summary").click();
   const providerPrompt = providerEditor.getByRole("textbox", { name: "System prompt" });
   const defaultsForm = settingsDialog.locator(".settings-grid-form");
   const defaultTextProvider = defaultsForm.getByRole("combobox", { name: "Text provider" });
@@ -1414,7 +2130,7 @@ test("provider and routing autosaves serialize whole-profile mutations in both d
   await expect(defaultTextProvider).toHaveValue("openai");
   await expect(page.locator("notification-region")).toHaveText("Provider settings saved");
 
-  const reloadedProfileResponse = page.waitForResponse(`${baseURL}/api/management/profile`);
+  const reloadedProfileResponse = page.waitForResponse(`${baseURL}${managementDefaultTenantPath}`);
   await page.reload();
   const reloadedProfile = await (await reloadedProfileResponse).json();
   expect(reloadedProfile.tenant.defaults).toMatchObject({ provider: "openai", model: "gpt-4.1" });
@@ -1435,7 +2151,7 @@ test("Settings close waits for the current routing-default autosave", async ({ p
   });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
-  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
     defaultsSaveStarted();
     await defaultsSaveReleased;
     await route.fallback();
@@ -1459,7 +2175,7 @@ test("failed routing-default autosave retains edits and blocks Settings close", 
   let defaultsSaveRequestCount = 0;
   await installAssetRoutes(page);
   await installManagementRoutes(page);
-  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
     defaultsSaveRequestCount += 1;
     await route.fulfill({ status: httpInternalServerError, body: "request_failed" });
   });
@@ -1484,7 +2200,7 @@ test("failed routing-default autosave retains edits and blocks Settings close", 
   await expect(textModel).toHaveValue("deepseek-chat");
 });
 
-test("late routing-default autosave responses cannot repopulate a cleared session", async ({ page }) => {
+test("session cleanup cancels routing-default autosaves before they can repopulate state", async ({ page }) => {
   let releaseDefaultsSave;
   const defaultsSaveReleased = new Promise((resolve) => {
     releaseDefaultsSave = resolve;
@@ -1495,7 +2211,7 @@ test("late routing-default autosave responses cannot repopulate a cleared sessio
   });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
-  await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
     defaultsSaveStarted();
     await defaultsSaveReleased;
     await route.fallback();
@@ -1511,9 +2227,8 @@ test("late routing-default autosave responses cannot repopulate a cleared sessio
     document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
   });
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
-  const defaultsSaveResponse = page.waitForResponse(`${baseURL}/api/management/defaults`);
   releaseDefaultsSave();
-  await defaultsSaveResponse;
+  await page.waitForTimeout(50);
   await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Authentication required");
   await expect(page.locator('option[value="deepseek"]')).toHaveCount(0);
 });
@@ -1521,7 +2236,7 @@ test("late routing-default autosave responses cannot repopulate a cleared sessio
 test("reasoning effort is exact to the selected text route and the controls remain responsive", async ({ page }) => {
   const defaultsMutations = [];
   page.on("request", (request) => {
-    if (request.url() === `${baseURL}/api/management/defaults`) {
+    if (request.url() === `${baseURL}${managementDefaultTenantPath}/defaults`) {
       defaultsMutations.push(request.postDataJSON());
     }
   });
@@ -1604,7 +2319,7 @@ test("reasoning effort is exact to the selected text route and the controls rema
     expect(box.x + box.width).toBeLessThanOrEqual(390);
   }
 
-  const reloadedProfileResponse = page.waitForResponse(`${baseURL}/api/management/profile`);
+  const reloadedProfileResponse = page.waitForResponse(`${baseURL}${managementDefaultTenantPath}`);
   await page.reload();
   expect((await reloadedProfileResponse).status()).toBe(httpOK);
   await page.getByTestId("avatar-menu").click();
@@ -1636,7 +2351,7 @@ test("invalid persisted routing-default profiles become workspace integrity erro
 test("dashboard loads only after MPR UI authenticates the user", async ({ page }) => {
   const profileRequests = [];
   page.on("request", (request) => {
-    if (request.url() === `${baseURL}/api/management/profile`) {
+    if (request.url() === `${baseURL}${managementDefaultTenantPath}`) {
       profileRequests.push(request);
     }
   });
@@ -1650,14 +2365,14 @@ test("dashboard loads only after MPR UI authenticates the user", async ({ page }
   await page.evaluate(() => window.__llmProxyMprAuthenticate());
 
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
-  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("37");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
   expect(profileRequests).toHaveLength(1);
 });
 
 test("startup reconciles MPR UI authentication after the lifecycle event has passed", async ({ page }) => {
   const profileRequests = [];
   page.on("request", (request) => {
-    if (request.url() === `${baseURL}/api/management/profile`) {
+    if (request.url() === `${baseURL}${managementDefaultTenantPath}`) {
       profileRequests.push(request);
     }
   });
@@ -1669,6 +2384,77 @@ test("startup reconciles MPR UI authentication after the lifecycle event has pas
   await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "authenticated");
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   expect(profileRequests).toHaveLength(1);
+});
+
+test("blocked Alpine startup becomes an actionable application error", async ({ page }) => {
+  const accountRequests = [];
+  const blockedAlpineRequests = [];
+  page.on("request", (request) => {
+    if (request.url() === `${baseURL}/api/management/account`) {
+      accountRequests.push(request);
+    }
+  });
+  page.on("requestfailed", (request) => {
+    if (request.url().includes("/alpinejs@3.13.5/dist/module.esm.js")) {
+      blockedAlpineRequests.push(request);
+    }
+  });
+  await page.addInitScript(() => {
+    window.__llmProxyManagementReadyCount = 0;
+    document.addEventListener("llm-proxy:management-ready", () => {
+      window.__llmProxyManagementReadyCount += 1;
+    });
+  });
+  await installAssetRoutes(page, { alpineModuleFailure: true });
+  await installManagementRoutes(page);
+
+  await page.goto(baseURL);
+
+  const failureSurface = page.getByRole("alert");
+  await expect(failureSurface).toBeVisible();
+  await expect(failureSurface).toBeFocused();
+  await expect(failureSurface.getByText("Application startup")).toBeVisible();
+  await expect(failureSurface.getByRole("heading", { name: "Unable to open LLM Proxy" })).toBeVisible();
+  await expect(failureSurface).toContainText(
+    "Your browser could not load the current application files. Allow this site and cdn.jsdelivr.net in browser controls, then reload.",
+  );
+  await expect(failureSurface.getByRole("button", { name: "Reload LLM Proxy" })).toBeVisible();
+  await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "authenticated");
+  await expect.poll(() => page.evaluate(() => window.__llmProxyManagementReadyCount)).toBe(1);
+  expect(blockedAlpineRequests).toHaveLength(1);
+  expect(accountRequests).toHaveLength(0);
+});
+
+test("incompatible cached application module becomes an actionable application error", async ({ page }) => {
+  const accountRequests = [];
+  page.on("request", (request) => {
+    if (request.url() === `${baseURL}/api/management/account`) {
+      accountRequests.push(request);
+    }
+  });
+  await page.addInitScript(() => {
+    window.__llmProxyManagementReadyCount = 0;
+    document.addEventListener("llm-proxy:management-ready", () => {
+      window.__llmProxyManagementReadyCount += 1;
+    });
+  });
+  await installAssetRoutes(page, { backendModuleMismatch: true });
+  await installManagementRoutes(page);
+
+  await page.goto(baseURL);
+
+  const failureSurface = page.getByRole("alert");
+  await expect(failureSurface).toBeVisible();
+  await expect(failureSurface).toBeFocused();
+  await expect(failureSurface.getByText("Application startup")).toBeVisible();
+  await expect(failureSurface.getByRole("heading", { name: "Unable to open LLM Proxy" })).toBeVisible();
+  await expect(failureSurface).toContainText(
+    "Your browser could not load the current application files. Allow this site and cdn.jsdelivr.net in browser controls, then reload.",
+  );
+  await expect(failureSurface.getByRole("button", { name: "Reload LLM Proxy" })).toBeVisible();
+  await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "authenticated");
+  await expect.poll(() => page.evaluate(() => window.__llmProxyManagementReadyCount)).toBe(1);
+  expect(accountRequests).toHaveLength(0);
 });
 
 test("authenticated profile failures replace loading and signed-out states", async ({ page }) => {
@@ -1706,10 +2492,10 @@ test("fresh authenticated users receive one client key and must add a provider k
   let defaultsRequestCount = 0;
   const providerMutations = [];
   page.on("request", (request) => {
-    if (request.url() === `${baseURL}/api/management/secrets` && request.method() === "POST") {
+    if (request.url() === `${baseURL}${managementDefaultTenantPath}/secrets` && request.method() === "POST") {
       secretRequestCount += 1;
     }
-    if (request.url() === `${baseURL}/api/management/defaults`) {
+    if (request.url() === `${baseURL}${managementDefaultTenantPath}/defaults`) {
       defaultsRequestCount += 1;
     }
     if (request.url() === providerKeyEndpointURL("openai") && request.method() === "PUT") {
@@ -1737,7 +2523,7 @@ test("fresh authenticated users receive one client key and must add a provider k
   const clientKeyInput = settingsDialog.getByRole("textbox", { name: "Key", exact: true });
   await expect(clientKeyInput).toHaveValue("••••••••••••");
   await expect(clientKeyInput).toHaveAttribute("readonly", "");
-  await settingsDialog.locator("client-access-row").getByRole("button", { name: "Show key", exact: true }).click();
+  await settingsDialog.locator("tenant-access-row").getByRole("button", { name: "Show key", exact: true }).click();
   await expect(clientKeyInput).toHaveValue(generatedSecret);
   expect(await clientKeyInput.evaluate((inputElement) => inputElement.outerHTML)).not.toContain(generatedSecret);
   await settingsDialog.getByRole("button", { name: "Copy key", exact: true }).click();
@@ -1760,6 +2546,9 @@ test("fresh authenticated users receive one client key and must add a provider k
   await expect(setupRequirement).toBeFocused();
 
   const providerEditor = settingsDialog.locator("provider-editor");
+  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
+  const providerSystemPromptSummary = providerEditor.locator("summary.system-prompt-summary");
+  await providerSystemPromptSummary.click();
   const providerSystemPrompt = providerEditor.getByRole("textbox", { name: "System prompt" });
   await providerSystemPrompt.focus();
   await page.keyboard.press("Tab");
@@ -1791,7 +2580,7 @@ test("fresh authenticated users receive one client key and must add a provider k
 test("configured users reach the dashboard without reopening Settings or generating a key", async ({ page }) => {
   let secretRequestCount = 0;
   page.on("request", (request) => {
-    if (request.url() === `${baseURL}/api/management/secrets` && request.method() === "POST") {
+    if (request.url() === `${baseURL}${managementDefaultTenantPath}/secrets` && request.method() === "POST") {
       secretRequestCount += 1;
     }
   });
@@ -1822,7 +2611,7 @@ test("automatically generated client keys never enter request examples", async (
   const providerV2Example = settingsDialog.locator('request-example[data-example-id="provider-v2"] .usage-snippet');
   await expect(defaultTextExample).toContainText("key=<generated-secret>");
   await expect(providerV2Example).toContainText("key=<generated-secret>");
-  await expect(settingsDialog.locator("client-access-row").getByRole("textbox", { name: "Key", exact: true })).not.toHaveValue(
+  await expect(settingsDialog.locator("tenant-access-row").getByRole("textbox", { name: "Key", exact: true })).not.toHaveValue(
     generatedSecret,
   );
   await expect(defaultTextExample).toContainText("key=<generated-secret>");
@@ -1841,7 +2630,7 @@ test("failed automatic client-key creation stays locked and retries through Crea
   let secretRequestCount = 0;
   await installAssetRoutes(page);
   await installManagementRoutes(page, { hasSecret: false });
-  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/secrets`, async (route) => {
     secretRequestCount += 1;
     if (secretRequestCount === 1) {
       await route.fulfill({ status: httpInternalServerError, body: "request_failed" });
@@ -1888,7 +2677,7 @@ test("Settings remains locked while automatic client-key creation is pending", a
   });
   await installAssetRoutes(page);
   await installManagementRoutes(page, { hasSecret: false });
-  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/secrets`, async (route) => {
     generatedSecretRequested();
     await secretResponseReady;
     await route.fulfill({
@@ -1914,7 +2703,7 @@ test("Settings remains locked while automatic client-key creation is pending", a
   await expect(settingsDialog).toBeHidden();
 });
 
-test("Settings keeps a replacement client key available when close is requested during rotation", async ({ page }) => {
+test("Settings stays inert and keeps a replacement client key available during rotation", async ({ page }) => {
   const replacementSecret = "llmp_test_pending_replacement";
   let releaseSecretReplacement;
   const secretReplacementReleased = new Promise((resolve) => {
@@ -1926,7 +2715,7 @@ test("Settings keeps a replacement client key available when close is requested 
   });
   await installAssetRoutes(page);
   await installManagementRoutes(page, { generatedSecret: replacementSecret });
-  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/secrets`, async (route) => {
     if (route.request().method() !== "POST") {
       await route.fallback();
       return;
@@ -1940,24 +2729,36 @@ test("Settings keeps a replacement client key available when close is requested 
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  const clientAccessRow = settingsDialog.locator("client-access-row");
+  const tenantAccessRow = settingsDialog.locator("tenant-access-row");
+  const replaceKeyButton = tenantAccessRow.getByRole("button", { name: "Replace key" });
 
-  await clientAccessRow.getByRole("button", { name: "Replace key" }).click();
+  await replaceKeyButton.click();
+  const replacementDialog = page.getByRole("alertdialog", { name: "Replace client key?" });
+  await expect(replacementDialog).toContainText(
+    "The current key will stop working immediately. Copy the replacement now; it cannot be shown again.",
+  );
+  await replacementDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(replacementDialog).toBeHidden();
+  await expect(replaceKeyButton).toBeFocused();
+  await replaceKeyButton.click();
+  await replacementDialog.getByRole("button", { name: "Replace key" }).click();
   await secretReplacementRequested;
   await page.keyboard.press("Escape");
   await expect(settingsDialog).toBeVisible();
-  await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeDisabled();
+  await expect(replacementDialog).toBeVisible();
+  expect(await settingsDialog.evaluate((dialogElement) => dialogElement.inert)).toBe(true);
 
   const replacementResponse = page.waitForResponse(
-    (response) => response.url() === `${baseURL}/api/management/secrets` && response.request().method() === "POST",
+    (response) => response.url() === `${baseURL}${managementDefaultTenantPath}/secrets` && response.request().method() === "POST",
   );
   releaseSecretReplacement();
   await replacementResponse;
   await expect(settingsDialog).toBeVisible();
+  await expect(replacementDialog).toBeHidden();
   await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeEnabled();
-  const clientKeyInput = clientAccessRow.getByRole("textbox", { name: "Key", exact: true });
+  const clientKeyInput = tenantAccessRow.getByRole("textbox", { name: "Key", exact: true });
   await expect(clientKeyInput).toHaveValue("••••••••••••");
-  await clientAccessRow.getByRole("button", { name: "Show key", exact: true }).click();
+  await tenantAccessRow.getByRole("button", { name: "Show key", exact: true }).click();
   await expect(clientKeyInput).toHaveValue(replacementSecret);
   expect(await browserStorageContains(page, replacementSecret)).toBe(false);
 
@@ -1965,15 +2766,7 @@ test("Settings keeps a replacement client key available when close is requested 
   await expect(settingsDialog).toBeHidden();
 });
 
-test("pending revocation and last-provider removal enforce mandatory Settings before close", async ({ page }) => {
-  let releaseRevocation;
-  const revocationReleased = new Promise((resolve) => {
-    releaseRevocation = resolve;
-  });
-  let revocationStarted;
-  const revocationRequested = new Promise((resolve) => {
-    revocationStarted = resolve;
-  });
+test("pending last-provider removal enforces mandatory Settings before close", async ({ page }) => {
   let releaseProviderRemoval;
   const providerRemovalReleased = new Promise((resolve) => {
     releaseProviderRemoval = resolve;
@@ -1984,15 +2777,6 @@ test("pending revocation and last-provider removal enforce mandatory Settings be
   });
   await installAssetRoutes(page);
   await installManagementRoutes(page, { savedProviderIDs: ["openai"] });
-  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
-    if (route.request().method() !== "DELETE") {
-      await route.fallback();
-      return;
-    }
-    revocationStarted();
-    await revocationReleased;
-    await route.fallback();
-  });
   await page.route(providerKeyEndpointURL("openai"), async (route) => {
     if (route.request().method() !== "DELETE") {
       await route.fallback();
@@ -2008,18 +2792,6 @@ test("pending revocation and last-provider removal enforce mandatory Settings be
   await page.getByTestId("avatar-menu-item").nth(0).click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   const closeSettings = settingsDialog.getByRole("button", { name: "Close" });
-  const clientAccessRow = settingsDialog.locator("client-access-row");
-
-  await clientAccessRow.getByRole("button", { name: "Revoke key" }).click();
-  await revocationRequested;
-  await closeSettings.click();
-  await expect(settingsDialog).toBeVisible();
-  releaseRevocation();
-  await expect(settingsDialog.getByRole("alert")).toHaveText("Create a client key before leaving Settings.");
-  await expect(settingsDialog).toBeVisible();
-
-  await settingsDialog.getByRole("button", { name: "Create key" }).click();
-  await expect(settingsDialog.getByRole("alert")).toBeHidden();
   const providerEditor = settingsDialog.locator("provider-editor");
   await providerEditor.getByRole("button", { name: "Remove provider key and settings" }).click();
   await page.getByRole("alertdialog", { name: "Remove provider key?" }).getByRole("button", { name: "Remove key" }).click();
@@ -2031,7 +2803,7 @@ test("pending revocation and last-provider removal enforce mandatory Settings be
   await expect(settingsDialog).toBeVisible();
 });
 
-test("late generated client keys cannot restore after session cleanup", async ({ page }) => {
+test("session cleanup cancels generated client keys before they can restore state", async ({ page }) => {
   const lateGeneratedSecret = "llmp_test_late_session_secret";
   const currentGeneratedSecret = "llmp_test_current_session_secret";
   let secretRequestCount = 0;
@@ -2045,7 +2817,7 @@ test("late generated client keys cannot restore after session cleanup", async ({
   });
   await installAssetRoutes(page);
   await installManagementRoutes(page, { hasSecret: false });
-  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/secrets`, async (route) => {
     secretRequestCount += 1;
     if (secretRequestCount > 1) {
       await route.fulfill({
@@ -2075,11 +2847,8 @@ test("late generated client keys cannot restore after session cleanup", async ({
     document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
   });
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
-  const generatedSecretResponse = page.waitForResponse(
-    (response) => response.url() === `${baseURL}/api/management/secrets` && response.request().method() === "POST",
-  );
   fulfillSecretResponse();
-  await generatedSecretResponse;
+  await page.waitForTimeout(50);
   await expect(page.locator("body")).not.toContainText(lateGeneratedSecret);
   expect(await browserStorageContains(page, lateGeneratedSecret)).toBe(false);
 
@@ -2087,12 +2856,12 @@ test("late generated client keys cannot restore after session cleanup", async ({
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   await expect(settingsDialog).toBeVisible();
   expect(secretRequestCount).toBe(2);
-  await settingsDialog.locator("client-access-row").getByRole("button", { name: "Show key", exact: true }).click();
+  await settingsDialog.locator("tenant-access-row").getByRole("button", { name: "Show key", exact: true }).click();
   await expect(settingsDialog.getByRole("textbox", { name: "Key", exact: true })).toHaveValue(currentGeneratedSecret);
   await expect(settingsDialog).not.toContainText(lateGeneratedSecret);
 });
 
-test("new client keys stay left-aligned and read-only while supporting key actions", async ({ page }) => {
+test("tenant access stays compact while one-time client keys support confirmed replacement", async ({ page }) => {
   const generatedSecret = "llmp_test_generated_secret";
   await installClipboardMock(page);
   await installAssetRoutes(page);
@@ -2105,21 +2874,32 @@ test("new client keys stay left-aligned and read-only while supporting key actio
     const settingsDialog = page.getByRole("dialog", { name: "Settings" });
     await expect(settingsDialog).toBeVisible();
 
-    const clientAccessRow = settingsDialog.locator("client-access-row");
-    const clientKey = clientAccessRow.locator("client-access-key");
+    const tenantAccessRow = settingsDialog.getByRole("group", { name: "Tenant access" });
+    const tenantSelector = tenantAccessRow.getByRole("combobox", { name: "Tenant" });
+    const renameTenantButton = tenantAccessRow.getByRole("button", { name: "Rename" });
+    const deleteTenantButton = tenantAccessRow.getByRole("button", { name: "Delete tenant" });
+    const createTenantButton = tenantAccessRow.getByRole("button", { name: "Create tenant" });
+    const deleteTenantIcon = deleteTenantButton.locator(".material-symbols-outlined");
+    const createTenantSymbol = createTenantButton.locator(".tenant-create-symbol");
+    const clientKey = tenantAccessRow.locator("client-access-key");
     const keyLabel = clientKey.locator(".eyebrow");
     const clientKeyRow = clientKey.locator("client-key-row");
-    const clientKeyInput = clientAccessRow.getByRole("textbox", { name: "Key", exact: true });
-    const visibilityButton = clientAccessRow.getByRole("button", { name: "Show key", exact: true });
-    const copyButton = clientAccessRow.getByRole("button", { name: "Copy key", exact: true });
-    const revokeButton = clientAccessRow.getByRole("button", { name: "Revoke key", exact: true });
-    const copyIcon = copyButton.locator("svg.copy-icon");
+    const clientKeyInput = tenantAccessRow.getByRole("textbox", { name: "Key", exact: true });
+    const visibilityButton = tenantAccessRow.getByRole("button", { name: "Show key", exact: true });
+    const copyButton = tenantAccessRow.getByRole("button", { name: "Copy key", exact: true });
+    const copyIcon = copyButton.locator(".material-symbols-outlined");
     const visibilitySymbols = visibilityButton.locator(".material-symbols-outlined");
+    const replaceKeyButton = tenantAccessRow.getByRole("button", { name: "Replace key", exact: true });
+    const replaceKeyIcon = replaceKeyButton.locator(".material-symbols-outlined");
+    const replaceKeyLabel = replaceKeyButton.locator(".tenant-access-action-label");
+    await expect(tenantSelector.locator("option:checked")).toHaveText("Default");
+    await expect(renameTenantButton).toBeVisible();
+    await expect(deleteTenantButton).toBeDisabled();
+    await expect(createTenantButton).toBeVisible();
+    await expect(tenantAccessRow.locator(".tenant-delete + .tenant-create")).toHaveCount(1);
+    await expect(tenantAccessRow.getByRole("button", { name: "Revoke key" })).toHaveCount(0);
     await expect(clientKeyInput).toHaveValue("••••••••••••");
     await expect(clientKeyInput).toHaveAttribute("readonly", "");
-    const replaceKeyButton = clientAccessRow.getByRole("button", { name: "Replace key", exact: true });
-    const replaceKeyIcon = replaceKeyButton.locator(".material-symbols-outlined");
-    const replaceKeyLabel = replaceKeyButton.locator(".client-key-replace-label");
     await expect(replaceKeyButton).toBeVisible();
     await expect(replaceKeyButton).toHaveClass(/icon-button/);
     await expect(replaceKeyButton).toHaveAttribute("title", "Replace key");
@@ -2128,20 +2908,40 @@ test("new client keys stay left-aligned and read-only while supporting key actio
     await expect(replaceKeyIcon).toHaveText("key");
     await expect(replaceKeyIcon).toBeVisible();
     await expect(replaceKeyLabel).toHaveText("Replace key");
-    await expect(replaceKeyLabel).toBeVisible();
+    await expect(deleteTenantIcon).toHaveText("delete");
+    await expect(deleteTenantIcon).toHaveAttribute("aria-hidden", "true");
+    await expect(createTenantButton).toHaveClass(/icon-only/);
+    await expect(createTenantButton).not.toHaveClass(/icon-button/);
+    await expect(createTenantButton).toHaveAttribute("title", "Create tenant");
+    await expect(createTenantButton).toHaveAttribute("aria-label", "Create tenant");
+    await expect(createTenantButton.locator(".tenant-access-action-label")).toHaveCount(0);
+    await expect(createTenantSymbol).toHaveText("+");
+    await expect(createTenantSymbol).toHaveAttribute("aria-hidden", "true");
+    await expect(createTenantSymbol).toBeVisible();
+    const deleteTenantIconFontSize = await deleteTenantIcon.evaluate(
+      (iconElement) => Number.parseFloat(window.getComputedStyle(iconElement).fontSize),
+    );
+    const createTenantSymbolFontSize = await createTenantSymbol.evaluate(
+      (symbolElement) => Number.parseFloat(window.getComputedStyle(symbolElement).fontSize),
+    );
+    expect(createTenantSymbolFontSize).toBeGreaterThan(deleteTenantIconFontSize);
+    if (viewport.name === "desktop") {
+      await expect(replaceKeyLabel).toBeVisible();
+    } else {
+      await expect(replaceKeyLabel).toBeHidden();
+    }
     await expect(visibilityButton).toHaveAttribute("aria-pressed", "false");
     await expect(visibilitySymbols).toHaveCount(2);
     await expect(visibilitySymbols.nth(0)).toHaveText("visibility");
     await expect(visibilitySymbols.nth(0)).toBeVisible();
     await expect(visibilitySymbols.nth(1)).toHaveText("visibility_off");
     await expect(visibilitySymbols.nth(1)).toBeHidden();
-    await expect(revokeButton.locator(".material-symbols-outlined")).toHaveText("delete");
     await expect(copyButton).toHaveAttribute("title", "Copy key");
     await expect(copyIcon).toHaveCount(1);
     await expect(copyIcon).toHaveAttribute("aria-hidden", "true");
-    await expect(copyIcon).toHaveAttribute("focusable", "false");
-    await expect(copyIcon).toHaveAttribute("viewBox", "0 0 24 24");
-    await expect(copyIcon.locator("rect")).toHaveCount(2);
+    await expect(copyIcon).toHaveText("content_copy");
+    await expect(copyIcon).toBeVisible();
+    await expect(copyButton.locator("svg")).toHaveCount(0);
     await expect(copyButton).not.toContainText("[]");
 
     await copyButton.focus();
@@ -2162,54 +2962,95 @@ test("new client keys stay left-aligned and read-only while supporting key actio
     expect(copyButtonBox.x).toBeGreaterThanOrEqual(settingsDialogBox.x);
     expect(copyButtonBox.x + copyButtonBox.width).toBeLessThanOrEqual(settingsDialogBox.x + settingsDialogBox.width);
 
-    const clientAccessRowBox = await clientAccessRow.boundingBox();
+    const tenantAccessRowBox = await tenantAccessRow.boundingBox();
+    const tenantSelectorBox = await tenantSelector.boundingBox();
+    const renameTenantButtonBox = await renameTenantButton.boundingBox();
+    const deleteTenantButtonBox = await deleteTenantButton.boundingBox();
+    const createTenantButtonBox = await createTenantButton.boundingBox();
     const clientKeyBox = await clientKey.boundingBox();
     const clientKeyInputBox = await clientKeyInput.boundingBox();
     const replaceKeyButtonBox = await replaceKeyButton.boundingBox();
     const replaceKeyIconBox = await replaceKeyIcon.boundingBox();
-    const replaceKeyLabelBox = await replaceKeyLabel.boundingBox();
     const keyLabelBox = await keyLabel.boundingBox();
     const clientKeyRowBox = await clientKeyRow.boundingBox();
     if (
-      !clientAccessRowBox ||
+      !tenantAccessRowBox ||
+      !tenantSelectorBox ||
+      !renameTenantButtonBox ||
+      !deleteTenantButtonBox ||
+      !createTenantButtonBox ||
       !clientKeyBox ||
       !clientKeyInputBox ||
       !replaceKeyButtonBox ||
       !replaceKeyIconBox ||
-      !replaceKeyLabelBox ||
       !keyLabelBox ||
       !clientKeyRowBox
     ) {
       throw new Error(`client_access_geometry_missing:${viewport.name}`);
     }
-    expect(clientKeyBox.x).toBeGreaterThan(clientAccessRowBox.x);
-    expect(clientKeyBox.x - clientAccessRowBox.x).toBeLessThanOrEqual(12);
-    expect(keyLabelBox.x).toBe(clientKeyBox.x);
+    expect(tenantAccessRowBox.x).toBeGreaterThanOrEqual(settingsDialogBox.x);
+    expect(tenantAccessRowBox.x + tenantAccessRowBox.width).toBeLessThanOrEqual(
+      settingsDialogBox.x + settingsDialogBox.width,
+    );
+    for (const controlBox of [
+      tenantSelectorBox,
+      renameTenantButtonBox,
+      clientKeyBox,
+      replaceKeyButtonBox,
+      deleteTenantButtonBox,
+      createTenantButtonBox,
+    ]) {
+      expect(controlBox.x).toBeGreaterThanOrEqual(tenantAccessRowBox.x);
+      expect(controlBox.x + controlBox.width).toBeLessThanOrEqual(
+        tenantAccessRowBox.x + tenantAccessRowBox.width,
+      );
+    }
+    expect(clientKeyBox.x).toBeGreaterThan(tenantAccessRowBox.x);
     expect(keyLabelBox.x + keyLabelBox.width).toBeLessThanOrEqual(clientKeyRowBox.x);
     expect(
       Math.abs(keyLabelBox.y + keyLabelBox.height / 2 - (clientKeyRowBox.y + clientKeyRowBox.height / 2)),
     ).toBeLessThanOrEqual(1);
-    expect(clientKeyInputBox.x + clientKeyInputBox.width).toBeLessThanOrEqual(replaceKeyButtonBox.x);
-    expect(
-      Math.abs(
-        clientKeyInputBox.y + clientKeyInputBox.height / 2 -
-          (replaceKeyButtonBox.y + replaceKeyButtonBox.height / 2),
-      ),
-    ).toBeLessThanOrEqual(1);
-    expect(replaceKeyButtonBox.width).toBeGreaterThan(30);
+    if (viewport.name === "desktop") {
+      expect(tenantAccessRowBox.height).toBeLessThanOrEqual(tenantAccessDesktopMaxHeight);
+      expect(clientKeyInputBox.x + clientKeyInputBox.width).toBeLessThanOrEqual(replaceKeyButtonBox.x);
+      const desktopControlCenters = [
+        tenantSelectorBox,
+        renameTenantButtonBox,
+        clientKeyInputBox,
+        replaceKeyButtonBox,
+        deleteTenantButtonBox,
+        createTenantButtonBox,
+      ].map((box) => box.y + box.height / 2);
+      expect(Math.max(...desktopControlCenters) - Math.min(...desktopControlCenters)).toBeLessThanOrEqual(2);
+      expect(replaceKeyButtonBox.width).toBeGreaterThan(30);
+    } else {
+      expect(tenantAccessRowBox.height).toBeLessThanOrEqual(92);
+      expect(
+        Math.abs(tenantSelectorBox.y + tenantSelectorBox.height / 2 - (renameTenantButtonBox.y + renameTenantButtonBox.height / 2)),
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(clientKeyRowBox.y + clientKeyRowBox.height / 2 - (replaceKeyButtonBox.y + replaceKeyButtonBox.height / 2)),
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(clientKeyRowBox.y + clientKeyRowBox.height / 2 - (deleteTenantButtonBox.y + deleteTenantButtonBox.height / 2)),
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(clientKeyRowBox.y + clientKeyRowBox.height / 2 - (createTenantButtonBox.y + createTenantButtonBox.height / 2)),
+      ).toBeLessThanOrEqual(1);
+      expect(tenantSelectorBox.y + tenantSelectorBox.height).toBeLessThanOrEqual(clientKeyRowBox.y);
+      expect(replaceKeyButtonBox.width).toBe(30);
+    }
     expect(replaceKeyButtonBox.width).toBeLessThanOrEqual(120);
+    expect(createTenantButtonBox.width).toBe(30);
+    expect(createTenantButtonBox.x).toBeGreaterThanOrEqual(deleteTenantButtonBox.x + deleteTenantButtonBox.width);
     expect(replaceKeyIconBox.x).toBeGreaterThanOrEqual(replaceKeyButtonBox.x);
-    expect(replaceKeyLabelBox.x).toBeGreaterThan(replaceKeyIconBox.x + replaceKeyIconBox.width);
-    expect(replaceKeyLabelBox.x + replaceKeyLabelBox.width).toBeLessThanOrEqual(
-      replaceKeyButtonBox.x + replaceKeyButtonBox.width,
-    );
     expect(replaceKeyButtonBox.x + replaceKeyButtonBox.width).toBeLessThanOrEqual(
-      clientAccessRowBox.x + clientAccessRowBox.width,
+      tenantAccessRowBox.x + tenantAccessRowBox.width,
     );
 
     await visibilityButton.click();
     await expect(clientKeyInput).toHaveValue(generatedSecret);
-    const hideKeyButton = clientAccessRow.getByRole("button", { name: "Hide key", exact: true });
+    const hideKeyButton = tenantAccessRow.getByRole("button", { name: "Hide key", exact: true });
     await expect(hideKeyButton).toHaveAttribute("aria-pressed", "true");
     expect(await clientKeyInput.evaluate((inputElement) => inputElement.outerHTML)).not.toContain(generatedSecret);
     await expect(settingsDialog.locator("example-list")).not.toContainText(generatedSecret);
@@ -2226,29 +3067,21 @@ test("new client keys stay left-aligned and read-only while supporting key actio
 
     await page.getByTestId("avatar-menu").click();
     await page.getByTestId("avatar-menu-item").nth(0).click();
-    await expect(
-      clientAccessRow.getByText("This key is saved and can’t be shown again. Replace it to create and copy a new key."),
-    ).toBeVisible();
+    await expect(tenantAccessRow.getByText("Saved; replace to reveal a new key.")).toBeVisible();
     await expect(clientKeyInput).toBeHidden();
-    await expect(clientAccessRow.getByRole("button", { name: "Show key", exact: true })).toBeHidden();
-    await expect(clientAccessRow.getByRole("button", { name: "Copy key", exact: true })).toBeHidden();
-    await expect(revokeButton).toBeVisible();
+    await expect(tenantAccessRow.getByRole("button", { name: "Show key", exact: true })).toBeHidden();
+    await expect(tenantAccessRow.getByRole("button", { name: "Copy key", exact: true })).toBeHidden();
 
     await replaceKeyButton.click();
+    const replacementDialog = page.getByRole("alertdialog", { name: "Replace client key?" });
+    await expect(replacementDialog).toBeVisible();
+    await expect(replacementDialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+    await replacementDialog.getByRole("button", { name: "Replace key" }).click();
+    await expect(replacementDialog).toBeHidden();
     await expect(clientKeyInput).toBeVisible();
     await expect(clientKeyInput).toHaveValue("••••••••••••");
-    await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Key created");
-    await revokeButton.click();
-    await expect(clientAccessRow.getByText("No key created")).toBeVisible();
-    await expect(revokeButton).toBeHidden();
-    const createKeyButton = settingsDialog.getByRole("button", { name: "Create key" });
-    await expect(createKeyButton).toBeVisible();
-    await expect(settingsDialog.getByRole("alert")).toHaveText("Create a client key before leaving Settings.");
-    await settingsDialog.getByRole("button", { name: "Close" }).click();
-    await expect(settingsDialog).toBeVisible();
-    await createKeyButton.click();
-    await expect(clientKeyInput).toHaveValue("••••••••••••");
-    await expect(settingsDialog.getByRole("alert")).toBeHidden();
+    await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Key replaced");
+    await expect(copyButton).toBeFocused();
   }
 });
 
@@ -2275,12 +3108,42 @@ test("settings modal overlays MPR header and footer layers", async ({ page }) =>
   for (const viewport of settingsLayerViewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto(baseURL);
+    const usageTenantSelector = page.getByRole("combobox", { name: "Usage tenant" });
+    const usageTenantSelectorBox = await usageTenantSelector.boundingBox();
+    const allIntervalButtonBox = await page.getByRole("button", { name: "ALL", exact: true }).boundingBox();
+    if (!usageTenantSelectorBox || !allIntervalButtonBox) {
+      throw new Error(`usage_tenant_geometry_missing:${viewport.name}`);
+    }
+    expect(usageTenantSelectorBox.x).toBeGreaterThanOrEqual(0);
+    expect(usageTenantSelectorBox.x + usageTenantSelectorBox.width).toBeLessThanOrEqual(viewport.width);
+    await expect(page.locator(".usage-tenant-control + .usage-interval-control")).toHaveCount(1);
+    if (viewport.name === "desktop") {
+      expect(usageTenantSelectorBox.x + usageTenantSelectorBox.width).toBeLessThanOrEqual(allIntervalButtonBox.x);
+    } else {
+      expect(usageTenantSelectorBox.y).toBeLessThanOrEqual(allIntervalButtonBox.y);
+    }
     await page.getByTestId("avatar-menu").click();
     await page.getByTestId("avatar-menu-item").nth(0).click();
 
     const settingsDialog = page.getByRole("dialog", { name: "Settings" });
     await expect(settingsDialog).toBeVisible();
     await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeVisible();
+    const tenantAccess = settingsDialog.getByRole("group", { name: "Tenant access" });
+    const createTenantButton = tenantAccess.getByRole("button", { name: "Create tenant" });
+    const tenantAccessBox = await tenantAccess.boundingBox();
+    const createTenantButtonBox = await createTenantButton.boundingBox();
+    const settingsDialogBox = await settingsDialog.boundingBox();
+    if (!tenantAccessBox || !createTenantButtonBox || !settingsDialogBox) {
+      throw new Error(`settings_tenant_geometry_missing:${viewport.name}`);
+    }
+    expect(tenantAccessBox.x).toBeGreaterThanOrEqual(settingsDialogBox.x);
+    expect(tenantAccessBox.x + tenantAccessBox.width).toBeLessThanOrEqual(
+      settingsDialogBox.x + settingsDialogBox.width,
+    );
+    expect(createTenantButtonBox.x).toBeGreaterThanOrEqual(tenantAccessBox.x);
+    expect(createTenantButtonBox.x + createTenantButtonBox.width).toBeLessThanOrEqual(
+      tenantAccessBox.x + tenantAccessBox.width,
+    );
 
     const layerFacts = await settingsLayerFacts(page);
     expect(layerFacts.overlayZIndex).toBeGreaterThan(layerFacts.headerZIndex);
@@ -2384,7 +3247,7 @@ test("management notices auto-dismiss after ten seconds and replacement notices 
   const notificationRegion = page.locator("#llm-proxy-header notification-region");
   const notice = notificationRegion.locator(".notice");
   const refresh = page.getByRole("button", { name: "Refresh" });
-  const requests = page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong");
+  const requests = page.locator("usage-metrics usage-card").first().locator("strong");
   await expect(notice).toHaveText("Workspace loaded");
   await page.clock.fastForward(9_000);
   await expect(notificationRegion).toBeVisible();
@@ -2490,7 +3353,7 @@ test("settings stays reachable when usage summary fails", async ({ page }) => {
   await page.goto(baseURL);
 
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
-  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("0");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
   await expect(page.getByText("Request failed")).toBeVisible();
 
   await page.getByTestId("avatar-menu").click();
@@ -2504,7 +3367,7 @@ test("usage refresh clears stale metrics when summary reload fails", async ({ pa
 
   await page.goto(baseURL);
 
-  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("37");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
   await page.unroute(usageRequestPattern());
   await page.route(usageRequestPattern(), async (route) => {
     await route.fulfill({ status: httpInternalServerError, json: { error: "usage_failed" } });
@@ -2512,7 +3375,7 @@ test("usage refresh clears stale metrics when summary reload fails", async ({ pa
   await page.getByRole("button", { name: "Refresh" }).click();
 
   await expect(page.getByText("Request failed")).toBeVisible();
-  await expect(page.locator("usage-card").filter({ hasText: "Requests" }).locator("strong")).toHaveText("0");
+  await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
   await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
 });
 
@@ -2529,15 +3392,23 @@ test("admin menu opens all users dashboard", async ({ page }) => {
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
   await expect(page.getByRole("heading", { name: "All users" })).toBeVisible();
-  await expect(page.locator("admin-user-card").filter({ hasText: "owner@example.com" })).toContainText("37");
+  const ownerCard = page.locator("admin-user-card").filter({ hasText: "owner@example.com" });
+  await expect(ownerCard).toContainText("2 tenants");
+  await expect(ownerCard.locator("admin-tenant-card")).toHaveCount(2);
+  await expect(ownerCard).toContainText("Default");
+  await expect(ownerCard).toContainText("Research");
+  await expect(ownerCard).toContainText("37");
+  await expect(ownerCard).toContainText("5");
   await expect(page.locator("admin-user-card").filter({ hasText: "teammate@example.com" })).toContainText("0");
   await expect(page.locator("admin-dashboard")).not.toContainText("sk-");
   await expect(page.locator("admin-dashboard")).not.toContainText("masked_key");
+  await expect(page.getByRole("button", { name: /failed request/ })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Failed request details" })).toHaveCount(0);
 });
 
 /**
  * @param {import("@playwright/test").Page} page
- * @param {{ initialAuthStatus?: "authenticated" | "unauthenticated", emitInitialAuthEvent?: boolean }} options
+ * @param {{ initialAuthStatus?: "authenticated" | "unauthenticated", emitInitialAuthEvent?: boolean, alpineModuleFailure?: boolean, backendModuleMismatch?: boolean }} options
  * @returns {Promise<void>}
  */
 async function installAssetRoutes(page, options = {}) {
@@ -2545,9 +3416,18 @@ async function installAssetRoutes(page, options = {}) {
     route.fulfill({ body: "", contentType: "application/javascript" }),
   );
   await page.route("https://accounts.google.com/**", async (route) => route.abort());
-  await page.route("**/alpinejs@3.13.5/dist/module.esm.js", async (route) =>
-    fulfillFile(route, "node_modules/alpinejs/dist/module.esm.js", "application/javascript"),
-  );
+  await page.route("**/alpinejs@3.13.5/dist/module.esm.js", async (route) => {
+    if (options.alpineModuleFailure) {
+      await route.abort("blockedbyclient");
+      return;
+    }
+    await fulfillFile(route, "node_modules/alpinejs/dist/module.esm.js", "application/javascript");
+  });
+  if (options.backendModuleMismatch) {
+    await page.route("**/assets/llm-proxy/js/core/backendClient.js*", async (route) =>
+      route.fulfill({ body: "export {};", contentType: "application/javascript" }),
+    );
+  }
   await page.route("**/js-yaml@4.3.0/dist/js-yaml.min.js", async (route) =>
     fulfillFile(route, "node_modules/js-yaml/dist/js-yaml.min.js", "application/javascript"),
   );
@@ -2858,6 +3738,243 @@ function usageRequestPattern() {
 }
 
 /**
+ * @returns {string}
+ */
+function usageFailuresRequestPattern() {
+  return `${baseURL}/api/management/usage/failures?*`;
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {object} response
+ * @returns {Promise<void>}
+ */
+async function installUsageFailuresResponse(page, response) {
+  await page.route(usageFailuresRequestPattern(), async (route) => {
+    const requestURL = new URL(route.request().url());
+    expect(requestURL.searchParams.get("interval")).toBe(response.interval);
+    expect(requestURL.searchParams.get("limit")).toBe("25");
+    expect(requestURL.searchParams.getAll("interval")).toHaveLength(1);
+    expect(requestURL.searchParams.getAll("limit")).toHaveLength(1);
+    await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: response });
+  });
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @param {{ profiles?: object[], usageRequests?: Record<string, number>, accountUsageRequests?: number, admin?: boolean }} [options]
+ * @returns {Promise<{
+ *   order: string[],
+ *   profiles: Map<string, any>,
+ *   providerKeys: Map<string, Record<string, string>>,
+ *   requests: Array<{ method: string, path: string }>
+ * }>}
+ */
+async function installMultiTenantRoutes(page, options = {}) {
+  const initialProfiles = options.profiles || [
+    managementTenantProfile("tenant_1", "Default"),
+    managementTenantProfile("tenant_2", "Research"),
+  ];
+  const state = {
+    order: initialProfiles.map((profile) => profile.tenant.id),
+    profiles: new Map(initialProfiles.map((profile) => [profile.tenant.id, profile])),
+    providerKeys: new Map(initialProfiles.map((profile) => [
+      profile.tenant.id,
+      {
+        openai: `sk-${profile.tenant.id}-openai`,
+        deepseek: `sk-${profile.tenant.id}-deepseek`,
+        meta: `sk-${profile.tenant.id}-meta`,
+      },
+    ])),
+    requests: [],
+  };
+  let createdTenantSequence = initialProfiles.length + 1;
+  const tenantRoutePattern = new RegExp(`${baseURL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/api/management/tenants/[^/]+(?:/.*)?$`);
+
+  await page.route(tenantRoutePattern, async (route) => {
+    const request = route.request();
+    const requestURL = new URL(request.url());
+    const path = requestURL.pathname;
+    state.requests.push({ method: request.method(), path });
+    const relativePath = path.slice("/api/management/tenants/".length);
+    const [tenantID, resource, providerID, action] = relativePath.split("/");
+    const profile = state.profiles.get(tenantID);
+    if (!profile) {
+      await route.fulfill({ status: 404 });
+      return;
+    }
+    if (!resource) {
+      if (request.method() === "GET") {
+        await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+        return;
+      }
+      if (request.method() === "PUT") {
+        const { name } = request.postDataJSON();
+        if (state.order.some((candidateID) => (
+          candidateID !== tenantID &&
+          state.profiles.get(candidateID).tenant.name.toLocaleLowerCase("en-US") === String(name).trim().toLocaleLowerCase("en-US")
+        ))) {
+          await route.fulfill({ status: 409, body: "managed_tenant_name_conflict" });
+          return;
+        }
+        profile.tenant.name = String(name).trim();
+        profile.tenant.updated_at = "2026-07-25T12:00:00Z";
+        await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+        return;
+      }
+      if (request.method() === "DELETE") {
+        if (state.order.length === 1) {
+          await route.fulfill({ status: 409, body: "managed_final_tenant_deletion" });
+          return;
+        }
+        state.order = state.order.filter((candidateID) => candidateID !== tenantID);
+        state.profiles.delete(tenantID);
+        state.providerKeys.delete(tenantID);
+        await route.fulfill({ status: 204, body: "" });
+        return;
+      }
+    }
+    if (resource === "usage" && !providerID && request.method() === "GET") {
+      const interval = requestURL.searchParams.get("interval") || "";
+      await route.fulfill({
+        json: managementUsage(interval, {
+          requests: options.usageRequests?.[tenantID] ?? (tenantID === "tenant_1" ? 37 : 7),
+        }),
+      });
+      return;
+    }
+    if (resource === "secrets") {
+      if (request.method() === "POST") {
+        profile.tenant.has_secret = true;
+        await route.fulfill({
+          headers: { "Cache-Control": "no-store" },
+          json: { secret: `llmp_${tenantID}_generated`, profile },
+        });
+        return;
+      }
+    }
+    if (resource === "defaults" && request.method() === "PUT") {
+      profile.tenant.defaults = request.postDataJSON();
+      await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+      return;
+    }
+    if (resource === "provider-keys") {
+      const provider = profile.providers.find((candidateProvider) => candidateProvider.id === providerID);
+      if (!provider) {
+        await route.fulfill({ status: 404 });
+        return;
+      }
+      const providerKeys = state.providerKeys.get(tenantID);
+      if (action === "reveal" && request.method() === "POST") {
+        if (!provider.has_key || !providerKeys[providerID]) {
+          await route.fulfill({ status: 404 });
+          return;
+        }
+        await route.fulfill({
+          headers: { "Cache-Control": "no-store" },
+          json: { api_key: providerKeys[providerID] },
+        });
+        return;
+      }
+      if (!action && request.method() === "PUT") {
+        const settings = request.postDataJSON();
+        if (settings.api_key) {
+          providerKeys[providerID] = settings.api_key;
+        }
+        provider.has_key = true;
+        provider.masked_key = "saved";
+        provider.text_model = settings.text_model;
+        provider.system_prompt = settings.system_prompt;
+        reconcileManagementProfileRoutingDefaults(profile);
+        await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+        return;
+      }
+      if (!action && request.method() === "DELETE") {
+        delete providerKeys[providerID];
+        provider.has_key = false;
+        delete provider.masked_key;
+        reconcileManagementProfileRoutingDefaults(profile);
+        await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
+        return;
+      }
+    }
+    await route.fulfill({ status: httpInternalServerError });
+  });
+
+  await page.route(`${baseURL}/api/management/tenants`, async (route) => {
+    const request = route.request();
+    state.requests.push({ method: request.method(), path: new URL(request.url()).pathname });
+    if (request.method() !== "POST") {
+      await route.fulfill({ status: 405 });
+      return;
+    }
+    const name = String(request.postDataJSON().name || "").trim();
+    if (state.order.some((tenantID) => (
+      state.profiles.get(tenantID).tenant.name.toLocaleLowerCase("en-US") === name.toLocaleLowerCase("en-US")
+    ))) {
+      await route.fulfill({ status: 409, body: "managed_tenant_name_conflict" });
+      return;
+    }
+    const tenantID = `tenant_${createdTenantSequence}`;
+    createdTenantSequence += 1;
+    const profile = managementTenantProfile(tenantID, name, false);
+    for (const provider of profile.providers) {
+      provider.has_key = false;
+      delete provider.masked_key;
+    }
+    reconcileManagementProfileRoutingDefaults(profile);
+    state.order.push(tenantID);
+    state.profiles.set(tenantID, profile);
+    state.providerKeys.set(tenantID, {});
+    await route.fulfill({ status: 201, headers: { "Cache-Control": "no-store" }, json: profile });
+  });
+
+  await page.route(`${baseURL}/api/management/account`, async (route) => {
+    state.requests.push({ method: route.request().method(), path: new URL(route.request().url()).pathname });
+    await route.fulfill({
+      headers: { "Cache-Control": "no-store" },
+      json: {
+        user: {
+          id: "user_1",
+          email: "owner@example.com",
+          display_name: "Owner",
+          is_admin: options.admin || false,
+        },
+        tenants: state.order.map((tenantID) => {
+          const tenant = state.profiles.get(tenantID).tenant;
+          return {
+            id: tenant.id,
+            name: tenant.name,
+            has_secret: tenant.has_secret,
+            created_at: tenant.created_at,
+            updated_at: tenant.updated_at,
+          };
+        }),
+      },
+    });
+  });
+
+  await page.route(usageRequestPattern(), async (route) => {
+    const requestURL = new URL(route.request().url());
+    const interval = requestURL.searchParams.get("interval") || "";
+    const accountRequests = options.accountUsageRequests ?? state.order.reduce(
+      (total, tenantID) => total + (options.usageRequests?.[tenantID] ?? (tenantID === "tenant_1" ? 37 : 7)),
+      0,
+    );
+    state.requests.push({ method: route.request().method(), path: requestURL.pathname });
+    await route.fulfill({
+      headers: { "Cache-Control": "no-store" },
+      json: managementUsage(interval, { requests: accountRequests }),
+    });
+  });
+
+  await page.route(`${baseURL}/api/management/admin/users`, async (route) => {
+    await route.fulfill({ json: managementAdminUsers() });
+  });
+  return state;
+}
+
+/**
  * @param {import("@playwright/test").Page} page
  * @param {{ usageStatus?: number, admin?: boolean, hasSecret?: boolean, generatedSecret?: string, profileStatus?: number, profileStatuses?: number[], profileError?: string, malformedRoutingDefaults?: boolean, maskedKeys?: Record<string, string>, providerKeys?: Record<string, string>, savedProviderIDs?: string[] }} options
  * @returns {Promise<void>}
@@ -2880,6 +3997,7 @@ async function installManagementRoutes(page, options = {}) {
         delete provider.masked_key;
       }
     }
+    reconcileManagementProfileRoutingDefaults(profile);
   }
   for (const [providerID, maskedKey] of Object.entries(options.maskedKeys || {})) {
     const provider = profile.providers.find((candidateProvider) => candidateProvider.id === providerID);
@@ -2903,7 +4021,27 @@ async function installManagementRoutes(page, options = {}) {
     });
     profile.tenant.defaults.provider = "anthropic";
   }
-  await page.route(`${baseURL}/api/management/profile`, async (route) => {
+  await page.route(`${baseURL}/api/management/account`, async (route) => {
+    await route.fulfill({
+      headers: { "Cache-Control": "no-store" },
+      json: {
+        user: {
+          id: "user_1",
+          email: "owner@example.com",
+          display_name: "Owner",
+          is_admin: options.admin || false,
+        },
+        tenants: [{
+          id: profile.tenant.id,
+          name: profile.tenant.name,
+          has_secret: profile.tenant.has_secret,
+          created_at: profile.tenant.created_at,
+          updated_at: profile.tenant.updated_at,
+        }],
+      },
+    });
+  });
+  await page.route(`${baseURL}${managementDefaultTenantPath}`, async (route) => {
     const profileStatus = profileStatuses.length > 0 ? profileStatuses.shift() : options.profileStatus;
     if (profileStatus && profileStatus !== httpOK) {
       await route.fulfill({ status: profileStatus, body: options.profileError || "authentication_required" });
@@ -2923,7 +4061,7 @@ async function installManagementRoutes(page, options = {}) {
   await page.route(`${baseURL}/api/management/admin/users`, async (route) => {
     await route.fulfill({ json: managementAdminUsers() });
   });
-  await page.route(`${baseURL}/api/management/secrets`, async (route) => {
+  await page.route(`${baseURL}${managementDefaultTenantPath}/secrets`, async (route) => {
     if (route.request().method() === "POST") {
       profile.tenant.has_secret = true;
       await route.fulfill({
@@ -2938,7 +4076,7 @@ async function installManagementRoutes(page, options = {}) {
     profile.tenant.has_secret = false;
     await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
   });
-	await page.route(`${baseURL}/api/management/defaults`, async (route) => {
+	await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
     const defaults = /** @type {typeof profile.tenant.defaults} */ (route.request().postDataJSON());
     profile.tenant.defaults = defaults;
 		await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
@@ -2969,6 +4107,7 @@ async function installManagementRoutes(page, options = {}) {
       provider.masked_key = "sk-...saved";
       provider.text_model = providerSettings.text_model;
       provider.system_prompt = providerSettings.system_prompt;
+      reconcileManagementProfileRoutingDefaults(profile);
       await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
       return;
     }
@@ -2976,11 +4115,38 @@ async function installManagementRoutes(page, options = {}) {
       delete providerKeys[providerID];
       provider.has_key = false;
       delete provider.masked_key;
+      reconcileManagementProfileRoutingDefaults(profile);
       await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
       return;
     }
     await route.fulfill({ status: httpInternalServerError });
   });
+}
+
+/**
+ * @param {ReturnType<typeof managementProfile>} profile
+ * @returns {void}
+ */
+function reconcileManagementProfileRoutingDefaults(profile) {
+  const keyedProviders = profile.providers
+    .filter((provider) => provider.has_key)
+    .toSorted((first, second) => first.id.localeCompare(second.id));
+  const currentTextProvider = keyedProviders.find((provider) => provider.id === profile.tenant.defaults.provider);
+  if (!currentTextProvider) {
+    const nextTextProvider = keyedProviders[0];
+    profile.tenant.defaults.provider = nextTextProvider ? nextTextProvider.id : "";
+    profile.tenant.defaults.model = nextTextProvider ? nextTextProvider.text_model : "";
+    profile.tenant.defaults.reasoning_effort = "";
+  }
+  const keyedDictationProviders = keyedProviders.filter((provider) => provider.supports_dictation);
+  const currentDictationProvider = keyedDictationProviders.find(
+    (provider) => provider.id === profile.tenant.defaults.dictation_provider,
+  );
+  if (!currentDictationProvider) {
+    const nextDictationProvider = keyedDictationProviders[0];
+    profile.tenant.defaults.dictation_provider = nextDictationProvider ? nextDictationProvider.id : "";
+    profile.tenant.defaults.dictation_model = nextDictationProvider ? nextDictationProvider.dictation_default_model : "";
+  }
 }
 
 /**
@@ -3032,6 +4198,11 @@ async function staticSiteHandler(request, response) {
     response.end(`llmProxy:\n  managementApiOrigin: ${baseURL}\n  proxyOrigin: ${baseURL}\n`);
     return;
   }
+  if (requestURL.pathname === openAPIPath) {
+    response.writeHead(200, { "Content-Type": mimeTypes[".yaml"] });
+    createReadStream(canonicalOpenAPIFile).pipe(response);
+    return;
+  }
 
   const routePath =
     requestURL.pathname === "/" || requestURL.pathname.endsWith("/")
@@ -3068,15 +4239,12 @@ async function staticSiteHandler(request, response) {
  */
 function managementProfile(isAdmin = false, hasSecret = true) {
   return {
-    user: {
-      id: "user_1",
-      email: "owner@example.com",
-      display_name: "Owner",
-      is_admin: isAdmin,
-    },
     tenant: {
       id: "tenant_1",
+      name: "Default",
       has_secret: hasSecret,
+      created_at: "2026-07-01T00:00:00Z",
+      updated_at: "2026-07-01T00:00:00Z",
       defaults: {
         provider: "openai",
         model: "gpt-4.1",
@@ -3200,6 +4368,19 @@ function managementProfile(isAdmin = false, hasSecret = true) {
 }
 
 /**
+ * @param {string} tenantID
+ * @param {string} name
+ * @param {boolean} [hasSecret]
+ * @returns {object}
+ */
+function managementTenantProfile(tenantID, name, hasSecret = true) {
+  const profile = managementProfile(false, hasSecret);
+  profile.tenant.id = tenantID;
+  profile.tenant.name = name;
+  return profile;
+}
+
+/**
  * @returns {object}
  */
 function managementAdminUsers() {
@@ -3213,13 +4394,33 @@ function managementAdminUsers() {
           display_name: "Owner",
           is_admin: true,
         },
-        tenant: {
-          id: "tenant_1",
-          has_secret: true,
-          created_at: "2026-06-01T00:00:00Z",
-          updated_at: "2026-06-29T00:00:00Z",
-        },
-        usage: managementAdminUsage(),
+        tenant_count: 2,
+        tenants: [
+          {
+            id: "tenant_1",
+            name: "Default",
+            has_secret: true,
+            created_at: "2026-06-01T00:00:00Z",
+            updated_at: "2026-06-29T00:00:00Z",
+            usage: managementAdminUsage(),
+          },
+          {
+            id: "tenant_3",
+            name: "Research",
+            has_secret: false,
+            created_at: "2026-06-15T00:00:00Z",
+            updated_at: "2026-06-20T00:00:00Z",
+            usage: {
+              ...managementAdminUsage(),
+              totals: usageAggregate({
+                requests: 5,
+                successful_requests: 4,
+                failed_requests: 1,
+                total_tokens: 500,
+              }),
+            },
+          },
+        ],
       },
       {
         user: {
@@ -3228,19 +4429,21 @@ function managementAdminUsers() {
           display_name: "Teammate",
           is_admin: false,
         },
-        tenant: {
+        tenant_count: 1,
+        tenants: [{
           id: "tenant_2",
+          name: "Default",
           has_secret: false,
           created_at: "2026-06-10T00:00:00Z",
           updated_at: "2026-06-10T00:00:00Z",
-        },
-        usage: {
-          ...managementAdminUsage(),
-          totals: usageAggregate(),
-          providers: [],
-          models: [],
-          status_codes: [],
-        },
+          usage: {
+            ...managementAdminUsage(),
+            totals: usageAggregate(),
+            providers: [],
+            models: [],
+            status_codes: [],
+          },
+        }],
       },
     ],
   };
@@ -3331,6 +4534,95 @@ function managementUsage(interval = "30d", totalOverrides = {}) {
       { status_code: 200, requests: isDefaultInterval ? 35 : intervalFixture.requests },
       ...(isDefaultInterval ? [{ status_code: 502, requests: 2 }] : []),
     ],
+  };
+}
+
+/**
+ * @param {string} interval
+ * @param {number} count
+ * @param {string} [nextCursor]
+ * @param {number} [offset]
+ * @returns {object}
+ */
+function managementUsageFailures(interval, count, nextCursor = "", offset = 0) {
+  const failureTemplates = [
+    {
+      endpoint: "v2",
+      provider: "openai",
+      model: "gpt-4.1",
+      status_code: 502,
+      outcome_code: "upstream_error",
+      latency_ms: 245,
+    },
+    {
+      endpoint: "text",
+      provider: "",
+      model: "",
+      status_code: 400,
+      outcome_code: "invalid_request",
+      latency_ms: 3,
+    },
+    {
+      endpoint: "dictation",
+      provider: "openai",
+      model: "gpt-4o-mini-transcribe",
+      status_code: 429,
+      outcome_code: "rate_limited",
+      latency_ms: 81,
+    },
+    {
+      endpoint: "v2",
+      provider: "meta",
+      model: "muse-spark-1.1",
+      status_code: 503,
+      outcome_code: "service_unavailable",
+      latency_ms: 9,
+    },
+    {
+      endpoint: "text",
+      provider: "deepseek",
+      model: "deepseek-chat",
+      status_code: 504,
+      outcome_code: "request_timeout",
+      latency_ms: 1_000,
+    },
+    {
+      endpoint: "v2",
+      provider: "openai",
+      model: "gpt-4.1",
+      status_code: 413,
+      outcome_code: "payload_too_large",
+      latency_ms: 2,
+    },
+    {
+      endpoint: "text",
+      provider: "deepseek",
+      model: "deepseek-chat",
+      status_code: 499,
+      outcome_code: "request_timeout",
+      latency_ms: 17,
+    },
+  ];
+  const failures = Array.from({ length: count }, (_, index) => {
+    const template = failureTemplates[(offset + index) % failureTemplates.length];
+    return {
+      tenant_id: (offset + index) % 2 === 0 ? "tenant_1" : "tenant_2",
+      tenant_name: (offset + index) % 2 === 0 ? "Default" : "Research",
+      occurred_at: new Date(Date.UTC(2026, 6, 25, 12, 0, 0) - ((offset + index) * 1_000)).toISOString(),
+      ...template,
+      ...(index === 0 && offset === 0
+        ? {
+            provider_error: "raw-provider-body",
+            credential: "sk-never-render",
+            prompt: "private prompt",
+          }
+        : {}),
+    };
+  });
+  return {
+    interval,
+    failures,
+    ...(nextCursor ? { next_cursor: nextCursor } : {}),
   };
 }
 

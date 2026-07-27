@@ -30,16 +30,12 @@ const (
 	// DefaultMaxRequestTimeoutSeconds is the one-hour operator capacity ceiling for a request.
 	DefaultMaxRequestTimeoutSeconds = 60 * 60
 	// DefaultMaxPromptBytes limits JSON LLM request bodies accepted by POST /.
-	DefaultMaxPromptBytes      = 4 * 1024 * 1024
-	DefaultDictationModel      = "gpt-4o-mini-transcribe"
-	DefaultMaxInputAudioBytes  = 25 * 1024 * 1024
-	DefaultManagementJWTIssuer = "tauth"
-	// ManagementDatabaseDialectPostgres selects the GORM Postgres dialector.
-	ManagementDatabaseDialectPostgres = "postgres"
-	// ManagementDatabaseDialectSQLite selects the GORM SQLite dialector.
-	ManagementDatabaseDialectSQLite = "sqlite"
-	managedProviderKeyBytes         = 32
-	tenantValidationErrorFormat     = "%w: tenant=%s"
+	DefaultMaxPromptBytes       = 4 * 1024 * 1024
+	DefaultDictationModel       = "gpt-4o-mini-transcribe"
+	DefaultMaxInputAudioBytes   = 25 * 1024 * 1024
+	DefaultManagementJWTIssuer  = "tauth"
+	managedProviderKeyBytes     = 32
+	tenantValidationErrorFormat = "%w: tenant=%s"
 )
 
 // Configuration holds runtime settings.
@@ -109,19 +105,11 @@ type ManagementConfiguration struct {
 	JWTSigningKey            string
 	JWTIssuer                string
 	SessionCookieName        string
-	DatabaseDialect          string
-	DatabaseDSN              string
+	DatabasePath             string
 	ProviderKeyEncryptionKey string
 	ManagementAPIOrigin      string
 	ProxyOrigin              string
-	LegacyTokenMigration     LegacyTokenMigrationConfiguration
 	DatabaseDialector        gorm.Dialector
-}
-
-// LegacyTokenMigrationConfiguration identifies the one legacy tenant and verified account email allowed to claim it.
-type LegacyTokenMigrationConfiguration struct {
-	TenantID   string
-	OwnerEmail string
 }
 
 // NewConfiguration returns a normalized runtime configuration after validating startup invariants.
@@ -332,21 +320,14 @@ func (configuration *ManagementConfiguration) ApplyTunables() {
 		configuration.JWTIssuer = DefaultManagementJWTIssuer
 	}
 	configuration.SessionCookieName = strings.TrimSpace(configuration.SessionCookieName)
-	configuration.DatabaseDialect = strings.ToLower(strings.TrimSpace(configuration.DatabaseDialect))
-	configuration.DatabaseDSN = strings.TrimSpace(configuration.DatabaseDSN)
+	configuration.DatabasePath = strings.TrimSpace(configuration.DatabasePath)
 	configuration.ProviderKeyEncryptionKey = strings.TrimSpace(configuration.ProviderKeyEncryptionKey)
 	configuration.ManagementAPIOrigin = strings.TrimSpace(configuration.ManagementAPIOrigin)
 	configuration.ProxyOrigin = strings.TrimSpace(configuration.ProxyOrigin)
-	configuration.LegacyTokenMigration.TenantID = strings.TrimSpace(configuration.LegacyTokenMigration.TenantID)
-	configuration.LegacyTokenMigration.OwnerEmail = strings.ToLower(strings.TrimSpace(configuration.LegacyTokenMigration.OwnerEmail))
 }
 
 func validateManagementConfiguration(configuration ManagementConfiguration) error {
-	migrationConfigured := configuration.LegacyTokenMigration.TenantID != constants.EmptyString || configuration.LegacyTokenMigration.OwnerEmail != constants.EmptyString
 	if !configuration.Enabled {
-		if migrationConfigured {
-			return fmt.Errorf("%w: field=management.legacy_token_migration requires_management", ErrInvalidManagementConfiguration)
-		}
 		return nil
 	}
 	requiredFields := []struct {
@@ -362,8 +343,7 @@ func validateManagementConfiguration(configuration ManagementConfiguration) erro
 		{fieldName: "management.logout_path", fieldValue: configuration.LogoutPath},
 		{fieldName: "management.nonce_path", fieldValue: configuration.NoncePath},
 		{fieldName: "management.session_path", fieldValue: configuration.SessionPath},
-		{fieldName: "management.database_dialect", fieldValue: configuration.DatabaseDialect},
-		{fieldName: "management.database_dsn", fieldValue: configuration.DatabaseDSN},
+		{fieldName: "management.database_path", fieldValue: configuration.DatabasePath},
 		{fieldName: "management.provider_key_encryption_key", fieldValue: configuration.ProviderKeyEncryptionKey},
 		{fieldName: "management.management_api_origin", fieldValue: configuration.ManagementAPIOrigin},
 		{fieldName: "management.proxy_origin", fieldValue: configuration.ProxyOrigin},
@@ -386,12 +366,6 @@ func validateManagementConfiguration(configuration ManagementConfiguration) erro
 			return fmt.Errorf("%w: field=management.admin_emails value=%s", ErrInvalidManagementConfiguration, emailValue)
 		}
 	}
-	if migrationError := validateLegacyTokenMigrationConfiguration(configuration.LegacyTokenMigration); migrationError != nil {
-		return migrationError
-	}
-	if !supportedManagementDatabaseDialect(configuration.DatabaseDialect) {
-		return fmt.Errorf("%w: field=management.database_dialect value=%s", ErrInvalidManagementConfiguration, configuration.DatabaseDialect)
-	}
 	if _, keyError := newManagedProviderKeyCipher(configuration.ProviderKeyEncryptionKey); keyError != nil {
 		return fmt.Errorf("%w: field=management.provider_key_encryption_key: %v", ErrInvalidManagementConfiguration, keyError)
 	}
@@ -411,24 +385,6 @@ func decodeManagedProviderKey(rawEncryptionKey string) ([managedProviderKeyBytes
 	return encryptionKey, nil
 }
 
-func validateLegacyTokenMigrationConfiguration(configuration LegacyTokenMigrationConfiguration) error {
-	tenantIdentifier := strings.TrimSpace(configuration.TenantID)
-	ownerEmail := strings.TrimSpace(configuration.OwnerEmail)
-	if tenantIdentifier == constants.EmptyString && ownerEmail == constants.EmptyString {
-		return nil
-	}
-	if tenantIdentifier == constants.EmptyString {
-		return fmt.Errorf("%w: field=management.legacy_token_migration.tenant_id", ErrInvalidManagementConfiguration)
-	}
-	if ownerEmail == constants.EmptyString {
-		return fmt.Errorf("%w: field=management.legacy_token_migration.owner_email", ErrInvalidManagementConfiguration)
-	}
-	if _, emailError := normalizeManagementEmail(ownerEmail); emailError != nil {
-		return fmt.Errorf("%w: field=management.legacy_token_migration.owner_email value=%s", ErrInvalidManagementConfiguration, ownerEmail)
-	}
-	return nil
-}
-
 func normalizeManagementEmail(rawEmail string) (string, error) {
 	email := strings.ToLower(strings.TrimSpace(rawEmail))
 	if email == constants.EmptyString {
@@ -439,13 +395,4 @@ func normalizeManagementEmail(rawEmail string) (string, error) {
 		return constants.EmptyString, ErrInvalidManagementConfiguration
 	}
 	return email, nil
-}
-
-func supportedManagementDatabaseDialect(databaseDialect string) bool {
-	supportedDialects := map[string]struct{}{
-		ManagementDatabaseDialectPostgres: {},
-		ManagementDatabaseDialectSQLite:   {},
-	}
-	_, supportedDialect := supportedDialects[databaseDialect]
-	return supportedDialect
 }

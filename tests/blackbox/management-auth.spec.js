@@ -11,8 +11,11 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const httpOK = 200;
+const httpCreated = 201;
 const httpNoContent = 204;
+const httpBadRequest = 400;
 const httpUnauthorized = 401;
+const httpNotFound = 404;
 const minimumReadableTextContrastRatio = 4.5;
 const cssRGBChannelCount = 3;
 const cssRGBChannelMaximum = 255;
@@ -39,14 +42,17 @@ test.afterAll(async () => {
   }
 });
 
-test("TAuth sign-in stays legible and the session survives until explicit sign out", async ({ context, page }) => {
-  let browserProfileRequestCount = 0;
+test("TAuth sign-in stays legible and the session survives until explicit sign out", async ({ browser, context, page }) => {
+  let browserAccountRequestCount = 0;
   let browserSecretRequestCount = 0;
   page.on("request", (request) => {
-    if (request.url() === `${stack.llmProxyOrigin}/api/management/profile`) {
-      browserProfileRequestCount += 1;
+    if (request.url() === `${stack.llmProxyOrigin}/api/management/account`) {
+      browserAccountRequestCount += 1;
     }
-    if (request.url() === `${stack.llmProxyOrigin}/api/management/secrets` && request.method() === "POST") {
+    if (
+      new URL(request.url()).pathname.match(/^\/api\/management\/tenants\/[^/]+\/secrets$/) &&
+      request.method() === "POST"
+    ) {
       browserSecretRequestCount += 1;
     }
   });
@@ -62,10 +68,10 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   expect(browserConfig).toContain('sessionPath: "/auth/session"');
   expect(browserConfig).not.toContain("authButton");
 
-  const anonymousProfileResponse = await context.request.get(`${stack.llmProxyOrigin}/api/management/profile`, {
+  const anonymousAccountResponse = await context.request.get(`${stack.llmProxyOrigin}/api/management/account`, {
     headers: { Origin: stack.frontendOrigin },
   });
-  expect(anonymousProfileResponse.status()).toBe(httpUnauthorized);
+  expect(anonymousAccountResponse.status()).toBe(httpUnauthorized);
 
   await page.goto(stack.frontendOrigin);
   await expect(page.locator("#mpr-ui-bundle")).toHaveAttribute("data-mpr-ui-bundle-src", mprUIBundleURL);
@@ -73,7 +79,7 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
   await expect(page.locator("llm-proxy-key-management")).toHaveAttribute("data-auth-state", "unauthenticated");
   await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "unauthenticated");
-  expect(browserProfileRequestCount).toBe(0);
+  expect(browserAccountRequestCount).toBe(0);
   const signInButton = page.locator('[data-mpr-header="google-signin-button"]');
   await expect(signInButton).toBeVisible();
   await signInButton.hover();
@@ -145,45 +151,55 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
     ]),
   );
 
-  const authenticatedProfileResponsePromise = waitForManagementProfile(page);
+  const authenticatedAccountResponsePromise = waitForManagementAccount(page);
   const generatedSecretResponsePromise = page.waitForResponse(
     (response) =>
-      response.url() === `${stack.llmProxyOrigin}/api/management/secrets` && response.request().method() === "POST",
+      new URL(response.url()).pathname.match(/^\/api\/management\/tenants\/[^/]+\/secrets$/) &&
+      response.request().method() === "POST",
   );
   await page.evaluate((profile) => {
     window.MPRUI.testing.authenticate(document.querySelector("mpr-header"), profile);
   }, loginResult.profile);
-  const authenticatedProfileResponse = await authenticatedProfileResponsePromise;
-  expect(authenticatedProfileResponse.status()).toBe(httpOK);
-  expect(await authenticatedProfileResponse.json()).toMatchObject({
+  const authenticatedAccountResponse = await authenticatedAccountResponsePromise;
+  expect(authenticatedAccountResponse.status()).toBe(httpOK);
+  const authenticatedAccount = await authenticatedAccountResponse.json();
+  expect(authenticatedAccount).toMatchObject({
     user: {
       email: localManagementProfile.operatorEmail,
       display_name: "Local Operator",
     },
+    tenants: [{ name: "Default" }],
   });
-  expect(browserProfileRequestCount).toBe(1);
+  const firstTenantID = authenticatedAccount.tenants[0].id;
+  expect(firstTenantID).toMatch(/^managed-/);
+  expect(browserAccountRequestCount).toBe(1);
 
   const generatedSecretResponse = await generatedSecretResponsePromise;
   expect(generatedSecretResponse.status()).toBe(httpOK);
   expect(generatedSecretResponse.headers()["cache-control"]).toBe("no-store");
+  const firstGeneratedSecret = (await generatedSecretResponse.json()).secret;
+  expect(firstGeneratedSecret).toMatch(/^llmp_/);
   expect(browserSecretRequestCount).toBe(1);
 
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await expect(settingsDialog).toBeVisible();
+  await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue(firstTenantID);
+  await expect(settingsDialog.getByRole("button", { name: "Create tenant" })).toBeVisible();
   await expect(settingsDialog.getByRole("alert")).toHaveText(
     "Add at least one provider API key before leaving Settings.",
   );
   const clientKeyInput = settingsDialog.getByRole("textbox", { name: "Key", exact: true });
   await expect(clientKeyInput).toHaveValue("••••••••••••");
   await expect(clientKeyInput).toHaveAttribute("readonly", "");
-  await settingsDialog.locator("client-access-row").getByRole("button", { name: "Show key", exact: true }).click();
+  await settingsDialog.locator("tenant-access-row").getByRole("button", { name: "Show key", exact: true }).click();
   await expect(clientKeyInput).toHaveValue(/^llmp_/);
 
   const providerEditor = settingsDialog.locator("provider-editor");
+  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
   await providerEditor.getByRole("textbox", { name: "OpenAI API key" }).fill("sk-local-blackbox-provider-key");
   const providerSaveResponsePromise = page.waitForResponse(
     (response) =>
-      response.url() === `${stack.llmProxyOrigin}/api/management/provider-keys/openai` &&
+      response.url() === `${stack.llmProxyOrigin}/api/management/tenants/${firstTenantID}/provider-keys/openai` &&
       response.request().method() === "PUT",
   );
   await page.keyboard.press("Tab");
@@ -196,6 +212,144 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
 
   await expectAuthenticatedDashboard(page);
   await expectNoSignedOutStateAfterAuthentication(page);
+
+  const createSecondTenantResponse = await context.request.post(
+    `${stack.llmProxyOrigin}/api/management/tenants`,
+    {
+      headers: { Origin: stack.frontendOrigin },
+      data: { name: "Research" },
+    },
+  );
+  expect(createSecondTenantResponse.status()).toBe(httpCreated);
+  const secondTenantProfile = await createSecondTenantResponse.json();
+  const secondTenantID = secondTenantProfile.tenant.id;
+  expect(secondTenantID).toMatch(/^managed-/);
+  expect(secondTenantID).not.toBe(firstTenantID);
+
+  const secondTenantSecretResponse = await context.request.post(
+    `${stack.llmProxyOrigin}/api/management/tenants/${secondTenantID}/secrets`,
+    {
+      headers: { Origin: stack.frontendOrigin },
+      data: {},
+    },
+  );
+  expect(secondTenantSecretResponse.status()).toBe(httpOK);
+  const secondGeneratedSecret = (await secondTenantSecretResponse.json()).secret;
+  expect(secondGeneratedSecret).toMatch(/^llmp_/);
+  expect(secondGeneratedSecret).not.toBe(firstGeneratedSecret);
+
+  for (const generatedSecret of [firstGeneratedSecret, secondGeneratedSecret]) {
+    const authenticatedPublicResponse = await context.request.get(
+      `${stack.llmProxyOrigin}/?key=${encodeURIComponent(generatedSecret)}`,
+    );
+    expect(authenticatedPublicResponse.status()).toBe(httpBadRequest);
+  }
+  for (const tenantID of [firstTenantID, secondTenantID]) {
+    const tenantProfileResponse = await context.request.get(
+      `${stack.llmProxyOrigin}/api/management/tenants/${tenantID}`,
+      { headers: { Origin: stack.frontendOrigin } },
+    );
+    expect(tenantProfileResponse.status()).toBe(httpOK);
+    const tenantUsageResponse = await context.request.get(
+      `${stack.llmProxyOrigin}/api/management/tenants/${tenantID}/usage?interval=30d`,
+      { headers: { Origin: stack.frontendOrigin } },
+    );
+    expect(tenantUsageResponse.status()).toBe(httpOK);
+  }
+  const twoTenantAccountResponse = await context.request.get(
+    `${stack.llmProxyOrigin}/api/management/account`,
+    { headers: { Origin: stack.frontendOrigin } },
+  );
+  expect(twoTenantAccountResponse.status()).toBe(httpOK);
+  expect((await twoTenantAccountResponse.json()).tenants.map((tenant) => tenant.id)).toEqual([
+    firstTenantID,
+    secondTenantID,
+  ]);
+  const accountUsageResponse = await context.request.get(
+    `${stack.llmProxyOrigin}/api/management/usage?interval=30d`,
+    { headers: { Origin: stack.frontendOrigin } },
+  );
+  expect(accountUsageResponse.status()).toBe(httpOK);
+  expect(accountUsageResponse.headers()["cache-control"]).toBe("no-store");
+  expect(await accountUsageResponse.json()).toMatchObject({
+    interval: "30d",
+    totals: {
+      requests: 2,
+      failed_requests: 2,
+    },
+  });
+  const accountUsageFailuresResponse = await context.request.get(
+    `${stack.llmProxyOrigin}/api/management/usage/failures?interval=30d&limit=10`,
+    { headers: { Origin: stack.frontendOrigin } },
+  );
+  expect(accountUsageFailuresResponse.status()).toBe(httpOK);
+  expect(accountUsageFailuresResponse.headers()["cache-control"]).toBe("no-store");
+  const accountUsageFailures = await accountUsageFailuresResponse.json();
+  expect(accountUsageFailures.interval).toBe("30d");
+  expect(accountUsageFailures.failures).toHaveLength(2);
+  expect(
+    accountUsageFailures.failures
+      .map((failure) => [failure.tenant_id, failure.tenant_name])
+      .sort(([leftTenantID], [rightTenantID]) => leftTenantID.localeCompare(rightTenantID)),
+  ).toEqual([
+    [firstTenantID, "Default"],
+    [secondTenantID, "Research"],
+  ].sort(([leftTenantID], [rightTenantID]) => leftTenantID.localeCompare(rightTenantID)));
+  expect(accountUsageFailures.failures).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        outcome_code: "invalid_request",
+        status_code: httpBadRequest,
+      }),
+    ]),
+  );
+
+  const secondUserContext = await browser.newContext();
+  try {
+    const secondUserLoginResponse = await secondUserContext.request.post(
+      `${stack.tAuthOrigin}/auth/password/login`,
+      {
+        headers: {
+          Origin: stack.frontendOrigin,
+          "X-Requested-With": "XMLHttpRequest",
+          "X-TAuth-Tenant": localManagementProfile.tenantID,
+        },
+        data: {
+          email: localManagementProfile.secondOperatorEmail,
+          password: localManagementProfile.operatorPassword,
+        },
+      },
+    );
+    expect(secondUserLoginResponse.status()).toBe(httpOK);
+    const secondUserAccountResponse = await secondUserContext.request.get(
+      `${stack.llmProxyOrigin}/api/management/account`,
+      { headers: { Origin: stack.frontendOrigin } },
+    );
+    expect(secondUserAccountResponse.status()).toBe(httpOK);
+    const secondUserAccount = await secondUserAccountResponse.json();
+    expect(secondUserAccount.user.email).toBe(localManagementProfile.secondOperatorEmail);
+    expect(secondUserAccount.tenants).toHaveLength(1);
+    expect(secondUserAccount.tenants.map((tenant) => tenant.id)).not.toContain(firstTenantID);
+    expect(secondUserAccount.tenants.map((tenant) => tenant.id)).not.toContain(secondTenantID);
+
+    for (const tenantID of [firstTenantID, secondTenantID]) {
+      const foreignReadResponse = await secondUserContext.request.get(
+        `${stack.llmProxyOrigin}/api/management/tenants/${tenantID}`,
+        { headers: { Origin: stack.frontendOrigin } },
+      );
+      expect(foreignReadResponse.status()).toBe(httpNotFound);
+      const foreignRenameResponse = await secondUserContext.request.put(
+        `${stack.llmProxyOrigin}/api/management/tenants/${tenantID}`,
+        {
+          headers: { Origin: stack.frontendOrigin },
+          data: { name: "Forbidden rename" },
+        },
+      );
+      expect(foreignRenameResponse.status()).toBe(httpNotFound);
+    }
+  } finally {
+    await secondUserContext.close();
+  }
 
   const ordinaryReloadSessionResponsePromise = waitForSessionRestore(page);
   await page.reload();
@@ -250,15 +404,19 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   });
   expect(signedOutTAuthResponse.status()).toBe(httpNoContent);
 
-  const signedOutProfileResponse = await context.request.get(`${stack.llmProxyOrigin}/api/management/profile`, {
+  const signedOutAccountResponse = await context.request.get(`${stack.llmProxyOrigin}/api/management/account`, {
     headers: { Origin: stack.frontendOrigin },
   });
-  expect(signedOutProfileResponse.status()).toBe(httpUnauthorized);
+  expect(signedOutAccountResponse.status()).toBe(httpUnauthorized);
 });
 
 async function expectAuthenticatedDashboard(page) {
   await expect(page.locator("llm-proxy-key-management")).toHaveAttribute("data-auth-state", "authenticated");
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  const usageTenantSelector = page.getByRole("combobox", { name: "Usage tenant" });
+  await expect(usageTenantSelector).toHaveValue("");
+  await expect(usageTenantSelector.locator("option:checked")).toHaveText("All tenants");
+  await expect(page.locator("tenant-context-bar")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeHidden();
   await expect(page.locator("mpr-user")).toHaveAttribute("data-mpr-user-status", "authenticated");
   await expect(page.locator("mpr-user")).toHaveAttribute("data-user-email", localManagementProfile.operatorEmail);
@@ -327,10 +485,10 @@ function waitForSessionRestore(page) {
   );
 }
 
-function waitForManagementProfile(page) {
+function waitForManagementAccount(page) {
   return page.waitForResponse(
     (response) =>
-      response.url() === `${stack.llmProxyOrigin}/api/management/profile` && response.request().method() === "GET",
+      response.url() === `${stack.llmProxyOrigin}/api/management/account` && response.request().method() === "GET",
   );
 }
 

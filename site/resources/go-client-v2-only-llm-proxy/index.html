@@ -18,7 +18,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Go LLM Proxy client with a v2-only transport","description":"Use the Go package to send canonical messages requests through POST /v2.","url":"https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/","datePublished":"2026-07-06","dateModified":"2026-07-24","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/","about":["LLM Proxy","Clients","Go LLM proxy client v2"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Go LLM Proxy client with a v2-only transport","description":"Use the Go package to send canonical messages requests through POST /v2.","url":"https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/","datePublished":"2026-07-06","dateModified":"2026-07-26","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/","about":["LLM Proxy","Clients","Go LLM proxy client v2"]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Go LLM Proxy client with a v2-only transport","item":"https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of Go LLM proxy client v2?","acceptedAnswer":{"@type":"Answer","text":"The Go package under pkg/llmproxyclient exposes the canonical MessagesRequest and Client.PostMessages path for text requests."}},{"@type":"Question","name":"Who should read this clients resource?","acceptedAnswer":{"@type":"Answer","text":"Go developers integrating application backends with LLM Proxy."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Authenticate an LLM Proxy client with a tenant secret, which covers LLM Proxy client authentication."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
@@ -28,6 +28,8 @@
       <header class="resource-shell resource-topbar">
         <a class="resource-brand" href="/">LLM Proxy</a>
         <nav aria-label="Resource navigation">
+          <a href="/docs/">API reference</a>
+          <a href="/openapi.yaml">OpenAPI</a>
           <a href="/resources/">Resources</a>
           <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
           <a href="/">Main page</a>
@@ -48,7 +50,7 @@
             <p class="resource-deck">Use the Go package to send canonical messages requests through POST /v2.</p>
             <p class="resource-audience">Go developers integrating application backends with LLM Proxy.</p>
             <div class="resource-actions">
-              <a class="resource-button" href="/">Open LLM Proxy</a>
+              <a class="resource-button" href="/docs/">Open API reference</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
             </div>
           </header>
@@ -188,7 +190,7 @@ request, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequest
     },
     RequestTimeoutSeconds: &amp;requestTimeoutSeconds,
 })</code></pre>
-            <p>Verified 2026-07-24 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
+            <p>Verified 2026-07-26 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
           </section>
 
           <section>
@@ -247,13 +249,15 @@ request, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequest
 
           <section class="resource-final-cta">
             <h2>Use this pattern in LLM Proxy</h2>
-            <p>Start from the main management surface, then copy a current request example or use the documented REST contract for this workflow.</p>
-            <a class="resource-button" href="/">Open the main page</a>
+            <p>Start from the canonical API reference, then use the management surface when the workflow needs tenant or provider configuration.</p>
+            <a class="resource-button" href="/docs/">Open API reference</a>
           </section>
         </article>
       </main>
       <footer class="resource-shell resource-footer">
         <a href="/">LLM Proxy main page</a>
+        <a href="/docs/">API reference</a>
+        <a href="/openapi.yaml">OpenAPI schema</a>
         <a href="/resources/">Resource hub</a>
         <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
         <a href="/sitemap.xml">Sitemap</a>

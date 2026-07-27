@@ -39,7 +39,7 @@ func makeControlledResponseHTTPClient(testingInstance *testing.T, endpoints *pro
 				case <-httpRequest.Context().Done():
 					return nil, httpRequest.Context().Err()
 				case <-releaseResponse:
-					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"output_text":"` + expectedResponseBody + `"}`)), Header: make(http.Header)}, nil
+					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"status":"completed","output_text":"` + expectedResponseBody + `"}`)), Header: make(http.Header)}, nil
 				}
 			default:
 				testingInstance.Fatalf(unexpectedRequestFormat, httpRequest.URL.String())

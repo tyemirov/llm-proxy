@@ -1,11 +1,33 @@
 // @ts-check
 
-import Alpine from "https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/module.esm.js";
-import { initializeMprShell } from "./core/mprShell.js";
-import { createKeyManagement } from "./ui/keyManagement.js";
+import { RUNTIME_UI } from "./constants.js?v=20260727";
+import { initializeMprShell } from "./core/mprShell.js?v=20260727";
+import { failApplicationStartup } from "./ui/applicationStartup.js?v=20260727";
+import { createKeyManagement } from "./ui/keyManagement.js?v=20260727";
 
 initializeMprShell();
 
-window.Alpine = Alpine;
-Alpine.data("llmProxyKeyManagement", createKeyManagement);
-Alpine.start();
+const alpineRuntimeScript = document.createElement("script");
+alpineRuntimeScript.type = "module";
+alpineRuntimeScript.src = RUNTIME_UI.ALPINE_RUNTIME_MODULE_URL;
+alpineRuntimeScript.addEventListener("load", startApplication, { once: true });
+alpineRuntimeScript.addEventListener("error", () => void failApplicationStartup(), { once: true });
+document.head.appendChild(alpineRuntimeScript);
+
+/**
+ * @returns {void}
+ */
+function startApplication() {
+  const alpineRuntime =
+    /** @type {typeof globalThis & { Alpine?: { data: (name: string, factory: () => object) => void, start: () => void } }} */ (
+      globalThis
+    );
+  if (!alpineRuntime.Alpine) {
+    void failApplicationStartup();
+    return;
+  }
+
+  alpineRuntime.Alpine.data("llmProxyKeyManagement", createKeyManagement);
+  alpineRuntime.Alpine.start();
+  document.documentElement.setAttribute(RUNTIME_UI.APPLICATION_READY_ATTRIBUTE, "ready");
+}

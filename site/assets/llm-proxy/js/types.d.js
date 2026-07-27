@@ -51,24 +51,53 @@
 /**
  * @typedef {{
  *   id: string,
+ *   name: string,
  *   has_secret: boolean,
- *   defaults: TenantDefaults
+ *   defaults: TenantDefaults,
+ *   created_at: string,
+ *   updated_at: string
  * }} TenantProfile
  */
 
 /**
  * @typedef {{
- *   user: { id: string, email?: string, display_name?: string, avatar_url?: string, is_admin: boolean },
  *   tenant: TenantProfile,
  *   providers: ProviderProfile[],
  *   proxy: { text_path: string, v2_path: string, dictation_path: string }
- * }} ManagementProfile
+ * }} ManagementTenantProfile
+ */
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   email?: string,
+ *   display_name?: string,
+ *   avatar_url?: string,
+ *   is_admin: boolean
+ * }} ManagementUser
+ */
+
+/**
+ * @typedef {{
+ *   id: string,
+ *   name: string,
+ *   has_secret: boolean,
+ *   created_at: string,
+ *   updated_at: string
+ * }} ManagementTenantSummary
+ */
+
+/**
+ * @typedef {{
+ *   user: ManagementUser,
+ *   tenants: ManagementTenantSummary[]
+ * }} ManagementAccount
  */
 
 /**
  * @typedef {{
  *   secret: string,
- *   profile: ManagementProfile
+ *   profile: ManagementTenantProfile
  * }} SecretResponse
  */
 
@@ -107,6 +136,53 @@
  */
 
 /**
+ * @typedef {
+ *   "success" |
+ *   "invalid_request" |
+ *   "payload_too_large" |
+ *   "rate_limited" |
+ *   "service_unavailable" |
+ *   "request_timeout" |
+ *   "upstream_error"
+ * } UsageOutcomeCode
+ */
+
+/**
+ * @typedef {{
+ *   occurred_at: string,
+ *   endpoint: string,
+ *   provider: string,
+ *   model: string,
+ *   status_code: number,
+ *   outcome_code: UsageOutcomeCode,
+ *   latency_ms: number
+ * }} ManagementUsageFailure
+ */
+
+/**
+ * @typedef {ManagementUsageFailure & {
+ *   tenant_id: string,
+ *   tenant_name: string
+ * }} ManagementAccountUsageFailure
+ */
+
+/**
+ * @typedef {{
+ *   interval: UsageInterval,
+ *   failures: ManagementUsageFailure[],
+ *   next_cursor?: string
+ * }} ManagementUsageFailurePage
+ */
+
+/**
+ * @typedef {{
+ *   interval: UsageInterval,
+ *   failures: ManagementAccountUsageFailure[],
+ *   next_cursor?: string
+ * }} ManagementAccountUsageFailurePage
+ */
+
+/**
  * @typedef {{
  *   interval: UsageInterval,
  *   bucket_unit: "day" | "hour",
@@ -132,8 +208,15 @@
 /**
  * @typedef {{
  *   user: { id: string, email?: string, display_name?: string, avatar_url?: string, is_admin: boolean },
- *   tenant: { id: string, has_secret: boolean, created_at?: string, updated_at?: string },
- *   usage: ManagementAdminUsageSummary
+ *   tenant_count: number,
+ *   tenants: Array<{
+ *     id: string,
+ *     name: string,
+ *     has_secret: boolean,
+ *     created_at: string,
+ *     updated_at: string,
+ *     usage: ManagementAdminUsageSummary
+ *   }>
  * }} ManagementAdminUser
  */
 

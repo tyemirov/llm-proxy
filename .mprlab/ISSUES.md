@@ -12,24 +12,866 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 Resolved history: `.mprlab/ISSUES-ARCHIVE.md`; the complete original issue
 bodies, resolution notes, and validation records remain in `v0.2.43`.
 
-Triage, 2026-07-24: B069 is the immediate active regression. Under the
-one-issue-at-a-time workflow, the selected P1 execution tranche is
-**B069 -> F014 -> I029**: B069 establishes the bounded per-request timeout and
-error contract for public upstream work, F014 replaces singular management
-routes with tenant-scoped routes, and I029 then freezes those final public and
-management contracts in OpenAPI. I031 is the next convergence item after I029
-and F014; I027 and P001 are independent F014 successors. I032 follows F014
+Triage, 2026-07-25: B069, F014, I029, and I031 are resolved. The selected
+one-issue-at-a-time P1 execution tranche is complete. I027 and P001 are
+independent B076 successors. I032 follows B076
 and I027 so its activity-breakdown presentation is added to the final
-tenant-scoped dashboard rather than the obsolete singleton layout. I033 follows
-F014 and I029 so its bounded dashboard freshness contract uses the final
-tenant-scoped endpoint and canonical response headers. M019 is independently
+Usage-scope dashboard rather than an obsolete global active-tenant layout. I033
+follows B076 and I029 so its bounded dashboard freshness contract uses the
+canonical account-wide and tenant-filtered operations and response headers. M019 is independently
 ready because M018 is complete. M013 then M012 resolve the product-context
 governance path. Planning proceeds P002 -> P003 -> P004 -> P005, with M020
 already satisfied; recurring maintenance remains scheduled work.
 
 ## BugFixes
 
-- [!] [B069] (P1) Make upstream request timeouts an explicit, bounded client-to-proxy contract.
+- [x] [B084] (P1) {I029} Restore the generated API reference after OpenAPI contract merges.
+  Goal:
+  Keep the committed human-readable API reference derived from the exact
+  canonical OpenAPI source after forward-only branch merges.
+
+  Evidence:
+  - Merge commit `39869d3` combined OpenAPI changes from both parents into
+    `docs/openapi.yaml` but retained `site/docs/index.html` from a parent.
+  - The canonical contract SHA-256 is
+    `796cff4216584bde8fb94cdadee195a0e715d3590a43f407c0f7ba60708b5c78`,
+    while the committed reference records
+    `5a6683d01dc04a10d6e045df3c3c265cd6b66aa43d9f39518ec9ecfa47c39b88`.
+  - The required baseline `make ci` passes Go and Python static checks, then
+    fails frontend lint with `openapi_docs_out_of_date`.
+
+  Requirements:
+  - Regenerate `site/docs/index.html` from the current `docs/openapi.yaml`
+    through the canonical generator.
+  - Do not change the canonical contract, generator, runtime behavior, or add
+    another schema or documentation source.
+
+  Validation:
+  - Verify the reference records the exact canonical source digest.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci` after the last code edit.
+
+  Resolved 2026-07-27:
+  - Regenerated `site/docs/index.html` from the unchanged canonical
+    `docs/openapi.yaml`; its three provenance fields now record the exact
+    `796cff4216584bde8fb94cdadee195a0e715d3590a43f407c0f7ba60708b5c78`
+    source digest.
+  - The full final `make ci` passes after the generated-document check, exact
+    100% Go coverage, Python, rendered-browser, TAuth black-box, release, and
+    live-provider harness gates.
+
+- [x] [B083] (P1) Keep tracked environment examples out of runtime use.
+  Goal:
+  Preserve sample environment files as deliberately unrealistic documentation
+  while requiring real runtime values only from ignored private dotenv files.
+
+  Evidence:
+  - `configs/.env.local.example` and `configs/.env.sample` now identify
+    themselves as documentation-only and contain non-operational values.
+  - The prior local startup contract copied the tracked local example into
+    `configs/.env.local`, which allowed documentation to become runtime
+    configuration and contradicted the private-env boundary.
+  - The runtime and orchestration tests now use an explicitly created
+    `configs/.env.local`, but README still documents the obsolete copy behavior.
+
+  Requirements:
+  - Never source, copy, or infer runtime configuration from a tracked sample.
+  - Require the operator to create the ignored real `configs/.env.local`
+    explicitly with private values and mode `0600`.
+  - Fail before Docker startup when the private file is absent.
+  - Keep `configs/.env`, `configs/.env.local`, and generated service-scoped
+    dotenv files ignored and excluded from container build context.
+
+  Validation:
+  - Exercise the missing-private-env failure and the complete local
+    orchestration path through the public `make up` boundary.
+  - Verify both tracked sample files retain the documentation-only banner and
+    deliberately unrealistic values.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last tracked edit.
+
+  Resolved 2026-07-26:
+  - Both tracked examples now remain visibly documentation-only with
+    deliberately unrealistic values and cannot seed local runtime state.
+  - `make up` requires the ignored real `configs/.env.local` before checking
+    Docker, enforces mode `0600`, and creates only ignored service projections.
+  - Operational coverage verifies the sample-file boundary, missing-file
+    failure, generated local secrets, scoped projections, and complete
+    orchestration flow.
+
+- [x] [B082] (P1) {F014} Restore persisted-routing and dictation-size enforcement.
+  Goal:
+  Make management startup reject catalog-invalid persisted state and make the
+  public dictation endpoint enforce its published upload limit.
+
+  Evidence:
+  - Schema-version-2 startup verifies the usage outcome column and index, then
+    returns without validating persisted tenant routing defaults against the
+    active provider/model catalogs.
+  - F014 preflight resolves legacy provider aliases and models but persists the
+    original values, so a noncanonical provider row can survive migration under
+    an identifier the runtime does not use.
+  - `/dictate` maps `http.MaxBytesReader` failures to `400` and does not reject
+    an audio part that exceeds `server.max_input_audio_bytes` while the complete
+    multipart body remains inside its separate overhead allowance, despite the
+    canonical OpenAPI `413` response.
+
+  Requirements:
+  - Validate every current-schema tenant routing default at startup and fail
+    with owner, tenant, endpoint, provider, and model context; never repair or
+    infer persisted routing state.
+  - Reject noncanonical legacy provider and text-model values before the F014
+    migration transaction; persist only exact canonical provider/model
+    identifiers.
+  - Return `413 Payload Too Large` when either the audio part exceeds
+    `server.max_input_audio_bytes` or the bounded multipart reader overflows,
+    and do not call an upstream transcription provider.
+
+  Validation:
+  - Exercise restart through the real router construction boundary with an
+    invalid current-schema tenant, legacy preflight with alias/case variants,
+    and `/dictate` with both audio-part and total-body overflow.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last tracked edit.
+
+  Resolved 2026-07-26:
+  - Current-schema startup now rejects catalog-invalid routing rows, legacy
+    preflight rejects noncanonical provider/model values, and `/dictate`
+    returns `413` for either audio-part or bounded-body overflow.
+  - Router-boundary, migration, and public dictation scenarios cover the
+    corrected contracts.
+
+- [x] [B081] (P1) {F014,B079} Keep managed routing defaults on providers with saved tenant keys.
+  Goal:
+  Ensure every managed routing default is immediately usable by the owning
+  tenant instead of retaining a catalog default for a provider whose API key is
+  absent.
+
+  Requirements:
+  - Treat a saved tenant provider key as a hard eligibility boundary for
+    managed routing defaults. Preserve an existing text or dictation default
+    only while its exact provider remains keyed and supports that endpoint.
+  - When a provider-key save or removal invalidates a default, reconcile it
+    atomically to a deterministic eligible keyed provider. Use the saved
+    provider text model for an automatically selected text route and the
+    catalog dictation default model for an automatically selected dictation
+    route.
+  - Represent an endpoint with no eligible keyed provider as one canonical
+    unset provider/model pair. In particular, disable managed dictation when
+    none of the tenant's keyed providers supports dictation; never retain an
+    unkeyed or unsupported dictation provider as a placeholder.
+  - Restrict the Settings routing selectors to keyed eligible providers and
+    show the unset dictation state explicitly. Do not special-case any provider
+    name, infer credentials from global configuration, or add a read-time
+    fallback.
+  - Migrate existing managed tenants once into the keyed-default contract and
+    reject noncanonical persisted state after migration.
+  - Keep static-configuration tenant defaults unchanged; this contract applies
+    only to managed tenants and their tenant-owned provider keys.
+
+  Validation:
+  - Exercise the real management API and public proxy with arbitrary keyed
+    providers, including a sole text-only provider, multiple eligible
+    providers, removal of the active default, and restart after migration.
+  - Prove Settings exposes only keyed routing candidates, disables dictation
+    with no eligible keyed provider, and re-enables it from the complete
+    profile returned by a successful provider-key mutation.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last tracked edit.
+
+  Resolved 2026-07-26:
+  - Managed defaults now remain on deterministic keyed providers, reconcile
+    atomically with provider-key mutations, and persist one canonical unset
+    pair when no eligible provider exists.
+  - Settings exposes only keyed routing candidates and disables dictation when
+    no keyed provider supports it; provider-agnostic API/runtime, migration,
+    restart, and rendered-browser coverage verifies the contract.
+
+- [x] [B080] (P1) Reject incomplete OpenAI responses that contain partial text
+  Goal:
+  Make every successful text-provider result complete so callers never receive
+  a provider-truncated prefix or intermediate result as an HTTP 200 response,
+  while keeping asynchronous job handling explicit to each supported adapter.
+
+  Evidence:
+  - Fruits of the Quill Story Plan generation failed in production at
+    `2026-07-27 00:14:16 UTC` after its strict JSON decoder reported
+    `unexpected EOF`.
+  - The matching LLM Proxy usage row recorded `response_tokens=2048`,
+    `total_tokens=3647`, `status_code=200`, and `success=1`. The caller's exact
+    2048-token output budget was exhausted, but LLM Proxy classified the
+    incomplete result as successful.
+  - `resolveIncompleteOpenAIResponse` currently returns
+    `responseSnapshot.generation()` whenever an incomplete response contains
+    nonblank text, bypassing the existing incomplete-response error path.
+  - Multiple production rows reached the same exact 2048-token cap, so this is
+    a repeatable transport-contract defect rather than an isolated malformed
+    model response.
+  - The shared OpenAI-compatible Chat Completions adapter does not inspect
+    `finish_reason`, so `length` and other non-complete choices can currently
+    return partial text for DeepSeek, DashScope, Qwen Cloud, Moonshot, MiniMax,
+    SiliconFlow, Zhipu, Meta, and Grok.
+  - The Anthropic Messages adapter does not inspect `stop_reason`, so
+    `max_tokens`, `pause_turn`, and other non-complete results can currently
+    return text. Gemini already requires `finishReason=STOP` but discards
+    reported usage when rejecting another reason.
+  - Only the OpenAI Responses adapter uses a pollable lifecycle. The shared
+    `server.queue_size` facility is HTTP-operation admission control, not a
+    durable provider-job-id queue, and the configured synchronous provider
+    routes do not imply each provider's separate deferred or batch API.
+  - This issue is the upstream owner for the dependent Story Service correction
+    tracked as `story-generator` B007.
+
+  Requirements:
+  - Define HTTP success for the OpenAI Responses adapter as a provider response
+    whose terminal status is complete. An upstream `status=incomplete` must
+    never return partial text, an HTTP 2xx response, or a successful usage
+    event merely because text is nonblank.
+  - Poll an OpenAI response id only from the adapter's explicit background
+    lifecycle and documented `queued` or `in_progress` states. Reject missing
+    and unknown states instead of treating every non-terminal value as pending.
+  - Treat usage reported across observations of one OpenAI response id as
+    cumulative snapshots: retain the newest nonempty snapshot instead of
+    summing it with earlier observations. Sum usage only across a genuinely
+    distinct synthesis response id.
+  - Define complete success for the shared Chat Completions adapter as
+    `finish_reason=stop`, Gemini as `finishReason=STOP`, and Anthropic Messages
+    as `stop_reason=end_turn` or `stop_sequence`. Reject missing, truncated,
+    tool/intermediate, refused, and unknown reasons without returning their
+    text.
+  - Do not invent generic polling from an arbitrary `id`. A provider-specific
+    deferred, batch, or asynchronous API requires its own explicit transport
+    and lifecycle contract.
+  - Map every incomplete terminal response, including
+    `incomplete_details.reason=max_output_tokens`, to the canonical upstream
+    failure response and status. Do not expose the provider body or partial
+    generated text.
+  - Remove hidden continuation or synthesis of incomplete output. The caller's
+    explicit `max_tokens` value remains the upper bound for that request and
+    must not trigger an undisclosed additional paid generation.
+  - Record the request as unsuccessful with the canonical upstream failure
+    outcome while retaining safe normalized metadata and available token usage;
+    never persist prompts, responses, or raw provider errors.
+  - Update the canonical OpenAPI and provider-routing documentation in the same
+    change so HTTP 200 continues to mean a complete response at every public
+    text endpoint.
+  - Include B080 in the next immutable release prepared by B077. Production
+    activation remains operator-owned.
+
+  Validation:
+  - Exercise the real public `POST /v2` handler against a fake OpenAI endpoint
+    that returns HTTP 200, `status=incomplete`, nonempty partial output,
+    `reason=max_output_tokens`, and exact token usage.
+  - Prove the proxy returns the canonical non-2xx upstream failure, emits no
+    partial generated text, and records a failed normalized usage event with
+    the provider-reported token counts.
+  - Prove a terminal completed OpenAI response still returns its exact text and
+    successful usage record.
+  - Exercise the shared Chat Completions, Gemini, and Anthropic adapters through
+    public `POST /v2` with partial/intermediate stop signals. Prove each returns
+    `502`, exposes no partial text or token headers, and retains exact
+    provider-reported token counts in failed managed usage.
+  - Prove unknown OpenAI states with ids do not trigger polling and that
+    documented `queued` and `in_progress` states still poll to completion.
+  - Prove repeated usage snapshots for one polled OpenAI response id retain the
+    latest exact counts on both success and managed failure instead of
+    double-counting earlier snapshots.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+  Resolution:
+  - OpenAI Responses now accepts only exact `status=completed` as success,
+    polls only explicit `queued` or `in_progress` work, and rejects incomplete,
+    missing, unknown, failed, or cancelled states without leaking partial text
+    or starting a hidden continuation.
+  - The shared Chat Completions adapter requires exact
+    `finish_reason=stop`, Gemini requires exact `finishReason=STOP`, and
+    Anthropic requires exact `stop_reason=end_turn` or `stop_sequence`.
+    Truncated, tool/intermediate, refused, missing, and unknown reasons return
+    the canonical upstream failure.
+  - Polling remains owned by the OpenAI Responses adapter and the active client
+    request. `server.queue_size` remains HTTP-operation admission control; no
+    generic or durable provider-job queue was invented for synchronous routes.
+  - Failed managed usage retains available provider-reported token counts
+    without exposing token headers, prompts, responses, or raw provider bodies.
+    Repeated observations of one OpenAI response id replace its cumulative usage
+    snapshot; only a separately created synthesis response is additive.
+  - Public `POST /v2` coverage proves the exact OpenAI
+    `1599/2048/3647` incomplete case and representative Chat, Gemini, and
+    Anthropic partial cases return `502`; completed responses and documented
+    OpenAI pending-state polling remain successful.
+  - The README, canonical OpenAPI, generated API reference, and provider-routing
+    documentation describe the same completion and async-ownership contract.
+  - The managed-routing public proxy fixture now returns the required
+    `finish_reason=stop` completed Chat Completions response, and the full final
+    `make ci` passes.
+
+- [!] [B077] (P1) {B069,F014,I029,I031} Publish and activate the merged LLM Proxy contract.
+  Goal:
+  Make the production API and management UI run the same canonical contract
+  that is merged and marked resolved in this repository, with immutable release
+  provenance that can be verified before dependent provider work resumes.
+
+  Evidence:
+  - The production `umna-moma-i-tsar` Creative Director canary selected
+    `gpt-5.6-terra`, reasoning effort `max`, and the explicit 900-second request
+    timeout, then received `HTTP 504` with an empty response body at the
+    source-world review boundary on 2026-07-26.
+  - The current production gateway configuration and deployed Caddy global
+    timeout guards are already 3660 seconds, so the earlier gateway-timeout
+    diagnosis is disproved.
+  - On 2026-07-26, both
+    `ghcr.io/tyemirov/llm-proxy:v0.2.46` and
+    `ghcr.io/tyemirov/llm-proxy:latest` resolve to
+    `sha256:f2593f7a55e6e7bde5f37fe36edaa027fcee96700c48cdcb19c1e3e718b9009c`.
+    That release predates the 2026-07-26 merged F014/I029/I031 management
+    contract and its failure-details implementation.
+  - The live tenant-scoped
+    `GET /api/management/tenants/{tenant_id}/usage/failures` path returns a
+    router-level `404 page not found`, while the merged canonical API defines
+    that operation. The refreshed production management UI likewise lacks the
+    merged failed-request inspection action.
+  - The missing live failure-details operation prevents retrieval of the
+    normalized failure record needed to distinguish an LLM Proxy timeout from
+    an upstream provider or transport 504 without exposing prompts, responses,
+    or raw provider errors.
+
+  Requirements:
+  - Prepare a clean immutable release from committed source that contains the
+    resolved B069, F014, I029, and I031 contracts. Do not publish from the
+    current dirty worktree or fold unresolved B076 work into the release.
+  - Publish the versioned multi-platform container, move `latest` to that exact
+    manifest, and publish the matching generated Pages artifact through the
+    repository-owned release workflow. Record the release tag, source commit,
+    manifest digest, and Pages version as one provenance tuple.
+  - Have the production operator activate that exact release without replacing
+    or reinitializing the existing management SQLite volume. Apply only the
+    forward migrations owned by the released binary.
+  - Verify the backend and Pages surfaces independently. A successful image
+    pull or container recreation is not proof that the API route and browser UI
+    are current.
+  - Do not work around the failure by inflating another timeout, bypassing the
+    public LLM Proxy API, querying private provider state, or retrying the paid
+    F001 canary before release activation is proven.
+
+  Deliverables:
+  - A versioned release and matching `latest` image containing the merged
+    request-timeout, tenant-management, OpenAPI, and normalized failure-details
+    contracts.
+  - A matching published management UI and a production activation receipt
+    containing the immutable source/tag/digest tuple.
+  - Read-only post-deploy evidence for the canonical health, timeout-header,
+    tenant failure-details, and management UI boundaries.
+
+  Validation:
+  - Prove the version tag and `latest` resolve to the same newly published
+    manifest and that the manifest was built from the recorded source commit.
+  - Prove an unauthenticated request to the tenant failure-details operation
+    reaches the authentication boundary rather than returning router-level 404,
+    then prove an authenticated owner can read the safe normalized failure page.
+  - Prove the production UI exposes the failed-request action and reads the same
+    canonical operation without credentials, prompts, responses, transcripts,
+    or raw provider errors entering the DOM.
+  - Re-run one Creative Director source-world canary with Terra/max and the
+    explicit 900-second request timeout. Use its normalized usage/failure record
+    to classify any subsequent provider failure before resuming the full F001
+    batch.
+
+  Blocked: production release publication and activation are operator-owned;
+  F001 provider execution remains stopped until the new immutable release,
+  backend route, and matching Pages UI are all verified live.
+
+- [x] [B079] (P1) {B074,B076,F014} Consolidate tenant and client-key lifecycle into one Settings row.
+  Goal:
+  Make the selected Settings tenant and its client key one compact, logical
+  control surface without exposing a standalone key-deletion state.
+
+  Problem:
+  Settings currently repeats the selected tenant across a selector row and a
+  separate identity row, then separates the same tenant's client key into a
+  third row. Rename expands inline, key replacement happens without an
+  explicit invalidation confirmation, and the client key has a revoke action
+  even though the intended lifecycle is replacement or deletion of the owning
+  tenant.
+
+  Requirements:
+  - Replace the Settings-tenant selector, tenant identity row, and client-key
+    row with one semantic compact row containing the selected tenant dropdown,
+    Rename, key state and one-time reveal/copy controls, confirmed Replace key,
+    confirmed Delete tenant, and Create tenant.
+  - Treat the selected dropdown value as the current Settings editor context;
+    do not add another active-tenant state, activation flag, URL parameter,
+    immutable-id banner, or compatibility selection path. Preserve the
+    independent Usage tenant filter and simultaneous operability of every
+    tenant.
+  - Move rename into a keyboard- and focus-managed modal with canonical
+    validation and conflict feedback. Preserve the unsaved-Settings discard
+    decision when switching tenants.
+  - Require confirmation before replacing an existing client key. State that
+    the prior key stops working immediately, then preserve the one-time masked
+    reveal, Show, Copy, close guard, stale-response isolation, and retryable
+    Create key state after an automatic creation failure.
+  - Remove standalone client-key revocation from the browser, management
+    router, OpenAPI contract, persistence surface, documentation, and tests.
+    Provider API-key removal remains a separate provider-settings contract.
+  - Keep final-tenant deletion disabled with an accessible explanation and
+    retain the named deletion confirmation, complete tenant cleanup, Usage
+    filter reset, and deterministic next-tenant selection.
+  - Keep the row on one line at desktop width and use one bounded responsive
+    wrap on narrow screens. Preserve semantic custom elements, centralized
+    copy, visible focus, keyboard operation, and unclipped modal geometry.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last tracked edit.
+
+  Validation:
+  - Exercise selection independence, modal rename success/conflict/cancel,
+    confirmed key replacement and cancellation, one-time key reveal/copy,
+    missing-key retry, final-tenant protection, confirmed tenant deletion, and
+    stale-response isolation through the rendered Playwright interface.
+  - Prove the real management router and canonical OpenAPI inventory no longer
+    expose `DELETE /api/management/tenants/{tenant_id}/secrets`.
+  - Prove the combined row remains contained and ordered across desktop,
+    compact, and mobile viewports.
+
+  Resolved 2026-07-26:
+  - Replaced the repeated tenant selector, identity, and key rows with one
+    semantic `Tenant access` row. Desktop stays on one line; narrow screens
+    preserve the same control order in one bounded two-line wrap.
+  - Moved rename and client-key replacement into focus-managed dialogs,
+    centralized nested Escape handling, retained one-time reveal/copy and
+    missing-key retry behavior, and kept final-tenant deletion protected.
+  - Removed standalone client-key revocation from the browser, management
+    router/store, canonical OpenAPI inventory, generated API reference,
+    current documentation/resources, mocks, and tests. Replacement now proves
+    immediate invalidation of the prior key; tenant deletion remains the only
+    other client-key removal path.
+  - Extended rendered Playwright coverage for rename validation/conflict,
+    replacement confirmation/cancellation/pending state, selection
+    independence, lifecycle cleanup, and desktop/compact/mobile geometry.
+  - Refined the final tenant-lifecycle action to a large icon-only plus beside
+    the trash action at every viewport while retaining `Create tenant` as its
+    accessible name and tooltip.
+  - Standardized the generated client-key Copy control on the Material Symbols
+    `content_copy` glyph and removed its custom inline SVG while retaining the
+    existing accessible clipboard behavior.
+
+- [x] [B078] (P1) {F014,B075} Fail visibly when the management application runtime is blocked.
+  Goal:
+  Make local browser startup terminate in either the management application or
+  an actionable error instead of leaving the MPR authentication transition
+  visible forever.
+
+  Problem:
+  The local ghttp frontend publishes no cache policy and every application
+  module has an unversioned URL. Chrome can therefore combine modules cached
+  before B076 with current files from the mounted working tree. The observed
+  page loaded current `keyManagement.js` with an older `backendClient.js` that
+  did not export `fetchAccountUsageFailures`, so module linking failed before
+  the application entrypoint evaluated. MPR UI authenticated independently,
+  but LLM Proxy never mounted Alpine, requested the management account, or
+  dispatched `llm-proxy:management-ready`; the user remained on
+  `Opening LLM Proxy` indefinitely.
+
+  Requirements:
+  - Revise the complete first-party module graph once so browser copies cached
+    before the local cache policy cannot mix with current files.
+  - Serve the local browser surface with `Cache-Control: no-store` so an
+    ordinary reload cannot combine stale and current ES modules while `make up`
+    is mounted to the working tree. Revise the entry-module URL once to evict
+    browser copies cached before that policy existed.
+  - Keep the pinned Alpine 3.13.5 jsDelivr module as the single canonical
+    dependency. Do not add a fallback CDN, compatibility loader, bundled copy,
+    retry loop, or timeout.
+  - Guard application-module linking and Alpine loading so a rejected runtime
+    renders a semantic error surface with the exact allow-and-reload recovery
+    action.
+  - Complete the MPR UI transition after the failure surface is ready, without
+    issuing a protected management request or reinterpreting the MPR UI
+    authentication state.
+  - Preserve the current authenticated, unauthenticated, and already-settled
+    authentication lifecycle when Alpine loads.
+  - Add black-box rendered-browser coverage for an incompatible cached
+    first-party module and a rejected Alpine request. Prove both show the
+    recovery state and emit the management-ready completion event.
+  - Document that `make up` service readiness cannot override a browser-side
+    block and identify the exact CDN origin that local Chrome must allow.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last tracked edit.
+
+  Resolved 2026-07-26:
+  The local frontend now disables browser caching and uses one revised URL
+  across the complete first-party ES-module graph, preventing the observed
+  current-`keyManagement.js`/stale-`backendClient.js` link failure. A separate
+  startup guard owns application-link and pinned-Alpine failures, renders the
+  semantic allow-and-reload surface, and completes the existing MPR UI
+  transition without a protected management request. The 65-scenario rendered
+  browser suite passes, including both failure boundaries, and clean reloads in
+  real Chrome and the in-app browser reach the signed-out application with
+  `data-llm-proxy-application="ready"` and no startup error.
+
+- [x] [B076] (P1) {F014,I029,I031} Separate active tenants from Settings and Usage selection.
+  Goal:
+  Keep every owned tenant simultaneously operational while making Settings the
+  sole tenant-management surface and making Usage Overview an account-wide
+  report by default with an independent tenant filter.
+
+  Problem:
+  F014 introduced one global `active tenant` that simultaneously chooses the
+  Settings profile, Usage Overview scope, URL workspace, and tenant lifecycle
+  target. The toolbar therefore implies that only one tenant is active, exposes
+  tenant management outside Settings, and makes the default usage report show
+  only the oldest tenant. The product contract is instead that every tenant's
+  secret remains active independently; UI selection chooses only what the user
+  is editing or reporting.
+
+  Requirements:
+  - Delete the global active-tenant toolbar, `Active tenant` copy, immutable-id
+    banner, create action, and URL/history-owned workspace contract. Do not add
+    an activation flag, status, server-side selected tenant, compatibility
+    query, or fallback selection path. Every tenant remains independently
+    routable through its own generated secret.
+  - Put tenant selection and `Create tenant` inside Settings with the existing
+    rename, guarded delete, client key, provider settings, defaults, and request
+    examples. The Settings tenant is an editor context only. Switching it must
+    preserve the unsaved-edit decision, clear one-time/revealed credentials,
+    and never change Usage Overview's filter.
+  - Add one accessible Usage tenant selector immediately left of the ordered
+    `ALL`, `30 days`, `7 days`, and `1 day` interval controls. Its first option
+    is `All tenants`, it defaults to that option on every authenticated
+    workspace load, and the interval independently continues to default to
+    `30 days`. Refresh and interval changes retain the Usage tenant selection.
+  - Add canonical owner-only `GET /api/management/usage` and
+    `GET /api/management/usage/failures` operations for all owned tenants.
+    Preserve the existing tenant-scoped operations for an explicitly selected
+    tenant; these are distinct canonical scopes, not aliases or fallback
+    reads. Require the same exact interval and failure pagination query
+    contracts and return `Cache-Control: no-store`.
+  - Compute owner-wide usage in the database/store boundary from every usage
+    row whose tenant belongs to the authenticated owner, using one captured
+    server timestamp. Preserve exact bucket, provider, model, status, token,
+    success, and request aggregation; calculate average latency from the
+    complete event set rather than averaging tenant averages. Never fetch each
+    tenant from the browser and combine partial responses.
+  - Make the existing failed-request action follow the Usage selector.
+    Owner-wide pages use one stable newest-first snapshot/cursor across all
+    owned tenants and add only the owning tenant's safe id and display name to
+    each row. Tenant-scoped pages retain their current safe shape. Bind cursors
+    to their exact owner-wide or tenant scope so they cannot cross scopes.
+  - Keep Settings and Usage request identity/cancellation independent. A late
+    profile, usage, failure, create, rename, or delete response cannot overwrite
+    another Settings tenant or Usage scope. Deleting the tenant currently used
+    by the Usage filter resets that filter to `All tenants` and refreshes the
+    owner-wide snapshot; other deletions retain the current filter.
+  - Preserve the account/tenant persistence model, owner isolation, final
+    tenant guard, admin aggregate-only boundary, mandatory setup behavior,
+    credential secrecy, semantic components, centralized copy, focus handling,
+    and unclipped desktop/mobile layout.
+  - Update the canonical OpenAPI source, README, implementation documentation,
+    generator-owned public usage resource, and unresolved F014-dependent issue
+    wording to distinguish `Settings tenant`, `Usage tenant`, and `All tenants`
+    from operational tenant activity. Do not hand-edit a generated artifact.
+
+  Validation:
+  - Add real management-router and OpenAPI scenarios proving exact owner-wide
+    totals/buckets/breakdowns, weighted latency, all-time bounds, empty usage,
+    strict queries, no-store headers, owner isolation, distinct tenant scope,
+    stable scope-bound failure pagination, safe tenant context, and absence of
+    credentials, prompts, responses, raw errors, or other owners' data.
+  - Add Playwright scenarios proving the missing global toolbar, Settings-only
+    lifecycle controls, default `All tenants` plus `30 days`, selector placement
+    immediately before `ALL`, scope-preserving Refresh/interval behavior,
+    independent Settings and Usage selections, creation/deletion behavior,
+    stale-response rejection, failure drill-down scope, keyboard/screen-reader
+    semantics, and desktop/mobile geometry.
+  - Extend the real TAuth black-box flow to prove the default owner-wide
+    dashboard includes two independently routable tenants while Settings can
+    manage either without changing the report.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last code edit.
+
+  Resolved 2026-07-26:
+  The global active-tenant toolbar and URL/history workspace state are removed.
+  Tenant selection and creation now live in Settings as an editor-only context,
+  while Usage Overview independently defaults to `All tenants` and `30 days`
+  with its tenant selector immediately before the interval controls. Every
+  tenant secret remains independently routable.
+
+  Canonical owner-wide usage and failure operations now aggregate every owned
+  tenant at the database boundary under one captured time/snapshot contract.
+  Tenant-scoped operations remain distinct; all-tenant failure rows add only
+  safe tenant attribution, and opaque cursors cannot cross scopes. OpenAPI,
+  README, implementation guidance, generated public resources, and dependent
+  backlog wording now describe the same forward-only contract.
+
+  The required pre-change and post-change `make ci` runs pass. Exact-coverage Go
+  scenarios, 63 Playwright scenarios, and the real TAuth black-box prove
+  aggregation, isolation, simultaneous routing, independent Settings and Usage
+  selection, stale-response rejection, failure pagination, accessibility, and
+  desktop/mobile layout.
+
+- [x] [B075] (P1) {F014} Keep local browser authentication on the ghttp front door.
+  Goal:
+  Make the canonical `make up` browser login path reach the TAuth container
+  regardless of unrelated host processes.
+
+  Problem:
+  The local runtime config publishes `http://localhost:8082` while Compose
+  binds TAuth only on IPv4 `127.0.0.1:8082`. An unrelated process can own the
+  IPv6 `localhost` listener on that port. The browser then reaches that process,
+  receives no TAuth CORS headers, and cannot restore a session or request a
+  nonce even though `make up` reports ready because readiness checks IPv4
+  directly.
+
+  Requirements:
+  - Keep production's explicit split-origin contract unchanged.
+  - Publish the ghttp `http://localhost:4179` front door as the local TAuth URL
+    and proxy `/auth/*` plus `/me` to TAuth on the Compose network.
+  - Remove the host TAuth port from the canonical local topology so it cannot
+    conflict with unrelated IPv4 or IPv6 listeners.
+  - Verify static, config, API, same-origin session, nonce, and management API
+    boundaries through the exact `localhost` origins used by the browser.
+  - Keep aggregate local environment files out of containers and retain
+    service-scoped secret ownership.
+  - Prove the operational contract, the real Compose stack, and the browser
+    login bootstrap, then pass the required final `make ci`.
+
+  Resolved 2026-07-26:
+  Local browser authentication now stays on the ghttp front door. Compose owns
+  the canonical `/auth/*` and `/me` proxy mappings plus the browser-facing
+  `tauthUrl`, so stale ignored local environment entries cannot restore the
+  obsolete direct-port topology. TAuth remains internal to the Compose network
+  and production's split-origin configuration is unchanged.
+
+  `make up` now verifies the exact `localhost` URLs used by the browser,
+  including `GET /auth/session` and `POST /auth/nonce`. The real stack reached
+  ready with session `204`, nonce `200`, anonymous management `401`, and no
+  host TAuth port. Reloading the real local UI and activating **Sign in**
+  produced a same-origin nonce request in TAuth without the prior CORS or
+  `:8082` browser requests.
+
+  The required pre-change and post-change `make ci` runs pass. The final run
+  follows the last tracked edit and passes static analysis, exact 100% Go
+  coverage, 33 Python tests, package installation, 63 browser scenarios, the
+  TAuth black-box test, 47 release tests, and live-provider preflight.
+
+- [x] [B074] (P1) {F014} Make tenant context and lifecycle controls compact.
+  Goal:
+  Make multi-tenant context immediately legible without presenting the active
+  tenant as a permanently open edit form.
+
+  Problem:
+  The active-tenant toolbar stacks its label above the selector and separates
+  the immutable id into a wide second column. In Settings, the tenant name is
+  always rendered as a full-width input with save/delete actions and two help
+  lines. This gives stable tenant identity the visual weight of a pending form,
+  pushes the client key away from its owning context, and makes the final-tenant
+  guard read like an error during ordinary use.
+
+  Requirements:
+  - Keep the canonical F014 account, URL, isolation, and tenant lifecycle
+    behavior unchanged; this is one frontend presentation and interaction fix.
+  - Render the global active-tenant label, selector, immutable id, and create
+    action as one dense MPR toolbar on desktop with a bounded two-row mobile
+    layout.
+  - Render Settings tenant identity as a compact idle row with the display name
+    primary and immutable id secondary. Enter an inline name editor only after
+    an explicit Rename action, focus it deterministically, and return focus
+    after save or cancel.
+  - Keep deletion adjacent to the tenant it affects. Use a compact destructive
+    action, retain the named confirmation, and present the undeletable final
+    tenant as concise protected state with an accessible explanation.
+  - Keep the client-key row separate and preserve one-time reveal, copy,
+    replacement, revocation, mandatory-setup, and credential-clearing behavior.
+  - Preserve centralized copy, semantic custom elements, visible focus,
+    keyboard operation, screen-reader naming, and unclipped desktop/mobile
+    geometry.
+  - Extend Playwright coverage through the real rendered interface and pass the
+    required final `make ci` after the last code edit.
+
+  Resolved 2026-07-26:
+  The global tenant selector, immutable id, and create action now share one
+  dense context toolbar. Settings renders the active tenant as a compact
+  name/id row with an `Only tenant` protection chip and colocated destructive
+  action; the name input appears only after Rename and returns focus after save
+  or cancel.
+
+  The client-key contract remains a separate row with unchanged one-time
+  reveal, copy, replace, revoke, and mandatory-setup behavior. Its narrow
+  layout now gives key status the full row before placing the create/replace
+  action below it, avoiding the prior squeezed vertical copy.
+
+  Browser coverage proves lifecycle behavior, stale-response isolation, focus,
+  final-tenant protection, and bounded desktop/compact/mobile geometry. The
+  required pre-change and post-change `make ci` runs pass. The final run
+  followed the last code edit and passed static analysis, exact 100% Go
+  coverage, 33 Python tests, package installation, 63 browser scenarios, the
+  TAuth black-box test, 47 release tests, and live-provider preflight.
+
+- [x] [B073] (P1) {B070,F014,I031} Migrate persisted caller-cancellation usage outcomes.
+  Goal:
+  Let existing management databases containing valid caller-cancellation
+  usage rows start and migrate to the canonical outcome schema.
+
+  Problem:
+  Runtime usage recording already persists caller cancellation as status `499`
+  with outcome `request_timeout`, but the bounded historical mapper accepts
+  only status `504` for that outcome. A persisted schema-1 or pre-F014 `499`
+  row therefore fails migration preflight and prevents router startup.
+
+  Requirements:
+  - Map historical status `499` to `request_timeout` through the existing
+    canonical caller-cancellation status constant.
+  - Exercise persisted `499` rows through both the schema-1-to-2 and pre-F014
+    SQLite startup migration paths while retaining rejection of unknown
+    historical statuses.
+  - Document that caller cancellation `499` and proxy-budget expiry `504`
+    share the normalized `request_timeout` outcome.
+  - Pass the required post-edit `make ci`.
+
+  Resolved 2026-07-26:
+  The historical outcome mapper now uses the canonical caller-cancellation
+  status constant to map persisted `499` rows to `request_timeout`, matching
+  current runtime recording and presentation. Unknown historical statuses
+  remain rejected before mutation.
+
+  The schema-1-to-2 and pre-F014 disposable SQLite startup migrations both
+  contain caller-cancellation rows and prove their status and normalized
+  outcome survive the bounded upgrade. README and implementation runbooks now
+  state that `499` caller cancellation and `504` proxy-budget expiry share the
+  canonical outcome without conflating their HTTP meanings.
+
+  The required pre-change and post-change `make ci` runs pass. The final run
+  followed the last code edit and passed static analysis, exact 100% Go
+  coverage, 33 Python tests, package installation, 63 browser scenarios, the
+  TAuth black-box test, 47 release tests, and live-provider preflight.
+
+- [x] [B072] (P1) {F014,B071} Preserve legacy SQLite index names through the ownership migration.
+  Goal:
+  Let `make up` start against an existing pre-F014 SQLite volume without
+  deleting tenant, provider-key, or usage data.
+
+  Problem:
+  The deployed one-workspace schema contains
+  `idx_managed_tenant_records_secret_digest` and
+  `idx_managed_usage_created_at`. SQLite keeps those global index names when
+  GORM renames the legacy tables, so creating the current tables fails with
+  `index ... already exists`. The disposable migration fixture omitted the
+  historical index tags and therefore did not reproduce the real volume.
+
+  Requirements:
+  - Make the disposable legacy SQLite fixture reproduce the exact historical
+    tenant and usage indexes from the pre-F014 GORM models.
+  - Inside the existing all-or-nothing migration transaction, rename only the
+    two colliding legacy indexes through the GORM Migrator before renaming
+    tables and creating the current schema. Do not add raw SQL or delete data.
+  - Prove the current schema receives its canonical indexes and every injected
+    migration failure restores the legacy tables and original index names.
+  - Update the migration runbook, pass the required final `make ci`, then run
+    `make up` against the preserved named volume and verify every readiness
+    boundary.
+
+  Resolved 2026-07-26:
+  The ownership migration now renames the two colliding historical indexes
+  through the GORM Migrator inside its existing transaction before it renames
+  the legacy tables. No runtime raw SQL, alternate database, compatibility
+  path, or data deletion was added.
+
+  The disposable legacy fixture now recreates the exact pre-F014 GORM indexes.
+  Migration coverage proves the current tables receive their canonical index
+  names and every injected failure restores the original legacy table and
+  index shape.
+
+  The pre-change `make ci` baseline reached two existing local-orchestration
+  timing failures after the immediately preceding full gate had passed. The
+  required post-change `make ci` passed static analysis, exact 100% Go
+  coverage, 33 Python tests, package installation, 63 browser scenarios, the
+  TAuth black-box test, 47 release tests, and live-provider preflight.
+
+  `make up` then migrated the preserved named SQLite volume and passed static,
+  runtime-config, API, TAuth-session, and management-session readiness. A
+  normal interrupt removed the containers and network while preserving
+  `llm-proxy-local_llm_proxy_local_data`.
+
+- [x] [B071] (P1) {F014,I029,I031} Restore the SQLite-only GORM management database contract.
+  Goal:
+  Select the management database by its SQLite location and keep all runtime
+  persistence behind GORM model APIs, without a PostgreSQL or raw-SQL path.
+
+  Requirements:
+  - Replace `management.database_dialect` and `management.database_dsn` with
+    one required `management.database_path` field and the matching
+    `LLM_PROXY_MANAGEMENT_DATABASE_PATH` placeholder.
+  - Open the configured SQLite location with the pure-Go GORM dialector. Keep
+    injected GORM dialectors only as test boundaries; do not expose another
+    runtime database selector.
+  - Delete the PostgreSQL driver, raw sequence SQL, disposable PostgreSQL
+    harness, workflow service, and database-specific tests.
+  - Update current repository, operator, generated public, and issue
+    documentation to the forward-only SQLite contract without aliases or
+    compatibility reads.
+  - Preserve the real SQLite migration and management API coverage, then pass
+    the required post-edit `make ci`.
+
+  Resolved 2026-07-26:
+  Replaced the dialect/DSN pair with the required `management.database_path`
+  and `LLM_PROXY_MANAGEMENT_DATABASE_PATH` contract. Runtime persistence now
+  opens that SQLite location through GORM, while injected GORM dialectors
+  remain test-only boundaries.
+
+  Removed the PostgreSQL driver and transitive dependencies, raw identity
+  sequence SQL, PostgreSQL workflow service and environment, disposable
+  PostgreSQL harness, target, and database-specific tests. Updated the current
+  configuration examples, local and deployment environment files, repository
+  guidance, migration runbooks, issue records, and generated public resources
+  to the SQLite-only contract without an alias or fallback.
+
+  The required pre-change `make ci` established a failing exact-coverage
+  baseline at two `management_usage.go` branches. After the final code edit,
+  `make ci` passed static analysis, exact 100% Go coverage, 33 Python tests,
+  package installation, 63 browser scenarios, the TAuth black-box test, 47
+  release tests, and live-provider preflight.
+
+- [x] [B070] (P1) {F014,I029,I031} Correct review-discovered management presentation and OpenAPI gaps.
+  Goal:
+  Keep canonical failure presentation and OpenAPI conformance aligned with the
+  released multi-tenant management contract.
+
+  Requirements:
+  - Present the persisted caller-cancellation status `499` through the same
+    strict status-label and tenant-scoped failure-detail paths as every other
+    canonical failure.
+  - Document and validate the existing empty `api_key` request that retains a
+    stored credential while updating its provider model or system prompt.
+  - Enforce declared integer `maximum` values in the canonical OpenAPI
+    conformance validator.
+  - Cover each correction through the real-router, OpenAPI, and Playwright
+    integration boundaries, then pass the required post-edit `make ci`.
+
+  Resolved 2026-07-26:
+  Persisted caller cancellation now renders as canonical status `499 Client
+  closed request` in both usage breakdowns and tenant-scoped failure details.
+  The real management router proves cancellation persists only the normalized
+  `request_timeout` outcome, while Playwright proves the complete response
+  remains usable and secret-safe.
+
+  The canonical OpenAPI request describes empty `api_key` as the existing
+  retain-credential operation, its generated reference is synchronized, and a
+  real provider-settings request passes both schema and server validation.
+  Integer `maximum` values are enforced, with the documented failure-page
+  limit rejecting `101` in both the conformance gate and real handler.
+
+  The required pre-change and post-change `make ci` runs pass. The final run
+  followed the last code edit and passed exact 100% Go coverage, 33 Python
+  tests, 63 management-browser tests, TAuth black-box coverage, release
+  checks, and live-provider preflight.
+
+- [x] [B069] (P1) Make upstream request timeouts an explicit, bounded client-to-proxy contract.
   Goal:
   Let each client choose the exact bounded amount of time LLM Proxy may spend
   on one upstream request, while keeping caller cancellation, provider work,
@@ -254,21 +1096,49 @@ already satisfied; recurring maintenance remains scheduled work.
   `LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS`; focused operational coverage rejects
   any reintroduction of that environment handoff.
 
-  Blocked:
-  Source implementation is complete, but resolution still requires the
-  execution chain to land and release the coordinated app and gateway changes,
-  the user-owned production deployment, verification of the deployed
-  max/outer-guard relationship, and the production-comparable approximately
-  16 KB explicit-`high` canary plus its small control before Kamu F001 retries.
+  Resolved 2026-07-25:
+  - The coordinated app and gateway changes were released and deployed by the operator; released client `v0.2.46` exposes the request-level budget without a hidden total-response deadline.
+  - A live `gpt-5.6-terra` / `max` control returned `OK` with a 900-second request budget.
+  - A production-sized Bulgarian source-world request using the same model, effort, and budget remained connected beyond the former 300-second caller deadline and the 360-second proxy default, then returned a complete passing review after roughly 6.5 minutes.
+  - Kamu F001 can therefore resume with the declared 900-second budget; no retry, direct-provider path, prompt chunking, or tenant mutation is required.
 
 ## Improvements
 
-- [ ] [I033] (P2) {F014,I029} Keep the visible tenant usage dashboard automatically fresh.
+- [x] [I034] (P2) {B079} Minimize Settings system-prompt editors by default.
   Goal:
-  Let a user returning to an unattended selected-tenant usage dashboard see
-  current activity without having to discover and press Refresh. Provide a
-  bounded, observable near-real-time freshness contract rather than claiming a
-  push-based real-time feed.
+  Keep tenant-wide and provider-specific system prompts out of the dense
+  Settings layout until a user explicitly asks to edit one.
+
+  Requirements:
+  - Render each system-prompt editor as a semantic disclosure that is collapsed
+    whenever Settings opens and whenever its tenant or provider context changes.
+  - Make the visible System prompt label activate the disclosure through pointer
+    and keyboard input, and show an explicit visible indicator while the field
+    is hidden.
+  - Preserve the existing values, disabled states, serialized mutation
+    behavior, and autosave-on-field-exit contract.
+
+  Validation:
+  - Exercise both disclosures through the rendered browser, including initial
+    hidden state, pointer and keyboard expansion, context-reset behavior, and
+    autosave after editing an expanded field.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last tracked edit.
+
+  Resolved 2026-07-26:
+  - Tenant-wide and provider-specific prompts now use collapsed semantic
+    disclosures with visible `Hidden` and `Expanded` indicators.
+  - Settings-open, tenant-switch, and provider-switch resets preserve values,
+    disabled states, focus behavior, and autosave-on-field-exit semantics.
+  - All 67 rendered-browser scenarios and the real TAuth management flow pass.
+
+- [ ] [I033] (P2) {B076,I029} Keep the visible Usage Overview automatically fresh.
+  Goal:
+  Let a user returning to an unattended account-wide or tenant-filtered Usage
+  Overview see current activity without having to discover and press Refresh.
+  Provide a bounded, observable near-real-time freshness contract rather than
+  claiming a push-based real-time feed.
 
   Evidence:
   - The current dashboard loads usage at authenticated-workspace startup and on
@@ -278,58 +1148,63 @@ already satisfied; recurring maintenance remains scheduled work.
   - The current refresh path clears the rendered summary after a request error.
     That is safe for a newly selected interval, but an automatic refresh would
     turn a true prior snapshot into misleading zeroes after a transient failure.
-  - The existing usage GET uses the browser's default cache behavior, and the
-    current usage handler does not send the `Cache-Control: no-store` protection
-    already used by sensitive management responses.
-  - F014 replaces the singleton endpoint with selected-tenant usage routes, and
-    I029 makes their headers and response behavior one canonical HTTP contract.
+  - The usage client still uses the browser's default cache behavior. B076
+    established `Cache-Control: no-store` on both the account-wide and
+    tenant-filtered summary operations, but foreground revalidation also needs
+    an explicit browser request-cache contract.
+  - B076 separates the `Usage tenant` scope from the `Settings tenant`; I029
+    makes both usage scopes' headers and response behavior one canonical HTTP
+    contract.
 
   Requirements:
-  - Implement only after F014 and I029, against the canonical selected-tenant
-    usage operation. Do not retain the singleton route, add a second polling
-    endpoint, introduce WebSocket/SSE/service-worker push infrastructure, or
-    add a browser-stored freshness preference. This issue is foreground
-    revalidation of the existing aggregate snapshot, not a streaming product.
+  - Implement only after B076 and I029, against the canonical account-wide and
+    tenant-filtered usage operations. Do not add a second polling endpoint,
+    introduce WebSocket/SSE/service-worker push infrastructure, or add a
+    browser-stored freshness preference. This issue is foreground revalidation
+    of the existing aggregate snapshot, not a streaming product.
   - Define one centralized `USAGE_FRESHNESS_MILLISECONDS` budget of 60 seconds.
     It is a user-facing maximum ordinary age while the usage view is visible,
-    not an arbitrary retry or transport timeout. The authenticated selected-
-    tenant usage view revalidates no more often than that budget, and a return
-    from a hidden page revalidates immediately when the accepted snapshot is
-    older than the same budget or absent. Hidden tabs, the admin dashboard, and
+    not an arbitrary retry or transport timeout. The authenticated selected
+    Usage scope revalidates no more often than that budget, and a return from a
+    hidden page revalidates immediately when the accepted snapshot is older
+    than the same budget or absent. Hidden tabs, the admin dashboard, and
     signed-out/error workspaces perform no periodic usage request.
   - Maintain exactly one scheduled usage revalidation and at most one in-flight
-    usage request for the active tenant/interval. Schedule the next foreground
+    usage request for the selected Usage scope and interval. Schedule the next foreground
     revalidation only after the current request settles; do not use overlapping
     interval callbacks or a hot retry loop. Cancel/invalidate scheduled work on
-    logout, workspace reset, tenant or interval change, dashboard-view change,
-    and page teardown. Resume only after the final active usage context is
+    logout, authentication reset, Usage tenant or interval change,
+    dashboard-view change, and page teardown. Resume only after the final Usage context is
     established.
-  - Reuse F014's tenant, interval, workspace, and request-identity guards. An
-    automatic or visibility-triggered response can update only the still-active
-    tenant and interval; it must not overwrite a newer manual refresh, tenant
-    switch, interval selection, authentication reset, or local I032 breakdown
-    presentation choice. A manual Refresh may request immediate revalidation
-    but must join the same single-request lifecycle and reschedule freshness.
+  - Reuse B076's Usage scope, interval, and request-identity guards. An
+    automatic or visibility-triggered response can update only the still-selected
+    Usage tenant scope and interval; it must not overwrite a newer manual
+    refresh, Usage tenant selection, interval selection, authentication reset,
+    Settings tenant change, or local I032 breakdown presentation choice. A
+    manual Refresh may request immediate revalidation but must join the same
+    single-request lifecycle and reschedule freshness.
   - Track and visibly expose the receipt time of the last accepted usage
     snapshot using centralized copy and semantic time markup. Do not announce a
     success toast every minute. Distinguish a current snapshot, an in-progress
     refresh, and a stale snapshot accessibly, without presenting browser-clock
     metadata as server event time.
-  - Preserve a successfully rendered snapshot when a same-tenant/same-interval
+  - Preserve a successfully rendered snapshot when a same-scope/same-interval
     manual, automatic, or return-to-visible refresh fails. Mark it stale and
     provide a clear retry path; do not replace its counts, charts, breakdowns,
     or I032 view with empty/zero data. Keep the current clear-before-load rule
-    for a changed tenant or interval so one tenant's data can never appear as
-    another tenant's. An initial load with no prior accepted snapshot retains
+    for a changed Usage tenant or interval so one scope's data can never appear
+    as another scope's. An initial load with no prior accepted snapshot retains
     the explicit empty/error state rather than fabricating a last-updated time.
-  - Make every canonical tenant usage response and the browser usage fetch
-    uncacheable (`Cache-Control: no-store` and `cache: "no-store"` respectively)
-    so a revalidation cannot be satisfied by a stale private cache. Record the
-    response header in `docs/openapi.yaml` and its HTTP conformance coverage;
-    do not change the JSON payload merely to transport client receipt time.
+  - Preserve `Cache-Control: no-store` on every canonical account-wide and
+    tenant-filtered usage response and make the browser usage fetch explicitly
+    uncacheable with `cache: "no-store"` so revalidation cannot be satisfied by
+    a stale private cache. Do not change the JSON payload merely to transport
+    client receipt time.
   - Keep the refresh scope to aggregate usage metadata already authorized for
-    the selected tenant. Do not poll or reveal generated secrets, provider keys,
-    prompts, responses, transcripts, audio names, other tenants, or aggregate
+    the selected Usage scope. The `All tenants` scope may include only the
+    authenticated owner's tenants; an explicit tenant may include only that
+    tenant. Do not poll or reveal generated secrets, provider keys, prompts,
+    responses, transcripts, audio names, another owner's tenants, or aggregate
     administrator facts. Continue to make `connected provider` state I027-owned
     rather than inferring it from refreshed historical activity.
   - Update README, CHANGELOG.md, `docs/implementation/provider-routing-plan.md`,
@@ -343,7 +1218,7 @@ already satisfied; recurring maintenance remains scheduled work.
   Deliverables:
   - One typed usage-refresh reason/lifecycle contract, central freshness budget,
     visibility-aware single scheduler, cache-safe usage client request, and
-    race-safe selected-tenant state integration.
+    race-safe Usage-scope state integration.
   - A compact accessible last-updated/loading/stale status and retry behavior
     that preserves a valid current-context snapshot across refresh failures.
   - Canonical no-store response-header documentation/conformance plus updated
@@ -351,17 +1226,17 @@ already satisfied; recurring maintenance remains scheduled work.
     persistence schema, or client-library API.
 
   Validation:
-  - Add real management-router coverage proving the selected-tenant usage
-    response carries `Cache-Control: no-store` and the OpenAPI contract accepts
-    that header without changing its aggregate JSON shape.
+  - Preserve real management-router and OpenAPI coverage proving both canonical
+    Usage scopes carry `Cache-Control: no-store` without changing their
+    aggregate JSON shape.
   - Add Playwright scenarios with controlled time and page visibility for the
     initial load, one-minute foreground revalidation, no hidden/admin polling,
     stale-on-return immediate revalidation, one in-flight request, manual
-    Refresh coordination, timer cleanup on logout/tenant/interval/view changes,
-    and stale-response rejection across tenant and interval races.
+    Refresh coordination, timer cleanup on logout/Usage-tenant/interval/view
+    changes, and stale-response rejection across scope and interval races.
   - Prove a failed refresh after a successful snapshot preserves its exact data
     and marks it stale, while a successful later refresh updates counts and the
-    receipt timestamp; prove a new tenant/interval never retains prior data.
+    receipt timestamp; prove a new Usage scope/interval never retains prior data.
     Cover keyboard/screen-reader status, narrow layouts, no browser storage,
     no success-notice spam, and absence of sensitive values from DOM/network
     payloads beyond the existing usage contract.
@@ -369,12 +1244,12 @@ already satisfied; recurring maintenance remains scheduled work.
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
 
-- [ ] [I032] (P2) {F014,I027} Switch provider/model activity breakdowns between bar graphs and segmented disks.
+- [ ] [I032] (P2) {B076,I027} Switch provider/model activity breakdowns between bar graphs and segmented disks.
   Goal:
   Let a signed-in user choose one clear presentation for both the selected
-  tenant's Provider usage and Model usage activity breakdowns, while preserving
-  the selected interval, exact request counts, and the distinction between
-  historical activity and currently connected providers.
+  Usage scope's Provider usage and Model usage activity breakdowns, while
+  preserving the Usage tenant, interval, exact request counts, and the
+  distinction between historical activity and currently connected providers.
 
   Evidence:
   - The current usage summary already returns deterministically ordered
@@ -384,14 +1259,14 @@ already satisfied; recurring maintenance remains scheduled work.
   - The summary has time buckets only for total requests and tokens. It has no
     provider- or model-specific time series, so `Graph` must mean the ranked
     horizontal-bar display rather than a new trend chart.
-  - F014 replaces the singleton management/usage route with selected-tenant
-    APIs. I027 then establishes the final dashboard layout and explicitly
+  - B076 establishes canonical account-wide and explicitly tenant-filtered
+    Usage scopes. I027 then establishes the final dashboard layout and explicitly
     reserves provider/model breakdowns for historical selected-period activity,
     rather than current `has_key` connection state.
 
   Requirements:
-  - Implement only after F014 and I027, against the canonical selected-tenant
-    usage response. Do not add a presentation-specific endpoint, response
+  - Implement only after B076 and I027, against the canonical response for the
+    selected Usage scope. Do not add a presentation-specific endpoint, response
     field, server persistence, URL parameter, tenant setting, browser storage,
     or client-library change.
     If final implementation exposes a genuinely missing data field, file and
@@ -402,10 +1277,10 @@ already satisfied; recurring maintenance remains scheduled work.
     Switching a mode changes both panels together so their distributions remain
     directly comparable.
   - Keep the choice local to the mounted authenticated dashboard. It survives
-    interval selection, Refresh, and an F014 tenant switch, but resets on
-    authentication/workspace reset and a full page reload. A mode change is a
+    interval selection, Refresh, and Usage tenant selection, but resets on
+    authentication reset and a full page reload. A mode change is a
     pure presentation action: it must not fetch, mutate the selected interval
-    or usage snapshot, or weaken F014's request-identity/stale-response rules.
+    or Usage tenant, or weaken B076's request-identity/stale-response rules.
   - Build every disk from the same ordered `providers[].data.requests` or
     `models[].data.requests` data that Graph renders. The percentage denominator
     is the complete source breakdown total, never token counts or the largest
@@ -429,7 +1304,7 @@ already satisfied; recurring maintenance remains scheduled work.
     single-choice control), and keep labels/counts/shares available to assistive
     technology without a tooltip. Validate desktop and narrow layouts without
     clipping, overlap, or horizontal overflow.
-  - Keep the scope to the selected user's activity dashboard. I027's connected
+  - Keep the scope to the authenticated user's Usage Overview. I027's connected
     provider widgets remain a separate `has_key` projection; an inactive
     connected provider and historical activity for a disconnected provider must
     retain their existing meanings. Do not add this control to the aggregate
@@ -447,7 +1322,7 @@ already satisfied; recurring maintenance remains scheduled work.
   Deliverables:
   - One typed local presentation-mode contract, pure provider/model distribution
     transform, shared selector, semantic bar/disk renderings, responsive styles,
-    and centralized copy in the tenant dashboard.
+    and centralized copy in Usage Overview.
   - A legible, deterministic SVG disk/legend treatment that preserves all
     request counts and makes any `Other` aggregation explicit.
   - Updated README, CHANGELOG.md, implementation documentation, generator-owned
@@ -459,9 +1334,9 @@ already satisfied; recurring maintenance remains scheduled work.
     default Graph mode, keyboard selection of Segmented disk, simultaneous
     changes to provider and model panels, visible names/counts/shares, and no
     additional usage request when the presentation changes.
-  - Exercise interval changes, Refresh, tenant switching, loading/failure, and
+  - Exercise interval changes, Refresh, Usage tenant selection, loading/failure, and
     out-of-order response scenarios; prove the local mode remains selected only
-    where specified and never presents a stale tenant or interval snapshot.
+    where specified and never presents a stale Usage scope or interval snapshot.
   - Cover zero, one, and many-category distributions, including deterministic
     `Other` aggregation, exact request-count conservation, share totals of 100
     percent, Graph access to every source category, non-color-only semantics,
@@ -470,7 +1345,7 @@ already satisfied; recurring maintenance remains scheduled work.
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
 
-- [ ] [I031] (P1) {I029,F014} Add tenant-scoped failure details to the usage dashboard.
+- [x] [I031] (P1) {I029,F014} Add tenant-scoped failure details to the usage dashboard.
   Goal:
   Let a signed-in tenant owner open a selected-period **failed requests** link
   from the success-rate metric and inspect safe, individual failure metadata.
@@ -554,7 +1429,7 @@ already satisfied; recurring maintenance remains scheduled work.
     rate-limit, unavailable, timeout, and upstream failures; prove each stores
     the exact safe code and a success stores `success`, without persisting a raw
     error message.
-  - Run the real SQLite and PostgreSQL migration paths with historical events;
+  - Run the real SQLite migration path with historical events;
     prove exact code backfill, index creation, totals preservation, contextual
     rejection/rollback for an unsupported status, and no obsolete nullable or
     compatibility path.
@@ -567,7 +1442,26 @@ already satisfied; recurring maintenance remains scheduled work.
     `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
     last code edit.
 
-- [ ] [I029] (P1) {B069,F014} Publish one canonical OpenAPI contract and enforce server/client conformance.
+  Resolved 2026-07-25:
+  - Added the owner-only tenant failure operation with strict interval, limit,
+    and cursor inputs; stable snapshot pagination; exact safe row fields; and
+    indistinguishable missing/foreign-tenant behavior.
+  - Added canonical outcome recording at the managed request boundary and the
+    transactional version-2 SQLite migration with exact historical
+    normalization, unsupported-status rollback, and the current failure-query
+    index.
+  - Added the selected-period failed-request action and accessible details
+    dialog with status context, safe labels, pagination, responsive behavior,
+    retry and stale-response protection, while keeping administrators
+    aggregate-only. Updated the canonical OpenAPI contract and generated,
+    repository, routing, and public usage documentation.
+  - The required pre-change and post-change `make ci` runs pass. The final run
+    followed the last code edit and passed static analysis, exact 100% Go
+    coverage, real SQLite migration checks, 33 Python tests, package
+    installation, 63 browser scenarios, the TAuth black-box test, release
+    checks, and the live-provider harness preflight.
+
+- [x] [I029] (P1) {B069,F014} Publish one canonical OpenAPI contract and enforce server/client conformance.
   Goal:
   Make one committed OpenAPI 3.1 document the sole canonical HTTP wire
   contract for every llm-proxy-owned endpoint, publish that exact artifact on
@@ -664,26 +1558,49 @@ already satisfied; recurring maintenance remains scheduled work.
     for `/openapi.yaml` and `/docs/` and verify the published schema matches the
     released source artifact.
 
-- [ ] [I027] (P1) {F014} Redesign the user dashboard around connected-provider widgets.
+  Resolved 2026-07-25:
+  - Added `docs/openapi.yaml` as the sole OpenAPI 3.1 source for all 18 owned
+    operations, with exact production server, authentication, request,
+    response, status, header, content-type, and `/v2` reasoning contracts.
+  - Added bidirectional real-router inventory and representative HTTP exchange
+    conformance, plus request/response coverage from the Go package, Python
+    package, and Go CLI against the same artifact.
+  - Derived the human API reference and resource-page wire inventory from the
+    contract, and made the Pages build publish the committed schema
+    byte-for-byte with provenance and tamper/drift rejection.
+  - The required pre-change and post-change `make ci` runs pass. The final run
+    followed the last code edit and passed static analysis, exact 100% Go
+    coverage, SQLite checks, 33 Python tests, package installation,
+    60 browser scenarios, the TAuth black-box test, release checks, and the
+    live-provider harness preflight. Live publication verification remains
+    user-owned after production deployment.
+
+- [ ] [I027] (P1) {B076} Redesign the user dashboard around connected-provider widgets.
   Goal:
   Make the authenticated dashboard answer, at a glance, which upstream
-  providers the current tenant has connected. Preserve usage reporting as a
-  separate measure of activity so an unused connected provider remains visible
-  and historical traffic never implies that a provider is still connected.
+  providers the selected Usage scope has connected. Preserve usage reporting as
+  a separate measure of activity so an unused connected provider remains
+  visible and historical traffic never implies that a provider is still
+  connected.
 
   Dependencies:
-  - F014 replaces the singular profile and usage contracts with selected-tenant
-    APIs. Build the widgets against that canonical tenant-scoped boundary rather
-    than implementing and immediately replacing a singleton-profile join.
+  - B076 makes Usage account-wide by default and gives it an independent tenant
+    filter. Build the widgets against that final scope contract: one explicitly
+    selected Usage tenant shows that tenant's connections, while `All tenants`
+    shows tenant-labelled connections across all owned tenants. The Settings
+    tenant must not silently control the dashboard projection.
 
   Requirements:
-  - Define a connected provider solely as an entry in the current authenticated
-    management profile whose canonical `has_key` value is `true`. Do not infer
-    connection from catalog membership, aliases, routing defaults, local
-    environment credentials, or a provider's presence in historical usage.
+  - Define a connected provider solely from canonical authenticated profile
+    data whose `has_key` value is `true`. Do not infer connection from catalog
+    membership, aliases, routing defaults, local environment credentials, or a
+    provider's presence in historical usage.
   - Add a prominent `Connected providers` section to the user usage dashboard
-    and render exactly one widget for each connected provider, in the
-    deterministic order returned by the management profile. Do not hard-code
+    and render exactly one widget for each tenant/provider connection in the
+    selected Usage scope. An explicit tenant uses that profile's deterministic
+    provider order. `All tenants` groups connections by account tenant order and
+    then provider order, labels every group with tenant name and opaque ID, and
+    does not merge the same provider across two tenants. Do not hard-code
     provider names or duplicate provider-registration state in the browser.
   - Give each widget a concise, consistent summary: the profile label,
     `Connected` status, saved text model, declared text/dictation capabilities,
@@ -692,34 +1609,39 @@ already satisfied; recurring maintenance remains scheduled work.
     render with zero activity; a usage-load failure must render as unavailable,
     not as a false zero or a disconnected provider.
   - Add a provider-specific `Manage` action that opens Settings with that exact
-    provider selected. It must not reveal a key, invoke the key-reveal endpoint,
-    or alter provider/default settings merely by opening the editor.
+    tenant and provider selected without changing the Usage tenant filter. It
+    must not reveal a key, invoke the key-reveal endpoint, or alter
+    provider/default settings merely by opening the editor.
   - Replace the ambiguous usage-derived `Providers` summary metric with a
-    `Connected providers` count derived from the same `has_key` projection.
+    `Connected providers` count derived from the same scope-correct `has_key`
+    projection. Under `All tenants`, count tenant/provider connections rather
+    than deduplicated provider IDs.
     Keep provider/model usage breakdowns explicitly labeled as activity for the
     selected reporting period, including historical rows for providers that are
     no longer connected.
   - Render a purposeful empty state when no providers are connected, with one
     action that opens Settings. The state must coexist with mandatory onboarding
     and must not create a path around its persisted-key requirements.
-  - Keep the widgets synchronized with the profile: a successful provider-key
-    autosave adds its widget, a successful removal removes it, failed mutations
-    leave the current projection unchanged, and dashboard refresh reloads both
-    current profile state and usage. Never let an out-of-order response restore
-    stale connection state.
+  - Keep the widgets synchronized with canonical profile state: a successful
+    provider-key autosave adds its widget, a successful removal removes it,
+    failed mutations leave the current projection unchanged, and dashboard
+    refresh reloads both connection state and usage for the selected Usage
+    scope. Never let an out-of-order response restore stale connection state.
   - Treat widgets as non-secret metadata. Never render provider API keys,
     masked-key suffixes, client keys, system prompts, or credential-bearing
     values in widget text, attributes, accessible names, or browser storage.
   - Use semantic headings and per-provider articles, unique accessible action
     names such as `Manage OpenAI`, full keyboard operation, and a responsive
     grid that remains aligned without horizontal overflow on narrow screens.
-    Keep the provider widgets confined to the current user's dashboard; the
+    Keep the provider widgets confined to the current user's owned tenants; the
     admin dashboard must not project another tenant's provider credentials or
     connection state.
-  - Consume the existing management-profile and usage contracts unless a
-    demonstrated missing field requires one canonical contract change. Do not
-    add a parallel provider-registration endpoint, cached shadow state,
-    compatibility aliases, or fallback matching.
+  - Add one canonical owner-wide safe connection projection because the account
+    summary does not contain provider `has_key` facts and the browser must not
+    fan out profile requests under `All tenants`. Preserve the existing tenant
+    profile as the canonical explicitly selected-tenant projection. Do not add
+    cached shadow state, compatibility aliases, fallback matching, or expose
+    masked/raw key material in the owner-wide response.
   - Update dashboard and self-service documentation so `connected provider` and
     `active provider` have explicit, non-overlapping meanings.
 
@@ -727,23 +1649,26 @@ already satisfied; recurring maintenance remains scheduled work.
   - Add the connected-provider widget grid, connected count, provider-specific
     Settings navigation, empty/error states, and responsive styling to the user
     dashboard.
-  - Add one derived presentation model that joins profile providers to usage by
-    exact canonical ID while keeping registration authoritative to `has_key`.
+  - Add the owner-wide safe connection projection plus one derived presentation
+    model that joins tenant/provider connections to usage by exact canonical IDs
+    while keeping registration authoritative to `has_key`.
   - Update first-party frontend types, copy, documentation, and rendered-browser
     coverage for the final dashboard contract.
 
   Validation:
-  - Add Playwright scenarios for zero, one, and multiple connected providers;
-    deterministic widget order; a connected provider with zero activity; an
-    unconnected provider with historical activity; exact model/capability and
-    usage rendering; and the connected-provider count.
+  - Add Playwright scenarios for `All tenants` and one explicit Usage tenant;
+    zero, one, and multiple connected providers; duplicate provider IDs in two
+    tenants; deterministic grouping/order; a connected provider with zero
+    activity; an unconnected provider with historical activity; exact
+    model/capability and usage rendering; and the connected-provider count.
   - Prove successful key autosave/removal and dashboard refresh update the
     widgets, while rejected or out-of-order requests do not mutate the visible
     projection and usage failure leaves connection state intact with activity
     marked unavailable.
-  - Prove each `Manage` action selects the intended provider without a reveal or
-    mutation request, no secret-bearing value reaches the rendered dashboard or
-    browser storage, and admin/user dashboard switching preserves isolation.
+  - Prove each `Manage` action selects the intended Settings tenant and provider
+    without changing the Usage tenant or making a reveal/mutation request, no
+    secret-bearing value reaches the rendered dashboard or browser storage, and
+    admin/user dashboard switching preserves isolation.
   - Cover keyboard navigation, accessible names, and desktop/narrow viewport
     layout without overlap or horizontal overflow.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
@@ -798,7 +1723,8 @@ already satisfied; recurring maintenance remains scheduled work.
   deployment dependency, and M013 waits for B069 so future product-context
   documents cannot omit the resulting timeout contract. Selected the
   sequential P1 tranche B069 -> F014 -> I029; I031 is the resulting convergence
-  item, while I027 and P001 remain independent F014 successors. Planning
+  item, while I027 and P001 now follow B076's independent Settings and Usage
+  selectors. Planning
   entries remain open but deferred under the repository workflow.
 - [ ] [M003R] (P2) Architecture and policy review.
   Goal:
@@ -962,7 +1888,7 @@ already satisfied; recurring maintenance remains scheduled work.
 
 ## Features
 
-- [ ] [F014] (P1) Support multiple isolated tenants per managed user.
+- [x] [F014] (P1) Support multiple isolated tenants per managed user.
   Goal:
   Let one authenticated TAuth user create, select, rename, and delete multiple independently configured LLM Proxy tenants. Each tenant owns its own generated client secret, provider credentials and settings, routing defaults, request examples, and usage history. This feature is one-user-to-many-tenants; shared tenants, invitations, memberships, and team roles are outside scope.
   Current contract:
@@ -979,7 +1905,7 @@ already satisfied; recurring maintenance remains scheduled work.
   - Preserve strict tenant isolation at the database query boundary. Every tenant-scoped management query and mutation must constrain both authenticated owner user id and tenant id. Return the same `404 Not Found` for a missing tenant and another user's tenant so identifiers cannot be enumerated.
   - Keep administrators read-only with respect to tenant ownership. Replace the singular admin tenant shape with an ordered `tenants` collection and tenant count per user; show each tenant's facts and existing 30-day usage summary without exposing provider keys, masked key material, secret digests, generated secrets, prompts, responses, audio names, or transcripts.
   Migration:
-  - Add one bounded, versioned, all-or-nothing GORM migration for both supported SQLite and PostgreSQL management databases. Do not add raw-SQL persistence, dual reads/writes, a runtime fallback to the old schema, or a compatibility response shape.
+  - Add one bounded, versioned, all-or-nothing GORM migration for the configured SQLite management database. Do not add raw-SQL persistence, dual reads/writes, a runtime fallback to the old schema, or a compatibility response shape.
   - Preflight the complete current dataset before mutation: require unique nonblank user and tenant ids, valid B036 provider/model pairs, matching tenant ids on usage rows, no orphan provider or usage rows, and successful decryption of every provider key. Reject any remaining `static-config:<tenant-id>` owner with a contextual instruction to complete the F011 ownership claim first.
   - Create one managed-user row for every current authenticated owner and one owned tenant row for that user's existing record. Name each migrated tenant `Default`; preserve tenant id, secret digest, defaults, provider settings, creation/update timestamps, and all usage fields and timestamps exactly.
   - Move provider records from the user foreign key to the preserved tenant id and decrypt/re-encrypt each key from the old user/provider associated data to the new tenant/provider associated data inside the migration boundary. Move usage ownership to its existing tenant id and remove user id as an independent usage-partition key.
@@ -1009,28 +1935,48 @@ already satisfied; recurring maintenance remains scheduled work.
   - Add black-box management HTTP scenarios where one authenticated user creates two tenants with different keys for the same provider, defaults, secrets, and usage; prove each tenant round-trips independently and another authenticated user receives indistinguishable `404` responses for both reads and mutations.
   - Prove through public proxy endpoints that each tenant's generated secret selects only that tenant's provider key/defaults, records usage only for that tenant, and that revoking or deleting one tenant never changes another tenant's authentication or history.
   - Exercise I025 reveal and F013 intervals through the tenant-scoped endpoints, including cross-tenant denial, response non-caching, concurrent requests, and the absence of raw secrets/keys from account, tenant-summary, usage, and admin payloads.
-  - Add disposable pre-migration database fixtures for SQLite and PostgreSQL containing multiple current users, encrypted provider keys, generated-secret digests, defaults, and usage. Run the real migration entrypoint and prove exact preservation, ciphertext re-binding, old-schema removal, idempotent version rejection, rollback on corrupted/orphaned rows, and unchanged client-secret routing.
+  - Add disposable pre-migration SQLite database fixtures containing multiple current users, encrypted provider keys, generated-secret digests, defaults, and usage. Run the real migration entrypoint and prove exact preservation, ciphertext re-binding, old-schema removal, idempotent version rejection, rollback on corrupted/orphaned rows, and unchanged client-secret routing.
   - Add Playwright coverage for first-user bootstrap, create, switch, URL reload/history, independent tabs, rename, guarded final-tenant deletion, confirmed deletion, unsaved-edit handling, one-time secret/key cleanup, response-order races, explicit invalid-URL errors, admin tenant lists, keyboard use, and desktop/mobile geometry.
   - Extend the real local TAuth black-box path to create and use two tenants for one verified session and prove a second verified user cannot access either tenant.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
 
+  Resolved 2026-07-25:
+  - Replaced the one-user/one-tenant persistence and unscoped management
+    surface with account-owned opaque tenants, tenant-bound credentials,
+    defaults, secrets, usage, administrator projections, and canonical
+    `/api/management/tenants/:tenant_id/...` operations.
+  - Added the transactional version-1 SQLite ownership migration,
+    provider-key ciphertext rebinding, strict preflight/verification/rollback,
+    disposable database fixtures, and operator-owned migration runbook.
+  - Added URL-owned workspace selection and full create, switch, rename, and
+    delete interaction with isolation, confirmation, cancellation, stale
+    response protection, credential cleanup, responsive behavior, and updated
+    generated documentation.
+  - The required pre-change and post-change `make ci` runs pass. The final run
+    followed the last code edit and passed static analysis, exact 100% Go
+    coverage, the real SQLite migrations, 33 Python tests,
+    package installation, 59 browser scenarios, the real two-user TAuth
+    black-box test, release checks, and live-provider harness preflight.
+
 ## Planning
 *do not implement yet*
 
-- [ ] [P001] (P1) {F014} Design a tenant-scoped provider, model, and key-acquisition onboarding flow.
+- [ ] [P001] (P1) {B076} Design a tenant-scoped provider, model, and key-acquisition onboarding flow.
   Goal:
   Let a signed-in managed user complete one clear text-routing setup: select a
   supported provider, select one of that provider's supported text models, and
   either paste an existing provider API key or open that provider's official
   key-acquisition page in a new window before returning to paste it. A completed
-  setup must make the chosen provider/model the active tenant's usable text
+  setup must make the chosen provider/model the Settings tenant's usable text
   route without asking the user to reconcile separate provider, default, and
   client-secret forms.
 
   Requirements:
-  - Build the flow on the canonical F014 active-tenant context. It must read and
-    write only the selected tenant; another tenant or user must never inherit a
-    provider key, model choice, in-progress form value, or completion state.
+  - Build the flow inside Settings on B076's editor-only `Settings tenant`
+    context. It must read and write only that selected tenant and must not change
+    the independent `Usage tenant` filter; another tenant or user must never
+    inherit a provider key, model choice, in-progress form value, or completion
+    state.
   - Serve provider labels, text-model choices, capabilities, and the verified
     official credential-acquisition URL from one validated provider catalog.
     Do not hard-code provider/model lists or provider registration URLs in the

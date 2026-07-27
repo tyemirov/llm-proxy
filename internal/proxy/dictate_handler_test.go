@@ -23,6 +23,11 @@ const (
 
 func newDictationRouter(t *testing.T, transcriptionsURL string, requestTimeoutSeconds int) *gin.Engine {
 	t.Helper()
+	return newDictationRouterWithAudioLimit(t, transcriptionsURL, requestTimeoutSeconds, 1024*1024)
+}
+
+func newDictationRouterWithAudioLimit(t *testing.T, transcriptionsURL string, requestTimeoutSeconds int, maxInputAudioBytes int64) *gin.Engine {
+	t.Helper()
 	endpoints := proxy.NewEndpoints()
 	endpoints.SetTranscriptionsURL(transcriptionsURL)
 
@@ -36,7 +41,7 @@ func newDictationRouter(t *testing.T, transcriptionsURL string, requestTimeoutSe
 		WorkerCount:           1,
 		QueueSize:             1,
 		RequestTimeoutSeconds: requestTimeoutSeconds,
-		MaxInputAudioBytes:    1024 * 1024,
+		MaxInputAudioBytes:    maxInputAudioBytes,
 		Endpoints:             endpoints,
 	}, logger.Sugar())
 	if buildError != nil {
@@ -119,23 +124,8 @@ func TestDictateHandlerSuccessWithAudioField(t *testing.T) {
 	}
 }
 
-func TestDictateHandlerAcceptsFileAlias(t *testing.T) {
-	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		if parseError := request.ParseMultipartForm(1024 * 1024); parseError != nil {
-			t.Fatalf("ParseMultipartForm error: %v", parseError)
-		}
-		if model := request.FormValue("model"); model != proxy.DefaultDictationModel {
-			t.Fatalf("model=%q want=%q", model, proxy.DefaultDictationModel)
-		}
-		if _, _, fileError := request.FormFile("file"); fileError != nil {
-			t.Fatalf("FormFile(file) error: %v", fileError)
-		}
-		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"text":"ok from alias"}`))
-	}))
-	defer upstreamServer.Close()
-
-	router := newDictationRouter(t, upstreamServer.URL, TestTimeout)
+func TestDictateHandlerRejectsObsoleteFileField(t *testing.T) {
+	router := newDictationRouter(t, "http://example.invalid", TestTimeout)
 	body, contentType := buildMultipartAudioRequest(t, "file")
 	request := httptest.NewRequest(http.MethodPost, "/dictate?key="+TestSecret, body)
 	request.Header.Set("Content-Type", contentType)
@@ -143,11 +133,56 @@ func TestDictateHandlerAcceptsFileAlias(t *testing.T) {
 
 	router.ServeHTTP(responseRecorder, request)
 
-	if responseRecorder.Code != http.StatusOK {
-		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
+	if responseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusBadRequest, responseRecorder.Body.String())
 	}
-	if responseText := decodeTextResponse(t, responseRecorder.Body.Bytes()); responseText != "ok from alias" {
-		t.Fatalf("text=%q want=%q", responseText, "ok from alias")
+}
+
+func TestDictateHandlerRejectsOversizedAudio(t *testing.T) {
+	const maxInputAudioBytes = int64(32)
+	upstreamCalls := 0
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		upstreamCalls++
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"text":"should-not-be-used"}`))
+	}))
+	defer upstreamServer.Close()
+
+	router := newDictationRouterWithAudioLimit(t, upstreamServer.URL, TestTimeout, maxInputAudioBytes)
+	testCases := []struct {
+		name         string
+		payloadBytes int
+	}{
+		{name: "audio part exceeds configured limit", payloadBytes: int(maxInputAudioBytes) + 1},
+		{name: "multipart body exceeds reader limit", payloadBytes: int(maxInputAudioBytes) + 2*1024*1024},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			body := &bytes.Buffer{}
+			writer := multipart.NewWriter(body)
+			filePart, createError := writer.CreateFormFile("audio", "recording.webm")
+			if createError != nil {
+				subTest.Fatalf("CreateFormFile error: %v", createError)
+			}
+			if _, writeError := filePart.Write(bytes.Repeat([]byte("a"), testCase.payloadBytes)); writeError != nil {
+				subTest.Fatalf("write audio payload: %v", writeError)
+			}
+			if closeError := writer.Close(); closeError != nil {
+				subTest.Fatalf("Close writer error: %v", closeError)
+			}
+
+			request := httptest.NewRequest(http.MethodPost, "/dictate?key="+TestSecret, body)
+			request.Header.Set("Content-Type", writer.FormDataContentType())
+			responseRecorder := httptest.NewRecorder()
+			router.ServeHTTP(responseRecorder, request)
+
+			if responseRecorder.Code != http.StatusRequestEntityTooLarge || responseRecorder.Body.String() != "audio payload too large" {
+				subTest.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
+			}
+		})
+	}
+	if upstreamCalls != 0 {
+		t.Fatalf("upstream calls=%d want=0", upstreamCalls)
 	}
 }
 

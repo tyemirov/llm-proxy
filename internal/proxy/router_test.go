@@ -363,10 +363,8 @@ func TestChatHandlerAcceptsMessagesJSONBodyForOpenAIResponses(testingInstance *t
 	}
 }
 
-func TestChatHandlerContinuesIncompleteGPT55JSONBody(testingInstance *testing.T) {
-	const finalResponse = `{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"continued ok"}]}]}`
+func TestChatHandlerRejectsIncompleteGPT55JSONBody(testingInstance *testing.T) {
 	const incompleteResponseID = "resp_incomplete_gpt55"
-	const continuedResponseID = "resp_continued_gpt55"
 
 	var capturedPayloads []map[string]any
 	mockServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
@@ -381,15 +379,7 @@ func TestChatHandlerContinuesIncompleteGPT55JSONBody(testingInstance *testing.T)
 				testingInstance.Fatalf("unmarshal request body: %v", unmarshalError)
 			}
 			capturedPayloads = append(capturedPayloads, capturedPayload)
-			if capturedPayload["previous_response_id"] == nil {
-				_, _ = responseWriter.Write([]byte(`{"id":"` + incompleteResponseID + `","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"reasoning","summary":[]},{"type":"web_search_call","status":"incomplete"}]}`))
-				return
-			}
-			_, _ = responseWriter.Write([]byte(`{"id":"` + continuedResponseID + `","status":"queued"}`))
-			return
-		}
-		if httpRequest.Method == http.MethodGet && strings.HasSuffix(httpRequest.URL.Path, continuedResponseID) {
-			_, _ = responseWriter.Write([]byte(finalResponse))
+			_, _ = responseWriter.Write([]byte(`{"id":"` + incompleteResponseID + `","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"partial answer"}]}]}`))
 			return
 		}
 		http.NotFound(responseWriter, httpRequest)
@@ -420,30 +410,17 @@ func TestChatHandlerContinuesIncompleteGPT55JSONBody(testingInstance *testing.T)
 
 	router.ServeHTTP(responseRecorder, request)
 
-	if responseRecorder.Code != http.StatusOK {
+	if responseRecorder.Code != http.StatusBadGateway || responseRecorder.Body.String() != proxy.ErrUpstreamIncomplete.Error() {
 		testingInstance.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
 	}
-	if responseRecorder.Body.String() != "continued ok" {
-		testingInstance.Fatalf("body=%q want continued ok", responseRecorder.Body.String())
-	}
-	if len(capturedPayloads) != 2 {
-		testingInstance.Fatalf("payloads=%d want=2", len(capturedPayloads))
+	if len(capturedPayloads) != 1 {
+		testingInstance.Fatalf("payloads=%d want=1", len(capturedPayloads))
 	}
 	if capturedPayloads[0]["model"] != proxy.ModelNameGPT55 {
 		testingInstance.Fatalf("initial model=%v want=%s", capturedPayloads[0]["model"], proxy.ModelNameGPT55)
 	}
-	if capturedPayloads[1]["model"] != proxy.ModelNameGPT55 {
-		testingInstance.Fatalf("continued model=%v want=%s", capturedPayloads[1]["model"], proxy.ModelNameGPT55)
-	}
-	if capturedPayloads[1]["previous_response_id"] != incompleteResponseID {
-		testingInstance.Fatalf("previous_response_id=%v want=%s", capturedPayloads[1]["previous_response_id"], incompleteResponseID)
-	}
-	if _, found := capturedPayloads[1]["tools"]; !found {
-		testingInstance.Fatalf("continued tools missing: %v", capturedPayloads[1])
-	}
-	reasoning, hasReasoning := capturedPayloads[1]["reasoning"].(map[string]any)
-	if !hasReasoning || reasoning["effort"] != "high" {
-		testingInstance.Fatalf("continued reasoning=%v want high", capturedPayloads[1]["reasoning"])
+	if strings.Contains(responseRecorder.Body.String(), "partial answer") {
+		testingInstance.Fatalf("partial response leaked: %q", responseRecorder.Body.String())
 	}
 }
 

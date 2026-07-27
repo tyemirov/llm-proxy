@@ -43,7 +43,7 @@ llm-proxy-key-management textarea {
 
 llm-proxy-key-management,
 workspace-surface,
-client-access-row,
+tenant-access-row,
 client-access-key,
 client-key-row,
 defaults-editor,
@@ -57,9 +57,17 @@ usage-breakdown,
 usage-row-list,
 usage-row,
 usage-bar,
+usage-failures-overlay,
+usage-failures-dialog,
+usage-failures-body,
+usage-failure-status-list,
+usage-failure-status,
+usage-failure-list,
+usage-failure-row,
 admin-dashboard,
 admin-user-list,
 admin-user-card,
+admin-tenant-card,
 example-list,
 request-example,
 provider-editor,
@@ -68,11 +76,23 @@ provider-key-field,
 provider-key-input,
 provider-removal-overlay,
 provider-removal-dialog,
+tenant-delete-overlay,
+tenant-delete-dialog,
+tenant-dialog-overlay,
+tenant-dialog,
 settings-overlay,
 settings-modal,
 settings-body,
 settings-section {
   display: block;
+}
+
+.tenant-create-symbol {
+  display: block;
+  color: var(--llm-accent);
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1;
 }
 
 #llm-proxy-header .mpr-header__actions {
@@ -203,6 +223,31 @@ settings-section {
   background: var(--llm-panel-strong);
 }
 
+.runtime-failure[hidden] {
+  display: none;
+}
+
+.runtime-failure {
+  margin-bottom: 0.5rem;
+}
+
+.runtime-failure:focus {
+  outline: 2px solid var(--llm-accent);
+  outline-offset: 2px;
+}
+
+.runtime-failure-copy {
+  max-width: 680px;
+  margin: 0.35rem 0 0.75rem;
+  color: var(--llm-subtle);
+  font-size: 0.78rem;
+}
+
+.runtime-failure .resource-button {
+  width: fit-content;
+  cursor: pointer;
+}
+
 workspace-surface {
   display: grid;
   gap: 0.5rem;
@@ -212,6 +257,10 @@ dashboard-actions {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+.usage-tenant-control {
+  min-width: 10rem;
 }
 
 .usage-interval-control {
@@ -277,6 +326,24 @@ usage-card strong {
   overflow-wrap: anywhere;
   font-size: 1.35rem;
   line-height: 1;
+}
+
+.usage-failure-action {
+  min-height: 0;
+  justify-self: start;
+  border: 0;
+  background: transparent;
+  color: var(--llm-danger);
+  padding: 0;
+  font-size: 0.7rem;
+  text-decoration: underline;
+  text-underline-offset: 0.16rem;
+}
+
+llm-proxy-key-management .usage-failure-action:hover:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+  color: #ff8177;
 }
 
 .dashboard-grid {
@@ -408,6 +475,27 @@ admin-user-card header span {
   font-size: 0.68rem;
 }
 
+admin-tenant-card {
+  display: grid;
+  gap: 0.45rem;
+  border-top: 1px solid var(--llm-border);
+  padding-top: 0.55rem;
+}
+
+admin-tenant-card header h3,
+admin-tenant-card header code {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+admin-tenant-card header code {
+  color: var(--llm-muted);
+  font-size: 0.68rem;
+}
+
 .admin-user-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -492,18 +580,61 @@ h3 {
   font-weight: 600;
 }
 
-client-access-row {
+tenant-access-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "tenant rename key key-action delete create";
+  grid-template-columns: minmax(150px, 0.85fr) auto minmax(210px, 1.35fr) auto auto auto;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.4rem;
   border: 1px solid var(--llm-border);
   border-radius: 6px;
   background: var(--llm-panel-strong);
-  padding: 0.55rem 0.65rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.tenant-selector-control {
+  grid-area: tenant;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.tenant-selector-control .eyebrow {
+  margin: 0;
+}
+
+.tenant-rename {
+  grid-area: rename;
+}
+
+.tenant-create {
+  grid-area: create;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tenant-delete {
+  grid-area: delete;
+}
+
+.field-hint {
+  color: var(--llm-muted);
+}
+
+.field-error {
+  color: #ff8177;
+}
+
+.tenant-delete .material-symbols-outlined {
+  display: block;
+  font-size: 1.125rem;
+  line-height: 1;
 }
 
 client-access-key {
+  grid-area: key;
   display: grid;
   min-width: 0;
   grid-template-columns: auto minmax(0, 1fr);
@@ -518,7 +649,7 @@ client-access-key > .eyebrow {
 client-key-row {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) repeat(3, 30px);
+  grid-template-columns: minmax(0, 1fr) repeat(2, 30px);
   align-items: center;
   gap: 0.35rem;
 }
@@ -532,7 +663,9 @@ client-key-row input {
   margin: 0;
   color: var(--llm-muted);
   font-size: 0.76rem;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .client-key-visibility-toggle,
@@ -543,27 +676,16 @@ client-key-row input {
 }
 
 .client-key-visibility-toggle .material-symbols-outlined,
-.client-key-revoke .material-symbols-outlined,
+.client-key-copy .material-symbols-outlined,
 .client-key-replace .material-symbols-outlined {
   display: block;
   font-size: 1.125rem;
   line-height: 1;
 }
 
-.client-key-copy .copy-icon {
-  display: block;
-  inline-size: 1rem;
-  block-size: 1rem;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.client-key-revoke {
-  grid-column: -2;
-}
-
 .client-key-create,
 .client-key-replace {
+  grid-area: key-action;
   align-self: center;
   white-space: nowrap;
 }
@@ -656,6 +778,14 @@ llm-proxy-key-management button:active:not(:disabled) {
 llm-proxy-key-management button:disabled {
   cursor: not-allowed;
   opacity: 0.52;
+}
+
+llm-proxy-key-management button:focus-visible,
+llm-proxy-key-management input:focus-visible,
+llm-proxy-key-management select:focus-visible,
+llm-proxy-key-management textarea:focus-visible {
+  outline: 2px solid var(--llm-accent);
+  outline-offset: 2px;
 }
 
 .icon-button {
@@ -808,6 +938,7 @@ provider-settings-fields > label select,
   font-size: 0.65rem;
 }
 
+usage-failures-overlay,
 settings-overlay {
   position: fixed;
   inset: 0;
@@ -818,6 +949,148 @@ settings-overlay {
   box-sizing: border-box;
   background: rgba(8, 10, 12, 0.78);
   padding: 0.75rem;
+}
+
+usage-failures-dialog {
+  display: flex;
+  width: min(900px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--llm-border-strong);
+  border-radius: 8px;
+  background: var(--llm-panel-strong);
+  box-shadow: var(--llm-shadow);
+}
+
+.usage-failures-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--llm-border);
+  padding: 0.75rem 0.85rem;
+}
+
+.usage-failures-header .eyebrow,
+.usage-failures-header h2 {
+  margin: 0;
+}
+
+.usage-failures-header h2 {
+  font-size: 1rem;
+}
+
+usage-failures-body {
+  display: grid;
+  gap: 0.65rem;
+  overflow: auto;
+  padding: 0.75rem 0.85rem;
+}
+
+.usage-failures-description,
+.usage-failures-loading,
+.usage-failures-empty,
+.usage-failures-error p {
+  margin: 0;
+  color: var(--llm-muted);
+  font-size: 0.78rem;
+}
+
+.usage-failure-statuses {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.usage-failure-statuses h3 {
+  margin: 0;
+  font-size: 0.72rem;
+}
+
+usage-failure-status-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+usage-failure-status {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(204, 75, 75, 0.4);
+  border-radius: 999px;
+  background: rgba(204, 75, 75, 0.08);
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
+}
+
+usage-failure-status span {
+  color: var(--llm-subtle);
+}
+
+usage-failure-status b {
+  color: var(--llm-danger);
+}
+
+.usage-failures-loading,
+.usage-failures-empty,
+.usage-failures-error {
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-panel);
+  padding: 0.6rem;
+}
+
+.usage-failures-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  border-color: rgba(204, 75, 75, 0.5);
+}
+
+usage-failure-list {
+  display: grid;
+  gap: 0.4rem;
+}
+
+usage-failure-row {
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-panel);
+  padding: 0.5rem;
+}
+
+usage-failure-row dl {
+  display: grid;
+  grid-template-columns: 1.3fr 1.6fr 0.65fr 0.9fr 1.2fr 1fr 1fr 0.7fr;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+usage-failure-row dl > div {
+  min-width: 0;
+}
+
+usage-failure-row dt {
+  color: var(--llm-muted);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+usage-failure-row dd {
+  margin: 0.1rem 0 0;
+  color: var(--llm-subtle);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+
+.usage-failures-footer {
+  display: flex;
+  justify-content: center;
 }
 
 settings-modal {
@@ -832,7 +1105,9 @@ settings-modal {
   box-shadow: var(--llm-shadow);
 }
 
-provider-removal-overlay {
+provider-removal-overlay,
+tenant-delete-overlay,
+tenant-dialog-overlay {
   position: fixed;
   inset: 0;
   z-index: calc(var(--llm-z-settings-overlay) + 1);
@@ -844,7 +1119,13 @@ provider-removal-overlay {
   padding: 0.75rem;
 }
 
-provider-removal-dialog {
+tenant-dialog-overlay {
+  z-index: calc(var(--llm-z-settings-overlay) + 2);
+}
+
+provider-removal-dialog,
+tenant-delete-dialog,
+tenant-dialog {
   display: grid;
   width: min(420px, calc(100vw - 24px));
   gap: 0.65rem;
@@ -856,13 +1137,40 @@ provider-removal-dialog {
 }
 
 provider-removal-dialog h3,
-provider-removal-dialog p {
+provider-removal-dialog p,
+tenant-delete-dialog h3,
+tenant-delete-dialog p,
+tenant-dialog h2,
+tenant-dialog p {
   margin-bottom: 0;
 }
 
-provider-removal-dialog p {
+provider-removal-dialog p,
+tenant-delete-dialog p,
+tenant-dialog p {
   color: var(--llm-muted);
   font-size: 0.78rem;
+}
+
+tenant-delete-dialog p {
+  display: grid;
+  gap: 0.25rem;
+}
+
+tenant-delete-dialog p strong {
+  color: var(--llm-text);
+  overflow-wrap: anywhere;
+}
+
+tenant-dialog form {
+  display: grid;
+  gap: 0.65rem;
+}
+
+tenant-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
 }
 
 .provider-removal-actions {
@@ -953,6 +1261,68 @@ settings-section,
 
 .settings-form-wide {
   grid-column: 1 / -1;
+}
+
+.system-prompt-disclosure {
+  min-width: 0;
+}
+
+.system-prompt-summary {
+  display: flex;
+  min-height: 30px;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  list-style: none;
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-bg);
+  color: var(--llm-muted);
+  padding: 0.38rem 0.5rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.system-prompt-summary::-webkit-details-marker {
+  display: none;
+}
+
+.system-prompt-summary::marker {
+  content: "";
+}
+
+.system-prompt-summary::after {
+  content: ">";
+  color: var(--llm-muted);
+  font-size: 0.82rem;
+  transform: rotate(0deg);
+  transition: transform 0.16s ease;
+}
+
+.system-prompt-disclosure[open] .system-prompt-summary::after {
+  transform: rotate(90deg);
+}
+
+.system-prompt-disclosure-state {
+  margin-left: auto;
+  border: 1px solid var(--llm-border);
+  border-radius: 999px;
+  color: var(--llm-subtle);
+  padding: 0.02rem 0.35rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.system-prompt-disclosure textarea {
+  margin-top: 0.35rem;
+}
+
+.system-prompt-summary:focus-visible {
+  outline: 2px solid var(--llm-accent);
+  outline-offset: 2px;
 }
 
 .text-routing-controls {
@@ -1051,6 +1421,10 @@ settings-section,
     width: 100%;
   }
 
+  .usage-tenant-control {
+    width: 100%;
+  }
+
   llm-proxy-key-management .usage-interval-button {
     flex: 1 1 0;
     padding-inline: 0.35rem;
@@ -1065,6 +1439,30 @@ settings-section,
     padding: 11px;
   }
 
+  usage-failures-overlay {
+    align-items: stretch;
+    padding: 11px;
+  }
+
+  usage-failures-dialog {
+    width: 100%;
+    max-height: calc(100dvh - 22px);
+  }
+
+  usage-failure-row dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  usage-failure-row dl > div:first-child,
+  usage-failure-row dl > div:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+
+  .usage-failures-error {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   settings-modal {
     width: 100%;
     max-height: calc(100dvh - 22px);
@@ -1072,6 +1470,26 @@ settings-section,
 
   settings-body {
     padding: 0.55rem;
+  }
+
+  tenant-access-row {
+    grid-template-areas:
+      "tenant tenant tenant rename"
+      "key key-action delete create";
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+  }
+
+  .tenant-access-action-label {
+    display: none;
+  }
+
+  .client-key-create,
+  .client-key-replace,
+  .tenant-create {
+    width: 30px;
+    min-width: 30px;
+    justify-content: center;
+    padding: 0;
   }
 
   .settings-form-wide {

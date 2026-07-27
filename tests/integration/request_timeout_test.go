@@ -34,7 +34,7 @@ const (
 	gatewayContextLateResponseDelay = 650 * time.Millisecond
 	gatewayContextAssertionTimeout  = 2 * time.Second
 	openAIAPIResponseLogMessage     = "OpenAI API response"
-	lateOpenAIResponseBody          = `{"output_text":"LATE_OPENAI_RESPONSE"}`
+	lateOpenAIResponseBody          = `{"status":"completed","output_text":"LATE_OPENAI_RESPONSE"}`
 )
 
 // makeTimeoutHTTPClient returns an HTTP client whose responses delay longer than the request timeout.
@@ -52,7 +52,7 @@ func makeTimeoutHTTPClient(testingInstance *testing.T, endpoints *proxy.Endpoint
 				case <-request.Context().Done():
 					return nil, request.Context().Err()
 				case <-time.After(timeoutUpstreamDelay):
-					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"output_text":"NEVER"}`)), Header: make(http.Header)}, nil
+					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"status":"completed","output_text":"NEVER"}`)), Header: make(http.Header)}, nil
 				}
 			default:
 				testingInstance.Fatalf("unexpected request to %s", request.URL.String())

@@ -256,6 +256,111 @@
   background: var(--llm-panel-strong);
 }
 
+.api-reference {
+  max-width: 1040px;
+}
+
+.api-contract-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+}
+
+.api-contract-meta span,
+.api-operation-id {
+  border: 1px solid var(--llm-border);
+  border-radius: 999px;
+  color: var(--llm-muted);
+  font-size: 0.68rem;
+  padding: 0.22rem 0.45rem;
+}
+
+.api-contract-meta code {
+  color: var(--llm-subtle);
+  overflow-wrap: anywhere;
+}
+
+.api-operation-index {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.api-operation-index a {
+  display: grid;
+  grid-template-columns: auto minmax(110px, auto) 1fr;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  border: 1px solid var(--llm-border);
+  border-radius: 5px;
+  color: var(--llm-subtle);
+  font-size: 0.76rem;
+  padding: 0.45rem;
+  text-decoration: none;
+}
+
+.api-operation-index a:hover {
+  border-color: var(--llm-accent);
+  color: var(--llm-text);
+}
+
+.api-operation-index code,
+.api-operation-heading code {
+  color: var(--llm-text);
+  overflow-wrap: anywhere;
+}
+
+.api-operation-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+}
+
+.api-method {
+  min-width: 3.4rem;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.35rem;
+  text-align: center;
+}
+
+.api-method-get {
+  background: #16794a;
+}
+
+.api-method-post {
+  background: #156aa3;
+}
+
+.api-method-put {
+  background: #8a5a12;
+}
+
+.api-method-delete {
+  background: #9c3d3d;
+}
+
+.api-contract-block {
+  margin-top: 0.7rem;
+}
+
+.api-contract-block h3 {
+  margin-bottom: 0.35rem;
+  color: var(--llm-text);
+  font-size: 0.82rem;
+}
+
+.api-security {
+  margin-bottom: 0;
+}
+
 .resource-footer {
   border-top: 1px solid var(--llm-border);
   padding: 1rem 0 1.25rem;
@@ -277,7 +382,16 @@
   }
 
   .resource-card-grid,
-  .resource-related-grid {
+  .resource-related-grid,
+  .api-operation-index {
     grid-template-columns: 1fr;
+  }
+
+  .api-operation-index a {
+    grid-template-columns: auto 1fr;
+  }
+
+  .api-operation-index a > span:last-child {
+    grid-column: 1 / -1;
   }
 }
