@@ -898,6 +898,7 @@
       "put": {
         "operationId": "putManagementTenantDefaults",
         "summary": "Replace the tenant routing defaults",
+        "description": "Every nonempty provider/model pair must use a provider for which this tenant has a saved API key. The text pair is empty only when no provider key exists. The dictation pair is empty when no keyed provider supports dictation.",
         "tags": [
           "Management"
         ],
@@ -1975,19 +1976,19 @@
         "properties": {
           "provider": {
             "type": "string",
-            "minLength": 1
+            "description": "Canonical keyed text-provider id, or empty together with model when the tenant has no saved provider key."
           },
           "model": {
             "type": "string",
-            "minLength": 1
+            "description": "Canonical model for provider, or empty together with provider when the tenant has no saved provider key."
           },
           "dictation_provider": {
             "type": "string",
-            "minLength": 1
+            "description": "Canonical keyed dictation-capable provider id, or empty together with dictation_model when no keyed provider supports dictation."
           },
           "dictation_model": {
             "type": "string",
-            "minLength": 1
+            "description": "Canonical model for dictation_provider, or empty together with dictation_provider when no keyed provider supports dictation."
           },
           "system_prompt": {
             "type": "string"
@@ -2147,16 +2148,20 @@
         ],
         "properties": {
           "provider": {
-            "type": "string"
+            "type": "string",
+            "description": "Canonical keyed text-provider id, or empty when the tenant has no saved provider key."
           },
           "model": {
-            "type": "string"
+            "type": "string",
+            "description": "Canonical text model paired with provider, or empty when provider is empty."
           },
           "dictation_provider": {
-            "type": "string"
+            "type": "string",
+            "description": "Canonical keyed dictation-capable provider id, or empty when no keyed provider supports dictation."
           },
           "dictation_model": {
-            "type": "string"
+            "type": "string",
+            "description": "Canonical dictation model paired with dictation_provider, or empty when dictation_provider is empty."
           },
           "system_prompt": {
             "type": "string"
