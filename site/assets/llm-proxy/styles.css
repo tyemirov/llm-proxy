@@ -87,9 +87,11 @@ settings-section {
   display: block;
 }
 
-.tenant-create > span:first-child {
+.tenant-create-symbol {
+  display: block;
   color: var(--llm-accent);
-  font-size: 1rem;
+  font-size: 1.5rem;
+  font-weight: 400;
   line-height: 1;
 }
 
@@ -608,6 +610,9 @@ tenant-access-row {
 
 .tenant-create {
   grid-area: create;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tenant-delete {
@@ -671,18 +676,11 @@ client-key-row input {
 }
 
 .client-key-visibility-toggle .material-symbols-outlined,
+.client-key-copy .material-symbols-outlined,
 .client-key-replace .material-symbols-outlined {
   display: block;
   font-size: 1.125rem;
   line-height: 1;
-}
-
-.client-key-copy .copy-icon {
-  display: block;
-  inline-size: 1rem;
-  block-size: 1rem;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .client-key-create,
@@ -1263,6 +1261,68 @@ settings-section,
 
 .settings-form-wide {
   grid-column: 1 / -1;
+}
+
+.system-prompt-disclosure {
+  min-width: 0;
+}
+
+.system-prompt-summary {
+  display: flex;
+  min-height: 30px;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  list-style: none;
+  border: 1px solid var(--llm-border);
+  border-radius: 6px;
+  background: var(--llm-bg);
+  color: var(--llm-muted);
+  padding: 0.38rem 0.5rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.system-prompt-summary::-webkit-details-marker {
+  display: none;
+}
+
+.system-prompt-summary::marker {
+  content: "";
+}
+
+.system-prompt-summary::after {
+  content: ">";
+  color: var(--llm-muted);
+  font-size: 0.82rem;
+  transform: rotate(0deg);
+  transition: transform 0.16s ease;
+}
+
+.system-prompt-disclosure[open] .system-prompt-summary::after {
+  transform: rotate(90deg);
+}
+
+.system-prompt-disclosure-state {
+  margin-left: auto;
+  border: 1px solid var(--llm-border);
+  border-radius: 999px;
+  color: var(--llm-subtle);
+  padding: 0.02rem 0.35rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.system-prompt-disclosure textarea {
+  margin-top: 0.35rem;
+}
+
+.system-prompt-summary:focus-visible {
+  outline: 2px solid var(--llm-accent);
+  outline-offset: 2px;
 }
 
 .text-routing-controls {

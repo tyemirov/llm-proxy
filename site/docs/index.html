@@ -6,12 +6,12 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="689b8175eafe6330b74549d1a0c3edf08882b6f87d5c48b22cc833a4f9753c6f">
+    <meta name="openapi-source-sha256" content="5a6683d01dc04a10d6e045df3c3c265cd6b66aa43d9f39518ec9ecfa47c39b88">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="689b8175eafe6330b74549d1a0c3edf08882b6f87d5c48b22cc833a4f9753c6f">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="5a6683d01dc04a10d6e045df3c3c265cd6b66aa43d9f39518ec9ecfa47c39b88">
     <header class="resource-shell resource-topbar">
       <a class="resource-brand" href="/">LLM Proxy</a>
       <nav aria-label="API reference navigation">
@@ -29,7 +29,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>689b8175eafe6330b74549d1a0c3edf08882b6f87d5c48b22cc833a4f9753c6f</code></span>
+          <span>Source SHA-256 <code>5a6683d01dc04a10d6e045df3c3c265cd6b66aa43d9f39518ec9ecfa47c39b88</code></span>
         </div>
         <div class="resource-actions">
           <a class="resource-button" href="/openapi.yaml">Download exact schema</a>
@@ -423,6 +423,7 @@
           <span class="api-operation-id">putManagementTenantDefaults</span>
         </header>
         <h2>Replace the tenant routing defaults</h2>
+        <p>Every nonempty provider/model pair must use a provider for which this tenant has a saved API key. The text pair is empty only when no provider key exists. The dictation pair is empty when no keyed provider supports dictation.</p>
         <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
         <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
         <div class="api-contract-block">
@@ -443,10 +444,10 @@
             <table>
               <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>provider</code></td><td>Yes</td><td>string</td><td></td></tr>
-<tr><td><code>model</code></td><td>Yes</td><td>string</td><td></td></tr>
-<tr><td><code>dictation_provider</code></td><td>Yes</td><td>string</td><td></td></tr>
-<tr><td><code>dictation_model</code></td><td>Yes</td><td>string</td><td></td></tr>
+                <tr><td><code>provider</code></td><td>Yes</td><td>string</td><td>Canonical keyed text-provider id, or empty together with model when the tenant has no saved provider key.</td></tr>
+<tr><td><code>model</code></td><td>Yes</td><td>string</td><td>Canonical model for provider, or empty together with provider when the tenant has no saved provider key.</td></tr>
+<tr><td><code>dictation_provider</code></td><td>Yes</td><td>string</td><td>Canonical keyed dictation-capable provider id, or empty together with dictation_model when no keyed provider supports dictation.</td></tr>
+<tr><td><code>dictation_model</code></td><td>Yes</td><td>string</td><td>Canonical model for dictation_provider, or empty together with dictation_provider when no keyed provider supports dictation.</td></tr>
 <tr><td><code>system_prompt</code></td><td>Yes</td><td>string</td><td></td></tr>
 <tr><td><code>reasoning_effort</code></td><td>Yes</td><td>string</td><td></td></tr>
               </tbody>

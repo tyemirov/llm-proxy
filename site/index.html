@@ -15,7 +15,7 @@
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=delete,key,visibility,visibility_off&amp;display=block">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,key,visibility,visibility_off&amp;display=block">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -466,10 +466,7 @@
                           <span class="material-symbols-outlined" x-show="generatedSecretVisible" aria-hidden="true">visibility_off</span>
                         </button>
                         <button type="button" class="icon-only client-key-copy" x-ref="clientKeyCopyButton" x-cloak x-show="hasGeneratedSecret" x-on:click="copyGeneratedSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.copyClientKey" x-bind:aria-label="copy.copyClientKey">
-                          <svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
-                            <rect x="6" y="5" width="10" height="12" rx="1.5"></rect>
-                            <rect x="8" y="7" width="10" height="12" rx="1.5"></rect>
-                          </svg>
+                          <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
                         </button>
                       </client-key-row>
                     </client-access-key>
@@ -514,15 +511,14 @@
                     </button>
                     <button
                       type="button"
-                      class="icon-button tenant-create"
+                      class="icon-only tenant-create"
                       x-ref="createTenantButton"
                       x-on:click="openCreateTenantDialog()"
                       x-bind:disabled="settingsControlsDisabled"
                       x-bind:title="copy.createTenant"
                       x-bind:aria-label="copy.createTenant"
                     >
-                      <span aria-hidden="true">+</span>
-                      <span class="tenant-access-action-label" x-text="copy.createTenant"></span>
+                      <span class="tenant-create-symbol" aria-hidden="true">+</span>
                     </button>
                     <p
                       id="final-tenant-deletion"
@@ -544,15 +540,21 @@
                       <div class="text-routing-controls">
                         <label>
                           <span x-text="copy.textProvider"></span>
-                          <select x-model="defaults.provider" x-on:change="handleTextProviderDefaultChange($event)" x-bind:disabled="settingsControlsDisabled">
-                            <template x-for="provider in providers" x-bind:key="provider.id">
+                          <select x-model="defaults.provider" x-on:change="handleTextProviderDefaultChange($event)" x-bind:disabled="settingsControlsDisabled || !hasKeyedTextProviders">
+                            <template x-if="!hasKeyedTextProviders">
+                              <option value="" x-text="copy.routingDefaultUnavailable"></option>
+                            </template>
+                            <template x-for="provider in keyedTextProviders" x-bind:key="provider.id">
                               <option x-bind:value="provider.id" x-text="provider.label"></option>
                             </template>
                           </select>
                         </label>
                         <label>
                           <span x-text="copy.textModel"></span>
-                          <select x-model="defaults.model" x-on:change="handleTextModelDefaultChange($event)" x-bind:disabled="settingsControlsDisabled">
+                          <select x-model="defaults.model" x-on:change="handleTextModelDefaultChange($event)" x-bind:disabled="settingsControlsDisabled || !hasKeyedTextProviders">
+                            <template x-if="!hasKeyedTextProviders">
+                              <option value="" x-text="copy.routingDefaultUnavailable"></option>
+                            </template>
                             <template x-for="model in selectedTextModels" x-bind:key="model">
                               <option x-bind:value="model" x-text="model"></option>
                             </template>
@@ -574,7 +576,10 @@
                       </div>
                       <label>
                         <span x-text="copy.dictationProvider"></span>
-                        <select x-model="defaults.dictation_provider" x-on:change="handleDictationProviderDefaultChange($event)" x-bind:disabled="settingsControlsDisabled">
+                        <select x-model="defaults.dictation_provider" x-on:change="handleDictationProviderDefaultChange($event)" x-bind:disabled="settingsControlsDisabled || !hasDictationProviders">
+                          <template x-if="!hasDictationProviders">
+                            <option value="" x-text="copy.routingDefaultUnavailable"></option>
+                          </template>
                           <template x-for="provider in dictationProviders" x-bind:key="provider.id">
                             <option x-bind:value="provider.id" x-text="provider.label"></option>
                           </template>
@@ -582,16 +587,38 @@
                       </label>
                       <label>
                         <span x-text="copy.dictationModel"></span>
-                        <select x-model="defaults.dictation_model" x-on:change="handleDictationModelDefaultChange($event)" x-bind:disabled="settingsControlsDisabled">
+                        <select x-model="defaults.dictation_model" x-on:change="handleDictationModelDefaultChange($event)" x-bind:disabled="settingsControlsDisabled || !hasDictationProviders">
+                          <template x-if="!hasDictationProviders">
+                            <option value="" x-text="copy.routingDefaultUnavailable"></option>
+                          </template>
                           <template x-for="model in selectedDictationModels" x-bind:key="model">
                             <option x-bind:value="model" x-text="model"></option>
                           </template>
                         </select>
                       </label>
-                      <label class="settings-form-wide">
-                        <span x-text="copy.systemPrompt"></span>
-                        <textarea rows="4" x-bind:value="defaults.system_prompt" x-on:input="handleRoutingSystemPromptInput($event)" x-on:change="autosaveRoutingDefaults()" x-bind:disabled="settingsControlsDisabled"></textarea>
-                      </label>
+                      <details
+                        class="settings-form-wide system-prompt-disclosure"
+                        x-bind:open="routingSystemPromptOpen"
+                        x-on:toggle="routingSystemPromptOpen = $event.currentTarget.open"
+                      >
+                        <summary class="system-prompt-summary">
+                          <span id="routing-system-prompt-label" x-text="copy.systemPrompt"></span>
+                          <span
+                            class="system-prompt-disclosure-state"
+                            aria-hidden="true"
+                            x-text="routingSystemPromptOpen ? copy.systemPromptExpanded : copy.systemPromptHidden"
+                          ></span>
+                        </summary>
+                        <textarea
+                          id="routing-system-prompt-input"
+                          rows="4"
+                          aria-labelledby="routing-system-prompt-label"
+                          x-bind:value="defaults.system_prompt"
+                          x-on:input="handleRoutingSystemPromptInput($event)"
+                          x-on:change="autosaveRoutingDefaults()"
+                          x-bind:disabled="settingsControlsDisabled"
+                        ></textarea>
+                      </details>
                     </form>
                   </settings-section>
 
@@ -663,10 +690,29 @@
                               </template>
                             </select>
                           </label>
-                          <label class="provider-system-prompt">
-                            <span x-text="copy.providerSystemPrompt"></span>
-                            <textarea rows="3" x-bind:value="providerEditorSession.systemPrompt" x-on:input="handleSelectedProviderSystemPromptInput($event)" x-on:change="autosaveSelectedProvider()" x-bind:disabled="settingsControlsDisabled || providerKeyRevealPending"></textarea>
-                          </label>
+                          <details
+                            class="provider-system-prompt system-prompt-disclosure"
+                            x-bind:open="providerSystemPromptOpen"
+                            x-on:toggle="providerSystemPromptOpen = $event.currentTarget.open"
+                          >
+                            <summary class="system-prompt-summary">
+                              <span id="provider-system-prompt-label" x-text="copy.providerSystemPrompt"></span>
+                              <span
+                                class="system-prompt-disclosure-state"
+                                aria-hidden="true"
+                                x-text="providerSystemPromptOpen ? copy.systemPromptExpanded : copy.systemPromptHidden"
+                              ></span>
+                            </summary>
+                            <textarea
+                              id="provider-system-prompt-input"
+                              rows="3"
+                              aria-labelledby="provider-system-prompt-label"
+                              x-bind:value="providerEditorSession.systemPrompt"
+                              x-on:input="handleSelectedProviderSystemPromptInput($event)"
+                              x-on:change="autosaveSelectedProvider()"
+                              x-bind:disabled="settingsControlsDisabled || providerKeyRevealPending"
+                            ></textarea>
+                          </details>
                         </provider-settings-fields>
                       </template>
                     </provider-editor>
