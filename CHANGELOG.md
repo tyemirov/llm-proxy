@@ -11,6 +11,18 @@ All notable changes to this project will be documented in this file.
 - Keep response construction and managed-usage persistence under request cancellation, classify queue saturation as `proxy_overload`, reject explicit null timeout configuration, and synchronize Python client distribution metadata at `0.2.0`.
 - Make deployment pass the app-owned maximum request budget into the gateway contract verifier, which rejects outer response guards that cannot outwait it.
 
+## [v0.2.48] - 2026-07-27
+
+- Merge pull request #228 from tyemirov/gix/add-paid-credential-safe-live-test-for-default-tenant
+- chore: add live production API test script for all main providers
+- test: add contract tests for production live-test with default tenant secret
+- docs: clarify output-budget continuation and error contract in API docs
+- fix: handle incomplete LLM responses with continuation instead of error
+- docs: clarify provider-agnostic output-budget recovery and max_tokens contract
+- docs: document missing-suffix output-continuation and live-test target
+- chore(makefile): add live-test target to run scripts/live_test.sh
+- docs(issues): track live-test boundary coverage, B085 output-completion, and release v0.2.47 verification
+
 ## [v0.2.47] - 2026-07-27
 
 - Merge pull request #226 from tyemirov/gix/support-multi-tenant-management-api-and-publish
