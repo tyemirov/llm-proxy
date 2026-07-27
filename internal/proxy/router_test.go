@@ -363,7 +363,7 @@ func TestChatHandlerAcceptsMessagesJSONBodyForOpenAIResponses(testingInstance *t
 	}
 }
 
-func TestChatHandlerRejectsIncompleteGPT55JSONBody(testingInstance *testing.T) {
+func TestChatHandlerCompletesIncompleteGPT55JSONBody(testingInstance *testing.T) {
 	const incompleteResponseID = "resp_incomplete_gpt55"
 
 	var capturedPayloads []map[string]any
@@ -379,7 +379,11 @@ func TestChatHandlerRejectsIncompleteGPT55JSONBody(testingInstance *testing.T) {
 				testingInstance.Fatalf("unmarshal request body: %v", unmarshalError)
 			}
 			capturedPayloads = append(capturedPayloads, capturedPayload)
-			_, _ = responseWriter.Write([]byte(`{"id":"` + incompleteResponseID + `","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"partial answer"}]}]}`))
+			if len(capturedPayloads) == 1 {
+				_, _ = responseWriter.Write([]byte(`{"id":"` + incompleteResponseID + `","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"partial answer"}]}]}`))
+				return
+			}
+			_, _ = responseWriter.Write([]byte(`{"id":"resp_complete_gpt55","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":" recovered suffix"}]}]}`))
 			return
 		}
 		http.NotFound(responseWriter, httpRequest)
@@ -410,17 +414,20 @@ func TestChatHandlerRejectsIncompleteGPT55JSONBody(testingInstance *testing.T) {
 
 	router.ServeHTTP(responseRecorder, request)
 
-	if responseRecorder.Code != http.StatusBadGateway || responseRecorder.Body.String() != proxy.ErrUpstreamIncomplete.Error() {
+	if responseRecorder.Code != http.StatusOK || responseRecorder.Body.String() != "partial answer recovered suffix" {
 		testingInstance.Fatalf("status=%d body=%q", responseRecorder.Code, responseRecorder.Body.String())
 	}
-	if len(capturedPayloads) != 1 {
-		testingInstance.Fatalf("payloads=%d want=1", len(capturedPayloads))
+	if len(capturedPayloads) != 2 {
+		testingInstance.Fatalf("payloads=%d want=2", len(capturedPayloads))
 	}
 	if capturedPayloads[0]["model"] != proxy.ModelNameGPT55 {
 		testingInstance.Fatalf("initial model=%v want=%s", capturedPayloads[0]["model"], proxy.ModelNameGPT55)
 	}
-	if strings.Contains(responseRecorder.Body.String(), "partial answer") {
-		testingInstance.Fatalf("partial response leaked: %q", responseRecorder.Body.String())
+	continuationInput, continuationInputOK := capturedPayloads[1]["input"].(string)
+	if !continuationInputOK ||
+		!strings.Contains(continuationInput, "assistant:\npartial answer") ||
+		!strings.Contains(continuationInput, "Return only the missing suffix") {
+		testingInstance.Fatalf("continuation input=%v", capturedPayloads[1]["input"])
 	}
 }
 

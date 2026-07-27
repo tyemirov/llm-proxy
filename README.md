@@ -58,12 +58,16 @@ immediately, and a missing or unknown status is rejected rather than polled.
 The response id remains in the active request lifecycle; llm-proxy has no
 durable provider-job queue or later resume endpoint.
 
-The current Chat Completions, Gemini `generateContent`, and Anthropic Messages
-routes are synchronous. Their text is successful only when the same response
-reports a complete provider-specific stop signal: Chat
-`finish_reason=stop`, Gemini `finishReason=STOP`, or Anthropic
-`stop_reason=end_turn|stop_sequence`. Missing, truncated, tool/intermediate, or
-unknown stop signals return `502` without partial text.
+Every current text route uses one provider-neutral completion coordinator.
+When an upstream attempt exhausts its output budget—OpenAI Responses
+`status=incomplete` with `reason=max_output_tokens`, Chat Completions
+`finish_reason=length`, Gemini `finishReason=MAX_TOKENS`, or Anthropic
+`stop_reason=max_tokens`—the coordinator retains the original messages,
+appends the accumulated assistant output and one missing-suffix instruction,
+and calls the same selected provider again. It repeats until the adapter
+reports its complete stop signal or the overall request deadline expires.
+Safety filters, refusals, tool/intermediate states, malformed responses, and
+missing or unknown signals remain `502` failures and never trigger this loop.
 
 A `504 Gateway Timeout` means the overall proxy request deadline expired before
 the selected upstream provider produced a final answer. It is not a prompt for
@@ -548,9 +552,10 @@ Provider-specific details:
   dictation uses `providers.openai.transcriptions_url`.
 * OpenAI-compatible text providers send chat completion requests with
   `Authorization: Bearer <api_key>` and the selected provider base URL. The
-  shared adapter accepts text only with `finish_reason=stop`; `length`,
-  `content_filter`, `tool_calls`, missing, and provider-specific non-stop
-  reasons are upstream failures.
+  shared adapter normalizes `finish_reason=length` into the common
+  missing-suffix loop and accepts the assembled text only after
+  `finish_reason=stop`; `content_filter`, `tool_calls`, missing, and
+  provider-specific non-stop reasons are upstream failures.
 * Qwen Cloud Token Plan uses selector `qwencloud`, exact model
   `qwen3.8-max-preview`, `${QWEN_CLOUD_TOKEN_PLAN_API_KEY}`, and
   `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`.
@@ -585,15 +590,17 @@ Provider-specific details:
   `providers.grok.transcriptions_url`.
 * Gemini text requests use the native `generateContent` route and normalize
   Gemini usage metadata into the same response headers and JSON `usage` object
-  used by the other text providers. Only `finishReason=STOP` can return text.
+  used by the other text providers. `finishReason=MAX_TOKENS` enters the common
+  missing-suffix loop and only `finishReason=STOP` completes the assembled
+  answer.
 * Anthropic text requests use `POST /v1/messages` with `x-api-key` and
   `anthropic-version: 2023-06-01`. System messages are translated to
   Anthropic's top-level `system` field. Anthropic requires `max_tokens`, so
   when the client omits it the proxy sends the selected Claude model's
-  configured output limit. Only `stop_reason=end_turn` or `stop_sequence` can
-  return text; truncation, tool use, paused turns, refusals, and unknown reasons
-  are upstream failures because this adapter exposes no continuation or tool
-  loop.
+  configured output limit. `stop_reason=max_tokens` enters the common
+  missing-suffix loop; `end_turn` or `stop_sequence` completes the assembled
+  answer. Tool use, paused turns, refusals, and unknown reasons remain upstream
+  failures because this adapter exposes no tool loop.
 * Zhipu dictation uses Z.AI GLM-ASR through
   `providers.zhipu.transcriptions_url` with the selected configured dictation
   model.
@@ -1070,10 +1077,13 @@ to the static frontend.
 
 Web search is per request and currently supported only on OpenAI models that
 support the OpenAI web search tool.
-Text output length is also per request: pass `max_tokens` when a client wants
-to cap one generation. When omitted, the proxy does not send a provider
-max-token field, except Anthropic Messages where `max_tokens` is required
-upstream and the proxy sends the selected model's configured output limit.
+Text output length is per upstream attempt: pass `max_tokens` to set the
+initial attempt's budget, which is reused for missing-suffix attempts. If an
+output-budget stop contains no visible progress and the model has a configured
+output limit, the coordinator increases the next attempt's budget toward that
+limit. When omitted, the proxy does not send a provider max-token field, except
+Anthropic Messages where `max_tokens` is required upstream and the proxy sends
+the selected model's configured output limit.
 Provider-specific output-token limits are enforced at the request edge when
 known. MiniMax M2.7 rejects `max_tokens` above `2048`; Gemini text models
 currently reject values above `65536`; Claude models reject values above the
@@ -1239,6 +1249,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make test-live-provider-harness` | Generate the temporary static-mode live-test config and verify authenticated routing without an upstream call. |
 | `make test-live-providers` | Generate a complete temporary static-mode config and run live text smoke tests for every provider whose API key is present; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
+| `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_SECRET`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus one large OpenAI background-polling request. |
 | `make release` | Run CI and prepare the local tag, container archives, and validated Pages archive under `.git/mprlab-release` without remote writes. |
 | `make publish` | Publish the exact prepared Git refs, GitHub Release assets, and container archives without rebuilding or deploying; wait for each GHCR manifest to become readable. |
 | `make deploy` | Verify and deploy the published backend through the sibling gateway, then activate the Pages archive and verify the matching Pages build and public marker. |
@@ -1289,6 +1300,40 @@ paid provider with `./scripts/test_live_providers.sh --write-config
 port, each harness run allocates a fresh loopback port. It removes only the
 temporary proxy child it started and never terminates an unrelated local
 listener.
+
+### Production Default-tenant live test
+
+`make live-test` is a separate paid production check. It calls only
+`https://llm-proxy-api.mprlab.com` and requires exactly one local credential:
+`LLM_PROXY_SECRET`, the Default tenant's generated client secret. It neither
+loads a dotenv file nor reads, accepts, or sends a local upstream-provider key.
+The saved provider credentials and per-provider default models remain entirely
+on the production tenant.
+
+The command sends canonical `POST /v2` requests with an explicit provider and
+no model, so it exercises each saved Default-tenant provider model. It runs a
+small echo-marker request for OpenAI, Anthropic, Meta, Gemini, and Moonshot,
+then the same deterministic request larger than 16 KiB through OpenAI,
+Anthropic, and Meta. The long request requires normalized output for every
+portfolio record before its final marker and uses a 900-second request budget.
+OpenAI keeps the blocking caller request open while the Responses adapter
+performs server-owned background polling. Anthropic and Meta use their canonical
+synchronous completion paths (including shared output-continuation work when
+needed); the test client never polls a provider or llm-proxy itself. Each case
+verifies HTTP `200`, the echoed request budget, and a completion marker without
+printing the response body or tenant secret. It runs all eight cases before
+returning nonzero for any failed case.
+
+Set only the Default-tenant client secret before invoking it:
+
+```shell
+export LLM_PROXY_SECRET='...'
+make live-test
+```
+
+This target is intentionally outside `make ci`: it has a real production cost
+and is expected to fail honestly for a disabled, rate-limited, or failing
+provider.
 
 `make release` and `make deploy` run the local `make ci` gate with the standard
 350-second timeout. Override both with

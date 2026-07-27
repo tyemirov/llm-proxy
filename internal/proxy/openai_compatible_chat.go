@@ -108,20 +108,23 @@ func parseChatCompletionResponse(responseBytes []byte) (textGenerationResult, er
 	}
 	generation := textGenerationResult{usage: usage}
 	for _, choice := range response.Choices {
-		finishReason := choice.FinishReason
-		if strings.TrimSpace(finishReason) == constants.EmptyString {
+		finishReason := strings.TrimSpace(choice.FinishReason)
+		if finishReason == constants.EmptyString {
 			return generation, fmt.Errorf("%w: chat completion missing finish_reason", ErrProviderAPI)
 		}
+		visibleText := choice.Message.Content
+		if utils.IsBlank(visibleText) {
+			visibleText = choice.Message.ReasoningContent
+		}
+		choiceGeneration := textGenerationResult{text: visibleText, usage: usage}
+		if finishReason == "length" {
+			return choiceGeneration, errProviderOutputLimitReached
+		}
 		if finishReason != finishReasonStop {
-			return generation, fmt.Errorf("%w: chat completion finish_reason=%s", ErrProviderAPI, strings.TrimSpace(finishReason))
+			return generation, fmt.Errorf("%w: chat completion finish_reason=%s", ErrProviderAPI, finishReason)
 		}
-		trimmedContent := strings.TrimSpace(choice.Message.Content)
-		if trimmedContent != constants.EmptyString {
-			return textGenerationResult{text: trimmedContent, usage: usage}, nil
-		}
-		trimmedReasoning := strings.TrimSpace(choice.Message.ReasoningContent)
-		if trimmedReasoning != constants.EmptyString {
-			return textGenerationResult{text: trimmedReasoning, usage: usage}, nil
+		if !utils.IsBlank(visibleText) {
+			return choiceGeneration, nil
 		}
 	}
 	return generation, errors.New(errorProviderNoText)

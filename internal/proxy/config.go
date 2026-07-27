@@ -193,9 +193,7 @@ func validateTenantDefaultRuntime(providers *providerRegistry, validator *modelV
 	return nil
 }
 
-// ErrUpstreamIncomplete indicates that the upstream provider returned an incomplete response before the request deadline.
-var ErrUpstreamIncomplete = errors.New(errorUpstreamIncomplete)
-
+var errProviderOutputLimitReached = errors.New("provider output limit reached")
 var errQueueFull = errors.New(errorQueueFull)
 
 // ApplyTunables ensures tunable configuration values have sensible defaults.

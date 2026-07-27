@@ -22,8 +22,237 @@ canonical account-wide and tenant-filtered operations and response headers. M019
 ready because M018 is complete. M013 then M012 resolve the product-context
 governance path. Planning proceeds P002 -> P003 -> P004 -> P005, with M020
 already satisfied; recurring maintenance remains scheduled work.
+I036 is an independently ready P1 improvement that verifies every newly
+supplied provider credential before it can be persisted or become routing
+eligible.
+I035 is an independent B076 successor that persists only the authenticated
+user's selected Usage interval across sessions.
+F016 is independently ready and adds the canonical v2 client contract for
+server-side Node.js applications.
+B077 publication and both public serving boundaries are now verified at
+v0.2.47. It remains operator-blocked only on the direct production-container
+image receipt and the post-release Terra/max canary required by its completion
+contract. The dominant active Meta 502 path is separately reproduced as
+explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
+
+- [x] [B086] (P1) Make Default-tenant production live tests repeatable.
+  Goal:
+  Provide one paid, production-boundary command that proves the Default tenant
+  can route text through its saved provider credentials without putting any
+  upstream credential in the local test environment.
+
+  Requirements:
+  - Add `make live-test`, separate from the disposable local provider harness
+    and excluded from `make ci`.
+  - Require only the canonical `LLM_PROXY_SECRET` tenant client secret. The
+    command must call `https://llm-proxy-api.mprlab.com`, must not load a dotenv
+    file, and must never read, accept, or send local provider API keys.
+  - Use that secret to select the Default tenant and test exactly OpenAI,
+    Anthropic, Meta, Gemini, and Moonshot through canonical `POST /v2` calls
+    with each provider's saved Default-tenant model.
+  - For every listed provider, send one short echo-marker request. Also send
+    the same deterministic, large completion request through OpenAI,
+    Anthropic, and Meta. The OpenAI Responses case must remain open through
+    the server-owned background polling lifecycle before returning its final
+    marker; the Anthropic and Meta cases must wait for their canonical
+    synchronous provider completions.
+  - Run every case even after a failure, redact all credentials and response
+    bodies from output, and return nonzero when any case does not return the
+    expected completed response.
+
+  Validation:
+  - Add black-box operational coverage for `make live-test` using a fake curl
+    boundary. Prove all eight canonical requests use the production origin,
+    Default-tenant secret query authentication, exact provider selection, no
+    explicit model, and all three large-completion request shapes.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, then execute the paid
+    `make live-test` command and record its exact safe provider outcomes.
+
+  Resolution:
+  - Extended the production-only harness to eight cases: five echo requests
+    plus the identical large completion request through OpenAI, Anthropic, and
+    Meta. The OpenAI result retains its explicit background-polling case name;
+    Anthropic and Meta retain explicit long-completion case names.
+  - The fake-curl operational boundary proves all eight calls use only the
+    production origin, Default-tenant client secret, saved provider default
+    model, required request budget, and final completion marker.
+  - The required baseline and final `make ci` checks passed. The paid run
+    returned `200` for the OpenAI, Anthropic, and Meta echoes; Gemini echo
+    returned `502`, Moonshot echo returned `429`, OpenAI long completion
+    returned `504`, and Anthropic and Meta long completions returned `502`.
+    The harness completed all eight cases, redacted their bodies, and correctly
+    returned nonzero. The echo failures remain B087; the long-completion
+    failures are tracked in B088.
+
+- [ ] [B087] (P1) Restore Default-tenant Gemini and Moonshot production routing.
+  Goal:
+  Restore successful text generation for the Default tenant's saved Gemini and
+  Moonshot provider routes without weakening the production live-test contract.
+
+  Evidence:
+  - The current eight-case `make live-test` production run returned `200` for
+    OpenAI, Anthropic, and Meta echo cases using the same Default-tenant client
+    secret. Gemini echo returned safe HTTP `502`; Moonshot echo returned safe
+    HTTP `429`. The independent long-completion failures are tracked in B088.
+
+  Requirements:
+  - Diagnose the exact Default-tenant Gemini `502` and Moonshot `429` at the
+    public proxy/provider boundary without exposing secrets, prompts, response
+    bodies, or client credentials.
+  - Restore the affected provider routes through their canonical saved tenant
+    credentials and provider configuration; do not add a local provider-key
+    path, fallback provider, retry loop, or test-only bypass.
+  - Preserve `make live-test` as an honest production boundary: it must retain
+    all five providers, the short marker requests, the OpenAI polling case, and
+    the Anthropic and Meta long-completion cases.
+
+  Validation:
+  - Run `make live-test` with the Default-tenant client secret and prove the
+    Gemini and Moonshot echo cases return HTTP `200` with their required
+    completion markers while retaining the complete eight-case matrix.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair for any code change.
+
+- [ ] [B088] (P1) Restore Default-tenant long completion routing for OpenAI, Anthropic, and Meta.
+  Goal:
+  Make the Default tenant complete the production live test's deterministic
+  large request through OpenAI, Anthropic, and Meta without a local provider
+  credential, fallback provider, or client-side polling path.
+
+  Evidence:
+  - The expanded `make live-test` run returned HTTP `200` for the three
+    providers' short echo requests using their saved Default-tenant models.
+  - The same run gave OpenAI's named background-polling case its full
+    900-second budget before a safe HTTP `504`; Anthropic and Meta long
+    completion cases each returned safe HTTP `502`.
+  - The harness sent the same request larger than 16 KiB to all three cases,
+    required normalized output for all 120 fictional portfolio records before
+    the final marker, printed no response body or credential, and continued
+    through the complete eight-case matrix.
+
+  Requirements:
+  - Diagnose and restore the exact production route for each failed long
+    completion through the saved Default-tenant provider configuration. Retain
+    OpenAI's server-owned Responses polling and the canonical blocking request
+    contract for Anthropic and Meta.
+  - Do not weaken, skip, shorten, special-case, retry, or replace the
+    large-completion live-test cases to conceal a provider, continuation, or
+    request-deadline failure.
+  - Do not add local provider keys, a client polling endpoint, a fallback
+    provider, or an unbounded timeout. Keep request and response data redacted
+    from user-facing failures and issue evidence.
+
+  Validation:
+  - Run `make live-test` with only the Default-tenant client secret and prove
+    the named OpenAI background-polling, Anthropic long-completion, and Meta
+    long-completion cases return HTTP `200` with their final marker.
+  - For any source change, run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [x] [B085] (P1) {B080} Complete truncated provider output through one shared coordinator.
+  Goal:
+  Make every configured text provider recover from output-budget truncation
+  inside the caller's existing blocking request, using one provider-neutral
+  completion lifecycle instead of recording a recoverable partial result as an
+  upstream failure.
+
+  Evidence:
+  - The production Meta Muse Spark path returns HTTP `200` with
+    `finish_reason=length` when the caller selects a 256-token completion
+    budget, while the same prompt completes with `finish_reason=stop` at 1200
+    tokens. B080 currently converts the recoverable first response into a
+    public `502` and a failed managed usage event.
+  - The configured provider catalog contains 12 text providers implemented by
+    four transports: OpenAI Responses; shared OpenAI-compatible Chat
+    Completions for Meta, DeepSeek, DashScope, Qwen Cloud, Moonshot, MiniMax,
+    SiliconFlow, Zhipu, and Grok; Gemini `generateContent`; and Anthropic
+    Messages.
+  - Each transport reports output-budget exhaustion explicitly:
+    OpenAI `status=incomplete` with `reason=max_output_tokens`, Chat
+    `finish_reason=length`, Gemini `finishReason=MAX_TOKENS`, and Anthropic
+    `stop_reason=max_tokens`.
+  - The current adapters classify those four signals independently as terminal
+    errors. OpenAI pending-response polling is also embedded in its adapter, so
+    there is no shared owner for completion state, continuation accounting, or
+    the request deadline.
+
+  Requirements:
+  - Introduce one provider-neutral completion coordinator used by every
+    configured text provider. It must keep the original public request open and
+    continue provider work until the normalized state is complete, the request
+    context ends, or a non-recoverable provider state occurs.
+  - Normalize only exact output-budget exhaustion as recoverable:
+    OpenAI `incomplete/max_output_tokens`, Chat `length`, Gemini `MAX_TOKENS`,
+    and Anthropic `max_tokens`. Safety/content filtering, refusals, tool calls,
+    context-window exhaustion, missing or unknown states, failed/cancelled
+    work, malformed responses, and provider HTTP failures remain canonical
+    upstream failures.
+  - Use one continuation transcript contract for every transport: retain the
+    original messages, append any accumulated assistant output, and request
+    only the missing suffix. Provider adapters may translate that canonical
+    transcript to their wire format but must not own separate retry loops or
+    provider-name-specific continuation policy.
+  - Treat public `max_tokens` as the initial per-attempt output budget for this
+    completion lifecycle, not permission to return a truncated answer. Reuse
+    it for suffix-producing attempts. When an incomplete attempt produces no
+    visible progress, increase the next attempt budget generically, bounded by
+    the configured model output limit when one is known and by integer safety;
+    the overall request timeout remains the hard lifecycle bound.
+  - Keep upstream worker admission and configured origin rate limits on every
+    provider operation. Waiting between explicit incomplete observations must
+    not occupy a worker.
+  - Aggregate token usage across distinct continuation attempts while retaining
+    cumulative-snapshot replacement for repeated observations of one OpenAI
+    response id. A recovered lifecycle produces one successful managed usage
+    event and no failure row. A request that exhausts its overall deadline
+    produces one canonical `504 request_timeout` event with usage accumulated
+    before the deadline.
+  - Never expose an intermediate partial response, raw provider body, provider
+    error, prompt, response, or credential through the public error or managed
+    failure-detail contract.
+  - Supersede B080's terminal-incomplete and no-hidden-continuation decision in
+    README, the canonical OpenAPI contract, the generated API reference, and
+    provider-routing documentation. Keep the client-facing operation blocking;
+    do not add a client polling endpoint, durable job queue, compatibility
+    path, or provider-specific public option.
+
+  Validation:
+  - Exercise every canonical text provider selector through the public
+    `POST /v2` boundary with an output-budget truncation followed by a complete
+    suffix, and prove each returns one complete HTTP `200` result.
+  - Prove the four transport families use the same coordinator contract,
+    preserve ordered/system/user/assistant messages, concatenate suffixes
+    without returning an intermediate response, and aggregate exact usage.
+  - Reproduce the Meta no-visible-output case and prove the generic progress
+    budget increases before the next attempt without exceeding a configured
+    model limit.
+  - Prove repeated incomplete observations continue until an explicit complete
+    signal, while deadline expiry returns the canonical `504` and a safety,
+    refusal, tool, context-window, missing, or unknown state still returns
+    `502` without another continuation request.
+  - Prove recovered managed requests add only one successful usage event and do
+    not appear in account-wide or tenant failure details.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+  Resolution:
+  - Resolved 2026-07-27: one provider-neutral coordinator now continues exact
+    output-budget signals across all 12 configured providers and all four
+    transports until canonical completion or the public request deadline.
+    Adapters only normalize native provider state and translate the shared
+    continuation transcript.
+  - A recovered lifecycle records one success with usage aggregated across
+    distinct attempts; repeated OpenAI snapshots for one response id replace
+    prior snapshots. Deadline expiry records one canonical `504` with usage
+    accumulated before the deadline. Non-recoverable states remain `502`
+    failures and never expose partial text.
+  - The required baseline and post-change `make ci` runs passed. Public
+    black-box coverage exercises every configured provider, repeated and
+    zero-progress continuations, transcript and suffix assembly, exact usage
+    accounting, deadline expiry, and representative non-recoverable states.
 
 - [x] [B084] (P1) {I029} Restore the generated API reference after OpenAPI contract merges.
   Goal:
@@ -380,9 +609,37 @@ already satisfied; recurring maintenance remains scheduled work.
     to classify any subsequent provider failure before resuming the full F001
     batch.
 
-  Blocked: production release publication and activation are operator-owned;
-  F001 provider execution remains stopped until the new immutable release,
-  backend route, and matching Pages UI are all verified live.
+  Verified 2026-07-27:
+  - Release `v0.2.47` points to release commit
+    `943a9b5b582534c11526a5242c145a2d234f6f09`; its immutable source commit is
+    `63763e70c20db0dad311e95d654aa67a6f076e13`.
+  - `ghcr.io/tyemirov/llm-proxy:v0.2.47` and `:latest` both resolve through the
+    standard Docker client to
+    `sha256:986fb7cb1a3dc50d49d53678121452e28acb503458e70d107f45f98f3dfa4121`.
+  - The public Pages marker reports `release_version=v0.2.47` and source
+    `63763e70c20db0dad311e95d654aa67a6f076e13`. The deployed UI assets contain
+    the failed-request action and account/tenant failure clients.
+  - Unauthenticated requests to both canonical failure-details operations now
+    return `401`, proving the live backend reaches the authentication boundary
+    instead of the obsolete router-level `404`.
+  - The dominant active Meta failure path is not evidence of stale B077
+    activation.
+    One repository-owned live smoke without an explicit output ceiling
+    completed successfully. A controlled `muse-spark-1.1` request with the
+    caller's explicit 256-token ceiling returned provider HTTP `200`,
+    `finish_reason=length`, and no visible answer; the same request at 1200
+    tokens returned `finish_reason=stop` with visible text. The public
+    production proxy reproduced the same split: 256 returned safe `502`
+    `chat completion finish_reason=length`, while 1200 returned exact success.
+    B080 correctly maps the incomplete 256-token result without leaking partial
+    output. The current Gix commit-message path owns that 256-token ceiling and
+    fails over to its lower-priority OpenAI connection.
+
+  Blocked: direct inspection of the running production container image still
+  requires the gateway operator's sudo authority, and the required post-release
+  Terra/max 900-second Creative Director canary has not been rerun. Keep B077
+  blocked until the operator records the running container's image ID and
+  matching repo digest, then completes the single normalized Terra canary.
 
 - [x] [B079] (P1) {B074,B076,F014} Consolidate tenant and client-key lifecycle into one Settings row.
   Goal:
@@ -1103,6 +1360,198 @@ already satisfied; recurring maintenance remains scheduled work.
   - Kamu F001 can therefore resume with the declared 900-second budget; no retry, direct-provider path, prompt chunking, or tenant mutation is required.
 
 ## Improvements
+
+- [ ] [I036] (P1) {F014,B081} Verify pasted provider API keys before persisting them.
+  Goal:
+  Make a provider connected and routing-eligible only after LLM Proxy
+  automatically proves that a newly supplied credential is operational for
+  the exact selected provider and text model.
+
+  Evidence:
+  - The Settings API-key input currently marks the provider draft dirty on
+    input and submits it only on change, provider switch, or Settings close. A
+    paste has no immediate verification state or provider request.
+  - `PUT /api/management/tenants/:tenant_id/provider-keys/:provider` currently
+    validates the body, provider, and model, then encrypts and persists any
+    nonblank key without contacting the selected provider. The real-router
+    suite proves that an arbitrary short value such as `skhort` returns `200`
+    and masked saved-key state.
+  - A successful save sets `providers[].has_key`, makes that provider eligible
+    for routing defaults, and may establish the tenant's first default route.
+    An unusable credential can therefore appear connected until the user's
+    first real proxy request fails upstream.
+
+  Requirements:
+  - Treat every nonempty `api_key` submitted to the existing provider-settings
+    operation as an unverified new or replacement credential. Verify it
+    server-side before any provider-key, provider-settings, or routing-default
+    database mutation. An empty `api_key` remains the exact retain-existing-key
+    operation for model or system-prompt updates and does not reverify the
+    stored credential.
+  - Add one provider-neutral verification boundary covering every canonical
+    provider. Each provider adapter must perform its exact documented,
+    authenticated, non-user-content operation and report success only when the
+    supplied credential is accepted and the selected text model is available
+    to it. Key shape, encryption success, catalog membership, a global
+    credential, or another provider must never count as verification.
+  - A paste into the selected provider's API-key field must start verification
+    automatically without waiting for blur, Settings close, provider switch,
+    or a separate Verify/Save action. Any non-paste replacement submitted
+    through the canonical operation receives the same server-side verification
+    guarantee.
+  - Show one explicit `Verifying key` pending state and lock conflicting
+    provider, tenant, model, reveal, remove, and Settings-close actions until
+    that attempt settles. A newer paste, authentication reset, tenant switch,
+    provider switch, model change, or editor replacement must cancel or
+    invalidate the prior attempt so a stale result cannot mutate or render in
+    the new context.
+  - On verification success, encrypt and persist the credential together with
+    the submitted provider model and system prompt, reconcile routing defaults,
+    and return the complete profile in one atomic mutation. Only that response
+    may set `has_key`, unlock mandatory setup, or expose the provider in routing
+    selectors. Clear the raw pasted value from browser state and return to the
+    existing masked-key presentation.
+  - On verification rejection, keep a new provider unkeyed. For a failed
+    replacement, retain the prior verified encrypted credential, provider
+    settings, and routing defaults unchanged. Keep the rejected draft available
+    only in the current editor for correction or retry, and state visibly
+    whether no key was saved or the previous key remains active.
+  - Distinguish a provider credential/model rejection from an unconfirmed
+    timeout, rate limit, or provider outage through stable, documented,
+    provider-neutral management errors. None of those outcomes may save the
+    candidate key. Never return, persist, log, or render the key, authenticated
+    URL, raw provider body, probe response, prompt, or provider-specific
+    free-form error.
+  - Run verification under the request context and the existing shared
+    upstream admission and origin-rate-limit boundaries. Make exactly one
+    documented verification operation per submitted candidate; add no hidden
+    retry, alternate endpoint, generation fallback, background continuation,
+    or deferred save. Verification attempts do not create managed usage events.
+  - Update the canonical OpenAPI source and generated reference, README,
+    provider-routing documentation, frontend types and copy, and CHANGELOG in
+    the same implementation.
+
+  Deliverables:
+  - One provider-neutral operational credential verifier with exact adapters
+    for all canonical providers, wired into the existing authenticated
+    provider-settings mutation before its database transaction.
+  - Automatic paste-triggered verification with explicit pending, success,
+    rejection, transient-failure, retry, and stale-response behavior in
+    Settings.
+  - Canonical and generated documentation for the verify-before-persist
+    contract and its safe failure statuses.
+
+  Validation:
+  - Exercise every canonical provider through the real management router and
+    its actual transport shape against controlled upstream servers. Prove an
+    accepted credential/model pair performs exactly one verification operation
+    and only then returns a keyed profile and eligible defaults.
+  - For every transport family, prove authentication rejection, model-access
+    rejection, rate limiting, upstream failure, timeout, malformed success, and
+    cancellation leave the database and routing defaults unchanged and expose
+    only the documented safe management error.
+  - Prove a rejected first key leaves mandatory setup locked, while a rejected
+    replacement leaves the prior key operational and selected defaults
+    unchanged. Prove no verification attempt creates a managed usage event or
+    leaks candidate material through responses, logs, profile data, or the DOM.
+  - Add rendered Playwright coverage showing that paste starts verification
+    before blur, displays and announces the pending state, locks conflicting
+    actions, applies success once, retains a failed draft for retry, and rejects
+    stale completions after every tenant/provider/model/auth context change.
+  - Extend the opt-in live-provider harness to verify each available real key
+    through the same operational verifier before its provider smoke request;
+    keep paid live calls and secrets outside `make ci`.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
+    the final run after the last code edit.
+
+- [ ] [I035] (P2) {B076} Persist each user's selected Usage interval across sessions.
+  Goal:
+  Make the Usage Overview reopen with the last interval the authenticated user
+  successfully selected. A user who selects `7 days` must start the next login
+  at `7 days`; after changing to `1 day`, subsequent logins must start at
+  `1 day`.
+
+  Evidence:
+  - The frontend initializes `selectedUsageInterval` from the hard-coded
+    `30d` default. Selecting another interval changes only the mounted Alpine
+    component and requests that interval's usage summary.
+  - Authentication reset explicitly restores `30d`, and a full page reload
+    constructs the same default before the authenticated workspace loads.
+  - The managed user record and `GET /api/management/account` response contain
+    no dashboard preference, so the current selection cannot survive logout,
+    reload, session restoration, or another browser/device.
+
+  Requirements:
+  - Persist exactly one canonical account-owned `usage_interval` preference for
+    each authenticated managed user. Accepted values are `all`, `30d`, `7d`,
+    and `1d`; a newly created user defaults to `30d`.
+  - Keep this preference independent of the `Usage tenant` filter and Settings
+    tenant. The same saved interval initializes both account-wide and explicitly
+    tenant-filtered Usage Overview queries. Do not persist the Usage tenant,
+    dashboard view, admin view, failure-dialog state, or any other local UI
+    state as part of this issue.
+  - Extend the canonical `GET /api/management/account` response with a required
+    `preferences` object containing the exact saved `usage_interval`. Add one
+    owner-only `PUT /api/management/account/preferences` operation whose strict
+    request and response contain that same complete preference object. Reject
+    a missing, blank, unknown, or additional field with `400`; never normalize,
+    infer, or silently replace an invalid value.
+  - Store the preference on the managed user through the existing GORM database
+    boundary. Add one bounded, all-or-nothing schema migration that initializes
+    every existing user to `30d`, verifies the migrated rows, and records the
+    new current schema version. After migration, keep only the current schema
+    and reject invalid persisted values at startup without a read-time fallback,
+    nullable legacy shape, dual read/write, or compatibility response.
+  - Apply the account response's saved interval before issuing the initial
+    Usage Overview request so login, session restoration, and full reload make
+    exactly the saved-interval request without first rendering or requesting
+    `30d`.
+  - On interval selection, persist the exact new value before treating it as
+    the confirmed selection and loading its usage summary. Keep interval
+    controls blocked through the preference mutation and selected-interval load.
+    A failed preference mutation must retain the prior confirmed interval and
+    snapshot, show the existing explicit request-failure treatment, and never
+    imply that an unsaved choice will survive the next login.
+  - Preserve request identity and authentication isolation. A late preference
+    or usage response cannot overwrite a newer interval, authentication reset,
+    another user, Usage tenant change, or dashboard-view change.
+  - Keep the preference server-side. Do not add localStorage, sessionStorage,
+    cookies, URL/history state, a tenant field, a client-library preference
+    file, or a browser-only fallback. The fixed administrator dashboard remains
+    a separate 30-day contract and does not read or mutate this preference.
+  - Update the canonical OpenAPI source, generated API reference, frontend
+    types, README, CHANGELOG.md, and
+    `docs/implementation/provider-routing-plan.md` in the same implementation.
+
+  Deliverables:
+  - One typed Usage-interval preference contract, forward-only managed-user
+    schema migration, owner-isolated read/update store path, canonical account
+    response and preference update operation, and race-safe frontend hydration
+    and mutation flow.
+  - Updated canonical and generated documentation describing the account-owned
+    persistence boundary and the unchanged local-only state outside this
+    preference.
+
+  Validation:
+  - Exercise the real management router and a disposable SQLite database to
+    prove a new user starts at `30d`, can save each supported interval, retains
+    the latest value after database restart and a new authenticated session,
+    and cannot read or change another user's preference.
+  - Prove the bounded migration initializes existing users once, preserves all
+    account/tenant/provider/usage data, and rejects an invalid current-schema
+    preference at startup without mutation or fallback.
+  - Add OpenAPI conformance coverage for the required account preference and
+    strict authenticated update operation, including invalid bodies,
+    authorization, owner isolation, and stable error responses.
+  - Add Playwright coverage showing `7 days` selected after a full reload and
+    later login, then `1 day` after the next successful change and login.
+    Prove the first usage request uses only the saved interval, failed saves
+    retain the prior confirmed view, rapid/stale responses cannot regress it,
+    and no preference is written to browser storage.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
+    the final run after the last code edit.
 
 - [x] [I034] (P2) {B079} Minimize Settings system-prompt editors by default.
   Goal:
@@ -1957,6 +2406,136 @@ already satisfied; recurring maintenance remains scheduled work.
     coverage, the real SQLite migrations, 33 Python tests,
     package installation, 59 browser scenarios, the real two-user TAuth
     black-box test, release checks, and live-provider harness preflight.
+
+- [ ] [F016] (P1) Add an installable Node.js client for canonical v2 messages.
+  Goal:
+  Let server-side Node.js applications install `llm-proxy-client`, create one
+  validated client from an application-supplied LLM Proxy base URL and tenant
+  secret, and await canonical `/v2` message requests without duplicating
+  authentication, URL, model-profile, timeout, or error-handling logic.
+
+  Evidence:
+  - `pkg/llmproxyclient` is the reusable Go client, `python/llm_proxy_client` is
+    the installable Python package, and `llm-proxy-client` is the standalone Go
+    CLI. Their public tests exercise the same v2-only messages transport.
+  - The root npm project is private frontend/test tooling. The repository has
+    no installable Node.js package, Node import surface, package declaration,
+    or packed-consumer validation.
+  - `docs/openapi.yaml` is the sole public HTTP contract, and repository CI
+    already uses Node.js 22. The Node package can therefore use the built-in
+    Fetch API without adding a runtime dependency or another wire schema.
+
+  Requirements:
+  - Add exactly one package project under `node/`, named
+    `llm-proxy-client`, initially versioned `0.1.0`, with
+    `"type": "module"`, a strict public `exports` map, and
+    `"engines": {"node": ">=22"}`. Keep the root frontend package private and
+    separate; do not add alternate package names, scopes, entrypoints, or
+    registry fallbacks.
+  - Author the runtime directly as vanilla ESM JavaScript with `// @ts-check`,
+    complete JSDoc, descriptive identifiers, immutable validated values, and
+    no runtime dependencies. Generate one TypeScript declaration surface from
+    that source for consumers. Do not add a CommonJS build, dual-package
+    condition, transpiled runtime copy, browser bundle, provider SDK, or legacy
+    prompt/GET client.
+  - Export only the canonical public surface: `Client`, `ClientConfig`,
+    `ClientMessage`, `ClientMessagesRequest`, `LLMProxyClientError`,
+    `LLMProxyModelProfileError`, `LLMProxyHTTPError`, and
+    `LLMProxyTransportError`. `Client.postMessages(request, {signal})` returns
+    `Promise<string>`; the constructor accepts an explicitly injected Fetch
+    implementation or uses Node's built-in `globalThis.fetch`.
+  - Validate configuration and request input exactly once at their constructors.
+    Require an absolute HTTP(S) base URL and nonblank tenant secret; accept an
+    optional provider. Require at least one message and one `user` message,
+    allow only `system`, `user`, and `assistant` roles with nonempty content,
+    and require optional `order` values to be all-or-none, unique,
+    non-negative integers. Accept only optional `model`, `webSearch`,
+    `maxTokens`, `reasoningEffort`, and `requestTimeoutSeconds` values matching
+    the canonical v2 contract; a request timeout is a positive whole number.
+  - Build the request with the standard `URL` API. Append `/v2` exactly once,
+    replace `key` and `format`, preserve unrelated query values, preserve a
+    base-URL provider unless the validated config explicitly overrides it, and
+    remove body-owned query fields. Send `format=text/plain`,
+    `Accept: text/plain`, `Content-Type: application/json; charset=utf-8`, and
+    the exact canonical JSON body. Omit `model`, `max_tokens`, and
+    `reasoning_effort` when not selected; serialize `web_search` as a boolean.
+  - Serialize `requestTimeoutSeconds` only as
+    `X-LLM-Proxy-Request-Timeout-Seconds`. Add no client-owned total-response
+    deadline, retry, polling, streaming, or fallback transport. A supplied
+    `AbortSignal` is the caller's independent cancellation authority.
+  - Match F015's application-user model-profile contract. A configured
+    `modelProfilePath` requires one application-injected asynchronous text
+    reader; reread and strictly decode its complete JSON document before every
+    request. Accept exactly one nonblank `provider` and `model` string, reject
+    unknown or duplicate fields, and reject profile mode combined with a
+    configured/base-URL provider, base-URL model, or request model. A read,
+    decode, validation, or conflict failure must stop before Fetch and must
+    never reuse a prior profile, tenant default, or alternate source.
+  - Return successful response text unchanged. Map every non-2xx response to
+    `LLMProxyHTTPError` with status, response body, status text, and bounded
+    provider/model/request-timeout context. Map network failures and caller
+    cancellation to `LLMProxyTransportError` while retaining the original
+    error as `cause`. No error name, message, field, cause wrapper, log, or
+    package example may expose the tenant secret, authenticated URL, request
+    messages, or response text from another request.
+  - Keep the package server-side only. Do not read environment variables,
+    dotenv files, service `config.yml`, browser storage, TAuth state, or
+    upstream provider keys. Applications supply configuration and secrets
+    explicitly; the package never sends a provider API key.
+  - Add repository-owned package lint, declaration, black-box test, pack, and
+    temporary-consumer install targets to the root Makefile and `make ci`.
+    Extend CI path filters for `node/**`. Package only the ESM runtime,
+    declarations, package README, and MIT license through an explicit `files`
+    allowlist; exclude tests, coverage, repository tooling, and local files.
+  - Produce one deterministic `npm pack` tarball and an explicit
+    operator-owned npm publication command. Validate package name, version,
+    contents, registry target, and an unpublished version before mutation.
+    CI and implementation work use `npm publish --dry-run` only; no PR,
+    `make ci`, deploy, or implicit release step may publish externally, and
+    there is no alternate registry/package-name fallback.
+  - Add Node.js installation and ESM/TypeScript usage to the package README and
+    root README. Update `CHANGELOG.md`,
+    `docs/implementation/provider-routing-plan.md`, the client-authentication
+    documentation, and the generated Clients resource family with one
+    Node.js-client page and examples. Do not change the public HTTP contract to
+    accommodate the client; prove the package conforms to the existing
+    `docs/openapi.yaml`.
+
+  Deliverables:
+  - One installable zero-runtime-dependency Node.js ESM package with generated
+    declarations, validated public request/config types, injectable Fetch
+    transport, model-profile support, and stable typed errors.
+  - Root Makefile/CI integration, packed-consumer validation, deterministic
+    package artifact, and explicit operator-owned publication path.
+  - Updated product, client-authentication, provider-routing, package, and
+    generated public documentation for the Node.js integration.
+
+  Validation:
+  - Pack the package, install only that tarball into disposable JavaScript and
+    TypeScript consumer projects, import only its public export, compile the
+    typed example, and make real requests through a loopback HTTP server.
+    Never validate by importing unpublished source paths.
+  - Through the installed public client, prove exact method, `/v2` path,
+    authentication/format/provider query behavior, unrelated-query
+    preservation, body-field stripping, headers, Unicode messages, explicit
+    ordering, optional-field omission, response text, and conformance with the
+    canonical OpenAPI request and documented response statuses.
+  - Cover every configuration/message/request invariant; provider
+    preserve/override behavior; profile reload after atomic replacement;
+    malformed, duplicate, incomplete, unreadable, and conflicting profiles;
+    timeout-header omission/presence; caller abort; transport failure; every
+    documented non-2xx status; and proof that one call occurs with no hidden
+    retry or client deadline.
+  - Assert HTTP and transport errors preserve their typed fields and cause
+    while their string/object representations exclude the tenant secret,
+    authenticated URL, request content, and unrelated response state.
+  - Verify `npm pack --dry-run` and `npm publish --dry-run` contain only the
+    allowlisted files, use exact `llm-proxy-client@0.1.0` metadata, require
+    Node.js 22 or newer, expose only ESM plus declarations, and leave no packed,
+    installed, credential, or coverage artifacts in the worktree.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
+    the final run after the last code edit.
 
 ## Planning
 *do not implement yet*

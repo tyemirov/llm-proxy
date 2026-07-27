@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	geminiAPIKeyHeader     = "x-goog-api-key"
-	geminiFinishReasonStop = geminiFinishReason("STOP")
+	geminiAPIKeyHeader          = "x-goog-api-key"
+	geminiFinishReasonStop      = geminiFinishReason("STOP")
+	geminiFinishReasonMaxTokens = geminiFinishReason("MAX_TOKENS")
 )
 
 type geminiFinishReason string
@@ -151,12 +152,12 @@ func parseGeminiGenerateContentResponse(responseBytes []byte) (textGenerationRes
 	}
 	generation := textGenerationResult{usage: usage}
 	for _, candidate := range response.Candidates {
+		visibleText := visibleGeminiCandidateText(candidate)
 		if finishReasonError := validateGeminiFinishReason(candidate.FinishReason); finishReasonError != nil {
-			return generation, finishReasonError
+			return textGenerationResult{text: visibleText, usage: usage}, finishReasonError
 		}
-		trimmedText := visibleGeminiCandidateText(candidate)
-		if trimmedText != constants.EmptyString {
-			return textGenerationResult{text: trimmedText, usage: usage}, nil
+		if !utils.IsBlank(visibleText) {
+			return textGenerationResult{text: visibleText, usage: usage}, nil
 		}
 	}
 	return generation, fmt.Errorf("%w: gemini generateContent returned no text", ErrProviderAPI)
@@ -165,6 +166,9 @@ func parseGeminiGenerateContentResponse(responseBytes []byte) (textGenerationRes
 func validateGeminiFinishReason(reason geminiFinishReason) error {
 	if reason == geminiFinishReasonStop {
 		return nil
+	}
+	if reason == geminiFinishReasonMaxTokens {
+		return errProviderOutputLimitReached
 	}
 	normalizedReason := strings.TrimSpace(string(reason))
 	if normalizedReason == constants.EmptyString {
@@ -180,7 +184,7 @@ func visibleGeminiCandidateText(candidate geminiCandidate) string {
 			textBuilder.WriteString(part.Text)
 		}
 	}
-	return strings.TrimSpace(textBuilder.String())
+	return textBuilder.String()
 }
 
 func parseGeminiTokenUsage(usage *geminiUsageMetadata) (*tokenUsage, error) {

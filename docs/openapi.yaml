@@ -1080,6 +1080,7 @@
         "name": "max_tokens",
         "in": "query",
         "required": false,
+        "description": "Initial per-attempt output budget. The same budget is reused when the proxy requests a missing suffix; after a zero-text output-budget stop, a configured model output limit bounds any generic increase.",
         "schema": {
           "type": "integer",
           "minimum": 1
@@ -1286,7 +1287,7 @@
     },
     "responses": {
       "TextSuccess": {
-        "description": "Complete generated text in the selected representation. HTTP 200 requires the selected transport's canonical completion signal: OpenAI Responses status=completed, OpenAI-compatible Chat Completions finish_reason=stop, Gemini finishReason=STOP, or Anthropic stop_reason=end_turn|stop_sequence. Incomplete, intermediate, missing, or unknown provider states never return text as success.",
+        "description": "Complete generated text in the selected representation. The proxy internally continues exact output-budget stops through one provider-neutral lifecycle: OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, Gemini MAX_TOKENS, and Anthropic max_tokens. HTTP 200 is returned only after the selected transport reports its complete signal: OpenAI completed, Chat stop, Gemini STOP, or Anthropic end_turn|stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states never return text as success.",
         "headers": {
           "X-LLM-Proxy-Request-Timeout-Seconds": {
             "$ref": "#/components/headers/ResolvedRequestTimeout"
@@ -1404,7 +1405,7 @@
         "description": "The caller canceled or closed the request."
       },
       "ProxyBadGateway": {
-        "description": "The selected upstream provider failed or returned an incomplete, intermediate, missing, or unknown completion signal. The response never exposes partial generated text, token-count headers, or the raw provider body; provider-reported usage can still be retained in managed failure accounting.",
+        "description": "The selected upstream provider failed or returned a nonrecoverable completion signal. Output-budget stops are continued internally and do not create this response. The response never exposes partial generated text, token-count headers, or the raw provider body; provider-reported usage can still be retained in managed failure accounting.",
         "headers": {
           "X-LLM-Proxy-Request-Timeout-Seconds": {
             "$ref": "#/components/headers/ResolvedRequestTimeout"
@@ -1712,7 +1713,8 @@
           },
           "max_tokens": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 1,
+            "description": "Initial per-attempt output budget. Reused for missing-suffix attempts, with any zero-progress increase bounded by the configured model output limit."
           },
           "reasoning_effort": {
             "type": "string",
@@ -1746,7 +1748,8 @@
           },
           "max_tokens": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 1,
+            "description": "Initial per-attempt output budget. Reused for missing-suffix attempts, with any zero-progress increase bounded by the configured model output limit."
           },
           "reasoning_effort": {
             "type": "string",

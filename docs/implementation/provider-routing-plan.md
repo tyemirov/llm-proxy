@@ -23,9 +23,9 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - `messages[]` items contain `role` and string `content`. Supported roles are `system`, `user`, and `assistant`; at least one `user` message is required.
 - `messages[].order` is optional. When any submitted message includes `order`, every submitted message must include a unique non-negative integer `order`; the proxy sorts submitted messages by ascending `order` before adding a request or tenant system prompt and before routing upstream.
 - With `messages[]` on `POST /`, body `system_prompt` is prepended as a system message only when the transcript does not already contain a `system` message. A body containing both `system_prompt` and a system message is invalid. With `POST /v2`, callers send system instructions as `system` role messages.
-- `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies.
+- `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies. It is the initial per-attempt output budget and is reused for missing-suffix attempts.
 - Provided `max_tokens` maps to OpenAI Responses `max_output_tokens`, Meta, Moonshot, and MiniMax Chat Completions `max_completion_tokens`, other OpenAI-compatible chat completions `max_tokens`, Anthropic Messages `max_tokens`, and Gemini `generationConfig.maxOutputTokens`.
-- Omitted `max_tokens` means the proxy omits provider max-token fields and lets the selected provider/model default apply, except Anthropic Messages where the upstream API requires `max_tokens` and the proxy sends the selected model's configured synchronous output limit.
+- Omitted `max_tokens` means the proxy omits provider max-token fields and lets the selected provider/model default apply, except Anthropic Messages where the upstream API requires `max_tokens` and the proxy sends the selected model's configured synchronous output limit. After an output-budget stop with no visible progress, a configured model output limit becomes the generic ceiling for increasing the next attempt.
 - Known provider-specific output-token ceilings are validated before upstream calls; MiniMax M2.7 rejects `max_tokens` above `2048`, Gemini text models reject values above `65536`, and Claude models reject values above their configured synchronous Messages output limits with `400 Bad Request`.
 - `reasoning_effort` is optional on `GET /` as a query parameter and on JSON `POST /` and `POST /v2` as a body field. Omission retains the resolved tenant default. A supplied value must be nonblank and supported by the exact resolved text provider/model route; blank, `null`, or unsupported values return `400 Bad Request` before a provider call.
 - `X-LLM-Proxy-Request-Timeout-Seconds` is an optional positive whole-number
@@ -220,26 +220,39 @@ documented `queued` and `in_progress` pending states or for a proxy-initiated
 stored background synthesis. Documented terminal states are resolved
 immediately, and missing or unknown states are rejected rather than guessed.
 Only `status=completed` is a successful terminal response.
-`status=incomplete`, including `reason=max_output_tokens`, returns the
-canonical `502` upstream failure without partial text, continuation, or another
-paid generation; any reported token usage remains attached only to the failed
-normalized usage event. Usage objects observed while polling one response id
-are cumulative snapshots, so the newest nonempty snapshot replaces earlier
-observations. Usage is summed only when completed-response synthesis creates a
-distinct response id. Callers use one normal `GET /`, `POST /`, or `POST /v2`
-request and receive a complete formatted answer or a non-2xx response; there is
-no streaming, client-side polling, durable provider-job queue, or later resume
-contract.
+`status=incomplete` with `reason=max_output_tokens` is normalized into the
+same provider-neutral missing-suffix lifecycle used by every text transport.
+Other incomplete reasons are canonical `502` upstream failures. Usage objects
+observed while polling one response id are cumulative snapshots, so the newest
+nonempty snapshot replaces earlier observations. Usage is summed across
+distinct missing-suffix attempts and completed-response synthesis requests.
+Callers use one normal `GET /`, `POST /`, or `POST /v2` request and receive a
+complete formatted answer or a non-2xx response; there is no streaming,
+client-side polling, durable provider-job queue, or later resume contract.
 
-All other current text transports are synchronous and validate their native
-completion evidence before returning text. The shared OpenAI-compatible Chat
-Completions adapter requires `finish_reason=stop`; Gemini
-`generateContent` requires `finishReason=STOP`; Anthropic Messages requires
-`stop_reason=end_turn` or `stop_sequence`. Missing, truncated,
-tool/intermediate, refused, or unknown reasons return `502` without partial
-text. Provider-specific deferred, batch, and asynchronous APIs are separate
-transports outside the configured routes; an arbitrary response `id` never
-activates generic polling.
+One completion coordinator owns output-budget recovery for all transports.
+Adapters normalize only their exact recoverable signal: OpenAI
+`incomplete/max_output_tokens`, Chat Completions `length`, Gemini
+`MAX_TOKENS`, and Anthropic `max_tokens`. The coordinator preserves the
+original messages, appends all accumulated assistant text plus one
+missing-suffix user instruction, repeats the selected provider call, and joins
+the returned suffixes until OpenAI reports `completed`, Chat reports `stop`,
+Gemini reports `STOP`, or Anthropic reports `end_turn`/`stop_sequence`. The
+overall request deadline is the hard bound. Safety/filter, refusal,
+tool/intermediate, failed/cancelled, malformed, missing, and unknown signals
+return the canonical failure without exposing partial text. Provider-specific
+deferred, batch, and asynchronous APIs remain separate transports; an
+arbitrary response `id` never activates polling.
+
+The caller's `max_tokens` value is the initial per-attempt budget and is reused
+for suffix attempts. When an output-budget response has no visible text and
+the model catalog declares an output limit, the next attempt increases the
+budget toward that limit. Each provider call independently passes through the
+shared worker, queue, and upstream-rate-limit controls; the coordinator's wait
+does not retain a worker. Distinct attempt usage is summed into one final
+managed event, while successive OpenAI snapshots for one response id replace
+one another. A recovered request records one success and no failure; a request
+deadline records one `504` with all usage observed before the deadline.
 
 Bundled clients intentionally expose only the canonical `POST /v2` text
 contract. The installable Go CLI maps prompt flags or stdin into v2 `system` and
@@ -343,6 +356,22 @@ fresh loopback port unless `LLM_PROXY_LIVE_PORT` explicitly provides one, and
 cleanup terminates only the proxy child started by the harness rather than a
 process discovered through a shared port.
 
+`make live-test` is deliberately a different boundary: it calls only the
+production API origin with `LLM_PROXY_SECRET`, the Default tenant client
+secret. It never loads a dotenv file or local provider credential. The command
+uses canonical `POST /v2` calls with explicit OpenAI, Anthropic, Meta, Gemini,
+and Moonshot providers and no explicit model, so managed production provider
+settings remain authoritative. Five echo-marker requests verify those routes;
+matching deterministic requests larger than 16 KiB target OpenAI, Anthropic,
+and Meta with a 900-second request budget and a required normalized line for
+each portfolio record before the final marker. OpenAI keeps one blocking request
+open while the proxy owns its Responses background polling. Anthropic and Meta
+exercise their canonical synchronous completion paths, including shared
+output-continuation work when needed. The client validates only the final
+marker, status, and resolved timeout header. This paid check remains outside
+`make ci`, runs all eight cases even after an earlier failure, and never prints
+a tenant secret or response body.
+
 Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, requires API keys for each configured static tenant's default text and dictation providers when management mode is disabled, allows non-default provider API keys to be blank so those providers are disabled until configured, requires every configured provider base URL, requires transcription URLs for dictation-capable providers, requires text model catalogs for every provider, requires dictation model catalogs for dictation-capable providers, rejects blank or duplicate model ids, rejects defaults not listed in their model catalog, rejects `web_search` outside OpenAI text model entries, validates OpenAI request profiles, validates exact model-owned reasoning-effort lists, validates each configured static tenant's default text provider/model and effort, and validates endpoint/credential support for each configured static tenant's default dictation provider/model. When `management.enabled` is false, at least one static tenant is required. When `management.enabled` is true, static tenants and nonblank config-level provider API keys are rejected because managed tokens and provider credentials are user-owned database state.
 
 The repository owns the immutable release implementation under
@@ -401,19 +430,20 @@ When the selected Usage snapshot contains failures, the success-rate card expose
 - `429`: upstream provider rate limiting.
 - `503`: registered non-default provider credential is unavailable, so the selected provider is disabled until its API key is configured.
 - `504`: the overall proxy request timed out before the selected upstream provider returned a final result.
-- `502`: upstream provider failure, including OpenAI Responses
-  `status=incomplete`, Chat Completions non-`stop` finish reasons, Gemini
-  non-`STOP` finish reasons, and Anthropic non-complete stop reasons; partial
-  provider text is never returned.
+- `502`: upstream provider failure, including non-budget OpenAI incomplete
+  reasons, Chat Completions reasons other than `stop` or `length`, Gemini
+  reasons other than `STOP` or `MAX_TOKENS`, and Anthropic reasons other than
+  `end_turn`, `stop_sequence`, or `max_tokens`; partial provider text is never
+  returned.
 
 ## Implementation Notes
 
 - Provider/model validation happens at the HTTP edge through a provider registry built from the configured model catalogs.
-- OpenAI keeps the existing Responses API adapter and derives Responses and Models URLs from `providers.openai.base_url`; audio transcription uses `providers.openai.transcriptions_url`. The adapter accepts text only from `status=completed`, polls only the documented pending states, and rejects failed, cancelled, incomplete, missing, or unknown states.
-- Non-OpenAI text providers use a shared OpenAI-compatible Chat Completions adapter. It requires `finish_reason=stop` before returning content or reasoning text.
+- OpenAI keeps the existing Responses API adapter and derives Responses and Models URLs from `providers.openai.base_url`; audio transcription uses `providers.openai.transcriptions_url`. The adapter polls documented pending states, normalizes only `incomplete/max_output_tokens` for shared continuation, and rejects failed, cancelled, other incomplete, missing, or unknown states.
+- Non-OpenAI compatible text providers use a shared Chat Completions adapter. It normalizes `finish_reason=length` for shared continuation and requires `finish_reason=stop` to complete content or reasoning text.
 - Meta uses the shared OpenAI-compatible Chat Completions adapter against `providers.meta.base_url`; its proxy contract is text-only and has no Responses fallback.
-- Anthropic uses a native Messages adapter, translating proxy `system` messages to the top-level Anthropic `system` parameter and `user`/`assistant` messages to Anthropic `messages[]`; only `end_turn` and `stop_sequence` are complete text stops.
-- Gemini uses a native generateContent adapter against `providers.gemini.base_url`; only `STOP` is a complete text finish reason.
+- Anthropic uses a native Messages adapter, translating proxy `system` messages to the top-level Anthropic `system` parameter and `user`/`assistant` messages to Anthropic `messages[]`; `max_tokens` continues through the shared coordinator, while `end_turn` and `stop_sequence` are complete text stops.
+- Gemini uses a native generateContent adapter against `providers.gemini.base_url`; `MAX_TOKENS` continues through the shared coordinator, while `STOP` is the complete text finish reason.
 - Grok uses the shared OpenAI-compatible Chat Completions adapter against `providers.grok.base_url`.
 - OpenAI-compatible chat providers receive validated and sorted `messages[]` as provider-supported `role` and `content` items.
 - OpenAI Responses payload shape comes from the selected configured model's stable `request_profile`; model-specific web-search support comes from the selected model catalog entry. OpenAI Responses text calls run in background mode with stored responses so long provider work can be polled by llm-proxy while the caller waits on one REST request.
@@ -427,14 +457,17 @@ When the selected Usage snapshot contains failures, the success-rate card expose
 Black-box router tests cover:
 
 - OpenAI omitted-provider regression.
-- OpenAI completed-only success and incomplete-response rejection through the
-  public `POST /v2` handler, including safe failed usage counts and no hidden
-  continuation.
+- OpenAI output-budget recovery through the public `POST /v2` handler,
+  including pending-response snapshots, repeated suffix attempts, exact text
+  assembly, aggregated usage, and one successful managed event.
 - OpenAI polling only for documented pending states, with missing and unknown
   states rejected without another provider call.
-- Shared Chat Completions, Gemini, and Anthropic partial-response rejection
-  through public `POST /v2`, including retained failed usage counts and no
-  client-visible token headers or partial text.
+- Every configured provider through its public text route, proving the same
+  shared continuation transcript, completion order, suffix assembly, and usage
+  aggregation for Chat Completions, Gemini, Anthropic, and OpenAI.
+- Deadline exhaustion and nonrecoverable safety, refusal, tool, malformed,
+  missing, and unknown signals, proving partial text is never exposed as a
+  failure response.
 - Explicit Meta Muse Spark 1.1 routing through `GET /`, compatibility `POST /`, and canonical `POST /v2`.
 - Unsupported Meta `web_search` and dictation paths.
 - Explicit DeepSeek chat-completions routing.

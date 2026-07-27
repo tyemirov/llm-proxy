@@ -74,8 +74,6 @@ const (
 	errorInvalidAudioForm           = "invalid audio form"
 	errorMissingAudioFile           = "missing audio file"
 	errorAudioPayloadTooLarge       = "audio payload too large"
-	// errorUpstreamIncomplete indicates that the upstream provider returned an incomplete response.
-	errorUpstreamIncomplete = "OpenAI API error (incomplete response)"
 	// errorUnknownModel indicates that a model identifier is not recognized.
 	errorUnknownModel = "unknown model"
 	// errorQueueFull indicates that the internal request queue cannot accept additional tasks.

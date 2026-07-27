@@ -730,15 +730,31 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("initial incomplete response with text maps to bad gateway", func(subTest *testing.T) {
+	t.Run("initial incomplete response with text continues to completion", func(subTest *testing.T) {
+		requestCount := 0
+		var finalContinuationPayload map[string]any
 		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			requestCount++
 			responseWriter.Header().Set("Content-Type", "application/json")
+			if requestCount == 3 {
+				requestBytes, _ := io.ReadAll(httpRequest.Body)
+				_ = json.Unmarshal(requestBytes, &finalContinuationPayload)
+				_, _ = responseWriter.Write([]byte(`{"id":"complete","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":" recovered"}]}]}`))
+				return
+			}
+			if requestCount == 2 {
+				_, _ = responseWriter.Write([]byte(`{"id":"partial-again","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":" then"}]}]}`))
+				return
+			}
 			_, _ = responseWriter.Write([]byte(`{"id":"partial","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"partial answer"}]}]}`))
 		})
 		queryParameters := url.Values{}
 		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusBadGateway || body != proxy.ErrUpstreamIncomplete.Error() {
+		if statusCode != http.StatusOK || body != "partial answer then recovered" {
 			subTest.Fatalf("status=%d body=%q", statusCode, body)
+		}
+		if !strings.Contains(finalContinuationPayload["input"].(string), "assistant:\npartial answer then") {
+			subTest.Fatalf("final continuation input=%v", finalContinuationPayload["input"])
 		}
 	})
 
@@ -795,8 +811,9 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("initial incomplete response does not start continuation", func(subTest *testing.T) {
+	t.Run("initial incomplete response without text continues without inventing an unknown model limit", func(subTest *testing.T) {
 		requestCount := 0
+		var continuationPayload map[string]any
 		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			if httpRequest.Method != http.MethodPost || httpRequest.URL.Path != "/" {
@@ -804,15 +821,36 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 				return
 			}
 			requestCount++
+			if requestCount == 2 {
+				requestBytes, _ := io.ReadAll(httpRequest.Body)
+				_ = json.Unmarshal(requestBytes, &continuationPayload)
+				_, _ = responseWriter.Write([]byte(`{"id":"complete","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"complete after empty partial"}]}]}`))
+				return
+			}
 			_, _ = responseWriter.Write([]byte(`{"id":"partial","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[],"usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}`))
 		})
 		queryParameters := url.Values{}
 		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusBadGateway || body != proxy.ErrUpstreamIncomplete.Error() {
+		if statusCode != http.StatusOK || body != "complete after empty partial" {
 			subTest.Fatalf("status=%d body=%q", statusCode, body)
 		}
-		if requestCount != 1 {
-			subTest.Fatalf("upstream requests=%d want=1", requestCount)
+		if requestCount != 2 {
+			subTest.Fatalf("upstream requests=%d want=2", requestCount)
+		}
+		if continuationPayload["max_output_tokens"] != nil {
+			subTest.Fatalf("continuation payload invented an unconfigured model limit: %v", continuationPayload)
+		}
+	})
+
+	t.Run("caller cancellation ends shared continuation polling", func(subTest *testing.T) {
+		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"id":"partial","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[],"usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}`))
+		})
+		queryParameters := url.Values{}
+		statusCode, _, _ := performCoverageTextRequestWithTimeout(subTest, router, queryParameters, "", coverageShortRequestTimeout)
+		if statusCode != 499 {
+			subTest.Fatalf("status=%d want=499", statusCode)
 		}
 	})
 
@@ -1114,11 +1152,17 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("poll incomplete response with text maps to bad gateway", func(subTest *testing.T) {
+	t.Run("poll incomplete response with text continues to completion", func(subTest *testing.T) {
+		postRequestCount := 0
 		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			switch {
 			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				postRequestCount++
+				if postRequestCount == 2 {
+					_, _ = responseWriter.Write([]byte(`{"id":"complete","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":" recovered"}]}]}`))
+					return
+				}
 				_, _ = responseWriter.Write([]byte(`{"id":"partial","status":"queued"}`))
 			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/partial":
 				_, _ = responseWriter.Write([]byte(`{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"partial poll answer"}]}]}`))
@@ -1128,16 +1172,22 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		})
 		queryParameters := url.Values{}
 		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusBadGateway || body != proxy.ErrUpstreamIncomplete.Error() {
+		if statusCode != http.StatusOK || body != "partial poll answer recovered" {
 			subTest.Fatalf("status=%d body=%q", statusCode, body)
 		}
 	})
 
-	t.Run("poll incomplete response without text maps to bad gateway", func(subTest *testing.T) {
+	t.Run("poll incomplete response without text continues to completion", func(subTest *testing.T) {
+		postRequestCount := 0
 		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			switch {
 			case httpRequest.Method == http.MethodPost && httpRequest.URL.Path == "/":
+				postRequestCount++
+				if postRequestCount == 2 {
+					_, _ = responseWriter.Write([]byte(`{"id":"complete","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"complete after poll"}]}]}`))
+					return
+				}
 				_, _ = responseWriter.Write([]byte(`{"id":"partial","status":"queued"}`))
 			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/partial":
 				_, _ = responseWriter.Write([]byte(`{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[]}`))
@@ -1146,13 +1196,13 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 			}
 		})
 		queryParameters := url.Values{}
-		statusCode, _, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusBadGateway {
-			subTest.Fatalf("status=%d want=%d", statusCode, http.StatusBadGateway)
+		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+		if statusCode != http.StatusOK || body != "complete after poll" {
+			subTest.Fatalf("status=%d body=%q", statusCode, body)
 		}
 	})
 
-	t.Run("polled incomplete response does not start continuation", func(subTest *testing.T) {
+	t.Run("polled incomplete response starts shared continuation", func(subTest *testing.T) {
 		postRequestCount := 0
 		router := textRouterWithResponsesHandler(subTest, func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 			responseWriter.Header().Set("Content-Type", "application/json")
@@ -1163,7 +1213,7 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 					_, _ = responseWriter.Write([]byte(`{"id":"polled_partial","status":"queued"}`))
 					return
 				}
-				http.Error(responseWriter, "unexpected continuation", http.StatusInternalServerError)
+				_, _ = responseWriter.Write([]byte(`{"id":"complete","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"continued"}]}]}`))
 			case httpRequest.Method == http.MethodGet && httpRequest.URL.Path == "/polled_partial":
 				_, _ = responseWriter.Write([]byte(`{"id":"polled_partial","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[],"usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5}}`))
 			default:
@@ -1172,11 +1222,11 @@ func TestCoverageOpenAILifecycleBranches(t *testing.T) {
 		})
 		queryParameters := url.Values{}
 		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusBadGateway || body != proxy.ErrUpstreamIncomplete.Error() {
+		if statusCode != http.StatusOK || body != "continued" {
 			subTest.Fatalf("status=%d body=%q", statusCode, body)
 		}
-		if postRequestCount != 1 {
-			subTest.Fatalf("post requests=%d want=1", postRequestCount)
+		if postRequestCount != 2 {
+			subTest.Fatalf("post requests=%d want=2", postRequestCount)
 		}
 	})
 
@@ -1580,7 +1630,7 @@ func TestCoverageProviderRoutingEdges(t *testing.T) {
 			{name: "malformed json", statusCode: http.StatusOK, body: `{`, wantStatus: http.StatusBadGateway},
 			{name: "negative usage", statusCode: http.StatusOK, body: `{"choices":[{"message":{"content":"bad usage"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":-1}}`, wantStatus: http.StatusBadGateway},
 			{name: "missing finish reason", statusCode: http.StatusOK, body: `{"choices":[{"message":{"content":"unfinished text"}}]}`, wantStatus: http.StatusBadGateway},
-			{name: "length finish reason", statusCode: http.StatusOK, body: `{"choices":[{"message":{"content":"partial text"},"finish_reason":"length"}]}`, wantStatus: http.StatusBadGateway},
+			{name: "filtered finish reason", statusCode: http.StatusOK, body: `{"choices":[{"message":{"content":"filtered text"},"finish_reason":"content_filter"}]}`, wantStatus: http.StatusBadGateway},
 			{name: "missing text", statusCode: http.StatusOK, body: `{"choices":[{"message":{},"finish_reason":"stop"}]}`, wantStatus: http.StatusBadGateway},
 		}
 		for _, testCase := range testCases {

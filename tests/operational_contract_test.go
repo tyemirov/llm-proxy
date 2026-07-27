@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -57,6 +58,7 @@ func TestOperationalHelpCommandsUseBuiltinOutput(testingInstance *testing.T) {
 	}{
 		{name: "deploy", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"), expectedFragment: "scripts/deploy.sh [options]"},
 		{name: "live-providers", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), expectedFragment: "scripts/test_live_providers.sh [--preflight | --write-config <path>]"},
+		{name: "production-live-test", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "live_test.sh"), expectedFragment: "Usage: make live-test"},
 		{name: "deploy-pages", path: filepath.Join(repositoryRoot, operationalReleaseToolsRelative, "scripts", "deploy_pages_artifact.sh"), expectedFragment: "deploy_pages_artifact.sh --url <public-url> [options]"},
 		{name: "prepare-container", path: filepath.Join(repositoryRoot, operationalReleaseToolsRelative, "scripts", "prepare_container_artifact.sh"), expectedFragment: "prepare_container_artifact.sh --name <name> --image <registry/repository> [options]"},
 		{name: "prepare-pages", path: filepath.Join(repositoryRoot, operationalReleaseToolsRelative, "scripts", "prepare_pages_artifact.sh"), expectedFragment: "prepare_pages_artifact.sh --source <directory> [options]"},
@@ -1074,6 +1076,212 @@ func TestOperationalDeployForwardsSelectedRemoteToPages(testingInstance *testing
 	}
 	if !strings.Contains(string(captureBytes), "deploy-llm-proxy-backend\t") {
 		testingInstance.Fatalf("gateway deployment was not invoked: %s", captureBytes)
+	}
+}
+
+func TestOperationalProductionLiveTestUsesDefaultTenantSecretOnly(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	for _, relativePath := range []string{
+		"Makefile",
+		filepath.Join(operationalScriptsDirectory, "live_test.sh"),
+	} {
+		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
+	}
+
+	liveTestScript, readScriptError := os.ReadFile(filepath.Join(fixtureRoot, operationalScriptsDirectory, "live_test.sh"))
+	if readScriptError != nil {
+		testingInstance.Fatalf("read production live-test script: %v", readScriptError)
+	}
+	for _, forbiddenFragment := range []string{"LIVE_ENV_FILE", "API_KEY", "SERVICE_SECRET", "configs/.env"} {
+		if strings.Contains(string(liveTestScript), forbiddenFragment) {
+			testingInstance.Fatalf("production live-test script reads forbidden local credential source %q", forbiddenFragment)
+		}
+	}
+
+	toolDirectory := filepath.Join(fixtureRoot, "tools")
+	captureDirectory := filepath.Join(fixtureRoot, "curl-capture")
+	if createCaptureDirectoryError := os.MkdirAll(captureDirectory, 0o755); createCaptureDirectoryError != nil {
+		testingInstance.Fatalf("create curl capture directory: %v", createCaptureDirectoryError)
+	}
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env bash
+set -euo pipefail
+
+curl_config_path=""
+headers_path=""
+response_path=""
+request_timeout_seconds=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --config)
+      curl_config_path="$2"
+      shift 2
+      ;;
+    --dump-header)
+      headers_path="$2"
+      shift 2
+      ;;
+    --output)
+      response_path="$2"
+      shift 2
+      ;;
+    --header)
+      case "$2" in
+        X-LLM-Proxy-Request-Timeout-Seconds:*)
+          request_timeout_seconds="${2#X-LLM-Proxy-Request-Timeout-Seconds: }"
+          ;;
+      esac
+      shift 2
+      ;;
+    --request|--connect-timeout|--max-time|--write-out|--data-binary)
+      shift 2
+      ;;
+    --silent|--show-error)
+      shift
+      ;;
+    *)
+      exit 2
+      ;;
+  esac
+done
+[[ -n "${curl_config_path}" ]]
+[[ -n "${headers_path}" ]]
+[[ -n "${response_path}" ]]
+[[ -n "${request_timeout_seconds}" ]]
+
+request_url=""
+while IFS= read -r config_line; do
+  if [[ "${config_line}" == url\ =\ \"* ]]; then
+    request_url="${config_line#url = \"}"
+    request_url="${request_url%\"}"
+  fi
+done <"${curl_config_path}"
+[[ -n "${request_url}" ]]
+request_body="$(< /dev/stdin)"
+
+call_count_path="${CURL_CAPTURE_DIRECTORY:?}/call-count"
+call_index=0
+if [[ -f "${call_count_path}" ]]; then
+  call_index="$(<"${call_count_path}")"
+fi
+call_index=$((call_index + 1))
+builtin printf '%s' "${call_index}" >"${call_count_path}"
+builtin printf '%s' "${request_url}" >"${CURL_CAPTURE_DIRECTORY}/url-${call_index}"
+builtin printf '%s' "${request_body}" >"${CURL_CAPTURE_DIRECTORY}/body-${call_index}"
+builtin printf '%s' "${request_timeout_seconds}" >"${CURL_CAPTURE_DIRECTORY}/timeout-${call_index}"
+
+response_marker="LLM_PROXY_LIVE_ECHO_OK"
+if [[ "${request_body}" == *LLM_PROXY_LIVE_COMPLEX_OK* ]]; then
+  response_marker="LLM_PROXY_LIVE_COMPLEX_OK"
+fi
+builtin printf 'HTTP/1.1 200 OK\r\nX-LLM-Proxy-Request-Timeout-Seconds: %s\r\n\r\n' "${request_timeout_seconds}" >"${headers_path}"
+builtin printf '%s' "${response_marker}" >"${response_path}"
+builtin printf '%s' '200'
+`, 0o755)
+	defaultTenantSecret := "default-tenant-client-secret"
+	environment := append(
+		os.Environ(),
+		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"CURL_CAPTURE_DIRECTORY="+captureDirectory,
+		"LLM_PROXY_SECRET="+defaultTenantSecret,
+	)
+	output := runOperationalCommand(testingInstance, fixtureRoot, environment, "make", "live-test")
+	if strings.Contains(output, defaultTenantSecret) {
+		testingInstance.Fatalf("production live-test output exposed the tenant secret: %s", output)
+	}
+	if !strings.Contains(output, "live test passed: total_cases=8") {
+		testingInstance.Fatalf("production live-test did not report all cases: %s", output)
+	}
+	for _, expectedCase := range []string{
+		"case=openai-background-polling provider=openai status=200",
+		"case=anthropic-long-completion provider=anthropic status=200",
+		"case=meta-long-completion provider=meta status=200",
+	} {
+		if !strings.Contains(output, expectedCase) {
+			testingInstance.Fatalf("production live-test omitted long-completion result %q: %s", expectedCase, output)
+		}
+	}
+
+	type liveTestMessage struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	type liveTestPayload struct {
+		Messages  []liveTestMessage `json:"messages"`
+		MaxTokens *int              `json:"max_tokens"`
+	}
+	expectedProviders := []string{"openai", "anthropic", "meta", "gemini", "moonshot", "openai", "anthropic", "meta"}
+	for callIndex, expectedProvider := range expectedProviders {
+		captureIndex := callIndex + 1
+		requestURLBytes, readURLError := os.ReadFile(filepath.Join(captureDirectory, "url-"+strconv.Itoa(captureIndex)))
+		if readURLError != nil {
+			testingInstance.Fatalf("read production live-test URL for call %d: %v", captureIndex, readURLError)
+		}
+		requestURL, parseURLError := url.Parse(string(requestURLBytes))
+		if parseURLError != nil {
+			testingInstance.Fatalf("parse production live-test URL for call %d: %v", captureIndex, parseURLError)
+		}
+		if requestURL.Scheme != "https" || requestURL.Host != "llm-proxy-api.mprlab.com" || requestURL.Path != "/v2" {
+			testingInstance.Fatalf("production live-test call %d used non-production endpoint: %s", captureIndex, requestURL)
+		}
+		query := requestURL.Query()
+		if query.Get("key") != defaultTenantSecret || query.Get("provider") != expectedProvider || query.Get("format") != "text/plain" {
+			testingInstance.Fatalf("production live-test call %d used unexpected tenant or route query: %s", captureIndex, requestURL)
+		}
+		if query.Has("model") {
+			testingInstance.Fatalf("production live-test call %d bypassed the saved provider default model: %s", captureIndex, requestURL)
+		}
+
+		requestBody, readBodyError := os.ReadFile(filepath.Join(captureDirectory, "body-"+strconv.Itoa(captureIndex)))
+		if readBodyError != nil {
+			testingInstance.Fatalf("read production live-test body for call %d: %v", captureIndex, readBodyError)
+		}
+		var payload liveTestPayload
+		if decodeError := json.Unmarshal(requestBody, &payload); decodeError != nil {
+			testingInstance.Fatalf("decode production live-test body for call %d: %v", captureIndex, decodeError)
+		}
+
+		timeoutBytes, readTimeoutError := os.ReadFile(filepath.Join(captureDirectory, "timeout-"+strconv.Itoa(captureIndex)))
+		if readTimeoutError != nil {
+			testingInstance.Fatalf("read production live-test timeout for call %d: %v", captureIndex, readTimeoutError)
+		}
+		if callIndex < 5 {
+			if len(payload.Messages) != 1 || payload.MaxTokens != nil || !strings.Contains(payload.Messages[0].Content, "LLM_PROXY_LIVE_ECHO_OK") {
+				testingInstance.Fatalf("echo call %d did not preserve the simple marker request: %s", captureIndex, requestBody)
+			}
+			if string(timeoutBytes) != "90" {
+				testingInstance.Fatalf("echo call %d used unexpected request budget: %s", captureIndex, timeoutBytes)
+			}
+			continue
+		}
+		if len(requestBody) < 16384 || len(payload.Messages) != 2 || payload.MaxTokens == nil || *payload.MaxTokens != 512 || !strings.Contains(payload.Messages[1].Content, "LLM_PROXY_LIVE_COMPLEX_OK") || !strings.Contains(payload.Messages[1].Content, "all 120 normalized lines") {
+			testingInstance.Fatalf("long completion call %d did not preserve the large complex request contract: bytes=%d payload=%s", captureIndex, len(requestBody), requestBody)
+		}
+		if string(timeoutBytes) != "900" {
+			testingInstance.Fatalf("long completion call %d used unexpected request budget: %s", captureIndex, timeoutBytes)
+		}
+	}
+}
+
+func TestOperationalProductionLiveTestRequiresDefaultTenantSecret(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	for _, relativePath := range []string{
+		"Makefile",
+		filepath.Join(operationalScriptsDirectory, "live_test.sh"),
+	} {
+		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
+	}
+
+	command := exec.Command("make", "live-test")
+	command.Dir = fixtureRoot
+	command.Env = []string{"PATH=" + os.Getenv("PATH")}
+	output, commandError := command.CombinedOutput()
+	if commandError == nil {
+		testingInstance.Fatalf("make live-test accepted a missing Default-tenant secret: %s", output)
+	}
+	if !strings.Contains(string(output), "LLM_PROXY_SECRET must contain the Default-tenant client secret") {
+		testingInstance.Fatalf("missing-secret error omitted the Default-tenant contract: %s", output)
 	}
 }
 
