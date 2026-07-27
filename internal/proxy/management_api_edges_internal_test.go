@@ -286,17 +286,6 @@ func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 		t.Fatalf("generate profile status=%d", response.Code)
 	}
 
-	service, _ = newSeededService()
-	response = executeInternalManagementHandler(service.revokeSecretHandler(), http.MethodDelete, "/api/management/tenants/%20/secrets", "", gin.Params{{Key: "tenant_id", Value: " "}}, principal)
-	if response.Code != http.StatusNotFound {
-		t.Fatalf("revoke invalid tenant status=%d", response.Code)
-	}
-	service, database = newSeededService()
-	database.saveTenantErrors = []error{errInternalTestDatabase}
-	response = executeInternalManagementHandler(service.revokeSecretHandler(), http.MethodDelete, "/api/management/tenants/managed-default/secrets", "", tenantParams, principal)
-	if response.Code != http.StatusInternalServerError {
-		t.Fatalf("revoke store status=%d", response.Code)
-	}
 }
 
 func TestManagementResponseErrorMappings(t *testing.T) {

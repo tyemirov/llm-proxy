@@ -1531,21 +1531,6 @@ func (store *managedTenantStore) generateSecret(principal managementPrincipal, t
 	return constants.EmptyString, managedTenantSnapshot{}, errManagedSecretCollision
 }
 
-func (store *managedTenantStore) revokeSecret(principal managementPrincipal, tenantIdentifier managedTenantIdentifier) (managedTenantSnapshot, error) {
-	store.mutex.Lock()
-	defer store.mutex.Unlock()
-	record, recordError := store.database.tenantByOwnerAndID(principal.userID, tenantIdentifier.string())
-	if recordError != nil {
-		return managedTenantSnapshot{}, managedTenantQueryError(principal.userID, tenantIdentifier.string(), recordError)
-	}
-	record.SecretDigest = nil
-	record.UpdatedAt = store.now()
-	if persistError := store.database.saveTenant(record); persistError != nil {
-		return managedTenantSnapshot{}, managedTenantMutationError(principal.userID, tenantIdentifier.string(), persistError)
-	}
-	return store.snapshot(record)
-}
-
 func (store *managedTenantStore) authenticate(rawSecret string) (tenant, bool) {
 	presentedSecret := strings.TrimSpace(rawSecret)
 	if presentedSecret == constants.EmptyString {

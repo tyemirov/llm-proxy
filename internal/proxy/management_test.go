@@ -1597,17 +1597,38 @@ func TestManagementMetaProviderRoutesWithEncryptedTenantKey(t *testing.T) {
 		t.Fatalf("authorization=%q want=%q", capturedAuthorization, "Bearer "+testManagementMetaKey)
 	}
 
-	revokeRequest := authenticatedJSONRequest(http.MethodDelete, userOneTenantPath+"/secrets", `{}`, userOneCookie)
-	revokeResponse := httptest.NewRecorder()
-	router.ServeHTTP(revokeResponse, revokeRequest)
-	if revokeResponse.Code != http.StatusOK {
-		t.Fatalf("revoke status=%d body=%s", revokeResponse.Code, revokeResponse.Body.String())
+	replacementSecretRequest := authenticatedJSONRequest(http.MethodPost, userOneTenantPath+"/secrets", `{}`, userOneCookie)
+	replacementSecretResponseRecorder := httptest.NewRecorder()
+	router.ServeHTTP(replacementSecretResponseRecorder, replacementSecretRequest)
+	if replacementSecretResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("replacement secret status=%d body=%s", replacementSecretResponseRecorder.Code, replacementSecretResponseRecorder.Body.String())
 	}
-	revokedProxyRequest := httptest.NewRequest(http.MethodGet, "/?"+proxyRequestValues.Encode(), nil)
-	revokedProxyResponse := httptest.NewRecorder()
-	router.ServeHTTP(revokedProxyResponse, revokedProxyRequest)
-	if revokedProxyResponse.Code != http.StatusForbidden {
-		t.Fatalf("revoked status=%d want=%d", revokedProxyResponse.Code, http.StatusForbidden)
+	var replacementSecretResponse struct {
+		Secret string `json:"secret"`
+	}
+	if decodeError := json.Unmarshal(replacementSecretResponseRecorder.Body.Bytes(), &replacementSecretResponse); decodeError != nil {
+		t.Fatalf("decode replacement secret response: %v", decodeError)
+	}
+	if !strings.HasPrefix(replacementSecretResponse.Secret, "llmp_") || replacementSecretResponse.Secret == secretResponse.Secret {
+		t.Fatalf("replacement secret=%q original=%q", replacementSecretResponse.Secret, secretResponse.Secret)
+	}
+	replacedProxyRequest := httptest.NewRequest(http.MethodGet, "/?"+proxyRequestValues.Encode(), nil)
+	replacedProxyResponse := httptest.NewRecorder()
+	router.ServeHTTP(replacedProxyResponse, replacedProxyRequest)
+	if replacedProxyResponse.Code != http.StatusForbidden {
+		t.Fatalf("replaced key status=%d want=%d", replacedProxyResponse.Code, http.StatusForbidden)
+	}
+	proxyRequestValues.Set("key", replacementSecretResponse.Secret)
+	replacementProxyResponse := httptest.NewRecorder()
+	router.ServeHTTP(replacementProxyResponse, httptest.NewRequest(http.MethodGet, "/?"+proxyRequestValues.Encode(), nil))
+	if replacementProxyResponse.Code != http.StatusOK {
+		t.Fatalf("replacement key status=%d body=%q", replacementProxyResponse.Code, replacementProxyResponse.Body.String())
+	}
+	deleteSecretRequest := authenticatedJSONRequest(http.MethodDelete, userOneTenantPath+"/secrets", `{}`, userOneCookie)
+	deleteSecretResponse := httptest.NewRecorder()
+	router.ServeHTTP(deleteSecretResponse, deleteSecretRequest)
+	if deleteSecretResponse.Code != http.StatusNotFound {
+		t.Fatalf("obsolete secret delete status=%d want=%d", deleteSecretResponse.Code, http.StatusNotFound)
 	}
 }
 

@@ -250,21 +250,24 @@ func TestManagementTenantConfigurationSecretAndUsageIsolation(t *testing.T) {
 		t.Fatalf("account leaked credentials: %s", accountJSON)
 	}
 
-	revokeRequest := authenticatedJSONRequest(http.MethodDelete, managementTenantTestPath(firstTenantID, "/secrets"), `{}`, ownerCookie)
-	revokeResponse := httptest.NewRecorder()
-	router.ServeHTTP(revokeResponse, revokeRequest)
-	if revokeResponse.Code != http.StatusOK {
-		t.Fatalf("revoke first secret status=%d body=%q", revokeResponse.Code, revokeResponse.Body.String())
+	replacementFirstSecret := generateManagementTenantSecret(t, router, ownerCookie, firstTenantID)
+	if replacementFirstSecret == firstSecret {
+		t.Fatalf("replacement first secret=%q original=%q", replacementFirstSecret, firstSecret)
 	}
 	firstProxyResponse := httptest.NewRecorder()
-	router.ServeHTTP(firstProxyResponse, httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(firstSecret)+"&prompt=revoked", nil))
+	router.ServeHTTP(firstProxyResponse, httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(firstSecret)+"&prompt=replaced", nil))
 	if firstProxyResponse.Code != http.StatusForbidden {
-		t.Fatalf("revoked first secret status=%d", firstProxyResponse.Code)
+		t.Fatalf("replaced first secret status=%d", firstProxyResponse.Code)
+	}
+	replacementFirstProxyResponse := httptest.NewRecorder()
+	router.ServeHTTP(replacementFirstProxyResponse, httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(replacementFirstSecret)+"&prompt=replacement-active", nil))
+	if replacementFirstProxyResponse.Code != http.StatusOK {
+		t.Fatalf("replacement first secret status=%d body=%q", replacementFirstProxyResponse.Code, replacementFirstProxyResponse.Body.String())
 	}
 	secondProxyResponse := httptest.NewRecorder()
 	router.ServeHTTP(secondProxyResponse, httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(secondSecret)+"&prompt=still-active", nil))
 	if secondProxyResponse.Code != http.StatusOK {
-		t.Fatalf("second secret after first revoke status=%d body=%q", secondProxyResponse.Code, secondProxyResponse.Body.String())
+		t.Fatalf("second secret after first replacement status=%d body=%q", secondProxyResponse.Code, secondProxyResponse.Body.String())
 	}
 
 	deleteFirstRequest := authenticatedJSONRequest(http.MethodDelete, managementTenantTestPath(firstTenantID, ""), `{}`, ownerCookie)

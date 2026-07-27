@@ -297,7 +297,6 @@ func (service *managementService) registerRoutes(router *gin.Engine) {
 	tenantGroup.POST(managementProviderKeyRevealPath, service.managementCredentialedActionMiddleware(), service.revealProviderKeyHandler())
 	tenantGroup.PUT(managementDefaultsPath, service.updateDefaultsHandler())
 	tenantGroup.POST(managementSecretsPath, service.generateSecretHandler())
-	tenantGroup.DELETE(managementSecretsPath, service.revokeSecretHandler())
 }
 
 func (service *managementService) sessionMiddleware() gin.HandlerFunc {
@@ -729,22 +728,6 @@ func (service *managementService) generateSecretHandler() gin.HandlerFunc {
 			Secret:  rawSecret,
 			Profile: profile,
 		})
-	}
-}
-
-func (service *managementService) revokeSecretHandler() gin.HandlerFunc {
-	return func(ginContext *gin.Context) {
-		tenantIdentifier, identifierValid := managementTenantIdentifierFromContext(ginContext)
-		if !identifierValid {
-			return
-		}
-		principal := managementPrincipalFromContext(ginContext)
-		snapshot, storeError := service.store.revokeSecret(principal, tenantIdentifier)
-		if storeError != nil {
-			writeManagementStoreError(ginContext, storeError)
-			return
-		}
-		service.writeTenantProfileResponse(ginContext, snapshot, http.StatusOK)
 	}
 }
 

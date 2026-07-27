@@ -573,18 +573,6 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	record.ProviderAPIKeys = nil
 	database.tenantsByID[identifier.string()] = record
 
-	database.tenantByOwnerAndIDErrors = []error{errInternalTestDatabase}
-	if _, revokeError := store.revokeSecret(principal, identifier); !errors.Is(revokeError, errManagedTenantStorePersist) {
-		t.Fatalf("revoke query error=%v", revokeError)
-	}
-	database.saveTenantErrors = []error{errInternalTestDatabase}
-	if _, revokeError := store.revokeSecret(principal, identifier); !errors.Is(revokeError, errManagedTenantStorePersist) {
-		t.Fatalf("revoke persistence error=%v", revokeError)
-	}
-	if revoked, revokeError := store.revokeSecret(principal, identifier); revokeError != nil || revoked.hasSecret {
-		t.Fatalf("revoked=%+v error=%v", revoked, revokeError)
-	}
-
 	unmanagedTenant := tenant{}
 	if usageError := store.recordUsage(context.Background(), unmanagedTenant, managedUsageEvent{}); usageError != nil {
 		t.Fatalf("unmanaged usage error=%v", usageError)
