@@ -368,6 +368,7 @@ exec "${REAL_AWK_PATH:?}" "$@"
 				"./configs/.env.api.local",
 				"./configs/.env.tauth.local",
 				"GHTTP_SERVE_PROXIES: \"/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080\"",
+				"GHTTP_SERVE_RESPONSE_HEADERS: \"/=Cache-Control:no-store\"",
 				"LLM_PROXY_MANAGEMENT_TAUTH_URL: \"http://localhost:4179\"",
 				"127.0.0.1:4179:4179",
 				"127.0.0.1:8080:8080",

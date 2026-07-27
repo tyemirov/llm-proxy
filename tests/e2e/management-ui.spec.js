@@ -104,6 +104,10 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
   expect(html).toContain(`<script src="${mprUIConfigURL}"></script>`);
   expect(html).toContain(`data-mpr-ui-bundle-src="${mprUIBundleURL}"`);
+  expect(html).toContain('<script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260727"></script>');
+  expect(html).toContain(
+    '<script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260727"></script>',
+  );
   expect(html).not.toContain("MarcoPoloResearchLab/mpr-ui@v");
   expect(html).not.toContain("tauth.js");
   expect(html).toMatch(/<notification-region\s+slot="aux"[\s\S]*?<mpr-user\s+slot="aux"/);
@@ -2249,6 +2253,77 @@ test("startup reconciles MPR UI authentication after the lifecycle event has pas
   expect(profileRequests).toHaveLength(1);
 });
 
+test("blocked Alpine startup becomes an actionable application error", async ({ page }) => {
+  const accountRequests = [];
+  const blockedAlpineRequests = [];
+  page.on("request", (request) => {
+    if (request.url() === `${baseURL}/api/management/account`) {
+      accountRequests.push(request);
+    }
+  });
+  page.on("requestfailed", (request) => {
+    if (request.url().includes("/alpinejs@3.13.5/dist/module.esm.js")) {
+      blockedAlpineRequests.push(request);
+    }
+  });
+  await page.addInitScript(() => {
+    window.__llmProxyManagementReadyCount = 0;
+    document.addEventListener("llm-proxy:management-ready", () => {
+      window.__llmProxyManagementReadyCount += 1;
+    });
+  });
+  await installAssetRoutes(page, { alpineModuleFailure: true });
+  await installManagementRoutes(page);
+
+  await page.goto(baseURL);
+
+  const failureSurface = page.getByRole("alert");
+  await expect(failureSurface).toBeVisible();
+  await expect(failureSurface).toBeFocused();
+  await expect(failureSurface.getByText("Application startup")).toBeVisible();
+  await expect(failureSurface.getByRole("heading", { name: "Unable to open LLM Proxy" })).toBeVisible();
+  await expect(failureSurface).toContainText(
+    "Your browser could not load the current application files. Allow this site and cdn.jsdelivr.net in browser controls, then reload.",
+  );
+  await expect(failureSurface.getByRole("button", { name: "Reload LLM Proxy" })).toBeVisible();
+  await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "authenticated");
+  await expect.poll(() => page.evaluate(() => window.__llmProxyManagementReadyCount)).toBe(1);
+  expect(blockedAlpineRequests).toHaveLength(1);
+  expect(accountRequests).toHaveLength(0);
+});
+
+test("incompatible cached application module becomes an actionable application error", async ({ page }) => {
+  const accountRequests = [];
+  page.on("request", (request) => {
+    if (request.url() === `${baseURL}/api/management/account`) {
+      accountRequests.push(request);
+    }
+  });
+  await page.addInitScript(() => {
+    window.__llmProxyManagementReadyCount = 0;
+    document.addEventListener("llm-proxy:management-ready", () => {
+      window.__llmProxyManagementReadyCount += 1;
+    });
+  });
+  await installAssetRoutes(page, { backendModuleMismatch: true });
+  await installManagementRoutes(page);
+
+  await page.goto(baseURL);
+
+  const failureSurface = page.getByRole("alert");
+  await expect(failureSurface).toBeVisible();
+  await expect(failureSurface).toBeFocused();
+  await expect(failureSurface.getByText("Application startup")).toBeVisible();
+  await expect(failureSurface.getByRole("heading", { name: "Unable to open LLM Proxy" })).toBeVisible();
+  await expect(failureSurface).toContainText(
+    "Your browser could not load the current application files. Allow this site and cdn.jsdelivr.net in browser controls, then reload.",
+  );
+  await expect(failureSurface.getByRole("button", { name: "Reload LLM Proxy" })).toBeVisible();
+  await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "authenticated");
+  await expect.poll(() => page.evaluate(() => window.__llmProxyManagementReadyCount)).toBe(1);
+  expect(accountRequests).toHaveLength(0);
+});
+
 test("authenticated profile failures replace loading and signed-out states", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page, { profileStatus: 409 });
@@ -3161,7 +3236,7 @@ test("admin menu opens all users dashboard", async ({ page }) => {
 
 /**
  * @param {import("@playwright/test").Page} page
- * @param {{ initialAuthStatus?: "authenticated" | "unauthenticated", emitInitialAuthEvent?: boolean }} options
+ * @param {{ initialAuthStatus?: "authenticated" | "unauthenticated", emitInitialAuthEvent?: boolean, alpineModuleFailure?: boolean, backendModuleMismatch?: boolean }} options
  * @returns {Promise<void>}
  */
 async function installAssetRoutes(page, options = {}) {
@@ -3169,9 +3244,18 @@ async function installAssetRoutes(page, options = {}) {
     route.fulfill({ body: "", contentType: "application/javascript" }),
   );
   await page.route("https://accounts.google.com/**", async (route) => route.abort());
-  await page.route("**/alpinejs@3.13.5/dist/module.esm.js", async (route) =>
-    fulfillFile(route, "node_modules/alpinejs/dist/module.esm.js", "application/javascript"),
-  );
+  await page.route("**/alpinejs@3.13.5/dist/module.esm.js", async (route) => {
+    if (options.alpineModuleFailure) {
+      await route.abort("blockedbyclient");
+      return;
+    }
+    await fulfillFile(route, "node_modules/alpinejs/dist/module.esm.js", "application/javascript");
+  });
+  if (options.backendModuleMismatch) {
+    await page.route("**/assets/llm-proxy/js/core/backendClient.js*", async (route) =>
+      route.fulfill({ body: "export {};", contentType: "application/javascript" }),
+    );
+  }
   await page.route("**/js-yaml@4.3.0/dist/js-yaml.min.js", async (route) =>
     fulfillFile(route, "node_modules/js-yaml/dist/js-yaml.min.js", "application/javascript"),
   );
