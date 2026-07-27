@@ -11,6 +11,7 @@ services:
       - ./configs/.env.frontend.local
     environment:
       GHTTP_SERVE_PROXIES: "/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080"
+      GHTTP_SERVE_RESPONSE_HEADERS: "/=Cache-Control:no-store"
     ports:
       - "127.0.0.1:4179:4179"
     volumes:
