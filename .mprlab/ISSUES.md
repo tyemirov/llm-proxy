@@ -25,10 +25,11 @@ already satisfied; recurring maintenance remains scheduled work.
 
 ## BugFixes
 
-- [ ] [B080] (P1) Reject incomplete OpenAI responses that contain partial text
+- [x] [B080] (P1) Reject incomplete provider responses that contain partial text
   Goal:
-  Make every successful OpenAI Responses API result terminal and complete so
-  callers never receive a provider-truncated prefix as an HTTP 200 response.
+  Make every successful text-provider result complete so callers never receive
+  a provider-truncated prefix or intermediate result as an HTTP 200 response,
+  while keeping asynchronous job handling explicit to each supported adapter.
 
   Evidence:
   - Fruits of the Quill Story Plan generation failed in production at
@@ -44,6 +45,18 @@ already satisfied; recurring maintenance remains scheduled work.
   - Multiple production rows reached the same exact 2048-token cap, so this is
     a repeatable transport-contract defect rather than an isolated malformed
     model response.
+  - The shared OpenAI-compatible Chat Completions adapter does not inspect
+    `finish_reason`, so `length` and other non-complete choices can currently
+    return partial text for DeepSeek, DashScope, Qwen Cloud, Moonshot, MiniMax,
+    SiliconFlow, Zhipu, Meta, and Grok.
+  - The Anthropic Messages adapter does not inspect `stop_reason`, so
+    `max_tokens`, `pause_turn`, and other non-complete results can currently
+    return text. Gemini already requires `finishReason=STOP` but discards
+    reported usage when rejecting another reason.
+  - Only the OpenAI Responses adapter uses a pollable lifecycle. The shared
+    `server.queue_size` facility is HTTP-operation admission control, not a
+    durable provider-job-id queue, and the configured synchronous provider
+    routes do not imply each provider's separate deferred or batch API.
   - This issue is the upstream owner for the dependent Story Service correction
     tracked as `story-generator` B007.
 
@@ -52,6 +65,17 @@ already satisfied; recurring maintenance remains scheduled work.
     whose terminal status is complete. An upstream `status=incomplete` must
     never return partial text, an HTTP 2xx response, or a successful usage
     event merely because text is nonblank.
+  - Poll an OpenAI response id only from the adapter's explicit background
+    lifecycle and documented `queued` or `in_progress` states. Reject missing
+    and unknown states instead of treating every non-terminal value as pending.
+  - Define complete success for the shared Chat Completions adapter as
+    `finish_reason=stop`, Gemini as `finishReason=STOP`, and Anthropic Messages
+    as `stop_reason=end_turn` or `stop_sequence`. Reject missing, truncated,
+    tool/intermediate, refused, and unknown reasons without returning their
+    text.
+  - Do not invent generic polling from an arbitrary `id`. A provider-specific
+    deferred, batch, or asynchronous API requires its own explicit transport
+    and lifecycle contract.
   - Map every incomplete terminal response, including
     `incomplete_details.reason=max_output_tokens`, to the canonical upstream
     failure response and status. Do not expose the provider body or partial
@@ -77,8 +101,36 @@ already satisfied; recurring maintenance remains scheduled work.
     the provider-reported token counts.
   - Prove a terminal completed OpenAI response still returns its exact text and
     successful usage record.
+  - Exercise the shared Chat Completions, Gemini, and Anthropic adapters through
+    public `POST /v2` with partial/intermediate stop signals. Prove each returns
+    `502`, exposes no partial text or token headers, and retains exact
+    provider-reported token counts in failed managed usage.
+  - Prove unknown OpenAI states with ids do not trigger polling and that
+    documented `queued` and `in_progress` states still poll to completion.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+  Resolution:
+  - OpenAI Responses now accepts only exact `status=completed` as success,
+    polls only explicit `queued` or `in_progress` work, and rejects incomplete,
+    missing, unknown, failed, or cancelled states without leaking partial text
+    or starting a hidden continuation.
+  - The shared Chat Completions adapter requires exact
+    `finish_reason=stop`, Gemini requires exact `finishReason=STOP`, and
+    Anthropic requires exact `stop_reason=end_turn` or `stop_sequence`.
+    Truncated, tool/intermediate, refused, missing, and unknown reasons return
+    the canonical upstream failure.
+  - Polling remains owned by the OpenAI Responses adapter and the active client
+    request. `server.queue_size` remains HTTP-operation admission control; no
+    generic or durable provider-job queue was invented for synchronous routes.
+  - Failed managed usage retains available provider-reported token counts
+    without exposing token headers, prompts, responses, or raw provider bodies.
+  - Public `POST /v2` coverage proves the exact OpenAI
+    `1599/2048/3647` incomplete case and representative Chat, Gemini, and
+    Anthropic partial cases return `502`; completed responses and documented
+    OpenAI pending-state polling remain successful.
+  - The README, canonical OpenAPI, generated API reference, and provider-routing
+    documentation describe the same completion and async-ownership contract.
 
 - [!] [B077] (P1) {B069,F014,I029,I031} Publish and activate the merged LLM Proxy contract.
   Goal:

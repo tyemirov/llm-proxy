@@ -6,12 +6,12 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="689b8175eafe6330b74549d1a0c3edf08882b6f87d5c48b22cc833a4f9753c6f">
+    <meta name="openapi-source-sha256" content="e34651f976ab3ae58d7e8ba09089281dcde0717e98f3b6984e1adbfbe82f030e">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="689b8175eafe6330b74549d1a0c3edf08882b6f87d5c48b22cc833a4f9753c6f">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="e34651f976ab3ae58d7e8ba09089281dcde0717e98f3b6984e1adbfbe82f030e">
     <header class="resource-shell resource-topbar">
       <a class="resource-brand" href="/">LLM Proxy</a>
       <nav aria-label="API reference navigation">
@@ -29,7 +29,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>689b8175eafe6330b74549d1a0c3edf08882b6f87d5c48b22cc833a4f9753c6f</code></span>
+          <span>Source SHA-256 <code>e34651f976ab3ae58d7e8ba09089281dcde0717e98f3b6984e1adbfbe82f030e</code></span>
         </div>
         <div class="resource-actions">
           <a class="resource-button" href="/openapi.yaml">Download exact schema</a>
@@ -97,12 +97,12 @@
             <table>
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Generated text in the selected representation.</td></tr>
+                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. HTTP 200 requires the selected transport&#39;s canonical completion signal: OpenAI Responses status=completed, OpenAI-compatible Chat Completions finish_reason=stop, Gemini finishReason=STOP, or Anthropic stop_reason=end_turn|stop_sequence. Incomplete, intermediate, missing, or unknown provider states never return text as success.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
 <tr><td><code>429</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider is rate limited.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
-<tr><td><code>502</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider failed.</td></tr>
+<tr><td><code>502</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider failed or returned an incomplete, intermediate, missing, or unknown completion signal. The response never exposes partial generated text, token-count headers, or the raw provider body; provider-reported usage can still be retained in managed failure accounting.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected provider is not configured or the bounded request queue is full.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
@@ -157,13 +157,13 @@
             <table>
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Generated text in the selected representation.</td></tr>
+                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. HTTP 200 requires the selected transport&#39;s canonical completion signal: OpenAI Responses status=completed, OpenAI-compatible Chat Completions finish_reason=stop, Gemini finishReason=STOP, or Anthropic stop_reason=end_turn|stop_sequence. Incomplete, intermediate, missing, or unknown provider states never return text as success.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
 <tr><td><code>413</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The configured prompt or audio payload limit was exceeded.</td></tr>
 <tr><td><code>429</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider is rate limited.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
-<tr><td><code>502</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider failed.</td></tr>
+<tr><td><code>502</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider failed or returned an incomplete, intermediate, missing, or unknown completion signal. The response never exposes partial generated text, token-count headers, or the raw provider body; provider-reported usage can still be retained in managed failure accounting.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected provider is not configured or the bounded request queue is full.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
@@ -877,7 +877,7 @@
 <tr><td><code>413</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The configured prompt or audio payload limit was exceeded.</td></tr>
 <tr><td><code>429</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider is rate limited.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
-<tr><td><code>502</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider failed.</td></tr>
+<tr><td><code>502</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider failed or returned an incomplete, intermediate, missing, or unknown completion signal. The response never exposes partial generated text, token-count headers, or the raw provider body; provider-reported usage can still be retained in managed failure accounting.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected provider is not configured or the bounded request queue is full.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>
@@ -930,13 +930,13 @@
             <table>
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Generated text in the selected representation.</td></tr>
+                <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. HTTP 200 requires the selected transport&#39;s canonical completion signal: OpenAI Responses status=completed, OpenAI-compatible Chat Completions finish_reason=stop, Gemini finishReason=STOP, or Anthropic stop_reason=end_turn|stop_sequence. Incomplete, intermediate, missing, or unknown provider states never return text as success.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
 <tr><td><code>413</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The configured prompt or audio payload limit was exceeded.</td></tr>
 <tr><td><code>429</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider is rate limited.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
-<tr><td><code>502</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider failed.</td></tr>
+<tr><td><code>502</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected upstream provider failed or returned an incomplete, intermediate, missing, or unknown completion signal. The response never exposes partial generated text, token-count headers, or the raw provider body; provider-reported usage can still be retained in managed failure accounting.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected provider is not configured or the bounded request queue is full.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
               </tbody>

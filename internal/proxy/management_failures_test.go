@@ -49,6 +49,232 @@ type managementAccountUsageFailureTestItem struct {
 	managementUsageFailureTestItem
 }
 
+func TestOpenAIResponsesRequireCompletedStatusAtPublicV2Boundary(testingInstance *testing.T) {
+	const (
+		incompletePrompt = "b080-incomplete"
+		completedPrompt  = "b080-completed"
+		partialText      = "provider-truncated partial text"
+		completedText    = "complete response text"
+	)
+	upstreamRequestCount := 0
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		upstreamRequestCount++
+		requestBody, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			testingInstance.Errorf("read upstream request: %v", readError)
+			return
+		}
+		responseWriter.Header().Set("Content-Type", "application/json")
+		switch {
+		case bytes.Contains(requestBody, []byte(incompletePrompt)):
+			_, _ = responseWriter.Write([]byte(`{"id":"b080-incomplete-response","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"` + partialText + `"}]}],"usage":{"input_tokens":1599,"output_tokens":2048,"total_tokens":3647}}`))
+		case bytes.Contains(requestBody, []byte(completedPrompt)):
+			_, _ = responseWriter.Write([]byte(`{"id":"b080-completed-response","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"` + completedText + `"}]}],"usage":{"input_tokens":7,"output_tokens":11,"total_tokens":18}}`))
+		default:
+			http.Error(responseWriter, "unexpected request", http.StatusBadRequest)
+		}
+	}))
+	defer upstreamServer.Close()
+
+	databasePath := filepath.Join(testingInstance.TempDir(), "openai-terminal-events.db")
+	router := newManagementRouterWithDatabasePath(testingInstance, proxy.Configuration{OpenAIBaseURL: upstreamServer.URL}, databasePath)
+	ownerCookie := managementSessionCookie(testingInstance, "openai-terminal-owner")
+	tenantIdentifier := managementDefaultTenantTestID(testingInstance, router, ownerCookie)
+	saveManagementProviderKey(testingInstance, router, ownerCookie, tenantIdentifier, testManagementOpenAIKey, proxy.ModelNameGPT41, "")
+	secret := generateManagementTenantSecret(testingInstance, router, ownerCookie, tenantIdentifier)
+
+	requestV2 := func(prompt string, maxTokens int) *httptest.ResponseRecorder {
+		testingInstance.Helper()
+		requestBody, marshalError := json.Marshal(map[string]any{
+			"messages":   []map[string]string{{"role": "user", "content": prompt}},
+			"max_tokens": maxTokens,
+		})
+		if marshalError != nil {
+			testingInstance.Fatalf("marshal v2 request: %v", marshalError)
+		}
+		request := httptest.NewRequest(http.MethodPost, "/v2?key="+url.QueryEscape(secret), bytes.NewReader(requestBody))
+		request.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		return response
+	}
+
+	incompleteResponse := requestV2(incompletePrompt, 2048)
+	if incompleteResponse.Code != http.StatusBadGateway || incompleteResponse.Body.String() != proxy.ErrUpstreamIncomplete.Error() {
+		testingInstance.Fatalf("incomplete status=%d body=%q", incompleteResponse.Code, incompleteResponse.Body.String())
+	}
+	if strings.Contains(incompleteResponse.Body.String(), partialText) {
+		testingInstance.Fatalf("incomplete response leaked partial text: %q", incompleteResponse.Body.String())
+	}
+	for _, tokenHeader := range []string{testHeaderLLMProxyRequestTokens, testHeaderLLMProxyResponseTokens, testHeaderLLMProxyTotalTokens} {
+		if incompleteResponse.Header().Get(tokenHeader) != "" {
+			testingInstance.Fatalf("incomplete response exposed %s=%q", tokenHeader, incompleteResponse.Header().Get(tokenHeader))
+		}
+	}
+
+	completedResponse := requestV2(completedPrompt, 2048)
+	if completedResponse.Code != http.StatusOK || completedResponse.Body.String() != completedText {
+		testingInstance.Fatalf("completed status=%d body=%q", completedResponse.Code, completedResponse.Body.String())
+	}
+	if completedResponse.Header().Get(testHeaderLLMProxyRequestTokens) != "7" ||
+		completedResponse.Header().Get(testHeaderLLMProxyResponseTokens) != "11" ||
+		completedResponse.Header().Get(testHeaderLLMProxyTotalTokens) != "18" {
+		testingInstance.Fatalf("completed token headers=%v", completedResponse.Header())
+	}
+	if upstreamRequestCount != 2 {
+		testingInstance.Fatalf("upstream requests=%d want=2", upstreamRequestCount)
+	}
+
+	type persistedOpenAIUsageEvent struct {
+		Endpoint       string `gorm:"column:endpoint"`
+		Provider       string `gorm:"column:provider_id"`
+		Model          string `gorm:"column:model_id"`
+		StatusCode     int    `gorm:"column:status_code"`
+		Success        bool   `gorm:"column:success"`
+		OutcomeCode    string `gorm:"column:outcome_code"`
+		RequestTokens  int    `gorm:"column:request_tokens"`
+		ResponseTokens int    `gorm:"column:response_tokens"`
+		TotalTokens    int    `gorm:"column:total_tokens"`
+	}
+	database, openError := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+	if openError != nil {
+		testingInstance.Fatalf("open usage database: %v", openError)
+	}
+	var usageEvents []persistedOpenAIUsageEvent
+	if queryError := database.
+		Table("managed_usage_event_records").
+		Select("endpoint", "provider_id", "model_id", "status_code", "success", "outcome_code", "request_tokens", "response_tokens", "total_tokens").
+		Order("id").
+		Find(&usageEvents).
+		Error; queryError != nil {
+		testingInstance.Fatalf("load OpenAI usage events: %v", queryError)
+	}
+	expectedUsageEvents := []persistedOpenAIUsageEvent{
+		{Endpoint: "v2", Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT41, StatusCode: http.StatusBadGateway, Success: false, OutcomeCode: "upstream_error", RequestTokens: 1599, ResponseTokens: 2048, TotalTokens: 3647},
+		{Endpoint: "v2", Provider: proxy.ProviderNameOpenAI, Model: proxy.ModelNameGPT41, StatusCode: http.StatusOK, Success: true, OutcomeCode: "success", RequestTokens: 7, ResponseTokens: 11, TotalTokens: 18},
+	}
+	if !reflect.DeepEqual(usageEvents, expectedUsageEvents) {
+		testingInstance.Fatalf("usage events=%+v want=%+v", usageEvents, expectedUsageEvents)
+	}
+}
+
+func TestProviderCompletionSignalsRejectPartialTextAndRetainUsageAtPublicV2Boundary(testingInstance *testing.T) {
+	const (
+		chatPartialText      = "chat completion partial text"
+		geminiPartialText    = "gemini partial text"
+		anthropicPartialText = "anthropic partial text"
+	)
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.URL.Path == "/chat/completions":
+			_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"` + chatPartialText + `"},"finish_reason":"length"}],"usage":{"prompt_tokens":31,"completion_tokens":47,"total_tokens":78}}`))
+		case strings.HasSuffix(request.URL.Path, ":generateContent"):
+			_, _ = responseWriter.Write([]byte(`{"candidates":[{"finishReason":"MAX_TOKENS","content":{"parts":[{"text":"` + geminiPartialText + `"}]}}],"usageMetadata":{"promptTokenCount":41,"candidatesTokenCount":53,"totalTokenCount":94}}`))
+		case request.URL.Path == "/v1/messages":
+			_, _ = responseWriter.Write([]byte(`{"content":[{"type":"text","text":"` + anthropicPartialText + `"}],"stop_reason":"max_tokens","usage":{"input_tokens":59,"output_tokens":61}}`))
+		default:
+			http.NotFound(responseWriter, request)
+		}
+	}))
+	defer upstreamServer.Close()
+
+	databasePath := filepath.Join(testingInstance.TempDir(), "provider-completion-events.db")
+	router := newManagementRouterWithDatabasePath(testingInstance, proxy.Configuration{
+		DeepSeekBaseURL:  upstreamServer.URL,
+		GeminiBaseURL:    upstreamServer.URL,
+		AnthropicBaseURL: upstreamServer.URL,
+	}, databasePath)
+	ownerCookie := managementSessionCookie(testingInstance, "provider-completion-owner")
+	tenantIdentifier := managementDefaultTenantTestID(testingInstance, router, ownerCookie)
+	saveProviderKey := func(providerIdentifier string, apiKey string, modelIdentifier string) {
+		testingInstance.Helper()
+		request := authenticatedJSONRequest(
+			http.MethodPut,
+			managementTenantTestPath(tenantIdentifier, "/provider-keys/"+providerIdentifier),
+			managementProviderKeyRequestBody(testingInstance, apiKey, modelIdentifier, ""),
+			ownerCookie,
+		)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			testingInstance.Fatalf("save provider=%s status=%d body=%q", providerIdentifier, response.Code, response.Body.String())
+		}
+	}
+	saveProviderKey(proxy.ProviderNameDeepSeek, testManagementDeepSeekKey, proxy.ModelNameDeepSeekV4Flash)
+	saveProviderKey(proxy.ProviderNameGemini, "sk-user-gemini", proxy.ModelNameGemini25Flash)
+	saveProviderKey(proxy.ProviderNameAnthropic, "sk-user-anthropic", proxy.ModelNameClaudeSonnet46)
+	secret := generateManagementTenantSecret(testingInstance, router, ownerCookie, tenantIdentifier)
+
+	testCases := []struct {
+		provider    string
+		model       string
+		partialText string
+	}{
+		{provider: proxy.ProviderNameDeepSeek, model: proxy.ModelNameDeepSeekV4Flash, partialText: chatPartialText},
+		{provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, partialText: geminiPartialText},
+		{provider: proxy.ProviderNameAnthropic, model: proxy.ModelNameClaudeSonnet46, partialText: anthropicPartialText},
+	}
+	for _, testCase := range testCases {
+		requestBody, marshalError := json.Marshal(map[string]any{
+			"messages": []map[string]string{{"role": "user", "content": "complete this response"}},
+			"model":    testCase.model,
+		})
+		if marshalError != nil {
+			testingInstance.Fatalf("marshal provider=%s request: %v", testCase.provider, marshalError)
+		}
+		requestPath := "/v2?key=" + url.QueryEscape(secret) + "&provider=" + url.QueryEscape(testCase.provider)
+		request := httptest.NewRequest(http.MethodPost, requestPath, bytes.NewReader(requestBody))
+		request.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusBadGateway {
+			testingInstance.Fatalf("provider=%s status=%d body=%q", testCase.provider, response.Code, response.Body.String())
+		}
+		if strings.Contains(response.Body.String(), testCase.partialText) {
+			testingInstance.Fatalf("provider=%s leaked partial text: %q", testCase.provider, response.Body.String())
+		}
+		for _, tokenHeader := range []string{testHeaderLLMProxyRequestTokens, testHeaderLLMProxyResponseTokens, testHeaderLLMProxyTotalTokens} {
+			if response.Header().Get(tokenHeader) != "" {
+				testingInstance.Fatalf("provider=%s exposed %s=%q", testCase.provider, tokenHeader, response.Header().Get(tokenHeader))
+			}
+		}
+	}
+
+	type persistedProviderUsageEvent struct {
+		Endpoint       string `gorm:"column:endpoint"`
+		Provider       string `gorm:"column:provider_id"`
+		Model          string `gorm:"column:model_id"`
+		StatusCode     int    `gorm:"column:status_code"`
+		Success        bool   `gorm:"column:success"`
+		OutcomeCode    string `gorm:"column:outcome_code"`
+		RequestTokens  int    `gorm:"column:request_tokens"`
+		ResponseTokens int    `gorm:"column:response_tokens"`
+		TotalTokens    int    `gorm:"column:total_tokens"`
+	}
+	database, openError := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+	if openError != nil {
+		testingInstance.Fatalf("open usage database: %v", openError)
+	}
+	var usageEvents []persistedProviderUsageEvent
+	if queryError := database.
+		Table("managed_usage_event_records").
+		Select("endpoint", "provider_id", "model_id", "status_code", "success", "outcome_code", "request_tokens", "response_tokens", "total_tokens").
+		Order("id").
+		Find(&usageEvents).
+		Error; queryError != nil {
+		testingInstance.Fatalf("load provider usage events: %v", queryError)
+	}
+	expectedUsageEvents := []persistedProviderUsageEvent{
+		{Endpoint: "v2", Provider: proxy.ProviderNameDeepSeek, Model: proxy.ModelNameDeepSeekV4Flash, StatusCode: http.StatusBadGateway, Success: false, OutcomeCode: "upstream_error", RequestTokens: 31, ResponseTokens: 47, TotalTokens: 78},
+		{Endpoint: "v2", Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini25Flash, StatusCode: http.StatusBadGateway, Success: false, OutcomeCode: "upstream_error", RequestTokens: 41, ResponseTokens: 53, TotalTokens: 94},
+		{Endpoint: "v2", Provider: proxy.ProviderNameAnthropic, Model: proxy.ModelNameClaudeSonnet46, StatusCode: http.StatusBadGateway, Success: false, OutcomeCode: "upstream_error", RequestTokens: 59, ResponseTokens: 61, TotalTokens: 120},
+	}
+	if !reflect.DeepEqual(usageEvents, expectedUsageEvents) {
+		testingInstance.Fatalf("usage events=%+v want=%+v", usageEvents, expectedUsageEvents)
+	}
+}
+
 func TestManagementUsageFailuresRejectsInvalidQueriesAndEnforcesTenantOwnership(t *testing.T) {
 	router := newManagementRouter(t, proxy.Configuration{})
 	ownerCookie := managementSessionCookie(t, "failure-owner")
@@ -241,7 +467,7 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 			return
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"success"}}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"success"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`))
 	}))
 	defer upstreamServer.Close()
 

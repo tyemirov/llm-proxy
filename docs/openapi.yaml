@@ -1285,7 +1285,7 @@
     },
     "responses": {
       "TextSuccess": {
-        "description": "Generated text in the selected representation.",
+        "description": "Complete generated text in the selected representation. HTTP 200 requires the selected transport's canonical completion signal: OpenAI Responses status=completed, OpenAI-compatible Chat Completions finish_reason=stop, Gemini finishReason=STOP, or Anthropic stop_reason=end_turn|stop_sequence. Incomplete, intermediate, missing, or unknown provider states never return text as success.",
         "headers": {
           "X-LLM-Proxy-Request-Timeout-Seconds": {
             "$ref": "#/components/headers/ResolvedRequestTimeout"
@@ -1403,7 +1403,7 @@
         "description": "The caller canceled or closed the request."
       },
       "ProxyBadGateway": {
-        "description": "The selected upstream provider failed.",
+        "description": "The selected upstream provider failed or returned an incomplete, intermediate, missing, or unknown completion signal. The response never exposes partial generated text, token-count headers, or the raw provider body; provider-reported usage can still be retained in managed failure accounting.",
         "headers": {
           "X-LLM-Proxy-Request-Timeout-Seconds": {
             "$ref": "#/components/headers/ResolvedRequestTimeout"

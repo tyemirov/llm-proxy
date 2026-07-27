@@ -122,7 +122,7 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 			t.Fatalf("upstream path=%s want=/chat/completions", request.URL.Path)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"contract response"}}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"contract response"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}`))
 	}))
 	t.Cleanup(upstreamServer.Close)
 	router := newManagementRouter(t, proxy.Configuration{DeepSeekBaseURL: upstreamServer.URL})

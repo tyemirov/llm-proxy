@@ -48,7 +48,7 @@ func newAdaptiveClient(testingInstance *testing.T, mode string, endpoints *proxy
 						errBody := `{"error":{"message":"Unsupported parameter: 'temperature' is not supported with this model.","type":"invalid_request_error","param":"temperature","code":null}}`
 						return &http.Response{StatusCode: http.StatusBadRequest, Body: io.NopCloser(strings.NewReader(errBody)), Header: make(http.Header)}, nil
 					}
-					ok := `{"output_text":"` + adaptiveOKNoTemp + `"}`
+					ok := `{"status":"completed","output_text":"` + adaptiveOKNoTemp + `"}`
 					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(ok)), Header: make(http.Header)}, nil
 				default:
 					return &http.Response{StatusCode: http.StatusTeapot, Body: io.NopCloser(strings.NewReader(`{}`)), Header: make(http.Header)}, nil

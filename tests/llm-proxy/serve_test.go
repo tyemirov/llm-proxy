@@ -116,7 +116,7 @@ func TestEndpoint_RespectsAcceptHeaderCSV(testingInstance *testing.T) {
 	router := newRouterWithStubbedOpenAI(
 		testingInstance,
 		`{"data":[{"id":"`+proxy.ModelNameGPT41+`"}]}`,
-		`{"output_text":"Hello, world!"}`,
+		`{"status":"completed","output_text":"Hello, world!"}`,
 		1,
 		4,
 		5,
@@ -170,7 +170,7 @@ func TestEndpoint_ReturnsServiceUnavailableWhenQueueFull(testingInstance *testin
 				case <-releaseUpstream:
 					return &http.Response{
 						StatusCode: http.StatusOK,
-						Body:       io.NopCloser(strings.NewReader(`{"output_text":"queued"}`)),
+						Body:       io.NopCloser(strings.NewReader(`{"status":"completed","output_text":"queued"}`)),
 						Header:     make(http.Header),
 					}, nil
 				}
@@ -275,7 +275,7 @@ func TestEndpoint_ReturnsGatewayTimeoutWhenWaitingForUpstreamWorker(testingInsta
 				case <-releaseUpstream:
 					return &http.Response{
 						StatusCode: http.StatusOK,
-						Body:       io.NopCloser(strings.NewReader(`{"output_text":"queued"}`)),
+						Body:       io.NopCloser(strings.NewReader(`{"status":"completed","output_text":"queued"}`)),
 						Header:     make(http.Header),
 					}, nil
 				}

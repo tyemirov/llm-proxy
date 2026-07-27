@@ -48,12 +48,22 @@ human-readable reference derived from them at
 `https://llm-proxy-api.mprlab.com` as its API server; the API origin does not
 serve another schema location.
 
-The caller does not stream tokens, poll a job endpoint, follow a resume token, or
-know whether the selected upstream provider uses synchronous responses,
-background responses, or provider-specific polling internally. For OpenAI
-Responses, llm-proxy always owns the background-response lifecycle: it sends
-stored background requests upstream and polls OpenAI server-side until the answer
-is terminal or the request's effective work budget expires.
+The caller does not stream tokens, poll a job endpoint, or follow a resume
+token. OpenAI Responses is the only current text adapter with a pollable
+upstream lifecycle: llm-proxy sends stored background requests and keeps the
+client request open while it polls a nonblank response id reported with
+`status=queued` or `status=in_progress`, or returned by a proxy-initiated
+stored background synthesis. A documented terminal status is resolved
+immediately, and a missing or unknown status is rejected rather than polled.
+The response id remains in the active request lifecycle; llm-proxy has no
+durable provider-job queue or later resume endpoint.
+
+The current Chat Completions, Gemini `generateContent`, and Anthropic Messages
+routes are synchronous. Their text is successful only when the same response
+reports a complete provider-specific stop signal: Chat
+`finish_reason=stop`, Gemini `finishReason=STOP`, or Anthropic
+`stop_reason=end_turn|stop_sequence`. Missing, truncated, tool/intermediate, or
+unknown stop signals return `502` without partial text.
 
 A `504 Gateway Timeout` means the overall proxy request deadline expired before
 the selected upstream provider produced a final answer. It is not a prompt for
@@ -115,7 +125,8 @@ changes an already selected response.
 Internally, `server.workers` limits concurrent upstream provider HTTP
 operations and `server.queue_size` limits upstream HTTP operations waiting for a
 worker. Long OpenAI background-response poll sleeps do not occupy a worker slot;
-only the actual upstream HTTP request or poll does.
+only the actual upstream HTTP request or poll does. This admission queue stores
+no provider job ids and provides no durable retry or resume behavior.
 
 ## Configuration
 
@@ -519,10 +530,14 @@ the stable proxy payload shape for that OpenAI model and must be one of:
 
 All OpenAI Responses text requests also send `background: true` and
 `store: true`. llm-proxy polls the stored OpenAI response server-side until it
-reaches a terminal state or the request's effective work budget expires. Plain
-REST callers use one `GET /`, `POST /`, or `POST /v2` request and receive the
-final formatted answer; they do not stream, poll, or follow a separate resume
-endpoint.
+reaches a documented terminal state or the request's effective work budget
+expires. Only `queued` and `in_progress` are pending states; unknown states do
+not trigger polling. Only `completed` can produce a successful response.
+Plain REST callers use one `GET /`, `POST /`, or `POST /v2` request and receive
+the final formatted answer; they do not stream, poll, or follow a separate
+resume endpoint. Separately published provider-specific deferred, batch, or
+asynchronous APIs are not implicit variants of these routes and are not
+activated by an arbitrary response `id`.
 
 Provider-specific details:
 
@@ -532,7 +547,10 @@ Provider-specific details:
   and Models endpoint URLs are derived from `providers.openai.base_url`;
   dictation uses `providers.openai.transcriptions_url`.
 * OpenAI-compatible text providers send chat completion requests with
-  `Authorization: Bearer <api_key>` and the selected provider base URL.
+  `Authorization: Bearer <api_key>` and the selected provider base URL. The
+  shared adapter accepts text only with `finish_reason=stop`; `length`,
+  `content_filter`, `tool_calls`, missing, and provider-specific non-stop
+  reasons are upstream failures.
 * Qwen Cloud Token Plan uses selector `qwencloud`, exact model
   `qwen3.8-max-preview`, `${QWEN_CLOUD_TOKEN_PLAN_API_KEY}`, and
   `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`.
@@ -567,12 +585,15 @@ Provider-specific details:
   `providers.grok.transcriptions_url`.
 * Gemini text requests use the native `generateContent` route and normalize
   Gemini usage metadata into the same response headers and JSON `usage` object
-  used by the other text providers.
+  used by the other text providers. Only `finishReason=STOP` can return text.
 * Anthropic text requests use `POST /v1/messages` with `x-api-key` and
   `anthropic-version: 2023-06-01`. System messages are translated to
   Anthropic's top-level `system` field. Anthropic requires `max_tokens`, so
   when the client omits it the proxy sends the selected Claude model's
-  configured output limit.
+  configured output limit. Only `stop_reason=end_turn` or `stop_sequence` can
+  return text; truncation, tool use, paused turns, refusals, and unknown reasons
+  are upstream failures because this adapter exposes no continuation or tool
+  loop.
 * Zhipu dictation uses Z.AI GLM-ASR through
   `providers.zhipu.transcriptions_url` with the selected configured dictation
   model.

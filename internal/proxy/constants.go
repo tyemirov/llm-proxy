@@ -135,17 +135,11 @@ const (
 	finishReasonStop      = "stop"
 
 	statusCompleted  = "completed"
-	statusSucceeded  = "succeeded"
-	statusDone       = "done"
 	statusCancelled  = "cancelled"
 	statusFailed     = "failed"
-	statusErrored    = "errored"
 	statusIncomplete = "incomplete"
-
-	jsonFieldIncompleteDetails      = "incomplete_details"
-	jsonFieldReason                 = "reason"
-	incompleteReasonMaxTokens       = "max_tokens"
-	incompleteReasonMaxOutputTokens = "max_output_tokens"
+	statusInProgress = "in_progress"
+	statusQueued     = "queued"
 
 	logFieldHTTPStatus   = "http_status"
 	logFieldAPIStatus    = "api_status"

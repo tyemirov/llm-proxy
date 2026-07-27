@@ -14,9 +14,11 @@ import (
 )
 
 const (
-	anthropicAPIKeyHeader  = "x-api-key"
-	anthropicVersionHeader = "anthropic-version"
-	anthropicVersionValue  = "2023-06-01"
+	anthropicAPIKeyHeader           = "x-api-key"
+	anthropicVersionHeader          = "anthropic-version"
+	anthropicVersionValue           = "2023-06-01"
+	anthropicStopReasonEndTurn      = "end_turn"
+	anthropicStopReasonStopSequence = "stop_sequence"
 )
 
 type anthropicMessagesClient struct {
@@ -36,8 +38,9 @@ type anthropicMessage struct {
 }
 
 type anthropicMessagesResponse struct {
-	Content []anthropicContentBlock `json:"content"`
-	Usage   *upstreamTokenUsage     `json:"usage"`
+	Content    []anthropicContentBlock `json:"content"`
+	StopReason string                  `json:"stop_reason"`
+	Usage      *upstreamTokenUsage     `json:"usage"`
 }
 
 type anthropicContentBlock struct {
@@ -83,7 +86,7 @@ func (client *anthropicMessagesClient) generateText(parentContext context.Contex
 	}
 	generation, parseError := parseAnthropicMessagesResponse(responseBytes)
 	if parseError != nil {
-		return textGenerationResult{}, parseError
+		return generation, parseError
 	}
 	return generation, nil
 }
@@ -117,6 +120,14 @@ func parseAnthropicMessagesResponse(responseBytes []byte) (textGenerationResult,
 	if usageError != nil {
 		return textGenerationResult{}, usageError
 	}
+	generation := textGenerationResult{usage: usage}
+	stopReason := response.StopReason
+	if strings.TrimSpace(stopReason) == constants.EmptyString {
+		return generation, fmt.Errorf("%w: anthropic Messages missing stop_reason", ErrProviderAPI)
+	}
+	if stopReason != anthropicStopReasonEndTurn && stopReason != anthropicStopReasonStopSequence {
+		return generation, fmt.Errorf("%w: anthropic Messages stop_reason=%s", ErrProviderAPI, strings.TrimSpace(stopReason))
+	}
 	var textBuilder strings.Builder
 	for _, contentBlock := range response.Content {
 		if contentBlock.Type == textPartType && strings.TrimSpace(contentBlock.Text) != constants.EmptyString {
@@ -125,7 +136,7 @@ func parseAnthropicMessagesResponse(responseBytes []byte) (textGenerationResult,
 	}
 	trimmedText := strings.TrimSpace(textBuilder.String())
 	if trimmedText == constants.EmptyString {
-		return textGenerationResult{}, fmt.Errorf("%w: anthropic Messages returned no text", ErrProviderAPI)
+		return generation, fmt.Errorf("%w: anthropic Messages returned no text", ErrProviderAPI)
 	}
 	return textGenerationResult{text: trimmedText, usage: usage}, nil
 }

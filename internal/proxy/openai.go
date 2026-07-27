@@ -43,9 +43,8 @@ func NewOpenAIClient(httpClient HTTPDoer, endpoints *Endpoints) *OpenAIClient {
 }
 
 const (
-	synthesisInstructionPrimary    = "Now synthesize the final answer with concise citations."
-	continuationInstructionPrimary = "Continue from the previous response and provide the final answer."
-	responsePollInterval           = 500 * time.Millisecond
+	synthesisInstructionPrimary = "Now synthesize the final answer with concise citations."
+	responsePollInterval        = 500 * time.Millisecond
 )
 
 // hasFinalMessage checks if the response payload contains the terminal assistant message.
@@ -119,7 +118,6 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 }
 
 type openAIResponseSnapshot struct {
-	decodedObject         map[string]any
 	identifier            string
 	status                string
 	text                  string
@@ -133,9 +131,8 @@ func newOpenAIResponseSnapshot(responseBytes []byte) (openAIResponseSnapshot, er
 	decodeError := json.Unmarshal(responseBytes, &decodedObject)
 	usage, usageError := parseResponsesTokenUsage(responseBytes)
 	responseSnapshot := openAIResponseSnapshot{
-		decodedObject:         decodedObject,
 		identifier:            utils.GetString(decodedObject, jsonFieldID),
-		status:                strings.ToLower(utils.GetString(decodedObject, jsonFieldStatus)),
+		status:                utils.GetString(decodedObject, jsonFieldStatus),
 		text:                  extractTextFromAny(responseBytes),
 		usage:                 usage,
 		hasFinalMessage:       hasFinalMessage(responseBytes),
@@ -152,7 +149,16 @@ func newOpenAIResponseSnapshot(responseBytes []byte) (openAIResponseSnapshot, er
 
 func (responseSnapshot openAIResponseSnapshot) isTerminal() bool {
 	switch responseSnapshot.status {
-	case statusCompleted, statusSucceeded, statusDone, statusCancelled, statusFailed, statusErrored, statusIncomplete:
+	case statusCompleted, statusCancelled, statusFailed, statusIncomplete:
+		return true
+	default:
+		return false
+	}
+}
+
+func (responseSnapshot openAIResponseSnapshot) isPending() bool {
+	switch responseSnapshot.status {
+	case statusQueued, statusInProgress:
 		return true
 	default:
 		return false
@@ -168,68 +174,36 @@ func (responseSnapshot openAIResponseSnapshot) generation() textGenerationResult
 }
 
 func (client *OpenAIClient) resolveOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	if !responseSnapshot.isTerminal() && !utils.IsBlank(responseSnapshot.identifier) {
-		finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, responseSnapshot.identifier, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, structuredLogger)
-		if pollError != nil {
-			structuredLogger.Errorw(
-				logEventOpenAIPollError,
-				logFieldID, responseSnapshot.identifier,
-				constants.LogFieldError, pollError,
-			)
-			return textGenerationResult{}, openAIStageError(pollError)
-		}
-		if !utils.IsBlank(finalGeneration.text) {
-			finalGeneration.usage = mergeTokenUsage(responseSnapshot.usage, finalGeneration.usage)
-			return finalGeneration, nil
-		}
+	if responseSnapshot.isTerminal() {
+		return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 	}
-	if !responseSnapshot.isTerminal() {
-		if utils.IsBlank(responseSnapshot.text) {
-			return textGenerationResult{}, errors.New(errorOpenAIAPI)
-		}
-		return responseSnapshot.generation(), nil
+	if !responseSnapshot.isPending() {
+		return textGenerationResult{usage: responseSnapshot.usage}, errors.New(errorOpenAIAPI)
 	}
-	return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
+	if utils.IsBlank(responseSnapshot.identifier) {
+		return textGenerationResult{usage: responseSnapshot.usage}, errors.New(errorOpenAIAPI)
+	}
+	finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, responseSnapshot.identifier, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, structuredLogger)
+	finalGeneration.usage = mergeTokenUsage(responseSnapshot.usage, finalGeneration.usage)
+	if pollError != nil {
+		structuredLogger.Errorw(
+			logEventOpenAIPollError,
+			logFieldID, responseSnapshot.identifier,
+			constants.LogFieldError, pollError,
+		)
+		return finalGeneration, openAIStageError(pollError)
+	}
+	return finalGeneration, nil
 }
 
 func (client *OpenAIClient) resolveTerminalOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	switch responseSnapshot.status {
-	case statusCancelled, statusFailed, statusErrored:
-		return textGenerationResult{}, errors.New(errorOpenAIFailedStatus)
-	case statusIncomplete:
-		return client.resolveIncompleteOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
-	default:
+	case statusCompleted:
 		return client.resolveCompleteOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
+	case statusCancelled, statusFailed:
+		return textGenerationResult{usage: responseSnapshot.usage}, errors.New(errorOpenAIFailedStatus)
 	}
-}
-
-func (client *OpenAIClient) resolveIncompleteOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	if !utils.IsBlank(responseSnapshot.text) {
-		return responseSnapshot.generation(), nil
-	}
-	if !canContinueIncompleteResponse(responseSnapshot.decodedObject) || utils.IsBlank(responseSnapshot.identifier) {
-		return textGenerationResult{}, ErrUpstreamIncomplete
-	}
-	continuedResponseID, continuationError := client.startIncompleteContinuation(parentContext, openAIKey, responseSnapshot.identifier, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, structuredLogger)
-	if continuationError != nil {
-		structuredLogger.Errorw(
-			logEventOpenAIContinueError,
-			logFieldID, responseSnapshot.identifier,
-			constants.LogFieldError, continuationError,
-		)
-		return textGenerationResult{}, openAIStageError(continuationError)
-	}
-	finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, continuedResponseID, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, structuredLogger)
-	if pollError != nil {
-		structuredLogger.Errorw(
-			logEventOpenAIPollError,
-			logFieldID, continuedResponseID,
-			constants.LogFieldError, pollError,
-		)
-		return textGenerationResult{}, openAIStageError(pollError)
-	}
-	finalGeneration.usage = mergeTokenUsage(responseSnapshot.usage, finalGeneration.usage)
-	return finalGeneration, nil
+	return textGenerationResult{usage: responseSnapshot.usage}, ErrUpstreamIncomplete
 }
 
 func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
@@ -245,15 +219,15 @@ func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.
 			return textGenerationResult{}, openAIStageError(synthErr)
 		}
 		finalGeneration, pollError := client.pollResponseUntilDone(parentContext, openAIKey, continuedResponseID, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, structuredLogger)
+		finalGeneration.usage = mergeTokenUsage(responseSnapshot.usage, finalGeneration.usage)
 		if pollError != nil {
 			structuredLogger.Errorw(
 				logEventOpenAIPollError,
 				logFieldID, continuedResponseID,
 				constants.LogFieldError, pollError,
 			)
-			return textGenerationResult{}, openAIStageError(pollError)
+			return finalGeneration, openAIStageError(pollError)
 		}
-		finalGeneration.usage = mergeTokenUsage(responseSnapshot.usage, finalGeneration.usage)
 		return finalGeneration, nil
 	}
 	if utils.IsBlank(responseSnapshot.text) {
@@ -263,7 +237,7 @@ func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.
 }
 
 func openAIStageError(stageError error) error {
-	if errors.Is(stageError, context.Canceled) || errors.Is(stageError, context.DeadlineExceeded) {
+	if errors.Is(stageError, context.Canceled) || errors.Is(stageError, context.DeadlineExceeded) || errors.Is(stageError, ErrUpstreamIncomplete) {
 		return stageError
 	}
 	return errors.New(errorOpenAIAPI)
@@ -295,11 +269,6 @@ func (client *OpenAIClient) startSynthesisContinuation(parentContext context.Con
 	return client.startContinuationResponse(parentContext, openAIKey, payload, structuredLogger)
 }
 
-func (client *OpenAIClient) startIncompleteContinuation(parentContext context.Context, openAIKey string, previousResponseID string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredLogger *zap.SugaredLogger) (string, error) {
-	payload := buildStatefulContinuationPayload(modelIdentifier, continuationInstructionPrimary, webSearchEnabled, maxTokens, reasoningEffort, previousResponseID)
-	return client.startContinuationResponse(parentContext, openAIKey, payload, structuredLogger)
-}
-
 func (client *OpenAIClient) startContinuationResponse(parentContext context.Context, openAIKey string, payload map[string]any, structuredLogger *zap.SugaredLogger) (string, error) {
 	payloadBytes, _ := json.Marshal(payload)
 
@@ -324,28 +293,6 @@ func (client *OpenAIClient) startContinuationResponse(parentContext context.Cont
 	return newID, nil
 }
 
-func buildStatefulContinuationPayload(modelIdentifier textModelDefinition, inputText string, webSearchEnabled bool, maxTokens *int, reasoningEffort string, previousResponseID string) map[string]any {
-	payloadBytes, _ := json.Marshal(BuildRequestPayload(modelIdentifier.string(), modelIdentifier.requestProfile.string(), inputText, webSearchEnabled, maxTokens, reasoningEffort))
-	var payload map[string]any
-	_ = json.Unmarshal(payloadBytes, &payload)
-	payload[keyPreviousResponseID] = previousResponseID
-	return payload
-}
-
-func canContinueIncompleteResponse(decodedObject map[string]any) bool {
-	details, ok := decodedObject[jsonFieldIncompleteDetails].(map[string]any)
-	if !ok {
-		return false
-	}
-	reason := utils.GetString(details, jsonFieldReason)
-	switch reason {
-	case incompleteReasonMaxTokens, incompleteReasonMaxOutputTokens:
-		return true
-	default:
-		return false
-	}
-}
-
 // pollResponseUntilDone repeatedly fetches a response until it is complete or the request context expires.
 func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context, openAIKey string, responseIdentifier string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	for {
@@ -354,7 +301,7 @@ func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context,
 			if parentContext.Err() != nil {
 				return textGenerationResult{}, parentContext.Err()
 			}
-			return textGenerationResult{}, fetchError
+			return textGenerationResult{usage: responseSnapshot.usage}, fetchError
 		}
 		if responseComplete {
 			return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
@@ -397,9 +344,15 @@ func (client *OpenAIClient) fetchResponseByID(parentContext context.Context, ope
 
 	responseSnapshot, snapshotError := newOpenAIResponseSnapshot(responseBytes)
 	if snapshotError != nil {
-		return openAIResponseSnapshot{}, false, errors.New(errorOpenAIAPI)
+		return responseSnapshot, false, errors.New(errorOpenAIAPI)
 	}
-	return responseSnapshot, responseSnapshot.isTerminal(), nil
+	if responseSnapshot.isTerminal() {
+		return responseSnapshot, true, nil
+	}
+	if !responseSnapshot.isPending() {
+		return responseSnapshot, false, errors.New(errorOpenAIAPI)
+	}
+	return responseSnapshot, false, nil
 }
 
 // --- Final, Corrected Response Parser ---

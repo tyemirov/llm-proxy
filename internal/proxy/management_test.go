@@ -466,7 +466,7 @@ func TestManagementProviderKeyRevealPersistsUpdatedKey(t *testing.T) {
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		capturedAuthorizations = append(capturedAuthorizations, request.Header.Get("Authorization"))
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"updated key ok"}}]}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"updated key ok"},"finish_reason":"stop"}]}`))
 	}))
 	defer upstreamServer.Close()
 
@@ -884,7 +884,7 @@ func TestManagementDatabasePersistenceAndOpenFailures(t *testing.T) {
 		}
 		requestedModels = append(requestedModels, requestPayload.Model)
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"persisted ok"}}]}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"persisted ok"},"finish_reason":"stop"}]}`))
 	}))
 	defer upstreamServer.Close()
 
@@ -1228,7 +1228,7 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 			t.Fatalf("chat path=%s want=/chat/completions", request.URL.Path)
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"managed usage ok"}}],"usage":{"prompt_tokens":4,"completion_tokens":6,"total_tokens":10}}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"managed usage ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":4,"completion_tokens":6,"total_tokens":10}}`))
 	}))
 	defer chatServer.Close()
 	dictationServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
@@ -1390,7 +1390,7 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 func TestManagementAdminUsersDashboard(t *testing.T) {
 	chatServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"admin usage ok"}}],"usage":{"prompt_tokens":7,"completion_tokens":11,"total_tokens":18}}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"admin usage ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":7,"completion_tokens":11,"total_tokens":18}}`))
 	}))
 	defer chatServer.Close()
 
@@ -1515,7 +1515,7 @@ func TestManagementMetaProviderRoutesWithEncryptedTenantKey(t *testing.T) {
 			t.Fatalf("system message=%+v", messages[0])
 		}
 		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"managed meta ok"}}]}`))
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"managed meta ok"},"finish_reason":"stop"}]}`))
 	}))
 	defer upstreamServer.Close()
 
