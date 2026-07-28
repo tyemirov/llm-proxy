@@ -14,6 +14,22 @@ All notable changes to this project will be documented in this file.
 - Keep response construction and managed-usage persistence under request cancellation, classify queue saturation as `proxy_overload`, reject explicit null timeout configuration, and synchronize Python client distribution metadata at `0.2.0`.
 - Make deployment pass the app-owned maximum request budget into the gateway contract verifier, which rejects outer response guards that cannot outwait it.
 
+## [v0.2.49] - 2026-07-28
+
+- Merge pull request #229 from tyemirov/tyemirov/improvement/I042-sqlite-wal-concurrency
+- Merge pull request #230 from tyemirov/tyemirov/improvement/I043-bounded-usage-writer
+- Merge pull request #231 from tyemirov/improvement/I036-verify-provider-keys
+- Merge pull request #232 from tyemirov/bugfix/B089-provider-error-contract
+- fix: ensure saveProviderKey honors request context cancellation
+- docs(issues): enumerate provider wire contract lifecycle refactors and audits
+- Merge I036 verification into B089 provider errors
+- Merge I043 usage writer into I036 key verification
+- Merge I042 concurrency into I043 usage writer
+- Sanitize and correlate provider errors
+- Verify provider keys and repair Moonshot default
+- feat(management): bound asynchronous usage persistence
+- Improve managed SQLite request concurrency
+
 ## [v0.2.48] - 2026-07-27
 
 - Merge pull request #228 from tyemirov/gix/add-paid-credential-safe-live-test-for-default-tenant
