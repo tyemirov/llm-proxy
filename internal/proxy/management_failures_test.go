@@ -141,6 +141,7 @@ func TestOpenAIResponsesCompleteTruncatedOutputAndRecordOneSuccessAtPublicV2Boun
 	if openError != nil {
 		testingInstance.Fatalf("open usage database: %v", openError)
 	}
+	waitForPersistedManagedUsageEventCount(testingInstance, database, 2)
 	var usageEvents []persistedOpenAIUsageEvent
 	if queryError := database.
 		Table("managed_usage_event_records").
@@ -221,6 +222,7 @@ func TestOpenAIPolledIncompleteUsesLatestSnapshotThenCompletesAtPublicV2Boundary
 	if openError != nil {
 		testingInstance.Fatalf("open usage database: %v", openError)
 	}
+	waitForPersistedManagedUsageEventCount(testingInstance, database, 1)
 	var usageEvents []persistedUsageEvent
 	if queryError := database.
 		Table("managed_usage_event_records").
@@ -350,6 +352,7 @@ func TestProviderCompletionSignalsRecoverPartialTextAndAggregateUsageAtPublicV2B
 	if openError != nil {
 		testingInstance.Fatalf("open usage database: %v", openError)
 	}
+	waitForPersistedManagedUsageEventCount(testingInstance, database, 3)
 	var usageEvents []persistedProviderUsageEvent
 	if queryError := database.
 		Table("managed_usage_event_records").
@@ -433,6 +436,7 @@ func TestCompletionCoordinatorDeadlineRecordsAccumulatedUsageAsOneTimeout(testin
 	if openError != nil {
 		testingInstance.Fatalf("open usage database: %v", openError)
 	}
+	waitForPersistedManagedUsageEventCount(testingInstance, database, 1)
 	var usageEvents []persistedTimeoutUsageEvent
 	if queryError := database.
 		Table("managed_usage_event_records").
@@ -568,6 +572,11 @@ func TestManagementAccountUsageFailuresAggregateOwnedTenantsAndBindCursorsToScop
 	recordInvalidRequest(secondSecret)
 	recordInvalidRequest(firstSecret)
 	recordInvalidRequest(otherSecret)
+	waitForManagementValue(t, func() managementAccountUsageFailuresTestResponse {
+		return requestManagementAccountUsageFailures(t, router, ownerCookie, "30d", 25, "")
+	}, func(payload managementAccountUsageFailuresTestResponse) bool {
+		return len(payload.Failures) == 3
+	})
 
 	firstPage := requestManagementAccountUsageFailures(t, router, ownerCookie, "30d", 1, "")
 	if firstPage.Interval != "30d" || len(firstPage.Failures) != 1 || firstPage.NextCursor == "" {
@@ -757,6 +766,11 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 			t.Fatalf("request=%d status=%d want=%d body=%q", requestIndex, response.Code, requestCase.wantStatus, response.Body.String())
 		}
 	}
+	waitForManagementValue(t, func() managementUsageFailuresTestResponse {
+		return requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 25, "")
+	}, func(payload managementUsageFailuresTestResponse) bool {
+		return len(payload.Failures) == 6
+	})
 
 	firstPage := requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 3, "")
 	if firstPage.NextCursor == "" || len(firstPage.Failures) != 3 {
@@ -789,6 +803,11 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 	if newFailureResponse.Code != http.StatusBadRequest {
 		t.Fatalf("new failure status=%d body=%q", newFailureResponse.Code, newFailureResponse.Body.String())
 	}
+	waitForManagementValue(t, func() managementUsageFailuresTestResponse {
+		return requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 1, "")
+	}, func(payload managementUsageFailuresTestResponse) bool {
+		return len(payload.Failures) == 1 && payload.Failures[0].OutcomeCode == "invalid_request"
+	})
 
 	secondPage := requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 3, firstPage.NextCursor)
 	if secondPage.NextCursor != "" || len(secondPage.Failures) != 3 {
@@ -837,6 +856,11 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 	if canceledResponse.Code != 499 {
 		t.Fatalf("canceled status=%d body=%q", canceledResponse.Code, canceledResponse.Body.String())
 	}
+	waitForManagementValue(t, func() managementUsageFailuresTestResponse {
+		return requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 1, "")
+	}, func(payload managementUsageFailuresTestResponse) bool {
+		return len(payload.Failures) == 1 && payload.Failures[0].StatusCode == 499
+	})
 	canceledPage := requestManagementUsageFailures(t, router, ownerCookie, tenantPath, "30d", 1, "")
 	if len(canceledPage.Failures) != 1 ||
 		canceledPage.Failures[0].StatusCode != 499 ||
@@ -860,6 +884,7 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 	if openError != nil {
 		t.Fatalf("open usage database: %v", openError)
 	}
+	waitForPersistedManagedUsageEventCount(t, database, 9)
 	var persistedOutcomes []persistedUsageOutcome
 	if queryError := database.
 		Table("managed_usage_event_records").
@@ -983,4 +1008,37 @@ func requestManagementAccountUsageFailures(t *testing.T, router http.Handler, se
 		t.Fatalf("decode account failures: %v", decodeError)
 	}
 	return payload
+}
+
+func waitForPersistedManagedUsageEventCount(t *testing.T, database *gorm.DB, expectedCount int64) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		var observedCount int64
+		if countError := database.Table("managed_usage_event_records").Count(&observedCount).Error; countError != nil {
+			t.Fatalf("count persisted usage events: %v", countError)
+		}
+		if observedCount == expectedCount {
+			return
+		}
+		if observedCount > expectedCount || time.Now().After(deadline) {
+			t.Fatalf("persisted usage event count=%d want=%d", observedCount, expectedCount)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func waitForManagementValue[valueType any](t *testing.T, readValue func() valueType, accepted func(valueType) bool) valueType {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		value := readValue()
+		if accepted(value) {
+			return value
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("management value did not reach expected state: %+v", value)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

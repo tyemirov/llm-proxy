@@ -33,7 +33,41 @@ const (
 	testManagementOpenAIKey                = "sk-user-openai"
 	testManagementDeepSeekKey              = "sk-user-deepseek"
 	testManagementMetaKey                  = "sk-user-meta"
+	testProviderKeyVerificationPrompt      = "Verify this provider credential."
 )
+
+type managementProviderKeyVerificationHTTPDoer struct {
+	next proxy.HTTPDoer
+}
+
+func (httpDoer managementProviderKeyVerificationHTTPDoer) Do(request *http.Request) (*http.Response, error) {
+	if request.Body == nil {
+		return httpDoer.next.Do(request)
+	}
+	requestBody, readError := io.ReadAll(request.Body)
+	if readError != nil {
+		return nil, readError
+	}
+	request.Body = io.NopCloser(bytes.NewReader(requestBody))
+	if !bytes.Contains(requestBody, []byte(testProviderKeyVerificationPrompt)) {
+		return httpDoer.next.Do(request)
+	}
+	responseBody := `{"choices":[{}]}`
+	switch {
+	case request.Header.Get("x-goog-api-key") != "":
+		responseBody = `{"candidates":[{}]}`
+	case request.Header.Get("x-api-key") != "":
+		responseBody = `{"id":"verification","type":"message","role":"assistant"}`
+	case strings.HasSuffix(request.URL.Path, "/responses"):
+		responseBody = `{"id":"verification","status":"completed"}`
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(responseBody)),
+		Request:    request,
+	}, nil
+}
 
 func managementProviderKeyRequestBody(t *testing.T, apiKey string, textModel string, systemPrompt string) string {
 	t.Helper()
@@ -101,8 +135,8 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		`href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css"`,
 		`src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"`,
 		`data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"`,
-		`src="/assets/llm-proxy/js/startupGuard.js?v=20260727"`,
-		`src="/assets/llm-proxy/js/app.js?v=20260727"`,
+		`src="/assets/llm-proxy/js/startupGuard.js?v=20260727i036"`,
+		`src="/assets/llm-proxy/js/app.js?v=20260727i036"`,
 		`data-config-url="/config-ui.yaml"`,
 		`<mpr-user`,
 		`<mpr-footer`,
@@ -544,6 +578,7 @@ func TestManagementProviderKeyRevealPersistsUpdatedKey(t *testing.T) {
 	if len(capturedAuthorizations) != 2 || capturedAuthorizations[0] != "Bearer "+updatedProviderKey || capturedAuthorizations[1] != "Bearer "+updatedProviderKey {
 		t.Fatalf("updated key authorizations=%v", capturedAuthorizations)
 	}
+	waitForManagementRequestCount(t, router, ownerCookie, 2)
 	if updateError := database.Model(&managedProviderKeyFixture{}).Where("tenant_id = ? AND provider_id = ?", ownerTenantID, proxy.ProviderNameDeepSeek).Update("encrypted_api_key", "invalid").Error; updateError != nil {
 		t.Fatalf("corrupt updated provider key record: %v", updateError)
 	}
@@ -768,6 +803,7 @@ func TestManagementRoutingDefaultsFollowSavedProviderKeys(t *testing.T) {
 		t.Fatalf("remove final provider status=%d body=%s", removeDeepSeekResponse.Code, removeDeepSeekResponse.Body.String())
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{})
+	waitForManagementRequestCount(t, router, sessionCookie, 2)
 }
 
 func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *testing.T) {
@@ -1057,6 +1093,7 @@ func TestManagementDatabasePersistenceAndOpenFailures(t *testing.T) {
 	if len(requestedModels) != 1 || requestedModels[0] != proxy.ModelNameDeepSeekV4Flash {
 		t.Fatalf("persisted default models=%v want=[%s]", requestedModels, proxy.ModelNameDeepSeekV4Flash)
 	}
+	waitForManagementRequestCount(t, reloadedRouter, sessionCookie, 1)
 
 	parentFile := filepath.Join(t.TempDir(), "parent-file")
 	if writeError := os.WriteFile(parentFile, []byte("not a directory"), 0o600); writeError != nil {
@@ -1072,10 +1109,7 @@ func TestManagementDatabasePersistenceAndOpenFailures(t *testing.T) {
 func TestManagementStartupRejectsInvalidPersistedRoutingDefaults(t *testing.T) {
 	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
 	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
-	router, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
-	if buildError != nil {
-		t.Fatalf(messageBuildRouterError, buildError)
-	}
+	router := newManagementRouterWithDatabasePath(t, proxy.Configuration{}, databasePath)
 	sessionCookie := managementSessionCookie(t, "tauth-invalid-persisted-defaults")
 	tenantID := managementDefaultTenantTestID(t, router, sessionCookie)
 	saveKeyRequest := authenticatedJSONRequest(
@@ -1259,7 +1293,18 @@ func TestManagementOpensConfiguredDatabasePath(t *testing.T) {
 
 func TestManagedAuthenticationReadsThroughConcurrentSQLiteWriter(t *testing.T) {
 	upstreamReached := make(chan struct{})
-	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, _ *http.Request) {
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		requestBody, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			t.Errorf("read concurrent writer upstream request: %v", readError)
+			responseWriter.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if bytes.Contains(requestBody, []byte(testProviderKeyVerificationPrompt)) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"id":"verification","status":"completed"}`))
+			return
+		}
 		close(upstreamReached)
 		responseWriter.Header().Set("Content-Type", "application/json")
 		_, _ = responseWriter.Write([]byte(`{"id":"response-id","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"text","text":"wal reader ok"}]}]}`))
@@ -1341,6 +1386,7 @@ func TestManagedAuthenticationReadsThroughConcurrentSQLiteWriter(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("proxy request did not finish after the concurrent writer committed")
 	}
+	waitForManagementRequestCount(t, router, sessionCookie, 1)
 }
 
 func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
@@ -1355,8 +1401,9 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 
 	var profilePayload struct {
 		Providers []struct {
-			ID         string `json:"id"`
-			TextModels []struct {
+			ID               string `json:"id"`
+			TextDefaultModel string `json:"text_default_model"`
+			TextModels       []struct {
 				ID string `json:"id"`
 			} `json:"text_models"`
 		} `json:"providers"`
@@ -1365,18 +1412,20 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 		t.Fatalf("decode profile: %v", decodeError)
 	}
 	modelsByProvider := map[string][]string{}
+	textDefaultsByProvider := map[string]string{}
 	for _, provider := range profilePayload.Providers {
 		models := make([]string, 0, len(provider.TextModels))
 		for _, model := range provider.TextModels {
 			models = append(models, model.ID)
 		}
 		modelsByProvider[provider.ID] = models
+		textDefaultsByProvider[provider.ID] = provider.TextDefaultModel
 	}
 	expectedModels := map[string][]string{
 		proxy.ProviderNameOpenAI:    {"gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
 		proxy.ProviderNameDashScope: {proxy.ModelNameDashScopeQwenPlus},
 		proxy.ProviderNameQwenCloud: {proxy.ModelNameQwenCloudQwen38MaxPreview},
-		proxy.ProviderNameMoonshot:  {"kimi-k3", "kimi-k2.7-code", "kimi-k2.7-code-highspeed", "kimi-k2.6"},
+		proxy.ProviderNameMoonshot:  {proxy.ModelNameMoonshotKimiK26, proxy.ModelNameMoonshotKimiK27Code, proxy.ModelNameMoonshotKimiK27CodeHighSpeed, proxy.ModelNameMoonshotKimiK3},
 		proxy.ProviderNameMiniMax:   {proxy.ModelNameMiniMaxM27},
 		proxy.ProviderNameZhipu:     {"glm-5.2"},
 		proxy.ProviderNameGemini:    {"gemini-3.1-pro-preview", "gemini-3-flash-preview"},
@@ -1400,6 +1449,13 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 				t.Fatalf("profile provider=%s models=%v missing=%s", providerIdentifier, configuredModels, expectedModel)
 			}
 		}
+	}
+	configuredMoonshotModels := modelsByProvider[proxy.ProviderNameMoonshot]
+	if !reflect.DeepEqual(configuredMoonshotModels, expectedModels[proxy.ProviderNameMoonshot]) {
+		t.Fatalf("profile provider=%s models=%v want=%v", proxy.ProviderNameMoonshot, configuredMoonshotModels, expectedModels[proxy.ProviderNameMoonshot])
+	}
+	if textDefaultsByProvider[proxy.ProviderNameMoonshot] != proxy.ModelNameMoonshotKimiK26 {
+		t.Fatalf("profile provider=%s default=%s want=%s", proxy.ProviderNameMoonshot, textDefaultsByProvider[proxy.ProviderNameMoonshot], proxy.ModelNameMoonshotKimiK26)
 	}
 	unsupportedDashScopeModels := []string{"qwen3.7-max", "qwen3.7-plus"}
 	configuredDashScopeModels, configured := modelsByProvider[proxy.ProviderNameDashScope]
@@ -1483,6 +1539,7 @@ func TestManagementGeneratedSecretSupportsDictationAndRejectsMultipartProviderKe
 	if capturedAuthorization != "Bearer sk-user-openai" {
 		t.Fatalf("authorization=%q want=%q", capturedAuthorization, "Bearer sk-user-openai")
 	}
+	waitForManagementRequestCount(t, router, sessionCookie, 2)
 }
 
 func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
@@ -1599,7 +1656,11 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 		t.Fatalf("invalid dictation status=%d body=%s", invalidDictationResponse.Code, invalidDictationResponse.Body.String())
 	}
 
-	usage := requestManagementUsage(t, router, userOneCookie, "30d")
+	usage := waitForManagementValue(t, func() managementUsageTestResponse {
+		return requestManagementUsage(t, router, userOneCookie, "30d")
+	}, func(payload managementUsageTestResponse) bool {
+		return payload.Totals.Requests == 5
+	})
 	if usage.Totals.Requests != 5 || usage.Totals.SuccessfulRequests != 1 || usage.Totals.FailedRequests != 4 {
 		t.Fatalf("usage totals=%+v", usage.Totals)
 	}
@@ -1715,6 +1776,11 @@ func TestManagementAdminUsersDashboard(t *testing.T) {
 	if forbiddenResponse.Code != http.StatusForbidden {
 		t.Fatalf("admin users non-admin status=%d want=%d body=%s", forbiddenResponse.Code, http.StatusForbidden, forbiddenResponse.Body.String())
 	}
+	waitForManagementValue(t, func() managementUsageTestResponse {
+		return requestManagementUsage(t, router, userOneCookie, "30d")
+	}, func(payload managementUsageTestResponse) bool {
+		return payload.Totals.Requests == 1
+	})
 
 	adminRequest := authenticatedJSONRequest(http.MethodGet, "/api/management/admin/users", "", adminCookie)
 	adminResponse := httptest.NewRecorder()
@@ -1893,6 +1959,7 @@ func TestManagementMetaProviderRoutesWithEncryptedTenantKey(t *testing.T) {
 	if deleteSecretResponse.Code != http.StatusNotFound {
 		t.Fatalf("obsolete secret delete status=%d want=%d", deleteSecretResponse.Code, http.StatusNotFound)
 	}
+	waitForManagementRequestCount(t, router, userOneCookie, 2)
 }
 
 func TestManagementGeneratedSecretOmittedProviderUsesTenantDefaults(t *testing.T) {
@@ -1986,6 +2053,7 @@ func TestManagementGeneratedSecretOmittedProviderUsesTenantDefaults(t *testing.T
 	if capturedModels[1] != proxy.ModelNameGPT55 || capturedInputs[1] != "provider-owned system\n\nhello explicit" {
 		t.Fatalf("explicit model/input=%q/%q", capturedModels[1], capturedInputs[1])
 	}
+	waitForManagementRequestCount(t, router, userCookie, 2)
 }
 
 func TestProxyRejectsClientSuppliedProviderKeys(t *testing.T) {
@@ -2061,6 +2129,11 @@ func newManagementRouter(t *testing.T, configuration proxy.Configuration) http.H
 
 func newManagementRouterWithDatabasePath(t *testing.T, configuration proxy.Configuration, databasePath string) http.Handler {
 	t.Helper()
+	previousHTTPClient := proxy.HTTPClient
+	proxy.HTTPClient = managementProviderKeyVerificationHTTPDoer{next: previousHTTPClient}
+	defer func() {
+		proxy.HTTPClient = previousHTTPClient
+	}()
 	router, buildError := buildRouterWithCatalogs(t, managementConfigurationWithDatabasePath(configuration, databasePath), zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -2261,6 +2334,15 @@ func requestManagementUsage(t *testing.T, router http.Handler, sessionCookie *ht
 		t.Fatalf("decode usage: %v", decodeError)
 	}
 	return usage
+}
+
+func waitForManagementRequestCount(t *testing.T, router http.Handler, sessionCookie *http.Cookie, expectedRequests int) {
+	t.Helper()
+	waitForManagementValue(t, func() managementUsageTestResponse {
+		return requestManagementUsage(t, router, sessionCookie, "30d")
+	}, func(payload managementUsageTestResponse) bool {
+		return payload.Totals.Requests == expectedRequests
+	})
 }
 
 type managementTenantDefaultsTestResponse struct {

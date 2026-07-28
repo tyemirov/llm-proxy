@@ -74,6 +74,7 @@ provider-editor,
 provider-settings-fields,
 provider-key-field,
 provider-key-input,
+provider-key-verification-error,
 provider-removal-overlay,
 provider-removal-dialog,
 tenant-delete-overlay,
@@ -887,6 +888,22 @@ provider-key-input input {
 
 provider-key-input input[readonly] {
   color: var(--llm-muted);
+}
+
+.provider-key-verification-pending {
+  margin: 0;
+}
+
+provider-key-verification-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+}
+
+provider-key-verification-error button {
+  flex: 0 0 auto;
 }
 
 .provider-key-visibility-toggle {

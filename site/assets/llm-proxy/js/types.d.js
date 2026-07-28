@@ -49,6 +49,15 @@
  */
 
 /**
+ * @typedef {
+ *   "provider_key_rejected" |
+ *   "provider_key_verification_rate_limited" |
+ *   "provider_key_verification_timed_out" |
+ *   "provider_key_verification_unavailable"
+ * } ProviderKeyVerificationError
+ */
+
+/**
  * @typedef {{
  *   id: string,
  *   name: string,

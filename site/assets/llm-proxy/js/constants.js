@@ -71,6 +71,12 @@ export const USAGE_STATUS_LABELS = Object.freeze({
 
 export const WORKSPACE_INTEGRITY_ERROR = "workspace_integrity_error";
 export const ROUTING_DEFAULTS_INVALID_ERROR = "managed_routing_defaults_invalid";
+export const PROVIDER_KEY_VERIFICATION_ERRORS = Object.freeze({
+  REJECTED: "provider_key_rejected",
+  RATE_LIMITED: "provider_key_verification_rate_limited",
+  TIMED_OUT: "provider_key_verification_timed_out",
+  UNAVAILABLE: "provider_key_verification_unavailable",
+});
 
 export const USER_MENU_ITEMS = Object.freeze([
   Object.freeze({
@@ -100,7 +106,7 @@ export const MPR_UI = Object.freeze({
 });
 
 export const RUNTIME_UI = Object.freeze({
-  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260727",
+  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260727i036",
   APPLICATION_MODULE_ID: "llm-proxy-application-module",
   APPLICATION_MODULE_MISSING: "llm_proxy_application_module_missing",
   APPLICATION_READY_ATTRIBUTE: "data-llm-proxy-application",
@@ -251,6 +257,17 @@ export const COPY = Object.freeze({
   profileLoaded: "Workspace loaded",
   usageRefreshed: "Usage refreshed",
   providerSettingsSaved: "Provider settings saved",
+  providerKeyVerifying: "Verifying key",
+  providerKeyVerified: "Provider key verified and settings saved",
+  providerKeyRetry: "Retry verification",
+  providerKeyRejectedUnsaved: "Key was rejected. No provider key was saved.",
+  providerKeyRejectedPreviousActive: "Key was rejected. The previous key remains active.",
+  providerKeyRateLimitedUnsaved: "Key could not be verified because the provider rate limit was reached. No provider key was saved.",
+  providerKeyRateLimitedPreviousActive: "Key could not be verified because the provider rate limit was reached. The previous key remains active.",
+  providerKeyTimedOutUnsaved: "Key verification timed out. No provider key was saved.",
+  providerKeyTimedOutPreviousActive: "Key verification timed out. The previous key remains active.",
+  providerKeyUnavailableUnsaved: "The provider could not verify this key. No provider key was saved.",
+  providerKeyUnavailablePreviousActive: "The provider could not verify this key. The previous key remains active.",
   providerKeyRemoved: "Provider key and settings removed",
   defaultsSaved: "Defaults saved",
   keyGenerated: "Key created",

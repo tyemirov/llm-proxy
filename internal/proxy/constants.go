@@ -36,7 +36,8 @@ const (
 
 	dictationMultipartOverheadBytes = int64(2 * 1024 * 1024)
 
-	contextKeyTenant = "tenant"
+	contextKeyRequestID = "request_id"
+	contextKeyTenant    = "tenant"
 
 	mimeApplicationJSON = "application/json"
 	mimeApplicationXML  = "application/xml"
@@ -51,7 +52,6 @@ const (
 	errorPromptPayloadTooLarge  = "prompt payload too large"
 	// errorMissingClientKey indicates that the key query parameter is missing.
 	errorMissingClientKey           = "unknown client key"
-	errorRequestTimedOut            = "request timed out"
 	errorOpenAIRequest              = "OpenAI request error"
 	errorOpenAIAPI                  = "OpenAI API error"
 	errorOpenAIAPINoText            = "OpenAI API error (no text)"
@@ -144,9 +144,6 @@ const (
 
 	logFieldHTTPStatus   = "http_status"
 	logFieldAPIStatus    = "api_status"
-	logFieldResponseText = "response_text"
-	// logFieldResponseBody captures the raw body returned by the upstream API.
-	logFieldResponseBody = "response_body"
 	logFieldMethod       = "method"
 	logFieldClientIP     = "client_ip"
 	logFieldStatus       = "status"
@@ -154,18 +151,19 @@ const (
 	logFieldEndpoint     = "endpoint"
 	logFieldProvider     = "provider"
 	logFieldModel        = "model"
+	logFieldRequestID    = "request_id"
+	logFieldRetryAfter   = "retry_after"
+	logFieldRetryable    = "retryable"
+	logFieldUpstreamCode = "upstream_status"
 	// logFieldID identifies the response identifier logged for traceability.
 	logFieldID = "id"
 
-	logEventOpenAIRequestError = "OpenAI request error"
-	logEventOpenAIResponse     = "OpenAI API response"
-	logEventOpenAIPollError    = "OpenAI poll error"
-	// logEventOpenAIPollResponseBody records the body returned when polling OpenAI for a response.
-	logEventOpenAIPollResponseBody = "OpenAI poll response body"
-	logEventOpenAIContinueError    = "OpenAI continue error"
-	// logEventOpenAIInitialResponseBody records the body of the initial response from OpenAI.
-	logEventOpenAIInitialResponseBody = "OpenAI initial response body"
-	logEventProviderRequestError      = "provider request error"
+	logEventOpenAIRequestError   = "OpenAI request error"
+	logEventOpenAIResponse       = "OpenAI API response"
+	logEventOpenAIPollError      = "OpenAI poll error"
+	logEventOpenAIContinueError  = "OpenAI continue error"
+	logEventProviderRequestError = "provider request error"
+	logEventProviderFailure      = "provider failure"
 	// logEventMissingFinalMessage indicates that the response completed without a final assistant message.
 	logEventMissingFinalMessage           = "response is 'completed' but lacks final message; starting synthesis continuation"
 	logEventForbiddenRequest              = "forbidden request"
@@ -173,6 +171,7 @@ const (
 	logEventResponseSent                  = "response sent"
 	logEventBuildHTTPRequest              = "build HTTP request failed"
 	logEventParseWebSearchParameterFailed = "parse web_search parameter failed"
+	logEventUsageRecordDropped            = "management usage record dropped"
 	logEventUsageRecordFailed             = "management usage record failed"
 
 	responseRequestAttribute = "request"

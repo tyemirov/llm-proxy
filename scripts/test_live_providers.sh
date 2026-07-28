@@ -5,10 +5,10 @@ usage() {
   builtin printf '%s\n' 'Usage:
   scripts/test_live_providers.sh [--preflight | --write-config <path>]
 
-Builds the current llm-proxy binary and runs live text smoke tests for providers
-whose API keys are present. The preflight mode builds the same temporary static
-configuration and verifies authenticated routing without making an upstream
-provider call.
+Builds the current llm-proxy binary, verifies each available provider key
+through the authenticated management operation, and only then runs its live
+text smoke test. The preflight mode builds a temporary static configuration and
+verifies authenticated routing without making an upstream provider call.
 
 Required environment:
   At least one provider API key, unless no-op skip behavior is desired.
@@ -34,7 +34,6 @@ Optional environment:
   LLM_PROXY_LIVE_PORT        Local port for the temporary proxy. Default: a
                              freshly allocated loopback port.
   LLM_PROXY_LIVE_TIMEOUT     Per-request curl timeout in seconds. Default: 45.
-  SERVICE_SECRET             Tenant secret. Generated when omitted.
   GO                         Go binary. Default: go.
 
 Options:
@@ -62,7 +61,7 @@ env_or_default() {
   local name="$1"
   local fallback="$2"
   local value=""
-  if [[ -v "${name}" ]]; then
+  if declare -p "${name}" >/dev/null 2>&1; then
     value="${!name}"
   fi
   if [[ -n "${value}" ]]; then
@@ -120,7 +119,7 @@ for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlin
   local variable_value
   while IFS= read -r -d '' variable_name; do
     IFS= read -r -d '' variable_value || { echo "error: invalid parsed dotenv output" >&2; exit 1; }
-    if [[ -v "${variable_name}" ]]; then
+    if declare -p "${variable_name}" >/dev/null 2>&1; then
       continue
     fi
     printf -v "${variable_name}" '%s' "${variable_value}"
@@ -162,6 +161,36 @@ provider_model_override() {
     grok) env_or_default LLM_PROXY_LIVE_GROK_MODEL "" ;;
     *) return 1 ;;
   esac
+}
+
+provider_default_model() {
+  local provider="$1"
+  python3 -c '
+import json
+import pathlib
+import sys
+
+profile = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")).get("profile", {})
+providers = profile.get("providers", [])
+matches = [candidate for candidate in providers if candidate.get("id") == sys.argv[2]]
+if len(matches) != 1:
+    raise SystemExit(1)
+model = matches[0].get("text_default_model")
+if not isinstance(model, str) or not model:
+    raise SystemExit(1)
+print(model)
+' "${MANAGEMENT_SECRET_RESPONSE_PATH}" "${provider}"
+}
+
+provider_model() {
+  local provider="$1"
+  local override
+  override="$(provider_model_override "${provider}")"
+  if [[ -n "${override}" ]]; then
+    printf "%s\n" "${override}"
+    return
+  fi
+  provider_default_model "${provider}"
 }
 
 validate_provider_name() {
@@ -225,7 +254,7 @@ redact_log() {
   sed -E 's/(key=)[^& ]+/\1<redacted>/g; s/(api_key: ).+/\1<redacted>/g' "${LOG_PATH}" >&2 || true
 }
 
-write_live_config() {
+write_static_live_config() {
   awk -v port="${PORT}" '
     BEGIN {
       provider_keys["openai"] = "OPENAI_API_KEY"
@@ -280,6 +309,43 @@ write_live_config() {
   ' "${ROOT_DIR}/configs/config.yml" > "${CONFIG_PATH}"
 }
 
+write_managed_live_config() {
+  awk -v port="${PORT}" '
+    /^  port: / && replaced == 0 {
+      print "  port: " port
+      replaced = 1
+      next
+    }
+    { print }
+  ' "${ROOT_DIR}/configs/config.yml" >"${CONFIG_PATH}"
+}
+
+configure_live_management_environment() {
+  local live_origin="http://127.0.0.1:${PORT}"
+  export LLM_PROXY_MANAGEMENT_ENABLED=true
+  export LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN="${live_origin}"
+  export LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN="${live_origin}"
+  export LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN="http://localhost:${PORT}"
+  export LLM_PROXY_MANAGEMENT_UI_DESCRIPTION="LLM Proxy live provider verification"
+  export LLM_PROXY_MANAGEMENT_ADMIN_EMAILS="[]"
+  export LLM_PROXY_MANAGEMENT_TAUTH_URL="${live_origin}"
+  export LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID="live-provider-verification"
+  export LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID="live-provider-verification.apps.googleusercontent.com"
+  export LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH="/auth/google"
+  export LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH="/auth/logout"
+  export LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH="/auth/nonce"
+  export LLM_PROXY_MANAGEMENT_TAUTH_SESSION_PATH="/auth/session"
+  export LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY
+  LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+  export LLM_PROXY_MANAGEMENT_JWT_ISSUER="tauth"
+  export LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME="llm_proxy_live_provider_session"
+  export LLM_PROXY_MANAGEMENT_DATABASE_PATH="${TMP_DIR}/management.sqlite"
+  export LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY
+  LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY="$(python3 -c 'import base64, secrets; print(base64.b64encode(secrets.token_bytes(32)).decode("ascii"))')"
+  export LLM_PROXY_MANAGEMENT_API_ORIGIN="${live_origin}"
+  export LLM_PROXY_MANAGEMENT_PROXY_ORIGIN="${live_origin}"
+}
+
 wait_for_proxy() {
   local readiness_status
   for _ in {1..50}; do
@@ -297,6 +363,171 @@ wait_for_proxy() {
   echo "error: live proxy did not become ready on port ${PORT}" >&2
   redact_log
   exit 1
+}
+
+initialize_live_management() {
+  local account_response_path="${TMP_DIR}/management-account.json"
+  local account_status
+  local secret_status
+  SESSION_COOKIE_PATH="${TMP_DIR}/management-cookie.txt"
+  MANAGEMENT_SECRET_RESPONSE_PATH="${TMP_DIR}/management-secret.json"
+  python3 -c '
+import base64
+import hashlib
+import hmac
+import json
+import os
+import pathlib
+import sys
+import time
+
+def encoded(value):
+    return base64.urlsafe_b64encode(value).rstrip(b"=")
+
+issued_at = int(time.time())
+header = encoded(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode("utf-8"))
+payload = encoded(json.dumps({
+    "iss": os.environ["LLM_PROXY_MANAGEMENT_JWT_ISSUER"],
+    "tenant_id": os.environ["LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID"],
+    "user_id": "live-provider-verification",
+    "user_email": "live-provider-verification@example.invalid",
+    "user_display_name": "Live provider verification",
+    "iat": issued_at,
+    "exp": issued_at + 3600,
+}, separators=(",", ":")).encode("utf-8"))
+signing_input = header + b"." + payload
+signature = encoded(hmac.new(
+    os.environ["LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY"].encode("utf-8"),
+    signing_input,
+    hashlib.sha256,
+).digest())
+token = (signing_input + b"." + signature).decode("ascii")
+cookie_name = os.environ["LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME"]
+cookie_path = pathlib.Path(sys.argv[1])
+cookie_path.write_text(
+    "# Netscape HTTP Cookie File\n"
+    f"127.0.0.1\tFALSE\t/\tFALSE\t{issued_at + 3600}\t"
+    f"{cookie_name}\t{token}\n",
+    encoding="utf-8",
+)
+cookie_path.chmod(0o600)
+' "${SESSION_COOKIE_PATH}"
+
+  account_status="$(
+    curl -sS --max-time 5 \
+      --cookie "${SESSION_COOKIE_PATH}" \
+      -o "${account_response_path}" \
+      -w "%{http_code}" \
+      "http://127.0.0.1:${PORT}/api/management/account"
+  )"
+  if [[ "${account_status}" != "200" ]]; then
+    echo "error: live provider management account setup failed: status=${account_status}" >&2
+    redact_log
+    exit 1
+  fi
+  if ! TENANT_ID="$(python3 -c '
+import json
+import pathlib
+import sys
+
+account = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+tenants = account.get("tenants", [])
+if len(tenants) != 1 or not isinstance(tenants[0].get("id"), str) or not tenants[0]["id"]:
+    raise SystemExit(1)
+print(tenants[0]["id"])
+' "${account_response_path}" 2>/dev/null)"; then
+    echo "error: live provider management account response was invalid" >&2
+    exit 1
+  fi
+
+  secret_status="$(
+    curl -sS --max-time 5 \
+      --cookie "${SESSION_COOKIE_PATH}" \
+      -X POST \
+      -H "Content-Type: application/json" \
+      --data '{}' \
+      -o "${MANAGEMENT_SECRET_RESPONSE_PATH}" \
+      -w "%{http_code}" \
+      "http://127.0.0.1:${PORT}/api/management/tenants/${TENANT_ID}/secrets"
+  )"
+  if [[ "${secret_status}" != "200" ]]; then
+    echo "error: live provider tenant-key setup failed: status=${secret_status}" >&2
+    redact_log
+    exit 1
+  fi
+  if ! SERVICE_SECRET="$(python3 -c '
+import json
+import pathlib
+import sys
+
+secret = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")).get("secret")
+if not isinstance(secret, str) or not secret:
+    raise SystemExit(1)
+print(secret)
+' "${MANAGEMENT_SECRET_RESPONSE_PATH}" 2>/dev/null)"; then
+    echo "error: live provider tenant-key response was invalid" >&2
+    exit 1
+  fi
+}
+
+verification_failure_code() {
+  local response_path="$1"
+  local response_code
+  response_code="$(tr -d '\r\n' <"${response_path}")"
+  case "${response_code}" in
+    provider_key_rejected|provider_key_verification_rate_limited|provider_key_verification_timed_out|provider_key_verification_unavailable)
+      printf "%s\n" "${response_code}"
+      ;;
+    *)
+      printf "%s\n" "provider_key_verification_unconfirmed"
+      ;;
+  esac
+}
+
+verify_provider_key() {
+  local provider="$1"
+  local key_variable
+  local model
+  local request_path
+  local response_path
+  local http_status
+  key_variable="$(provider_key_variable "${provider}")"
+  model="$(provider_model "${provider}")"
+  request_path="${TMP_DIR}/${provider}-verification-request.json"
+  response_path="${TMP_DIR}/${provider}-verification-response.json"
+  python3 -c '
+import json
+import os
+import pathlib
+import sys
+
+pathlib.Path(sys.argv[3]).write_text(
+    json.dumps({
+        "api_key": os.environ[sys.argv[1]],
+        "text_model": sys.argv[2],
+        "system_prompt": "",
+    }, separators=(",", ":")),
+    encoding="utf-8",
+)
+' "${key_variable}" "${model}" "${request_path}"
+  chmod 600 "${request_path}"
+
+  http_status="$(
+    curl -sS --max-time "${LIVE_TIMEOUT}" \
+      --cookie "${SESSION_COOKIE_PATH}" \
+      -X PUT \
+      -H "Content-Type: application/json" \
+      --data-binary "@${request_path}" \
+      -o "${response_path}" \
+      -w "%{http_code}" \
+      "http://127.0.0.1:${PORT}/api/management/tenants/${TENANT_ID}/provider-keys/${provider}"
+  )"
+  if [[ "${http_status}" != "200" ]]; then
+    echo "error: live provider verification failed: provider=${provider} model=${model} status=${http_status} error=$(verification_failure_code "${response_path}")" >&2
+    redact_log
+    exit 1
+  fi
+  echo "live provider verification passed: provider=${provider} model=${model} status=${http_status}"
 }
 
 run_text_smoke() {
@@ -329,7 +560,7 @@ run_text_smoke() {
 
   response_text="$(tr -d '\r\n' < "${response_path}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
   if [[ "${http_status}" != "200" || "${response_text}" != "OK" ]]; then
-    echo "error: live ${provider} smoke failed: model=${request_model_label} status=${http_status} response=${response_text}" >&2
+    echo "error: live ${provider} smoke failed: model=${request_model_label} status=${http_status}" >&2
     redact_log
     exit 1
   fi
@@ -429,10 +660,15 @@ else
   CONFIG_PATH="${TMP_DIR}/config.yml"
 fi
 LOG_PATH="${TMP_DIR}/llm-proxy.log"
-export SERVICE_SECRET="${SERVICE_SECRET:-live-service-secret}"
 export LLM_PROXY_LIVE_PORT="${PORT}"
-export_unused_provider_placeholders
-write_live_config
+if [[ "${PREFLIGHT_ONLY}" == "true" || -n "${WRITE_CONFIG_PATH}" ]]; then
+  export SERVICE_SECRET="${SERVICE_SECRET:-live-service-secret}"
+  export_unused_provider_placeholders
+  write_static_live_config
+else
+  configure_live_management_environment
+  write_managed_live_config
+fi
 
 if [[ -n "${WRITE_CONFIG_PATH}" ]]; then
   echo "isolated live provider config written: ${CONFIG_PATH}"
@@ -459,6 +695,8 @@ if [[ "${PREFLIGHT_ONLY}" == "true" ]]; then
   exit 0
 fi
 
+initialize_live_management
 for live_provider in "${LIVE_PROVIDERS[@]}"; do
+  verify_provider_key "${live_provider}"
   run_text_smoke "${live_provider}"
 done

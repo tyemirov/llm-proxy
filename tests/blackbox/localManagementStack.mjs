@@ -71,6 +71,14 @@ export async function startLocalManagementStack() {
     if (llmProxyConfig === packagedLLMProxyConfig) {
       throw new Error("llm_proxy_blackbox_port_contract_missing");
     }
+    const portConfiguredLLMProxyConfig = llmProxyConfig;
+    llmProxyConfig = llmProxyConfig.replace(
+      '    base_url: "https://api.openai.com/v1"\n',
+      `    base_url: "${frontendOrigin}/v1"\n`,
+    );
+    if (llmProxyConfig === portConfiguredLLMProxyConfig) {
+      throw new Error("llm_proxy_blackbox_openai_base_url_contract_missing");
+    }
     const llmProxyConfigPath = path.join(temporaryDirectory, "llm-proxy-config.yml");
     await writeFile(llmProxyConfigPath, llmProxyConfig, { mode: 0o600 });
 
@@ -241,6 +249,11 @@ async function handleFrontendRequest(request, response, managementAPIOrigin) {
         "content-type": upstreamResponse.headers.get("content-type") || mimeTypes[".yaml"],
       });
       response.end(Buffer.from(await upstreamResponse.arrayBuffer()));
+      return;
+    }
+    if (request.method === "POST" && requestURL.pathname === "/v1/responses") {
+      response.writeHead(200, { "content-type": mimeTypes[".json"] });
+      response.end(JSON.stringify({ id: "resp_local_provider_key_verification", status: "completed" }));
       return;
     }
 

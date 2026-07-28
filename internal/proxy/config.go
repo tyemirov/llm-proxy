@@ -30,12 +30,14 @@ const (
 	// DefaultMaxRequestTimeoutSeconds is the one-hour operator capacity ceiling for a request.
 	DefaultMaxRequestTimeoutSeconds = 60 * 60
 	// DefaultMaxPromptBytes limits JSON LLM request bodies accepted by POST /.
-	DefaultMaxPromptBytes       = 4 * 1024 * 1024
-	DefaultDictationModel       = "gpt-4o-mini-transcribe"
-	DefaultMaxInputAudioBytes   = 25 * 1024 * 1024
-	DefaultManagementJWTIssuer  = "tauth"
-	managedProviderKeyBytes     = 32
-	tenantValidationErrorFormat = "%w: tenant=%s"
+	DefaultMaxPromptBytes      = 4 * 1024 * 1024
+	DefaultDictationModel      = "gpt-4o-mini-transcribe"
+	DefaultMaxInputAudioBytes  = 25 * 1024 * 1024
+	DefaultManagementJWTIssuer = "tauth"
+	// DefaultManagementUsageQueueSize is the number of managed usage events retained for asynchronous persistence.
+	DefaultManagementUsageQueueSize = 1024
+	managedProviderKeyBytes         = 32
+	tenantValidationErrorFormat     = "%w: tenant=%s"
 )
 
 // Configuration holds runtime settings.
@@ -106,6 +108,7 @@ type ManagementConfiguration struct {
 	JWTIssuer                string
 	SessionCookieName        string
 	DatabasePath             string
+	UsageQueueSize           int
 	ProviderKeyEncryptionKey string
 	ManagementAPIOrigin      string
 	ProxyOrigin              string
@@ -319,6 +322,9 @@ func (configuration *ManagementConfiguration) ApplyTunables() {
 	}
 	configuration.SessionCookieName = strings.TrimSpace(configuration.SessionCookieName)
 	configuration.DatabasePath = strings.TrimSpace(configuration.DatabasePath)
+	if configuration.UsageQueueSize == 0 {
+		configuration.UsageQueueSize = DefaultManagementUsageQueueSize
+	}
 	configuration.ProviderKeyEncryptionKey = strings.TrimSpace(configuration.ProviderKeyEncryptionKey)
 	configuration.ManagementAPIOrigin = strings.TrimSpace(configuration.ManagementAPIOrigin)
 	configuration.ProxyOrigin = strings.TrimSpace(configuration.ProxyOrigin)
@@ -353,6 +359,9 @@ func validateManagementConfiguration(configuration ManagementConfiguration) erro
 	}
 	if len(configuration.UIOrigins) == 0 {
 		return fmt.Errorf("%w: field=management.ui_origins", ErrInvalidManagementConfiguration)
+	}
+	if configuration.UsageQueueSize <= 0 {
+		return fmt.Errorf("%w: field=management.usage_queue_size", ErrInvalidManagementConfiguration)
 	}
 	for _, originValue := range configuration.UIOrigins {
 		if strings.TrimSpace(originValue) == constants.EmptyString {

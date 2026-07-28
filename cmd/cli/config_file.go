@@ -93,6 +93,7 @@ type managementConfiguration struct {
 	JWTIssuer                string   `mapstructure:"jwt_issuer"`
 	SessionCookieName        string   `mapstructure:"session_cookie_name"`
 	DatabasePath             string   `mapstructure:"database_path"`
+	UsageQueueSize           *int     `mapstructure:"usage_queue_size"`
 	ProviderKeyEncryptionKey string   `mapstructure:"provider_key_encryption_key"`
 	ManagementAPIOrigin      string   `mapstructure:"management_api_origin"`
 	ProxyOrigin              string   `mapstructure:"proxy_origin"`
@@ -180,8 +181,8 @@ func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error)
 	if readConfigError := configReader.ReadConfig(strings.NewReader(expandedConfig)); readConfigError != nil {
 		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigFileParse, configPath, readConfigError)
 	}
-	if timeoutValidationError := validateExplicitRequestTimeoutConfiguration(configReader); timeoutValidationError != nil {
-		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigInvalid, configPath, timeoutValidationError)
+	if integerValidationError := validateExplicitPositiveIntegerConfiguration(configReader); integerValidationError != nil {
+		return proxy.Configuration{}, fmt.Errorf("%w: path=%s: %v", errConfigInvalid, configPath, integerValidationError)
 	}
 
 	var parsedConfiguration fileConfiguration
@@ -195,13 +196,14 @@ func loadRuntimeConfiguration(rawConfigPath string) (proxy.Configuration, error)
 	return runtimeConfig, nil
 }
 
-func validateExplicitRequestTimeoutConfiguration(configReader *viper.Viper) error {
-	timeoutFields := map[string]struct{}{
+func validateExplicitPositiveIntegerConfiguration(configReader *viper.Viper) error {
+	positiveIntegerFields := map[string]struct{}{
 		"server.request_timeout_seconds":     {},
 		"server.max_request_timeout_seconds": {},
+		"management.usage_queue_size":        {},
 	}
 	for _, configuredField := range configReader.AllKeys() {
-		if _, isTimeoutField := timeoutFields[configuredField]; isTimeoutField && configReader.Get(configuredField) == nil {
+		if _, isPositiveIntegerField := positiveIntegerFields[configuredField]; isPositiveIntegerField && configReader.Get(configuredField) == nil {
 			return fmt.Errorf("invalid configuration: %s must be positive", configuredField)
 		}
 	}
@@ -282,17 +284,21 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 	if configurationValidationError := configuration.validateCompleteConfiguration(); configurationValidationError != nil {
 		return proxy.Configuration{}, configurationValidationError
 	}
-	requestTimeoutSeconds, timeoutError := configuredPositiveSeconds(configuration.Server.RequestTimeoutSeconds, proxy.DefaultRequestTimeoutSeconds, "server.request_timeout_seconds")
+	requestTimeoutSeconds, timeoutError := configuredPositiveInteger(configuration.Server.RequestTimeoutSeconds, proxy.DefaultRequestTimeoutSeconds, "server.request_timeout_seconds")
 	if timeoutError != nil {
 		return proxy.Configuration{}, timeoutError
 	}
-	maxRequestTimeoutSeconds, maxTimeoutError := configuredPositiveSeconds(configuration.Server.MaxRequestTimeoutSeconds, proxy.DefaultMaxRequestTimeoutSeconds, "server.max_request_timeout_seconds")
+	maxRequestTimeoutSeconds, maxTimeoutError := configuredPositiveInteger(configuration.Server.MaxRequestTimeoutSeconds, proxy.DefaultMaxRequestTimeoutSeconds, "server.max_request_timeout_seconds")
 	if maxTimeoutError != nil {
 		return proxy.Configuration{}, maxTimeoutError
 	}
+	usageQueueSize, usageQueueError := configuredPositiveInteger(configuration.Management.UsageQueueSize, proxy.DefaultManagementUsageQueueSize, "management.usage_queue_size")
+	if usageQueueError != nil {
+		return proxy.Configuration{}, usageQueueError
+	}
 	return proxy.NewConfiguration(proxy.Configuration{
 		Tenants:                      tenantConfigurations(configuration.Tenants),
-		Management:                   managementProxyConfiguration(configuration.Management),
+		Management:                   managementProxyConfiguration(configuration.Management, usageQueueSize),
 		OpenAIKey:                    configuration.Providers.OpenAI.APIKey,
 		DeepSeekKey:                  configuration.Providers.DeepSeek.APIKey,
 		DashScopeKey:                 configuration.Providers.DashScope.APIKey,
@@ -334,7 +340,7 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 	})
 }
 
-func configuredPositiveSeconds(configuredValue *int, defaultValue int, fieldName string) (int, error) {
+func configuredPositiveInteger(configuredValue *int, defaultValue int, fieldName string) (int, error) {
 	if configuredValue == nil {
 		return defaultValue, nil
 	}
@@ -356,7 +362,7 @@ func proxyUpstreamRateLimitConfigurations(configurations []upstreamRateLimitConf
 	return proxyConfigurations
 }
 
-func managementProxyConfiguration(configuration managementConfiguration) proxy.ManagementConfiguration {
+func managementProxyConfiguration(configuration managementConfiguration, usageQueueSize int) proxy.ManagementConfiguration {
 	return proxy.ManagementConfiguration{
 		Enabled:                  configuration.Enabled,
 		PublicOrigin:             configuration.PublicOrigin,
@@ -374,6 +380,7 @@ func managementProxyConfiguration(configuration managementConfiguration) proxy.M
 		JWTIssuer:                configuration.JWTIssuer,
 		SessionCookieName:        configuration.SessionCookieName,
 		DatabasePath:             configuration.DatabasePath,
+		UsageQueueSize:           usageQueueSize,
 		ProviderKeyEncryptionKey: configuration.ProviderKeyEncryptionKey,
 		ManagementAPIOrigin:      configuration.ManagementAPIOrigin,
 		ProxyOrigin:              configuration.ProxyOrigin,
