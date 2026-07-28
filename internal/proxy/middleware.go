@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"net/http"
@@ -56,7 +57,7 @@ func tenantAuthenticatedHandler(authenticator tenantAuthenticator, structuredLog
 }
 
 func authenticateTenantRequest(ginContext *gin.Context, authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger) bool {
-	requestTenant, authenticated := authenticator.authenticate(ginContext.Query(queryParameterKey))
+	requestTenant, authenticated := authenticator.authenticate(ginContext.Request.Context(), ginContext.Query(queryParameterKey))
 	if !authenticated {
 		structuredLogger.Warnw(
 			logEventForbiddenRequest,
@@ -81,14 +82,14 @@ func newTenantAuthenticator(staticTenants tenantRegistry, managedTenants *manage
 	}
 }
 
-func (authenticator tenantAuthenticator) authenticate(rawSecret string) (tenant, bool) {
+func (authenticator tenantAuthenticator) authenticate(requestContext context.Context, rawSecret string) (tenant, bool) {
 	if requestTenant, authenticated := authenticator.staticTenants.authenticate(rawSecret); authenticated {
 		return requestTenant, true
 	}
 	if authenticator.managedTenants == nil {
 		return tenant{}, false
 	}
-	return authenticator.managedTenants.authenticate(rawSecret)
+	return authenticator.managedTenants.authenticate(requestContext, rawSecret)
 }
 
 func (authenticator tenantAuthenticator) containsStaticSecretDigest(secretDigest [sha256.Size]byte) bool {

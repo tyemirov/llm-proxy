@@ -21,6 +21,12 @@ func TestManagedTenantGORMInitializationEdges(t *testing.T) {
 	if resolvedDialector != customDialector {
 		t.Fatalf("custom dialector=%v", resolvedDialector)
 	}
+	runtimeDialector, runtimeDialectorOK := managementDatabaseDialector(ManagementConfiguration{
+		DatabasePath: "managed-tenants.db",
+	}).(*sqlite.Dialector)
+	if !runtimeDialectorOK || runtimeDialector.DSN != "managed-tenants.db"+managedSQLiteRuntimeQuery {
+		t.Fatalf("runtime dialector=%+v", runtimeDialector)
+	}
 	if _, databaseError := newGORMManagedTenantDatabase(ManagementConfiguration{
 		DatabasePath: filepath.Join(t.TempDir(), "missing", "management.sqlite"),
 	}, cipher, providers); !errors.Is(databaseError, errManagedTenantStoreOpen) {

@@ -131,7 +131,7 @@ func (database *fakeManagedTenantDatabase) tenantByTenantID(_ context.Context, t
 	return cloneManagedTenantRecord(record), nil
 }
 
-func (database *fakeManagedTenantDatabase) tenantBySecretDigest(secretDigest string) (managedTenantRecord, error) {
+func (database *fakeManagedTenantDatabase) tenantBySecretDigest(_ context.Context, secretDigest string) (managedTenantRecord, error) {
 	if queryError, configured := popFakeError(&database.tenantBySecretDigestErrors); configured && queryError != nil {
 		return managedTenantRecord{}, queryError
 	}
@@ -278,7 +278,10 @@ func (database *fakeManagedTenantDatabase) deleteProviderKey(ownerUserID string,
 	return nil
 }
 
-func (database *fakeManagedTenantDatabase) createUsageEvent(_ context.Context, record managedUsageEventRecord) error {
+func (database *fakeManagedTenantDatabase) createUsageEvent(requestContext context.Context, record managedUsageEventRecord) error {
+	if requestError := requestContext.Err(); requestError != nil {
+		return requestError
+	}
 	if database.createUsageEventError != nil {
 		return database.createUsageEventError
 	}

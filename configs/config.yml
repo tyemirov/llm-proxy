@@ -28,6 +28,7 @@ management:
   jwt_issuer: "${LLM_PROXY_MANAGEMENT_JWT_ISSUER}"
   session_cookie_name: "${LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME}"
   database_path: "${LLM_PROXY_MANAGEMENT_DATABASE_PATH}"
+  usage_queue_size: 1024
   provider_key_encryption_key: "${LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY}"
   management_api_origin: "${LLM_PROXY_MANAGEMENT_API_ORIGIN}"
   proxy_origin: "${LLM_PROXY_MANAGEMENT_PROXY_ORIGIN}"

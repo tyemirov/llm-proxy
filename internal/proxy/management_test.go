@@ -578,6 +578,7 @@ func TestManagementProviderKeyRevealPersistsUpdatedKey(t *testing.T) {
 	if len(capturedAuthorizations) != 2 || capturedAuthorizations[0] != "Bearer "+updatedProviderKey || capturedAuthorizations[1] != "Bearer "+updatedProviderKey {
 		t.Fatalf("updated key authorizations=%v", capturedAuthorizations)
 	}
+	waitForManagementRequestCount(t, router, ownerCookie, 2)
 	if updateError := database.Model(&managedProviderKeyFixture{}).Where("tenant_id = ? AND provider_id = ?", ownerTenantID, proxy.ProviderNameDeepSeek).Update("encrypted_api_key", "invalid").Error; updateError != nil {
 		t.Fatalf("corrupt updated provider key record: %v", updateError)
 	}
@@ -802,6 +803,7 @@ func TestManagementRoutingDefaultsFollowSavedProviderKeys(t *testing.T) {
 		t.Fatalf("remove final provider status=%d body=%s", removeDeepSeekResponse.Code, removeDeepSeekResponse.Body.String())
 	}
 	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{})
+	waitForManagementRequestCount(t, router, sessionCookie, 2)
 }
 
 func TestManagementRoutingDefaultsRequireAnExactTextRouteReasoningEffort(t *testing.T) {
@@ -1091,6 +1093,7 @@ func TestManagementDatabasePersistenceAndOpenFailures(t *testing.T) {
 	if len(requestedModels) != 1 || requestedModels[0] != proxy.ModelNameDeepSeekV4Flash {
 		t.Fatalf("persisted default models=%v want=[%s]", requestedModels, proxy.ModelNameDeepSeekV4Flash)
 	}
+	waitForManagementRequestCount(t, reloadedRouter, sessionCookie, 1)
 
 	parentFile := filepath.Join(t.TempDir(), "parent-file")
 	if writeError := os.WriteFile(parentFile, []byte("not a directory"), 0o600); writeError != nil {
@@ -1288,6 +1291,104 @@ func TestManagementOpensConfiguredDatabasePath(t *testing.T) {
 	}
 }
 
+func TestManagedAuthenticationReadsThroughConcurrentSQLiteWriter(t *testing.T) {
+	upstreamReached := make(chan struct{})
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		requestBody, readError := io.ReadAll(request.Body)
+		if readError != nil {
+			t.Errorf("read concurrent writer upstream request: %v", readError)
+			responseWriter.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if bytes.Contains(requestBody, []byte(testProviderKeyVerificationPrompt)) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"id":"verification","status":"completed"}`))
+			return
+		}
+		close(upstreamReached)
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"id":"response-id","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"text","text":"wal reader ok"}]}]}`))
+	}))
+	defer upstreamServer.Close()
+
+	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
+	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{
+		OpenAIBaseURL: upstreamServer.URL,
+	}, databasePath)
+	configuration.Management.DatabaseDialector = nil
+	router, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	const ownerID = "wal-reader-owner"
+	sessionCookie := managementSessionCookie(t, ownerID)
+	account := requestManagementAccount(t, router, sessionCookie)
+	tenantID := account.Tenants[0].ID
+	saveManagementProviderKey(t, router, sessionCookie, tenantID, testManagementOpenAIKey, proxy.ModelNameGPT41, "")
+	saveManagementDefaults(t, router, sessionCookie, tenantID, proxy.ModelNameGPT41, "")
+	secret := generateManagementTenantSecret(t, router, sessionCookie, tenantID)
+
+	writerDatabase, writerOpenError := gorm.Open(
+		sqlite.Open(databasePath+"?_pragma=busy_timeout(5000)&_txlock=exclusive"),
+		&gorm.Config{},
+	)
+	if writerOpenError != nil {
+		t.Fatalf("open concurrent writer: %v", writerOpenError)
+	}
+	writerSQLDatabase, sqlDatabaseError := writerDatabase.DB()
+	if sqlDatabaseError != nil {
+		t.Fatalf("resolve concurrent writer: %v", sqlDatabaseError)
+	}
+	defer writerSQLDatabase.Close()
+
+	writerTransaction := writerDatabase.Begin()
+	if writerTransaction.Error != nil {
+		t.Fatalf("begin concurrent writer: %v", writerTransaction.Error)
+	}
+	writerTransactionOpen := true
+	defer func() {
+		if writerTransactionOpen {
+			_ = writerTransaction.Rollback().Error
+		}
+	}()
+	updateResult := writerTransaction.
+		Table("managed_user_records").
+		Where("user_id = ?", ownerID).
+		Update("user_display_name", "Writer in progress")
+	if updateResult.Error != nil || updateResult.RowsAffected != 1 {
+		t.Fatalf("hold concurrent writer rows=%d error=%v", updateResult.RowsAffected, updateResult.Error)
+	}
+
+	responseDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		request := httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(secret)+"&prompt=hello", nil)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		responseDone <- response
+	}()
+
+	select {
+	case <-upstreamReached:
+	case <-time.After(time.Second):
+		t.Fatal("managed authentication did not reach the provider while a SQLite writer was active")
+	}
+	if commitError := writerTransaction.Commit().Error; commitError != nil {
+		t.Fatalf("commit concurrent writer: %v", commitError)
+	}
+	writerTransactionOpen = false
+
+	select {
+	case response := <-responseDone:
+		if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != "wal reader ok" {
+			t.Fatalf("proxy status=%d body=%q", response.Code, response.Body.String())
+		}
+	case <-time.After(time.Second):
+		t.Fatal("proxy request did not finish after the concurrent writer committed")
+	}
+	waitForManagementRequestCount(t, router, sessionCookie, 1)
+}
+
 func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 	router := newManagementRouter(t, proxy.Configuration{})
 	sessionCookie := managementSessionCookie(t, "tauth-current-catalog-user")
@@ -1438,6 +1539,7 @@ func TestManagementGeneratedSecretSupportsDictationAndRejectsMultipartProviderKe
 	if capturedAuthorization != "Bearer sk-user-openai" {
 		t.Fatalf("authorization=%q want=%q", capturedAuthorization, "Bearer sk-user-openai")
 	}
+	waitForManagementRequestCount(t, router, sessionCookie, 2)
 }
 
 func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
@@ -1554,7 +1656,11 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 		t.Fatalf("invalid dictation status=%d body=%s", invalidDictationResponse.Code, invalidDictationResponse.Body.String())
 	}
 
-	usage := requestManagementUsage(t, router, userOneCookie, "30d")
+	usage := waitForManagementValue(t, func() managementUsageTestResponse {
+		return requestManagementUsage(t, router, userOneCookie, "30d")
+	}, func(payload managementUsageTestResponse) bool {
+		return payload.Totals.Requests == 5
+	})
 	if usage.Totals.Requests != 5 || usage.Totals.SuccessfulRequests != 1 || usage.Totals.FailedRequests != 4 {
 		t.Fatalf("usage totals=%+v", usage.Totals)
 	}
@@ -1670,6 +1776,11 @@ func TestManagementAdminUsersDashboard(t *testing.T) {
 	if forbiddenResponse.Code != http.StatusForbidden {
 		t.Fatalf("admin users non-admin status=%d want=%d body=%s", forbiddenResponse.Code, http.StatusForbidden, forbiddenResponse.Body.String())
 	}
+	waitForManagementValue(t, func() managementUsageTestResponse {
+		return requestManagementUsage(t, router, userOneCookie, "30d")
+	}, func(payload managementUsageTestResponse) bool {
+		return payload.Totals.Requests == 1
+	})
 
 	adminRequest := authenticatedJSONRequest(http.MethodGet, "/api/management/admin/users", "", adminCookie)
 	adminResponse := httptest.NewRecorder()
@@ -1848,6 +1959,7 @@ func TestManagementMetaProviderRoutesWithEncryptedTenantKey(t *testing.T) {
 	if deleteSecretResponse.Code != http.StatusNotFound {
 		t.Fatalf("obsolete secret delete status=%d want=%d", deleteSecretResponse.Code, http.StatusNotFound)
 	}
+	waitForManagementRequestCount(t, router, userOneCookie, 2)
 }
 
 func TestManagementGeneratedSecretOmittedProviderUsesTenantDefaults(t *testing.T) {
@@ -1941,6 +2053,7 @@ func TestManagementGeneratedSecretOmittedProviderUsesTenantDefaults(t *testing.T
 	if capturedModels[1] != proxy.ModelNameGPT55 || capturedInputs[1] != "provider-owned system\n\nhello explicit" {
 		t.Fatalf("explicit model/input=%q/%q", capturedModels[1], capturedInputs[1])
 	}
+	waitForManagementRequestCount(t, router, userCookie, 2)
 }
 
 func TestProxyRejectsClientSuppliedProviderKeys(t *testing.T) {
@@ -2221,6 +2334,15 @@ func requestManagementUsage(t *testing.T, router http.Handler, sessionCookie *ht
 		t.Fatalf("decode usage: %v", decodeError)
 	}
 	return usage
+}
+
+func waitForManagementRequestCount(t *testing.T, router http.Handler, sessionCookie *http.Cookie, expectedRequests int) {
+	t.Helper()
+	waitForManagementValue(t, func() managementUsageTestResponse {
+		return requestManagementUsage(t, router, sessionCookie, "30d")
+	}, func(payload managementUsageTestResponse) bool {
+		return payload.Totals.Requests == expectedRequests
+	})
 }
 
 type managementTenantDefaultsTestResponse struct {

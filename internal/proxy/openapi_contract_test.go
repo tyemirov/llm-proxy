@@ -221,6 +221,7 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	invalidTimeoutResponse := httptest.NewRecorder()
 	router.ServeHTTP(invalidTimeoutResponse, invalidTimeoutRequest)
 	assertOpenAPIResponse(t, contract, "/v2", http.MethodPost, invalidTimeoutResponse)
+	waitForManagementRequestCount(t, router, sessionCookie, 2)
 
 	failuresRequest := httptest.NewRequest(http.MethodGet, tenantPath+"/usage/failures?interval=30d&limit=25", nil)
 	failuresRequest.AddCookie(sessionCookie)

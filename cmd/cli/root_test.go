@@ -82,6 +82,7 @@ management:
   jwt_issuer: "tauth"
   session_cookie_name: "llm_proxy_session"
   database_path: "${P411_MANAGEMENT_DATABASE_PATH}"
+  usage_queue_size: 3
   provider_key_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   management_api_origin: "https://llm-proxy-api.example"
   proxy_origin: "https://llm-proxy-api.example"
@@ -163,6 +164,9 @@ P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlh
 	if capturedConfiguration.Management.DatabasePath != "/var/lib/llm-proxy/management.sqlite" {
 		t.Fatalf("management database path=%q", capturedConfiguration.Management.DatabasePath)
 	}
+	if capturedConfiguration.Management.UsageQueueSize != 3 {
+		t.Fatalf("management usage queue size=%d", capturedConfiguration.Management.UsageQueueSize)
+	}
 	if capturedConfiguration.Management.ProviderKeyEncryptionKey != "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=" {
 		t.Fatalf("management provider key encryption key=%q", capturedConfiguration.Management.ProviderKeyEncryptionKey)
 	}
@@ -236,6 +240,9 @@ tenants:
 		if configuration.LogLevel != proxy.LogLevelInfo {
 			t.Fatalf("logLevel=%q", configuration.LogLevel)
 		}
+		if configuration.Management.UsageQueueSize != proxy.DefaultManagementUsageQueueSize {
+			t.Fatalf("management usage queue size=%d", configuration.Management.UsageQueueSize)
+		}
 		return nil
 	})
 
@@ -301,6 +308,27 @@ server:
 			executeError := executeRootCommand(subTest, "--config", configPath)
 			if executeError == nil || !strings.Contains(executeError.Error(), testCase.expectedError) {
 				subTest.Fatalf("error=%v want contains %q", executeError, testCase.expectedError)
+			}
+		})
+	}
+}
+
+func TestRootCommandRejectsInvalidManagementUsageQueueSize(t *testing.T) {
+	for _, configuredValue := range []string{"0", "-1", "null", ""} {
+		t.Run("value="+configuredValue, func(subTest *testing.T) {
+			configPath := writeTestConfig(subTest, subTest.TempDir(), `
+management:
+  enabled: false
+  usage_queue_size: `+configuredValue+`
+tenants:
+  - id: default
+    secret: "sekret"
+`+completeLiteralProvidersYAML())
+			withServeProxy(subTest, failingServeProxy(subTest))
+
+			executeError := executeRootCommand(subTest, "--config", configPath)
+			if executeError == nil || !strings.Contains(executeError.Error(), "management.usage_queue_size must be positive") {
+				subTest.Fatalf("error=%v want positive usage queue size rejection", executeError)
 			}
 		})
 	}
@@ -466,6 +494,9 @@ LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
 	}
 	if capturedConfiguration.Management.DatabasePath != "llm-proxy-management.sqlite" {
 		t.Fatalf("database path=%q", capturedConfiguration.Management.DatabasePath)
+	}
+	if capturedConfiguration.Management.UsageQueueSize != proxy.DefaultManagementUsageQueueSize {
+		t.Fatalf("usage queue size=%d", capturedConfiguration.Management.UsageQueueSize)
 	}
 	if capturedConfiguration.Management.ProviderKeyEncryptionKey != "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=" {
 		t.Fatalf("provider key encryption key=%q", capturedConfiguration.Management.ProviderKeyEncryptionKey)

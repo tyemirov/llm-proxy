@@ -119,12 +119,24 @@ budget and one of `validation_failure`, `success`, `proxy_timeout`,
 `proxy_overload`, `provider_failure`, or `caller_cancelled`. Queue-capacity
 rejection is proxy overload, not a provider failure.
 
-For managed tenants, usage persistence begins only after the selected response
-status and body have been written and the response writer has been flushed.
-The store lock and database calls run in a detached, five-second persistence
-budget so a selected timeout or caller cancellation does not erase its terminal
-usage event. Persistence still happens after response selection and never
-changes an already selected response.
+For managed tenants, the proxy writes and flushes the selected response before
+it attempts a non-blocking usage enqueue. Each management runtime has one FIFO
+channel bounded by `management.usage_queue_size` and starts one writer goroutine
+when the first event is accepted. The writer attempts each accepted insert once
+under a detached five-second budget, in acceptance order, without per-event
+goroutines or retries. A dedicated database-write gate sequences usage inserts
+with management mutations without acquiring the management mutation mutex.
+Authentication bypasses both, so database latency neither retains the request
+handler nor serializes authentication for another request, and it cannot change
+an already selected response.
+
+When the channel is full, the newest event is dropped, previously accepted work
+stays queued, and the proxy emits one `managed_usage_queue_full` warning with
+safe request metadata. Accepted events are process-local, at-most-once work
+until their database insert commits. Queue contents are not crash-durable, and
+an insert failure or process termination can lose an uncommitted event. Managed
+usage is operational telemetry, not a billing, accounting, or provider-job
+ledger; summaries may briefly lag completed proxy responses.
 
 Internally, `server.workers` limits concurrent upstream provider HTTP
 operations and `server.queue_size` limits upstream HTTP operations waiting for a
@@ -179,6 +191,7 @@ management:
   jwt_issuer: "${LLM_PROXY_MANAGEMENT_JWT_ISSUER}"
   session_cookie_name: "${LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME}"
   database_path: "${LLM_PROXY_MANAGEMENT_DATABASE_PATH}"
+  usage_queue_size: 1024
   provider_key_encryption_key: "${LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY}"
   management_api_origin: "${LLM_PROXY_MANAGEMENT_API_ORIGIN}"
   proxy_origin: "${LLM_PROXY_MANAGEMENT_PROXY_ORIGIN}"
@@ -696,7 +709,8 @@ Required hosted values are profile-specific:
 | `management.jwt_signing_key` | Internal signing key used to validate the TAuth session cookie. |
 | `management.jwt_issuer` | JWT issuer, normally `tauth`. |
 | `management.session_cookie_name` | Exact app/environment TAuth session cookie name. |
-| `management.database_path` | Required SQLite database location for tenant-owned provider keys, defaults, generated-secret digests, and usage events. Persistence uses the pure-Go GORM SQLite driver so `CGO_ENABLED=0` builds remain valid. |
+| `management.database_path` | Required SQLite database location for tenant-owned provider keys, defaults, generated-secret digests, and usage events. The pure-Go GORM SQLite runtime enables WAL journaling and a five-second busy timeout so `CGO_ENABLED=0` builds remain valid and readers can proceed alongside a writer. |
+| `management.usage_queue_size` | Positive capacity of the process-local FIFO for asynchronous managed usage persistence. Defaults to `1024`; this queue is independent from `server.queue_size`. |
 | `management.provider_key_encryption_key` | Required base64-encoded 32-byte key used for AES-GCM encryption of tenant-owned provider API keys at rest. Generate with `openssl rand -base64 32` and store it with backend deployment secrets. |
 | `management.management_api_origin` | Browser-facing management API origin served from `/config-ui.yaml` under `llmProxy.managementApiOrigin`. |
 | `management.proxy_origin` | Browser-facing public proxy origin served from `/config-ui.yaml` under `llmProxy.proxyOrigin` for generated examples. |
@@ -773,8 +787,18 @@ confirming that the prior value stops working immediately. A client key cannot
 be deleted independently; access is rotated through replacement or removed
 with the owning non-final tenant. Management mode requires
 `management.database_path` so signups, enabled
-providers, defaults, generated secret digests, and usage events survive restarts
-in a GORM-managed SQLite database at the configured location. The packaged management config uses
+providers, defaults, generated secret digests, and committed usage events
+survive restarts in a GORM-managed SQLite database at the configured location.
+SQLite is the sole runtime source of truth; there is no application
+authentication cache, replica, dual read, or invalidation path. Runtime
+connections use WAL journaling and a five-second busy timeout. Managed
+authentication uses the caller context and one read-only GORM transaction to
+load the tenant and provider-key records from a consistent SQLite snapshot.
+Authentication and single usage-event inserts do not acquire the process-wide
+management mutation lock; management flows retain that lock where they
+coordinate state transitions, while their existing GORM transactions own
+multi-statement database atomicity.
+The packaged management config uses
 strict expandable placeholders for the hosted profile values; define every
 `LLM_PROXY_MANAGEMENT_*` key in the API runtime environment. Local `make up`
 projects those values from `configs/.env.local` into the ignored, API-scoped
@@ -943,7 +967,9 @@ Usage events are recorded only for managed workspaces when they call the public
 proxy endpoints with a generated secret. Account-wide usage queries apply the
 authenticated owner and all owned tenant ids at the database boundary;
 tenant-scoped queries additionally require the explicit tenant id. Every query
-uses one captured time boundary. Stored usage
+uses one captured time boundary. Because proxy responses enqueue usage
+asynchronously, a summary or failure query can temporarily omit accepted work
+that has not committed yet. Stored usage
 metadata includes endpoint, provider, model, status code, success flag, one
 canonical outcome code, latency, and normalized request/response/total token
 counts. Outcome codes are exactly `success`, `invalid_request`,
