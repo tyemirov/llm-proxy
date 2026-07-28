@@ -123,13 +123,12 @@ providers:
   moonshot:
     base_url: "https://api.moonshot.ai/v1"
     text:
-      default_model: "kimi-k2-0905-preview"
+      default_model: "kimi-k2.6"
       models:
-        - id: "kimi-k2-0905-preview"
+        - id: "kimi-k2.6"
         - id: "kimi-k3"
         - id: "kimi-k2.7-code"
         - id: "kimi-k2.7-code-highspeed"
-        - id: "kimi-k2.6"
   minimax:
     base_url: "https://api.minimax.io/v1"
     text:

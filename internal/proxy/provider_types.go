@@ -68,8 +68,14 @@ const (
 	ModelNameDashScopeQwenPlus = "qwen-plus"
 	// ModelNameQwenCloudQwen38MaxPreview identifies Qwen Cloud Token Plan's Qwen 3.8 Max preview.
 	ModelNameQwenCloudQwen38MaxPreview = "qwen3.8-max-preview"
-	// ModelNameMoonshotKimi identifies the Kimi K2 preview model.
-	ModelNameMoonshotKimi = "kimi-k2-0905-preview"
+	// ModelNameMoonshotKimiK26 identifies Moonshot Kimi K2.6.
+	ModelNameMoonshotKimiK26 = "kimi-k2.6"
+	// ModelNameMoonshotKimiK3 identifies Moonshot Kimi K3.
+	ModelNameMoonshotKimiK3 = "kimi-k3"
+	// ModelNameMoonshotKimiK27Code identifies Moonshot Kimi K2.7 Code.
+	ModelNameMoonshotKimiK27Code = "kimi-k2.7-code"
+	// ModelNameMoonshotKimiK27CodeHighSpeed identifies Moonshot Kimi K2.7 Code Highspeed.
+	ModelNameMoonshotKimiK27CodeHighSpeed = "kimi-k2.7-code-highspeed"
 	// ModelNameMiniMaxM27 identifies MiniMax M2.7.
 	ModelNameMiniMaxM27 = "MiniMax-M2.7"
 	// ModelNameSiliconFlowDeepSeek identifies SiliconFlow-hosted DeepSeek R1.

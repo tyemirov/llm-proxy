@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,94 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
+
+type internalProviderKeyVerifier struct {
+	verificationError error
+}
+
+func (verifier internalProviderKeyVerifier) verify(context.Context, providerDefinition, textModelDefinition, string) error {
+	return verifier.verificationError
+}
+
+type pausingProviderKeyVerifier struct {
+	verificationStarted  chan struct{}
+	releaseVerification  chan struct{}
+	verificationComplete chan struct{}
+}
+
+func (verifier pausingProviderKeyVerifier) verify(context.Context, providerDefinition, textModelDefinition, string) error {
+	close(verifier.verificationStarted)
+	<-verifier.releaseVerification
+	close(verifier.verificationComplete)
+	return nil
+}
+
+func TestManagementProviderKeySaveStopsWhenVerifiedRequestIsCanceled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	principal := managementPrincipal{userID: "tauth-handler-user", userEmail: "owner@example.com"}
+	service, database := newSeededInternalManagementService(t)
+	verifier := pausingProviderKeyVerifier{
+		verificationStarted:  make(chan struct{}),
+		releaseVerification:  make(chan struct{}),
+		verificationComplete: make(chan struct{}),
+	}
+	service.keyVerifier = verifier
+
+	requestContext, cancelRequest := context.WithCancel(context.Background())
+	defer cancelRequest()
+	responseComplete := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		responseComplete <- executeInternalManagementHandlerWithContext(
+			service.saveProviderKeyHandler(),
+			http.MethodPut,
+			"/api/management/tenants/managed-default/provider-keys/openai",
+			`{"api_key":"canceled-candidate","text_model":"`+ModelNameGPT41+`","system_prompt":""}`,
+			gin.Params{
+				{Key: "tenant_id", Value: "managed-default"},
+				{Key: "provider", Value: ProviderNameOpenAI},
+			},
+			principal,
+			requestContext,
+		)
+	}()
+
+	select {
+	case <-verifier.verificationStarted:
+	case <-time.After(time.Second):
+		t.Fatal("provider verification did not start")
+	}
+	if lockError := service.store.mutex.DatabaseWriteLockContext(context.Background()); lockError != nil {
+		t.Fatalf("hold database write gate: %v", lockError)
+	}
+	writeGateLocked := true
+	defer func() {
+		if writeGateLocked {
+			service.store.mutex.DatabaseWriteUnlock()
+		}
+	}()
+	close(verifier.releaseVerification)
+	<-verifier.verificationComplete
+	cancelRequest()
+
+	select {
+	case response := <-responseComplete:
+		if response.Code != http.StatusInternalServerError {
+			t.Fatalf("canceled save status=%d body=%q", response.Code, response.Body.String())
+		}
+	case <-time.After(time.Second):
+		service.store.mutex.DatabaseWriteUnlock()
+		writeGateLocked = false
+		<-responseComplete
+		t.Fatal("canceled provider-key save remained queued for the database")
+	}
+	service.store.mutex.DatabaseWriteUnlock()
+	writeGateLocked = false
+
+	tenantRecord := database.tenantsByID["managed-default"]
+	if len(tenantRecord.ProviderAPIKeys) != 0 {
+		t.Fatalf("canceled provider key persisted records=%+v", tenantRecord.ProviderAPIKeys)
+	}
+}
 
 func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -257,7 +346,7 @@ func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 	}
 	service, database = newSeededService()
 	service.store.randomReader = strings.NewReader(strings.Repeat("x", 64))
-	if _, saveError := service.store.saveProviderKey(principal, "managed-default", newProviderID(ProviderNameOpenAI), "sk-openai", ModelNameGPT41, ""); saveError != nil {
+	if _, saveError := service.store.saveProviderKey(context.Background(), principal, "managed-default", newProviderID(ProviderNameOpenAI), "sk-openai", ModelNameGPT41, ""); saveError != nil {
 		t.Fatalf("seed defaults provider key: %v", saveError)
 	}
 	database.saveTenantErrors = []error{errInternalTestDatabase}
@@ -360,6 +449,7 @@ func newInternalManagementService(t *testing.T, database *fakeManagedTenantDatab
 		sessionValidator,
 		store,
 		providers,
+		internalProviderKeyVerifier{},
 		newTenantAuthenticator(tenantRegistry{}, store),
 		zap.NewNop().Sugar(),
 	)
@@ -374,9 +464,13 @@ func newSeededInternalManagementService(t *testing.T) (*managementService, *fake
 }
 
 func executeInternalManagementHandler(handler gin.HandlerFunc, method string, path string, body string, params gin.Params, principal managementPrincipal) *httptest.ResponseRecorder {
+	return executeInternalManagementHandlerWithContext(handler, method, path, body, params, principal, context.Background())
+}
+
+func executeInternalManagementHandlerWithContext(handler gin.HandlerFunc, method string, path string, body string, params gin.Params, principal managementPrincipal, requestContext context.Context) *httptest.ResponseRecorder {
 	response := httptest.NewRecorder()
 	ginContext, _ := gin.CreateTestContext(response)
-	ginContext.Request = httptest.NewRequest(method, path, strings.NewReader(body))
+	ginContext.Request = httptest.NewRequest(method, path, strings.NewReader(body)).WithContext(requestContext)
 	ginContext.Params = params
 	ginContext.Set(contextKeyManagementPrincipal, principal)
 	handler(ginContext)

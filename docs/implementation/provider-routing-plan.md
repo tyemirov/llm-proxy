@@ -291,6 +291,53 @@ profile or tenant/provider default. The proxy remains the authority for whether
 the resulting provider/model pair is valid. Without a profile path, model
 omission keeps the existing tenant/provider-default behavior.
 
+## Managed Provider Credential Verification
+
+Every nonempty `api_key` submitted to
+`PUT /api/management/tenants/:tenant_id/provider-keys/:provider` is an
+unverified new or replacement credential. After ownership, provider, and exact
+selected text-model resolution, the handler performs one fixed,
+non-user-content inference through the provider's canonical text transport:
+
+- OpenAI Responses uses one synchronous, non-stored `POST /responses` with
+  `background: false`, `store: false`, and a 16-token output limit.
+- DeepSeek, DashScope, Qwen Cloud, Moonshot, MiniMax, SiliconFlow, Zhipu, Meta,
+  and Grok use one authenticated OpenAI-compatible `POST /chat/completions`
+  with the provider's declared token-limit parameter.
+- Gemini uses one `generateContent` request with `x-goog-api-key` and
+  `maxOutputTokens: 16`.
+- Anthropic uses one Messages request with `x-api-key`,
+  `anthropic-version: 2023-06-01`, and `max_tokens: 16`.
+
+The verifier uses the management request context and the same shared upstream
+worker, queue, and origin-rate-limit boundary as proxy traffic. It performs no
+retry, alternate endpoint, polling, continuation, background work, or managed
+usage recording. A transport success counts only when its canonical response
+envelope is structurally valid. Provider `4xx` credential/model rejection maps
+to `422 provider_key_rejected` except `408` timeout and `429` rate limit;
+upstream `504` also maps to timeout. Transport cancellation/deadline, outage,
+and malformed success map to the documented provider-neutral `504`, `503`, or
+`429` error. Candidate keys, fixed probe content, authenticated URLs, and raw
+upstream bodies never enter logs, management responses, profiles, or usage
+rows.
+
+Only successful verification enters the existing atomic provider-key
+transaction, which encrypts the credential, saves the submitted model and
+system prompt, reconciles routing defaults, and returns the complete profile.
+Every failure leaves a new provider unkeyed or preserves the prior verified
+replacement credential, settings, and defaults unchanged. An empty `api_key`
+is the canonical retain-existing-key settings update and bypasses verification.
+
+Settings starts this operation automatically when a paste updates the selected
+provider key. It announces `Verifying key`, leaves only that input available
+for a newer paste, and locks tenant, provider, model, reveal, remove, routing,
+and close actions until settlement. Per-candidate abort ownership plus the
+existing workspace/editor versions prevent newer paste, authentication, tenant,
+provider, model, or editor context changes from applying a stale result.
+Success clears the raw draft and restores the masked key. A safe failure keeps
+the draft only in that editor, distinguishes an unsaved first key from an active
+prior key, and exposes an explicit retry.
+
 ## Managed Routing Defaults
 
 `PUT /api/management/tenants/:tenant_id/defaults` requires every field and
@@ -346,15 +393,18 @@ duration strings, and duplicate normalized origins fail startup. Delayed calls
 and context-canceled waits emit structured shared-client logs.
 
 The live-provider harness parses `LIVE_ENV_FILE` as dotenv data without shell
-execution, discovers selected provider keys, and writes a disposable static
-tenant config with management disabled and placeholder values for unused
-providers. It therefore cannot open or mutate the configured management
-database. The `--write-config` option exposes that generated contract without
-building the proxy or making a paid provider call; `--preflight` starts it and
-proves authenticated routing without an upstream call. Each run allocates a
-fresh loopback port unless `LLM_PROXY_LIVE_PORT` explicitly provides one, and
-cleanup terminates only the proxy child started by the harness rather than a
-process discovered through a shared port.
+execution and discovers selected provider keys. A paid run starts a disposable
+management database with ephemeral encryption/session material, creates one
+local managed tenant and client secret, verifies each available key through the
+same provider-settings operation above, and runs that provider's smoke request
+only after the verification returns a keyed profile. Verification payloads,
+session material, and provider/proxy response bodies remain in the private
+temporary directory and are removed at exit. `--write-config` and `--preflight`
+retain the non-paid static-tenant configuration with management disabled and
+make no verification or upstream call. Each mode allocates a fresh loopback
+port unless `LLM_PROXY_LIVE_PORT` explicitly provides one, and cleanup
+terminates only the proxy child started by the harness rather than a process
+discovered through a shared port.
 
 `make live-test` is deliberately a different boundary: it calls only the
 production API origin with `LLM_PROXY_SECRET`, the Default tenant client
@@ -393,7 +443,7 @@ MPR UI is the sole browser authentication authority. Application JavaScript list
 
 DNS must leave `llm-proxy.mprlab.com` pointed at GitHub Pages and point `llm-proxy-api.mprlab.com` at the MPR gateway; the gateway route for `llm-proxy.mprlab.com` must be removed or moved so the backend only owns the API hostname. Management APIs under `/api/management` validate the configured TAuth session cookie locally with issuer `tauth` unless `management.jwt_issuer` overrides it.
 
-Provider API keys are accepted only through authenticated, workspace-scoped management endpoints and encrypted at rest with AES-GCM using the required `management.provider_key_encryption_key`. Normal save, workspace-profile, and administrator responses return only masked status. The sole raw-key response is the explicit owner-authenticated `POST /api/management/tenants/:tenant_id/provider-keys/:provider/reveal` action, which requires the configured management origin and returns `Cache-Control: no-store`. Each provider-key record also stores that provider's selected text model and provider-specific system prompt. Managed text requests that select a provider and omit `model` use the saved provider text model, and provider-selected requests without request-level system instructions use the saved provider system prompt. The bounded F014 migration rejects plaintext or corrupt legacy rows and re-encrypts valid keys with the preserved opaque tenant id as AES-GCM associated data. This is an encrypted-at-rest guarantee for database dumps, backups, and direct storage access, not a user-only decryption or zero-knowledge guarantee.
+Provider API keys are accepted only through authenticated, workspace-scoped management endpoints. Every nonempty new or replacement credential is operationally verified against its exact provider and selected text model before it is encrypted at rest with AES-GCM using the required `management.provider_key_encryption_key`. Normal save, workspace-profile, and administrator responses return only masked status. The sole raw-key response is the explicit owner-authenticated `POST /api/management/tenants/:tenant_id/provider-keys/:provider/reveal` action, which requires the configured management origin and returns `Cache-Control: no-store`. Each provider-key record also stores that provider's selected text model and provider-specific system prompt. Managed text requests that select a provider and omit `model` use the saved provider text model, and provider-selected requests without request-level system instructions use the saved provider system prompt. The bounded F014 migration rejects plaintext or corrupt legacy rows and re-encrypts valid keys with the preserved opaque tenant id as AES-GCM associated data. This is an encrypted-at-rest guarantee for database dumps, backups, and direct storage access, not a user-only decryption or zero-knowledge guarantee.
 
 Management mode requires `management.database_path` and `management.provider_key_encryption_key`; management persistence uses the pure-Go GORM SQLite driver so `CGO_ENABLED=0` release builds remain valid. Administrators are config-owned through exact `management.admin_emails` entries; public config populates those entries from the plural `${LLM_PROXY_MANAGEMENT_ADMIN_EMAILS}` YAML flow sequence placeholder so personal admin addresses stay out of the repository while allowing multiple admins. An admin session gets `user.is_admin: true`, an `Admin` avatar-menu item, and `GET /api/management/admin/users` access to all managed users' tenant facts and 30-day usage summaries without provider API keys, masked key values, generated secrets, secret digests, prompts, responses, audio names, or transcripts. Non-admin sessions receive `403` from admin APIs. The packaged management config uses strict expandable `LLM_PROXY_MANAGEMENT_*` placeholders, so local and hosted profiles must define explicit values in the runtime environment or `configs/.env`.
 
@@ -439,6 +489,13 @@ When the selected Usage snapshot contains failures, the success-rate card expose
   reasons other than `STOP` or `MAX_TOKENS`, and Anthropic reasons other than
   `end_turn`, `stop_sequence`, or `max_tokens`; partial provider text is never
   returned.
+
+Provider-originated `429` and `502` responses use the canonical six-field JSON
+envelope documented in `docs/openapi.yaml`: error code, canonical provider,
+nullable exact upstream status, retryability, proxy-owned request id, and
+nullable validated `Retry-After`. The public proxy status and upstream status
+remain distinct. Raw provider bodies, messages, and partial output never enter
+that response or structured provider-failure logs.
 
 ## Implementation Notes
 

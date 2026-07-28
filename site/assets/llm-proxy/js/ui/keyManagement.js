@@ -9,6 +9,7 @@ import {
   MENU_ACTIONS,
   NOTICE_AUTO_DISMISS_MILLISECONDS,
   NOTICE_KINDS,
+  PROVIDER_KEY_VERIFICATION_ERRORS,
   ROUTING_DEFAULTS_INVALID_ERROR,
   USAGE_ENDPOINT_LABELS,
   USAGE_FAILURE_PAGE_LIMIT,
@@ -16,7 +17,7 @@ import {
   USAGE_OUTCOME_LABELS,
   USAGE_STATUS_LABELS,
   WORKSPACE_INTEGRITY_ERROR,
-} from "../constants.js?v=20260727";
+} from "../constants.js?v=20260727i036";
 import {
   createTenant as requestCreateTenant,
   deleteTenant as requestDeleteTenant,
@@ -34,7 +35,7 @@ import {
   revealProviderKey as requestRevealProviderKey,
   saveProviderKey as requestSaveProviderKey,
   updateDefaults as requestUpdateDefaults,
-} from "../core/backendClient.js?v=20260727";
+} from "../core/backendClient.js?v=20260727i036";
 import {
   emptyUsageSummary,
   modelRows,
@@ -43,13 +44,13 @@ import {
   usagePolyline,
   USAGE_CHART,
   USAGE_METRICS,
-} from "./usagePresentation.js?v=20260727";
+} from "./usagePresentation.js?v=20260727i036";
 import {
   applyUserMenuItems,
   readMprUIAuthStatus,
   waitForMprUIAutoOrchestrationReady,
-} from "../core/mprShell.js?v=20260727";
-import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260727";
+} from "../core/mprShell.js?v=20260727i036";
+import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260727i036";
 
 const EMPTY_SECRET_PLACEHOLDER = "<generated-secret>";
 const EMPTY_STRING = "";
@@ -110,6 +111,10 @@ export function createKeyManagement() {
     providerAutosavePending: false,
     /** @type {Promise<boolean> | null} */
     providerAutosavePromise: null,
+    providerKeyVerificationPending: false,
+    /** @type {AbortController | null} */
+    providerKeyVerificationController: null,
+    providerKeyVerificationFailure: EMPTY_STRING,
     routingDefaultsDirty: false,
     routingDefaultsEditVersion: 0,
     routingDefaultsAutosavePending: false,
@@ -221,6 +226,7 @@ export function createKeyManagement() {
           this.tenantNameDirty ||
           this.providerEditorSession.dirty ||
           this.providerAutosavePending ||
+          this.providerKeyVerificationPending ||
           this.routingDefaultsDirty ||
           this.routingDefaultsAutosavePending
         )
@@ -258,7 +264,7 @@ export function createKeyManagement() {
     },
 
     get settingsControlsDisabled() {
-      return this.busy || this.settingsClosePending;
+      return this.busy || this.settingsClosePending || this.providerKeyVerificationPending;
     },
 
     get isAdmin() {
@@ -363,6 +369,10 @@ export function createKeyManagement() {
 
     get providerKeyRevealPending() {
       return this.providerEditorSession.revealPending;
+    },
+
+    get providerKeyVerificationFailed() {
+      return this.providerKeyVerificationFailure !== EMPTY_STRING;
     },
 
     get providerRemovalConfirmationOpen() {
@@ -1514,6 +1524,7 @@ export function createKeyManagement() {
       if (providerID === this.selectedProviderID) {
         return;
       }
+      this.abortProviderKeyVerification();
       this.restoreSelectedProviderControl();
       if (!(await this.autosaveSelectedProvider())) {
         this.restoreSelectedProviderControl();
@@ -1556,6 +1567,8 @@ export function createKeyManagement() {
       if (!provider) {
         return;
       }
+      this.abortProviderKeyVerification();
+      this.providerKeyVerificationFailure = EMPTY_STRING;
       const keyInput = /** @type {HTMLInputElement} */ (event.target);
       this.providerEditorSession.keyInput = keyInput.value;
       this.providerEditorSession.keyVisible = true;
@@ -1563,10 +1576,35 @@ export function createKeyManagement() {
       this.markSelectedProviderDirty();
     },
 
+    handleSelectedProviderKeyPaste() {
+      this.$nextTick(() => {
+        void this.verifyPastedProviderKey();
+      });
+    },
+
+    async verifyPastedProviderKey() {
+      if (this.providerAutosavePromise) {
+        await this.providerAutosavePromise;
+      }
+      if (
+        this.providerEditorSession.keyDirty &&
+        this.providerEditorSession.keyInput.trim() !== EMPTY_STRING
+      ) {
+        await this.autosaveSelectedProvider();
+      }
+    },
+
+    async retrySelectedProviderKeyVerification() {
+      this.providerKeyVerificationFailure = EMPTY_STRING;
+      await this.autosaveSelectedProvider();
+    },
+
     /**
      * @param {Event} event
      */
     handleSelectedProviderTextModelChange(event) {
+      this.abortProviderKeyVerification();
+      this.providerKeyVerificationFailure = EMPTY_STRING;
       const modelSelect = /** @type {HTMLSelectElement} */ (event.target);
       this.providerEditorSession.textModel = modelSelect.value;
       this.markSelectedProviderDirty();
@@ -1647,6 +1685,8 @@ export function createKeyManagement() {
      * @param {string} providerID
      */
     replaceProviderEditorSession(providerID) {
+      this.abortProviderKeyVerification();
+      this.providerKeyVerificationFailure = EMPTY_STRING;
       const providerChanged = providerID !== this.selectedProviderID;
       const provider = providerID === EMPTY_STRING ? null : profileProvider(this.providers, providerID);
       this.providerEditorSession = createProviderEditorSession(
@@ -1658,6 +1698,14 @@ export function createKeyManagement() {
       if (providerChanged) {
         this.providerSystemPromptOpen = false;
       }
+    },
+
+    abortProviderKeyVerification() {
+      if (this.providerKeyVerificationController) {
+        this.providerKeyVerificationController.abort();
+        this.providerKeyVerificationController = null;
+      }
+      this.providerKeyVerificationPending = false;
     },
 
     clearGeneratedSecret() {
@@ -1778,6 +1826,32 @@ export function createKeyManagement() {
         if (!lifetimeController) {
           return false;
         }
+        const verifiesCandidate = apiKey !== EMPTY_STRING;
+        let requestSignal = lifetimeController.signal;
+        /** @type {AbortController | null} */
+        let verificationController = null;
+        /** @type {() => void} */
+        let detachLifetimeAbort = () => {};
+        if (verifiesCandidate) {
+          this.abortProviderKeyVerification();
+          const candidateVerificationController = new AbortController();
+          verificationController = candidateVerificationController;
+          this.providerKeyVerificationController = candidateVerificationController;
+          this.providerKeyVerificationPending = true;
+          this.providerKeyVerificationFailure = EMPTY_STRING;
+          const abortForTenantLifetime = () => {
+            candidateVerificationController.abort();
+          };
+          if (lifetimeController.signal.aborted) {
+            abortForTenantLifetime();
+          } else {
+            lifetimeController.signal.addEventListener("abort", abortForTenantLifetime, { once: true });
+            detachLifetimeAbort = () => {
+              lifetimeController.signal.removeEventListener("abort", abortForTenantLifetime);
+            };
+          }
+          requestSignal = candidateVerificationController.signal;
+        }
         editorSession.dirty = false;
         try {
           const profileApplied = await this.enqueueProfileMutation(workspaceVersion, async () => {
@@ -1787,7 +1861,7 @@ export function createKeyManagement() {
               apiKey,
               editorSession.textModel,
               editorSession.systemPrompt,
-              lifetimeController.signal,
+              requestSignal,
             );
             if (!this.canApplyProviderAutosave(providerID, revealVersion, workspaceVersion)) {
               return false;
@@ -1799,7 +1873,10 @@ export function createKeyManagement() {
               this.routingDefaultsDirty || this.routingDefaultsAutosavePending,
             );
             if (!preserveProviderEditor) {
-              this.setNotice(NOTICE_KINDS.SUCCESS, COPY.providerSettingsSaved);
+              this.setNotice(
+                NOTICE_KINDS.SUCCESS,
+                verifiesCandidate ? COPY.providerKeyVerified : COPY.providerSettingsSaved,
+              );
             }
             return true;
           });
@@ -1809,9 +1886,27 @@ export function createKeyManagement() {
         } catch (requestError) {
           if (this.canApplyProviderAutosave(providerID, revealVersion, workspaceVersion)) {
             this.providerEditorSession.dirty = true;
-            this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+            if (!isAbortError(requestError)) {
+              const verificationError = verifiesCandidate
+                ? providerKeyVerificationError(requestError)
+                : null;
+              const failureMessage = verificationError
+                ? providerKeyVerificationFailureMessage(verificationError, provider.has_key)
+                : profileFailureMessage(requestError);
+              this.providerKeyVerificationFailure = verificationError ? failureMessage : EMPTY_STRING;
+              this.setNotice(NOTICE_KINDS.ERROR, failureMessage);
+            }
           }
           return false;
+        } finally {
+          detachLifetimeAbort();
+          if (
+            verificationController &&
+            this.providerKeyVerificationController === verificationController
+          ) {
+            this.providerKeyVerificationController = null;
+            this.providerKeyVerificationPending = false;
+          }
         }
       }
       return true;
@@ -2867,6 +2962,41 @@ function profileFailureMessage(requestError) {
     return COPY.workspaceIntegrityError;
   }
   return COPY.requestFailed;
+}
+
+/**
+ * @param {unknown} requestError
+ * @returns {import("../types.d.js").ProviderKeyVerificationError | null}
+ */
+function providerKeyVerificationError(requestError) {
+  if (!(requestError instanceof Error)) {
+    return null;
+  }
+  const errorCode = requestError.message.trim();
+  if (!Object.values(PROVIDER_KEY_VERIFICATION_ERRORS).includes(errorCode)) {
+    return null;
+  }
+  return /** @type {import("../types.d.js").ProviderKeyVerificationError} */ (errorCode);
+}
+
+/**
+ * @param {import("../types.d.js").ProviderKeyVerificationError} verificationError
+ * @param {boolean} previousKeyActive
+ * @returns {string}
+ */
+function providerKeyVerificationFailureMessage(verificationError, previousKeyActive) {
+  switch (verificationError) {
+    case PROVIDER_KEY_VERIFICATION_ERRORS.REJECTED:
+      return previousKeyActive ? COPY.providerKeyRejectedPreviousActive : COPY.providerKeyRejectedUnsaved;
+    case PROVIDER_KEY_VERIFICATION_ERRORS.RATE_LIMITED:
+      return previousKeyActive ? COPY.providerKeyRateLimitedPreviousActive : COPY.providerKeyRateLimitedUnsaved;
+    case PROVIDER_KEY_VERIFICATION_ERRORS.TIMED_OUT:
+      return previousKeyActive ? COPY.providerKeyTimedOutPreviousActive : COPY.providerKeyTimedOutUnsaved;
+    case PROVIDER_KEY_VERIFICATION_ERRORS.UNAVAILABLE:
+      return previousKeyActive ? COPY.providerKeyUnavailablePreviousActive : COPY.providerKeyUnavailableUnsaved;
+    default:
+      return COPY.requestFailed;
+  }
 }
 
 /**

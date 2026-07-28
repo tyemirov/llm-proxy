@@ -79,7 +79,7 @@ func TestPerformHTTPRequest_ReturnsBodyResetError(testingInstance *testing.T) {
 	httpRequest.GetBody = func() (io.ReadCloser, error) {
 		return nil, context.Canceled
 	}
-	_, _, _, performError := utils.PerformHTTPRequest(func(*http.Request) (*http.Response, error) {
+	_, _, _, _, performError := utils.PerformHTTPRequest(func(*http.Request) (*http.Response, error) {
 		testingInstance.Fatalf("executeRequest should not run")
 		return nil, nil
 	}, httpRequest, nil, "transport error")

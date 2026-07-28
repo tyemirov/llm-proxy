@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -495,32 +496,32 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	store.routingDefaults = internalManagementProviderRegistry()
 	store.now = func() time.Time { return now }
 
-	if _, saveError := store.saveProviderKey(principal, "missing", newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantNotFound) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, "missing", newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantNotFound) {
 		t.Fatalf("provider tenant error=%v", saveError)
 	}
-	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), " ", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyInvalid) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), " ", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyInvalid) {
 		t.Fatalf("blank provider error=%v", saveError)
 	}
 	store.randomReader = strings.NewReader("")
-	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyEncryption) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyEncryption) {
 		t.Fatalf("provider encryption error=%v", saveError)
 	}
 	store.randomReader = bytes.NewReader(bytes.Repeat([]byte{1}, 256))
 	database.saveProviderKeyErrors = []error{errInternalTestDatabase}
-	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
 		t.Fatalf("provider persistence error=%v", saveError)
 	}
-	snapshot, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, "provider system")
+	snapshot, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, "provider system")
 	if saveError != nil || snapshot.providerSettings[newProviderID(ProviderNameOpenAI)].apiKey != "sk-key" {
 		t.Fatalf("provider snapshot=%+v error=%v", snapshot, saveError)
 	}
 	originalCiphertext := database.tenantsByID[identifier.string()].ProviderAPIKeys[0].EncryptedAPIKey
-	snapshot, saveError = store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "", ModelNameGPT55, "updated system")
+	snapshot, saveError = store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "", ModelNameGPT55, "updated system")
 	if saveError != nil || snapshot.providerSettings[newProviderID(ProviderNameOpenAI)].textModel != ModelNameGPT55 || database.tenantsByID[identifier.string()].ProviderAPIKeys[0].EncryptedAPIKey != originalCiphertext {
 		t.Fatalf("updated snapshot=%+v error=%v", snapshot, saveError)
 	}
 	database.tenantByOwnerAndIDErrors = []error{nil, errInternalTestDatabase}
-	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
 		t.Fatalf("provider reload error=%v", saveError)
 	}
 
@@ -646,6 +647,35 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	record.ProviderAPIKeys = nil
 	database.tenantsByID[identifier.string()] = record
 
+	store.mutex.mutations.Lock()
+	postGateContext, cancelPostGateContext := context.WithCancel(context.Background())
+	postGateLockComplete := make(chan error, 1)
+	go func() {
+		postGateLockComplete <- store.mutex.LockContext(postGateContext)
+	}()
+	postGateDeadline := time.Now().Add(time.Second)
+	for len(store.mutex.databaseWrite) == 0 && time.Now().Before(postGateDeadline) {
+		runtime.Gosched()
+	}
+	if len(store.mutex.databaseWrite) == 0 {
+		cancelPostGateContext()
+		store.mutex.mutations.Unlock()
+		t.Fatal("context-aware mutation lock did not acquire the database write gate")
+	}
+	cancelPostGateContext()
+	store.mutex.mutations.Unlock()
+	select {
+	case lockError := <-postGateLockComplete:
+		if !errors.Is(lockError, context.Canceled) {
+			t.Fatalf("post-gate cancellation error=%v", lockError)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("context-aware mutation lock did not release after cancellation")
+	}
+	if len(store.mutex.databaseWrite) != 0 {
+		t.Fatal("context-aware mutation lock retained the database write gate after cancellation")
+	}
+
 	cancelledContext, cancel := context.WithCancel(context.Background())
 	cancel()
 	managedTenant := tenant{identifier: tenantID(identifier.string()), userID: principal.userID, managed: true}
@@ -653,7 +683,12 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	if usageRecordError != nil {
 		t.Fatalf("usage record error=%v", usageRecordError)
 	}
-	if usageError := store.persistManagedUsageRecord(cancelledContext, usageRecord); !errors.Is(usageError, context.Canceled) || !errors.Is(usageError, errManagedTenantStorePersist) {
+	if lockError := store.mutex.DatabaseWriteLockContext(context.Background()); lockError != nil {
+		t.Fatalf("hold usage database write gate: %v", lockError)
+	}
+	usageError := store.persistManagedUsageRecord(cancelledContext, usageRecord)
+	store.mutex.DatabaseWriteUnlock()
+	if !errors.Is(usageError, context.Canceled) || !errors.Is(usageError, errManagedTenantStorePersist) {
 		t.Fatalf("cancelled usage error=%v", usageError)
 	}
 	database.createUsageEventError = errInternalTestDatabase
@@ -751,7 +786,7 @@ func TestManagedTenantStoreProviderRoutingReconciliationErrors(t *testing.T) {
 		TextModel:       ModelNameGPT41,
 	}}
 	database.tenantsByID[identifier.string()] = record
-	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameDeepSeek), "sk-deepseek", ModelNameDeepSeekV4Flash, ""); !errors.Is(saveError, errManagedProviderKeyDecryption) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameDeepSeek), "sk-deepseek", ModelNameDeepSeekV4Flash, ""); !errors.Is(saveError, errManagedProviderKeyDecryption) {
 		t.Fatalf("save provider decryption error=%v", saveError)
 	}
 	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedProviderKeyDecryption) {
@@ -762,7 +797,7 @@ func TestManagedTenantStoreProviderRoutingReconciliationErrors(t *testing.T) {
 	record.DefaultProvider = "missing"
 	record.DefaultModel = ""
 	database.tenantsByID[identifier.string()] = record
-	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
 		t.Fatalf("save invalid defaults error=%v", saveError)
 	}
 	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedRoutingDefaultsInvalid) {
@@ -786,7 +821,7 @@ func TestManagedTenantStoreProviderRoutingReconciliationErrors(t *testing.T) {
 		TextModel:       "missing-model",
 	}}
 	database.tenantsByID[identifier.string()] = record
-	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
 		t.Fatalf("save reconciliation error=%v", saveError)
 	}
 	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedRoutingDefaultsInvalid) {

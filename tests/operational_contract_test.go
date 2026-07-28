@@ -1378,6 +1378,55 @@ func TestOperationalLiveConfigAllocatesDefaultHarnessPort(testingInstance *testi
 	}
 }
 
+func TestOperationalLiveHarnessVerifiesEachKeyBeforeItsSmokeRequest(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixture := newOperationalLiveHarnessFixture(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	environmentFile := filepath.Join(fixtureRoot, "live.env")
+	operationCapture := filepath.Join(fixtureRoot, "operations.log")
+	const providerKey = "test-live-openai-key"
+	writeOperationalFile(testingInstance, environmentFile, "OPENAI_API_KEY="+providerKey+"\n", 0o600)
+	environment := []string{
+		"PATH=" + fixture.toolDirectory + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"GO=" + filepath.Join(fixture.toolDirectory, "go"),
+		"LLM_PROXY_LIVE_PORT=" + strconv.Itoa(operationalLoopbackPort(testingInstance)),
+		"PROXY_PID_CAPTURE=" + fixture.proxyPIDPath,
+		"LIVE_ENV_FILE=" + environmentFile,
+		"LLM_PROXY_LIVE_PROVIDERS=openai",
+		"LIVE_OPERATION_CAPTURE=" + operationCapture,
+	}
+	command := exec.Command(filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"))
+	command.Dir = repositoryRoot
+	command.Env = environment
+	output, commandError := command.CombinedOutput()
+	if commandError != nil {
+		testingInstance.Fatalf("live provider harness failed: %v\n%s", commandError, output)
+	}
+	outputText := string(output)
+	if !strings.Contains(outputText, "live provider verification passed: provider=openai model=gpt-4.1 status=200") ||
+		!strings.Contains(outputText, "live provider smoke passed: provider=openai model=omitted status=200") {
+		testingInstance.Fatalf("live provider harness omitted verification or smoke success: %s", output)
+	}
+	if strings.Contains(outputText, providerKey) || strings.Contains(outputText, "live-generated-secret") {
+		testingInstance.Fatalf("live provider harness output exposed credential material: %s", output)
+	}
+	captureBytes, readError := os.ReadFile(operationCapture)
+	if readError != nil {
+		testingInstance.Fatalf("read live operation capture: %v", readError)
+	}
+	capture := string(captureBytes)
+	verificationOffset := strings.Index(capture, "verify PUT ")
+	smokeOffset := strings.Index(capture, "smoke POST ")
+	if verificationOffset < 0 || smokeOffset <= verificationOffset {
+		testingInstance.Fatalf("live operations were not verification then smoke: %s", capture)
+	}
+	expectedPayload := `payload {"api_key":"` + providerKey + `","text_model":"gpt-4.1","system_prompt":""}`
+	if !strings.Contains(capture, expectedPayload) {
+		testingInstance.Fatalf("live verification payload mismatch: %s", capture)
+	}
+	assertOperationalProxyChildStopped(testingInstance, fixture.proxyPIDPath)
+}
+
 func TestOperationalLiveHarnessReapsOwnedProxyChild(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	reservedPort := operationalLoopbackPort(testingInstance)
@@ -1472,19 +1521,71 @@ if [[ ! -f "${PROXY_PID_CAPTURE:?}" ]]; then
   exit 1
 fi
 
-for argument in "$@"; do
-  case "${argument}" in
-    *provider=unsupported-live-preflight*)
-      if [[ -n "${CURL_PREFLIGHT_BLOCK_PATH:-}" ]]; then
-        builtin printf '%s\n' ready >"${CURL_PREFLIGHT_BLOCK_PATH}"
-        sleep "${CURL_PREFLIGHT_BLOCK_SECONDS:-1}"
-      fi
-      builtin printf '%s' 400
-      exit 0
+output_path=""
+request_body_path=""
+request_method="GET"
+request_url=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    -o)
+      output_path="$2"
+      shift 2
+      ;;
+    -X)
+      request_method="$2"
+      shift 2
+      ;;
+    --data-binary)
+      request_body_path="${2#@}"
+      shift 2
+      ;;
+    http://*)
+      request_url="$1"
+      shift
+      ;;
+    *)
+      shift
       ;;
   esac
 done
-builtin printf '%s' 403
+
+case "${request_url}" in
+  */api/management/account)
+    builtin printf '%s' '{"tenants":[{"id":"tenant-live"}]}' >"${output_path}"
+    builtin printf '%s' 200
+    ;;
+  */api/management/tenants/tenant-live/secrets)
+    builtin printf '%s' '{"secret":"live-generated-secret","profile":{"providers":[{"id":"openai","text_default_model":"gpt-4.1"}]}}' >"${output_path}"
+    builtin printf '%s' 200
+    ;;
+  */api/management/tenants/tenant-live/provider-keys/*)
+    if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then
+      builtin printf 'verify %s %s\n' "${request_method}" "${request_url}" >>"${LIVE_OPERATION_CAPTURE}"
+      builtin printf 'payload ' >>"${LIVE_OPERATION_CAPTURE}"
+      command cat "${request_body_path}" >>"${LIVE_OPERATION_CAPTURE}"
+      builtin printf '\n' >>"${LIVE_OPERATION_CAPTURE}"
+    fi
+    builtin printf '%s' '{}' >"${output_path}"
+    builtin printf '%s' 200
+    ;;
+  *provider=unsupported-live-preflight*)
+    if [[ -n "${CURL_PREFLIGHT_BLOCK_PATH:-}" ]]; then
+      builtin printf '%s\n' ready >"${CURL_PREFLIGHT_BLOCK_PATH}"
+      sleep "${CURL_PREFLIGHT_BLOCK_SECONDS:-1}"
+    fi
+    builtin printf '%s' 400
+    ;;
+  *provider=*)
+    if [[ -n "${LIVE_OPERATION_CAPTURE:-}" ]]; then
+      builtin printf 'smoke %s %s\n' "${request_method}" "${request_url}" >>"${LIVE_OPERATION_CAPTURE}"
+    fi
+    builtin printf '%s' OK >"${output_path}"
+    builtin printf '%s' 200
+    ;;
+  *)
+    builtin printf '%s' 403
+    ;;
+esac
 `, 0o755)
 	return operationalLiveHarnessFixture{
 		proxyPIDPath:  proxyPIDPath,

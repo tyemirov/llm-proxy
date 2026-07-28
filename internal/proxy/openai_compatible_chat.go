@@ -72,15 +72,9 @@ func (client *openAICompatibleChatClient) generateText(parentContext context.Con
 		structuredLogger.Errorw(logEventBuildHTTPRequest, constants.LogFieldError, buildError)
 		return textGenerationResult{}, buildError
 	}
-	statusCode, responseBytes, _, requestError := utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEventProviderRequestError)
-	if requestError != nil {
-		return textGenerationResult{}, requestError
-	}
-	if statusCode == http.StatusTooManyRequests {
-		return textGenerationResult{}, fmt.Errorf("%w: chat completion", ErrProviderRateLimited)
-	}
-	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		return textGenerationResult{}, fmt.Errorf("%w: status=%d", ErrProviderAPI, statusCode)
+	statusCode, responseBytes, responseHeader, _, requestError := utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEventProviderRequestError)
+	if responseError := providerResponseError(statusCode, responseHeader, requestError); responseError != nil {
+		return textGenerationResult{}, responseError
 	}
 	generation, parseError := parseChatCompletionResponse(responseBytes)
 	if parseError != nil {
