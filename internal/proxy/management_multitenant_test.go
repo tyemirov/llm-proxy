@@ -214,7 +214,11 @@ func TestManagementTenantConfigurationSecretAndUsageIsolation(t *testing.T) {
 	}
 
 	for _, tenantID := range []string{firstTenantID, secondTenantID} {
-		usage := requestManagementTenantUsage(t, router, ownerCookie, tenantID)
+		usage := waitForManagementValue(t, func() managementTenantUsageTestResponse {
+			return requestManagementTenantUsage(t, router, ownerCookie, tenantID)
+		}, func(payload managementTenantUsageTestResponse) bool {
+			return payload.Totals.Requests == 1
+		})
 		if usage.Totals.Requests != 1 {
 			t.Fatalf("tenant=%s requests=%d want=1", tenantID, usage.Totals.Requests)
 		}

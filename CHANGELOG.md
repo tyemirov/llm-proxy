@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Persist managed usage after response flush through one bounded FIFO writer, with explicit drop-newest overflow, at-most-once process-local durability, and safe failure logging.
 - Declare the llm-proxy TAuth tenant requirements in the app-owned deployment manifest for gateway assembly.
 - Add the bounded `X-LLM-Proxy-Request-Timeout-Seconds` contract across text and dictation routes, including effective response headers and canonical `400 invalid_request_timeout` and `504 request_timeout` JSON errors.
 - Move Go and Python timeout selection from client configuration onto each messages request, replace the CLI `--timeout` flag with `--request-timeout-seconds`, and remove the arbitrary 390-second bundled-client deadline.

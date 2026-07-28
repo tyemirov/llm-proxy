@@ -1465,6 +1465,66 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
 
+- [x] [I043] (P1) Persist managed usage through one bounded asynchronous writer.
+  Goal:
+  Keep selected proxy responses independent from managed usage database
+  latency without creating one goroutine per response or an unbounded
+  telemetry backlog.
+
+  Evidence:
+  - Every managed proxy request currently flushes its selected response and
+    then performs `recordUsage` synchronously on the request goroutine under a
+    detached five-second persistence budget.
+  - `recordUsage` takes the process-wide managed-store write lock before its
+    database insert, so persistence work retains the handler and can contend
+    with unrelated managed authentication and mutation traffic.
+  - Managed usage powers operational dashboards and failure inspection; it is
+    not a billing, accounting, or provider-job ledger.
+
+  Requirements:
+  - Give each management runtime exactly one bounded FIFO usage channel and one
+    writer goroutine. Add a positive `management.usage_queue_size` setting with
+    a documented default; do not reuse the upstream provider queue.
+  - After selecting and flushing a managed response, construct one immutable
+    usage event and attempt a non-blocking enqueue. A successful enqueue
+    returns immediately and never waits for the database operation.
+  - Drain accepted events in FIFO order and attempt each database insert once
+    under the existing detached five-second persistence budget. Log database
+    failures with safe request metadata; do not retry or start per-event
+    goroutines.
+  - When the channel is full, drop the newest event, retain every previously
+    accepted event, emit one stable `managed_usage_queue_full` warning, and
+    leave the selected proxy response unchanged.
+  - Document the exact durability contract: accepted events are process-local,
+    at-most-once work until their database insert commits. Queue contents are
+    not crash-durable, and database failures or process termination can lose
+    uncommitted events.
+  - Keep prompts, responses, audio, transcripts, secrets, raw provider bodies,
+    and free-form upstream errors out of both queued events and logs.
+
+  Validation:
+  - Public HTTP coverage blocks the first usage insert, proves later managed
+    responses still complete, fills the one-slot test queue, and proves the
+    newest event is dropped without changing its response.
+  - The same coverage releases persistence and proves the accepted events are
+    stored once in FIFO order while the overflow emits exactly one safe stable
+    warning.
+  - Configuration coverage proves omitted queue size receives the default and
+    non-positive explicit values are rejected at the configuration edge.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
+    the final run after the last code edit.
+
+  Resolution:
+  - Managed responses now flush before a non-blocking send to one bounded,
+    runtime-owned FIFO writer. Accepted records receive one detached insert
+    attempt; saturation drops only the newest record with the stable safe
+    `managed_usage_queue_full` warning.
+  - Added the positive `management.usage_queue_size` contract, explicit
+    process-local at-most-once durability documentation, and public HTTP
+    coverage for response independence, FIFO persistence, overflow, and safe
+    logging.
+
 - [ ] [I035] (P2) {B076} Persist each user's selected Usage interval across sessions.
   Goal:
   Make the Usage Overview reopen with the last interval the authenticated user

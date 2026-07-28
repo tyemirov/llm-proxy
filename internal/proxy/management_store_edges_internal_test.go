@@ -565,25 +565,29 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	record.ProviderAPIKeys = nil
 	database.tenantsByID[identifier.string()] = record
 
-	unmanagedTenant := tenant{}
-	if usageError := store.recordUsage(context.Background(), unmanagedTenant, managedUsageEvent{}); usageError != nil {
-		t.Fatalf("unmanaged usage error=%v", usageError)
-	}
 	cancelledContext, cancel := context.WithCancel(context.Background())
 	cancel()
 	managedTenant := tenant{identifier: tenantID(identifier.string()), userID: principal.userID, managed: true}
-	if usageError := store.recordUsage(cancelledContext, managedTenant, managedUsageEvent{}); !errors.Is(usageError, context.Canceled) || !errors.Is(usageError, errManagedTenantStorePersist) {
+	usageRecord, usageRecordError := store.newManagedUsageRecord(managedTenant, managedUsageEvent{outcomeCode: managedUsageOutcomeSuccess})
+	if usageRecordError != nil {
+		t.Fatalf("usage record error=%v", usageRecordError)
+	}
+	if usageError := store.persistManagedUsageRecord(cancelledContext, usageRecord); !errors.Is(usageError, context.Canceled) || !errors.Is(usageError, errManagedTenantStorePersist) {
 		t.Fatalf("cancelled usage error=%v", usageError)
 	}
 	database.createUsageEventError = errInternalTestDatabase
-	if usageError := store.recordUsage(context.Background(), managedTenant, managedUsageEvent{outcomeCode: managedUsageOutcomeSuccess}); !errors.Is(usageError, errManagedTenantStorePersist) {
+	if usageError := store.persistManagedUsageRecord(context.Background(), usageRecord); !errors.Is(usageError, errManagedTenantStorePersist) {
 		t.Fatalf("persist usage error=%v", usageError)
 	}
 	database.createUsageEventError = nil
-	if usageError := store.recordUsage(context.Background(), managedTenant, managedUsageEvent{
+	usageRecord, usageRecordError = store.newManagedUsageRecord(managedTenant, managedUsageEvent{
 		endpoint: usageEndpointText, providerIdentifier: ProviderNameOpenAI, modelIdentifier: ModelNameGPT41,
 		statusCode: http.StatusOK, outcomeCode: managedUsageOutcomeSuccess, latencyMilliseconds: 12, usage: &tokenUsage{RequestTokens: 2, ResponseTokens: 3, TotalTokens: 5},
-	}); usageError != nil {
+	})
+	if usageRecordError != nil {
+		t.Fatalf("usage record error=%v", usageRecordError)
+	}
+	if usageError := store.persistManagedUsageRecord(context.Background(), usageRecord); usageError != nil {
 		t.Fatalf("record usage error=%v", usageError)
 	}
 

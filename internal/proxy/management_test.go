@@ -1513,7 +1513,11 @@ func TestManagementUsageSummaryRecordsManagedProxyRequests(t *testing.T) {
 		t.Fatalf("invalid dictation status=%d body=%s", invalidDictationResponse.Code, invalidDictationResponse.Body.String())
 	}
 
-	usage := requestManagementUsage(t, router, userOneCookie, "30d")
+	usage := waitForManagementValue(t, func() managementUsageTestResponse {
+		return requestManagementUsage(t, router, userOneCookie, "30d")
+	}, func(payload managementUsageTestResponse) bool {
+		return payload.Totals.Requests == 5
+	})
 	if usage.Totals.Requests != 5 || usage.Totals.SuccessfulRequests != 1 || usage.Totals.FailedRequests != 4 {
 		t.Fatalf("usage totals=%+v", usage.Totals)
 	}
@@ -1629,6 +1633,11 @@ func TestManagementAdminUsersDashboard(t *testing.T) {
 	if forbiddenResponse.Code != http.StatusForbidden {
 		t.Fatalf("admin users non-admin status=%d want=%d body=%s", forbiddenResponse.Code, http.StatusForbidden, forbiddenResponse.Body.String())
 	}
+	waitForManagementValue(t, func() managementUsageTestResponse {
+		return requestManagementUsage(t, router, userOneCookie, "30d")
+	}, func(payload managementUsageTestResponse) bool {
+		return payload.Totals.Requests == 1
+	})
 
 	adminRequest := authenticatedJSONRequest(http.MethodGet, "/api/management/admin/users", "", adminCookie)
 	adminResponse := httptest.NewRecorder()

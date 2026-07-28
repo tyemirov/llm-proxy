@@ -94,26 +94,29 @@ type managedTenantStore struct {
 	routingDefaults   *providerRegistry
 	randomReader      io.Reader
 	now               func() time.Time
+	usageWriter       *managedUsageWriter
 }
 
 type managedTenantStoreMutex struct {
-	weighted *semaphore.Weighted
+	weighted       *semaphore.Weighted
+	databaseWrites *semaphore.Weighted
 }
 
 func newManagedTenantStoreMutex() *managedTenantStoreMutex {
-	return &managedTenantStoreMutex{weighted: semaphore.NewWeighted(managedTenantStoreLockCapacity)}
+	return &managedTenantStoreMutex{
+		weighted:       semaphore.NewWeighted(managedTenantStoreLockCapacity),
+		databaseWrites: semaphore.NewWeighted(1),
+	}
 }
 
 func (mutex *managedTenantStoreMutex) Lock() {
+	_ = mutex.databaseWrites.Acquire(context.Background(), 1)
 	_ = mutex.weighted.Acquire(context.Background(), managedTenantStoreLockCapacity)
-}
-
-func (mutex *managedTenantStoreMutex) LockContext(requestContext context.Context) error {
-	return mutex.weighted.Acquire(requestContext, managedTenantStoreLockCapacity)
 }
 
 func (mutex *managedTenantStoreMutex) Unlock() {
 	mutex.weighted.Release(managedTenantStoreLockCapacity)
+	mutex.databaseWrites.Release(1)
 }
 
 func (mutex *managedTenantStoreMutex) RLock() {
@@ -122,6 +125,14 @@ func (mutex *managedTenantStoreMutex) RLock() {
 
 func (mutex *managedTenantStoreMutex) RUnlock() {
 	mutex.weighted.Release(1)
+}
+
+func (mutex *managedTenantStoreMutex) DatabaseWriteLockContext(requestContext context.Context) error {
+	return mutex.databaseWrites.Acquire(requestContext, 1)
+}
+
+func (mutex *managedTenantStoreMutex) DatabaseWriteUnlock() {
+	mutex.databaseWrites.Release(1)
 }
 
 type managedTenantIdentifier string
@@ -336,7 +347,7 @@ func newManagedTenantStore(configuration ManagementConfiguration, providers *pro
 	if databaseError != nil {
 		return nil, databaseError
 	}
-	store := newManagedTenantStoreWithDatabaseAndCipher(database, providerKeyCipher)
+	store := newManagedTenantStoreWithDatabaseAndCipherAndUsageQueue(database, providerKeyCipher, configuration.UsageQueueSize)
 	store.routingDefaults = providers
 	return store, nil
 }
@@ -346,13 +357,19 @@ func newManagedTenantStoreWithDatabase(database managedTenantDatabase) *managedT
 }
 
 func newManagedTenantStoreWithDatabaseAndCipher(database managedTenantDatabase, providerKeyCipher managedProviderKeyCipher) *managedTenantStore {
-	return &managedTenantStore{
+	return newManagedTenantStoreWithDatabaseAndCipherAndUsageQueue(database, providerKeyCipher, DefaultManagementUsageQueueSize)
+}
+
+func newManagedTenantStoreWithDatabaseAndCipherAndUsageQueue(database managedTenantDatabase, providerKeyCipher managedProviderKeyCipher, usageQueueSize int) *managedTenantStore {
+	store := &managedTenantStore{
 		mutex:             newManagedTenantStoreMutex(),
 		database:          database,
 		providerKeyCipher: providerKeyCipher,
 		randomReader:      rand.Reader,
 		now:               func() time.Time { return time.Now().UTC() },
 	}
+	store.usageWriter = newManagedUsageWriter(store, usageQueueSize)
+	return store
 }
 
 func newManagedProviderKeyCipher(rawEncryptionKey string) (managedProviderKeyCipher, error) {
