@@ -48,6 +48,16 @@ func newProviderHTTPError(statusCode int, responseHeader http.Header) error {
 	}
 }
 
+func providerResponseError(statusCode int, responseHeader http.Header, requestError error) error {
+	if statusCode == 0 {
+		return requestError
+	}
+	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
+		return newProviderHTTPError(statusCode, responseHeader)
+	}
+	return requestError
+}
+
 func (providerError *providerHTTPError) Unwrap() error {
 	return providerError.error
 }

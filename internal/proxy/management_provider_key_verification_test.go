@@ -355,17 +355,23 @@ func TestManagementProviderKeyVerificationPreservesVerifiedReplacementAndCoversT
 	})
 
 	edgeCases := []struct {
-		name       string
-		httpClient proxy.HTTPDoer
+		name           string
+		httpClient     proxy.HTTPDoer
+		expectedStatus int
+		expectedBody   string
 	}{
 		{
-			name: "transport error",
+			name:           "transport error",
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedBody:   "provider_key_verification_unavailable",
 			httpClient: coverageHTTPDoer(func(*http.Request) (*http.Response, error) {
 				return nil, errors.New("verification transport failed")
 			}),
 		},
 		{
-			name: "response read error",
+			name:           "response read error",
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedBody:   "provider_key_verification_unavailable",
 			httpClient: coverageHTTPDoer(func(*http.Request) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusOK,
@@ -375,9 +381,31 @@ func TestManagementProviderKeyVerificationPreservesVerifiedReplacementAndCoversT
 			}),
 		},
 		{
-			name: "oversized response",
+			name:           "oversized response",
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedBody:   "provider_key_verification_unavailable",
 			httpClient: coverageHTTPDoer(func(*http.Request) (*http.Response, error) {
 				return coverageHTTPResponse(http.StatusOK, strings.Repeat("x", (1<<20)+1)), nil
+			}),
+		},
+		{
+			name:           "rate limit response read error",
+			expectedStatus: http.StatusTooManyRequests,
+			expectedBody:   "provider_key_verification_rate_limited",
+			httpClient: coverageHTTPDoer(func(*http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusTooManyRequests,
+					Header:     make(http.Header),
+					Body:       failingVerificationReadCloser{},
+				}, nil
+			}),
+		},
+		{
+			name:           "oversized rejected response",
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedBody:   "provider_key_rejected",
+			httpClient: coverageHTTPDoer(func(*http.Request) (*http.Response, error) {
+				return coverageHTTPResponse(http.StatusUnauthorized, strings.Repeat("x", (1<<20)+1)), nil
 			}),
 		},
 	}
@@ -406,7 +434,7 @@ func TestManagementProviderKeyVerificationPreservesVerifiedReplacementAndCoversT
 				"",
 				context.Background(),
 			)
-			if response.Code != http.StatusServiceUnavailable || strings.TrimSpace(response.Body.String()) != "provider_key_verification_unavailable" {
+			if response.Code != edgeCase.expectedStatus || strings.TrimSpace(response.Body.String()) != edgeCase.expectedBody {
 				subTest.Fatalf("status=%d body=%q", response.Code, response.Body.String())
 			}
 		})

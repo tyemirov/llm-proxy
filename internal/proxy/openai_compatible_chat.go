@@ -73,11 +73,8 @@ func (client *openAICompatibleChatClient) generateText(parentContext context.Con
 		return textGenerationResult{}, buildError
 	}
 	statusCode, responseBytes, responseHeader, _, requestError := utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEventProviderRequestError)
-	if requestError != nil {
-		return textGenerationResult{}, requestError
-	}
-	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		return textGenerationResult{}, newProviderHTTPError(statusCode, responseHeader)
+	if responseError := providerResponseError(statusCode, responseHeader, requestError); responseError != nil {
+		return textGenerationResult{}, responseError
 	}
 	generation, parseError := parseChatCompletionResponse(responseBytes)
 	if parseError != nil {

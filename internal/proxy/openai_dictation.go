@@ -50,12 +50,8 @@ func (client *OpenAIClient) transcribeAudioWithURL(parentContext context.Context
 	httpRequest.Header.Set(headerAccept, mimeApplicationJSON)
 
 	statusCode, responseBytes, responseHeader, _, requestError := client.performTranscriptionsRequest(httpRequest, structuredLogger)
-	if requestError != nil {
-		return constants.EmptyString, requestError
-	}
-
-	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		return constants.EmptyString, newProviderHTTPError(statusCode, responseHeader)
+	if responseError := providerResponseError(statusCode, responseHeader, requestError); responseError != nil {
+		return constants.EmptyString, responseError
 	}
 
 	transcribedText, parseError := parseTranscriptionText(responseBytes)

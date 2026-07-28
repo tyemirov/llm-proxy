@@ -446,20 +446,20 @@ func (client *OpenAIClient) performResponsesRequest(httpRequest *http.Request, s
 	operation := func() error {
 		var transportError error
 		statusCode, responseBytes, responseHeader, latencyMillis, transportError = utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEvent)
-		if transportError != nil {
-			if errors.Is(transportError, context.Canceled) || errors.Is(transportError, context.DeadlineExceeded) || errors.Is(transportError, errQueueFull) {
-				return backoff.Permanent(transportError)
+		responseError := providerResponseError(statusCode, responseHeader, transportError)
+		if _, _, _, hasHTTPMetadata := providerHTTPMetadata(responseError); !hasHTTPMetadata {
+			if responseError == nil {
+				return nil
 			}
-			return transportError
+			if errors.Is(transportError, context.Canceled) || errors.Is(transportError, context.DeadlineExceeded) || errors.Is(transportError, errQueueFull) {
+				return backoff.Permanent(responseError)
+			}
+			return responseError
 		}
-		if statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices {
-			return nil
-		}
-		providerError := newProviderHTTPError(statusCode, responseHeader)
 		if statusCode >= http.StatusInternalServerError || statusCode == http.StatusTooManyRequests {
-			return providerError
+			return responseError
 		}
-		return backoff.Permanent(providerError)
+		return backoff.Permanent(responseError)
 	}
 	retryStrategy := utils.AcquireExponentialBackoff()
 	defer utils.ReleaseExponentialBackoff(retryStrategy)

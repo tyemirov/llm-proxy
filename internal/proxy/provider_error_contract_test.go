@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -51,15 +52,17 @@ func TestProviderErrorContractSanitizesEveryTextTransport(t *testing.T) {
 		wantCode           string
 		wantRetryable      bool
 		wantRetryAfter     *string
+		truncateBody       bool
 		configure          func(*proxy.Configuration, string)
 	}{
 		{
-			name:               "OpenAI Responses",
+			name:               "OpenAI Responses truncated error body",
 			provider:           proxy.ProviderNameOpenAI,
 			upstreamStatus:     http.StatusBadRequest,
 			upstreamRetryAfter: "provider-controlled",
 			wantStatus:         http.StatusBadGateway,
 			wantCode:           llmproxycontract.ErrorCodeProviderError,
+			truncateBody:       true,
 			configure: func(configuration *proxy.Configuration, baseURL string) {
 				configuration.OpenAIBaseURL = baseURL
 			},
@@ -93,13 +96,15 @@ func TestProviderErrorContractSanitizesEveryTextTransport(t *testing.T) {
 			},
 		},
 		{
-			name:               "Meta chat completions",
+			name:               "Meta chat completions truncated error body",
 			provider:           proxy.ProviderNameMeta,
 			upstreamStatus:     http.StatusInternalServerError,
-			upstreamRetryAfter: "invalid retry data",
+			upstreamRetryAfter: "11",
 			wantStatus:         http.StatusBadGateway,
 			wantCode:           llmproxycontract.ErrorCodeProviderError,
 			wantRetryable:      true,
+			wantRetryAfter:     stringPointer("11"),
+			truncateBody:       true,
 			configure: func(configuration *proxy.Configuration, baseURL string) {
 				configuration.MetaKey = testMetaKey
 				configuration.MetaBaseURL = baseURL
@@ -126,6 +131,9 @@ func TestProviderErrorContractSanitizesEveryTextTransport(t *testing.T) {
 			upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, _ *http.Request) {
 				responseWriter.Header().Set("Content-Type", "application/json")
 				responseWriter.Header().Set("Retry-After", testCase.upstreamRetryAfter)
+				if testCase.truncateBody {
+					responseWriter.Header().Set("Content-Length", strconv.Itoa(len(rawProviderBody)+1))
+				}
 				responseWriter.WriteHeader(testCase.upstreamStatus)
 				_, _ = responseWriter.Write([]byte(rawProviderBody))
 			}))
