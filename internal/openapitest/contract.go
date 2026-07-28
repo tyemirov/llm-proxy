@@ -637,6 +637,11 @@ func (contract *Contract) validateValue(schema map[string]any, value any, contex
 			return fmt.Errorf("%w: %s must be a boolean", errInvalidContract, context)
 		}
 		return nil
+	case "null":
+		if value != nil {
+			return fmt.Errorf("%w: %s must be null", errInvalidContract, context)
+		}
+		return nil
 	default:
 		return fmt.Errorf("%w: %s has unsupported schema type %q", errInvalidContract, context, schemaType)
 	}

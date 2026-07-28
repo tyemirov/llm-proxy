@@ -229,7 +229,10 @@ func (database *fakeManagedTenantDatabase) providerKeys() ([]managedProviderAPIK
 	return records, nil
 }
 
-func (database *fakeManagedTenantDatabase) saveProviderKey(ownerUserID string, record managedProviderAPIKeyRecord, defaults managedRoutingDefaults, updatedAt time.Time) error {
+func (database *fakeManagedTenantDatabase) saveProviderKey(requestContext context.Context, ownerUserID string, record managedProviderAPIKeyRecord, defaults managedRoutingDefaults, updatedAt time.Time) error {
+	if contextError := requestContext.Err(); contextError != nil {
+		return contextError
+	}
 	if saveError, configured := popFakeError(&database.saveProviderKeyErrors); configured && saveError != nil {
 		return saveError
 	}

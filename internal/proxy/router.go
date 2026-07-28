@@ -97,6 +97,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}
 
 	router := gin.New()
+	router.Use(requestIdentifierHandler())
 	if normalizedLogLevel := strings.ToLower(configuration.LogLevel); normalizedLogLevel == LogLevelInfo || normalizedLogLevel == LogLevelDebug {
 		router.Use(requestResponseLogger(structuredLogger))
 	}
@@ -506,7 +507,7 @@ func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRoute
 		}
 		markRequestOutcome(ginContext, requestFailureOutcome(requestError), managedRequestFailureOutcome(requestError))
 		statusCode := statusCodeForError(requestError)
-		ginContext.String(statusCode, responseMessageForError(requestError))
+		writeProviderRequestErrorResponse(ginContext, chatRequest.provider.identifier.string(), requestError, structuredLogger)
 		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), statusCode, generation.usage, requestStart)
 		return
 	}
@@ -609,7 +610,7 @@ func dictateHandler(upstreamProviders *providerRouter, providers *providerRegist
 			}
 			markRequestOutcome(ginContext, requestFailureOutcome(requestError), managedRequestFailureOutcome(requestError))
 			statusCode := statusCodeForError(requestError)
-			ginContext.String(statusCode, responseMessageForError(requestError))
+			writeProviderRequestErrorResponse(ginContext, providerDefinition.identifier.string(), requestError, structuredLogger)
 			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, providerDefinition.identifier.string(), modelIdentifier.string(), statusCode, nil, requestStart)
 			return
 		}
@@ -764,8 +765,5 @@ func statusCodeForError(requestError error) int {
 }
 
 func responseMessageForError(requestError error) string {
-	if errors.Is(requestError, context.DeadlineExceeded) || errors.Is(requestError, context.Canceled) {
-		return errorRequestTimedOut
-	}
 	return requestError.Error()
 }

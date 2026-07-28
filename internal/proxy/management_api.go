@@ -624,7 +624,7 @@ func (service *managementService) saveProviderKeyHandler() gin.HandlerFunc {
 				return
 			}
 		}
-		snapshot, storeError := service.store.saveProviderKey(principal, tenantIdentifier, providerIdentifier, request.APIKey, request.TextModel, request.SystemPrompt)
+		snapshot, storeError := service.store.saveProviderKey(ginContext.Request.Context(), principal, tenantIdentifier, providerIdentifier, request.APIKey, request.TextModel, request.SystemPrompt)
 		if storeError != nil {
 			writeManagementStoreError(ginContext, storeError)
 			return

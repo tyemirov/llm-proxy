@@ -42,9 +42,9 @@ func BuildHTTPRequestWithHeaders(method string, requestURL string, body io.Reade
 	return httpRequest, nil
 }
 
-// PerformHTTPRequest issues the HTTP request using executeRequest and returns the status code, body, and latency.
+// PerformHTTPRequest issues the HTTP request using executeRequest and returns the status code, body, response headers, and latency.
 // It automatically retries transport failures using exponential backoff.
-func PerformHTTPRequest(executeRequest func(*http.Request) (*http.Response, error), httpRequest *http.Request, structuredLogger *zap.SugaredLogger, logEventOnTransportError string) (int, []byte, int64, error) {
+func PerformHTTPRequest(executeRequest func(*http.Request) (*http.Response, error), httpRequest *http.Request, structuredLogger *zap.SugaredLogger, logEventOnTransportError string) (int, []byte, http.Header, int64, error) {
 	startTime := time.Now()
 	var httpResponse *http.Response
 	operation := func() error {
@@ -83,7 +83,7 @@ func PerformHTTPRequest(executeRequest func(*http.Request) (*http.Response, erro
 				latencyMillis,
 			)
 		}
-		return 0, nil, latencyMillis, retryError
+		return 0, nil, nil, latencyMillis, retryError
 	}
 	defer httpResponse.Body.Close()
 
@@ -92,7 +92,7 @@ func PerformHTTPRequest(executeRequest func(*http.Request) (*http.Response, erro
 		if structuredLogger != nil {
 			structuredLogger.Errorw(constants.LogEventReadResponseBodyFailed, constants.LogFieldError, readError)
 		}
-		return httpResponse.StatusCode, nil, latencyMillis, readError
+		return httpResponse.StatusCode, nil, httpResponse.Header, latencyMillis, readError
 	}
-	return httpResponse.StatusCode, responseBytes, latencyMillis, nil
+	return httpResponse.StatusCode, responseBytes, httpResponse.Header, latencyMillis, nil
 }

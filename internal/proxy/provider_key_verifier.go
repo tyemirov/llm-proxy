@@ -103,12 +103,12 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 	}
 	defer httpResponse.Body.Close()
 
+	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
+		return providerKeyVerificationStatusError(httpResponse.StatusCode)
+	}
 	responseBytes, readError := io.ReadAll(io.LimitReader(httpResponse.Body, providerKeyVerificationResponseLimit+1))
 	if readError != nil || int64(len(responseBytes)) > providerKeyVerificationResponseLimit {
 		return errProviderKeyVerificationUnavailable
-	}
-	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
-		return providerKeyVerificationStatusError(httpResponse.StatusCode)
 	}
 	responseValidator := providerKeyVerificationResponseValidators[provider.textTransport]
 	if !responseValidator(responseBytes) {

@@ -1400,16 +1400,22 @@
         }
       },
       "ProxyRateLimited": {
-        "description": "The selected upstream provider is rate limited.",
+        "description": "The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.",
         "headers": {
           "X-LLM-Proxy-Request-Timeout-Seconds": {
             "$ref": "#/components/headers/ResolvedRequestTimeout"
+          },
+          "X-LLM-Proxy-Request-ID": {
+            "$ref": "#/components/headers/ProxyRequestID"
+          },
+          "Retry-After": {
+            "$ref": "#/components/headers/SafeRetryAfter"
           }
         },
         "content": {
-          "text/plain": {
+          "application/json": {
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/ProviderErrorEnvelope"
             }
           }
         }
@@ -1418,16 +1424,22 @@
         "description": "The caller canceled or closed the request."
       },
       "ProxyBadGateway": {
-        "description": "The selected upstream provider failed or returned a nonrecoverable completion signal. Output-budget stops are continued internally and do not create this response. The response never exposes partial generated text, token-count headers, or the raw provider body; provider-reported usage can still be retained in managed failure accounting.",
+        "description": "The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The response contains only sanitized provider metadata and never exposes partial generated text, token-count headers, a raw provider body, or a provider error message; provider-reported usage can still be retained in managed failure accounting.",
         "headers": {
           "X-LLM-Proxy-Request-Timeout-Seconds": {
             "$ref": "#/components/headers/ResolvedRequestTimeout"
+          },
+          "X-LLM-Proxy-Request-ID": {
+            "$ref": "#/components/headers/ProxyRequestID"
+          },
+          "Retry-After": {
+            "$ref": "#/components/headers/SafeRetryAfter"
           }
         },
         "content": {
-          "text/plain": {
+          "application/json": {
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/ProviderErrorEnvelope"
             }
           }
         }
@@ -1698,6 +1710,21 @@
         "schema": {
           "type": "integer",
           "minimum": 1
+        }
+      },
+      "ProxyRequestID": {
+        "description": "Proxy-owned identifier matching error.request_id and the request_id field in structured proxy logs.",
+        "schema": {
+          "type": "string",
+          "minLength": 1
+        },
+        "x-required": true
+      },
+      "SafeRetryAfter": {
+        "description": "Present only when the provider supplied a syntactically valid Retry-After value. Delta seconds are normalized to unsigned decimal form and HTTP dates are normalized to IMF-fixdate.",
+        "schema": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "OptionalTokenCount": {
@@ -1982,6 +2009,75 @@
               "request_timeout_seconds": {
                 "type": "integer",
                 "minimum": 1
+              }
+            }
+          }
+        }
+      },
+      "ProviderErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "provider",
+              "upstream_status",
+              "retryable",
+              "request_id",
+              "retry_after"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "provider_error",
+                  "provider_rate_limited"
+                ]
+              },
+              "provider": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Canonical provider selector resolved for the request."
+              },
+              "upstream_status": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 100,
+                    "maximum": 599
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Exact provider HTTP status when an upstream response was received; null for transport, request-construction, and response-protocol failures without a usable unsuccessful HTTP response."
+              },
+              "retryable": {
+                "type": "boolean",
+                "description": "True only for upstream HTTP 408, 425, 429, 500, 502, 503, or 504. This classifies the provider condition; clients remain responsible for duplicate-work and billing consequences before retrying."
+              },
+              "request_id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Proxy-owned correlation identifier also returned in X-LLM-Proxy-Request-ID and recorded in structured proxy logs."
+              },
+              "retry_after": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Validated and normalized provider Retry-After value, or null when the provider omitted it or supplied an invalid value. A non-null value is also returned in the Retry-After response header."
               }
             }
           }

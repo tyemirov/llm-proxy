@@ -1,17 +1,30 @@
 package integration_test
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
+
+	"github.com/tyemirov/llm-proxy/internal/proxy"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 )
 
-const (
-	malformedJSONPayload = "invalid"
-	expectedErrorMessage = "OpenAI API error"
-)
+const malformedJSONPayload = "invalid"
+
+type integrationProviderErrorEnvelope struct {
+	Error struct {
+		Code           string  `json:"code"`
+		Provider       string  `json:"provider"`
+		UpstreamStatus *int    `json:"upstream_status"`
+		Retryable      bool    `json:"retryable"`
+		RequestID      string  `json:"request_id"`
+		RetryAfter     *string `json:"retry_after"`
+	} `json:"error"`
+}
 
 // newMalformedOpenAIServer returns a stub OpenAI server emitting invalid JSON for the responses endpoint.
 func newMalformedOpenAIServer(testingInstance *testing.T) *httptest.Server {
@@ -51,7 +64,21 @@ func TestOpenAIMalformedJSON(testingInstance *testing.T) {
 		testingInstance.Fatalf(unexpectedStatusFormat, httpResponse.StatusCode, string(responseBody))
 	}
 	responseBytes, _ := io.ReadAll(httpResponse.Body)
-	if string(responseBytes) != expectedErrorMessage {
-		testingInstance.Fatalf(bodyMismatchFormat, string(responseBytes), expectedErrorMessage)
+	var errorEnvelope integrationProviderErrorEnvelope
+	if decodeError := json.Unmarshal(responseBytes, &errorEnvelope); decodeError != nil {
+		testingInstance.Fatalf("decode provider error: %v body=%s", decodeError, responseBytes)
+	}
+	requestID := httpResponse.Header.Get(llmproxycontract.HeaderRequestID)
+	if errorEnvelope.Error.Code != llmproxycontract.ErrorCodeProviderError ||
+		errorEnvelope.Error.Provider != proxy.ProviderNameOpenAI ||
+		errorEnvelope.Error.UpstreamStatus != nil ||
+		errorEnvelope.Error.Retryable ||
+		errorEnvelope.Error.RequestID == "" ||
+		errorEnvelope.Error.RequestID != requestID ||
+		errorEnvelope.Error.RetryAfter != nil {
+		testingInstance.Fatalf("provider error=%+v request_id_header=%q", errorEnvelope.Error, requestID)
+	}
+	if strings.Contains(string(responseBytes), malformedJSONPayload) {
+		testingInstance.Fatalf("provider error exposed upstream body: %s", responseBytes)
 	}
 }

@@ -286,7 +286,7 @@ func TestManagedTenantGORMLowLevelMutationEdges(t *testing.T) {
 
 	t.Run("save provider ownership query", func(subTest *testing.T) {
 		database := newCanonicalGORMFixture(subTest, now)
-		if saveError := database.saveProviderKey("other", managedProviderAPIKeyRecord{
+		if saveError := database.saveProviderKey(context.Background(), "other", managedProviderAPIKeyRecord{
 			TenantID: "managed-first", ProviderID: ProviderNameOpenAI, EncryptedAPIKey: "cipher",
 		}, defaultManagedRoutingDefaults(), now); !errors.Is(saveError, gorm.ErrRecordNotFound) {
 			subTest.Fatalf("provider ownership error=%v", saveError)
@@ -295,7 +295,7 @@ func TestManagedTenantGORMLowLevelMutationEdges(t *testing.T) {
 	t.Run("save provider record", func(subTest *testing.T) {
 		database := newCanonicalGORMFixture(subTest, now)
 		registerManagedGORMError(subTest, database.database, "create_provider", "create", managedProviderKeyTable, errInternalTestDatabase)
-		if saveError := database.saveProviderKey("owner", managedProviderAPIKeyRecord{
+		if saveError := database.saveProviderKey(context.Background(), "owner", managedProviderAPIKeyRecord{
 			TenantID: "managed-first", ProviderID: ProviderNameOpenAI, EncryptedAPIKey: "cipher",
 		}, defaultManagedRoutingDefaults(), now); !errors.Is(saveError, errInternalTestDatabase) {
 			subTest.Fatalf("provider record error=%v", saveError)
