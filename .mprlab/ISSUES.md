@@ -147,6 +147,17 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     OpenAI, Anthropic, and Meta echo cases using the same Default-tenant client
     secret. Gemini echo returned safe HTTP `502`; Moonshot echo returned safe
     HTTP `429`. The independent long-completion failures are tracked in B088.
+  - The I036 disposable managed-key run authenticated the supplied Kimi
+    credential against Moonshot's model catalog (`200`), where the configured
+    former default was absent. The same credential verified and completed its
+    smoke request with cataloged `kimi-k2.6` (`200`/`200`), isolating the
+    credential from the existing default-route repair.
+  - An authenticated catalog recheck on 2026-07-28 again returned `200`,
+    confirmed the former default remains absent, and confirmed `kimi-k2.6` is
+    present. The checked-in catalog now removes the obsolete model and promotes
+    `kimi-k2.6`. The disposable managed-key harness then verified that new
+    default and completed its smoke request (`200`/`200`); the production
+    Default-tenant saved route remains unverified.
 
   Requirements:
   - Diagnose the exact Default-tenant Gemini `502` and Moonshot `429` at the
@@ -1411,7 +1422,48 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Improvements
 
-- [ ] [I036] (P1) {F014,B081} Verify pasted provider API keys before persisting them.
+- [x] [I042] (P1) Remove managed-request serialization from SQLite authentication.
+  Goal:
+  Keep SQLite as the sole managed-tenant source of truth while allowing each
+  proxy request to wait only for its own database read and selected provider,
+  rather than another request's usage write or management mutation.
+
+  Requirements:
+  - Open the canonical runtime GORM SQLite database in WAL mode with a bounded
+    busy timeout. Keep injected dialectors test-only and add no application
+    cache, replica, dual read, or invalidation path.
+  - Propagate the caller context into managed authentication and load each
+    tenant plus its provider settings through one consistent GORM read
+    transaction.
+  - Remove authentication and single-event usage persistence from the
+    process-wide management mutation lock. Keep multi-statement management
+    changes atomic through their existing GORM transactions.
+  - Preserve the blocking public response, secret-digest comparison,
+    provider-key decryption, routing-default, usage, and migration contracts.
+  - Document SQLite/GORM concurrency ownership in the canonical management
+    persistence guidance.
+
+  Validation:
+  - Public HTTP coverage using a disposable runtime SQLite database proves WAL
+    mode permits managed authentication and upstream routing while another
+    connection holds an exclusive write transaction.
+  - Concurrency coverage proves an in-flight managed usage write cannot block
+    authentication for an independent request.
+  - The required post-change `make ci` passes after the final code edit.
+
+  Resolved 2026-07-27:
+  - Runtime managed SQLite connections now use WAL journaling and a five-second
+    busy timeout. Authentication uses the caller context and one read-only GORM
+    transaction, while authentication and single usage inserts bypass the
+    management mutation mutex without adding an application cache.
+  - Public HTTP coverage reaches the selected provider while another connection
+    holds an exclusive SQLite writer, and deterministic store coverage proves a
+    blocked usage insert cannot delay independent authentication.
+  - The final `make ci` passed with exact 100% Go statement coverage, all Python
+    and frontend tests, the TAuth black-box test, release tests, and the live
+    provider harness preflight.
+
+- [x] [I036] (P1) {F014,B081} Verify pasted provider API keys before persisting them.
   Goal:
   Make a provider connected and routing-eligible only after LLM Proxy
   automatically proves that a newly supplied credential is operational for
@@ -1514,6 +1566,94 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
+
+  Resolved 2026-07-27:
+  - Added one provider-neutral, single-operation verifier for every canonical
+    transport and made the authenticated provider-settings mutation verify
+    before atomically persisting keys, settings, or routing defaults.
+  - Added automatic paste verification with accessible pending and safe-failure
+    states, locked conflicting actions, retry, raw-draft cleanup on success, and
+    stale-attempt rejection across every editor context boundary.
+  - Controlled real-router coverage proves all 12 providers, transport-family
+    failures, exact one-operation admission, unchanged state on failure, safe
+    responses and logs, and no managed usage. The rendered suite passes all 75
+    scenarios; OpenAPI, generated docs, the real auth black-box, and the
+    live-provider harness were updated.
+  - The required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` runs passed with the Go coverage
+    gate at 100%.
+  - Disposable paid runs verified the supplied OpenAI, Gemini, Anthropic, and
+    Muse11 credentials and their smoke requests (`200`/`200`). The supplied
+    Kimi credential authenticated successfully, the former configured model
+    was absent and rejected, and cataloged `kimi-k2.6` verified and completed
+    (`200`/`200`); the production default-route repair remains tracked by B087.
+  - Follow-up 2026-07-28: removed the unavailable former Moonshot model from the
+    current catalog and promoted verified `kimi-k2.6` to the canonical default
+    without an alias or fallback. The disposable managed-key verification and
+    default-model smoke request both returned `200`.
+
+- [x] [I043] (P1) Persist managed usage through one bounded asynchronous writer.
+  Goal:
+  Keep selected proxy responses independent from managed usage database
+  latency without creating one goroutine per response or an unbounded
+  telemetry backlog.
+
+  Evidence:
+  - Every managed proxy request currently flushes its selected response and
+    then performs `recordUsage` synchronously on the request goroutine under a
+    detached five-second persistence budget.
+  - `recordUsage` takes the process-wide managed-store write lock before its
+    database insert, so persistence work retains the handler and can contend
+    with unrelated managed authentication and mutation traffic.
+  - Managed usage powers operational dashboards and failure inspection; it is
+    not a billing, accounting, or provider-job ledger.
+
+  Requirements:
+  - Give each management runtime exactly one bounded FIFO usage channel and one
+    writer goroutine. Add a positive `management.usage_queue_size` setting with
+    a documented default; do not reuse the upstream provider queue.
+  - After selecting and flushing a managed response, construct one immutable
+    usage event and attempt a non-blocking enqueue. A successful enqueue
+    returns immediately and never waits for the database operation.
+  - Drain accepted events in FIFO order and attempt each database insert once
+    under the existing detached five-second persistence budget. Log database
+    failures with safe request metadata; do not retry or start per-event
+    goroutines.
+  - When the channel is full, drop the newest event, retain every previously
+    accepted event, emit one stable `managed_usage_queue_full` warning, and
+    leave the selected proxy response unchanged.
+  - Document the exact durability contract: accepted events are process-local,
+    at-most-once work until their database insert commits. Queue contents are
+    not crash-durable, and database failures or process termination can lose
+    uncommitted events.
+  - Keep prompts, responses, audio, transcripts, secrets, raw provider bodies,
+    and free-form upstream errors out of both queued events and logs.
+
+  Validation:
+  - Public HTTP coverage blocks the first usage insert, proves later managed
+    responses still complete, fills the one-slot test queue, and proves the
+    newest event is dropped without changing its response.
+  - The same coverage releases persistence and proves the accepted events are
+    stored once in FIFO order while the overflow emits exactly one safe stable
+    warning.
+  - Configuration coverage proves omitted queue size receives the default and
+    non-positive explicit values are rejected at the configuration edge.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
+    the final run after the last code edit.
+
+  Resolution:
+  - Managed responses now flush before a non-blocking send to one bounded,
+    runtime-owned FIFO writer. Accepted records receive one detached insert
+    attempt; saturation drops only the newest record with the stable safe
+    `managed_usage_queue_full` warning.
+  - A context-aware database-write gate sequences the writer with management
+    mutations without taking the management mutation mutex; authentication
+    bypasses both and retains the I042 caller-scoped read path.
+  - Added the positive `management.usage_queue_size` contract, explicit
+    process-local at-most-once durability documentation, and public HTTP
+    coverage for response independence, FIFO persistence, overflow, and safe
+    logging.
 
 - [ ] [I035] (P2) {B076} Persist each user's selected Usage interval across sessions.
   Goal:

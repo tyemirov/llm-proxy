@@ -171,6 +171,7 @@ const (
 	logEventResponseSent                  = "response sent"
 	logEventBuildHTTPRequest              = "build HTTP request failed"
 	logEventParseWebSearchParameterFailed = "parse web_search parameter failed"
+	logEventUsageRecordDropped            = "management usage record dropped"
 	logEventUsageRecordFailed             = "management usage record failed"
 
 	responseRequestAttribute = "request"

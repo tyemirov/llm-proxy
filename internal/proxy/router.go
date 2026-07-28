@@ -108,6 +108,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	geminiClient := newGeminiGenerateContentClient(upstreamHTTPClient)
 	anthropicClient := newAnthropicMessagesClient(upstreamHTTPClient)
 	upstreamProviders := newProviderRouter(openAIClient, chatClient, geminiClient, anthropicClient)
+	keyVerifier := newOperationalProviderKeyVerifier(upstreamHTTPClient, configuration.Endpoints, time.Duration(configuration.RequestTimeoutSeconds)*time.Second)
 	var managedTenants *managedTenantStore
 	runtimeStaticTenants := configuration.tenants
 	if configuration.Management.Enabled {
@@ -127,7 +128,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatHandler(upstreamProviders, providers, managedTenants, structuredLogger)),
 	)
 	if configuration.Management.Enabled {
-		managementService := newManagementService(configuration.Management, configuration.managementSessionValidator, managedTenants, providers, tenantAuthenticator, structuredLogger)
+		managementService := newManagementService(configuration.Management, configuration.managementSessionValidator, managedTenants, providers, keyVerifier, tenantAuthenticator, structuredLogger)
 		managementService.registerRoutes(router)
 	}
 	router.GET(rootPath, rootProxyHandler)
@@ -638,10 +639,7 @@ func recordManagedUsage(managedTenants *managedTenantStore, structuredLogger *za
 		return
 	}
 	ginContext.Writer.Flush()
-	requestContext := ginContext.Request.Context()
-	persistenceContext, cancelPersistence := context.WithTimeout(context.WithoutCancel(requestContext), managedUsagePersistenceTimeout)
-	defer cancelPersistence()
-	recordError := managedTenants.recordUsage(persistenceContext, requestTenant, managedUsageEvent{
+	managedTenants.usageWriter.submit(requestTenant, managedUsageEvent{
 		endpoint:            endpoint,
 		providerIdentifier:  providerIdentifier,
 		modelIdentifier:     modelIdentifier,
@@ -649,21 +647,7 @@ func recordManagedUsage(managedTenants *managedTenantStore, structuredLogger *za
 		outcomeCode:         requestTimeoutStateFromContext(ginContext).managedUsageOutcome,
 		latencyMilliseconds: time.Since(requestStart).Milliseconds(),
 		usage:               usage,
-	})
-	if recordError != nil {
-		if context.Cause(requestContext) != nil {
-			return
-		}
-		structuredLogger.Warnw(
-			logEventUsageRecordFailed,
-			logFieldTenantID, requestTenant.identifier.string(),
-			logFieldEndpoint, endpoint,
-			logFieldProvider, providerIdentifier,
-			logFieldModel, modelIdentifier,
-			logFieldStatus, statusCode,
-			constants.LogFieldError, recordError,
-		)
-	}
+	}, structuredLogger)
 }
 
 func recordManagedUsageValidationFailure(managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, ginContext *gin.Context, requestTenant tenant, endpoint string, providerIdentifier string, modelIdentifier string, requestStart time.Time) {

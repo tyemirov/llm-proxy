@@ -214,7 +214,11 @@ func TestManagementTenantConfigurationSecretAndUsageIsolation(t *testing.T) {
 	}
 
 	for _, tenantID := range []string{firstTenantID, secondTenantID} {
-		usage := requestManagementTenantUsage(t, router, ownerCookie, tenantID)
+		usage := waitForManagementValue(t, func() managementTenantUsageTestResponse {
+			return requestManagementTenantUsage(t, router, ownerCookie, tenantID)
+		}, func(payload managementTenantUsageTestResponse) bool {
+			return payload.Totals.Requests == 1
+		})
 		if usage.Totals.Requests != 1 {
 			t.Fatalf("tenant=%s requests=%d want=1", tenantID, usage.Totals.Requests)
 		}
@@ -281,6 +285,11 @@ func TestManagementTenantConfigurationSecretAndUsageIsolation(t *testing.T) {
 	if secondAfterDeleteResponse.Code != http.StatusOK {
 		t.Fatalf("second secret after first delete status=%d body=%q", secondAfterDeleteResponse.Code, secondAfterDeleteResponse.Body.String())
 	}
+	waitForManagementValue(t, func() managementTenantUsageTestResponse {
+		return requestManagementTenantUsage(t, router, ownerCookie, secondTenantID)
+	}, func(payload managementTenantUsageTestResponse) bool {
+		return payload.Totals.Requests == 3
+	})
 }
 
 func requestManagementAccount(t *testing.T, router http.Handler, sessionCookie *http.Cookie) managementAccountTestResponse {

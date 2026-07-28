@@ -745,7 +745,8 @@
     "/api/management/tenants/{tenant_id}/provider-keys/{provider}": {
       "put": {
         "operationId": "putManagementProviderKey",
-        "summary": "Save provider settings and a provider credential",
+        "summary": "Verify and save provider settings and a provider credential",
+        "description": "A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider and text model under the management request context and shared upstream admission/rate-limit boundary. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential while updating settings without reverification.",
         "tags": [
           "Management"
         ],
@@ -788,8 +789,20 @@
           "415": {
             "$ref": "#/components/responses/ManagementUnsupportedMediaType"
           },
+          "422": {
+            "$ref": "#/components/responses/ProviderKeyRejected"
+          },
+          "429": {
+            "$ref": "#/components/responses/ProviderKeyVerificationRateLimited"
+          },
           "500": {
             "$ref": "#/components/responses/ManagementInternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ProviderKeyVerificationUnavailable"
+          },
+          "504": {
+            "$ref": "#/components/responses/ProviderKeyVerificationTimedOut"
           }
         }
       },
@@ -1628,6 +1641,50 @@
       "ManagementUnsupportedMediaType": {
         "description": "A management mutation did not supply application/json."
       },
+      "ProviderKeyRejected": {
+        "description": "The candidate credential was rejected or cannot access the selected text model. Nothing was saved.",
+        "content": {
+          "text/plain": {
+            "schema": {
+              "type": "string",
+              "const": "provider_key_rejected"
+            }
+          }
+        }
+      },
+      "ProviderKeyVerificationRateLimited": {
+        "description": "The provider rate-limited the single verification operation. The credential remains unconfirmed and nothing was saved.",
+        "content": {
+          "text/plain": {
+            "schema": {
+              "type": "string",
+              "const": "provider_key_verification_rate_limited"
+            }
+          }
+        }
+      },
+      "ProviderKeyVerificationUnavailable": {
+        "description": "The provider was unavailable or returned a malformed success envelope. The credential remains unconfirmed and nothing was saved.",
+        "content": {
+          "text/plain": {
+            "schema": {
+              "type": "string",
+              "const": "provider_key_verification_unavailable"
+            }
+          }
+        }
+      },
+      "ProviderKeyVerificationTimedOut": {
+        "description": "The single verification operation timed out or was canceled. The credential remains unconfirmed and nothing was saved.",
+        "content": {
+          "text/plain": {
+            "schema": {
+              "type": "string",
+              "const": "provider_key_verification_timed_out"
+            }
+          }
+        }
+      },
       "ManagementInternalError": {
         "description": "The management operation failed internally.",
         "content": {
@@ -2050,7 +2107,7 @@
         "properties": {
           "api_key": {
             "type": "string",
-            "description": "A replacement provider key. Send an empty string to retain the tenant's existing credential while updating its provider model or system prompt; an empty value is rejected when no credential exists."
+            "description": "An unverified new or replacement provider key. A nonempty value is verified against the exact path provider and selected text_model before any persistence. Send an empty string to retain the tenant's existing verified credential while updating its provider model or system prompt; an empty value is rejected when no credential exists."
           },
           "text_model": {
             "type": "string",

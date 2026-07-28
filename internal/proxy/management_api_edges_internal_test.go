@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,14 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
+
+type internalProviderKeyVerifier struct {
+	verificationError error
+}
+
+func (verifier internalProviderKeyVerifier) verify(context.Context, providerDefinition, textModelDefinition, string) error {
+	return verifier.verificationError
+}
 
 func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -360,6 +369,7 @@ func newInternalManagementService(t *testing.T, database *fakeManagedTenantDatab
 		sessionValidator,
 		store,
 		providers,
+		internalProviderKeyVerifier{},
 		newTenantAuthenticator(tenantRegistry{}, store),
 		zap.NewNop().Sugar(),
 	)

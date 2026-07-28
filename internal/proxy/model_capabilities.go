@@ -57,12 +57,16 @@ type Tool struct {
 
 // BuildRequestPayload selects the correct OpenAI Responses payload shape for the configured request profile.
 func BuildRequestPayload(modelIdentifier string, rawRequestProfile string, combinedPrompt string, webSearchEnabled bool, maxTokens *int, reasoningEffort string) any {
+	return buildRequestPayload(modelIdentifier, rawRequestProfile, combinedPrompt, webSearchEnabled, maxTokens, reasoningEffort, true, true)
+}
+
+func buildRequestPayload(modelIdentifier string, rawRequestProfile string, combinedPrompt string, webSearchEnabled bool, maxTokens *int, reasoningEffort string, background bool, store bool) any {
 	base := requestPayloadBase{
 		Model:           modelIdentifier,
 		Input:           combinedPrompt,
 		MaxOutputTokens: maxTokens,
-		Background:      true,
-		Store:           true,
+		Background:      background,
+		Store:           store,
 	}
 	requestProfile := modelRequestProfile(strings.ToLower(strings.TrimSpace(rawRequestProfile)))
 

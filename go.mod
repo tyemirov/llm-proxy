@@ -12,7 +12,6 @@ require (
 	github.com/subosito/gotenv v1.6.0
 	github.com/tyemirov/tauth v1.1.8
 	go.uber.org/zap v1.27.1
-	golang.org/x/sync v0.22.0
 	gorm.io/gorm v1.31.1
 )
 

@@ -355,18 +355,17 @@ func (interval usageInterval) finiteWindow() (time.Duration, int, usageBucketUni
 	}
 }
 
-func (store *managedTenantStore) recordUsage(requestContext context.Context, requestTenant tenant, event managedUsageEvent) error {
-	if !requestTenant.managed || requestTenant.userID == constants.EmptyString {
-		return nil
-	}
-	if lockError := store.mutex.LockContext(requestContext); lockError != nil {
-		return fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, requestTenant.identifier.string(), lockError)
-	}
-	defer store.mutex.Unlock()
+func (store *managedTenantStore) newManagedUsageRecord(requestTenant tenant, event managedUsageEvent) (managedUsageEventRecord, error) {
 	timestamp := store.now()
 	outcomeCode, outcomeError := newManagedUsageOutcomeCode(string(event.outcomeCode))
 	if outcomeError != nil {
-		return fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, requestTenant.identifier.string(), outcomeError)
+		return managedUsageEventRecord{
+			TenantID:   requestTenant.identifier.string(),
+			Endpoint:   event.endpoint,
+			ProviderID: event.providerIdentifier,
+			ModelID:    event.modelIdentifier,
+			StatusCode: event.statusCode,
+		}, fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, requestTenant.identifier.string(), outcomeError)
 	}
 	usageRecord := managedUsageEventRecord{
 		TenantID:            requestTenant.identifier.string(),
@@ -384,8 +383,16 @@ func (store *managedTenantStore) recordUsage(requestContext context.Context, req
 		usageRecord.ResponseTokens = event.usage.ResponseTokens
 		usageRecord.TotalTokens = event.usage.TotalTokens
 	}
+	return usageRecord, nil
+}
+
+func (store *managedTenantStore) persistManagedUsageRecord(requestContext context.Context, usageRecord managedUsageEventRecord) error {
+	if lockError := store.mutex.DatabaseWriteLockContext(requestContext); lockError != nil {
+		return fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, usageRecord.TenantID, lockError)
+	}
+	defer store.mutex.DatabaseWriteUnlock()
 	if persistError := store.database.createUsageEvent(requestContext, usageRecord); persistError != nil {
-		return fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, requestTenant.identifier.string(), persistError)
+		return fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, usageRecord.TenantID, persistError)
 	}
 	return nil
 }
