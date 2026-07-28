@@ -1,6 +1,11 @@
 package proxy
 
-import "errors"
+import (
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+)
 
 var (
 	// ErrUnknownProvider is returned when a request names a provider that is not registered.
@@ -22,3 +27,62 @@ var (
 	// ErrInvalidModelCatalog is returned when configured provider model catalogs are incomplete or inconsistent.
 	ErrInvalidModelCatalog = errors.New("invalid_model_catalog")
 )
+
+type providerHTTPError struct {
+	error
+	statusCode    int
+	retryAfter    string
+	retryableHint bool
+}
+
+func newProviderHTTPError(statusCode int, responseHeader http.Header) error {
+	cause := ErrProviderAPI
+	if statusCode == http.StatusTooManyRequests {
+		cause = ErrProviderRateLimited
+	}
+	return &providerHTTPError{
+		error:         cause,
+		statusCode:    statusCode,
+		retryAfter:    sanitizedRetryAfter(responseHeader.Get("Retry-After")),
+		retryableHint: retryableProviderStatus(statusCode),
+	}
+}
+
+func (providerError *providerHTTPError) Unwrap() error {
+	return providerError.error
+}
+
+func providerHTTPMetadata(requestError error) (int, string, bool, bool) {
+	var providerError *providerHTTPError
+	if !errors.As(requestError, &providerError) {
+		return 0, "", false, false
+	}
+	return providerError.statusCode, providerError.retryAfter, providerError.retryableHint, true
+}
+
+func sanitizedRetryAfter(rawValue string) string {
+	trimmedValue := strings.TrimSpace(rawValue)
+	if retryAfterSeconds, parseError := strconv.ParseUint(trimmedValue, 10, 63); parseError == nil {
+		return strconv.FormatUint(retryAfterSeconds, 10)
+	}
+	retryAfterTime, parseError := http.ParseTime(trimmedValue)
+	if parseError != nil {
+		return ""
+	}
+	return retryAfterTime.UTC().Format(http.TimeFormat)
+}
+
+func retryableProviderStatus(statusCode int) bool {
+	switch statusCode {
+	case http.StatusRequestTimeout,
+		http.StatusTooEarly,
+		http.StatusTooManyRequests,
+		http.StatusInternalServerError,
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
+}

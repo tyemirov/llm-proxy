@@ -96,15 +96,12 @@ func (client *geminiGenerateContentClient) generateText(parentContext context.Co
 	httpRequest.Header.Set(headerContentType, mimeApplicationJSON)
 	httpRequest.Header.Set(geminiAPIKeyHeader, strings.TrimSpace(apiKey))
 
-	statusCode, responseBytes, _, requestError := utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEventProviderRequestError)
+	statusCode, responseBytes, responseHeader, _, requestError := utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEventProviderRequestError)
 	if requestError != nil {
 		return textGenerationResult{}, requestError
 	}
-	if statusCode == http.StatusTooManyRequests {
-		return textGenerationResult{}, fmt.Errorf("%w: gemini generateContent", ErrProviderRateLimited)
-	}
 	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		return textGenerationResult{}, fmt.Errorf("%w: status=%d", ErrProviderAPI, statusCode)
+		return textGenerationResult{}, newProviderHTTPError(statusCode, responseHeader)
 	}
 	generation, parseError := parseGeminiGenerateContentResponse(responseBytes)
 	if parseError != nil {

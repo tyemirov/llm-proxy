@@ -37,6 +37,56 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B089] (P1) Return sanitized, correlated provider errors at the public proxy boundary.
+  Goal:
+  Let clients distinguish a proxy status from the exact upstream provider
+  condition without exposing provider-controlled error bodies or messages.
+
+  Requirements:
+  - Replace provider-originated plaintext `429` and `502` bodies with one
+    canonical JSON envelope containing `code`, canonical `provider`,
+    `upstream_status`, `retryable`, proxy-owned `request_id`, and
+    `retry_after`.
+  - Keep every field present. Use `null` for `upstream_status` when no usable
+    unsuccessful provider HTTP response exists and for `retry_after` when the
+    provider omitted it or supplied an invalid value.
+  - Preserve upstream `429` as public `429`; continue mapping every other
+    provider failure to public `502`, with the exact received status carried
+    separately in `upstream_status`.
+  - Set `retryable` only for upstream HTTP `408`, `425`, `429`, `500`, `502`,
+    `503`, and `504`. Document that this classification does not make LLM
+    requests idempotent or remove duplicate-work and billing risk.
+  - Accept only unsigned delta seconds or parseable HTTP dates from an
+    upstream `Retry-After`, normalize the value, and return it in both JSON and
+    the response header. Drop malformed values.
+  - Generate the request ID inside the proxy, return it in
+    `X-LLM-Proxy-Request-ID`, and record the same value with sanitized
+    provider metadata in structured logs.
+  - Apply the contract to OpenAI Responses and dictation,
+    OpenAI-compatible providers, Gemini, and Anthropic. Never retain a raw
+    provider error body in the public response or provider-failure log.
+
+  Validation:
+  - Exercise the public router against controlled OpenAI, Anthropic, Meta,
+    Gemini, Moonshot, and dictation failures. Assert exact proxy and upstream
+    statuses, retryability, normalized and rejected `Retry-After` values,
+    request-ID correlation, JSON schema, and raw-body non-disclosure.
+  - Validate the canonical OpenAPI document and generated reference against
+    the new `429` and `502` contract.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+  Resolution:
+  - Added typed provider HTTP metadata across every provider adapter and a
+    single public error writer that returns the six-field sanitized envelope.
+  - Added proxy-owned request IDs to response headers and structured request,
+    response, authentication-failure, and provider-failure logs.
+  - Removed OpenAI raw response-body and response-text logging and retained
+    only validated `Retry-After` data for provider failures.
+  - Added public-boundary coverage for all five live-test providers plus
+    dictation and response-protocol failures, and updated README/OpenAPI
+    documentation and generated API reference.
+
 - [x] [B086] (P1) Make Default-tenant production live tests repeatable.
   Goal:
   Provide one paid, production-boundary command that proves the Default tenant

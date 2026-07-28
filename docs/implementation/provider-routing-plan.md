@@ -436,6 +436,13 @@ When the selected Usage snapshot contains failures, the success-rate card expose
   `end_turn`, `stop_sequence`, or `max_tokens`; partial provider text is never
   returned.
 
+Provider-originated `429` and `502` responses use the canonical six-field JSON
+envelope documented in `docs/openapi.yaml`: error code, canonical provider,
+nullable exact upstream status, retryability, proxy-owned request id, and
+nullable validated `Retry-After`. The public proxy status and upstream status
+remain distinct. Raw provider bodies, messages, and partial output never enter
+that response or structured provider-failure logs.
+
 ## Implementation Notes
 
 - Provider/model validation happens at the HTTP edge through a provider registry built from the configured model catalogs.

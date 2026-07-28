@@ -85,12 +85,10 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 		return textGenerationResult{}, buildError
 	}
 
-	statusCode, responseBytes, latencyMillis, requestError := client.performResponsesRequest(httpRequest, structuredLogger, logEventOpenAIRequestError)
+	statusCode, responseBytes, _, latencyMillis, requestError := client.performResponsesRequest(httpRequest, structuredLogger, logEventOpenAIRequestError)
 	if requestError != nil {
 		return textGenerationResult{}, requestError
 	}
-
-	structuredLogger.Debugw(logEventOpenAIInitialResponseBody, logFieldResponseBody, string(responseBytes))
 
 	responseSnapshot, snapshotError := newOpenAIResponseSnapshot(responseBytes)
 
@@ -99,17 +97,8 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 		logFieldHTTPStatus, statusCode,
 		logFieldAPIStatus, responseSnapshot.status,
 		constants.LogFieldLatencyMilliseconds, latencyMillis,
-		logFieldResponseText, responseSnapshot.text,
 	)
 
-	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		structuredLogger.Desugar().Error(
-			errorOpenAIAPI,
-			zap.Int(logFieldStatus, statusCode),
-			zap.ByteString(logFieldResponseBody, responseBytes),
-		)
-		return textGenerationResult{}, errors.New(errorOpenAIAPI)
-	}
 	if snapshotError != nil {
 		return textGenerationResult{}, errors.New(errorOpenAIAPI)
 	}
@@ -254,6 +243,9 @@ func openAIStageError(stageError error) error {
 	if errors.Is(stageError, context.Canceled) || errors.Is(stageError, context.DeadlineExceeded) || errors.Is(stageError, errProviderOutputLimitReached) {
 		return stageError
 	}
+	if _, _, _, hasHTTPMetadata := providerHTTPMetadata(stageError); hasHTTPMetadata {
+		return stageError
+	}
 	return errors.New(errorOpenAIAPI)
 }
 
@@ -288,12 +280,9 @@ func (client *OpenAIClient) startContinuationResponse(parentContext context.Cont
 
 	request, _ := buildAuthorizedJSONRequest(parentContext, http.MethodPost, client.endpoints.GetResponsesURL(), openAIKey, bytes.NewReader(payloadBytes))
 
-	statusCode, responseBytes, _, requestError := client.performResponsesRequest(request, structuredLogger, logEventOpenAIRequestError)
+	_, responseBytes, _, _, requestError := client.performResponsesRequest(request, structuredLogger, logEventOpenAIRequestError)
 	if requestError != nil {
 		return constants.EmptyString, requestError
-	}
-	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		return constants.EmptyString, errors.New(errorOpenAIAPI)
 	}
 
 	var decodedResponse map[string]any
@@ -340,25 +329,10 @@ func (client *OpenAIClient) fetchResponseByID(parentContext context.Context, ope
 		return openAIResponseSnapshot{}, false, buildError
 	}
 
-	statusCode, responseBytes, _, requestError := client.performResponsesRequest(httpRequest, structuredLogger, logEventOpenAIPollError)
+	_, responseBytes, _, _, requestError := client.performResponsesRequest(httpRequest, structuredLogger, logEventOpenAIPollError)
 	if requestError != nil {
 		return openAIResponseSnapshot{}, false, requestError
 	}
-	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		structuredLogger.Desugar().Error(
-			errorOpenAIAPI,
-			zap.Int(logFieldStatus, statusCode),
-			zap.ByteString(logFieldResponseBody, responseBytes),
-			zap.String(logFieldID, responseIdentifier),
-		)
-		return openAIResponseSnapshot{}, false, errors.New(errorOpenAIAPI)
-	}
-
-	structuredLogger.Debugw(
-		logEventOpenAIPollResponseBody,
-		logFieldID, responseIdentifier,
-		logFieldResponseBody, string(responseBytes),
-	)
 
 	responseSnapshot, snapshotError := newOpenAIResponseSnapshot(responseBytes)
 	if snapshotError != nil {
@@ -464,29 +438,33 @@ func extractTextFromAny(rawPayload []byte) string {
 }
 
 // --- HTTP and Helper Functions ---
-func (client *OpenAIClient) performResponsesRequest(httpRequest *http.Request, structuredLogger *zap.SugaredLogger, logEvent string) (int, []byte, int64, error) {
+func (client *OpenAIClient) performResponsesRequest(httpRequest *http.Request, structuredLogger *zap.SugaredLogger, logEvent string) (int, []byte, http.Header, int64, error) {
 	var statusCode int
 	var responseBytes []byte
+	var responseHeader http.Header
 	var latencyMillis int64
 	operation := func() error {
 		var transportError error
-		statusCode, responseBytes, latencyMillis, transportError = utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEvent)
+		statusCode, responseBytes, responseHeader, latencyMillis, transportError = utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEvent)
 		if transportError != nil {
 			if errors.Is(transportError, context.Canceled) || errors.Is(transportError, context.DeadlineExceeded) || errors.Is(transportError, errQueueFull) {
 				return backoff.Permanent(transportError)
 			}
 			return transportError
 		}
-		// Retry on server errors (5xx) and rate limit errors (429).
-		if statusCode >= http.StatusInternalServerError || statusCode == http.StatusTooManyRequests {
-			return errors.New(errorOpenAIAPI)
+		if statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices {
+			return nil
 		}
-		return nil
+		providerError := newProviderHTTPError(statusCode, responseHeader)
+		if statusCode >= http.StatusInternalServerError || statusCode == http.StatusTooManyRequests {
+			return providerError
+		}
+		return backoff.Permanent(providerError)
 	}
 	retryStrategy := utils.AcquireExponentialBackoff()
 	defer utils.ReleaseExponentialBackoff(retryStrategy)
 	retryError := backoff.Retry(operation, backoff.WithContext(retryStrategy, httpRequest.Context()))
-	return statusCode, responseBytes, latencyMillis, retryError
+	return statusCode, responseBytes, responseHeader, latencyMillis, retryError
 }
 
 func buildAuthorizedJSONRequest(contextToUse context.Context, method string, resourceURL string, openAIKey string, body io.Reader) (*http.Request, error) {

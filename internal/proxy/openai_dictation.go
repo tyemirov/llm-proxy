@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -50,13 +49,13 @@ func (client *OpenAIClient) transcribeAudioWithURL(parentContext context.Context
 	httpRequest.Header.Set(headerContentType, multipartWriter.FormDataContentType())
 	httpRequest.Header.Set(headerAccept, mimeApplicationJSON)
 
-	statusCode, responseBytes, _, requestError := client.performTranscriptionsRequest(httpRequest, structuredLogger)
+	statusCode, responseBytes, responseHeader, _, requestError := client.performTranscriptionsRequest(httpRequest, structuredLogger)
 	if requestError != nil {
 		return constants.EmptyString, requestError
 	}
 
 	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		return constants.EmptyString, fmt.Errorf("%s: status=%d", errorOpenAIAPI, statusCode)
+		return constants.EmptyString, newProviderHTTPError(statusCode, responseHeader)
 	}
 
 	transcribedText, parseError := parseTranscriptionText(responseBytes)
@@ -90,6 +89,6 @@ func parseTranscriptionText(rawPayload []byte) (string, error) {
 	return trimmedPayload, nil
 }
 
-func (client *OpenAIClient) performTranscriptionsRequest(httpRequest *http.Request, structuredLogger *zap.SugaredLogger) (int, []byte, int64, error) {
+func (client *OpenAIClient) performTranscriptionsRequest(httpRequest *http.Request, structuredLogger *zap.SugaredLogger) (int, []byte, http.Header, int64, error) {
 	return utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEventOpenAIRequestError)
 }
