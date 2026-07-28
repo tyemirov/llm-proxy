@@ -359,10 +359,6 @@ func (store *managedTenantStore) recordUsage(requestContext context.Context, req
 	if !requestTenant.managed || requestTenant.userID == constants.EmptyString {
 		return nil
 	}
-	if lockError := store.mutex.LockContext(requestContext); lockError != nil {
-		return fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, requestTenant.identifier.string(), lockError)
-	}
-	defer store.mutex.Unlock()
 	timestamp := store.now()
 	outcomeCode, outcomeError := newManagedUsageOutcomeCode(string(event.outcomeCode))
 	if outcomeError != nil {

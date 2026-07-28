@@ -121,10 +121,11 @@ rejection is proxy overload, not a provider failure.
 
 For managed tenants, usage persistence begins only after the selected response
 status and body have been written and the response writer has been flushed.
-The store lock and database calls run in a detached, five-second persistence
-budget so a selected timeout or caller cancellation does not erase its terminal
-usage event. Persistence still happens after response selection and never
-changes an already selected response.
+The GORM insert runs in a detached, five-second persistence budget so a selected
+timeout or caller cancellation does not erase its terminal usage event. A usage
+insert does not acquire the process-wide management mutation lock and therefore
+cannot serialize authentication for another request. Persistence still happens
+after response selection and never changes an already selected response.
 
 Internally, `server.workers` limits concurrent upstream provider HTTP
 operations and `server.queue_size` limits upstream HTTP operations waiting for a
@@ -697,7 +698,7 @@ Required hosted values are profile-specific:
 | `management.jwt_signing_key` | Internal signing key used to validate the TAuth session cookie. |
 | `management.jwt_issuer` | JWT issuer, normally `tauth`. |
 | `management.session_cookie_name` | Exact app/environment TAuth session cookie name. |
-| `management.database_path` | Required SQLite database location for tenant-owned provider keys, defaults, generated-secret digests, and usage events. Persistence uses the pure-Go GORM SQLite driver so `CGO_ENABLED=0` builds remain valid. |
+| `management.database_path` | Required SQLite database location for tenant-owned provider keys, defaults, generated-secret digests, and usage events. The pure-Go GORM SQLite runtime enables WAL journaling and a five-second busy timeout so `CGO_ENABLED=0` builds remain valid and readers can proceed alongside a writer. |
 | `management.provider_key_encryption_key` | Required base64-encoded 32-byte key used for AES-GCM encryption of tenant-owned provider API keys at rest. Generate with `openssl rand -base64 32` and store it with backend deployment secrets. |
 | `management.management_api_origin` | Browser-facing management API origin served from `/config-ui.yaml` under `llmProxy.managementApiOrigin`. |
 | `management.proxy_origin` | Browser-facing public proxy origin served from `/config-ui.yaml` under `llmProxy.proxyOrigin` for generated examples. |
@@ -749,7 +750,16 @@ be deleted independently; access is rotated through replacement or removed
 with the owning non-final tenant. Management mode requires
 `management.database_path` so signups, enabled
 providers, defaults, generated secret digests, and usage events survive restarts
-in a GORM-managed SQLite database at the configured location. The packaged management config uses
+in a GORM-managed SQLite database at the configured location. SQLite is the
+sole runtime source of truth; there is no application authentication cache,
+replica, dual read, or invalidation path. Runtime connections use WAL journaling
+and a five-second busy timeout. Managed authentication uses the caller context
+and one read-only GORM transaction to load the tenant and provider-key records
+from a consistent SQLite snapshot. Authentication and single usage-event
+inserts do not acquire the process-wide management mutation lock; management
+flows retain that lock where they coordinate state transitions, while their
+existing GORM transactions own multi-statement database atomicity.
+The packaged management config uses
 strict expandable placeholders for the hosted profile values; define every
 `LLM_PROXY_MANAGEMENT_*` key in the API runtime environment. Local `make up`
 projects those values from `configs/.env.local` into the ignored, API-scoped

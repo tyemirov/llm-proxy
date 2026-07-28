@@ -1257,6 +1257,92 @@ func TestManagementOpensConfiguredDatabasePath(t *testing.T) {
 	}
 }
 
+func TestManagedAuthenticationReadsThroughConcurrentSQLiteWriter(t *testing.T) {
+	upstreamReached := make(chan struct{})
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, _ *http.Request) {
+		close(upstreamReached)
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{"id":"response-id","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"text","text":"wal reader ok"}]}]}`))
+	}))
+	defer upstreamServer.Close()
+
+	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
+	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{
+		OpenAIBaseURL: upstreamServer.URL,
+	}, databasePath)
+	configuration.Management.DatabaseDialector = nil
+	router, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	const ownerID = "wal-reader-owner"
+	sessionCookie := managementSessionCookie(t, ownerID)
+	account := requestManagementAccount(t, router, sessionCookie)
+	tenantID := account.Tenants[0].ID
+	saveManagementProviderKey(t, router, sessionCookie, tenantID, testManagementOpenAIKey, proxy.ModelNameGPT41, "")
+	saveManagementDefaults(t, router, sessionCookie, tenantID, proxy.ModelNameGPT41, "")
+	secret := generateManagementTenantSecret(t, router, sessionCookie, tenantID)
+
+	writerDatabase, writerOpenError := gorm.Open(
+		sqlite.Open(databasePath+"?_pragma=busy_timeout(5000)&_txlock=exclusive"),
+		&gorm.Config{},
+	)
+	if writerOpenError != nil {
+		t.Fatalf("open concurrent writer: %v", writerOpenError)
+	}
+	writerSQLDatabase, sqlDatabaseError := writerDatabase.DB()
+	if sqlDatabaseError != nil {
+		t.Fatalf("resolve concurrent writer: %v", sqlDatabaseError)
+	}
+	defer writerSQLDatabase.Close()
+
+	writerTransaction := writerDatabase.Begin()
+	if writerTransaction.Error != nil {
+		t.Fatalf("begin concurrent writer: %v", writerTransaction.Error)
+	}
+	writerTransactionOpen := true
+	defer func() {
+		if writerTransactionOpen {
+			_ = writerTransaction.Rollback().Error
+		}
+	}()
+	updateResult := writerTransaction.
+		Table("managed_user_records").
+		Where("user_id = ?", ownerID).
+		Update("user_display_name", "Writer in progress")
+	if updateResult.Error != nil || updateResult.RowsAffected != 1 {
+		t.Fatalf("hold concurrent writer rows=%d error=%v", updateResult.RowsAffected, updateResult.Error)
+	}
+
+	responseDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		request := httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(secret)+"&prompt=hello", nil)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		responseDone <- response
+	}()
+
+	select {
+	case <-upstreamReached:
+	case <-time.After(time.Second):
+		t.Fatal("managed authentication did not reach the provider while a SQLite writer was active")
+	}
+	if commitError := writerTransaction.Commit().Error; commitError != nil {
+		t.Fatalf("commit concurrent writer: %v", commitError)
+	}
+	writerTransactionOpen = false
+
+	select {
+	case response := <-responseDone:
+		if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != "wal reader ok" {
+			t.Fatalf("proxy status=%d body=%q", response.Code, response.Body.String())
+		}
+	case <-time.After(time.Second):
+		t.Fatal("proxy request did not finish after the concurrent writer committed")
+	}
+}
+
 func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 	router := newManagementRouter(t, proxy.Configuration{})
 	sessionCookie := managementSessionCookie(t, "tauth-current-catalog-user")
