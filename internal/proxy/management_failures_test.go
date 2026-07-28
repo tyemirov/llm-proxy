@@ -638,6 +638,7 @@ func TestManagementAccountUsageFailuresAggregateOwnedTenantsAndBindCursorsToScop
 }
 
 func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPagination(t *testing.T) {
+	callerCancellationUpstreamReached := make(chan struct{})
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		requestBody, readError := io.ReadAll(request.Body)
 		if readError != nil {
@@ -652,6 +653,10 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 			http.Error(responseWriter, `{"private":"upstream-provider-body"}`, http.StatusInternalServerError)
 			return
 		case bytes.Contains(requestBody, []byte("request-timeout")):
+			<-request.Context().Done()
+			return
+		case bytes.Contains(requestBody, []byte("caller-canceled")):
+			close(callerCancellationUpstreamReached)
 			<-request.Context().Done()
 			return
 		}
@@ -825,14 +830,29 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 	}
 
 	callerContext, cancelCaller := context.WithCancel(context.Background())
-	cancelCaller()
 	canceledRequest := httptest.NewRequest(
 		http.MethodGet,
 		"/?key="+secretQuery+"&prompt=caller-canceled",
 		nil,
 	).WithContext(callerContext)
 	canceledResponse := httptest.NewRecorder()
-	router.ServeHTTP(canceledResponse, canceledRequest)
+	canceledResponseDone := make(chan struct{})
+	go func() {
+		router.ServeHTTP(canceledResponse, canceledRequest)
+		close(canceledResponseDone)
+	}()
+	select {
+	case <-callerCancellationUpstreamReached:
+	case <-time.After(time.Second):
+		cancelCaller()
+		t.Fatal("caller-canceled request did not reach upstream")
+	}
+	cancelCaller()
+	select {
+	case <-canceledResponseDone:
+	case <-time.After(time.Second):
+		t.Fatal("caller-canceled request did not finish")
+	}
 	if canceledResponse.Code != 499 {
 		t.Fatalf("canceled status=%d body=%q", canceledResponse.Code, canceledResponse.Body.String())
 	}

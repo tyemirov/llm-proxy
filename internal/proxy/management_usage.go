@@ -391,10 +391,6 @@ func (store *managedTenantStore) persistManagedUsageRecord(requestContext contex
 		return fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, usageRecord.TenantID, lockError)
 	}
 	defer store.mutex.DatabaseWriteUnlock()
-	return store.createManagedUsageRecord(requestContext, usageRecord)
-}
-
-func (store *managedTenantStore) createManagedUsageRecord(requestContext context.Context, usageRecord managedUsageEventRecord) error {
 	if persistError := store.database.createUsageEvent(requestContext, usageRecord); persistError != nil {
 		return fmt.Errorf("%w: tenant_id=%s: %w", errManagedTenantStorePersist, usageRecord.TenantID, persistError)
 	}

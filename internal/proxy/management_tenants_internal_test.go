@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -160,7 +161,7 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 	}
 	store := newManagedTenantStoreWithDatabaseAndCipher(database, providerKeyCipher)
 	store.routingDefaults = providers
-	if authenticatedTenant, authenticated := store.authenticate(firstSecret); !authenticated || authenticatedTenant.identifier.string() != firstTenant.TenantID {
+	if authenticatedTenant, authenticated := store.authenticate(context.Background(), firstSecret); !authenticated || authenticatedTenant.identifier.string() != firstTenant.TenantID {
 		t.Fatalf("preserved secret authenticated=%v tenant=%+v", authenticated, authenticatedTenant)
 	}
 	if initializeError := initializeManagedTenantSchema(database.database, providerKeyCipher, providers); initializeError != nil {

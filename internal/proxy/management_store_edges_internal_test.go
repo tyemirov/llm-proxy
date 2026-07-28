@@ -12,9 +12,89 @@ import (
 	"testing"
 	"time"
 
+	"github.com/glebarez/sqlite"
 	"github.com/tyemirov/llm-proxy/internal/constants"
 	"gorm.io/gorm"
 )
+
+type blockingUsageManagedTenantDatabase struct {
+	managedTenantDatabase
+	usageStarted chan struct{}
+	usageRelease chan struct{}
+}
+
+func (database *blockingUsageManagedTenantDatabase) createUsageEvent(requestContext context.Context, record managedUsageEventRecord) error {
+	close(database.usageStarted)
+	select {
+	case <-database.usageRelease:
+		return database.managedTenantDatabase.createUsageEvent(requestContext, record)
+	case <-requestContext.Done():
+		return requestContext.Err()
+	}
+}
+
+func TestManagedTenantAuthenticationDoesNotWaitForUsagePersistence(t *testing.T) {
+	const (
+		rawSecret = "llmp_parallel_authentication"
+		ownerID   = "parallel-owner"
+		tenantID  = "parallel-tenant"
+	)
+	secretDigest := sha256.Sum256([]byte(rawSecret))
+	secretDigestText := hex.EncodeToString(secretDigest[:])
+	baseDatabase := newFakeManagedTenantDatabase()
+	record := fakeTenantRecord(ownerID, tenantID, "Parallel", time.Now().UTC())
+	record.SecretDigest = &secretDigestText
+	baseDatabase.tenantsByID[tenantID] = record
+	blockingDatabase := &blockingUsageManagedTenantDatabase{
+		managedTenantDatabase: baseDatabase,
+		usageStarted:          make(chan struct{}),
+		usageRelease:          make(chan struct{}),
+	}
+	store := newManagedTenantStoreWithDatabase(blockingDatabase)
+	usageContext, cancelUsage := context.WithCancel(context.Background())
+	defer cancelUsage()
+	usageRecord, usageRecordError := store.newManagedUsageRecord(tenant{
+		identifier: tenantID,
+		userID:     ownerID,
+		managed:    true,
+	}, managedUsageEvent{outcomeCode: managedUsageOutcomeSuccess})
+	if usageRecordError != nil {
+		t.Fatalf("usage record error=%v", usageRecordError)
+	}
+	usageDone := make(chan error, 1)
+	go func() {
+		usageDone <- store.persistManagedUsageRecord(usageContext, usageRecord)
+	}()
+
+	select {
+	case <-blockingDatabase.usageStarted:
+	case <-time.After(time.Second):
+		cancelUsage()
+		t.Fatal("usage persistence did not start")
+	}
+
+	authenticationDone := make(chan bool, 1)
+	go func() {
+		_, authenticated := store.authenticate(context.Background(), rawSecret)
+		authenticationDone <- authenticated
+	}()
+	select {
+	case authenticated := <-authenticationDone:
+		if !authenticated {
+			cancelUsage()
+			t.Fatal("managed tenant did not authenticate")
+		}
+	case <-time.After(time.Second):
+		cancelUsage()
+		<-usageDone
+		t.Fatal("managed authentication waited for unrelated usage persistence")
+	}
+
+	close(blockingDatabase.usageRelease)
+	if usageError := <-usageDone; usageError != nil {
+		t.Fatalf("usage persistence error=%v", usageError)
+	}
+}
 
 func TestManagedTenantStoreCipherAndSnapshotEdges(t *testing.T) {
 	providers := internalManagementProviderRegistry()
@@ -35,6 +115,7 @@ func TestManagedTenantStoreCipherAndSnapshotEdges(t *testing.T) {
 	})
 	if _, storeError := newManagedTenantStore(ManagementConfiguration{
 		ProviderKeyEncryptionKey: testManagedProviderKeyEncryptionKey,
+		DatabaseDialector:        sqlite.Open(":memory:"),
 	}, invalidDefaultsProviders); storeError != nil {
 		t.Fatalf("text-only provider catalog store error=%v", storeError)
 	}
@@ -526,13 +607,13 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	if generationError != nil || rawSecret == "" || !secretSnapshot.hasSecret {
 		t.Fatalf("generated secret=%q snapshot=%+v error=%v", rawSecret, secretSnapshot, generationError)
 	}
-	if authenticatedTenant, authenticated := store.authenticate(rawSecret); !authenticated || authenticatedTenant.identifier.string() != identifier.string() {
+	if authenticatedTenant, authenticated := store.authenticate(context.Background(), rawSecret); !authenticated || authenticatedTenant.identifier.string() != identifier.string() {
 		t.Fatalf("authenticated=%t tenant=%+v", authenticated, authenticatedTenant)
 	}
-	if _, authenticated := store.authenticate(" "); authenticated {
+	if _, authenticated := store.authenticate(context.Background(), " "); authenticated {
 		t.Fatal("blank secret authenticated")
 	}
-	if _, authenticated := store.authenticate("missing"); authenticated {
+	if _, authenticated := store.authenticate(context.Background(), "missing"); authenticated {
 		t.Fatal("missing secret authenticated")
 	}
 	record = database.tenantsByID[identifier.string()]
@@ -540,7 +621,7 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	record.SecretDigest = &invalidDigest
 	database.tenantsByID[identifier.string()] = record
 	database.tenantBySecretDigestErrors = []error{nil}
-	if _, authenticated := store.authenticate(rawSecret); authenticated {
+	if _, authenticated := store.authenticate(context.Background(), rawSecret); authenticated {
 		t.Fatal("invalid stored digest authenticated")
 	}
 	digest := sha256.Sum256([]byte(rawSecret))
@@ -549,7 +630,7 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	record.SecretDigest = &wrongDigestText
 	database.tenantsByID[identifier.string()] = record
 	database.tenantBySecretDigestRecord = &record
-	if _, authenticated := store.authenticate(rawSecret); authenticated {
+	if _, authenticated := store.authenticate(context.Background(), rawSecret); authenticated {
 		t.Fatal("mismatched digest authenticated")
 	}
 	database.tenantBySecretDigestRecord = nil
@@ -559,7 +640,7 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 		TenantID: identifier.string(), ProviderID: ProviderNameOpenAI, EncryptedAPIKey: "invalid",
 	}}
 	database.tenantsByID[identifier.string()] = record
-	if _, authenticated := store.authenticate(rawSecret); authenticated {
+	if _, authenticated := store.authenticate(context.Background(), rawSecret); authenticated {
 		t.Fatal("tenant with invalid provider key authenticated")
 	}
 	record.ProviderAPIKeys = nil

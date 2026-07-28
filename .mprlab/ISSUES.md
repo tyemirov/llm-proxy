@@ -1361,6 +1361,47 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Improvements
 
+- [x] [I042] (P1) Remove managed-request serialization from SQLite authentication.
+  Goal:
+  Keep SQLite as the sole managed-tenant source of truth while allowing each
+  proxy request to wait only for its own database read and selected provider,
+  rather than another request's usage write or management mutation.
+
+  Requirements:
+  - Open the canonical runtime GORM SQLite database in WAL mode with a bounded
+    busy timeout. Keep injected dialectors test-only and add no application
+    cache, replica, dual read, or invalidation path.
+  - Propagate the caller context into managed authentication and load each
+    tenant plus its provider settings through one consistent GORM read
+    transaction.
+  - Remove authentication and single-event usage persistence from the
+    process-wide management mutation lock. Keep multi-statement management
+    changes atomic through their existing GORM transactions.
+  - Preserve the blocking public response, secret-digest comparison,
+    provider-key decryption, routing-default, usage, and migration contracts.
+  - Document SQLite/GORM concurrency ownership in the canonical management
+    persistence guidance.
+
+  Validation:
+  - Public HTTP coverage using a disposable runtime SQLite database proves WAL
+    mode permits managed authentication and upstream routing while another
+    connection holds an exclusive write transaction.
+  - Concurrency coverage proves an in-flight managed usage write cannot block
+    authentication for an independent request.
+  - The required post-change `make ci` passes after the final code edit.
+
+  Resolved 2026-07-27:
+  - Runtime managed SQLite connections now use WAL journaling and a five-second
+    busy timeout. Authentication uses the caller context and one read-only GORM
+    transaction, while authentication and single usage inserts bypass the
+    management mutation mutex without adding an application cache.
+  - Public HTTP coverage reaches the selected provider while another connection
+    holds an exclusive SQLite writer, and deterministic store coverage proves a
+    blocked usage insert cannot delay independent authentication.
+  - The final `make ci` passed with exact 100% Go statement coverage, all Python
+    and frontend tests, the TAuth black-box test, release tests, and the live
+    provider harness preflight.
+
 - [ ] [I036] (P1) {F014,B081} Verify pasted provider API keys before persisting them.
   Goal:
   Make a provider connected and routing-eligible only after LLM Proxy
