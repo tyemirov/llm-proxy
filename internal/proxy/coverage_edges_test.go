@@ -607,7 +607,7 @@ func TestCoverageConfigurationValidationMatrix(t *testing.T) {
 		{
 			name: "missing moonshot text credential from alias",
 			configuration: proxy.Configuration{
-				Tenants:   proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: "kimi", Model: proxy.ModelNameMoonshotKimi, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}),
+				Tenants:   proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: "kimi", Model: proxy.ModelNameMoonshotKimiK26, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}),
 				OpenAIKey: TestAPIKey,
 			},
 			expectedError: "provider not configured: provider=moonshot",

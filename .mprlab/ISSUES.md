@@ -97,6 +97,17 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     OpenAI, Anthropic, and Meta echo cases using the same Default-tenant client
     secret. Gemini echo returned safe HTTP `502`; Moonshot echo returned safe
     HTTP `429`. The independent long-completion failures are tracked in B088.
+  - The I036 disposable managed-key run authenticated the supplied Kimi
+    credential against Moonshot's model catalog (`200`), where the configured
+    former default was absent. The same credential verified and completed its
+    smoke request with cataloged `kimi-k2.6` (`200`/`200`), isolating the
+    credential from the existing default-route repair.
+  - An authenticated catalog recheck on 2026-07-28 again returned `200`,
+    confirmed the former default remains absent, and confirmed `kimi-k2.6` is
+    present. The checked-in catalog now removes the obsolete model and promotes
+    `kimi-k2.6`. The disposable managed-key harness then verified that new
+    default and completed its smoke request (`200`/`200`); the production
+    Default-tenant saved route remains unverified.
 
   Requirements:
   - Diagnose the exact Default-tenant Gemini `502` and Moonshot `429` at the
@@ -1361,7 +1372,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Improvements
 
-- [ ] [I036] (P1) {F014,B081} Verify pasted provider API keys before persisting them.
+- [x] [I036] (P1) {F014,B081} Verify pasted provider API keys before persisting them.
   Goal:
   Make a provider connected and routing-eligible only after LLM Proxy
   automatically proves that a newly supplied credential is operational for
@@ -1464,6 +1475,31 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
+
+  Resolved 2026-07-27:
+  - Added one provider-neutral, single-operation verifier for every canonical
+    transport and made the authenticated provider-settings mutation verify
+    before atomically persisting keys, settings, or routing defaults.
+  - Added automatic paste verification with accessible pending and safe-failure
+    states, locked conflicting actions, retry, raw-draft cleanup on success, and
+    stale-attempt rejection across every editor context boundary.
+  - Controlled real-router coverage proves all 12 providers, transport-family
+    failures, exact one-operation admission, unchanged state on failure, safe
+    responses and logs, and no managed usage. The rendered suite passes all 75
+    scenarios; OpenAPI, generated docs, the real auth black-box, and the
+    live-provider harness were updated.
+  - The required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` runs passed with the Go coverage
+    gate at 100%.
+  - Disposable paid runs verified the supplied OpenAI, Gemini, Anthropic, and
+    Muse11 credentials and their smoke requests (`200`/`200`). The supplied
+    Kimi credential authenticated successfully, the former configured model
+    was absent and rejected, and cataloged `kimi-k2.6` verified and completed
+    (`200`/`200`); the production default-route repair remains tracked by B087.
+  - Follow-up 2026-07-28: removed the unavailable former Moonshot model from the
+    current catalog and promoted verified `kimi-k2.6` to the canonical default
+    without an alias or fallback. The disposable managed-key verification and
+    default-model smoke request both returned `200`.
 
 - [ ] [I035] (P2) {B076} Persist each user's selected Usage interval across sessions.
   Goal:

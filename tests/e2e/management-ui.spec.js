@@ -105,9 +105,9 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
   expect(html).toContain(`<script src="${mprUIConfigURL}"></script>`);
   expect(html).toContain(`data-mpr-ui-bundle-src="${mprUIBundleURL}"`);
-  expect(html).toContain('<script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260727"></script>');
+  expect(html).toContain('<script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260727i036"></script>');
   expect(html).toContain(
-    '<script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260727"></script>',
+    '<script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260727i036"></script>',
   );
   expect(html).not.toContain("MarcoPoloResearchLab/mpr-ui@v");
   expect(html).not.toContain("tauth.js");
@@ -148,7 +148,11 @@ test("site exposes product icon and favicon assets", async ({ request }) => {
   expect(html).toContain('role="alertdialog"');
   expect(html).toContain('x-on:click="requestSelectedProviderKeyRemoval()"');
   expect(html).toContain('x-show="selectedProvider.has_key || selectedProviderKeyHasInput"');
+  expect(html).toContain('x-on:paste="handleSelectedProviderKeyPaste()"');
   expect(html).toContain('x-on:change="autosaveSelectedProvider()"');
+  expect(html).toContain('role="status" aria-live="polite"');
+  expect(html).toContain('x-show="providerKeyVerificationPending"');
+  expect(html).toContain('x-show="providerKeyVerificationFailed"');
   expect(html).not.toContain("provider-settings-form");
   expect(html).not.toContain("saveSelectedProviderKey");
   expect(html).not.toContain('x-on:click="removeSelectedProviderKey()"');
@@ -1386,6 +1390,253 @@ test("failed-request responses cannot cross interval or Usage tenant boundaries"
   expect(routeState.requests.some((request) => request.path === "/api/management/tenants/tenant_2/usage")).toBe(true);
 });
 
+test("pasting a provider key verifies before blur, locks conflicts, and masks the accepted key", async ({ page }) => {
+  const pastedProviderKey = "sk-pasted-operational-key";
+  let providerSaveRequestCount = 0;
+  /** @type {() => void} */
+  let releaseProviderSave = () => {};
+  const providerSaveReleased = new Promise((resolve) => {
+    releaseProviderSave = () => resolve(undefined);
+  });
+  /** @type {() => void} */
+  let providerSaveStarted = () => {};
+  const providerSaveRequested = new Promise((resolve) => {
+    providerSaveStarted = () => resolve(undefined);
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { savedProviderIDs: [] });
+  await page.route(providerKeyEndpointURL("openai"), async (route) => {
+    providerSaveRequestCount += 1;
+    providerSaveStarted();
+    await providerSaveReleased;
+    await route.fallback();
+  });
+
+  await page.goto(baseURL);
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const providerEditor = settingsDialog.locator("provider-editor");
+  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
+  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
+  await pasteProviderKey(providerKeyInput, pastedProviderKey);
+  await providerSaveRequested;
+
+  await expect(providerKeyInput).toBeFocused();
+  await expect(providerKeyInput).toBeEnabled();
+  await expect(providerEditor.getByRole("status")).toHaveText("Verifying key");
+  await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeDisabled();
+  await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toBeDisabled();
+  await expect(providerEditor.getByRole("combobox", { name: "Provider", exact: true })).toBeDisabled();
+  await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toBeDisabled();
+  await expect(providerEditor.getByRole("button", { name: "Hide key" })).toBeDisabled();
+  await expect(providerEditor.getByRole("button", { name: "Remove provider key and settings" })).toBeDisabled();
+  expect(providerSaveRequestCount).toBe(1);
+
+  releaseProviderSave();
+  await expect(providerEditor.getByRole("status")).toBeHidden();
+  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Provider key verified and settings saved");
+  await expect(providerKeyInput).toHaveValue("****aved");
+  await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
+  await expect(providerKeyInput).not.toHaveValue(pastedProviderKey);
+  expect(await browserStorageContains(page, pastedProviderKey)).toBe(false);
+  expect(providerSaveRequestCount).toBe(1);
+});
+
+test("rejected pasted keys remain editable and retry through the same operation", async ({ page }) => {
+  const rejectedProviderKey = "sk-rejected-provider-key";
+  let providerSaveRequestCount = 0;
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { savedProviderIDs: [] });
+  await page.route(providerKeyEndpointURL("openai"), async (route) => {
+    providerSaveRequestCount += 1;
+    if (providerSaveRequestCount === 1) {
+      await route.fulfill({ status: 422, body: "provider_key_rejected" });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.goto(baseURL);
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const providerEditor = settingsDialog.locator("provider-editor");
+  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
+  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
+  await pasteProviderKey(providerKeyInput, rejectedProviderKey);
+
+  const verificationFailure = providerEditor.getByRole("alert");
+  await expect(verificationFailure).toContainText("Key was rejected. No provider key was saved.");
+  await expect(providerKeyInput).toHaveValue(rejectedProviderKey);
+  await expect(settingsDialog).toBeVisible();
+  expect(providerSaveRequestCount).toBe(1);
+
+  await verificationFailure.getByRole("button", { name: "Retry verification" }).click();
+  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Provider key verified and settings saved");
+  await expect(verificationFailure).toBeHidden();
+  await expect(providerKeyInput).toHaveValue("****aved");
+  expect(providerSaveRequestCount).toBe(2);
+});
+
+test("a rejected pasted replacement keeps the previous verified key active", async ({ page }) => {
+  const rejectedReplacement = "sk-rejected-replacement";
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await page.route(providerKeyEndpointURL("openai"), async (route) => {
+    await route.fulfill({ status: 422, body: "provider_key_rejected" });
+  });
+
+  await page.goto(baseURL);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+  const providerEditor = page.getByRole("dialog", { name: "Settings" }).locator("provider-editor");
+  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
+  await providerEditor.getByRole("button", { name: "Show key" }).click();
+  await pasteProviderKey(providerKeyInput, rejectedReplacement);
+
+  await expect(providerEditor.getByRole("alert")).toContainText(
+    "Key was rejected. The previous key remains active.",
+  );
+  await expect(providerKeyInput).toHaveValue(rejectedReplacement);
+});
+
+test("a newer pasted key cancels the stale verification and applies only the newest result", async ({ page }) => {
+  const staleProviderKey = "sk-stale-pasted-key";
+  const currentProviderKey = "sk-current-pasted-key";
+  const submittedKeys = [];
+  /** @type {() => void} */
+  let releaseStaleVerification = () => {};
+  const staleVerificationReleased = new Promise((resolve) => {
+    releaseStaleVerification = () => resolve(undefined);
+  });
+  /** @type {() => void} */
+  let staleVerificationStarted = () => {};
+  const staleVerificationRequested = new Promise((resolve) => {
+    staleVerificationStarted = () => resolve(undefined);
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page, { savedProviderIDs: [] });
+  await page.route(providerKeyEndpointURL("openai"), async (route) => {
+    const submittedKey = route.request().postDataJSON().api_key;
+    submittedKeys.push(submittedKey);
+    if (submittedKey === staleProviderKey) {
+      staleVerificationStarted();
+      await staleVerificationReleased;
+      await route.fulfill({ status: 422, body: "provider_key_rejected" }).catch(() => {});
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.goto(baseURL);
+  const providerEditor = page.getByRole("dialog", { name: "Settings" }).locator("provider-editor");
+  await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
+  const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
+  await pasteProviderKey(providerKeyInput, staleProviderKey);
+  await staleVerificationRequested;
+  await pasteProviderKey(providerKeyInput, currentProviderKey);
+
+  await expect.poll(() => submittedKeys).toEqual([staleProviderKey, currentProviderKey]);
+  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Provider key verified and settings saved");
+  await expect(providerKeyInput).toHaveValue("****aved");
+  releaseStaleVerification();
+  await expect(providerEditor.getByRole("alert")).toBeHidden();
+  expect(submittedKeys).toEqual([staleProviderKey, currentProviderKey]);
+});
+
+for (const verificationContextChange of [
+  { id: "tenant", label: "tenant switch", article: "a", multiTenant: true },
+  { id: "provider", label: "provider switch", article: "a", multiTenant: false },
+  { id: "model", label: "model change", article: "a", multiTenant: false },
+  { id: "editor", label: "editor replacement", article: "an", multiTenant: false },
+]) {
+  test(`${verificationContextChange.article} ${verificationContextChange.label} rejects a stale provider-key verification completion`, async ({ page }) => {
+    const staleProviderKey = `sk-stale-${verificationContextChange.id}-context`;
+    /** @type {() => void} */
+    let releaseVerification = () => {};
+    const verificationReleased = new Promise((resolve) => {
+      releaseVerification = () => resolve(undefined);
+    });
+    /** @type {() => void} */
+    let verificationStarted = () => {};
+    const verificationRequested = new Promise((resolve) => {
+      verificationStarted = () => resolve(undefined);
+    });
+    await installAssetRoutes(page);
+    if (verificationContextChange.multiTenant) {
+      await installMultiTenantRoutes(page);
+    } else {
+      await installManagementRoutes(page, { savedProviderIDs: [] });
+    }
+    await page.route(providerKeyEndpointURL("openai"), async (route) => {
+      verificationStarted();
+      await verificationReleased;
+      await route.fallback().catch(() => {});
+    });
+
+    await page.goto(baseURL);
+    if (verificationContextChange.multiTenant) {
+      await page.getByTestId("avatar-menu").click();
+      await page.getByTestId("avatar-menu-item").nth(0).click();
+    }
+    const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+    const providerEditor = settingsDialog.locator("provider-editor");
+    const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
+    if (!verificationContextChange.multiTenant) {
+      await providerSelector.selectOption("openai");
+    }
+    const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
+    if (verificationContextChange.multiTenant) {
+      await providerEditor.getByRole("button", { name: "Show key" }).click();
+    }
+    await pasteProviderKey(providerKeyInput, staleProviderKey);
+    await verificationRequested;
+    await expect(providerEditor.getByRole("status")).toHaveText("Verifying key");
+
+    await page.locator("llm-proxy-key-management").evaluate(
+      async (applicationElement, contextChange) => {
+        const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
+        const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
+        if (!applicationState) {
+          throw new Error("provider_verification_state_missing");
+        }
+        switch (contextChange) {
+          case "tenant":
+            await applicationState.switchSettingsTenant("tenant_2");
+            break;
+          case "provider":
+            applicationState.replaceProviderEditorSession("anthropic");
+            break;
+          case "model":
+            applicationState.handleSelectedProviderTextModelChange({ target: { value: "gpt-4o-mini" } });
+            break;
+          case "editor":
+            applicationState.replaceProviderEditorSession(applicationState.selectedProviderID);
+            break;
+          default:
+            throw new Error("provider_verification_context_change_invalid");
+        }
+      },
+      verificationContextChange.id,
+    );
+    releaseVerification();
+
+    await expect(providerEditor.getByRole("status")).toBeHidden();
+    await expect(providerEditor.getByRole("alert")).toBeHidden();
+    await expect(page.locator("#llm-proxy-header .notice")).not.toHaveText(
+      "Provider key verified and settings saved",
+    );
+    if (verificationContextChange.id === "tenant") {
+      await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_2");
+    } else if (verificationContextChange.id === "provider") {
+      await expect(providerSelector).toHaveValue("anthropic");
+    } else if (verificationContextChange.id === "model") {
+      await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toHaveValue(
+        "gpt-4o-mini",
+      );
+    } else {
+      await expect(providerKeyInput).toHaveValue("");
+    }
+  });
+}
+
 test("provider selection autosaves its exact editor while transient removal stays local", async ({ page }) => {
   const firstGrokKey = "xai-provider-first-1111";
   const secondGrokKey = "xai-provider-second-2222";
@@ -1566,20 +1817,22 @@ test("failed provider autosave preserves its editor and blocks provider switchin
 
 test("session cleanup cancels provider autosaves before they can repopulate state", async ({ page }) => {
   const lateProviderKey = "sk-anthropic-late-autosave";
-  let releaseProviderSave;
+  /** @type {() => void} */
+  let releaseProviderSave = () => {};
   const providerSaveReleased = new Promise((resolve) => {
-    releaseProviderSave = resolve;
+    releaseProviderSave = () => resolve(undefined);
   });
-  let providerSaveStarted;
+  /** @type {() => void} */
+  let providerSaveStarted = () => {};
   const providerSaveRequested = new Promise((resolve) => {
-    providerSaveStarted = resolve;
+    providerSaveStarted = () => resolve(undefined);
   });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
   await page.route(providerKeyEndpointURL("anthropic"), async (route) => {
     providerSaveStarted();
     await providerSaveReleased;
-    await route.fallback();
+    await route.fulfill({ status: httpOK, json: managementProfile() }).catch(() => {});
   });
 
   await page.goto(baseURL);
@@ -1589,9 +1842,9 @@ test("session cleanup cancels provider autosaves before they can repopulate stat
   const providerEditor = settingsDialog.locator("provider-editor");
   const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
   await providerSelector.selectOption("anthropic");
-  await providerEditor.getByRole("textbox", { name: "Anthropic API key" }).fill(lateProviderKey);
-  await page.keyboard.press("Tab");
+  await pasteProviderKey(providerEditor.getByRole("textbox", { name: "Anthropic API key" }), lateProviderKey);
   await providerSaveRequested;
+  await expect(providerEditor.getByRole("status")).toHaveText("Verifying key");
 
   await page.evaluate(() => {
     document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
@@ -1608,7 +1861,7 @@ test("session cleanup cancels provider autosaves before they can repopulate stat
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
   await providerSelector.selectOption("anthropic");
-  await expect(providerEditor.getByRole("textbox", { name: "Anthropic API key" })).toHaveValue("****aved");
+  await expect(providerEditor.getByRole("textbox", { name: "Anthropic API key" })).toHaveValue("");
   await expect(providerEditor).not.toContainText(lateProviderKey);
 });
 
@@ -1983,7 +2236,7 @@ test("routing defaults expose only keyed providers and disable unavailable dicta
   await providerEditor.getByRole("textbox", { name: "OpenAI API key" }).fill("sk-openai-new");
   await page.keyboard.press("Tab");
 
-  await expect(page.locator("notification-region")).toHaveText("Provider settings saved");
+  await expect(page.locator("notification-region")).toHaveText("Provider key verified and settings saved");
   await expect(textProvider.locator("option")).toHaveText(["OpenAI", "DeepSeek"]);
   await expect(textProvider).toHaveValue("deepseek");
   await expect(dictationProvider).toBeEnabled();
@@ -4156,6 +4409,31 @@ function reconcileManagementProfileRoutingDefaults(profile) {
  */
 function providerKeyEndpointURL(providerID, action = "") {
 	return `${baseURL}${managementProviderKeysPath}/${providerID}${action ? `/${action}` : ""}`;
+}
+
+/**
+ * @param {import("@playwright/test").Locator} providerKeyInput
+ * @param {string} value
+ * @returns {Promise<void>}
+ */
+async function pasteProviderKey(providerKeyInput, value) {
+  await providerKeyInput.focus();
+  await providerKeyInput.evaluate((inputElement, pastedValue) => {
+    const input = /** @type {HTMLInputElement} */ (inputElement);
+    const clipboardData = new DataTransfer();
+    clipboardData.setData("text/plain", pastedValue);
+    input.dispatchEvent(new ClipboardEvent("paste", {
+      bubbles: true,
+      cancelable: true,
+      clipboardData,
+    }));
+    input.value = pastedValue;
+    input.dispatchEvent(new InputEvent("input", {
+      bubbles: true,
+      data: pastedValue,
+      inputType: "insertFromPaste",
+    }));
+  }, value);
 }
 
 /**

@@ -107,6 +107,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	geminiClient := newGeminiGenerateContentClient(upstreamHTTPClient)
 	anthropicClient := newAnthropicMessagesClient(upstreamHTTPClient)
 	upstreamProviders := newProviderRouter(openAIClient, chatClient, geminiClient, anthropicClient)
+	keyVerifier := newOperationalProviderKeyVerifier(upstreamHTTPClient, configuration.Endpoints, time.Duration(configuration.RequestTimeoutSeconds)*time.Second)
 	var managedTenants *managedTenantStore
 	runtimeStaticTenants := configuration.tenants
 	if configuration.Management.Enabled {
@@ -126,7 +127,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatHandler(upstreamProviders, providers, managedTenants, structuredLogger)),
 	)
 	if configuration.Management.Enabled {
-		managementService := newManagementService(configuration.Management, configuration.managementSessionValidator, managedTenants, providers, tenantAuthenticator, structuredLogger)
+		managementService := newManagementService(configuration.Management, configuration.managementSessionValidator, managedTenants, providers, keyVerifier, tenantAuthenticator, structuredLogger)
 		managementService.registerRoutes(router)
 	}
 	router.GET(rootPath, rootProxyHandler)

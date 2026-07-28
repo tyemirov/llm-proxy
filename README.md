@@ -279,13 +279,12 @@ providers:
   moonshot:
     base_url: "https://api.moonshot.ai/v1"
     text:
-      default_model: "kimi-k2-0905-preview"
+      default_model: "kimi-k2.6"
       models:
-        - id: "kimi-k2-0905-preview"
+        - id: "kimi-k2.6"
         - id: "kimi-k3"
         - id: "kimi-k2.7-code"
         - id: "kimi-k2.7-code-highspeed"
-        - id: "kimi-k2.6"
   minimax:
     base_url: "https://api.minimax.io/v1"
     text:
@@ -432,7 +431,7 @@ adapters before they are available through `/dictate`.
 | `deepseek` | none | OpenAI-compatible chat completions | `deepseek-v4-flash` | `providers.deepseek.api_key` | `https://api.deepseek.com` | No | No |
 | `dashscope` | `qwen` | OpenAI-compatible chat completions | `qwen-plus` | `providers.dashscope.api_key` | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` | No | No |
 | `qwencloud` | none | Qwen Cloud Token Plan OpenAI-compatible chat completions | `qwen3.8-max-preview` | `providers.qwencloud.api_key` | `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` | No | No |
-| `moonshot` | `kimi` | OpenAI-compatible chat completions | `kimi-k2-0905-preview` | `providers.moonshot.api_key` | `https://api.moonshot.ai/v1` | No | No |
+| `moonshot` | `kimi` | OpenAI-compatible chat completions | `kimi-k2.6` | `providers.moonshot.api_key` | `https://api.moonshot.ai/v1` | No | No |
 | `minimax` | none | MiniMax OpenAI-compatible chat completions | `MiniMax-M2.7` | `providers.minimax.api_key` | `https://api.minimax.io/v1` | No | No |
 | `siliconflow` | none | OpenAI-compatible chat completions | `deepseek-ai/DeepSeek-R1` | `providers.siliconflow.api_key` | `https://api.siliconflow.com/v1` | Yes: `FunAudioLLM/SenseVoiceSmall` | No |
 | `zhipu` | `glm` | OpenAI-compatible chat completions | `glm-5.1` | `providers.zhipu.api_key` | `https://open.bigmodel.cn/api/paas/v4` | Yes: `glm-asr-2512` | No |
@@ -725,11 +724,37 @@ Settings opens automatically and cannot be dismissed until the profile has both
 that client key and at least one persisted managed provider key. Only
 `tenant.has_secret` and `providers[].has_key` satisfy this setup gate; a typed
 provider-key draft or a credential in local dotenv configuration does not.
-The selected provider's API key, default model, and system prompt autosave when
-the user leaves a changed field, switches providers, or closes Settings. A
-successful first provider-key autosave unlocks Settings and atomically
-establishes eligible routing defaults. Settings remains open until the user
-closes it explicitly.
+Pasting into the selected provider's API-key field immediately starts one
+server-side operational verification against that exact provider and selected
+text model; it does not wait for blur, provider switching, Settings close, or a
+separate action. While the attempt is active, Settings announces `Verifying
+key`, keeps the key input available for a newer paste, and locks tenant,
+provider, model, reveal, remove, routing, and close actions. A newer paste or a
+tenant, provider, model, editor, or authentication context change cancels or
+invalidates the prior request. Other provider-key edits still autosave through
+the same verify-before-persist operation when the user leaves the field,
+switches providers, or closes Settings.
+
+The verifier makes exactly one provider-authenticated, non-user-content
+operation through the selected transport and the shared upstream worker,
+queue, origin-rate-limit, and request-context boundaries. It does not retry,
+fall back, poll, continue in the background, or record managed usage. Only an
+accepted credential/model pair enters the provider-key transaction. That
+transaction encrypts the key, saves its submitted model and system prompt,
+reconciles routing defaults, and returns the complete keyed profile; the
+browser then clears the raw draft and returns to the masked presentation. A
+successful first key unlocks mandatory Settings.
+
+Credential/model rejection returns `422 provider_key_rejected`; an unconfirmed
+provider rate limit, timeout/cancellation, or outage/malformed response returns
+the documented `429`, `504`, or `503` provider-neutral verification error.
+None saves the candidate. A first failure leaves the provider unkeyed, while a
+failed replacement leaves the previously verified encrypted key, provider
+settings, and routing defaults active. The current editor retains only the
+rejected draft for correction or explicit retry and states which of those two
+outcomes applies. An empty `api_key` remains the exact retain-existing-key
+settings update and does not reverify the stored credential. Settings remains
+open until the user closes it explicitly.
 Text and dictation provider/model defaults plus reasoning effort autosave on
 selection, while the tenant system prompt autosaves when the user leaves the
 changed field. Settings serializes every mutation that returns a complete
@@ -760,9 +785,11 @@ The runtime config file is never mutated for user signup, provider enablement,
 or usage tracking, and database access must stay on GORM model APIs without raw
 SQL. Generated secrets continue to authenticate the public proxy endpoints with the same
 `key=<tenant secret>` query parameter. Provider API keys are accepted only
-through authenticated management endpoints and are encrypted at rest with AES-GCM
-before database persistence. Normal save, profile, and administrator responses
-return only masked key status. The sole raw-key response is the explicit
+through authenticated management endpoints. Every nonempty new or replacement
+key is operationally verified for its exact provider and selected text model
+before it is encrypted at rest with AES-GCM and persisted. Normal save,
+profile, and administrator responses return only masked key status. The sole
+raw-key response is the explicit
 owner-authenticated
 `POST /api/management/tenants/:tenant_id/provider-keys/:provider/reveal`
 management action, which requires the configured management origin and returns
@@ -1247,7 +1274,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make up` | Require the ignored private `configs/.env.local`, then build and run the complete local browser orchestration: ghttp static UI and same-origin TAuth routes on `localhost:4179`, plus the API on `localhost:8080`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
 | `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, repository-owned release integration tests, and the non-paid live-harness preflight. |
 | `make test-live-provider-harness` | Generate the temporary static-mode live-test config and verify authenticated routing without an upstream call. |
-| `make test-live-providers` | Generate a complete temporary static-mode config and run live text smoke tests for every provider whose API key is present; use `LIVE_ENV_FILE=/path/to/env` to load interpolation values. |
+| `make test-live-providers` | Start a disposable managed tenant, verify every available provider key through the canonical management operation, and run that provider's live text smoke only after verification succeeds; use `LIVE_ENV_FILE=/path/to/env` to load key values. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
 | `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_SECRET`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus one large OpenAI background-polling request. |
 | `make release` | Run CI and prepare the local tag, container archives, and validated Pages archive under `.git/mprlab-release` without remote writes. |
@@ -1256,10 +1283,11 @@ This repository exposes the standard local targets used by MPR app repos:
 
 Live provider smoke tests are intentionally not part of `make ci`; they call
 paid upstream APIs and depend on local or CI secret availability. The dynamic
-target discovers these provider keys after loading `LIVE_ENV_FILE`. By default,
-smoke requests omit `model`, so each provider uses the default configured in
-the selected `configs/config.yml`; set a model override only when debugging a
-specific provider/model pair.
+target discovers these provider keys after loading `LIVE_ENV_FILE`. It verifies
+each key against the provider's configured default model, or the exact model
+override below, before making that provider's smoke request. By default, the
+subsequent smoke omits `model` and proves that the newly saved managed provider
+default is operational; an override is included in both verification and smoke.
 
 | Provider | Key variable | Model override |
 |----------|--------------|----------------|
@@ -1291,15 +1319,22 @@ LLM_PROXY_LIVE_PROVIDERS=openai,gemini \
 ```
 
 The live harness parses `LIVE_ENV_FILE` as dotenv data without executing it as
-shell code. It always writes a disposable static-mode config with management
-disabled, a temporary tenant, and placeholder values for unused provider keys,
-so live checks never open the configured management database or reuse its
-migration state. Inspect that generated contract without building or calling a
-paid provider with `./scripts/test_live_providers.sh --write-config
+shell code. A paid run creates a disposable management database, encryption
+key, signed local session, tenant, and client secret under its private temporary
+directory. It submits each candidate once to
+`PUT /api/management/tenants/:tenant_id/provider-keys/:provider`, requires the
+safe `200` keyed-profile result, and only then sends that provider's smoke
+request. Candidate payloads, session material, provider responses, and proxy
+responses are never printed, and the temporary state is removed at exit.
+
+The non-paid `--preflight` and `--write-config` modes retain the isolated
+static-mode contract with management disabled, a temporary tenant, and
+placeholder values for unused provider keys; they make no verification or
+upstream provider call. Inspect that config without building with
+`./scripts/test_live_providers.sh --write-config
 /tmp/llm-proxy-live.yml`. Unless `LLM_PROXY_LIVE_PORT` explicitly selects a
-port, each harness run allocates a fresh loopback port. It removes only the
-temporary proxy child it started and never terminates an unrelated local
-listener.
+port, each harness run allocates a fresh loopback port. Cleanup removes only the
+temporary proxy child it started and never terminates an unrelated listener.
 
 ### Production Default-tenant live test
 
@@ -1961,11 +1996,10 @@ and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-mo
 | `deepseek-reasoner` | DeepSeek | No | - | No |
 | `qwen-plus` | DashScope/Qwen | Yes | - | No |
 | `qwen3.8-max-preview` | Qwen Cloud Token Plan | Yes | - | No |
-| `kimi-k2-0905-preview` | Moonshot/Kimi | Yes | - | No |
+| `kimi-k2.6` | Moonshot/Kimi | Yes | - | No |
 | `kimi-k3` | Moonshot/Kimi | No | - | No |
 | `kimi-k2.7-code` | Moonshot/Kimi | No | - | No |
 | `kimi-k2.7-code-highspeed` | Moonshot/Kimi | No | - | No |
-| `kimi-k2.6` | Moonshot/Kimi | No | - | No |
 | `MiniMax-M2.7` | MiniMax | Yes | `2048` | No |
 | `deepseek-ai/DeepSeek-R1` | SiliconFlow | Yes | - | No |
 | `glm-5.1` | Zhipu/GLM | Yes | - | No |

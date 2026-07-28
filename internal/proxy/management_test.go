@@ -33,7 +33,41 @@ const (
 	testManagementOpenAIKey                = "sk-user-openai"
 	testManagementDeepSeekKey              = "sk-user-deepseek"
 	testManagementMetaKey                  = "sk-user-meta"
+	testProviderKeyVerificationPrompt      = "Verify this provider credential."
 )
+
+type managementProviderKeyVerificationHTTPDoer struct {
+	next proxy.HTTPDoer
+}
+
+func (httpDoer managementProviderKeyVerificationHTTPDoer) Do(request *http.Request) (*http.Response, error) {
+	if request.Body == nil {
+		return httpDoer.next.Do(request)
+	}
+	requestBody, readError := io.ReadAll(request.Body)
+	if readError != nil {
+		return nil, readError
+	}
+	request.Body = io.NopCloser(bytes.NewReader(requestBody))
+	if !bytes.Contains(requestBody, []byte(testProviderKeyVerificationPrompt)) {
+		return httpDoer.next.Do(request)
+	}
+	responseBody := `{"choices":[{}]}`
+	switch {
+	case request.Header.Get("x-goog-api-key") != "":
+		responseBody = `{"candidates":[{}]}`
+	case request.Header.Get("x-api-key") != "":
+		responseBody = `{"id":"verification","type":"message","role":"assistant"}`
+	case strings.HasSuffix(request.URL.Path, "/responses"):
+		responseBody = `{"id":"verification","status":"completed"}`
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(responseBody)),
+		Request:    request,
+	}, nil
+}
 
 func managementProviderKeyRequestBody(t *testing.T, apiKey string, textModel string, systemPrompt string) string {
 	t.Helper()
@@ -101,8 +135,8 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		`href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css"`,
 		`src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"`,
 		`data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"`,
-		`src="/assets/llm-proxy/js/startupGuard.js?v=20260727"`,
-		`src="/assets/llm-proxy/js/app.js?v=20260727"`,
+		`src="/assets/llm-proxy/js/startupGuard.js?v=20260727i036"`,
+		`src="/assets/llm-proxy/js/app.js?v=20260727i036"`,
 		`data-config-url="/config-ui.yaml"`,
 		`<mpr-user`,
 		`<mpr-footer`,
@@ -1072,10 +1106,7 @@ func TestManagementDatabasePersistenceAndOpenFailures(t *testing.T) {
 func TestManagementStartupRejectsInvalidPersistedRoutingDefaults(t *testing.T) {
 	databasePath := filepath.Join(t.TempDir(), "managed-tenants.db")
 	configuration := managementConfigurationWithDatabasePath(proxy.Configuration{}, databasePath)
-	router, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar())
-	if buildError != nil {
-		t.Fatalf(messageBuildRouterError, buildError)
-	}
+	router := newManagementRouterWithDatabasePath(t, proxy.Configuration{}, databasePath)
 	sessionCookie := managementSessionCookie(t, "tauth-invalid-persisted-defaults")
 	tenantID := managementDefaultTenantTestID(t, router, sessionCookie)
 	saveKeyRequest := authenticatedJSONRequest(
@@ -1269,8 +1300,9 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 
 	var profilePayload struct {
 		Providers []struct {
-			ID         string `json:"id"`
-			TextModels []struct {
+			ID               string `json:"id"`
+			TextDefaultModel string `json:"text_default_model"`
+			TextModels       []struct {
 				ID string `json:"id"`
 			} `json:"text_models"`
 		} `json:"providers"`
@@ -1279,18 +1311,20 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 		t.Fatalf("decode profile: %v", decodeError)
 	}
 	modelsByProvider := map[string][]string{}
+	textDefaultsByProvider := map[string]string{}
 	for _, provider := range profilePayload.Providers {
 		models := make([]string, 0, len(provider.TextModels))
 		for _, model := range provider.TextModels {
 			models = append(models, model.ID)
 		}
 		modelsByProvider[provider.ID] = models
+		textDefaultsByProvider[provider.ID] = provider.TextDefaultModel
 	}
 	expectedModels := map[string][]string{
 		proxy.ProviderNameOpenAI:    {"gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"},
 		proxy.ProviderNameDashScope: {proxy.ModelNameDashScopeQwenPlus},
 		proxy.ProviderNameQwenCloud: {proxy.ModelNameQwenCloudQwen38MaxPreview},
-		proxy.ProviderNameMoonshot:  {"kimi-k3", "kimi-k2.7-code", "kimi-k2.7-code-highspeed", "kimi-k2.6"},
+		proxy.ProviderNameMoonshot:  {proxy.ModelNameMoonshotKimiK26, proxy.ModelNameMoonshotKimiK27Code, proxy.ModelNameMoonshotKimiK27CodeHighSpeed, proxy.ModelNameMoonshotKimiK3},
 		proxy.ProviderNameMiniMax:   {proxy.ModelNameMiniMaxM27},
 		proxy.ProviderNameZhipu:     {"glm-5.2"},
 		proxy.ProviderNameGemini:    {"gemini-3.1-pro-preview", "gemini-3-flash-preview"},
@@ -1314,6 +1348,13 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 				t.Fatalf("profile provider=%s models=%v missing=%s", providerIdentifier, configuredModels, expectedModel)
 			}
 		}
+	}
+	configuredMoonshotModels := modelsByProvider[proxy.ProviderNameMoonshot]
+	if !reflect.DeepEqual(configuredMoonshotModels, expectedModels[proxy.ProviderNameMoonshot]) {
+		t.Fatalf("profile provider=%s models=%v want=%v", proxy.ProviderNameMoonshot, configuredMoonshotModels, expectedModels[proxy.ProviderNameMoonshot])
+	}
+	if textDefaultsByProvider[proxy.ProviderNameMoonshot] != proxy.ModelNameMoonshotKimiK26 {
+		t.Fatalf("profile provider=%s default=%s want=%s", proxy.ProviderNameMoonshot, textDefaultsByProvider[proxy.ProviderNameMoonshot], proxy.ModelNameMoonshotKimiK26)
 	}
 	unsupportedDashScopeModels := []string{"qwen3.7-max", "qwen3.7-plus"}
 	configuredDashScopeModels, configured := modelsByProvider[proxy.ProviderNameDashScope]
@@ -1975,6 +2016,11 @@ func newManagementRouter(t *testing.T, configuration proxy.Configuration) http.H
 
 func newManagementRouterWithDatabasePath(t *testing.T, configuration proxy.Configuration, databasePath string) http.Handler {
 	t.Helper()
+	previousHTTPClient := proxy.HTTPClient
+	proxy.HTTPClient = managementProviderKeyVerificationHTTPDoer{next: previousHTTPClient}
+	defer func() {
+		proxy.HTTPClient = previousHTTPClient
+	}()
 	router, buildError := buildRouterWithCatalogs(t, managementConfigurationWithDatabasePath(configuration, databasePath), zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)

@@ -6,12 +6,12 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="1bee45874dabc4db17f29ebd269419a55e4c2208c923b2773d1cd330055b55cf">
+    <meta name="openapi-source-sha256" content="0fd32dd2b90e4b832472b60cf0190239158ebdbf89a47eeeb91f677fd118b4d3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="1bee45874dabc4db17f29ebd269419a55e4c2208c923b2773d1cd330055b55cf">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="0fd32dd2b90e4b832472b60cf0190239158ebdbf89a47eeeb91f677fd118b4d3">
     <header class="resource-shell resource-topbar">
       <a class="resource-brand" href="/">LLM Proxy</a>
       <nav aria-label="API reference navigation">
@@ -29,7 +29,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>1bee45874dabc4db17f29ebd269419a55e4c2208c923b2773d1cd330055b55cf</code></span>
+          <span>Source SHA-256 <code>0fd32dd2b90e4b832472b60cf0190239158ebdbf89a47eeeb91f677fd118b4d3</code></span>
         </div>
         <div class="resource-actions">
           <a class="resource-button" href="/openapi.yaml">Download exact schema</a>
@@ -49,7 +49,7 @@
 <a href="#operation-renameManagementTenant"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}</code><span>Rename an owned tenant</span></a>
 <a href="#operation-putManagementTenantDefaults"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}/defaults</code><span>Replace the tenant routing defaults</span></a>
 <a href="#operation-deleteManagementProviderKey"><span class="api-method api-method-delete">DELETE</span><code>/api/management/tenants/{tenant_id}/provider-keys/{provider}</code><span>Remove provider settings and a provider credential</span></a>
-<a href="#operation-putManagementProviderKey"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}/provider-keys/{provider}</code><span>Save provider settings and a provider credential</span></a>
+<a href="#operation-putManagementProviderKey"><span class="api-method api-method-put">PUT</span><code>/api/management/tenants/{tenant_id}/provider-keys/{provider}</code><span>Verify and save provider settings and a provider credential</span></a>
 <a href="#operation-revealManagementProviderKey"><span class="api-method api-method-post">POST</span><code>/api/management/tenants/{tenant_id}/provider-keys/{provider}/reveal</code><span>Reveal one saved provider credential</span></a>
 <a href="#operation-postManagementTenantSecret"><span class="api-method api-method-post">POST</span><code>/api/management/tenants/{tenant_id}/secrets</code><span>Generate and replace the tenant client secret</span></a>
 <a href="#operation-getManagementTenantUsage"><span class="api-method api-method-get">GET</span><code>/api/management/tenants/{tenant_id}/usage</code><span>Read interval-scoped usage for an owned tenant</span></a>
@@ -519,7 +519,8 @@
           <code>/api/management/tenants/{tenant_id}/provider-keys/{provider}</code>
           <span class="api-operation-id">putManagementProviderKey</span>
         </header>
-        <h2>Save provider settings and a provider credential</h2>
+        <h2>Verify and save provider settings and a provider credential</h2>
+        <p>A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider and text model under the management request context and shared upstream admission/rate-limit boundary. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential while updating settings without reverification.</p>
         <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
         <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
         <div class="api-contract-block">
@@ -541,7 +542,7 @@
             <table>
               <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>api_key</code></td><td>Yes</td><td>string</td><td>A replacement provider key. Send an empty string to retain the tenant&#39;s existing credential while updating its provider model or system prompt; an empty value is rejected when no credential exists.</td></tr>
+                <tr><td><code>api_key</code></td><td>Yes</td><td>string</td><td>An unverified new or replacement provider key. A nonempty value is verified against the exact path provider and selected text_model before any persistence. Send an empty string to retain the tenant&#39;s existing verified credential while updating its provider model or system prompt; an empty value is rejected when no credential exists.</td></tr>
 <tr><td><code>text_model</code></td><td>Yes</td><td>string</td><td></td></tr>
 <tr><td><code>system_prompt</code></td><td>Yes</td><td>string</td><td></td></tr>
               </tbody>
@@ -560,7 +561,11 @@
 <tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
 <tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
 <tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
+<tr><td><code>422</code></td><td>text/plain</td><td>none</td><td>The candidate credential was rejected or cannot access the selected text model. Nothing was saved.</td></tr>
+<tr><td><code>429</code></td><td>text/plain</td><td>none</td><td>The provider rate-limited the single verification operation. The credential remains unconfirmed and nothing was saved.</td></tr>
 <tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+<tr><td><code>503</code></td><td>text/plain</td><td>none</td><td>The provider was unavailable or returned a malformed success envelope. The credential remains unconfirmed and nothing was saved.</td></tr>
+<tr><td><code>504</code></td><td>text/plain</td><td>none</td><td>The single verification operation timed out or was canceled. The credential remains unconfirmed and nothing was saved.</td></tr>
               </tbody>
             </table>
           </div>

@@ -1025,7 +1025,7 @@ func TestRootCommandRejectsMissingDefaultTextProviderKeys(t *testing.T) {
 		{
 			name:     "moonshot alias",
 			provider: providerAliasKimi,
-			model:    proxy.ModelNameMoonshotKimi,
+			model:    proxy.ModelNameMoonshotKimiK26,
 			missingKey: func(values *providerYAMLValues) {
 				values.MoonshotAPIKey = "${P411_MISSING_MOONSHOT_KEY}"
 			},
@@ -1962,9 +1962,9 @@ providers:
     api_key: "%s"
     base_url: "%s"
     text:
-      default_model: "kimi-k2-0905-preview"
+      default_model: "%s"
       models:
-        - id: "kimi-k2-0905-preview"
+        - id: "%s"
   minimax:
     api_key: "%s"
     base_url: "%s"
@@ -2072,6 +2072,8 @@ providers:
 		values.QwenCloudBaseURL,
 		values.MoonshotAPIKey,
 		values.MoonshotBaseURL,
+		proxy.ModelNameMoonshotKimiK26,
+		proxy.ModelNameMoonshotKimiK26,
 		values.MiniMaxAPIKey,
 		values.MiniMaxBaseURL,
 		values.SiliconFlowAPIKey,
