@@ -1,7 +1,9 @@
 package proxy
 
 import (
+	"context"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"net/http"
 	"net/url"
@@ -9,11 +11,25 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/llm-proxy/internal/constants"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"go.uber.org/zap"
 )
 
 func requestLogPath(requestURL *url.URL) string {
 	return requestURL.EscapedPath()
+}
+
+func requestIdentifierHandler() gin.HandlerFunc {
+	return func(ginContext *gin.Context) {
+		requestID := rand.Text()
+		ginContext.Set(contextKeyRequestID, requestID)
+		ginContext.Header(llmproxycontract.HeaderRequestID, requestID)
+		ginContext.Next()
+	}
+}
+
+func requestIDFromContext(ginContext *gin.Context) string {
+	return ginContext.MustGet(contextKeyRequestID).(string)
 }
 
 // requestResponseLogger emits structured request and response metadata for traceability.
@@ -29,6 +45,7 @@ func requestResponseLogger(structuredLogger *zap.SugaredLogger) gin.HandlerFunc 
 			logFieldMethod, requestMethod,
 			constants.LogFieldPath, requestPath,
 			logFieldClientIP, requestClientIP,
+			logFieldRequestID, requestIDFromContext(ginContext),
 		)
 
 		ginContext.Next()
@@ -38,6 +55,7 @@ func requestResponseLogger(structuredLogger *zap.SugaredLogger) gin.HandlerFunc 
 		responseFields := []any{
 			logFieldStatus, responseStatus,
 			constants.LogFieldLatencyMilliseconds, responseLatencyMillis,
+			logFieldRequestID, requestIDFromContext(ginContext),
 		}
 		if requestTenant, authenticated := tenantIfPresentFromContext(ginContext); authenticated {
 			responseFields = append(responseFields, logFieldTenantID, requestTenant.identifier.string())
@@ -56,10 +74,11 @@ func tenantAuthenticatedHandler(authenticator tenantAuthenticator, structuredLog
 }
 
 func authenticateTenantRequest(ginContext *gin.Context, authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger) bool {
-	requestTenant, authenticated := authenticator.authenticate(ginContext.Query(queryParameterKey))
+	requestTenant, authenticated := authenticator.authenticate(ginContext.Request.Context(), ginContext.Query(queryParameterKey))
 	if !authenticated {
 		structuredLogger.Warnw(
 			logEventForbiddenRequest,
+			logFieldRequestID, requestIDFromContext(ginContext),
 		)
 		ginContext.String(http.StatusForbidden, errorMissingClientKey)
 		ginContext.Abort()
@@ -81,14 +100,14 @@ func newTenantAuthenticator(staticTenants tenantRegistry, managedTenants *manage
 	}
 }
 
-func (authenticator tenantAuthenticator) authenticate(rawSecret string) (tenant, bool) {
+func (authenticator tenantAuthenticator) authenticate(requestContext context.Context, rawSecret string) (tenant, bool) {
 	if requestTenant, authenticated := authenticator.staticTenants.authenticate(rawSecret); authenticated {
 		return requestTenant, true
 	}
 	if authenticator.managedTenants == nil {
 		return tenant{}, false
 	}
-	return authenticator.managedTenants.authenticate(rawSecret)
+	return authenticator.managedTenants.authenticate(requestContext, rawSecret)
 }
 
 func (authenticator tenantAuthenticator) containsStaticSecretDigest(secretDigest [sha256.Size]byte) bool {

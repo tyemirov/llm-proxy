@@ -97,6 +97,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}
 
 	router := gin.New()
+	router.Use(requestIdentifierHandler())
 	if normalizedLogLevel := strings.ToLower(configuration.LogLevel); normalizedLogLevel == LogLevelInfo || normalizedLogLevel == LogLevelDebug {
 		router.Use(requestResponseLogger(structuredLogger))
 	}
@@ -107,6 +108,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	geminiClient := newGeminiGenerateContentClient(upstreamHTTPClient)
 	anthropicClient := newAnthropicMessagesClient(upstreamHTTPClient)
 	upstreamProviders := newProviderRouter(openAIClient, chatClient, geminiClient, anthropicClient)
+	keyVerifier := newOperationalProviderKeyVerifier(upstreamHTTPClient, configuration.Endpoints, time.Duration(configuration.RequestTimeoutSeconds)*time.Second)
 	var managedTenants *managedTenantStore
 	runtimeStaticTenants := configuration.tenants
 	if configuration.Management.Enabled {
@@ -126,7 +128,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatHandler(upstreamProviders, providers, managedTenants, structuredLogger)),
 	)
 	if configuration.Management.Enabled {
-		managementService := newManagementService(configuration.Management, configuration.managementSessionValidator, managedTenants, providers, tenantAuthenticator, structuredLogger)
+		managementService := newManagementService(configuration.Management, configuration.managementSessionValidator, managedTenants, providers, keyVerifier, tenantAuthenticator, structuredLogger)
 		managementService.registerRoutes(router)
 	}
 	router.GET(rootPath, rootProxyHandler)
@@ -505,7 +507,7 @@ func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRoute
 		}
 		markRequestOutcome(ginContext, requestFailureOutcome(requestError), managedRequestFailureOutcome(requestError))
 		statusCode := statusCodeForError(requestError)
-		ginContext.String(statusCode, responseMessageForError(requestError))
+		writeProviderRequestErrorResponse(ginContext, chatRequest.provider.identifier.string(), requestError, structuredLogger)
 		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), statusCode, generation.usage, requestStart)
 		return
 	}
@@ -608,7 +610,7 @@ func dictateHandler(upstreamProviders *providerRouter, providers *providerRegist
 			}
 			markRequestOutcome(ginContext, requestFailureOutcome(requestError), managedRequestFailureOutcome(requestError))
 			statusCode := statusCodeForError(requestError)
-			ginContext.String(statusCode, responseMessageForError(requestError))
+			writeProviderRequestErrorResponse(ginContext, providerDefinition.identifier.string(), requestError, structuredLogger)
 			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, providerDefinition.identifier.string(), modelIdentifier.string(), statusCode, nil, requestStart)
 			return
 		}
@@ -637,10 +639,7 @@ func recordManagedUsage(managedTenants *managedTenantStore, structuredLogger *za
 		return
 	}
 	ginContext.Writer.Flush()
-	requestContext := ginContext.Request.Context()
-	persistenceContext, cancelPersistence := context.WithTimeout(context.WithoutCancel(requestContext), managedUsagePersistenceTimeout)
-	defer cancelPersistence()
-	recordError := managedTenants.recordUsage(persistenceContext, requestTenant, managedUsageEvent{
+	managedTenants.usageWriter.submit(requestTenant, managedUsageEvent{
 		endpoint:            endpoint,
 		providerIdentifier:  providerIdentifier,
 		modelIdentifier:     modelIdentifier,
@@ -648,21 +647,7 @@ func recordManagedUsage(managedTenants *managedTenantStore, structuredLogger *za
 		outcomeCode:         requestTimeoutStateFromContext(ginContext).managedUsageOutcome,
 		latencyMilliseconds: time.Since(requestStart).Milliseconds(),
 		usage:               usage,
-	})
-	if recordError != nil {
-		if context.Cause(requestContext) != nil {
-			return
-		}
-		structuredLogger.Warnw(
-			logEventUsageRecordFailed,
-			logFieldTenantID, requestTenant.identifier.string(),
-			logFieldEndpoint, endpoint,
-			logFieldProvider, providerIdentifier,
-			logFieldModel, modelIdentifier,
-			logFieldStatus, statusCode,
-			constants.LogFieldError, recordError,
-		)
-	}
+	}, structuredLogger)
 }
 
 func recordManagedUsageValidationFailure(managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, ginContext *gin.Context, requestTenant tenant, endpoint string, providerIdentifier string, modelIdentifier string, requestStart time.Time) {
@@ -780,8 +765,5 @@ func statusCodeForError(requestError error) int {
 }
 
 func responseMessageForError(requestError error) string {
-	if errors.Is(requestError, context.DeadlineExceeded) || errors.Is(requestError, context.Canceled) {
-		return errorRequestTimedOut
-	}
 	return requestError.Error()
 }

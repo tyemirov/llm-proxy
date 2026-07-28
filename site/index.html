@@ -26,8 +26,8 @@
       type="application/json"
       data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
     ></script>
-    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260727"></script>
-    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260727"></script>
+    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260727i036"></script>
+    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260727i036"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body x-data="llmProxyKeyManagement" x-init="init()">
@@ -412,7 +412,7 @@
               >
                 <header class="settings-header">
                   <p id="settings-title" class="eyebrow" x-text="copy.settingsEyebrow"></p>
-                  <button type="button" class="icon-only settings-close" x-ref="settingsClose" x-on:click="closeSettings()" x-bind:disabled="settingsClosePending" x-bind:title="copy.closeSettings" x-bind:aria-label="copy.closeSettings">
+                  <button type="button" class="icon-only settings-close" x-ref="settingsClose" x-on:mousedown.prevent x-on:click="closeSettings()" x-bind:disabled="settingsClosePending || providerKeyVerificationPending" x-bind:title="copy.closeSettings" x-bind:aria-label="copy.closeSettings">
                     <svg class="utility-icon close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
                       <path d="M6 6l12 12"></path>
                       <path d="M18 6L6 18"></path>
@@ -672,7 +672,7 @@
                               <span x-text="selectedProvider.label + copy.providerKeySuffix"></span>
                             </label>
                             <provider-key-input>
-                              <input id="provider-api-key-input" x-ref="providerKeyInput" type="text" autocomplete="off" x-bind:value="selectedProviderKeyInputValue" x-on:input="handleSelectedProviderKeyInput($event)" x-on:change="autosaveSelectedProvider()" x-bind:readonly="selectedProviderKeyInputReadOnly" x-bind:disabled="settingsControlsDisabled || providerKeyRevealPending">
+                              <input id="provider-api-key-input" x-ref="providerKeyInput" type="text" autocomplete="off" x-bind:value="selectedProviderKeyInputValue" x-on:paste="handleSelectedProviderKeyPaste()" x-on:input="handleSelectedProviderKeyInput($event)" x-on:change="autosaveSelectedProvider()" x-bind:readonly="selectedProviderKeyInputReadOnly" x-bind:disabled="busy || settingsClosePending || providerKeyRevealPending">
                               <button type="button" class="icon-only provider-key-visibility-toggle" x-show="selectedProvider.has_key || selectedProviderKeyHasInput" x-on:mousedown.prevent x-on:click="handleSelectedProviderKeyAction()" x-bind:disabled="settingsControlsDisabled || providerAutosavePending || providerKeyRevealPending" x-bind:title="selectedProviderKeyActionCopy" x-bind:aria-label="selectedProviderKeyActionCopy" x-bind:aria-pressed="providerKeyVisible">
                                 <span class="material-symbols-outlined" x-show="!providerKeyVisible" aria-hidden="true">visibility</span>
                                 <span class="material-symbols-outlined" x-show="providerKeyVisible" aria-hidden="true">visibility_off</span>
@@ -681,6 +681,11 @@
                                 <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                               </button>
                             </provider-key-input>
+                            <p class="field-hint provider-key-verification-pending" role="status" aria-live="polite" x-cloak x-show="providerKeyVerificationPending" x-text="copy.providerKeyVerifying"></p>
+                            <provider-key-verification-error class="field-error" role="alert" x-cloak x-show="providerKeyVerificationFailed">
+                              <span x-text="providerKeyVerificationFailure"></span>
+                              <button type="button" x-on:click="retrySelectedProviderKeyVerification()" x-bind:disabled="settingsControlsDisabled" x-text="copy.providerKeyRetry"></button>
+                            </provider-key-verification-error>
                           </provider-key-field>
                           <label>
                             <span x-text="copy.providerTextModel"></span>

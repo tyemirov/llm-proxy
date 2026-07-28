@@ -342,6 +342,27 @@ func TestManagementConfigurationInternalEdges(t *testing.T) {
 			t.Fatalf("admin email error=%v want %v", emailError, ErrInvalidManagementConfiguration)
 		}
 	}
+	invalidQueueConfiguration := ManagementConfiguration{
+		Enabled:                  true,
+		PublicOrigin:             "https://llm-proxy.example",
+		UIDescription:            "LLM Proxy",
+		UIOrigins:                []string{"https://llm-proxy.example"},
+		TAuthURL:                 "https://tauth.example",
+		TAuthTenantID:            "llm-proxy",
+		GoogleClientID:           "google-client",
+		LoginPath:                "/auth/google",
+		LogoutPath:               "/auth/logout",
+		NoncePath:                "/auth/nonce",
+		SessionPath:              "/auth/session",
+		DatabasePath:             "management.sqlite",
+		UsageQueueSize:           -1,
+		ProviderKeyEncryptionKey: testManagedProviderKeyEncryptionKey,
+		ManagementAPIOrigin:      "https://llm-proxy-api.example",
+		ProxyOrigin:              "https://llm-proxy-api.example",
+	}
+	if validationError := validateManagementConfiguration(invalidQueueConfiguration); !errors.Is(validationError, ErrInvalidManagementConfiguration) || !strings.Contains(validationError.Error(), "management.usage_queue_size") {
+		t.Fatalf("usage queue validation error=%v", validationError)
+	}
 }
 
 func TestTenantRegistryContainsSecretDigestEdges(t *testing.T) {

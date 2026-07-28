@@ -8,13 +8,94 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/glebarez/sqlite"
 	"github.com/tyemirov/llm-proxy/internal/constants"
 	"gorm.io/gorm"
 )
+
+type blockingUsageManagedTenantDatabase struct {
+	managedTenantDatabase
+	usageStarted chan struct{}
+	usageRelease chan struct{}
+}
+
+func (database *blockingUsageManagedTenantDatabase) createUsageEvent(requestContext context.Context, record managedUsageEventRecord) error {
+	close(database.usageStarted)
+	select {
+	case <-database.usageRelease:
+		return database.managedTenantDatabase.createUsageEvent(requestContext, record)
+	case <-requestContext.Done():
+		return requestContext.Err()
+	}
+}
+
+func TestManagedTenantAuthenticationDoesNotWaitForUsagePersistence(t *testing.T) {
+	const (
+		rawSecret = "llmp_parallel_authentication"
+		ownerID   = "parallel-owner"
+		tenantID  = "parallel-tenant"
+	)
+	secretDigest := sha256.Sum256([]byte(rawSecret))
+	secretDigestText := hex.EncodeToString(secretDigest[:])
+	baseDatabase := newFakeManagedTenantDatabase()
+	record := fakeTenantRecord(ownerID, tenantID, "Parallel", time.Now().UTC())
+	record.SecretDigest = &secretDigestText
+	baseDatabase.tenantsByID[tenantID] = record
+	blockingDatabase := &blockingUsageManagedTenantDatabase{
+		managedTenantDatabase: baseDatabase,
+		usageStarted:          make(chan struct{}),
+		usageRelease:          make(chan struct{}),
+	}
+	store := newManagedTenantStoreWithDatabase(blockingDatabase)
+	usageContext, cancelUsage := context.WithCancel(context.Background())
+	defer cancelUsage()
+	usageRecord, usageRecordError := store.newManagedUsageRecord(tenant{
+		identifier: tenantID,
+		userID:     ownerID,
+		managed:    true,
+	}, managedUsageEvent{outcomeCode: managedUsageOutcomeSuccess})
+	if usageRecordError != nil {
+		t.Fatalf("usage record error=%v", usageRecordError)
+	}
+	usageDone := make(chan error, 1)
+	go func() {
+		usageDone <- store.persistManagedUsageRecord(usageContext, usageRecord)
+	}()
+
+	select {
+	case <-blockingDatabase.usageStarted:
+	case <-time.After(time.Second):
+		cancelUsage()
+		t.Fatal("usage persistence did not start")
+	}
+
+	authenticationDone := make(chan bool, 1)
+	go func() {
+		_, authenticated := store.authenticate(context.Background(), rawSecret)
+		authenticationDone <- authenticated
+	}()
+	select {
+	case authenticated := <-authenticationDone:
+		if !authenticated {
+			cancelUsage()
+			t.Fatal("managed tenant did not authenticate")
+		}
+	case <-time.After(time.Second):
+		cancelUsage()
+		<-usageDone
+		t.Fatal("managed authentication waited for unrelated usage persistence")
+	}
+
+	close(blockingDatabase.usageRelease)
+	if usageError := <-usageDone; usageError != nil {
+		t.Fatalf("usage persistence error=%v", usageError)
+	}
+}
 
 func TestManagedTenantStoreCipherAndSnapshotEdges(t *testing.T) {
 	providers := internalManagementProviderRegistry()
@@ -35,6 +116,7 @@ func TestManagedTenantStoreCipherAndSnapshotEdges(t *testing.T) {
 	})
 	if _, storeError := newManagedTenantStore(ManagementConfiguration{
 		ProviderKeyEncryptionKey: testManagedProviderKeyEncryptionKey,
+		DatabaseDialector:        sqlite.Open(":memory:"),
 	}, invalidDefaultsProviders); storeError != nil {
 		t.Fatalf("text-only provider catalog store error=%v", storeError)
 	}
@@ -414,32 +496,32 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	store.routingDefaults = internalManagementProviderRegistry()
 	store.now = func() time.Time { return now }
 
-	if _, saveError := store.saveProviderKey(principal, "missing", newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantNotFound) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, "missing", newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantNotFound) {
 		t.Fatalf("provider tenant error=%v", saveError)
 	}
-	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), " ", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyInvalid) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), " ", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyInvalid) {
 		t.Fatalf("blank provider error=%v", saveError)
 	}
 	store.randomReader = strings.NewReader("")
-	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyEncryption) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedProviderKeyEncryption) {
 		t.Fatalf("provider encryption error=%v", saveError)
 	}
 	store.randomReader = bytes.NewReader(bytes.Repeat([]byte{1}, 256))
 	database.saveProviderKeyErrors = []error{errInternalTestDatabase}
-	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
 		t.Fatalf("provider persistence error=%v", saveError)
 	}
-	snapshot, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, "provider system")
+	snapshot, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-key", ModelNameGPT41, "provider system")
 	if saveError != nil || snapshot.providerSettings[newProviderID(ProviderNameOpenAI)].apiKey != "sk-key" {
 		t.Fatalf("provider snapshot=%+v error=%v", snapshot, saveError)
 	}
 	originalCiphertext := database.tenantsByID[identifier.string()].ProviderAPIKeys[0].EncryptedAPIKey
-	snapshot, saveError = store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "", ModelNameGPT55, "updated system")
+	snapshot, saveError = store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "", ModelNameGPT55, "updated system")
 	if saveError != nil || snapshot.providerSettings[newProviderID(ProviderNameOpenAI)].textModel != ModelNameGPT55 || database.tenantsByID[identifier.string()].ProviderAPIKeys[0].EncryptedAPIKey != originalCiphertext {
 		t.Fatalf("updated snapshot=%+v error=%v", snapshot, saveError)
 	}
 	database.tenantByOwnerAndIDErrors = []error{nil, errInternalTestDatabase}
-	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "", ModelNameGPT41, ""); !errors.Is(saveError, errManagedTenantStorePersist) {
 		t.Fatalf("provider reload error=%v", saveError)
 	}
 
@@ -526,13 +608,13 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	if generationError != nil || rawSecret == "" || !secretSnapshot.hasSecret {
 		t.Fatalf("generated secret=%q snapshot=%+v error=%v", rawSecret, secretSnapshot, generationError)
 	}
-	if authenticatedTenant, authenticated := store.authenticate(rawSecret); !authenticated || authenticatedTenant.identifier.string() != identifier.string() {
+	if authenticatedTenant, authenticated := store.authenticate(context.Background(), rawSecret); !authenticated || authenticatedTenant.identifier.string() != identifier.string() {
 		t.Fatalf("authenticated=%t tenant=%+v", authenticated, authenticatedTenant)
 	}
-	if _, authenticated := store.authenticate(" "); authenticated {
+	if _, authenticated := store.authenticate(context.Background(), " "); authenticated {
 		t.Fatal("blank secret authenticated")
 	}
-	if _, authenticated := store.authenticate("missing"); authenticated {
+	if _, authenticated := store.authenticate(context.Background(), "missing"); authenticated {
 		t.Fatal("missing secret authenticated")
 	}
 	record = database.tenantsByID[identifier.string()]
@@ -540,7 +622,7 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	record.SecretDigest = &invalidDigest
 	database.tenantsByID[identifier.string()] = record
 	database.tenantBySecretDigestErrors = []error{nil}
-	if _, authenticated := store.authenticate(rawSecret); authenticated {
+	if _, authenticated := store.authenticate(context.Background(), rawSecret); authenticated {
 		t.Fatal("invalid stored digest authenticated")
 	}
 	digest := sha256.Sum256([]byte(rawSecret))
@@ -549,7 +631,7 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 	record.SecretDigest = &wrongDigestText
 	database.tenantsByID[identifier.string()] = record
 	database.tenantBySecretDigestRecord = &record
-	if _, authenticated := store.authenticate(rawSecret); authenticated {
+	if _, authenticated := store.authenticate(context.Background(), rawSecret); authenticated {
 		t.Fatal("mismatched digest authenticated")
 	}
 	database.tenantBySecretDigestRecord = nil
@@ -559,31 +641,69 @@ func TestManagedTenantStoreProviderSecretUsageAndAdminEdges(t *testing.T) {
 		TenantID: identifier.string(), ProviderID: ProviderNameOpenAI, EncryptedAPIKey: "invalid",
 	}}
 	database.tenantsByID[identifier.string()] = record
-	if _, authenticated := store.authenticate(rawSecret); authenticated {
+	if _, authenticated := store.authenticate(context.Background(), rawSecret); authenticated {
 		t.Fatal("tenant with invalid provider key authenticated")
 	}
 	record.ProviderAPIKeys = nil
 	database.tenantsByID[identifier.string()] = record
 
-	unmanagedTenant := tenant{}
-	if usageError := store.recordUsage(context.Background(), unmanagedTenant, managedUsageEvent{}); usageError != nil {
-		t.Fatalf("unmanaged usage error=%v", usageError)
+	store.mutex.mutations.Lock()
+	postGateContext, cancelPostGateContext := context.WithCancel(context.Background())
+	postGateLockComplete := make(chan error, 1)
+	go func() {
+		postGateLockComplete <- store.mutex.LockContext(postGateContext)
+	}()
+	postGateDeadline := time.Now().Add(time.Second)
+	for len(store.mutex.databaseWrite) == 0 && time.Now().Before(postGateDeadline) {
+		runtime.Gosched()
 	}
+	if len(store.mutex.databaseWrite) == 0 {
+		cancelPostGateContext()
+		store.mutex.mutations.Unlock()
+		t.Fatal("context-aware mutation lock did not acquire the database write gate")
+	}
+	cancelPostGateContext()
+	store.mutex.mutations.Unlock()
+	select {
+	case lockError := <-postGateLockComplete:
+		if !errors.Is(lockError, context.Canceled) {
+			t.Fatalf("post-gate cancellation error=%v", lockError)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("context-aware mutation lock did not release after cancellation")
+	}
+	if len(store.mutex.databaseWrite) != 0 {
+		t.Fatal("context-aware mutation lock retained the database write gate after cancellation")
+	}
+
 	cancelledContext, cancel := context.WithCancel(context.Background())
 	cancel()
 	managedTenant := tenant{identifier: tenantID(identifier.string()), userID: principal.userID, managed: true}
-	if usageError := store.recordUsage(cancelledContext, managedTenant, managedUsageEvent{}); !errors.Is(usageError, context.Canceled) || !errors.Is(usageError, errManagedTenantStorePersist) {
+	usageRecord, usageRecordError := store.newManagedUsageRecord(managedTenant, managedUsageEvent{outcomeCode: managedUsageOutcomeSuccess})
+	if usageRecordError != nil {
+		t.Fatalf("usage record error=%v", usageRecordError)
+	}
+	if lockError := store.mutex.DatabaseWriteLockContext(context.Background()); lockError != nil {
+		t.Fatalf("hold usage database write gate: %v", lockError)
+	}
+	usageError := store.persistManagedUsageRecord(cancelledContext, usageRecord)
+	store.mutex.DatabaseWriteUnlock()
+	if !errors.Is(usageError, context.Canceled) || !errors.Is(usageError, errManagedTenantStorePersist) {
 		t.Fatalf("cancelled usage error=%v", usageError)
 	}
 	database.createUsageEventError = errInternalTestDatabase
-	if usageError := store.recordUsage(context.Background(), managedTenant, managedUsageEvent{outcomeCode: managedUsageOutcomeSuccess}); !errors.Is(usageError, errManagedTenantStorePersist) {
+	if usageError := store.persistManagedUsageRecord(context.Background(), usageRecord); !errors.Is(usageError, errManagedTenantStorePersist) {
 		t.Fatalf("persist usage error=%v", usageError)
 	}
 	database.createUsageEventError = nil
-	if usageError := store.recordUsage(context.Background(), managedTenant, managedUsageEvent{
+	usageRecord, usageRecordError = store.newManagedUsageRecord(managedTenant, managedUsageEvent{
 		endpoint: usageEndpointText, providerIdentifier: ProviderNameOpenAI, modelIdentifier: ModelNameGPT41,
 		statusCode: http.StatusOK, outcomeCode: managedUsageOutcomeSuccess, latencyMilliseconds: 12, usage: &tokenUsage{RequestTokens: 2, ResponseTokens: 3, TotalTokens: 5},
-	}); usageError != nil {
+	})
+	if usageRecordError != nil {
+		t.Fatalf("usage record error=%v", usageRecordError)
+	}
+	if usageError := store.persistManagedUsageRecord(context.Background(), usageRecord); usageError != nil {
 		t.Fatalf("record usage error=%v", usageError)
 	}
 
@@ -666,7 +786,7 @@ func TestManagedTenantStoreProviderRoutingReconciliationErrors(t *testing.T) {
 		TextModel:       ModelNameGPT41,
 	}}
 	database.tenantsByID[identifier.string()] = record
-	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameDeepSeek), "sk-deepseek", ModelNameDeepSeekV4Flash, ""); !errors.Is(saveError, errManagedProviderKeyDecryption) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameDeepSeek), "sk-deepseek", ModelNameDeepSeekV4Flash, ""); !errors.Is(saveError, errManagedProviderKeyDecryption) {
 		t.Fatalf("save provider decryption error=%v", saveError)
 	}
 	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedProviderKeyDecryption) {
@@ -677,7 +797,7 @@ func TestManagedTenantStoreProviderRoutingReconciliationErrors(t *testing.T) {
 	record.DefaultProvider = "missing"
 	record.DefaultModel = ""
 	database.tenantsByID[identifier.string()] = record
-	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
 		t.Fatalf("save invalid defaults error=%v", saveError)
 	}
 	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedRoutingDefaultsInvalid) {
@@ -701,7 +821,7 @@ func TestManagedTenantStoreProviderRoutingReconciliationErrors(t *testing.T) {
 		TextModel:       "missing-model",
 	}}
 	database.tenantsByID[identifier.string()] = record
-	if _, saveError := store.saveProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
+	if _, saveError := store.saveProviderKey(context.Background(), principal, identifier, newProviderID(ProviderNameOpenAI), "sk-openai", ModelNameGPT41, ""); !errors.Is(saveError, errManagedRoutingDefaultsInvalid) {
 		t.Fatalf("save reconciliation error=%v", saveError)
 	}
 	if _, removeError := store.removeProviderKey(principal, identifier, newProviderID(ProviderNameOpenAI)); !errors.Is(removeError, errManagedRoutingDefaultsInvalid) {

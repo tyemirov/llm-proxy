@@ -75,15 +75,9 @@ func (client *anthropicMessagesClient) generateText(parentContext context.Contex
 	httpRequest.Header.Set(anthropicAPIKeyHeader, strings.TrimSpace(apiKey))
 	httpRequest.Header.Set(anthropicVersionHeader, anthropicVersionValue)
 
-	statusCode, responseBytes, _, requestError := utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEventProviderRequestError)
-	if requestError != nil {
-		return textGenerationResult{}, requestError
-	}
-	if statusCode == http.StatusTooManyRequests {
-		return textGenerationResult{}, fmt.Errorf("%w: anthropic Messages", ErrProviderRateLimited)
-	}
-	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-		return textGenerationResult{}, fmt.Errorf("%w: status=%d", ErrProviderAPI, statusCode)
+	statusCode, responseBytes, responseHeader, _, requestError := utils.PerformHTTPRequest(client.httpClient.Do, httpRequest, structuredLogger, logEventProviderRequestError)
+	if responseError := providerResponseError(statusCode, responseHeader, requestError); responseError != nil {
+		return textGenerationResult{}, responseError
 	}
 	generation, parseError := parseAnthropicMessagesResponse(responseBytes)
 	if parseError != nil {

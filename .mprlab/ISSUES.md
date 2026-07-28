@@ -37,6 +37,56 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B089] (P1) Return sanitized, correlated provider errors at the public proxy boundary.
+  Goal:
+  Let clients distinguish a proxy status from the exact upstream provider
+  condition without exposing provider-controlled error bodies or messages.
+
+  Requirements:
+  - Replace provider-originated plaintext `429` and `502` bodies with one
+    canonical JSON envelope containing `code`, canonical `provider`,
+    `upstream_status`, `retryable`, proxy-owned `request_id`, and
+    `retry_after`.
+  - Keep every field present. Use `null` for `upstream_status` when no usable
+    unsuccessful provider HTTP response exists and for `retry_after` when the
+    provider omitted it or supplied an invalid value.
+  - Preserve upstream `429` as public `429`; continue mapping every other
+    provider failure to public `502`, with the exact received status carried
+    separately in `upstream_status`.
+  - Set `retryable` only for upstream HTTP `408`, `425`, `429`, `500`, `502`,
+    `503`, and `504`. Document that this classification does not make LLM
+    requests idempotent or remove duplicate-work and billing risk.
+  - Accept only unsigned delta seconds or parseable HTTP dates from an
+    upstream `Retry-After`, normalize the value, and return it in both JSON and
+    the response header. Drop malformed values.
+  - Generate the request ID inside the proxy, return it in
+    `X-LLM-Proxy-Request-ID`, and record the same value with sanitized
+    provider metadata in structured logs.
+  - Apply the contract to OpenAI Responses and dictation,
+    OpenAI-compatible providers, Gemini, and Anthropic. Never retain a raw
+    provider error body in the public response or provider-failure log.
+
+  Validation:
+  - Exercise the public router against controlled OpenAI, Anthropic, Meta,
+    Gemini, Moonshot, and dictation failures. Assert exact proxy and upstream
+    statuses, retryability, normalized and rejected `Retry-After` values,
+    request-ID correlation, JSON schema, and raw-body non-disclosure.
+  - Validate the canonical OpenAPI document and generated reference against
+    the new `429` and `502` contract.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+  Resolution:
+  - Added typed provider HTTP metadata across every provider adapter and a
+    single public error writer that returns the six-field sanitized envelope.
+  - Added proxy-owned request IDs to response headers and structured request,
+    response, authentication-failure, and provider-failure logs.
+  - Removed OpenAI raw response-body and response-text logging and retained
+    only validated `Retry-After` data for provider failures.
+  - Added public-boundary coverage for all five live-test providers plus
+    dictation and response-protocol failures, and updated README/OpenAPI
+    documentation and generated API reference.
+
 - [x] [B086] (P1) Make Default-tenant production live tests repeatable.
   Goal:
   Provide one paid, production-boundary command that proves the Default tenant
@@ -97,6 +147,17 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     OpenAI, Anthropic, and Meta echo cases using the same Default-tenant client
     secret. Gemini echo returned safe HTTP `502`; Moonshot echo returned safe
     HTTP `429`. The independent long-completion failures are tracked in B088.
+  - The I036 disposable managed-key run authenticated the supplied Kimi
+    credential against Moonshot's model catalog (`200`), where the configured
+    former default was absent. The same credential verified and completed its
+    smoke request with cataloged `kimi-k2.6` (`200`/`200`), isolating the
+    credential from the existing default-route repair.
+  - An authenticated catalog recheck on 2026-07-28 again returned `200`,
+    confirmed the former default remains absent, and confirmed `kimi-k2.6` is
+    present. The checked-in catalog now removes the obsolete model and promotes
+    `kimi-k2.6`. The disposable managed-key harness then verified that new
+    default and completed its smoke request (`200`/`200`); the production
+    Default-tenant saved route remains unverified.
 
   Requirements:
   - Diagnose the exact Default-tenant Gemini `502` and Moonshot `429` at the
@@ -1361,7 +1422,274 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Improvements
 
-- [ ] [I036] (P1) {F014,B081} Verify pasted provider API keys before persisting them.
+- [x] [I042] (P1) Remove managed-request serialization from SQLite authentication.
+  Goal:
+  Keep SQLite as the sole managed-tenant source of truth while allowing each
+  proxy request to wait only for its own database read and selected provider,
+  rather than another request's usage write or management mutation.
+
+  Requirements:
+  - Open the canonical runtime GORM SQLite database in WAL mode with a bounded
+    busy timeout. Keep injected dialectors test-only and add no application
+    cache, replica, dual read, or invalidation path.
+  - Propagate the caller context into managed authentication and load each
+    tenant plus its provider settings through one consistent GORM read
+    transaction.
+  - Remove authentication and single-event usage persistence from the
+    process-wide management mutation lock. Keep multi-statement management
+    changes atomic through their existing GORM transactions.
+  - Preserve the blocking public response, secret-digest comparison,
+    provider-key decryption, routing-default, usage, and migration contracts.
+  - Document SQLite/GORM concurrency ownership in the canonical management
+    persistence guidance.
+
+  Validation:
+  - Public HTTP coverage using a disposable runtime SQLite database proves WAL
+    mode permits managed authentication and upstream routing while another
+    connection holds an exclusive write transaction.
+  - Concurrency coverage proves an in-flight managed usage write cannot block
+    authentication for an independent request.
+  - The required post-change `make ci` passes after the final code edit.
+
+  Resolved 2026-07-27:
+  - Runtime managed SQLite connections now use WAL journaling and a five-second
+    busy timeout. Authentication uses the caller context and one read-only GORM
+    transaction, while authentication and single usage inserts bypass the
+    management mutation mutex without adding an application cache.
+  - Public HTTP coverage reaches the selected provider while another connection
+    holds an exclusive SQLite writer, and deterministic store coverage proves a
+    blocked usage insert cannot delay independent authentication.
+  - The final `make ci` passed with exact 100% Go statement coverage, all Python
+    and frontend tests, the TAuth black-box test, release tests, and the live
+    provider harness preflight.
+
+- [ ] [I037] (P1) Model provider wire contracts separately from execution lifecycles.
+  Goal:
+  Let each configured text model use its provider's exact current request shape
+  and execution lifecycle without inferring OpenAI Responses semantics from an
+  endpoint name, an SDK, or the presence of an upstream identifier.
+
+  Evidence:
+  - The registry currently collapses wire format and execution behavior into
+    four transport constants: OpenAI Responses, OpenAI-compatible Chat
+    Completions, Gemini `generateContent`, and Anthropic Messages.
+  - OpenAI Responses is a pollable background resource; Gemini Interactions is
+    independently pollable; xAI Responses is synchronous even though it exposes
+    stored response IDs; and several SDKs call ordinary concurrent HTTP methods
+    `async` without creating a server-side job.
+  - The shared output-continuation coordinator starts a new inference request
+    after output-limit exhaustion. That is distinct from observing one
+    in-progress upstream request and must not be described or implemented as
+    polling.
+  - The provider-by-provider audit produced these no-migration conclusions:
+    - OpenAI already uses its native pollable Responses background resource;
+      move its remaining router special case behind this shared capability
+      model rather than opening a separate provider refactor:
+      https://developers.openai.com/api/docs/guides/background
+    - DeepSeek, Moonshot, MiniMax, SiliconFlow, and Zhipu each document an
+      interactive synchronous or streaming Chat Completions contract. Keep
+      those canonical paths; do not turn response IDs, SDK concurrency, media
+      task APIs, or offline Batch APIs into text polling:
+      https://api-docs.deepseek.com/api/create-chat-completion
+      https://platform.kimi.ai/docs/api/chat
+      https://platform.minimax.io/docs/api-reference/text-chat-openai
+      https://docs.siliconflow.com/en/userguide/capabilities/text-generation
+      https://docs.bigmodel.cn/api-reference/%E6%A8%A1%E5%9E%8B-api/%E5%AF%B9%E8%AF%9D%E8%A1%A5%E5%85%A8
+    - Anthropic's canonical interactive inference surface remains Messages.
+      Message Batches and Managed Agents change workload and product semantics,
+      so neither belongs in the blocking proxy completion path:
+      https://platform.claude.com/docs/en/api/messages/create
+      https://platform.claude.com/docs/en/managed-agents/overview
+    - Meta remains on the currently evidenced synchronous Chat contract. Its
+      authoritative model and Chat references are authentication-gated, so no
+      newer lifecycle may be proposed until accessible first-party evidence
+      exists:
+      https://dev.meta.ai/docs/features/chat-completion
+  - Only DashScope, Qwen Cloud, Gemini, and Grok produced independently
+    actionable provider work; their issues follow this prerequisite.
+
+  Requirements:
+  - Replace the combined transport enum with closed, validated provider/model
+    capabilities for wire contract and execution lifecycle. Active lifecycle
+    variants must distinguish synchronous completion from reusable pollable
+    resources; if a one-read deferred result is ever adopted, give it a
+    separate exact variant rather than reusing the pollable-resource contract.
+    Do not use `supports_responses`, `background`, or similarly ambiguous
+    booleans.
+  - Resolve capabilities at the model boundary when a provider supports a newer
+    API for only part of its catalog. Each registered model has one canonical
+    current path; do not add runtime fallback from a newer API to Chat
+    Completions.
+  - Keep the public `GET /`, `POST /`, and `POST /v2` contract blocking. An
+    adapter may create and observe an upstream resource internally, but callers
+    continue to receive one final proxy response or one terminal proxy error.
+  - Keep output-limit continuation as a separate coordinator concern.
+    Continuation may consume a provider-native continuation primitive only when
+    its semantics are documented; it must never poll an arbitrary response ID.
+  - Make each adapter own its exact request fields, terminal states, result
+    retrieval rules, cancellation/deletion behavior, usage extraction, and
+    safe error translation. Offline batch products and managed-agent sessions
+    are not interactive lifecycle variants.
+  - Move OpenAI's existing background-resource behavior behind the new
+    capability model as part of this issue. Record the audited no-migration
+    providers in the registry and provider-routing documentation without
+    creating replacement wire adapters for them.
+  - Document the capability matrix and data-retention consequences in the
+    canonical provider-routing guide and generated API reference. Delete the
+    obsolete combined transport contract in the same forward-only change.
+
+  Validation:
+  - Black-box routing coverage enumerates every registered provider/model and
+    fails when its wire contract or lifecycle is absent, contradictory, or
+    inferred from another field.
+  - Public-boundary fixtures prove synchronous, pollable, continuation,
+    cancellation, timeout, and provider-terminal-error behavior without
+    exposing upstream IDs or provider bodies.
+
+- [ ] [I038] (P2) {I037} Adopt DashScope's synchronous Responses API without background mode.
+  Goal:
+  Move eligible DashScope Qwen models from Chat Completions to Alibaba's newer
+  Responses wire format while retaining its explicitly synchronous lifecycle.
+
+  Evidence:
+  - Alibaba documents an OpenAI-compatible Responses endpoint with typed output,
+    tools, `previous_response_id`, and storage controls:
+    https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses
+  - The same reference states that `background` is unsupported and that only
+    synchronous calls are processed. Unlisted OpenAI fields may be ignored.
+
+  Requirements:
+  - Verify the Responses support matrix for every configured DashScope model.
+    Migrate supported models to a dedicated DashScope Responses wire adapter;
+    leave any unsupported model on one explicitly registered current contract
+    rather than trying Responses and falling back at runtime.
+  - Send only Alibaba-documented fields and omit `background`. Parse typed
+    output items, incomplete status, Qwen reasoning usage, and provider errors
+    from the Alibaba schema rather than the OpenAI schema by assumption.
+  - Keep public proxy calls stateless unless a separately approved retention
+    contract requires stored provider state. Do not adopt
+    `previous_response_id`, conversations, built-in tools, or default storage
+    merely because the fields exist.
+  - Use output-limit continuation only after a terminal incomplete result.
+    Never issue `GET /responses/{id}` as a progress poll.
+
+  Validation:
+  - Public black-box tests prove the eligible-model request shape, typed text
+    extraction, synchronous incomplete continuation, usage, safe errors, and
+    rejection of accidental `background` or unsupported OpenAI-only fields.
+
+- [!] [I039] (P1) {I037} Replace or retire the backend-ineligible Qwen Cloud Token Plan provider.
+  Goal:
+  Stop treating an interactive-tool subscription as an application-backend
+  provider before considering any Responses API refactor.
+
+  Evidence:
+  - The canonical `qwencloud` provider points at
+    `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`.
+  - Alibaba's current base-URL and integration documentation says Token Plan is
+    for interactive AI coding tools and is not for custom applications,
+    automated scripts, or application backends:
+    https://www.alibabacloud.com/help/en/model-studio/base-url
+    https://www.alibabacloud.com/help/en/model-studio/more-tools
+  - Token Plan documentation mentions Responses-powered harness tools, but that
+    does not authorize LLM Proxy production traffic or establish an interactive
+    background-resource contract.
+
+  Blocked:
+  An operator/product decision and eligible Alibaba service credential are
+  required: either replace `qwencloud` with a distinct backend-authorized
+  service contract, or remove the redundant provider and use the canonical
+  DashScope provider.
+
+  Requirements:
+  - Send no LLM Proxy backend traffic to the Token Plan endpoint after this
+    issue is resolved. Do not probe newer API shapes with production tenant
+    requests while eligibility is unresolved.
+  - If a distinct backend-authorized service is selected, document its exact
+    credential, base URL, models, wire API, lifecycle, and billing identity,
+    then migrate persisted provider settings once into that canonical contract.
+  - If no distinct service exists, reject new `qwencloud` settings, migrate or
+    explicitly invalidate existing persisted selections, and delete the
+    provider, environment placeholders, docs, and tests. Do not alias it to
+    DashScope or silently fall back to DashScope credentials.
+
+  Validation:
+  - Runtime configuration and public routing tests prove that no Token Plan
+    domain can receive backend inference requests and that obsolete persisted
+    provider selections are handled by the chosen bounded migration.
+
+- [ ] [I040] (P1) {I037,B087} Migrate Gemini from generateContent to Interactions resources.
+  Goal:
+  Adopt Google's recommended current Gemini interface and use its real
+  background interaction lifecycle for models that support it.
+
+  Evidence:
+  - Google states that the Interactions API is GA, recommended for new
+    projects, and the home for future Gemini capabilities:
+    https://ai.google.dev/gemini-api/docs/interactions-overview
+  - `background: true` creates an interaction that can be retrieved, cancelled,
+    or deleted; statuses include `in_progress`, `requires_action`, `completed`,
+    `failed`, and `cancelled`:
+    https://ai.google.dev/gemini-api/docs/background-execution
+
+  Requirements:
+  - Verify Interactions and background support for every configured Gemini
+    model and register capability per model. Migrate eligible models from
+    `generateContent` to one native Interactions adapter with the required API
+    revision; do not try Interactions and fall back at runtime.
+  - Create background interactions, poll only while the documented status is
+    active, extract final text and complete usage, and translate every terminal
+    state. Treat unexpected `requires_action` as a stable unsupported-action
+    error until the public proxy contract deliberately supports tool handoff.
+  - Define and document storage, deletion, and cancellation behavior. Delete or
+    cancel provider resources when the request completes or the caller leaves,
+    subject to Google's documented lifecycle.
+  - Keep the public proxy request blocking and keep output-limit continuation
+    separate from observing the original interaction.
+
+  Validation:
+  - Public fixtures cover immediate and delayed completion, terminal failure,
+    cancellation, deletion, `requires_action`, usage, and safe errors.
+  - The Default-tenant Gemini echo and complex live cases run through
+    Interactions and prove actual upstream polling.
+
+- [ ] [I041] (P2) {I037} Migrate Grok to xAI Responses without OpenAI background assumptions.
+  Goal:
+  Move Grok off xAI's deprecated Chat Completions surface while preserving
+  xAI's actual synchronous Responses behavior.
+
+  Evidence:
+  - xAI calls Responses its preferred API and Chat Completions deprecated:
+    https://docs.x.ai/developers/model-capabilities/text/comparison
+  - xAI Responses supports typed output and optional stored conversation state,
+    but its `background` field is currently compatibility-only and unused:
+    https://docs.x.ai/developers/rest-api-reference/inference/chat
+  - xAI separately exposes Deferred Chat Completions with `202` polling and a
+    final result retrievable exactly once, but that operation belongs to the
+    deprecated Chat family:
+    https://docs.x.ai/developers/advanced-api-usage/deferred-chat-completions
+
+  Requirements:
+  - Verify Responses support for every configured Grok model and migrate each
+    eligible model to an xAI-owned Responses codec. Do not reuse OpenAI's
+    request builder or terminal-state parser merely because the endpoint path
+    and typed output resemble OpenAI.
+  - Omit `background` and register the lifecycle as synchronous. Parse xAI
+    output, reasoning, usage, errors, storage controls, and output limits from
+    xAI's schema.
+  - Keep proxy requests stateless by default and document any approved use of
+    xAI's 30-day stored response state. Do not retrieve a completed stored
+    response as if it were an in-progress job.
+  - Do not adopt Deferred Chat merely to manufacture polling. If xAI later
+    offers deferred execution on its current Responses contract, audit that
+    lifecycle in a separate issue.
+
+  Validation:
+  - Public fixtures prove xAI Responses request/response mapping, synchronous
+    continuation, storage policy, usage, safe errors, and absence of
+    `background` polling; existing xAI speech routing remains independent.
+
+- [x] [I036] (P1) {F014,B081} Verify pasted provider API keys before persisting them.
   Goal:
   Make a provider connected and routing-eligible only after LLM Proxy
   automatically proves that a newly supplied credential is operational for
@@ -1464,6 +1792,94 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
+
+  Resolved 2026-07-27:
+  - Added one provider-neutral, single-operation verifier for every canonical
+    transport and made the authenticated provider-settings mutation verify
+    before atomically persisting keys, settings, or routing defaults.
+  - Added automatic paste verification with accessible pending and safe-failure
+    states, locked conflicting actions, retry, raw-draft cleanup on success, and
+    stale-attempt rejection across every editor context boundary.
+  - Controlled real-router coverage proves all 12 providers, transport-family
+    failures, exact one-operation admission, unchanged state on failure, safe
+    responses and logs, and no managed usage. The rendered suite passes all 75
+    scenarios; OpenAPI, generated docs, the real auth black-box, and the
+    live-provider harness were updated.
+  - The required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` runs passed with the Go coverage
+    gate at 100%.
+  - Disposable paid runs verified the supplied OpenAI, Gemini, Anthropic, and
+    Muse11 credentials and their smoke requests (`200`/`200`). The supplied
+    Kimi credential authenticated successfully, the former configured model
+    was absent and rejected, and cataloged `kimi-k2.6` verified and completed
+    (`200`/`200`); the production default-route repair remains tracked by B087.
+  - Follow-up 2026-07-28: removed the unavailable former Moonshot model from the
+    current catalog and promoted verified `kimi-k2.6` to the canonical default
+    without an alias or fallback. The disposable managed-key verification and
+    default-model smoke request both returned `200`.
+
+- [x] [I043] (P1) Persist managed usage through one bounded asynchronous writer.
+  Goal:
+  Keep selected proxy responses independent from managed usage database
+  latency without creating one goroutine per response or an unbounded
+  telemetry backlog.
+
+  Evidence:
+  - Every managed proxy request currently flushes its selected response and
+    then performs `recordUsage` synchronously on the request goroutine under a
+    detached five-second persistence budget.
+  - `recordUsage` takes the process-wide managed-store write lock before its
+    database insert, so persistence work retains the handler and can contend
+    with unrelated managed authentication and mutation traffic.
+  - Managed usage powers operational dashboards and failure inspection; it is
+    not a billing, accounting, or provider-job ledger.
+
+  Requirements:
+  - Give each management runtime exactly one bounded FIFO usage channel and one
+    writer goroutine. Add a positive `management.usage_queue_size` setting with
+    a documented default; do not reuse the upstream provider queue.
+  - After selecting and flushing a managed response, construct one immutable
+    usage event and attempt a non-blocking enqueue. A successful enqueue
+    returns immediately and never waits for the database operation.
+  - Drain accepted events in FIFO order and attempt each database insert once
+    under the existing detached five-second persistence budget. Log database
+    failures with safe request metadata; do not retry or start per-event
+    goroutines.
+  - When the channel is full, drop the newest event, retain every previously
+    accepted event, emit one stable `managed_usage_queue_full` warning, and
+    leave the selected proxy response unchanged.
+  - Document the exact durability contract: accepted events are process-local,
+    at-most-once work until their database insert commits. Queue contents are
+    not crash-durable, and database failures or process termination can lose
+    uncommitted events.
+  - Keep prompts, responses, audio, transcripts, secrets, raw provider bodies,
+    and free-form upstream errors out of both queued events and logs.
+
+  Validation:
+  - Public HTTP coverage blocks the first usage insert, proves later managed
+    responses still complete, fills the one-slot test queue, and proves the
+    newest event is dropped without changing its response.
+  - The same coverage releases persistence and proves the accepted events are
+    stored once in FIFO order while the overflow emits exactly one safe stable
+    warning.
+  - Configuration coverage proves omitted queue size receives the default and
+    non-positive explicit values are rejected at the configuration edge.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
+    the final run after the last code edit.
+
+  Resolution:
+  - Managed responses now flush before a non-blocking send to one bounded,
+    runtime-owned FIFO writer. Accepted records receive one detached insert
+    attempt; saturation drops only the newest record with the stable safe
+    `managed_usage_queue_full` warning.
+  - A context-aware database-write gate sequences the writer with management
+    mutations without taking the management mutation mutex; authentication
+    bypasses both and retains the I042 caller-scoped read path.
+  - Added the positive `management.usage_queue_size` contract, explicit
+    process-local at-most-once durability documentation, and public HTTP
+    coverage for response independence, FIFO persistence, overflow, and safe
+    logging.
 
 - [ ] [I035] (P2) {B076} Persist each user's selected Usage interval across sessions.
   Goal:

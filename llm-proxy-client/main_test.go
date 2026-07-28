@@ -609,9 +609,10 @@ func TestCommandReportsProxyAndIOErrors(t *testing.T) {
 			if validationError := contract.ValidateRequest("/v2", httpRequest.Method, httpRequest, bodyBytes); validationError != nil {
 				t.Fatalf("CLI error request violates OpenAPI: %v", validationError)
 			}
-			responseBody := []byte("upstream failed")
+			responseBody := []byte(`{"error":{"code":"provider_error","provider":"openai","upstream_status":503,"retryable":true,"request_id":"fixture-request-id","retry_after":null}}`)
 			responseHeader := http.Header{}
-			responseHeader.Set("Content-Type", "text/plain; charset=utf-8")
+			responseHeader.Set("Content-Type", "application/json; charset=utf-8")
+			responseHeader.Set(llmproxycontract.HeaderRequestID, "fixture-request-id")
 			responseHeader.Set(llmproxycontract.HeaderRequestTimeoutSeconds, "360")
 			if validationError := contract.ValidateResponse("/v2", http.MethodPost, http.StatusBadGateway, responseHeader, responseBody); validationError != nil {
 				t.Fatalf("CLI error fixture violates OpenAPI: %v", validationError)

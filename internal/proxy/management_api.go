@@ -47,6 +47,7 @@ type managementService struct {
 	sessionValidator *managementSessionValidator
 	store            *managedTenantStore
 	providers        *providerRegistry
+	keyVerifier      providerKeyVerifier
 	authenticator    tenantAuthenticator
 	structuredLogger *zap.SugaredLogger
 }
@@ -260,12 +261,13 @@ type managementDefaultsRequest struct {
 	ReasoningEffort   *string `json:"reasoning_effort"`
 }
 
-func newManagementService(configuration ManagementConfiguration, sessionValidator *managementSessionValidator, store *managedTenantStore, providers *providerRegistry, authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger) *managementService {
+func newManagementService(configuration ManagementConfiguration, sessionValidator *managementSessionValidator, store *managedTenantStore, providers *providerRegistry, keyVerifier providerKeyVerifier, authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger) *managementService {
 	return &managementService{
 		configuration:    configuration,
 		sessionValidator: sessionValidator,
 		store:            store,
 		providers:        providers,
+		keyVerifier:      keyVerifier,
 		authenticator:    authenticator,
 		structuredLogger: structuredLogger,
 	}
@@ -607,11 +609,22 @@ func (service *managementService) saveProviderKeyHandler() gin.HandlerFunc {
 			ginContext.String(http.StatusBadRequest, decodeError.Error())
 			return
 		}
-		if providerSettingsError := service.validateManagedProviderSettings(providerIdentifier, request); providerSettingsError != nil {
+		provider, textModel, providerSettingsError := service.resolveManagedProviderSettings(providerIdentifier, request)
+		if providerSettingsError != nil {
 			ginContext.String(http.StatusBadRequest, providerSettingsError.Error())
 			return
 		}
-		snapshot, storeError := service.store.saveProviderKey(principal, tenantIdentifier, providerIdentifier, request.APIKey, request.TextModel, request.SystemPrompt)
+		if _, storeError := service.store.tenantProfile(principal, tenantIdentifier); storeError != nil {
+			writeManagementStoreError(ginContext, storeError)
+			return
+		}
+		if strings.TrimSpace(request.APIKey) != constants.EmptyString {
+			if verificationError := service.keyVerifier.verify(ginContext.Request.Context(), provider, textModel, request.APIKey); verificationError != nil {
+				writeProviderKeyVerificationError(ginContext, verificationError)
+				return
+			}
+		}
+		snapshot, storeError := service.store.saveProviderKey(ginContext.Request.Context(), principal, tenantIdentifier, providerIdentifier, request.APIKey, request.TextModel, request.SystemPrompt)
 		if storeError != nil {
 			writeManagementStoreError(ginContext, storeError)
 			return
@@ -786,6 +799,19 @@ func writeManagementStoreError(ginContext *gin.Context, storeError error) {
 	}
 }
 
+func writeProviderKeyVerificationError(ginContext *gin.Context, verificationError error) {
+	switch {
+	case errors.Is(verificationError, errProviderKeyRejected):
+		ginContext.String(http.StatusUnprocessableEntity, errProviderKeyRejected.Error())
+	case errors.Is(verificationError, errProviderKeyVerificationRateLimited):
+		ginContext.String(http.StatusTooManyRequests, errProviderKeyVerificationRateLimited.Error())
+	case errors.Is(verificationError, errProviderKeyVerificationTimedOut):
+		ginContext.String(http.StatusGatewayTimeout, errProviderKeyVerificationTimedOut.Error())
+	default:
+		ginContext.String(http.StatusServiceUnavailable, errProviderKeyVerificationUnavailable.Error())
+	}
+}
+
 func (service *managementService) providerResponses(providerSettings map[providerID]managedProviderSettings) []managementProviderResponse {
 	summaries := service.providers.providerSummaries()
 	responses := make([]managementProviderResponse, 0, len(summaries))
@@ -846,15 +872,16 @@ func managementReasoningEffortCapabilityResponseFor(capability *reasoningEffortC
 	}
 }
 
-func (service *managementService) validateManagedProviderSettings(providerIdentifier providerID, request managementProviderKeyRequest) error {
+func (service *managementService) resolveManagedProviderSettings(providerIdentifier providerID, request managementProviderKeyRequest) (providerDefinition, textModelDefinition, error) {
 	textModel := strings.TrimSpace(request.TextModel)
 	if textModel == constants.EmptyString {
-		return fmt.Errorf("%w: provider=%s field=text_model", errManagementBadRequest, providerIdentifier.string())
+		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: provider=%s field=text_model", errManagementBadRequest, providerIdentifier.string())
 	}
-	if _, _, validationError := service.providers.resolveTextModel(providerIdentifier.string(), textModel, providerIdentifier.string(), textModel, false); validationError != nil {
-		return fmt.Errorf("%w: %v", errManagementDefaults, validationError)
+	provider, resolvedTextModel, validationError := service.providers.resolveTextModel(providerIdentifier.string(), textModel, providerIdentifier.string(), textModel, false)
+	if validationError != nil {
+		return providerDefinition{}, textModelDefinition{}, fmt.Errorf("%w: %v", errManagementDefaults, validationError)
 	}
-	return nil
+	return provider, resolvedTextModel, nil
 }
 
 func (service *managementService) validateManagedRoutingDefaults(providerSettings map[providerID]managedProviderSettings, defaults managedRoutingDefaults) error {

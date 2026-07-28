@@ -6,6 +6,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -14,13 +15,13 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/glebarez/sqlite"
 	"github.com/tyemirov/llm-proxy/internal/constants"
-	"golang.org/x/sync/semaphore"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -39,10 +40,10 @@ const (
 	maskedSecretSuffixLength            = 4
 	managedUsageSummaryDays             = 30
 	managedUsageReadBatchSize           = 256
-	managedTenantStoreLockCapacity      = int64(1 << 30)
 	managedTenantOwnershipSchemaVersion = 1
 	managedUsageOutcomeSchemaVersion    = 2
 	managedTenantSchemaVersion          = 3
+	managedSQLiteRuntimeQuery           = "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
 
 	managedUserTable                = "managed_user_records"
 	managedTenantTable              = "managed_tenant_records"
@@ -94,34 +95,51 @@ type managedTenantStore struct {
 	routingDefaults   *providerRegistry
 	randomReader      io.Reader
 	now               func() time.Time
+	usageWriter       *managedUsageWriter
 }
 
 type managedTenantStoreMutex struct {
-	weighted *semaphore.Weighted
+	mutations     sync.Mutex
+	databaseWrite chan struct{}
 }
 
 func newManagedTenantStoreMutex() *managedTenantStoreMutex {
-	return &managedTenantStoreMutex{weighted: semaphore.NewWeighted(managedTenantStoreLockCapacity)}
+	return &managedTenantStoreMutex{databaseWrite: make(chan struct{}, 1)}
 }
 
 func (mutex *managedTenantStoreMutex) Lock() {
-	_ = mutex.weighted.Acquire(context.Background(), managedTenantStoreLockCapacity)
+	_ = mutex.LockContext(context.Background())
 }
 
 func (mutex *managedTenantStoreMutex) LockContext(requestContext context.Context) error {
-	return mutex.weighted.Acquire(requestContext, managedTenantStoreLockCapacity)
+	if lockError := mutex.DatabaseWriteLockContext(requestContext); lockError != nil {
+		return lockError
+	}
+	mutex.mutations.Lock()
+	if contextError := requestContext.Err(); contextError != nil {
+		mutex.mutations.Unlock()
+		mutex.DatabaseWriteUnlock()
+		return contextError
+	}
+	return nil
 }
 
 func (mutex *managedTenantStoreMutex) Unlock() {
-	mutex.weighted.Release(managedTenantStoreLockCapacity)
+	mutex.mutations.Unlock()
+	mutex.DatabaseWriteUnlock()
 }
 
-func (mutex *managedTenantStoreMutex) RLock() {
-	_ = mutex.weighted.Acquire(context.Background(), 1)
+func (mutex *managedTenantStoreMutex) DatabaseWriteLockContext(requestContext context.Context) error {
+	select {
+	case mutex.databaseWrite <- struct{}{}:
+		return nil
+	case <-requestContext.Done():
+		return requestContext.Err()
+	}
 }
 
-func (mutex *managedTenantStoreMutex) RUnlock() {
-	mutex.weighted.Release(1)
+func (mutex *managedTenantStoreMutex) DatabaseWriteUnlock() {
+	<-mutex.databaseWrite
 }
 
 type managedTenantIdentifier string
@@ -171,14 +189,14 @@ type managedTenantDatabase interface {
 	createUserAndTenant(user managedUserRecord, tenant managedTenantRecord) error
 	tenantByOwnerAndID(ownerUserID string, tenantID string) (managedTenantRecord, error)
 	tenantByTenantID(requestContext context.Context, tenantID string) (managedTenantRecord, error)
-	tenantBySecretDigest(secretDigest string) (managedTenantRecord, error)
+	tenantBySecretDigest(requestContext context.Context, secretDigest string) (managedTenantRecord, error)
 	tenantIDExists(tenantID string) (bool, error)
 	tenantNameExists(ownerUserID string, nameKey string, excludedTenantID string) (bool, error)
 	createTenant(record managedTenantRecord) error
 	saveTenant(record managedTenantRecord) error
 	deleteTenant(ownerUserID string, tenantID string) error
 	providerKeys() ([]managedProviderAPIKeyRecord, error)
-	saveProviderKey(ownerUserID string, record managedProviderAPIKeyRecord, defaults managedRoutingDefaults, updatedAt time.Time) error
+	saveProviderKey(requestContext context.Context, ownerUserID string, record managedProviderAPIKeyRecord, defaults managedRoutingDefaults, updatedAt time.Time) error
 	deleteProviderKey(ownerUserID string, tenantID string, providerID string, defaults managedRoutingDefaults, updatedAt time.Time) error
 	createUsageEvent(requestContext context.Context, record managedUsageEventRecord) error
 	earliestUsageEventByTenantIDsThrough(tenantIDs []string, periodEnd time.Time) (time.Time, error)
@@ -336,7 +354,7 @@ func newManagedTenantStore(configuration ManagementConfiguration, providers *pro
 	if databaseError != nil {
 		return nil, databaseError
 	}
-	store := newManagedTenantStoreWithDatabaseAndCipher(database, providerKeyCipher)
+	store := newManagedTenantStoreWithDatabaseAndCipherAndUsageQueue(database, providerKeyCipher, configuration.UsageQueueSize)
 	store.routingDefaults = providers
 	return store, nil
 }
@@ -346,13 +364,19 @@ func newManagedTenantStoreWithDatabase(database managedTenantDatabase) *managedT
 }
 
 func newManagedTenantStoreWithDatabaseAndCipher(database managedTenantDatabase, providerKeyCipher managedProviderKeyCipher) *managedTenantStore {
-	return &managedTenantStore{
+	return newManagedTenantStoreWithDatabaseAndCipherAndUsageQueue(database, providerKeyCipher, DefaultManagementUsageQueueSize)
+}
+
+func newManagedTenantStoreWithDatabaseAndCipherAndUsageQueue(database managedTenantDatabase, providerKeyCipher managedProviderKeyCipher, usageQueueSize int) *managedTenantStore {
+	store := &managedTenantStore{
 		mutex:             newManagedTenantStoreMutex(),
 		database:          database,
 		providerKeyCipher: providerKeyCipher,
 		randomReader:      rand.Reader,
 		now:               func() time.Time { return time.Now().UTC() },
 	}
+	store.usageWriter = newManagedUsageWriter(store, usageQueueSize)
+	return store
 }
 
 func newManagedProviderKeyCipher(rawEncryptionKey string) (managedProviderKeyCipher, error) {
@@ -429,7 +453,7 @@ func managementDatabaseDialector(configuration ManagementConfiguration) gorm.Dia
 	if configuration.DatabaseDialector != nil {
 		return configuration.DatabaseDialector
 	}
-	return sqlite.Open(configuration.DatabasePath)
+	return sqlite.Open(configuration.DatabasePath + managedSQLiteRuntimeQuery)
 }
 
 func migrateCurrentManagedSchema(database *gorm.DB) error {
@@ -1142,14 +1166,19 @@ func (database *gormManagedTenantDatabase) tenantByTenantID(requestContext conte
 	return record, queryError
 }
 
-func (database *gormManagedTenantDatabase) tenantBySecretDigest(secretDigest string) (managedTenantRecord, error) {
+func (database *gormManagedTenantDatabase) tenantBySecretDigest(requestContext context.Context, secretDigest string) (managedTenantRecord, error) {
 	var record managedTenantRecord
-	queryError := database.database.
-		Preload("ProviderAPIKeys").
-		Where("secret_digest = ?", secretDigest).
-		First(&record).
-		Error
-	return record, queryError
+	transactionError := database.database.WithContext(requestContext).Transaction(
+		func(transaction *gorm.DB) error {
+			return transaction.
+				Preload("ProviderAPIKeys").
+				Where("secret_digest = ?", secretDigest).
+				First(&record).
+				Error
+		},
+		&sql.TxOptions{ReadOnly: true},
+	)
+	return record, transactionError
 }
 
 func (database *gormManagedTenantDatabase) tenantIDExists(tenantID string) (bool, error) {
@@ -1232,8 +1261,8 @@ func (database *gormManagedTenantDatabase) providerKeys() ([]managedProviderAPIK
 	return records, queryError
 }
 
-func (database *gormManagedTenantDatabase) saveProviderKey(ownerUserID string, record managedProviderAPIKeyRecord, defaults managedRoutingDefaults, updatedAt time.Time) error {
-	return database.database.Transaction(func(transaction *gorm.DB) error {
+func (database *gormManagedTenantDatabase) saveProviderKey(requestContext context.Context, ownerUserID string, record managedProviderAPIKeyRecord, defaults managedRoutingDefaults, updatedAt time.Time) error {
+	return database.database.WithContext(requestContext).Transaction(func(transaction *gorm.DB) error {
 		var tenantRecord managedTenantRecord
 		if queryError := transaction.Where(&managedTenantRecord{OwnerUserID: ownerUserID, TenantID: record.TenantID}).First(&tenantRecord).Error; queryError != nil {
 			return queryError
@@ -1545,10 +1574,12 @@ func (store *managedTenantStore) deleteTenant(principal managementPrincipal, ten
 	return nil
 }
 
-func (store *managedTenantStore) saveProviderKey(principal managementPrincipal, tenantIdentifier managedTenantIdentifier, providerIdentifier providerID, rawAPIKey string, textModel string, systemPrompt string) (managedTenantSnapshot, error) {
+func (store *managedTenantStore) saveProviderKey(requestContext context.Context, principal managementPrincipal, tenantIdentifier managedTenantIdentifier, providerIdentifier providerID, rawAPIKey string, textModel string, systemPrompt string) (managedTenantSnapshot, error) {
 	apiKey := strings.TrimSpace(rawAPIKey)
 	normalizedTextModel := strings.TrimSpace(textModel)
-	store.mutex.Lock()
+	if lockError := store.mutex.LockContext(requestContext); lockError != nil {
+		return managedTenantSnapshot{}, managedTenantMutationError(principal.userID, tenantIdentifier.string(), lockError)
+	}
 	defer store.mutex.Unlock()
 	record, recordError := store.database.tenantByOwnerAndID(principal.userID, tenantIdentifier.string())
 	if recordError != nil {
@@ -1601,7 +1632,7 @@ func (store *managedTenantStore) saveProviderKey(principal managementPrincipal, 
 	if reconciliationError != nil {
 		return managedTenantSnapshot{}, managedRoutingDefaultsTenantError(record.TenantID, reconciliationError)
 	}
-	if persistError := store.database.saveProviderKey(principal.userID, providerRecord, reconciledDefaults, timestamp); persistError != nil {
+	if persistError := store.database.saveProviderKey(requestContext, principal.userID, providerRecord, reconciledDefaults, timestamp); persistError != nil {
 		return managedTenantSnapshot{}, managedTenantMutationError(principal.userID, tenantIdentifier.string(), persistError)
 	}
 	return store.snapshotByOwnerAndIDLocked(principal.userID, tenantIdentifier.string())
@@ -1705,16 +1736,14 @@ func (store *managedTenantStore) generateSecret(principal managementPrincipal, t
 	return constants.EmptyString, managedTenantSnapshot{}, errManagedSecretCollision
 }
 
-func (store *managedTenantStore) authenticate(rawSecret string) (tenant, bool) {
+func (store *managedTenantStore) authenticate(requestContext context.Context, rawSecret string) (tenant, bool) {
 	presentedSecret := strings.TrimSpace(rawSecret)
 	if presentedSecret == constants.EmptyString {
 		return tenant{}, false
 	}
 	presentedDigest := sha256.Sum256([]byte(presentedSecret))
 	presentedDigestString := hex.EncodeToString(presentedDigest[:])
-	store.mutex.RLock()
-	defer store.mutex.RUnlock()
-	record, recordError := store.database.tenantBySecretDigest(presentedDigestString)
+	record, recordError := store.database.tenantBySecretDigest(requestContext, presentedDigestString)
 	if recordError != nil {
 		return tenant{}, false
 	}
@@ -1731,7 +1760,7 @@ func (store *managedTenantStore) authenticate(rawSecret string) (tenant, bool) {
 
 func (store *managedTenantStore) containsSecretDigestLocked(secretDigest [sha256.Size]byte) bool {
 	secretDigestString := hex.EncodeToString(secretDigest[:])
-	_, recordError := store.database.tenantBySecretDigest(secretDigestString)
+	_, recordError := store.database.tenantBySecretDigest(context.Background(), secretDigestString)
 	return recordError == nil
 }
 
