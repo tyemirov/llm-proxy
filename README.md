@@ -1305,7 +1305,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_SECRET`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus one large OpenAI background-polling request. |
 | `make release` | Run CI and prepare the local tag, container archives, and validated Pages archive under `.git/mprlab-release` without remote writes; an exact retry reuses the sealed release without rerunning CI or rebuilding. |
 | `make publish` | Publish only missing state from the exact prepared Git refs, GitHub Release assets, and container archives without rebuilding or deploying; reuse exact immutable state and reject conflicts. |
-| `make deploy` | Converge the published backend through the sibling gateway, then activate or reuse the exact Pages branch/build and verify the public marker. |
+| `make deploy` | Require the exact sealed release from `make release`, verify its published backend and Pages artifacts, converge the backend through the sibling gateway, then activate or reuse the exact Pages branch/build and verify the public marker without rerunning CI. |
 
 Live provider smoke tests are intentionally not part of `make ci`; they call
 paid upstream APIs and depend on local or CI secret availability. The dynamic
@@ -1396,13 +1396,15 @@ This target is intentionally outside `make ci`: it has a real production cost
 and is expected to fail honestly for a disabled, rate-limited, or failing
 provider.
 
-`make release` and `make deploy` run the local `make ci` gate with the standard
-350-second timeout. Override both with
-`LLM_PROXY_CI_TIMEOUT_SECONDS=<seconds>`, or use the command-specific
-`RELEASE_CI_TIMEOUT_SECONDS` and `DEPLOY_CI_TIMEOUT_SECONDS` variables.
-`make publish` verifies and uploads only the already-prepared immutable
-artifacts; it does not rebuild or rerun CI. GHCR manifest readiness is bounded
-by `CONTAINER_REGISTRY_VERIFY_ATTEMPTS` (default `12`) and
+`make release` is the sole lifecycle stage that runs the local `make ci` gate,
+with the standard 350-second timeout. Override that release gate with
+`LLM_PROXY_CI_TIMEOUT_SECONDS=<seconds>` or
+`RELEASE_CI_TIMEOUT_SECONDS=<seconds>`. `make publish` consumes, verifies, and
+uploads only the already-prepared immutable artifacts. `make deploy` first
+requires the local sealed manifest and exact release tag produced by that
+release, then verifies the published image and Pages artifact. Neither later
+stage rebuilds artifacts or reruns CI. GHCR manifest readiness is bounded by
+`CONTAINER_REGISTRY_VERIFY_ATTEMPTS` (default `12`) and
 `CONTAINER_REGISTRY_VERIFY_DELAY_SECONDS` (default `5`), with every Docker
 inspection bounded by `CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS`
 (default `30`). Pages build readiness is bounded by
@@ -2172,11 +2174,12 @@ reuses exact existing GitHub Release metadata, assets, platform tags, and the
 version manifest; it publishes only missing state and rejects a conflicting
 immutable object. It uses the standard Docker client to wait until the exact
 published manifests are readable. Use `make deploy` only after publish; it
-verifies the published image, converges the backend through the gateway, then
-activates or reuses the exact `pages.tar.gz` asset on the live Pages branch.
-An existing queued or building Pages job is reused, while a missing or failed
-matching job receives one bounded replacement request before public-marker
-verification.
+requires the same sealed `.git/mprlab-release` identity and exact annotated
+tag, verifies the published image, converges the backend through the gateway,
+then activates or reuses the exact `pages.tar.gz` asset on the live Pages
+branch. It does not rerun CI. An existing queued or building Pages job is
+reused, while a missing or failed matching job receives one bounded
+replacement request before public-marker verification.
 
 ## License
 
