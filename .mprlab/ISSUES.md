@@ -37,6 +37,44 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B092] (P0) Make the container inspection-bound test deterministic.
+  Goal:
+  Verify that every registry inspection is independently bounded without
+  coupling the release gate to nested wall-clock timers.
+
+  Evidence:
+  - B091's final `make ci` proved the repaired operational test under a
+    22.777-second Go package run, then failed in
+    `test_container_manifest_digest_bounds_each_inspection_attempt`.
+  - The container test expected two fake Docker attempts but observed one
+    during a 151.503-second release-suite run.
+  - The fixture wraps two real one-second `timeout` calls and a real one-second
+    delay inside an outer five-second timeout. Host scheduling can consume the
+    outer budget before the second process starts, so the assertion measures
+    scheduler timing rather than the script's per-attempt command contract.
+
+  Requirements:
+  - Replace real nested timers with fake `timeout` and `sleep` process
+    boundaries that capture and validate the exact arguments.
+  - Require two independently bounded Docker inspection commands and one
+    configured inter-attempt delay.
+  - Do not increase a timeout or change the production registry-readiness
+    script.
+
+  Validation:
+  - Run the focused release suite and the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+  - Do not run `make release`, `make publish`, or `make deploy`.
+
+  Resolution:
+  - Replaced the nested real timers with fake `timeout` and `sleep`
+    executables that capture the public command boundary.
+  - The test now requires two exact one-second Docker inspection bounds, one
+    configured inter-attempt delay, Docker exit `124` reporting, and the final
+    unreadable-manifest error without depending on scheduler timing.
+  - All 54 repository-owned release tests passed in 87.971 seconds under the
+    same contended host conditions.
+
 - [x] [B091] (P0) Remove synthetic local-orchestration latency from the release gate.
   Goal:
   Keep the black-box `make up` contract deterministic when `make release` runs
