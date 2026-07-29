@@ -1303,9 +1303,9 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make test-live-providers` | Start a disposable managed tenant, verify every available provider key through the canonical management operation, and run that provider's live text smoke only after verification succeeds; use `LIVE_ENV_FILE=/path/to/env` to load key values. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
 | `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_SECRET`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus one large OpenAI background-polling request. |
-| `make release` | Run CI and prepare the local tag, container archives, and validated Pages archive under `.git/mprlab-release` without remote writes. |
-| `make publish` | Publish the exact prepared Git refs, GitHub Release assets, and container archives without rebuilding or deploying; wait for each GHCR manifest to become readable. |
-| `make deploy` | Verify and deploy the published backend through the sibling gateway, then activate the Pages archive and verify the matching Pages build and public marker. |
+| `make release` | Run CI and prepare the local tag, container archives, and validated Pages archive under `.git/mprlab-release` without remote writes; an exact retry reuses the sealed release without rerunning CI or rebuilding. |
+| `make publish` | Publish only missing state from the exact prepared Git refs, GitHub Release assets, and container archives without rebuilding or deploying; reuse exact immutable state and reject conflicts. |
+| `make deploy` | Converge the published backend through the sibling gateway, then activate or reuse the exact Pages branch/build and verify the public marker. |
 
 Live provider smoke tests are intentionally not part of `make ci`; they call
 paid upstream APIs and depend on local or CI secret availability. The dynamic
@@ -1411,6 +1411,19 @@ inspection bounded by `CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS`
 uses `PAGES_VERIFY_ATTEMPTS` and `PAGES_VERIFY_DELAY_SECONDS` (defaults `12`
 and `5`). Each wait reports its observed external readiness boundary rather
 than treating a completed push as immediate public availability.
+
+The three release phases are retry-safe. A canonical release commit and its
+annotated tag identify the same sealed `.git/mprlab-release` manifest on every
+`make release` retry. New payloads are prepared under
+`.git/mprlab-release.pending`; the prior sealed artifact remains intact until
+the new notes, payload inventory, release commit, and tag validate and the
+pending directory is atomically activated. `make publish` compares existing
+GitHub Release metadata and assets plus GHCR platform and version manifests,
+skips exact matches, creates only missing state, updates `latest` only when its
+digest differs, and rejects immutable conflicts. `make deploy` reapplies the
+gateway-owned desired state, reuses an exact Pages branch and configuration,
+waits for a matching queued or building Pages build, and requests at most one
+replacement when the matching build is missing or failed.
 
 `llm-proxy` is a gateway-local service in `mprlab-gateway`, so `make deploy`
 uses the sole gateway `deploy-llm-proxy-backend` target after the gateway-owned
@@ -2134,19 +2147,30 @@ the selected integration profile or deployment docs, not in this README.
 
 Use `make release` from a clean local `master` branch. It runs `make ci`, builds
 the multi-platform container archives and static Pages archive under
-`.git/mprlab-release`, updates `CHANGELOG.md`, and creates only a local release
-commit and tag. The release implementation is repository-owned under
-`tools/gitrelease`, uses the single canonical `vMAJOR.MINOR.PATCH` SemVer
-contract, and builds containers from `git archive HEAD` so ignored credentials,
-`.git`, and local artifacts never enter BuildKit. It performs no remote writes.
+`.git/mprlab-release.pending`, updates `CHANGELOG.md`, creates only a local
+release commit and annotated tag, and atomically seals the completed payloads
+under `.git/mprlab-release`. The previous sealed release is never replaced by
+an incomplete preparation. When `HEAD` is already the validated canonical
+release commit, a retry returns that exact release without selecting the next
+version, rerunning CI, rebuilding payloads, or changing Git. When `HEAD` has
+new source commits, release notes must contain changes after the newest SemVer
+tag before preparation can mutate local release state. The release
+implementation is repository-owned under `tools/gitrelease`, uses the single
+canonical `vMAJOR.MINOR.PATCH` SemVer contract, and builds containers from
+`git archive HEAD` so ignored credentials, `.git`, and local artifacts never
+enter BuildKit. It performs no remote writes.
 
 Use `make publish` to push the prepared Git refs, GitHub Release assets, and
-container archives without rebuilding. It uses the standard Docker client to
-wait until the exact published manifests are readable. Use `make deploy` only
-after publish; it verifies the published image, deploys the backend through the
-gateway, then activates the exact `pages.tar.gz` asset on the live Pages branch,
-waits for the matching GitHub Pages build, and verifies its cache-distinct
-public marker.
+container archives without rebuilding. Repeated publication verifies and
+reuses exact existing GitHub Release metadata, assets, platform tags, and the
+version manifest; it publishes only missing state and rejects a conflicting
+immutable object. It uses the standard Docker client to wait until the exact
+published manifests are readable. Use `make deploy` only after publish; it
+verifies the published image, converges the backend through the gateway, then
+activates or reuses the exact `pages.tar.gz` asset on the live Pages branch.
+An existing queued or building Pages job is reused, while a missing or failed
+matching job receives one bounded replacement request before public-marker
+verification.
 
 ## License
 
