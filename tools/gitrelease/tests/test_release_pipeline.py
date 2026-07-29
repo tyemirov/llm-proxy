@@ -712,36 +712,39 @@ printf '%s\\n' 'Name: ghcr.io/example/image:latest' 'Digest:    sha256:aaaaaaaaa
         fake_binary_directory = self.root / "manifest-timeout-bin"
         fake_binary_directory.mkdir()
         fake_docker = fake_binary_directory / "docker"
-        fake_docker.write_text(
+        fake_docker.write_text("#!/usr/bin/env bash\nexit 97\n", encoding="utf-8")
+        fake_docker.chmod(0o755)
+        fake_timeout = fake_binary_directory / "timeout"
+        fake_timeout.write_text(
             """#!/usr/bin/env bash
 set -euo pipefail
-[[ \"$1 $2 $3\" == \"buildx imagetools inspect\" ]] || exit 2
-attempt=0
-if [[ -f \"${FAKE_DOCKER_STATE}\" ]]; then attempt=\"$(cat \"${FAKE_DOCKER_STATE}\")\"; fi
-attempt=$((attempt + 1))
-printf '%s\\n' \"${attempt}\" >\"${FAKE_DOCKER_STATE}\"
-exec sleep \"${FAKE_DOCKER_HANG_SECONDS}\"
+printf '%s\\n' \"$*\" >>\"${FAKE_TIMEOUT_CAPTURE:?}\"
+exit 124
 """,
             encoding="utf-8",
         )
-        fake_docker.chmod(0o755)
-        state_path = self.root / "docker-timeout-attempts"
+        fake_timeout.chmod(0o755)
+        fake_sleep = fake_binary_directory / "sleep"
+        fake_sleep.write_text(
+            """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' \"$*\" >>\"${FAKE_SLEEP_CAPTURE:?}\"
+""",
+            encoding="utf-8",
+        )
+        fake_sleep.chmod(0o755)
+        timeout_capture_path = self.root / "timeout-arguments"
+        sleep_capture_path = self.root / "sleep-arguments"
         environment = os.environ.copy() | {
             "PATH": f"{fake_binary_directory}{os.pathsep}{os.environ['PATH']}",
-            "FAKE_DOCKER_STATE": str(state_path),
-            "FAKE_DOCKER_HANG_SECONDS": "30",
+            "FAKE_TIMEOUT_CAPTURE": str(timeout_capture_path),
+            "FAKE_SLEEP_CAPTURE": str(sleep_capture_path),
             "CONTAINER_REGISTRY_VERIFY_ATTEMPTS": "2",
             "CONTAINER_REGISTRY_VERIFY_DELAY_SECONDS": "1",
             "CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS": "1",
         }
 
         result = self.command(
-            "timeout",
-            "-k",
-            "5s",
-            "-s",
-            "SIGKILL",
-            "5s",
             "bash",
             str(CONTAINER_MANIFEST_DIGEST),
             "ghcr.io/example/image:latest",
@@ -751,8 +754,16 @@ exec sleep \"${FAKE_DOCKER_HANG_SECONDS}\"
         )
 
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertEqual(state_path.read_text(encoding="utf-8").strip(), "2")
-        self.assertIn("Docker exit", result.stderr)
+        expected_timeout_arguments = (
+            "-k 1s -s SIGKILL 1s docker buildx imagetools inspect "
+            "ghcr.io/example/image:latest"
+        )
+        self.assertEqual(
+            timeout_capture_path.read_text(encoding="utf-8").splitlines(),
+            [expected_timeout_arguments, expected_timeout_arguments],
+        )
+        self.assertEqual(sleep_capture_path.read_text(encoding="utf-8").splitlines(), ["1"])
+        self.assertIn("Docker exit 124", result.stderr)
         self.assertIn("container manifest did not become readable for ghcr.io/example/image:latest", result.stderr)
 
     def test_container_manifest_digest_rejects_invalid_attempt_timeout(self) -> None:
