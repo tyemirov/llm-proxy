@@ -35,6 +35,11 @@ RELEASE_HEADING_RE = re.compile(
     rf"^##\s+\[?(?:{SEMVER_VERSION_PATTERN})\]?(?:[^\n]*)?$",
     re.MULTILINE,
 )
+RELEASE_COMMIT_SUBJECT_RE = re.compile(rf"^Release ({SEMVER_VERSION_PATTERN})$")
+RELEASE_CHANGELOG_HEADING_RE = re.compile(
+    rf"^## \[({SEMVER_VERSION_PATTERN})\] - (\d{{4}}-\d{{2}}-\d{{2}})$",
+    re.MULTILINE,
+)
 
 
 class HelperError(Exception):
@@ -393,6 +398,263 @@ def resolve_commit(cwd: Path, revision: str, label: str) -> str:
     return result.stdout.strip()
 
 
+def release_artifact_pending_dir(cwd: Path, override: str | None = None) -> Path:
+    if override:
+        return Path(override).expanduser().resolve()
+    raw_path = run(["git", "rev-parse", "--git-path", "mprlab-release.pending"], cwd=cwd).stdout.strip()
+    pending_path = Path(raw_path)
+    if not pending_path.is_absolute():
+        pending_path = cwd / pending_path
+    return pending_path.resolve()
+
+
+def release_notes_from_changelog(cwd: Path, version: str) -> str:
+    changelog_path = cwd / "CHANGELOG.md"
+    if not changelog_path.is_file():
+        raise HelperError("canonical release commit has no CHANGELOG.md", {"version": version})
+    changelog = changelog_path.read_text(encoding="utf-8")
+    matches = [
+        match
+        for match in RELEASE_CHANGELOG_HEADING_RE.finditer(changelog)
+        if match.group(1) == version
+    ]
+    if len(matches) != 1:
+        raise HelperError(
+            "canonical release changelog must contain exactly one matching release section",
+            {"version": version, "matching_sections": len(matches)},
+        )
+    section_start = matches[0].start()
+    next_heading = re.search(r"^## ", changelog[matches[0].end() :], re.MULTILINE)
+    section_end = (
+        matches[0].end() + next_heading.start()
+        if next_heading is not None
+        else len(changelog)
+    )
+    notes = changelog[section_start:section_end].strip()
+    if not any(line.startswith("- ") for line in notes.splitlines()):
+        raise HelperError("canonical release changelog section has no release entries", {"version": version})
+    return notes
+
+
+def canonical_release_commit(cwd: Path, revision: str = "HEAD") -> dict[str, str]:
+    release_commit = resolve_commit(cwd, revision, "release_commit")
+    subject = run(["git", "show", "-s", "--format=%s", release_commit], cwd=cwd).stdout.strip()
+    subject_match = RELEASE_COMMIT_SUBJECT_RE.fullmatch(subject)
+    if subject_match is None:
+        raise HelperError(
+            "release commit subject is not canonical",
+            {"release_commit": release_commit, "subject": subject},
+        )
+    version = validate_release_version(subject_match.group(1))
+    parent_row = run(["git", "rev-list", "--parents", "-n", "1", release_commit], cwd=cwd).stdout.split()
+    if len(parent_row) != 2:
+        raise HelperError(
+            "release commit must have exactly one source parent",
+            {"release_commit": release_commit, "parent_count": max(0, len(parent_row) - 1)},
+        )
+    changed_files = run(
+        ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", release_commit],
+        cwd=cwd,
+    ).stdout.splitlines()
+    if changed_files != ["CHANGELOG.md"]:
+        raise HelperError(
+            "release commit must contain only CHANGELOG.md",
+            {"release_commit": release_commit, "changed_files": changed_files},
+        )
+    release_notes_from_changelog(cwd, version)
+    return {
+        "version": version,
+        "source_commit": parent_row[1],
+        "release_commit": release_commit,
+    }
+
+
+def exact_release_tags(cwd: Path, revision: str = "HEAD") -> list[str]:
+    tags = run(
+        ["git", "tag", "--points-at", revision, "--list", "v*", "--sort=-version:refname"],
+        cwd=cwd,
+    ).stdout.splitlines()
+    return [validate_release_version(tag) for tag in tags]
+
+
+def validate_annotated_release_tag(cwd: Path, version: str, release_commit: str) -> None:
+    tag_type = run(["git", "cat-file", "-t", f"refs/tags/{version}"], cwd=cwd, check=False)
+    if tag_type.returncode != 0:
+        raise HelperError("local release tag is missing", {"version": version})
+    if tag_type.stdout.strip() != "tag":
+        raise HelperError("local release tag must be annotated", {"version": version})
+    tag_commit = resolve_commit(cwd, version, "version")
+    if tag_commit != release_commit:
+        raise HelperError(
+            "local release tag points at a different commit",
+            {"version": version, "tag_commit": tag_commit, "release_commit": release_commit},
+        )
+
+
+def validate_release_manifest_identity(
+    manifest: dict[str, Any],
+    release: dict[str, str],
+    default_branch: str | None = None,
+) -> None:
+    expected = {
+        "version": release["version"],
+        "source_commit": release["source_commit"],
+        "release_commit": release["release_commit"],
+    }
+    if default_branch is not None:
+        expected["default_branch"] = default_branch
+    mismatches = {
+        field: {"expected": expected_value, "actual": manifest.get(field)}
+        for field, expected_value in expected.items()
+        if manifest.get(field) != expected_value
+    }
+    if mismatches:
+        raise HelperError("prepared release manifest identifies a different release", mismatches)
+
+
+def load_release_staging(
+    cwd: Path,
+    artifact_path: Path,
+    release: dict[str, str],
+) -> dict[str, Any]:
+    staging_path = artifact_path / "staging.json"
+    if not staging_path.is_file():
+        raise HelperError("resumable release staging area is missing", {"artifact_dir": str(artifact_path)})
+    staging = json.loads(staging_path.read_text(encoding="utf-8"))
+    expected = {
+        "schema_version": 1,
+        "artifact_kind": "mprlab.release.staging",
+        "version": release["version"],
+        "source_commit": release["source_commit"],
+    }
+    mismatches = {
+        field: {"expected": expected_value, "actual": staging.get(field)}
+        for field, expected_value in expected.items()
+        if staging.get(field) != expected_value
+    }
+    if mismatches:
+        raise HelperError("resumable release staging area identifies a different release", mismatches)
+    release_timestamp = staging.get("release_timestamp")
+    if not isinstance(release_timestamp, str) or not release_timestamp:
+        raise HelperError("resumable release staging area has no release timestamp")
+    parse_release_timestamp(release_timestamp)
+    if not (artifact_path / "payloads").is_dir():
+        raise HelperError("resumable release payload directory is missing", {"artifact_dir": str(artifact_path)})
+    inventory_payloads(artifact_path)
+    resolve_commit(cwd, release["source_commit"], "source_commit")
+    return staging
+
+
+def load_matching_release_artifact(
+    cwd: Path,
+    artifact_path: Path,
+    release: dict[str, str],
+    default_branch: str | None = None,
+) -> tuple[dict[str, Any], Path]:
+    loaded_path, manifest, notes_path = load_release_artifact(cwd, str(artifact_path))
+    if loaded_path != artifact_path:
+        raise HelperError(
+            "prepared release artifact resolved to an unexpected directory",
+            {"expected": str(artifact_path), "actual": str(loaded_path)},
+        )
+    validate_release_manifest_identity(manifest, release, default_branch)
+    expected_notes = normalize_markdown(release_notes_from_changelog(cwd, release["version"]))
+    if normalize_markdown(notes_path.read_text(encoding="utf-8")) != expected_notes:
+        raise HelperError(
+            "prepared release notes do not match the canonical changelog section",
+            {"version": release["version"]},
+        )
+    return manifest, notes_path
+
+
+def command_local_release_state(args: argparse.Namespace) -> int:
+    cwd = repo_root()
+    artifact_path = release_artifact_dir(cwd, args.artifact_dir)
+    pending_path = release_artifact_pending_dir(cwd, args.pending_artifact_dir)
+    tags = exact_release_tags(cwd)
+    if len(tags) > 1:
+        fail("HEAD has multiple canonical release tags", {"tags": tags})
+
+    subject = run(["git", "show", "-s", "--format=%s", "HEAD"], cwd=cwd).stdout.strip()
+    subject_match = RELEASE_COMMIT_SUBJECT_RE.fullmatch(subject)
+    if not tags and subject_match is None:
+        emit(
+            {
+                "ok": True,
+                "state": "new",
+                "artifact_dir": str(artifact_path),
+                "pending_artifact_dir": str(pending_path),
+            }
+        )
+        return 0
+
+    try:
+        release = canonical_release_commit(cwd)
+        if tags:
+            if tags[0] != release["version"]:
+                raise HelperError(
+                    "release tag and release commit version differ",
+                    {"tag": tags[0], "commit_version": release["version"]},
+                )
+            validate_annotated_release_tag(cwd, tags[0], release["release_commit"])
+            try:
+                manifest, _ = load_matching_release_artifact(cwd, artifact_path, release, args.default_branch)
+            except (HelperError, json.JSONDecodeError, OSError) as sealed_error:
+                try:
+                    load_matching_release_artifact(cwd, pending_path, release, args.default_branch)
+                except (HelperError, json.JSONDecodeError, OSError):
+                    try:
+                        load_release_staging(cwd, pending_path, release)
+                    except (HelperError, json.JSONDecodeError, OSError) as pending_error:
+                        raise HelperError(
+                            "exact release tag has no matching sealed or resumable local artifact",
+                            {
+                                "version": release["version"],
+                                "sealed_error": str(sealed_error),
+                                "resume_error": str(pending_error),
+                            },
+                        ) from pending_error
+                emit(
+                    {
+                        "ok": True,
+                        "state": "resume",
+                        "artifact_dir": str(artifact_path),
+                        "pending_artifact_dir": str(pending_path),
+                        **release,
+                    }
+                )
+                return 0
+            emit(
+                {
+                    "ok": True,
+                    "state": "sealed",
+                    "artifact_dir": str(artifact_path),
+                    "pending_artifact_dir": str(pending_path),
+                    "release_timestamp": manifest["release_timestamp"],
+                    **release,
+                }
+            )
+            return 0
+
+        try:
+            load_matching_release_artifact(cwd, pending_path, release, args.default_branch)
+        except (HelperError, json.JSONDecodeError, OSError):
+            load_release_staging(cwd, pending_path, release)
+        emit(
+            {
+                "ok": True,
+                "state": "resume",
+                "artifact_dir": str(artifact_path),
+                "pending_artifact_dir": str(pending_path),
+                **release,
+            }
+        )
+        return 0
+    except (HelperError, json.JSONDecodeError, OSError) as error:
+        fail(str(error), getattr(error, "details", {}))
+    return 1
+
+
 def command_initialize_release_artifact(args: argparse.Namespace) -> int:
     validate_release_version(args.version)
     cwd = repo_root()
@@ -550,8 +812,14 @@ def command_write_release_artifact(args: argparse.Namespace) -> int:
 
 def load_release_artifact(cwd: Path, override: str | None = None) -> tuple[Path, dict[str, Any], Path]:
     artifact_path = release_artifact_dir(cwd, override)
+    staging_path = artifact_path / "staging.json"
     manifest_path = artifact_path / "manifest.json"
     notes_path = artifact_path / "notes.md"
+    if staging_path.exists():
+        raise HelperError(
+            "sealed release artifact still contains mutable staging state",
+            {"staging": str(staging_path)},
+        )
     if not manifest_path.is_file() or not notes_path.is_file():
         raise HelperError(
             "prepared release artifact is missing; run make release",
@@ -578,6 +846,155 @@ def command_verify_release_artifact(args: argparse.Namespace) -> int:
     return 0
 
 
+def recover_interrupted_artifact_activation(artifact_path: Path) -> None:
+    backup_path = artifact_path.with_name(f"{artifact_path.name}.previous")
+    if backup_path.exists() and not artifact_path.exists():
+        os.replace(backup_path, artifact_path)
+
+
+def activate_release_artifact(
+    cwd: Path,
+    pending_path: Path,
+    artifact_path: Path,
+    release: dict[str, str],
+    default_branch: str,
+) -> dict[str, Any]:
+    if pending_path == artifact_path:
+        raise HelperError("pending and sealed release artifact directories must differ")
+    recover_interrupted_artifact_activation(artifact_path)
+    pending_manifest, _ = load_matching_release_artifact(
+        cwd,
+        pending_path,
+        release,
+        default_branch,
+    )
+    backup_path = artifact_path.with_name(f"{artifact_path.name}.previous")
+    if backup_path.exists():
+        if artifact_path.exists():
+            shutil.rmtree(backup_path)
+        else:
+            os.replace(backup_path, artifact_path)
+    if artifact_path.exists():
+        os.replace(artifact_path, backup_path)
+    try:
+        os.replace(pending_path, artifact_path)
+        activated_manifest, _ = load_matching_release_artifact(
+            cwd,
+            artifact_path,
+            release,
+            default_branch,
+        )
+        if activated_manifest != pending_manifest:
+            raise HelperError("activated release manifest changed during atomic promotion")
+    except BaseException:
+        if artifact_path.exists():
+            shutil.rmtree(artifact_path)
+        if backup_path.exists():
+            os.replace(backup_path, artifact_path)
+        raise
+    if backup_path.exists():
+        shutil.rmtree(backup_path)
+    return activated_manifest
+
+
+def command_resume_release_artifact(args: argparse.Namespace) -> int:
+    cwd = repo_root()
+    artifact_path = release_artifact_dir(cwd, args.artifact_dir)
+    pending_path = release_artifact_pending_dir(cwd, args.pending_artifact_dir)
+    recover_interrupted_artifact_activation(artifact_path)
+    try:
+        release = canonical_release_commit(cwd)
+        tags = exact_release_tags(cwd)
+        if len(tags) > 1:
+            raise HelperError("HEAD has multiple canonical release tags", {"tags": tags})
+
+        pending_manifest: dict[str, Any] | None = None
+        pending_notes_path: Path | None = None
+        try:
+            pending_manifest, pending_notes_path = load_matching_release_artifact(
+                cwd,
+                pending_path,
+                release,
+                args.default_branch,
+            )
+            release_timestamp = str(pending_manifest["release_timestamp"])
+        except (HelperError, json.JSONDecodeError, OSError):
+            staging = load_release_staging(cwd, pending_path, release)
+            release_timestamp = str(staging["release_timestamp"])
+
+        if tags:
+            if tags[0] != release["version"]:
+                raise HelperError(
+                    "release tag and release commit version differ",
+                    {"tag": tags[0], "commit_version": release["version"]},
+                )
+            validate_annotated_release_tag(cwd, release["version"], release["release_commit"])
+        else:
+            run(
+                [
+                    "git",
+                    "tag",
+                    "-a",
+                    release["version"],
+                    "-m",
+                    f"Release {release['version']}",
+                    release["release_commit"],
+                ],
+                cwd=cwd,
+            )
+            validate_annotated_release_tag(cwd, release["version"], release["release_commit"])
+
+        if pending_manifest is None or pending_notes_path is None:
+            notes = release_notes_from_changelog(cwd, release["version"])
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                prefix="mprlab-release-notes-",
+                delete=False,
+            ) as notes_handle:
+                notes_handle.write(notes + "\n")
+                notes_file = Path(notes_handle.name)
+            try:
+                write_args = argparse.Namespace(
+                    version=release["version"],
+                    source_commit=release["source_commit"],
+                    release_commit=release["release_commit"],
+                    notes_file=str(notes_file),
+                    default_branch=args.default_branch,
+                    release_timestamp=release_timestamp,
+                    artifact_dir=str(pending_path),
+                )
+                command_write_release_artifact(write_args)
+            finally:
+                notes_file.unlink(missing_ok=True)
+            pending_manifest, pending_notes_path = load_matching_release_artifact(
+                cwd,
+                pending_path,
+                release,
+                args.default_branch,
+            )
+
+        manifest = activate_release_artifact(
+            cwd,
+            pending_path,
+            artifact_path,
+            release,
+            args.default_branch,
+        )
+        emit(
+            {
+                "ok": True,
+                "action": "resumed",
+                "artifact_dir": str(artifact_path),
+                "manifest": manifest,
+            }
+        )
+        return 0
+    except (HelperError, json.JSONDecodeError, OSError) as error:
+        fail(str(error), getattr(error, "details", {}))
+    return 1
+
+
 def release_asset_paths(artifact_path: Path, manifest: dict[str, Any]) -> list[Path]:
     prefix = "payloads/release-assets/"
     assets = [artifact_path / "manifest.json"] + [
@@ -596,14 +1013,41 @@ def publish_release_assets(cwd: Path, version: str, assets: list[Path], remote: 
         return []
 
     repository_args = github_repository_cli_args(github_repository_for_remote(cwd, remote))
-    run(
-        ["gh", "release", "upload", version, *[str(path) for path in assets], "--clobber", *repository_args],
-        cwd=cwd,
+    release_view = gh_json(
+        [
+            "gh",
+            "release",
+            "view",
+            version,
+            "--json",
+            "assets",
+            *repository_args,
+        ],
+        cwd,
     )
+    existing_assets = release_view.get("assets")
+    if not isinstance(existing_assets, list):
+        raise HelperError("GitHub Release asset inventory is invalid", {"version": version})
+    existing_by_name: dict[str, dict[str, Any]] = {}
+    for entry in existing_assets:
+        if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+            raise HelperError("GitHub Release asset inventory contains an invalid entry", {"entry": entry})
+        name = str(entry["name"])
+        if name in existing_by_name:
+            raise HelperError("GitHub Release contains duplicate immutable asset names", {"asset": name})
+        existing_by_name[name] = entry
+
     published: list[dict[str, Any]] = []
     with tempfile.TemporaryDirectory(prefix="mprlab-release-assets-") as temporary_directory:
         download_root = Path(temporary_directory)
         for asset in assets:
+            action = "reused"
+            if asset.name not in existing_by_name:
+                run(
+                    ["gh", "release", "upload", version, str(asset), *repository_args],
+                    cwd=cwd,
+                )
+                action = "uploaded"
             asset_dir = download_root / asset.name
             asset_dir.mkdir()
             run(
@@ -635,6 +1079,7 @@ def publish_release_assets(cwd: Path, version: str, assets: list[Path], remote: 
             published.append(
                 {
                     "name": asset.name,
+                    "action": action,
                     "sha256": actual_sha256,
                     "size": downloaded.stat().st_size,
                 }
@@ -834,7 +1279,7 @@ def command_publish_release(args: argparse.Namespace) -> int:
         *repository_args,
     ]
     existing_proc = run(view_command, cwd=cwd, check=False)
-    action = "none"
+    action = "reused"
     command: list[str] | None = None
 
     if existing_proc.returncode != 0:
@@ -854,29 +1299,22 @@ def command_publish_release(args: argparse.Namespace) -> int:
     else:
         existing = json.loads(existing_proc.stdout)
         actual_notes = normalize_markdown(existing.get("body") or "")
-        needs_edit = (
-            existing.get("tagName") != args.version
-            or existing.get("name") != title
-            or existing.get("isDraft")
-            or bool(existing.get("isPrerelease")) != prerelease
-            or actual_notes != expected_notes
-        )
-        if needs_edit:
-            action = "updated"
-            command = [
-                "gh",
-                "release",
-                "edit",
-                args.version,
-                "--verify-tag",
-                "--title",
-                title,
-                "--notes-file",
-                str(notes_path),
-                "--draft=false",
-                f"--prerelease={'true' if prerelease else 'false'}",
-                "--latest=false" if prerelease else "--latest",
-            ]
+        conflicts = {
+            field: {"expected": expected, "actual": actual}
+            for field, expected, actual in (
+                ("tagName", args.version, existing.get("tagName")),
+                ("name", title, existing.get("name")),
+                ("isDraft", False, bool(existing.get("isDraft"))),
+                ("isPrerelease", prerelease, bool(existing.get("isPrerelease"))),
+                ("body", expected_notes, actual_notes),
+            )
+            if expected != actual
+        }
+        if conflicts:
+            fail(
+                "existing GitHub Release conflicts with the prepared immutable release",
+                {"version": args.version, "conflicts": conflicts},
+            )
 
     if command:
         command.extend(repository_args)
@@ -1179,12 +1617,21 @@ def build_parser() -> argparse.ArgumentParser:
     changelog.add_argument("--changelog", default="CHANGELOG.md")
     changelog.set_defaults(func=command_insert_changelog)
 
-    publish = subparsers.add_parser("publish-release", help="Create or update the GitHub Release object.")
+    publish = subparsers.add_parser("publish-release", help="Create or verify the immutable GitHub Release object.")
     publish.add_argument("--version", required=True)
     publish.add_argument("--notes-file", required=True)
     publish.add_argument("--title")
     publish.add_argument("--remote", default="origin")
     publish.set_defaults(func=command_publish_release)
+
+    local_release_state = subparsers.add_parser(
+        "local-release-state",
+        help="Classify HEAD as new source, a resumable release commit, or an exact sealed release.",
+    )
+    local_release_state.add_argument("--default-branch", required=True)
+    local_release_state.add_argument("--artifact-dir")
+    local_release_state.add_argument("--pending-artifact-dir")
+    local_release_state.set_defaults(func=command_local_release_state)
 
     initialize_artifact = subparsers.add_parser(
         "initialize-release-artifact",
@@ -1215,6 +1662,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     verify_artifact.add_argument("--artifact-dir")
     verify_artifact.set_defaults(func=command_verify_release_artifact)
+
+    resume_artifact = subparsers.add_parser(
+        "resume-release-artifact",
+        help="Finish the canonical release tag and atomically seal its prepared local artifact.",
+    )
+    resume_artifact.add_argument("--default-branch", required=True)
+    resume_artifact.add_argument("--artifact-dir")
+    resume_artifact.add_argument("--pending-artifact-dir")
+    resume_artifact.set_defaults(func=command_resume_release_artifact)
 
     publish_prepared = subparsers.add_parser(
         "publish-prepared-release",

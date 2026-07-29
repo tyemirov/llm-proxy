@@ -102,9 +102,10 @@ select_release() {
 }
 
 preflight_json="$(mktemp)"
+release_state_json="$(mktemp)"
 notes_file="$(mktemp)"
 cleanup() {
-  rm -f "${preflight_json}" "${notes_file}"
+  rm -f "${preflight_json}" "${release_state_json}" "${notes_file}"
 }
 trap cleanup EXIT
 
@@ -120,6 +121,17 @@ run_local_preflight() {
   cat "${preflight_json}"
 }
 
+inspect_local_release_state() {
+  if ! "${helper}" local-release-state \
+    --default-branch "${default_branch}" \
+    >"${release_state_json}"
+  then
+    cat "${release_state_json}"
+    echo "error: local release state is invalid" >&2
+    exit 1
+  fi
+}
+
 ensure_release_tag_absent() {
   if git show-ref --verify --quiet "refs/tags/${next_version}"; then
     echo "error: release tag already exists: ${next_version}" >&2
@@ -127,19 +139,72 @@ ensure_release_tag_absent() {
   fi
 }
 
+generate_release_notes() {
+  local generated_notes_file="$1"
+  local generated_version="$2"
+  local generated_boundary_tag="$3"
+  local notes_args=(generate-notes --version "${generated_version}" --release-date "${release_date}")
+  if [[ -n "${generated_boundary_tag}" ]]; then
+    notes_args+=(--since-tag "${generated_boundary_tag}")
+  fi
+  "${helper}" "${notes_args[@]}" >"${generated_notes_file}"
+}
+
 echo "==> [release] Checking local release state"
 run_local_preflight
 default_branch="$(json_value "${preflight_json}" "default_branch")"
+inspect_local_release_state
+release_state="$(json_value "${release_state_json}" "state")"
+artifact_dir="$(json_value "${release_state_json}" "artifact_dir")"
+pending_artifact_dir="$(json_value "${release_state_json}" "pending_artifact_dir")"
+
+case "${release_state}" in
+  sealed|resume)
+    prepared_version="$(json_value "${release_state_json}" "version")"
+    release_commit="$(json_value "${release_state_json}" "release_commit")"
+    if [[ -n "${version}" && "${version}" != "${prepared_version}" ]]; then
+      echo "error: HEAD is already the canonical ${prepared_version} release; explicit version ${version} cannot replace it" >&2
+      exit 1
+    fi
+    if [[ "${dry_run}" == "true" ]]; then
+      echo "release_dry_run=true"
+      echo "release_scope=local"
+      echo "release_action=${release_state}"
+      echo "default_branch=${default_branch}"
+      echo "version_scheme=semver"
+      echo "next_version=${prepared_version}"
+      echo "changelog_boundary=${prepared_version}"
+      exit 0
+    fi
+    if [[ "${release_state}" == "resume" ]]; then
+      echo "==> [release] Resuming ${prepared_version} from its prepared local payloads"
+      "${helper}" resume-release-artifact \
+        --default-branch "${default_branch}" \
+        --artifact-dir "${artifact_dir}" \
+        --pending-artifact-dir "${pending_artifact_dir}"
+    fi
+    echo "Prepared ${prepared_version} at ${release_commit}. Run make publish to publish it."
+    exit 0
+    ;;
+  new) ;;
+  *)
+    echo "error: release helper returned unknown local state: ${release_state}" >&2
+    exit 1
+    ;;
+esac
+
 source_commit="$(git rev-parse HEAD)"
 selection="$(select_release "${preflight_json}")"
 next_version="$(sed -n '1p' <<<"${selection}")"
 boundary_tag="$(sed -n '2p' <<<"${selection}")"
 effective_scheme="$(sed -n '3p' <<<"${selection}")"
 ensure_release_tag_absent
+generate_release_notes "${notes_file}" "${next_version}" "${boundary_tag}"
 
 if [[ "${dry_run}" == "true" ]]; then
   echo "release_dry_run=true"
   echo "release_scope=local"
+  echo "release_action=prepare"
   echo "default_branch=${default_branch}"
   echo "version_scheme=${effective_scheme}"
   echo "next_version=${next_version}"
@@ -160,19 +225,20 @@ echo "==> [release] Rechecking local state after CI"
 run_local_preflight
 [[ "$(git rev-parse HEAD)" == "${source_commit}" ]] || { echo "error: HEAD changed while make ci was running" >&2; exit 1; }
 selection="$(select_release "${preflight_json}")"
-next_version="$(sed -n '1p' <<<"${selection}")"
-boundary_tag="$(sed -n '2p' <<<"${selection}")"
-effective_scheme="$(sed -n '3p' <<<"${selection}")"
+rechecked_version="$(sed -n '1p' <<<"${selection}")"
+rechecked_boundary_tag="$(sed -n '2p' <<<"${selection}")"
+rechecked_scheme="$(sed -n '3p' <<<"${selection}")"
+[[ "${rechecked_version}" == "${next_version}" ]] || { echo "error: selected release version changed while make ci was running" >&2; exit 1; }
+[[ "${rechecked_boundary_tag}" == "${boundary_tag}" ]] || { echo "error: changelog boundary changed while make ci was running" >&2; exit 1; }
+[[ "${rechecked_scheme}" == "${effective_scheme}" ]] || { echo "error: version scheme changed while make ci was running" >&2; exit 1; }
 ensure_release_tag_absent
+generate_release_notes "${notes_file}" "${next_version}" "${boundary_tag}"
 
 "${helper}" initialize-release-artifact \
   --version "${next_version}" \
   --source-commit "${source_commit}" \
-  --release-timestamp "${release_timestamp}"
-artifact_dir="$(git rev-parse --git-path mprlab-release)"
-if [[ "${artifact_dir}" != /* ]]; then
-  artifact_dir="${repo_root}/${artifact_dir}"
-fi
+  --release-timestamp "${release_timestamp}" \
+  --artifact-dir "${pending_artifact_dir}"
 
 if [[ -n "${artifact_targets}" ]]; then
   read -r -a artifact_target_list <<<"${artifact_targets}"
@@ -180,7 +246,7 @@ if [[ -n "${artifact_targets}" ]]; then
     RELEASE_VERSION="${next_version}" \
     RELEASE_TIMESTAMP="${release_timestamp}" \
     MOBILE_RELEASE_TIMESTAMP="${release_timestamp}" \
-    RELEASE_ARTIFACT_DIR="${artifact_dir}" \
+    RELEASE_ARTIFACT_DIR="${pending_artifact_dir}" \
     make --no-print-directory "${artifact_target_list[@]}"
   echo "==> [release] Rechecking local state after artifact preparation"
   run_local_preflight
@@ -188,11 +254,7 @@ if [[ -n "${artifact_targets}" ]]; then
 fi
 
 echo "==> [release] Preparing ${next_version} from local Git history"
-notes_args=(generate-notes --version "${next_version}" --release-date "${release_date}")
-if [[ -n "${boundary_tag}" ]]; then
-  notes_args+=(--since-tag "${boundary_tag}")
-fi
-"${helper}" "${notes_args[@]}" | tee "${notes_file}"
+cat "${notes_file}"
 "${helper}" insert-changelog --notes-file "${notes_file}"
 
 git add CHANGELOG.md
@@ -209,13 +271,9 @@ fi
 
 git commit -m "Release ${next_version}"
 release_commit="$(git rev-parse HEAD)"
-git tag -a "${next_version}" -m "Release ${next_version}" "${release_commit}"
-"${helper}" write-release-artifact \
-  --version "${next_version}" \
-  --source-commit "${source_commit}" \
-  --release-commit "${release_commit}" \
-  --notes-file "${notes_file}" \
+"${helper}" resume-release-artifact \
   --default-branch "${default_branch}" \
-  --release-timestamp "${release_timestamp}"
+  --artifact-dir "${artifact_dir}" \
+  --pending-artifact-dir "${pending_artifact_dir}"
 
 echo "Prepared ${next_version} at ${release_commit}. Run make publish to publish it."

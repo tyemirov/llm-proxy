@@ -12,7 +12,7 @@ import tarfile
 
 PAGES_BUILD_BUILT = "built"
 PAGES_BUILD_ERRORED = "errored"
-PAGES_BUILD_WAITING = frozenset({"queued", "building"})
+PAGES_BUILD_ACTIVE = frozenset({"queued", "building"})
 
 
 def read_json(path: str) -> dict[str, object]:
@@ -117,7 +117,7 @@ def command_pages_build_state(args: argparse.Namespace) -> int:
         if build.get("commit") == args.commit:
             matching_builds.append(build)
     if not matching_builds:
-        print("waiting")
+        print("missing")
         return 0
     newest_build = max(matching_builds, key=pages_build_created_at)
     status = newest_build.get("status")
@@ -126,8 +126,8 @@ def command_pages_build_state(args: argparse.Namespace) -> int:
     if status == PAGES_BUILD_BUILT:
         print(PAGES_BUILD_BUILT)
         return 0
-    if status in PAGES_BUILD_WAITING:
-        print("waiting")
+    if status in PAGES_BUILD_ACTIVE:
+        print("active")
         return 0
     if status != PAGES_BUILD_ERRORED:
         raise SystemExit(f"GitHub Pages build has an unknown status: {status}")

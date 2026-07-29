@@ -188,27 +188,34 @@ fi
 find "${checkout_directory}" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 cp -R "${site_directory}"/. "${checkout_directory}/"
 git -C "${checkout_directory}" add -A
+pages_branch_changed="false"
 if ! git -C "${checkout_directory}" diff --cached --quiet; then
   git -C "${checkout_directory}" -c user.name="MPR Lab Pages Deployer" -c user.email="pages-deployer@mprlab.invalid" commit -m "Deploy Pages for ${version}" >/dev/null
   git -C "${checkout_directory}" push origin "HEAD:refs/heads/${branch}"
+  pages_branch_changed="true"
 else
   echo "Pages branch already contains ${version}."
 fi
 pages_branch_commit="$(git -C "${checkout_directory}" rev-parse HEAD)"
 
+pages_site_changed="false"
 if [[ "${configure}" == "true" ]]; then
   pages_site_path="${temporary_directory}/pages-site.json"
   if gh api "${github_api_args[@]}" "repos/${github_api_repository}/pages" >"${pages_site_path}"; then
     if ! python3 "${pages_helper}" pages-site-matches --site "${pages_site_path}" --branch "${branch}"; then
       gh api "${github_api_args[@]}" --method PUT "repos/${github_api_repository}/pages" -f build_type=legacy -f "source[branch]=${branch}" -f 'source[path]=/' -F https_enforced=true >/dev/null
+      pages_site_changed="true"
     fi
   else
     gh api "${github_api_args[@]}" --method POST "repos/${github_api_repository}/pages" -f build_type=legacy -f "source[branch]=${branch}" -f 'source[path]=/' -F https_enforced=true >/dev/null
+    pages_site_changed="true"
   fi
 fi
 
 if [[ "${verify}" == "true" ]]; then
   pages_builds_path="${temporary_directory}/pages-builds.json"
+  pages_build_requested="false"
+  pages_build_error=""
   for ((attempt = 1; attempt <= build_attempts; attempt += 1)); do
     if ! gh api "${github_api_args[@]}" "repos/${github_api_repository}/pages/builds?per_page=100" >"${pages_builds_path}"; then
       echo "error: could not read GitHub Pages build state for branch commit ${pages_branch_commit}" >&2
@@ -224,25 +231,44 @@ if [[ "${verify}" == "true" ]]; then
       built)
         break
         ;;
-      waiting)
-        if (( attempt < build_attempts )); then
-          echo "==> [pages] Waiting for GitHub Pages build ${pages_branch_commit} (attempt ${attempt}/${build_attempts})."
-          sleep "${build_delay_seconds}"
-          continue
+      active)
+        pages_build_wait_reason="matching build is active"
+        ;;
+      missing)
+        pages_build_wait_reason="matching build is not visible"
+        if [[ "${pages_branch_changed}" == "false" && "${pages_site_changed}" == "false" && "${pages_build_requested}" == "false" ]]; then
+          echo "==> [pages] Requesting the missing GitHub Pages build for ${pages_branch_commit}."
+          gh api "${github_api_args[@]}" --method POST "repos/${github_api_repository}/pages/builds" >/dev/null
+          pages_build_requested="true"
+          pages_build_wait_reason="replacement build was requested"
         fi
-        echo "error: GitHub Pages build did not reach built state for branch commit ${pages_branch_commit} after ${build_attempts} attempts" >&2
-        exit 1
         ;;
       errored)
         pages_build_error="${pages_build_state_values[1]:-no error message reported}"
-        echo "error: GitHub Pages build failed for branch commit ${pages_branch_commit}: ${pages_build_error}" >&2
-        exit 1
+        pages_build_wait_reason="newest matching build failed"
+        if [[ "${pages_build_requested}" == "false" ]]; then
+          echo "==> [pages] Requesting one replacement for failed GitHub Pages build ${pages_branch_commit}."
+          gh api "${github_api_args[@]}" --method POST "repos/${github_api_repository}/pages/builds" >/dev/null
+          pages_build_requested="true"
+          pages_build_wait_reason="replacement build was requested after failure"
+        fi
         ;;
       *)
         echo "error: GitHub Pages build-state response has unknown state '${pages_build_state_values[0]}' for branch commit ${pages_branch_commit}" >&2
         exit 1
         ;;
     esac
+    if (( attempt < build_attempts )); then
+      echo "==> [pages] Waiting for GitHub Pages build ${pages_branch_commit}: ${pages_build_wait_reason} (attempt ${attempt}/${build_attempts})."
+      sleep "${build_delay_seconds}"
+      continue
+    fi
+    if [[ -n "${pages_build_error}" ]]; then
+      echo "error: GitHub Pages build did not recover for branch commit ${pages_branch_commit}: ${pages_build_error}" >&2
+    else
+      echo "error: GitHub Pages build did not reach built state for branch commit ${pages_branch_commit} after ${build_attempts} attempts" >&2
+    fi
+    exit 1
   done
 
   marker_url="${url%/}/.mprlab-release.json?source_commit=${source_commit}"

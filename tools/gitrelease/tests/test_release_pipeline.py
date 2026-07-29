@@ -18,6 +18,7 @@ PREPARE = SKILL_ROOT / "scripts" / "prepare_release.sh"
 PREPARE_PAGES = SKILL_ROOT / "scripts" / "prepare_pages_artifact.sh"
 DEPLOY_PAGES = SKILL_ROOT / "scripts" / "deploy_pages_artifact.sh"
 CONTAINER_MANIFEST_DIGEST = SKILL_ROOT / "scripts" / "resolve_container_manifest_digest.sh"
+PUBLISH_CONTAINERS = SKILL_ROOT / "scripts" / "publish_container_artifacts.sh"
 RELEASE_ENVIRONMENT_KEYS = (
     "RELEASE_ARTIFACT_TARGETS",
     "RELEASE_VERSION",
@@ -88,6 +89,18 @@ class ReleasePipelineTest(unittest.TestCase):
             env=env,
         )
 
+    def git_private_path(self, name: str) -> pathlib.Path:
+        raw_path = self.command("git", "rev-parse", "--git-path", name, cwd=self.repo).stdout.strip()
+        path = pathlib.Path(raw_path)
+        return path if path.is_absolute() else self.repo / path
+
+    def artifact_snapshot(self, artifact_directory: pathlib.Path) -> dict[str, bytes]:
+        return {
+            path.relative_to(artifact_directory).as_posix(): path.read_bytes()
+            for path in artifact_directory.rglob("*")
+            if path.is_file()
+        }
+
     def test_prepare_is_local_and_finalizes_hashed_payload_inventory(self) -> None:
         env = os.environ.copy()
         env["RELEASE_HELPER"] = str(HELPER)
@@ -110,6 +123,135 @@ class ReleasePipelineTest(unittest.TestCase):
         self.assertEqual(manifest["schema_version"], 2)
         self.assertEqual(manifest["payloads"], [])
         self.command(str(HELPER), "verify-release-artifact", cwd=self.repo)
+
+    def test_prepare_exact_retry_reuses_sealed_release_without_ci_or_mutation(self) -> None:
+        ci_log = self.root / "release-ci.log"
+        (self.repo / "Makefile").write_text(
+            "ci:\n\t@printf 'ci\\n' >> \"$$FIXTURE_CI_LOG\"\n",
+            encoding="utf-8",
+        )
+        self.command("git", "add", "Makefile", cwd=self.repo)
+        self.command("git", "commit", "-m", "Record release CI calls", cwd=self.repo)
+        self.command("git", "push", "origin", "master", cwd=self.repo)
+        environment = os.environ.copy() | {
+            "RELEASE_HELPER": str(HELPER),
+            "FIXTURE_CI_LOG": str(ci_log),
+        }
+
+        first = self.command(
+            str(PREPARE),
+            "--version",
+            "v1.0.0",
+            cwd=self.repo,
+            env=environment,
+        )
+        release_head = self.command("git", "rev-parse", "HEAD", cwd=self.repo).stdout.strip()
+        artifact_directory = self.git_private_path("mprlab-release")
+        sealed_snapshot = self.artifact_snapshot(artifact_directory)
+
+        second = self.command(
+            str(PREPARE),
+            cwd=self.repo,
+            check=False,
+            env=environment,
+        )
+
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        self.assertIn("Prepared v1.0.0", second.stdout)
+        self.assertEqual(ci_log.read_text(encoding="utf-8").splitlines(), ["ci"])
+        self.assertEqual(self.command("git", "rev-parse", "HEAD", cwd=self.repo).stdout.strip(), release_head)
+        self.assertEqual(self.artifact_snapshot(artifact_directory), sealed_snapshot)
+        self.assertFalse(self.git_private_path("mprlab-release.pending").exists())
+
+    def test_failed_new_preparation_preserves_the_previous_sealed_release(self) -> None:
+        environment = os.environ.copy() | {"RELEASE_HELPER": str(HELPER)}
+        self.command(str(PREPARE), "--version", "v1.0.0", cwd=self.repo, env=environment)
+        artifact_directory = self.git_private_path("mprlab-release")
+        sealed_snapshot = self.artifact_snapshot(artifact_directory)
+        (self.repo / "Makefile").write_text(
+            "ci:\n\t@true\n"
+            "failing-artifact:\n"
+            "\t@mkdir -p \"$$RELEASE_ARTIFACT_DIR/payloads/release-assets\"\n"
+            "\t@printf 'partial\\n' > \"$$RELEASE_ARTIFACT_DIR/payloads/release-assets/partial.txt\"\n"
+            "\t@false\n",
+            encoding="utf-8",
+        )
+        self.command("git", "add", "Makefile", cwd=self.repo)
+        self.command("git", "commit", "-m", "Add the next release change", cwd=self.repo)
+        self.command("git", "push", "origin", "master", cwd=self.repo)
+        failing_environment = environment | {"RELEASE_ARTIFACT_TARGETS": "failing-artifact"}
+
+        result = self.command(
+            str(PREPARE),
+            "--version",
+            "v1.0.1",
+            cwd=self.repo,
+            check=False,
+            env=failing_environment,
+        )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.artifact_snapshot(artifact_directory), sealed_snapshot)
+        sealed_manifest = json.loads((artifact_directory / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(sealed_manifest["version"], "v1.0.0")
+        self.assertFalse(
+            self.command(
+                "git",
+                "show-ref",
+                "--verify",
+                "refs/tags/v1.0.1",
+                cwd=self.repo,
+                check=False,
+            ).returncode
+            == 0
+        )
+
+    def test_prepare_resumes_an_interrupted_release_commit_from_pending_payloads(self) -> None:
+        source_commit = self.command("git", "rev-parse", "HEAD", cwd=self.repo).stdout.strip()
+        pending_directory = self.git_private_path("mprlab-release.pending")
+        self.command(
+            str(HELPER),
+            "initialize-release-artifact",
+            "--version",
+            "v1.0.0",
+            "--source-commit",
+            source_commit,
+            "--release-timestamp",
+            "2026-07-28T12:00:00-07:00",
+            "--artifact-dir",
+            str(pending_directory),
+            cwd=self.repo,
+        )
+        notes = self.root / "interrupted-notes.md"
+        notes.write_text("## [v1.0.0] - 2026-07-28\n\n- Initial\n", encoding="utf-8")
+        self.command(
+            str(HELPER),
+            "insert-changelog",
+            "--notes-file",
+            str(notes),
+            cwd=self.repo,
+        )
+        self.command("git", "add", "CHANGELOG.md", cwd=self.repo)
+        self.command("git", "commit", "-m", "Release v1.0.0", cwd=self.repo)
+        interrupted_head = self.command("git", "rev-parse", "HEAD", cwd=self.repo).stdout.strip()
+        environment = os.environ.copy() | {"RELEASE_HELPER": str(HELPER)}
+
+        result = self.command(str(PREPARE), cwd=self.repo, check=False, env=environment)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Resuming v1.0.0", result.stdout)
+        self.assertEqual(self.command("git", "rev-parse", "HEAD", cwd=self.repo).stdout.strip(), interrupted_head)
+        self.assertEqual(
+            self.command("git", "rev-parse", "v1.0.0^{}", cwd=self.repo).stdout.strip(),
+            interrupted_head,
+        )
+        manifest = json.loads(
+            (self.git_private_path("mprlab-release") / "manifest.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(manifest["version"], "v1.0.0")
+        self.assertEqual(manifest["source_commit"], source_commit)
+        self.assertFalse(pending_directory.exists())
 
     def test_prepare_runs_ci_without_release_artifact_environment(self) -> None:
         (self.repo / "Makefile").write_text(
@@ -248,6 +390,275 @@ class ReleasePipelineTest(unittest.TestCase):
                     "source_commit": source_commit,
                 },
             )
+
+    def test_container_publication_reuses_exact_state_resumes_missing_indexes_and_rejects_conflicts(
+        self,
+    ) -> None:
+        prepare_environment = os.environ.copy() | {"RELEASE_HELPER": str(HELPER)}
+        self.command(
+            str(PREPARE),
+            "--version",
+            "v1.0.0",
+            cwd=self.repo,
+            env=prepare_environment,
+        )
+        artifact_directory = self.git_private_path("mprlab-release")
+        container_directory = artifact_directory / "payloads" / "containers" / "fixture"
+        container_directory.mkdir(parents=True)
+        platforms = (
+            ("linux/amd64", "linux-amd64", "a"),
+            ("linux/arm64", "linux-arm64", "b"),
+        )
+        descriptor_platforms = []
+        for platform, token, digest_character in platforms:
+            archive = container_directory / f"{token}.tar"
+            archive.write_bytes(f"{platform}-archive\n".encode())
+            descriptor_platforms.append(
+                {
+                    "platform": platform,
+                    "token": token,
+                    "local_ref": f"mprlab-release.local/fixture:v1.0.0-{token}",
+                    "image_id": f"sha256:{digest_character * 64}",
+                    "archive": archive.relative_to(artifact_directory).as_posix(),
+                    "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                }
+            )
+        descriptor = {
+            "schema_version": 1,
+            "artifact_kind": "mprlab.container",
+            "name": "fixture",
+            "image": "ghcr.io/example/fixture",
+            "version": "v1.0.0",
+            "platforms": descriptor_platforms,
+        }
+        descriptor_path = container_directory / "container.json"
+        descriptor_path.write_text(json.dumps(descriptor, sort_keys=True), encoding="utf-8")
+        manifest_path = artifact_directory / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["payloads"] = [
+            {
+                "path": path.relative_to(artifact_directory).as_posix(),
+                "size": path.stat().st_size,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+            for path in sorted(container_directory.iterdir())
+        ]
+        manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        fake_binary_directory = self.root / "container-publish-bin"
+        fake_binary_directory.mkdir()
+        fake_docker = fake_binary_directory / "docker"
+        fake_docker.write_text(
+            r"""#!/usr/bin/env python3
+import hashlib
+import json
+import os
+import pathlib
+import sys
+
+arguments = sys.argv[1:]
+state_directory = pathlib.Path(os.environ["FAKE_DOCKER_STATE"])
+state_directory.mkdir(exist_ok=True)
+with pathlib.Path(os.environ["FAKE_DOCKER_LOG"]).open("a", encoding="utf-8") as handle:
+    handle.write(json.dumps(arguments) + "\n")
+
+def state_paths(reference):
+    token = hashlib.sha256(reference.encode()).hexdigest()
+    return state_directory / f"{token}.json", state_directory / f"{token}.digest"
+
+def read_manifest(reference):
+    if os.environ.get("FAKE_DOCKER_INSPECTION_FAILURE_REFERENCE") == reference:
+        print(f"registry transport unavailable: {reference}", file=sys.stderr)
+        raise SystemExit(2)
+    manifest_path, digest_path = state_paths(reference)
+    if not manifest_path.exists():
+        print(f"manifest unknown: {reference}", file=sys.stderr)
+        raise SystemExit(1)
+    return manifest_path.read_text(encoding="utf-8"), digest_path.read_text(encoding="utf-8").strip()
+
+def write_manifest(reference, document):
+    manifest_path, digest_path = state_paths(reference)
+    raw = json.dumps(document, separators=(",", ":"), sort_keys=True) + "\n"
+    manifest_path.write_text(raw, encoding="utf-8")
+    digest_path.write_text(f"sha256:{hashlib.sha256(raw.encode()).hexdigest()}\n", encoding="utf-8")
+
+def image_id(reference):
+    return "sha256:" + ("a" if reference.endswith("linux-amd64") else "b") * 64
+
+if arguments[:2] == ["buildx", "version"]:
+    raise SystemExit(0)
+if arguments[:1] == ["login"]:
+    sys.stdin.read()
+    raise SystemExit(0)
+if arguments[:2] == ["image", "inspect"]:
+    print(image_id(arguments[2]))
+    raise SystemExit(0)
+if arguments[:1] == ["load"]:
+    raise SystemExit(0)
+if arguments[:1] == ["tag"]:
+    tag_map = state_directory / "tags.json"
+    values = json.loads(tag_map.read_text(encoding="utf-8")) if tag_map.exists() else {}
+    values[arguments[2]] = arguments[1]
+    tag_map.write_text(json.dumps(values), encoding="utf-8")
+    raise SystemExit(0)
+if arguments[:1] == ["push"]:
+    tag_map = json.loads((state_directory / "tags.json").read_text(encoding="utf-8"))
+    reference = arguments[1]
+    write_manifest(
+        reference,
+        {
+            "schemaVersion": 2,
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "config": {"digest": image_id(tag_map[reference])},
+            "layers": [],
+        },
+    )
+    print(f"pushed {reference}")
+    raise SystemExit(0)
+if arguments[:3] == ["buildx", "imagetools", "inspect"]:
+    raw_requested = "--raw" in arguments
+    reference = arguments[-1]
+    raw, digest = read_manifest(reference)
+    if raw_requested:
+        print(raw, end="")
+    else:
+        print(f"Name: {reference}\nDigest: {digest}")
+    raise SystemExit(0)
+if arguments[:3] == ["buildx", "imagetools", "create"]:
+    target = arguments[arguments.index("--tag") + 1]
+    sources = arguments[arguments.index("--tag") + 2 :]
+    manifests = []
+    for source in sources:
+        _, digest = read_manifest(source)
+        architecture = "amd64" if source.endswith("linux-amd64") else "arm64"
+        manifests.append(
+            {
+                "digest": digest,
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "platform": {"os": "linux", "architecture": architecture},
+            }
+        )
+    write_manifest(
+        target,
+        {
+            "schemaVersion": 2,
+            "mediaType": "application/vnd.oci.image.index.v1+json",
+            "manifests": manifests,
+        },
+    )
+    raise SystemExit(0)
+raise SystemExit(f"unexpected docker command: {arguments}")
+""",
+            encoding="utf-8",
+        )
+        fake_docker.chmod(0o755)
+        fake_gh = fake_binary_directory / "gh"
+        fake_gh.write_text(
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            "if [[ \"$1 $2\" == \"api user\" ]]; then printf '%s\\n' release-test; "
+            "elif [[ \"$1 $2\" == \"auth token\" ]]; then printf '%s\\n' fixture-token; "
+            "else printf 'unexpected gh command: %s\\n' \"$*\" >&2; exit 2; fi\n",
+            encoding="utf-8",
+        )
+        fake_gh.chmod(0o755)
+        docker_state = self.root / "fake-docker-state"
+        docker_log = self.root / "fake-docker.log"
+        publication_environment = os.environ.copy() | {
+            "PATH": f"{fake_binary_directory}{os.pathsep}{os.environ['PATH']}",
+            "FAKE_DOCKER_STATE": str(docker_state),
+            "FAKE_DOCKER_LOG": str(docker_log),
+            "CONTAINER_REGISTRY_VERIFY_ATTEMPTS": "1",
+            "CONTAINER_REGISTRY_VERIFY_DELAY_SECONDS": "1",
+            "CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS": "5",
+        }
+
+        first = self.command(
+            str(PUBLISH_CONTAINERS),
+            cwd=self.repo,
+            check=False,
+            env=publication_environment,
+        )
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        first_commands = list(map(json.loads, docker_log.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(sum(command[:1] == ["push"] for command in first_commands), 2)
+        self.assertEqual(
+            sum(command[:3] == ["buildx", "imagetools", "create"] for command in first_commands),
+            2,
+        )
+
+        second = self.command(
+            str(PUBLISH_CONTAINERS),
+            cwd=self.repo,
+            check=False,
+            env=publication_environment,
+        )
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        second_commands = list(map(json.loads, docker_log.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(sum(command[:1] == ["push"] for command in second_commands), 2)
+        self.assertEqual(
+            sum(command[:3] == ["buildx", "imagetools", "create"] for command in second_commands),
+            2,
+        )
+
+        uncertain_reference = "ghcr.io/example/fixture:v1.0.0-linux-amd64"
+        uncertain = self.command(
+            str(PUBLISH_CONTAINERS),
+            cwd=self.repo,
+            check=False,
+            env=publication_environment
+            | {"FAKE_DOCKER_INSPECTION_FAILURE_REFERENCE": uncertain_reference},
+        )
+        self.assertNotEqual(uncertain.returncode, 0, uncertain.stdout + uncertain.stderr)
+        self.assertIn(
+            f"could not determine immutable container state for {uncertain_reference}",
+            uncertain.stderr,
+        )
+        uncertain_commands = list(map(json.loads, docker_log.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(sum(command[:1] == ["push"] for command in uncertain_commands), 2)
+
+        for reference in ("ghcr.io/example/fixture:v1.0.0", "ghcr.io/example/fixture:latest"):
+            token = hashlib.sha256(reference.encode()).hexdigest()
+            (docker_state / f"{token}.json").unlink()
+            (docker_state / f"{token}.digest").unlink()
+        resumed = self.command(
+            str(PUBLISH_CONTAINERS),
+            cwd=self.repo,
+            check=False,
+            env=publication_environment,
+        )
+        self.assertEqual(resumed.returncode, 0, resumed.stdout + resumed.stderr)
+        resumed_commands = list(map(json.loads, docker_log.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(sum(command[:1] == ["push"] for command in resumed_commands), 2)
+        self.assertEqual(
+            sum(command[:3] == ["buildx", "imagetools", "create"] for command in resumed_commands),
+            4,
+        )
+
+        conflicting_reference = "ghcr.io/example/fixture:v1.0.0-linux-amd64"
+        conflicting_token = hashlib.sha256(conflicting_reference.encode()).hexdigest()
+        conflicting_document = {
+            "schemaVersion": 2,
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "config": {"digest": f"sha256:{'c' * 64}"},
+            "layers": [],
+        }
+        conflicting_raw = json.dumps(conflicting_document, separators=(",", ":"), sort_keys=True) + "\n"
+        (docker_state / f"{conflicting_token}.json").write_text(conflicting_raw, encoding="utf-8")
+        (docker_state / f"{conflicting_token}.digest").write_text(
+            f"sha256:{hashlib.sha256(conflicting_raw.encode()).hexdigest()}\n",
+            encoding="utf-8",
+        )
+        conflict = self.command(
+            str(PUBLISH_CONTAINERS),
+            cwd=self.repo,
+            check=False,
+            env=publication_environment,
+        )
+        self.assertNotEqual(conflict.returncode, 0, conflict.stdout + conflict.stderr)
+        self.assertIn("immutable container platform conflict", conflict.stderr)
+        conflict_commands = list(map(json.loads, docker_log.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(sum(command[:1] == ["push"] for command in conflict_commands), 2)
 
     def test_container_manifest_digest_waits_for_registry_readiness(self) -> None:
         fake_binary_directory = self.root / "manifest-bin"
@@ -431,22 +842,44 @@ exit 255
         self.assertIn("Waiting for GitHub Pages build", result.stdout)
         self.assertIn(f"Verified https://pages.example.invalid/ at source {source_commit}.", result.stdout)
 
-    def test_pages_deploy_rejects_terminal_matching_pages_build_error(self) -> None:
+    def test_pages_deploy_requests_only_one_replacement_for_persistent_build_error(self) -> None:
         _, environment = self.pages_release_fixture()
+        command_log = self.root / "pages-failed-build-gh.log"
         environment |= {
             "FAKE_PAGES_PREVIOUS_BUILD_STATUS": "built",
             "FAKE_PAGES_BUILD_STATES": "errored",
             "FAKE_PAGES_BUILD_ERROR": "simulated Pages build failure",
-            "PAGES_BUILD_VERIFY_ATTEMPTS": "1",
+            "FAKE_GH_COMMAND_LOG": str(command_log),
+            "PAGES_BUILD_VERIFY_ATTEMPTS": "2",
             "PAGES_BUILD_VERIFY_DELAY_SECONDS": "1",
         }
 
         result = self.deploy_pages(environment)
 
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("GitHub Pages build failed for branch commit", result.stderr)
+        self.assertIn("GitHub Pages build did not recover for branch commit", result.stderr)
         self.assertIn("simulated Pages build failure", result.stderr)
+        self.assertEqual(command_log.read_text(encoding="utf-8").count("--method POST"), 1)
         self.assertTrue(self.remote_branch_exists("gh-pages"), result.stdout + result.stderr)
+
+    def test_pages_deploy_resumes_after_one_failed_build_replacement(self) -> None:
+        source_commit, environment = self.pages_release_fixture()
+        command_log = self.root / "pages-recovered-build-gh.log"
+        build_counter = self.root / "pages-recovered-build-counter"
+        environment |= {
+            "FAKE_PAGES_BUILD_STATES": "errored,built",
+            "FAKE_PAGES_BUILD_ERROR": "simulated Pages build failure",
+            "FAKE_GH_COMMAND_LOG": str(command_log),
+            "FAKE_PAGES_BUILD_COUNTER": str(build_counter),
+            "PAGES_BUILD_VERIFY_ATTEMPTS": "2",
+            "PAGES_BUILD_VERIFY_DELAY_SECONDS": "1",
+        }
+
+        result = self.deploy_pages(environment)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(command_log.read_text(encoding="utf-8").count("--method POST"), 1)
+        self.assertIn(f"Verified https://pages.example.invalid/ at source {source_commit}.", result.stdout)
 
     def test_pages_deploy_rejects_built_pages_build_for_another_commit(self) -> None:
         _, environment = self.pages_release_fixture()
@@ -486,6 +919,72 @@ exit 255
         gh_commands = command_log.read_text(encoding="utf-8")
         self.assertNotIn("--method PUT", gh_commands)
         self.assertNotIn("--method POST", gh_commands)
+
+    def test_pages_deploy_exact_retry_reuses_branch_and_active_build(self) -> None:
+        _, environment = self.pages_release_fixture()
+        first = self.deploy_pages(environment)
+        first_branch_commit = self.command(
+            "git",
+            "rev-parse",
+            "refs/heads/gh-pages",
+            cwd=self.remote,
+            git_dir=True,
+        ).stdout.strip()
+        command_log = self.root / "pages-exact-retry-gh.log"
+        build_counter = self.root / "pages-exact-retry-build-counter"
+        retry_environment = environment | {
+            "FAKE_GH_COMMAND_LOG": str(command_log),
+            "FAKE_PAGES_BUILD_STATES": "building,built",
+            "FAKE_PAGES_BUILD_COUNTER": str(build_counter),
+            "PAGES_BUILD_VERIFY_ATTEMPTS": "2",
+            "PAGES_BUILD_VERIFY_DELAY_SECONDS": "1",
+        }
+
+        second = self.deploy_pages(retry_environment)
+
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        self.assertIn("Pages branch already contains v1.0.0.", second.stdout)
+        self.assertIn("matching build is active", second.stdout)
+        self.assertNotIn("--method POST", command_log.read_text(encoding="utf-8"))
+        self.assertEqual(
+            self.command(
+                "git",
+                "rev-parse",
+                "refs/heads/gh-pages",
+                cwd=self.remote,
+                git_dir=True,
+            ).stdout.strip(),
+            first_branch_commit,
+        )
+
+    def test_pages_deploy_requests_one_missing_build_and_then_reuses_it(self) -> None:
+        _, environment = self.pages_release_fixture()
+        first = self.deploy_pages(environment)
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        pages_commit = self.command(
+            "git",
+            "rev-parse",
+            "refs/heads/gh-pages",
+            cwd=self.remote,
+            git_dir=True,
+        ).stdout.strip()
+        command_log = self.root / "pages-missing-build-gh.log"
+        build_counter = self.root / "pages-missing-build-counter"
+        retry_environment = environment | {
+            "FAKE_GH_COMMAND_LOG": str(command_log),
+            "FAKE_PAGES_BUILD_STATES": "built,built",
+            "FAKE_PAGES_BUILD_COMMITS": f"{'0' * 40},{pages_commit}",
+            "FAKE_PAGES_BUILD_COUNTER": str(build_counter),
+            "PAGES_BUILD_VERIFY_ATTEMPTS": "2",
+            "PAGES_BUILD_VERIFY_DELAY_SECONDS": "1",
+        }
+
+        result = self.deploy_pages(retry_environment)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Requesting the missing GitHub Pages build", result.stdout)
+        self.assertEqual(command_log.read_text(encoding="utf-8").count("--method POST"), 1)
 
     def test_pages_deploy_scopes_release_download_to_selected_remote_repository(self) -> None:
         _, environment = self.pages_release_fixture()
@@ -930,13 +1429,11 @@ exit 255
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(command_log, "")
 
-    def test_publish_repairs_incorrect_prerelease_state(self) -> None:
+    def test_publish_rejects_conflicting_prerelease_state(self) -> None:
         result, command_log = self.publish_release_fixture("v1.2.3-rc.1", existing_prerelease=False)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("release edit v1.2.3-rc.1", command_log)
-        self.assertIn("--prerelease=true", command_log)
-        published = json.loads(result.stdout)
-        self.assertTrue(published["release"]["isPrerelease"])
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("existing GitHub Release conflicts", result.stdout)
+        self.assertEqual(command_log, "")
 
     def test_publish_prepared_release_validates_selected_remote_tag(self) -> None:
         prepare_environment = os.environ.copy()
@@ -993,6 +1490,8 @@ import sys
 
 arguments = sys.argv[1:]
 state = pathlib.Path(os.environ["FAKE_RELEASE_STATE"])
+assets = pathlib.Path(os.environ["FAKE_RELEASE_ASSET_DIR"])
+assets.mkdir(exist_ok=True)
 with pathlib.Path(os.environ["FAKE_GH_COMMAND_LOG"]).open("a", encoding="utf-8") as handle:
     handle.write(json.dumps(arguments) + "\n")
 if arguments[:2] == ["pr", "list"] or arguments[:2] == ["run", "list"]:
@@ -1001,6 +1500,9 @@ if arguments[:2] == ["pr", "list"] or arguments[:2] == ["run", "list"]:
 if arguments[:2] == ["release", "view"]:
     if not state.exists():
         raise SystemExit(1)
+    if arguments[arguments.index("--json") + 1] == "assets":
+        print(json.dumps({"assets": [{"name": path.name} for path in sorted(assets.iterdir())]}))
+        raise SystemExit(0)
     print(state.read_text(encoding="utf-8"))
     raise SystemExit(0)
 if arguments[:2] == ["release", "create"]:
@@ -1022,11 +1524,16 @@ if arguments[:2] == ["release", "create"]:
     )
     raise SystemExit(0)
 if arguments[:2] == ["release", "upload"]:
+    for value in arguments[3:]:
+        if value.startswith("--"):
+            break
+        source = pathlib.Path(value)
+        (assets / source.name).write_bytes(source.read_bytes())
     raise SystemExit(0)
 if arguments[:2] == ["release", "download"]:
     asset_name = arguments[arguments.index("--pattern") + 1]
     destination = pathlib.Path(arguments[arguments.index("--dir") + 1]) / asset_name
-    destination.write_bytes((pathlib.Path.cwd() / ".git" / "mprlab-release" / asset_name).read_bytes())
+    destination.write_bytes((assets / asset_name).read_bytes())
     raise SystemExit(0)
 raise SystemExit(f"unexpected gh command: {arguments}")
 """,
@@ -1036,6 +1543,8 @@ raise SystemExit(f"unexpected gh command: {arguments}")
         publish_environment = os.environ.copy()
         publish_environment["PATH"] = f"{fake_binary_directory}{os.pathsep}{publish_environment['PATH']}"
         publish_environment["FAKE_RELEASE_STATE"] = str(self.root / "fake-release-state.json")
+        release_asset_directory = self.root / "fake-release-assets"
+        publish_environment["FAKE_RELEASE_ASSET_DIR"] = str(release_asset_directory)
         command_log = self.root / "publish-selected-remote-gh-commands.log"
         publish_environment["FAKE_GH_COMMAND_LOG"] = str(command_log)
 
@@ -1050,6 +1559,37 @@ raise SystemExit(f"unexpected gh command: {arguments}")
         )
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        repeated_result = self.command(
+            str(HELPER),
+            "publish-prepared-release",
+            "--remote",
+            "upstream",
+            cwd=self.repo,
+            check=False,
+            env=publish_environment,
+        )
+        self.assertEqual(repeated_result.returncode, 0, repeated_result.stdout + repeated_result.stderr)
+        logged_arguments = list(map(json.loads, command_log.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(
+            sum(arguments[:2] == ["release", "upload"] for arguments in logged_arguments),
+            1,
+        )
+        (release_asset_directory / "manifest.json").write_text("conflict\n", encoding="utf-8")
+        conflicting_result = self.command(
+            str(HELPER),
+            "publish-prepared-release",
+            "--remote",
+            "upstream",
+            cwd=self.repo,
+            check=False,
+            env=publish_environment,
+        )
+        self.assertNotEqual(
+            conflicting_result.returncode,
+            0,
+            conflicting_result.stdout + conflicting_result.stderr,
+        )
+        self.assertIn("does not match the prepared payload", conflicting_result.stdout)
         for arguments in map(json.loads, command_log.read_text(encoding="utf-8").splitlines()):
             if arguments[:1] in (["pr"], ["release"], ["run"]):
                 self.assertIn("--repo", arguments, arguments)
@@ -1186,7 +1726,11 @@ if [[ "$1" == "api" ]]; then
     IFS=, read -r -a build_states <<<"${FAKE_PAGES_BUILD_STATES:-built}"
     if (( build_index >= ${#build_states[@]} )); then build_index=$((${#build_states[@]} - 1)); fi
     build_status="${build_states[build_index]}"
-    build_commit="${FAKE_PAGES_BUILD_COMMIT:-$(git --git-dir="${FAKE_PAGES_REMOTE}" rev-parse refs/heads/gh-pages)}"
+    default_build_commit="$(git --git-dir="${FAKE_PAGES_REMOTE}" rev-parse refs/heads/gh-pages)"
+    IFS=, read -r -a build_commits <<<"${FAKE_PAGES_BUILD_COMMITS:-${FAKE_PAGES_BUILD_COMMIT:-${default_build_commit}}}"
+    build_commit_index="${build_index}"
+    if (( build_commit_index >= ${#build_commits[@]} )); then build_commit_index=$((${#build_commits[@]} - 1)); fi
+    build_commit="${build_commits[build_commit_index]}"
     build_error='null'
     if [[ "${build_status}" == "errored" ]]; then build_error="\\\"${FAKE_PAGES_BUILD_ERROR:-simulated Pages build failure}\\\""; fi
     build_created_at="${FAKE_PAGES_BUILD_CREATED_AT:-2026-07-21T20:43:32Z}"
