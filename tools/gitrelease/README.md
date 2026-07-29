@@ -23,6 +23,11 @@ published, registry inspection ambiguity fails closed, and an existing
 conflict is never overwritten. The mutable `latest` tag changes only when its
 digest does not identify the prepared final release.
 
+The full CI suite runs only while preparing a new sealed release. Publication
+consumes that seal, and deployment requires the same local sealed manifest and
+exact annotated tag before it inspects or changes any remote surface. Neither
+publication nor deployment reruns CI.
+
 Each prepared platform tag is one immutable OCI index containing exactly one
 runnable Linux image manifest and its matching provenance attestation. Its
 remote index digest must equal the prepared local image ID. Version and
@@ -31,10 +36,10 @@ including the attestations.
 
 Pages artifacts always contain an empty `.nojekyll` file and a schema-versioned
 `.mprlab-release.json` marker. Deployment validates the archive contract and
-matches the release tag to `release_commit` while matching artifact and public
-marker provenance to the distinct `source_commit`. Container publication waits
-for the exact OCI manifests to become readable through the standard Docker
-client, with each inspection bounded by
+matches the local sealed release tag to `release_commit` while matching
+artifact and public marker provenance to the distinct `source_commit`.
+Container publication waits for the exact OCI manifests to become readable
+through the standard Docker client, with each inspection bounded by
 `CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS`. Pages activation reuses an
 exact branch and site configuration, selects the newest build for that branch
 commit, waits when it is queued or building, and requests one replacement when
