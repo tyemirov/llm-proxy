@@ -841,21 +841,19 @@ exit 1
 	}
 }
 
-func TestOperationalDeployNoopMatchesGatewayVerifier(testingInstance *testing.T) {
+func TestOperationalDeployRejectsRemovedCISkip(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	environment := append(os.Environ(), "GATEWAY_DIR="+filepath.Join(testingInstance.TempDir(), "missing-gateway"))
-	output := runOperationalCommand(
-		testingInstance,
-		repositoryRoot,
-		environment,
+	command := exec.Command(
 		filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"),
-		"--tag", "v0.0.0",
 		"--skip-ci",
-		"--skip-image-verify",
-		"--skip-gateway",
 	)
-	if !strings.Contains(output, "llm-proxy deploy complete") {
-		testingInstance.Fatalf("unexpected deploy no-op output: %s", output)
+	command.Dir = repositoryRoot
+	output, commandError := command.CombinedOutput()
+	if commandError == nil {
+		testingInstance.Fatalf("deploy accepted the removed CI bypass: %s", output)
+	}
+	if !strings.Contains(string(output), "unknown argument: --skip-ci") {
+		testingInstance.Fatalf("unexpected removed-CI-bypass error: %s", output)
 	}
 }
 
@@ -864,7 +862,6 @@ func TestOperationalDeployRejectsNoncanonicalTag(testingInstance *testing.T) {
 	command := exec.Command(
 		filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"),
 		"--tag", "v1.0.0-01",
-		"--skip-ci",
 		"--skip-image-verify",
 		"--skip-gateway",
 	)
@@ -988,12 +985,11 @@ func TestOperationalDeployPreflightsPagesBeforeGatewayMutation(testingInstance *
 		"GATEWAY_DIR="+gatewayDirectory,
 		"DEPLOY_REMOTE=origin",
 		"DEPLOY_BRANCH=master",
-		"RELEASE_HELPER="+filepath.Join(repositoryRoot, operationalReleaseToolsRelative, "scripts", "release_helper.py"),
+		"RELEASE_HELPER="+writeOperationalSealedReleaseHelper(testingInstance, fixtureRoot, "v1.0.0"),
 	)
 	command := exec.Command(
 		filepath.Join(fixtureRoot, operationalScriptsDirectory, "deploy.sh"),
 		"--tag", "v1.0.0",
-		"--skip-ci",
 		"--skip-image-verify",
 		"--pages-url", "https://pages.example.invalid/",
 	)
@@ -1052,7 +1048,7 @@ func TestOperationalDeployForwardsSelectedRemoteToPages(testingInstance *testing
 		"GATEWAY_DIR="+gatewayDirectory,
 		"DEPLOY_REMOTE=upstream",
 		"DEPLOY_BRANCH=master",
-		"RELEASE_HELPER="+filepath.Join(repositoryRoot, operationalReleaseToolsRelative, "scripts", "release_helper.py"),
+		"RELEASE_HELPER="+writeOperationalSealedReleaseHelper(testingInstance, fixtureRoot, "v1.0.0"),
 	)
 	runOperationalCommand(
 		testingInstance,
@@ -1060,7 +1056,6 @@ func TestOperationalDeployForwardsSelectedRemoteToPages(testingInstance *testing
 		environment,
 		filepath.Join(fixtureRoot, operationalScriptsDirectory, "deploy.sh"),
 		"--tag", "v1.0.0",
-		"--skip-ci",
 		"--skip-image-verify",
 		"--pages-url", "https://pages.example.invalid/",
 	)
@@ -1703,6 +1698,33 @@ GHTTP_SERVE_PORT=4179
 GHTTP_SERVE_DIRECTORY=/app/site
 GHTTP_SERVE_NO_MARKDOWN=true
 `, 0o600)
+}
+
+func writeOperationalSealedReleaseHelper(testingInstance *testing.T, fixtureRoot string, version string) string {
+	testingInstance.Helper()
+	releaseCommit := strings.TrimSpace(runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "rev-parse", "HEAD"))
+	helperPath := filepath.Join(testingInstance.TempDir(), "release_helper.py")
+	helperSource := `#!/usr/bin/env python3
+import json
+import sys
+
+command = sys.argv[1]
+if command == "local-release-state":
+    print(json.dumps({
+        "ok": True,
+        "state": "sealed",
+        "version": ` + strconv.Quote(version) + `,
+        "release_commit": ` + strconv.Quote(releaseCommit) + `,
+    }))
+elif command == "validate-version":
+    version_index = sys.argv.index("--version") + 1
+    if sys.argv[version_index] != ` + strconv.Quote(version) + `:
+        raise SystemExit("unexpected release version")
+else:
+    raise SystemExit("unexpected release-helper command")
+`
+	writeOperationalFile(testingInstance, helperPath, helperSource, 0o755)
+	return helperPath
 }
 
 func initializeOperationalGatewayCheckout(testingInstance *testing.T, gatewayDirectory string, remoteName string) {
