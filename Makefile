@@ -25,7 +25,7 @@ PAGES_VERSION ?=
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-package-install-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox release-test test-live-provider-harness test-live-providers test-live-gemini live-test build clean ci up release container-artifacts pages-artifact publish-release publish pages-deploy deploy deploy-dry-run
+.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-package-install-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox release-test test-live-provider-harness test-live-providers test-live-gemini live-test build clean ci up release container-artifacts pages-artifact publish-release publish pages-deploy deploy
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -118,7 +118,4 @@ pages-deploy:
 	@"$(RELEASE_TOOL_DIR)/deploy_pages_artifact.sh" --remote "$(PUBLISH_REMOTE)" --branch "$(PAGES_BRANCH)" --url "$(PAGES_URL)" $(if $(PAGES_VERSION),--version "$(PAGES_VERSION)") $(DEPLOY_PAGES_ARGS)
 
 deploy:
-	@LLM_PROXY_DEPLOY_MODE=deploy DOCKER_IMAGE="$(DOCKER_IMAGE)" PUBLISH_REMOTE="$(PUBLISH_REMOTE)" PUBLISH_BRANCH="$(PUBLISH_BRANCH)" PAGES_BRANCH="$(PAGES_BRANCH)" PAGES_URL="$(PAGES_URL)" ./scripts/deploy.sh
-
-deploy-dry-run:
-	@LLM_PROXY_DEPLOY_MODE=dry-run DOCKER_IMAGE="$(DOCKER_IMAGE)" PUBLISH_REMOTE="$(PUBLISH_REMOTE)" PUBLISH_BRANCH="$(PUBLISH_BRANCH)" PAGES_BRANCH="$(PAGES_BRANCH)" PAGES_URL="$(PAGES_URL)" ./scripts/deploy.sh
+	@mprlab-deploy

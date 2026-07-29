@@ -1305,8 +1305,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_SECRET`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus one large OpenAI background-polling request. |
 | `make release` | Run CI and prepare the local tag, container archives, and validated Pages archive under `.git/mprlab-release` without remote writes; an exact retry reuses the sealed release without rerunning CI or rebuilding. |
 | `make publish` | Publish only missing state from the exact prepared Git refs, GitHub Release assets, and container archives without rebuilding or deploying; reuse exact immutable state and reject conflicts. |
-| `make deploy-dry-run` | Verify the exact sealed release and published image, then execute the committed content-pinned gateway controller's complete local target analysis without credentials, production-host contact, or remote mutation. |
-| `make deploy` | Require the exact sealed release from `make release`, verify its published image and Pages artifacts, converge and verify the backend through the app-owned pinned controller transaction, then activate or reuse the exact Pages branch/build and verify the public marker without rerunning CI. |
+| `make deploy` | Delegate without arguments to the installed neutral controller, which verifies the exact published release and converges only this repository's declared backend, shared-platform, and Pages resources without rerunning CI. |
 
 Live provider smoke tests are intentionally not part of `make ci`; they call
 paid upstream APIs and depend on local or CI secret availability. The dynamic
@@ -1401,10 +1400,11 @@ provider.
 with the standard 350-second timeout. Override that release gate with
 `LLM_PROXY_CI_TIMEOUT_SECONDS=<seconds>` or
 `RELEASE_CI_TIMEOUT_SECONDS=<seconds>`. `make publish` consumes, verifies, and
-uploads only the already-prepared immutable artifacts. `make deploy` first
-requires the local sealed manifest and exact release tag produced by that
-release, then verifies the published image and Pages artifact. Neither later
-stage rebuilds artifacts or reruns CI. GHCR manifest readiness is bounded by
+uploads only the already-prepared immutable artifacts. `make deploy` delegates
+without arguments to the installed `mprlab-deploy` controller. That controller
+requires the local sealed manifest and exact release tag produced by
+`make release`, then verifies the published image and Pages artifact. Neither
+later stage rebuilds artifacts or reruns CI. GHCR manifest readiness is bounded by
 `CONTAINER_REGISTRY_VERIFY_ATTEMPTS` (default `12`) and
 `CONTAINER_REGISTRY_VERIFY_DELAY_SECONDS` (default `5`), with every Docker
 inspection bounded by `CONTAINER_REGISTRY_VERIFY_ATTEMPT_TIMEOUT_SECONDS`
@@ -1430,43 +1430,32 @@ pending directory is atomically activated. `make publish` compares existing
 GitHub Release metadata and assets plus GHCR platform and version manifests,
 skips exact matches, creates only missing state, updates `latest` only when its
 digest differs, and rejects immutable conflicts. `make deploy` reapplies the
-exact backend desired state, reuses an exact Pages branch and configuration,
-waits for a matching queued or building Pages build, and requests at most one
-replacement when the matching build is missing or failed.
+exact gateway-owned desired state and therefore converges on retries instead of
+creating a second deployment transaction.
 
-`llm-proxy` is a gateway-local service, but deployment never discovers,
-downloads, or executes a gateway source checkout. The application commits the
-exact attested gateway controller archive under `.mprlab/deploy/`, pins its
-content digest in `gateway-controller.lock.json`, and verifies every archive
-member before extraction. The controller is limited to dispatch target
-`llm-proxy`; malformed, dirty, or untracked sibling application repositories
-are outside that selected transaction.
+The tracked deployment surface in this repository is declarative:
+`.mprlab/deploy/resources.yml` identifies the service, runtime assets, public
+route, health check, Pages resource, and TAuth tenant, while
+`.mprlab/deploy/ansible/inventory/hosts.example.yml` documents the standard
+operator inventory shape. The real `hosts.yml` and runtime `.env` remain local
+and ignored. There is no app-owned deployment controller, gateway checkout
+selector, bundled gateway archive, Caddy reconciler, or TAuth deployment
+orchestrator.
 
-Create the ignored operator inventory once from the tracked example:
+Install or refresh the neutral controller from `mprlab-gateway` with
+`make bootstrap-control-machine`. From this repository, the complete lifecycle
+remains exactly:
 
 ```shell
-cp .mprlab/deploy/ansible/inventory/hosts.example.yml \
-  .mprlab/deploy/ansible/inventory/hosts.yml
-chmod 0600 .mprlab/deploy/ansible/inventory/hosts.yml
+make release
+make publish
+make deploy
 ```
 
-The inventory, ignored `.mprlab/deploy/.env`, app-owned validation and verify
-tasks, exact image digest, pinned controller, and published release identity
-form one deployment input. `make deploy-dry-run` performs local app validation,
-controller extraction, selected-target TAuth rendering, Compose rendering,
-syntax checks, timeout-capacity validation, and hermetic Caddy validation. It
-does not request a sudo password, contact production hosts, or change remote
-state.
-
-`make deploy` verifies that the release tag and `latest` resolve to the same
-GHCR digest, verifies the published Pages archive before backend mutation,
-prompts once for the gateway sudo password, and performs app preflight,
-gateway/TAuth/backend convergence, exact-image and public-backend verification,
-and only then Pages activation. An exact retry reapplies the same desired state.
-The controller reads `server.max_request_timeout_seconds` through the committed
-app-owned capacity reader and rejects gateway response-header, upstream-read,
-or client-write guards that cannot outwait it. There are no checkout overrides,
-partial-deploy flags, compatibility aliases, or skip paths.
+The gateway controller resolves only the current Git repository and its
+declarations. Caddy and TAuth reconciliation are platform responsibilities;
+llm-proxy runtime code knows TAuth only through its published client/session
+integration.
 
 ## Usage
 
@@ -2192,16 +2181,13 @@ container archives without rebuilding. Repeated publication verifies and
 reuses exact existing GitHub Release metadata, assets, platform tags, and the
 version manifest; it publishes only missing state and rejects a conflicting
 immutable object. It uses the standard Docker client to wait until the exact
-published manifests are readable. Use `make deploy-dry-run` after publish to
-validate the content-pinned target transaction without production-host contact.
-Use `make deploy` only for the operator-owned production continuation; it
+published manifests are readable. Use `make deploy` only after publish; it
 requires the same sealed `.git/mprlab-release` identity and exact annotated
-tag, verifies the published image and Pages archive, converges and verifies the
-backend with the committed controller bundle, then activates or reuses the
-exact `pages.tar.gz` asset on the live Pages branch. It does not rerun CI. An
-existing queued or building Pages job is reused, while a missing or failed
-matching job receives one bounded replacement request before public-marker
-verification.
+tag, verifies the published image, converges the backend through the gateway,
+then activates or reuses the exact `pages.tar.gz` asset on the live Pages
+branch. It does not rerun CI. An existing queued or building Pages job is
+reused, while a missing or failed matching job receives one bounded
+replacement request before public-marker verification.
 
 ## License
 

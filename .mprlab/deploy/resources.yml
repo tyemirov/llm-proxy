@@ -31,7 +31,7 @@ mprlab_resources:
     - type: container_service
       name: llm-proxy
       host_group: gateway
-      image_variable: MPRLAB_LLM_PROXY_IMAGE_REF
+      image: ghcr.io/tyemirov/llm-proxy:latest
       ports:
         - container_port: 8080
       compose_file: docker-compose.yml
@@ -59,12 +59,3 @@ mprlab_resources:
       target: pages-deploy
       url: https://llm-proxy.mprlab.com/
       source_marker_path: /.mprlab-release.json
-    - type: ansible_task_bundle
-      name: production
-      host_group: gateway
-      timeout_seconds: 1200
-      entrypoints:
-        validate: .mprlab/deploy/ansible/tasks/validate.yml
-        preflight: .mprlab/deploy/ansible/tasks/preflight.yml
-        deploy: .mprlab/deploy/ansible/tasks/deploy.yml
-        verify: .mprlab/deploy/ansible/tasks/verify.yml

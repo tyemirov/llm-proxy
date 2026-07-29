@@ -15,7 +15,6 @@ PLAN.md
 .envrc
 *.pem
 *.key
-.mprlab/deploy/ansible/inventory/hosts.yml
 configs/*.sqlite
 configs/*.sqlite-*
 configs/client_secret_*.json
@@ -40,6 +39,7 @@ build/
 python/.venv/
 python/.pytest_cache/
 python/.mypy_cache/
+.mprlab/deploy/ansible/inventory/hosts.yml
 
 # Logs
 *.log

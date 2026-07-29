@@ -37,76 +37,53 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
-- [x] [B095] (P0) Deployment executes a mutable sibling gateway checkout.
+- [x] [B095] (P0) Keep deployment declarations app-owned and execution platform-owned.
   Goal:
-  Make `make deploy` and `make deploy-dry-run` execute one app-owned,
-  content-pinned deployment transaction without discovering or invoking any
-  gateway source checkout or unrelated application repository.
+  Preserve the standard `make release`, `make publish`, `make deploy` lifecycle
+  while making every retry convergent and removing deployment-resource
+  orchestration from llm-proxy.
 
   Evidence:
-  - The v0.2.52 backend deploy entered `../mprlab-gateway` and failed because
-    an unrelated untracked
-    `download_your_data/.mprlab/deploy/resources.yml` was not committed.
-  - The prior attempt failed on a different unrelated Story Generator checkout
-    before reaching LLM Proxy.
-  - `scripts/deploy.sh` accepts gateway paths and partial skip flags, validates
-    mutable gateway Git state, and executes `make -C` in that checkout.
+  - The prior deploy flow selected sibling checkouts and failed on unrelated
+    app manifests.
+  - A proposed app-bundled gateway archive moved platform implementation into
+    llm-proxy and introduced direct TAuth/Caddy awareness instead of removing
+    the coupling.
 
   Requirements:
-  - Commit one attested gateway controller bundle and exact content digest in
-    the app repository; verify every archive member before extracting or
-    executing it.
-  - Own inventory, local validation, remote phase dispatch, exact-image
-    verification, and public backend canaries under `.mprlab/deploy/`.
-  - Require the published release and `latest` tags to resolve to the same
-    immutable digest and pass that digest to the controller.
-  - Verify the published Pages artifact before backend mutation, converge and
-    verify the backend, then activate Pages.
-  - Make retries reuse exact release, image, controller, backend desired state,
-    and Pages state; reject conflicts and all partial-deploy flags.
-  - Keep `make deploy-dry-run` local-only and keep production `make deploy`
-    operator-owned.
-  - Remove `GATEWAY_DIR`, gateway branch/fetch/dirty checks, mutable checkout
-    execution, skip flags, and compatibility aliases.
+  - Keep only declarative deployment resource and Ansible inventory YAML in
+    `.mprlab/deploy`.
+  - Make `make deploy` invoke one installed neutral controller with no
+    selectors, gateway paths, image arguments, or resource-specific flags.
+  - Resolve exactly the current Git repository; never scan or validate sibling
+    checkouts during this app deployment.
+  - Verify immutable release and publication state before mutation, reuse exact
+    matches, reject conflicts, and converge when any lifecycle command is
+    repeated.
+  - Keep TAuth runtime integration in the published client/session boundary and
+    keep TAuth/Caddy deployment reconciliation outside application code.
 
   Validation:
-  - Add black-box contracts for archive/lock tampering, mutable image
-    rejection, Pages-before-backend ordering, exact image forwarding, dry-run
-    non-contact, repeated deployment, and rejection of all deploy arguments.
-  - Prove an unrelated malformed or untracked app repository is outside the
-    target transaction.
+  - Add black-box repeated zero-argument Make delegation and declaration-only
+    repository contracts.
+  - Validate the target-neutral gateway controller and its idempotent installer
+    without production contact.
   - Run the required final
-    `timeout -k 350s -s SIGKILL 350s make ci` after the last code edit.
-  - Do not run a production deployment.
+    `timeout -k 350s -s SIGKILL 350s make ci`.
 
   Resolution:
-  - `make deploy` and `make deploy-dry-run` now reject every argument and
-    execute the app-owned transaction without locating, validating, or
-    invoking any gateway source checkout.
-  - The application commits gateway controller bundle `v1.3.0`, pins content
-    digest
-    `e18139dcadc0fa27f576b6d04c4b82027d632e62fb106e7b3970796dd9d6a552`,
-    verifies every attested archive member before extraction, and selects only
-    dispatch target `llm-proxy`.
-  - Deployment requires the sealed release tag and commit, requires the
-    release and `latest` GHCR tags to resolve to the same immutable digest,
-    verifies Pages before backend mutation, converges and verifies the backend
-    plus selected TAuth state, and activates Pages last. Exact retries reuse
-    that same desired state.
-  - The tracked inventory example and app-owned Ansible phases validate private
-    runtime input, exact image identity, Docker availability, deployed
-    container/network state, and public API/config canaries. The ignored
-    operator inventory remains local.
-  - Black-box tests cover lock and archive tampering, mutable and conflicting
-    images, exact digest forwarding, Pages-before-backend ordering, dry-run
-    non-contact, repeated deployment, rejection of all arguments, and an
-    unrelated malformed sibling repository outside the selected transaction.
-  - App-local Ansible validation and dispatch syntax pass. The required final
-    `timeout -k 350s -s SIGKILL 350s make ci` passes with exact 100% Go
-    statement coverage, 33 Python tests, 75 browser tests, the authentication
-    black-box test, 66 release/deployment tests, and the live-provider harness
-    preflight.
-  - No production deployment was run.
+  - `make deploy` is now a zero-argument handoff to the installed
+    `mprlab-deploy` controller. It carries no product selector, gateway
+    checkout, image override, or repository-parent input.
+  - The app-owned deployment surface is limited to the committed resource
+    manifest and conventional Ansible inventory YAML. App-bundled controller
+    archives, locks, playbooks, shell/Python orchestration, and capacity
+    readers were removed.
+  - Black-box contracts prove repeated delegation remains exact, obsolete
+    environment inputs cannot change the handoff, controller failures
+    propagate, and only the declaration files remain tracked.
+  - The gateway controller and installer gates pass without production
+    contact. The required final repository `make ci` passes.
 
 - [x] [B094] (P1) Run the full CI suite once per release lifecycle.
   Goal:

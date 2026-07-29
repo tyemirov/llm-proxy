@@ -840,155 +840,40 @@ exit 1
 	}
 }
 
-func TestOperationalDeployRejectsEveryArgument(testingInstance *testing.T) {
+func TestOperationalMakeDeployDelegatesWithoutResourceArguments(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	for _, argument := range []string{
-		"--skip-ci",
-		"--skip-pages",
-		"--skip-image-verify",
-		"--skip-gateway",
-		"--gateway-dir",
-		"--tag",
-		"anything",
-	} {
-		command := exec.Command(
-			filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"),
-			argument,
+	toolDirectory := testingInstance.TempDir()
+	capturePath := filepath.Join(testingInstance.TempDir(), "deploy-capture")
+	writeOperationalFile(
+		testingInstance,
+		filepath.Join(toolDirectory, "mprlab-deploy"),
+		"#!/usr/bin/env bash\nset -euo pipefail\n[[ $# -eq 0 ]]\nprintf '%s\\t%s\\n' \"$PWD\" \"$#\" >>\"${DEPLOY_CAPTURE}\"\n",
+		0o755,
+	)
+	environment := append(
+		os.Environ(),
+		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"DEPLOY_CAPTURE="+capturePath,
+	)
+	for invocation := 0; invocation < 2; invocation++ {
+		runOperationalCommand(
+			testingInstance,
+			repositoryRoot,
+			environment,
+			"make",
+			"--no-print-directory",
+			"deploy",
+			"DEPLOY_ARGS=ignored",
+			"GATEWAY_DIR=/unrelated/checkout",
 		)
-		command.Dir = repositoryRoot
-		output, commandError := command.CombinedOutput()
-		if commandError == nil {
-			testingInstance.Fatalf("deploy accepted argument %q: %s", argument, output)
-		}
-		if !strings.Contains(string(output), "llm-proxy deployment accepts no arguments") {
-			testingInstance.Fatalf("unexpected argument error for %q: %s", argument, output)
-		}
 	}
-}
-
-func TestOperationalDeployUsesAppOwnedPinnedController(testingInstance *testing.T) {
-	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	requiredPaths := []string{
-		filepath.Join(".mprlab", "deploy", "gateway-controller.lock.json"),
-		filepath.Join(".mprlab", "deploy", "ansible", "ansible.cfg"),
-		filepath.Join(".mprlab", "deploy", "ansible", "inventory", "hosts.example.yml"),
-		filepath.Join(".mprlab", "deploy", "ansible", "playbooks", "dispatch.yml"),
-		filepath.Join(".mprlab", "deploy", "ansible", "playbooks", "preflight-local.yml"),
-		filepath.Join(operationalScriptsDirectory, "prepare_gateway_controller.py"),
-		filepath.Join(operationalScriptsDirectory, "run-app-ansible-deploy.sh"),
-		filepath.Join(operationalScriptsDirectory, "run-app-deploy-transaction.sh"),
+	captureBytes, readError := os.ReadFile(capturePath)
+	if readError != nil {
+		testingInstance.Fatalf("read deploy delegation capture: %v", readError)
 	}
-	for _, relativePath := range requiredPaths {
-		path := filepath.Join(repositoryRoot, relativePath)
-		fileInfo, statError := os.Stat(path)
-		if statError != nil || !fileInfo.Mode().IsRegular() {
-			testingInstance.Fatalf("app-owned deployment input is missing: %s (%v)", relativePath, statError)
-		}
-	}
-
-	makefileBytes, readMakefileError := os.ReadFile(filepath.Join(repositoryRoot, "Makefile"))
-	if readMakefileError != nil {
-		testingInstance.Fatalf("read Makefile: %v", readMakefileError)
-	}
-	deployBytes, readDeployError := os.ReadFile(filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"))
-	if readDeployError != nil {
-		testingInstance.Fatalf("read deploy script: %v", readDeployError)
-	}
-	deploymentSource := string(makefileBytes) + "\n" + string(deployBytes)
-	for _, forbiddenFragment := range []string{
-		"GATEWAY_DIR",
-		"--gateway-dir",
-		"--skip-gateway",
-		"--skip-pages",
-		"--skip-image-verify",
-		"make -C",
-	} {
-		if strings.Contains(deploymentSource, forbiddenFragment) {
-			testingInstance.Fatalf("deployment retains mutable or partial gateway path %q", forbiddenFragment)
-		}
-	}
-	for _, requiredFragment := range []string{
-		"deploy-dry-run:",
-		"run-app-ansible-deploy.sh",
-		"MPRLAB_LLM_PROXY_IMAGE_REF",
-	} {
-		if !strings.Contains(deploymentSource, requiredFragment) {
-			testingInstance.Fatalf("deployment is missing app-owned contract %q", requiredFragment)
-		}
-	}
-}
-
-func TestOperationalRequestTimeoutCapacityReader(testingInstance *testing.T) {
-	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	readerPath := filepath.Join(repositoryRoot, operationalScriptsDirectory, "read-request-timeout-capacity.sh")
-	testCases := []struct {
-		name           string
-		configuration  string
-		expectedOutput string
-		expectedError  string
-	}{
-		{
-			name: "valid",
-			configuration: "server:\n" +
-				"  request_timeout_seconds: 360\n" +
-				"  max_request_timeout_seconds: 3600\n",
-			expectedOutput: "3600\n",
-		},
-		{
-			name: "commented",
-			configuration: "server:\n" +
-				"  max_request_timeout_seconds: 900 # operator capacity\n",
-			expectedOutput: "900\n",
-		},
-		{
-			name:          "missing",
-			configuration: "server:\n  request_timeout_seconds: 360\n",
-			expectedError: "expected exactly one server.max_request_timeout_seconds, found 0",
-		},
-		{
-			name: "duplicate",
-			configuration: "server:\n" +
-				"  max_request_timeout_seconds: 900\n" +
-				"  max_request_timeout_seconds: 1200\n",
-			expectedError: "expected exactly one server.max_request_timeout_seconds, found 2",
-		},
-		{
-			name:          "invalid",
-			configuration: "server:\n  max_request_timeout_seconds: 0\n",
-			expectedError: "must be a positive whole number",
-		},
-		{
-			name: "nested-lookalike",
-			configuration: "provider:\n" +
-				"  max_request_timeout_seconds: 900\n" +
-				"server:\n" +
-				"  max_request_timeout_seconds: 3600\n",
-			expectedOutput: "3600\n",
-		},
-	}
-
-	for _, testCase := range testCases {
-		testingInstance.Run(testCase.name, func(testingInstance *testing.T) {
-			configPath := filepath.Join(testingInstance.TempDir(), "config.yml")
-			writeOperationalFile(testingInstance, configPath, testCase.configuration, 0o644)
-			command := exec.Command(readerPath, configPath)
-			output, commandError := command.CombinedOutput()
-			if testCase.expectedError == "" {
-				if commandError != nil {
-					testingInstance.Fatalf("read request-timeout capacity: %v\n%s", commandError, output)
-				}
-				if string(output) != testCase.expectedOutput {
-					testingInstance.Fatalf("unexpected request-timeout capacity: %q", output)
-				}
-				return
-			}
-			if commandError == nil {
-				testingInstance.Fatalf("capacity reader accepted invalid config: %s", output)
-			}
-			if !strings.Contains(string(output), testCase.expectedError) {
-				testingInstance.Fatalf("unexpected capacity-reader error: %s", output)
-			}
-		})
+	expected := repositoryRoot + "\t0\n" + repositoryRoot + "\t0\n"
+	if string(captureBytes) != expected {
+		testingInstance.Fatalf("unexpected deploy delegation: %s", captureBytes)
 	}
 }
 
