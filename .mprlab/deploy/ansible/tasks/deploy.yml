@@ -1,0 +1,10 @@
+---
+- name: Load the immutable LLM Proxy deployment image contract
+  ansible.builtin.include_tasks: resolve-image.yml
+
+- name: Require gateway-owned target convergence before app activation completes
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - lookup('ansible.builtin.env', 'MPRLAB_GATEWAY_TARGET_CONVERGED') == '1'
+    fail_msg: "The pinned gateway target controller must converge LLM Proxy before the app deploy phase."

@@ -1,0 +1,53 @@
+---
+- name: Load the immutable LLM Proxy deployment image contract
+  ansible.builtin.include_tasks: resolve-image.yml
+
+- name: Inspect the deployed LLM Proxy backend
+  ansible.builtin.command:
+    argv:
+      - "{{ llm_proxy_docker_cli }}"
+      - inspect
+      - llm-proxy
+  register: llm_proxy_backend_inspect
+  changed_when: false
+
+- name: Resolve the deployed LLM Proxy backend state
+  ansible.builtin.set_fact:
+    llm_proxy_backend_state: "{{ (llm_proxy_backend_inspect.stdout | from_json | first) }}"
+
+- name: Require the exact running LLM Proxy backend
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - llm_proxy_backend_state.State.Running
+      - llm_proxy_backend_state.Config.Image == llm_proxy_deploy_image_ref_effective
+      - llm_proxy_gateway_network in llm_proxy_backend_state.NetworkSettings.Networks
+    fail_msg: "LLM Proxy must run the exact verified image digest on the shared gateway network."
+
+- name: Require the public unauthenticated API boundary
+  delegate_to: localhost
+  become: false
+  ansible.builtin.uri:
+    url: https://llm-proxy-api.mprlab.com/
+    method: GET
+    follow_redirects: none
+    status_code: 403
+    timeout: 10
+  register: llm_proxy_public_boundary
+  retries: 12
+  delay: 5
+  until: llm_proxy_public_boundary is succeeded
+
+- name: Require the public management configuration
+  delegate_to: localhost
+  become: false
+  ansible.builtin.uri:
+    url: https://llm-proxy-api.mprlab.com/config-ui.yaml
+    method: GET
+    follow_redirects: none
+    status_code: 200
+    timeout: 10
+  register: llm_proxy_public_management_config
+  retries: 12
+  delay: 5
+  until: llm_proxy_public_management_config is succeeded

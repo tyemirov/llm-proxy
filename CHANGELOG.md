@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Replace mutable sibling-gateway deployment with one app-owned, content-pinned target transaction, including a local-only dry-run, exact-image verification, Pages-before-backend ordering, and selected-target isolation from unrelated repositories.
 - Remove Moonshot's unavailable former default model and promote the verified `kimi-k2.6` model as the sole canonical default without an alias or fallback.
 - Verify every nonempty managed provider key against its exact provider and selected text model before atomic persistence, with automatic paste verification, safe stable failures, stale-attempt cancellation, and live-harness coverage.
 - Persist managed usage after response flush through one bounded FIFO writer, with explicit drop-newest overflow, at-most-once process-local durability, and safe failure logging.

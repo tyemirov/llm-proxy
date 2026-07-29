@@ -430,10 +430,17 @@ The repository owns the immutable release implementation under
 snapshot, packages a Pages marker for that source commit, and creates the
 changelog-only release commit after the lifecycle's sole `make ci` run.
 `make publish` and `make deploy` require that exact sealed local release rather
-than rerunning CI. Before Pages branch mutation, deployment validates the
-archive, its source marker, and the remote release tag. After activation it
+than rerunning CI. The application commits an attested, content-pinned gateway
+target controller plus its exact digest, inventory contract, and app-owned
+Ansible phase tasks; deployment never locates or executes a mutable gateway
+checkout. `make deploy-dry-run` verifies the published image and performs the
+selected `llm-proxy` controller analysis without credentials, production-host
+contact, or remote mutation. Production deployment validates the Pages archive
+before backend mutation, converges and verifies the exact image plus the
+selected TAuth tenant, and only then activates Pages. After activation it
 matches GitHub Pages build state to the pushed branch commit, then verifies a
-cache-distinct public marker after backend rollout.
+cache-distinct public marker. Exact retries reuse the same release, image
+digest, controller content, backend desired state, and Pages artifact.
 
 The management UI is served as a static GitHub Pages app from `site/` on `https://llm-proxy.mprlab.com`; the Go backend does not serve management HTML or assets. `make release` renders and validates the Pages archive locally, `make publish` uploads that immutable archive without changing the live site, and `make deploy` activates it on `gh-pages` after the backend rollout. The backend serves one public browser config file at `/config-ui.yaml` from the already-loaded management config, with credentialed CORS restricted to `management.public_origin`.
 

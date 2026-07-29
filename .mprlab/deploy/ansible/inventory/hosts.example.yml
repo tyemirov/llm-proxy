@@ -1,0 +1,16 @@
+---
+all:
+  children:
+    gateway:
+      hosts:
+        tutosh:
+          ansible_host: 192.168.1.252
+          ansible_user: tyemirov
+          ansible_become: true
+          ansible_become_method: sudo
+          ansible_ssh_transfer_method: scp
+          ansible_scp_extra_args: -O
+          mprlab_remote_project_root: /volume1/docker/mprlab-nginx-gateway
+          llm_proxy_docker_cli: /usr/local/bin/docker
+          llm_proxy_compose_project_name: mprlab-nginx-gateway
+          llm_proxy_gateway_network: mprlab-nginx-gateway_default

@@ -55,7 +55,6 @@ func TestOperationalHelpCommandsUseBuiltinOutput(testingInstance *testing.T) {
 		path             string
 		expectedFragment string
 	}{
-		{name: "deploy", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"), expectedFragment: "scripts/deploy.sh [options]"},
 		{name: "live-providers", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), expectedFragment: "scripts/test_live_providers.sh [--preflight | --write-config <path>]"},
 		{name: "production-live-test", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "live_test.sh"), expectedFragment: "Usage: make live-test"},
 		{name: "deploy-pages", path: filepath.Join(repositoryRoot, operationalReleaseToolsRelative, "scripts", "deploy_pages_artifact.sh"), expectedFragment: "deploy_pages_artifact.sh --url <public-url> [options]"},
@@ -841,37 +840,81 @@ exit 1
 	}
 }
 
-func TestOperationalDeployRejectsRemovedCISkip(testingInstance *testing.T) {
+func TestOperationalDeployRejectsEveryArgument(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	command := exec.Command(
-		filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"),
+	for _, argument := range []string{
 		"--skip-ci",
-	)
-	command.Dir = repositoryRoot
-	output, commandError := command.CombinedOutput()
-	if commandError == nil {
-		testingInstance.Fatalf("deploy accepted the removed CI bypass: %s", output)
-	}
-	if !strings.Contains(string(output), "unknown argument: --skip-ci") {
-		testingInstance.Fatalf("unexpected removed-CI-bypass error: %s", output)
+		"--skip-pages",
+		"--skip-image-verify",
+		"--skip-gateway",
+		"--gateway-dir",
+		"--tag",
+		"anything",
+	} {
+		command := exec.Command(
+			filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"),
+			argument,
+		)
+		command.Dir = repositoryRoot
+		output, commandError := command.CombinedOutput()
+		if commandError == nil {
+			testingInstance.Fatalf("deploy accepted argument %q: %s", argument, output)
+		}
+		if !strings.Contains(string(output), "llm-proxy deployment accepts no arguments") {
+			testingInstance.Fatalf("unexpected argument error for %q: %s", argument, output)
+		}
 	}
 }
 
-func TestOperationalDeployRejectsNoncanonicalTag(testingInstance *testing.T) {
+func TestOperationalDeployUsesAppOwnedPinnedController(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	command := exec.Command(
-		filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"),
-		"--tag", "v1.0.0-01",
-		"--skip-image-verify",
-		"--skip-gateway",
-	)
-	command.Dir = repositoryRoot
-	output, commandError := command.CombinedOutput()
-	if commandError == nil {
-		testingInstance.Fatalf("deploy accepted a noncanonical tag: %s", output)
+	requiredPaths := []string{
+		filepath.Join(".mprlab", "deploy", "gateway-controller.lock.json"),
+		filepath.Join(".mprlab", "deploy", "ansible", "ansible.cfg"),
+		filepath.Join(".mprlab", "deploy", "ansible", "inventory", "hosts.example.yml"),
+		filepath.Join(".mprlab", "deploy", "ansible", "playbooks", "dispatch.yml"),
+		filepath.Join(".mprlab", "deploy", "ansible", "playbooks", "preflight-local.yml"),
+		filepath.Join(operationalScriptsDirectory, "prepare_gateway_controller.py"),
+		filepath.Join(operationalScriptsDirectory, "run-app-ansible-deploy.sh"),
+		filepath.Join(operationalScriptsDirectory, "run-app-deploy-transaction.sh"),
 	}
-	if !strings.Contains(string(output), "canonical vMAJOR.MINOR.PATCH SemVer") {
-		testingInstance.Fatalf("unexpected invalid-tag error: %s", output)
+	for _, relativePath := range requiredPaths {
+		path := filepath.Join(repositoryRoot, relativePath)
+		fileInfo, statError := os.Stat(path)
+		if statError != nil || !fileInfo.Mode().IsRegular() {
+			testingInstance.Fatalf("app-owned deployment input is missing: %s (%v)", relativePath, statError)
+		}
+	}
+
+	makefileBytes, readMakefileError := os.ReadFile(filepath.Join(repositoryRoot, "Makefile"))
+	if readMakefileError != nil {
+		testingInstance.Fatalf("read Makefile: %v", readMakefileError)
+	}
+	deployBytes, readDeployError := os.ReadFile(filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"))
+	if readDeployError != nil {
+		testingInstance.Fatalf("read deploy script: %v", readDeployError)
+	}
+	deploymentSource := string(makefileBytes) + "\n" + string(deployBytes)
+	for _, forbiddenFragment := range []string{
+		"GATEWAY_DIR",
+		"--gateway-dir",
+		"--skip-gateway",
+		"--skip-pages",
+		"--skip-image-verify",
+		"make -C",
+	} {
+		if strings.Contains(deploymentSource, forbiddenFragment) {
+			testingInstance.Fatalf("deployment retains mutable or partial gateway path %q", forbiddenFragment)
+		}
+	}
+	for _, requiredFragment := range []string{
+		"deploy-dry-run:",
+		"run-app-ansible-deploy.sh",
+		"MPRLAB_LLM_PROXY_IMAGE_REF",
+	} {
+		if !strings.Contains(deploymentSource, requiredFragment) {
+			testingInstance.Fatalf("deployment is missing app-owned contract %q", requiredFragment)
+		}
 	}
 }
 
@@ -946,128 +989,6 @@ func TestOperationalRequestTimeoutCapacityReader(testingInstance *testing.T) {
 				testingInstance.Fatalf("unexpected capacity-reader error: %s", output)
 			}
 		})
-	}
-}
-
-func TestOperationalDeployPreflightsPagesBeforeGatewayMutation(testingInstance *testing.T) {
-	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	fixtureRoot := testingInstance.TempDir()
-	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"), filepath.Join(fixtureRoot, operationalScriptsDirectory, "deploy.sh"))
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "init")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "config", "user.name", "Operational Test")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "config", "user.email", "operational-test@example.invalid")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "add", operationalScriptsDirectory)
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "commit", "-m", "Fixture")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "branch", "-M", "master")
-	remoteRoot := filepath.Join(testingInstance.TempDir(), "origin.git")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "init", "--bare", remoteRoot)
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "remote", "add", "origin", remoteRoot)
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "push", "-u", "origin", "master")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "tag", "v1.0.0")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "push", "origin", "v1.0.0")
-
-	toolDirectory := filepath.Join(testingInstance.TempDir(), "bin")
-	gatewaySentinel := filepath.Join(testingInstance.TempDir(), "gateway-mutated")
-	makeCapture := filepath.Join(testingInstance.TempDir(), "make-capture.log")
-	writeOperationalFile(
-		testingInstance,
-		filepath.Join(toolDirectory, "make"),
-		"#!/usr/bin/env bash\nset -euo pipefail\n[[ -z \"${LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS+x}\" ]] || { printf '%s\\n' 'forbidden timeout-capacity environment handoff' >&2; exit 91; }\nprintf '%s\\t%s\\n' \"$*\" \"${DEPLOY_PAGES_ARGS:-}\" >>\"${MAKE_CAPTURE}\"\nif [[ \"$*\" == *pages-deploy* && \"${DEPLOY_PAGES_ARGS:-}\" == *--verify-only* ]]; then exit 42; fi\nif [[ \"${1:-}\" == \"-C\" && \"$*\" == *deploy-llm-proxy-backend* ]]; then : >\"${GATEWAY_SENTINEL}\"; fi\n",
-		0o755,
-	)
-	gatewayDirectory := filepath.Join(testingInstance.TempDir(), "gateway")
-	initializeOperationalGatewayCheckout(testingInstance, gatewayDirectory, "origin")
-	environment := append(
-		os.Environ(),
-		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"MAKE_CAPTURE="+makeCapture,
-		"GATEWAY_SENTINEL="+gatewaySentinel,
-		"GATEWAY_DIR="+gatewayDirectory,
-		"DEPLOY_REMOTE=origin",
-		"DEPLOY_BRANCH=master",
-		"RELEASE_HELPER="+writeOperationalSealedReleaseHelper(testingInstance, fixtureRoot, "v1.0.0"),
-	)
-	command := exec.Command(
-		filepath.Join(fixtureRoot, operationalScriptsDirectory, "deploy.sh"),
-		"--tag", "v1.0.0",
-		"--skip-image-verify",
-		"--pages-url", "https://pages.example.invalid/",
-	)
-	command.Dir = fixtureRoot
-	command.Env = environment
-	output, commandError := command.CombinedOutput()
-	if commandError == nil {
-		testingInstance.Fatalf("deploy continued after Pages preflight failure: %s", output)
-	}
-	if _, statError := os.Stat(gatewaySentinel); !os.IsNotExist(statError) {
-		testingInstance.Fatalf("gateway mutated before Pages preflight succeeded: %v", statError)
-	}
-	captureBytes, readError := os.ReadFile(makeCapture)
-	if readError != nil {
-		testingInstance.Fatalf("read make preflight capture: %v", readError)
-	}
-	if !strings.Contains(string(captureBytes), "pages-deploy\t--verify-only") {
-		testingInstance.Fatalf("Pages verify-only preflight was not invoked: %s", captureBytes)
-	}
-	if !strings.Contains(string(captureBytes), "verify-llm-proxy-deployment-contract\t") {
-		testingInstance.Fatalf("gateway verification was not invoked: %s", captureBytes)
-	}
-}
-
-func TestOperationalDeployForwardsSelectedRemoteToPages(testingInstance *testing.T) {
-	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	fixtureRoot := testingInstance.TempDir()
-	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, operationalScriptsDirectory, "deploy.sh"), filepath.Join(fixtureRoot, operationalScriptsDirectory, "deploy.sh"))
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "init")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "config", "user.name", "Operational Test")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "config", "user.email", "operational-test@example.invalid")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "add", operationalScriptsDirectory)
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "commit", "-m", "Fixture")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "branch", "-M", "master")
-	remoteRoot := filepath.Join(testingInstance.TempDir(), "upstream.git")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "init", "--bare", remoteRoot)
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "remote", "add", "upstream", remoteRoot)
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "push", "-u", "upstream", "master")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "tag", "v1.0.0")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "push", "upstream", "v1.0.0")
-
-	toolDirectory := filepath.Join(testingInstance.TempDir(), "bin")
-	makeCapture := filepath.Join(testingInstance.TempDir(), "make-capture.log")
-	writeOperationalFile(
-		testingInstance,
-		filepath.Join(toolDirectory, "make"),
-		"#!/usr/bin/env bash\nset -euo pipefail\n[[ -z \"${LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS+x}\" ]] || { printf '%s\\n' 'forbidden timeout-capacity environment handoff' >&2; exit 91; }\nprintf '%s\\t%s\\n' \"$*\" \"${PUBLISH_REMOTE:-}\" >>\"${MAKE_CAPTURE}\"\n",
-		0o755,
-	)
-	gatewayDirectory := filepath.Join(testingInstance.TempDir(), "gateway")
-	initializeOperationalGatewayCheckout(testingInstance, gatewayDirectory, "origin")
-	environment := append(
-		os.Environ(),
-		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"MAKE_CAPTURE="+makeCapture,
-		"GATEWAY_DIR="+gatewayDirectory,
-		"DEPLOY_REMOTE=upstream",
-		"DEPLOY_BRANCH=master",
-		"RELEASE_HELPER="+writeOperationalSealedReleaseHelper(testingInstance, fixtureRoot, "v1.0.0"),
-	)
-	runOperationalCommand(
-		testingInstance,
-		fixtureRoot,
-		environment,
-		filepath.Join(fixtureRoot, operationalScriptsDirectory, "deploy.sh"),
-		"--tag", "v1.0.0",
-		"--skip-image-verify",
-		"--pages-url", "https://pages.example.invalid/",
-	)
-	captureBytes, readError := os.ReadFile(makeCapture)
-	if readError != nil {
-		testingInstance.Fatalf("read make invocation capture: %v", readError)
-	}
-	if !strings.Contains(string(captureBytes), "--no-print-directory pages-deploy\tupstream") {
-		testingInstance.Fatalf("Pages deployment did not receive selected remote: %s", captureBytes)
-	}
-	if !strings.Contains(string(captureBytes), "deploy-llm-proxy-backend\t") {
-		testingInstance.Fatalf("gateway deployment was not invoked: %s", captureBytes)
 	}
 }
 
@@ -1698,48 +1619,6 @@ GHTTP_SERVE_PORT=4179
 GHTTP_SERVE_DIRECTORY=/app/site
 GHTTP_SERVE_NO_MARKDOWN=true
 `, 0o600)
-}
-
-func writeOperationalSealedReleaseHelper(testingInstance *testing.T, fixtureRoot string, version string) string {
-	testingInstance.Helper()
-	releaseCommit := strings.TrimSpace(runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "rev-parse", "HEAD"))
-	helperPath := filepath.Join(testingInstance.TempDir(), "release_helper.py")
-	helperSource := `#!/usr/bin/env python3
-import json
-import sys
-
-command = sys.argv[1]
-if command == "local-release-state":
-    print(json.dumps({
-        "ok": True,
-        "state": "sealed",
-        "version": ` + strconv.Quote(version) + `,
-        "release_commit": ` + strconv.Quote(releaseCommit) + `,
-    }))
-elif command == "validate-version":
-    version_index = sys.argv.index("--version") + 1
-    if sys.argv[version_index] != ` + strconv.Quote(version) + `:
-        raise SystemExit("unexpected release version")
-else:
-    raise SystemExit("unexpected release-helper command")
-`
-	writeOperationalFile(testingInstance, helperPath, helperSource, 0o755)
-	return helperPath
-}
-
-func initializeOperationalGatewayCheckout(testingInstance *testing.T, gatewayDirectory string, remoteName string) {
-	testingInstance.Helper()
-	writeOperationalFile(testingInstance, filepath.Join(gatewayDirectory, "deployment-contract.txt"), "coupled llm-proxy and TAuth\n", 0o644)
-	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "init")
-	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "config", "user.name", "Operational Test")
-	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "config", "user.email", "operational-test@example.invalid")
-	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "add", "deployment-contract.txt")
-	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "commit", "-m", "Gateway fixture")
-	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "branch", "-M", "master")
-	remoteDirectory := filepath.Join(testingInstance.TempDir(), remoteName+"-gateway.git")
-	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "init", "--bare", remoteDirectory)
-	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "remote", "add", remoteName, remoteDirectory)
-	runOperationalCommand(testingInstance, gatewayDirectory, nil, "git", "push", "-u", remoteName, "master")
 }
 
 func copyOperationalDirectory(testingInstance *testing.T, sourceDirectory string, targetDirectory string) {

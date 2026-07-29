@@ -1,0 +1,12 @@
+---
+- name: Validate the exact LLM Proxy deployment inputs locally
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  any_errors_fatal: true
+  vars:
+    mprlab_app_resource_repo_path: "{{ lookup('ansible.builtin.env', 'LLM_PROXY_DEPLOY_REPO_ROOT') }}"
+    mprlab_app_resource_source_repo_path: "{{ lookup('ansible.builtin.env', 'LLM_PROXY_DEPLOY_REPO_ROOT') }}"
+  tasks:
+    - name: Run the app-owned validation entrypoint
+      ansible.builtin.include_tasks: ../tasks/validate.yml

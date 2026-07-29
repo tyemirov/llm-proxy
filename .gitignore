@@ -15,6 +15,7 @@ PLAN.md
 .envrc
 *.pem
 *.key
+.mprlab/deploy/ansible/inventory/hosts.yml
 configs/*.sqlite
 configs/*.sqlite-*
 configs/client_secret_*.json
