@@ -37,6 +37,55 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B094] (P1) Run the full CI suite once per release lifecycle.
+  Goal:
+  Make `make release` the sole full-suite validation stage while requiring
+  `make publish` and `make deploy` to prove they continue that exact sealed
+  release.
+
+  Evidence:
+  - `tools/gitrelease/scripts/prepare_release.sh` runs `make ci` before it
+    seals `.git/mprlab-release`.
+  - `make publish` already consumes and validates that sealed manifest.
+  - `scripts/deploy.sh` reruns `make ci` before deployment and exposes
+    `--skip-ci` plus a deploy-only CI timeout, even though it separately checks
+    the release tag, published image, and Pages artifact.
+
+  Requirements:
+  - Keep the complete `make ci` gate in `make release`.
+  - Remove the deploy-time CI run, skip flag, and deploy-only CI timeout.
+  - Make deployment fail before gateway, registry, or Pages work unless the
+    local sealed manifest identifies the exact release tag and commit being
+    deployed.
+  - Keep publication and deployment artifact verification intact; do not add a
+    fallback, compatibility path, or manually asserted success marker.
+
+  Validation:
+  - Add black-box lifecycle scenarios for a missing sealed release, a sealed
+    version mismatch, and a valid continuation that reaches the gateway
+    without invoking the fixture `ci` target.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  - Run the gateway `make verify-app-workflows` cross-repository contract
+    without production contact.
+
+  Resolution:
+  - `make release` remains the lifecycle's sole full `make ci` gate.
+    Deployment no longer has a CI invocation, CI timeout, or `--skip-ci`
+    bypass.
+  - `make deploy` now requires `local-release-state` to report `sealed` and
+    requires its version and release commit to match the selected annotated
+    tag and deploy `HEAD` before any gateway, registry, or Pages work.
+  - Black-box coverage rejects a missing seal, mismatched version, mismatched
+    commit, the removed CI bypass, and a noncanonical tag; the valid sealed
+    continuation reaches the gateway without invoking the fixture CI target.
+  - The required baseline and final repository `make ci` runs pass. The final
+    run includes exact 100% Go statement coverage, 33 Python tests, 75 browser
+    tests, the authentication black-box test, 58 release-tool tests, and the
+    live-provider harness preflight.
+  - Gateway `make verify-app-workflows` reports llm-proxy ready and passes the
+    cross-repository lifecycle contract without production contact.
+
 - [x] [B093] (P0) Publish prepared OCI platform indexes without rejecting attestations.
   Goal:
   Make `make publish` converge when current Docker Buildx publishes each
