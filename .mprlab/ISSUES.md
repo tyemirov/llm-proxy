@@ -37,6 +37,60 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B093] (P0) Publish prepared OCI platform indexes without rejecting attestations.
+  Goal:
+  Make `make publish` converge when current Docker Buildx publishes each
+  prepared platform image as an OCI index containing the runnable image
+  manifest and its provenance attestation.
+
+  Evidence:
+  - The real `make release` completed for `v0.2.50`, including all CI gates,
+    both platform archives, the Pages archive, the changelog-only release
+    commit, annotated tag, and sealed manifest.
+  - The first `make publish` pushed `master`, `v0.2.50`, the GitHub Release,
+    `manifest.json`, `pages.tar.gz`, and the prepared amd64 platform tag before
+    failing with `published platform tag is not a single immutable image
+    manifest`.
+  - Standard `docker buildx imagetools inspect --raw` proves the platform tag
+    is an OCI index whose digest exactly equals the prepared local image ID. It
+    contains one `linux/amd64` image manifest and one `unknown/unknown` SLSA
+    attestation manifest that references the runnable manifest.
+  - The publisher assumes a bare image manifest and compares its config digest
+    with the local image ID. With the current Docker containerd image store,
+    that local ID identifies the complete platform index instead.
+
+  Requirements:
+  - Treat one OCI index with exactly one declared Linux platform image and its
+    matching provenance attestation as the canonical platform artifact.
+  - Require the remote platform-index digest to equal the prepared local image
+    ID before reusing it.
+  - Validate a version index as the exact union of the descriptors from every
+    prepared platform index, including their attestations.
+  - Preserve partial publication and reuse exact remote state; do not rebuild,
+    replace, delete, or retag an immutable published object.
+  - Continue using only standard Docker CLI publication and inspection
+    boundaries.
+
+  Validation:
+  - Cover fresh publication, exact retry, missing version/latest recovery,
+    uncertain inspection, and immutable conflict through the black-box release
+    suite.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci` after the last code edit.
+  - Merge through a ready PR with hosted CI, then verify the forward release
+    with exact `make release && make publish` retries on clean `master`.
+
+  Resolution:
+  - Platform publication now accepts only the canonical OCI index containing
+    exactly one runnable Linux image descriptor and its matching provenance
+    attestation, and requires the remote index digest to equal the prepared
+    image ID.
+  - Version publication now validates the exact descriptor union from every
+    prepared platform index, preserving immutable partial state across retries.
+  - The 54-scenario black-box release suite, direct standard-Docker inspection
+    of the published platform index and composed version index, and the final
+    repository `make ci` all pass.
+
 - [x] [B092] (P0) Make the container inspection-bound test deterministic.
   Goal:
   Verify that every registry inspection is independently bounded without

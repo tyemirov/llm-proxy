@@ -1412,6 +1412,12 @@ uses `PAGES_VERIFY_ATTEMPTS` and `PAGES_VERIFY_DELAY_SECONDS` (defaults `12`
 and `5`). Each wait reports its observed external readiness boundary rather
 than treating a completed push as immediate public availability.
 
+GHCR platform tags are immutable OCI indexes containing one runnable Linux
+image manifest and its matching provenance attestation. Publication requires
+each remote platform-index digest to equal the prepared local image ID, and the
+version and `latest` indexes to contain the exact union of the prepared
+platform descriptors.
+
 The three release phases are retry-safe. A canonical release commit and its
 annotated tag identify the same sealed `.git/mprlab-release` manifest on every
 `make release` retry. New payloads are prepared under
