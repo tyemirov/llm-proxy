@@ -13,7 +13,6 @@ RELEASE_ARGS ?=
 RELEASE_HELPER ?=
 RELEASE_ARTIFACT_TARGETS ?= container-artifacts pages-artifact
 RELEASE_TOOL_DIR ?= $(abspath $(CURDIR)/tools/gitrelease/scripts)
-DEPLOY_ARGS ?=
 PUBLISH_PLATFORMS ?= linux/amd64,linux/arm64
 DOCKER_IMAGE ?= ghcr.io/tyemirov/llm-proxy
 PUBLISH_REMOTE ?= origin
@@ -23,7 +22,6 @@ PAGES_DOMAIN ?= llm-proxy.mprlab.com
 PAGES_CONFIG_URL ?= https://llm-proxy-api.mprlab.com/config-ui.yaml
 PAGES_URL ?= https://llm-proxy.mprlab.com/
 PAGES_VERSION ?=
-GATEWAY_DIR ?=
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
@@ -120,4 +118,4 @@ pages-deploy:
 	@"$(RELEASE_TOOL_DIR)/deploy_pages_artifact.sh" --remote "$(PUBLISH_REMOTE)" --branch "$(PAGES_BRANCH)" --url "$(PAGES_URL)" $(if $(PAGES_VERSION),--version "$(PAGES_VERSION)") $(DEPLOY_PAGES_ARGS)
 
 deploy:
-	@GATEWAY_DIR="$(GATEWAY_DIR)" DOCKER_IMAGE="$(DOCKER_IMAGE)" PAGES_BRANCH="$(PAGES_BRANCH)" PAGES_URL="$(PAGES_URL)" ./scripts/deploy.sh $(DEPLOY_ARGS)
+	@mprlab-deploy

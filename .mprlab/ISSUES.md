@@ -37,6 +37,54 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B095] (P0) Keep deployment declarations app-owned and execution platform-owned.
+  Goal:
+  Preserve the standard `make release`, `make publish`, `make deploy` lifecycle
+  while making every retry convergent and removing deployment-resource
+  orchestration from llm-proxy.
+
+  Evidence:
+  - The prior deploy flow selected sibling checkouts and failed on unrelated
+    app manifests.
+  - A proposed app-bundled gateway archive moved platform implementation into
+    llm-proxy and introduced direct TAuth/Caddy awareness instead of removing
+    the coupling.
+
+  Requirements:
+  - Keep only declarative deployment resource and Ansible inventory YAML in
+    `.mprlab/deploy`.
+  - Make `make deploy` invoke one installed neutral controller with no
+    selectors, gateway paths, image arguments, or resource-specific flags.
+  - Resolve exactly the current Git repository; never scan or validate sibling
+    checkouts during this app deployment.
+  - Verify immutable release and publication state before mutation, reuse exact
+    matches, reject conflicts, and converge when any lifecycle command is
+    repeated.
+  - Keep TAuth runtime integration in the published client/session boundary and
+    keep TAuth/Caddy deployment reconciliation outside application code.
+
+  Validation:
+  - Add black-box repeated zero-argument Make delegation and declaration-only
+    repository contracts.
+  - Validate the target-neutral gateway controller and its idempotent installer
+    without production contact.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+
+  Resolution:
+  - `make deploy` is now a zero-argument handoff to the installed
+    `mprlab-deploy` controller. It carries no product selector, gateway
+    checkout, image override, or repository-parent input.
+  - The app-owned deployment surface is limited to the committed resource
+    manifest and conventional Ansible inventory YAML. App-bundled controller
+    archives, locks, playbooks, shell/Python orchestration, and capacity
+    readers were removed.
+  - Black-box contracts prove repeated delegation remains exact, obsolete
+    environment inputs cannot change the handoff, controller failures
+    propagate, and only the declaration files remain tracked.
+  - The gateway controller and installer gates pass without production
+    contact. The required final repository `make ci` passes.
+
 - [x] [B094] (P1) Run the full CI suite once per release lifecycle.
   Goal:
   Make `make release` the sole full-suite validation stage while requiring

@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 - Move Go and Python timeout selection from client configuration onto each messages request, replace the CLI `--timeout` flag with `--request-timeout-seconds`, and remove the arbitrary 390-second bundled-client deadline.
 - Add `server.max_request_timeout_seconds`, one ingress-owned deadline shared by body parsing, queue admission, provider calls, and OpenAI polling, plus safe terminal-outcome logging.
 - Keep response construction and managed-usage persistence under request cancellation, classify queue saturation as `proxy_overload`, reject explicit null timeout configuration, and synchronize Python client distribution metadata at `0.2.0`.
-- Make deployment pass the app-owned maximum request budget into the gateway contract verifier, which rejects outer response guards that cannot outwait it.
+- Reduce app-owned deployment state to declarative resource and inventory YAML, and delegate zero-argument `make deploy` execution to the installed target-neutral MPRLab controller.
 
 ## [v0.2.52] - 2026-07-29
 

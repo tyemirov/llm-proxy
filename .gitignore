@@ -39,6 +39,7 @@ build/
 python/.venv/
 python/.pytest_cache/
 python/.mypy_cache/
+.mprlab/deploy/ansible/inventory/hosts.yml
 
 # Logs
 *.log

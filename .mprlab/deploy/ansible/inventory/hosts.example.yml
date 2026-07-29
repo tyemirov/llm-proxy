@@ -1,0 +1,13 @@
+---
+all:
+  children:
+    gateway:
+      hosts:
+        gateway:
+          ansible_host: gateway.example.invalid
+          ansible_user: deploy
+          ansible_become: true
+          ansible_become_method: sudo
+          ansible_become_user: root
+          mprlab_remote_project_root: /srv/mprlab-gateway
+          mprlab_docker_cli: /usr/local/bin/docker
