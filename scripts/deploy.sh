@@ -13,25 +13,12 @@ Options:
   --gateway-dir <path>  Gateway checkout. Default: $GATEWAY_DIR or sibling ../mprlab-gateway
   --image <value>       Image repository. Default: $DOCKER_IMAGE or ghcr.io/tyemirov/llm-proxy
   --tag <value>         Release tag. Default: v* tag pointing at HEAD
-  --skip-ci             Skip the local make ci deployment gate
   --skip-image-verify   Skip release/latest image digest verification
   --skip-pages          Skip GitHub Pages activation
   --pages-branch <value> Pages branch to publish. Default: $PAGES_BRANCH or gh-pages
   --pages-url <value>   Public Pages URL. Default: $PAGES_URL or https://llm-proxy.mprlab.com/
   --skip-gateway        Skip gateway deployment
-  --help                Show this help text
-
-Environment:
-  DEPLOY_CI_TIMEOUT_SECONDS  make ci timeout in seconds. Default: $LLM_PROXY_CI_TIMEOUT_SECONDS or 350'
-}
-
-require_positive_integer() {
-  local name="$1"
-  local value="$2"
-  if [[ ! "${value}" =~ ^[1-9][0-9]*$ ]]; then
-    echo "error: ${name} must be a positive integer number of seconds (got: ${value})" >&2
-    exit 1
-  fi
+  --help                Show this help text'
 }
 
 env_or_default() {
@@ -55,7 +42,6 @@ GATEWAY_DEPLOY_REMOTE="origin"
 GATEWAY_DEPLOY_BRANCH="master"
 IMAGE_REPOSITORY="$(env_or_default DOCKER_IMAGE ghcr.io/tyemirov/llm-proxy)"
 TAG="$(env_or_default DEPLOY_TAG "")"
-SKIP_CI="false"
 SKIP_IMAGE_VERIFY="false"
 SKIP_GATEWAY="false"
 SKIP_PAGES="$(env_or_default DEPLOY_SKIP_PAGES false)"
@@ -63,16 +49,6 @@ PAGES_BRANCH="$(env_or_default PAGES_BRANCH gh-pages)"
 PAGES_URL="$(env_or_default PAGES_URL https://llm-proxy.mprlab.com/)"
 DEPLOY_BRANCH="$(env_or_default DEPLOY_BRANCH master)"
 DEPLOY_REMOTE="$(env_or_default DEPLOY_REMOTE origin)"
-LLM_PROXY_CI_TIMEOUT_SECONDS_EFFECTIVE="$(env_or_default LLM_PROXY_CI_TIMEOUT_SECONDS 350)"
-CI_TIMEOUT_SECONDS="$(env_or_default DEPLOY_CI_TIMEOUT_SECONDS "${LLM_PROXY_CI_TIMEOUT_SECONDS_EFFECTIVE}")"
-
-resolve_release_tag() {
-  if [[ -n "${TAG}" ]]; then
-    printf '%s\n' "${TAG}"
-    return
-  fi
-  git tag --points-at HEAD --list 'v*' --sort=-version:refname | head -n 1
-}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -90,10 +66,6 @@ while [[ $# -gt 0 ]]; do
       [[ $# -ge 2 ]] || { echo "error: --tag requires a value" >&2; exit 1; }
       TAG="$2"
       shift 2
-      ;;
-    --skip-ci)
-      SKIP_CI="true"
-      shift
       ;;
     --skip-image-verify)
       SKIP_IMAGE_VERIFY="true"
@@ -130,12 +102,85 @@ while [[ $# -gt 0 ]]; do
 done
 
 command -v git >/dev/null 2>&1 || { echo "error: git is required" >&2; exit 1; }
-require_positive_integer "DEPLOY_CI_TIMEOUT_SECONDS" "${CI_TIMEOUT_SECONDS}"
+command -v python3 >/dev/null 2>&1 || { echo "error: python3 is required" >&2; exit 1; }
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "${repo_root}"
 release_helper="${RELEASE_HELPER:-${repo_root}/tools/gitrelease/scripts/release_helper.py}"
 [[ -f "${release_helper}" ]] || { echo "error: release helper is missing: ${release_helper}" >&2; exit 1; }
+
+if [[ -n "${TAG}" ]]; then
+  if ! version_validation="$(python3 "${release_helper}" validate-version --version "${TAG}" 2>&1)"; then
+    printf '%s\n' "${version_validation}" >&2
+    exit 1
+  fi
+fi
+
+release_state_json="$(mktemp)"
+cleanup() {
+  rm -f "${release_state_json}"
+}
+trap cleanup EXIT
+
+if ! python3 "${release_helper}" local-release-state \
+  --default-branch "${DEPLOY_BRANCH}" \
+  >"${release_state_json}"
+then
+  cat "${release_state_json}" >&2
+  echo "error: make deploy requires the exact sealed release created by make release" >&2
+  exit 1
+fi
+release_state_summary="$(
+  python3 -c '
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as release_state_handle:
+    release_state = json.load(release_state_handle)
+if release_state.get("ok") is not True:
+    raise SystemExit("release helper did not confirm local release state")
+state = release_state.get("state")
+version = release_state.get("version", "")
+release_commit = release_state.get("release_commit", "")
+if (
+    not isinstance(state, str)
+    or not isinstance(version, str)
+    or not isinstance(release_commit, str)
+):
+    raise SystemExit("release helper returned an invalid local release identity")
+print(state)
+print(version)
+print(release_commit)
+' "${release_state_json}"
+)" || {
+  echo "error: release helper returned an invalid local release state" >&2
+  exit 1
+}
+release_state="$(sed -n '1p' <<<"${release_state_summary}")"
+sealed_release_version="$(sed -n '2p' <<<"${release_state_summary}")"
+sealed_release_commit="$(sed -n '3p' <<<"${release_state_summary}")"
+if [[ "${release_state}" != "sealed" ]]; then
+  echo "error: make deploy requires the exact sealed release created by make release" >&2
+  exit 1
+fi
+head_commit="$(git rev-parse HEAD)"
+if [[ -z "${sealed_release_commit}" || "${sealed_release_commit}" != "${head_commit}" ]]; then
+  echo "error: sealed release commit ${sealed_release_commit:-<missing>} does not match deploy HEAD ${head_commit}" >&2
+  exit 1
+fi
+if [[ -n "${TAG}" ]]; then
+  release_tag="${TAG}"
+else
+  release_tag="$(git tag --points-at HEAD --list 'v*' --sort=-version:refname | head -n 1)"
+fi
+if [[ -z "${release_tag}" ]]; then
+  echo "error: make deploy requires the exact sealed release tag created by make release" >&2
+  exit 1
+fi
+if [[ "${sealed_release_version}" != "${release_tag}" ]]; then
+  echo "error: sealed release version ${sealed_release_version} does not match deploy tag ${release_tag}" >&2
+  exit 1
+fi
 
 resolve_gateway_dir() {
   if [[ -n "${GATEWAY_DIR}" ]]; then
@@ -195,28 +240,18 @@ if [[ "${SKIP_GATEWAY}" != "true" ]]; then
     exit 1
   fi
 
-  release_tag="$(resolve_release_tag)"
-  [[ -n "${release_tag}" ]] || { echo "error: no v* release tag points at HEAD; run make release first or pass --tag" >&2; exit 1; }
   tag_sha="$(git rev-list -n 1 "${release_tag}" 2>/dev/null || true)"
   if [[ "${tag_sha}" != "${head_sha}" ]]; then
     echo "error: deploy tag ${release_tag} does not point at HEAD" >&2
     exit 1
   fi
-else
-  release_tag="$(resolve_release_tag)"
 fi
 
-if [[ -n "${release_tag}" ]]; then
-  command -v python3 >/dev/null 2>&1 || { echo "error: python3 is required" >&2; exit 1; }
+if [[ -z "${TAG}" ]]; then
   if ! version_validation="$(python3 "${release_helper}" validate-version --version "${release_tag}" 2>&1)"; then
     printf '%s\n' "${version_validation}" >&2
     exit 1
   fi
-fi
-
-if [[ "${SKIP_CI}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then
-  echo "==> [deploy] Running make ci before deployment (timeout ${CI_TIMEOUT_SECONDS}s)"
-  timeout -k "${CI_TIMEOUT_SECONDS}s" -s SIGKILL "${CI_TIMEOUT_SECONDS}s" make ci
 fi
 
 if [[ "${SKIP_IMAGE_VERIFY}" != "true" && "${SKIP_GATEWAY}" != "true" ]]; then
