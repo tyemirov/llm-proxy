@@ -428,10 +428,12 @@ The repository owns the immutable release implementation under
 `tools/gitrelease` and uses one canonical `vMAJOR.MINOR.PATCH` SemVer contract.
 `make release` builds container inputs from the tracked `git archive HEAD`
 snapshot, packages a Pages marker for that source commit, and creates the
-changelog-only release commit. Before Pages branch mutation, `make deploy`
-validates the archive, its source marker, and the remote release tag. After
-activation it matches GitHub Pages build state to the pushed branch commit,
-then verifies a cache-distinct public marker after backend rollout.
+changelog-only release commit after the lifecycle's sole `make ci` run.
+`make publish` and `make deploy` require that exact sealed local release rather
+than rerunning CI. Before Pages branch mutation, deployment validates the
+archive, its source marker, and the remote release tag. After activation it
+matches GitHub Pages build state to the pushed branch commit, then verifies a
+cache-distinct public marker after backend rollout.
 
 The management UI is served as a static GitHub Pages app from `site/` on `https://llm-proxy.mprlab.com`; the Go backend does not serve management HTML or assets. `make release` renders and validates the Pages archive locally, `make publish` uploads that immutable archive without changing the live site, and `make deploy` activates it on `gh-pages` after the backend rollout. The backend serves one public browser config file at `/config-ui.yaml` from the already-loaded management config, with credentialed CORS restricted to `management.public_origin`.
 
