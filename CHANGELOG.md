@@ -14,6 +14,11 @@ All notable changes to this project will be documented in this file.
 - Keep response construction and managed-usage persistence under request cancellation, classify queue saturation as `proxy_overload`, reject explicit null timeout configuration, and synchronize Python client distribution metadata at `0.2.0`.
 - Make deployment pass the app-owned maximum request budget into the gateway contract verifier, which rejects outer response guards that cannot outwait it.
 
+## [v0.2.51] - 2026-07-28
+
+- Merge pull request #235 from tyemirov/bugfix/B093-oci-platform-publication
+- Fix B093 OCI platform publication
+
 ## [v0.2.50] - 2026-07-28
 
 - Merge pull request #234 from tyemirov/bugfix/B092-container-inspection-test
