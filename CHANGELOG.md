@@ -14,6 +14,12 @@ All notable changes to this project will be documented in this file.
 - Keep response construction and managed-usage persistence under request cancellation, classify queue saturation as `proxy_overload`, reject explicit null timeout configuration, and synchronize Python client distribution metadata at `0.2.0`.
 - Reduce app-owned deployment state to declarative resource and inventory YAML, and delegate zero-argument `make deploy` execution to the installed target-neutral MPRLab controller.
 
+## [v0.2.53] - 2026-07-29
+
+- Merge pull request #236 from tyemirov/bugfix/B095-app-owned-deploy-bundle
+- fix(deploy): isolate llm-proxy from sibling repositories
+- fix(deploy): own pinned target transaction
+
 ## [v0.2.52] - 2026-07-29
 
 - test: cover deployment contract with sealed release and tag checks
