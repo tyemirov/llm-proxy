@@ -37,6 +37,50 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B091] (P0) Remove synthetic local-orchestration latency from the release gate.
+  Goal:
+  Keep the black-box `make up` contract deterministic when `make release` runs
+  the complete CI suite under host contention.
+
+  Evidence:
+  - The user-run release gate failed after five seconds waiting for the fake
+    management-boundary `curl-ready` file even though the proxy tests around
+    it continued to pass.
+  - Ten isolated runs of
+    `TestOperationalMakeUpStartsLocalWebOrchestration` passed in
+    1.95–2.08 seconds, while the same Go package took 25.444 seconds in the
+    failing release gate.
+  - The fixture deliberately sleeps 150 ms in every fake `awk` invocation,
+    even though it already reads the invocation capture and rejects more than
+    seven processes. The sleep adds no contract evidence and turns unrelated
+    host scheduling into readiness behavior.
+  - The required pre-change `make ci` passed, but showed the same host
+    contention: the Go `tests` package took 16.562 seconds and the release
+    suite took 106.887 seconds.
+
+  Requirements:
+  - Remove the fake `awk` sleep and its environment control. Do not increase
+    the five-second diagnostic guard.
+  - Retain the real `make up` entrypoint, fake Docker/HTTP boundaries, exact
+    readiness assertions, and the process-count guard that detects
+    per-variable environment projection.
+  - Do not change production `scripts/up.sh`; its batched environment
+    projection and readiness sequence are not the failing contract.
+
+  Validation:
+  - Run the focused black-box operational test repeatedly.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci` after the last code edit.
+  - Do not run `make release`, `make publish`, or `make deploy`.
+
+  Resolution:
+  - Removed the fake `awk` delay and its environment control without changing
+    the five-second diagnostic guard or production `scripts/up.sh`.
+  - The test still exercises the real `make up` entrypoint and asserts the
+    exact Compose, HTTP readiness, scoped-environment, cleanup, and maximum
+    process-count contracts.
+  - Thirty consecutive focused black-box runs passed in 36.283 seconds.
+
 - [x] [B090] (P0) Make release, publication, and deployment retries converge on one sealed release.
   Goal:
   Make the canonical `make release && make publish && make deploy` lifecycle

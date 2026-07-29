@@ -23,7 +23,6 @@ const (
 	operationalReleaseToolsRelative                 = "tools/gitrelease"
 	operationalHelpTimeout                          = 5 * time.Second
 	operationalHelpWaitDelay                        = time.Second
-	operationalScopedEnvironmentAWKDelaySeconds     = "0.15"
 	operationalScopedEnvironmentMaximumAWKProcesses = 7
 	constrainedPipeHelpCommand                      = `ulimit -p 1 2>/dev/null || true
 exec "$@"`
@@ -264,7 +263,6 @@ builtin printf '%s' generated-local-value
 set -euo pipefail
 
 builtin printf '%s\n' invoked >>"${AWK_INVOCATION_CAPTURE:?}"
-sleep "${AWK_DELAY_SECONDS:?}"
 exec "${REAL_AWK_PATH:?}" "$@"
 `, 0o755)
 
@@ -274,7 +272,6 @@ exec "${REAL_AWK_PATH:?}" "$@"
 	command.Env = append(
 		os.Environ(),
 		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"AWK_DELAY_SECONDS="+operationalScopedEnvironmentAWKDelaySeconds,
 		"AWK_INVOCATION_CAPTURE="+awkInvocationsPath,
 		"REAL_AWK_PATH="+realAWKPath,
 		"DOCKER_ARGUMENT_CAPTURE="+composeArgumentsPath,
