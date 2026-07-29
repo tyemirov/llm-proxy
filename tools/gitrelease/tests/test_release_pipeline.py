@@ -476,14 +476,21 @@ def read_manifest(reference):
         raise SystemExit(1)
     return manifest_path.read_text(encoding="utf-8"), digest_path.read_text(encoding="utf-8").strip()
 
-def write_manifest(reference, document):
+def write_manifest(reference, document, digest=None):
     manifest_path, digest_path = state_paths(reference)
     raw = json.dumps(document, separators=(",", ":"), sort_keys=True) + "\n"
     manifest_path.write_text(raw, encoding="utf-8")
-    digest_path.write_text(f"sha256:{hashlib.sha256(raw.encode()).hexdigest()}\n", encoding="utf-8")
+    manifest_digest = digest or f"sha256:{hashlib.sha256(raw.encode()).hexdigest()}"
+    digest_path.write_text(f"{manifest_digest}\n", encoding="utf-8")
 
 def image_id(reference):
     return "sha256:" + ("a" if reference.endswith("linux-amd64") else "b") * 64
+
+def image_manifest_digest(reference):
+    return "sha256:" + ("c" if reference.endswith("linux-amd64") else "d") * 64
+
+def attestation_manifest_digest(reference):
+    return "sha256:" + ("e" if reference.endswith("linux-amd64") else "f") * 64
 
 if arguments[:2] == ["buildx", "version"]:
     raise SystemExit(0)
@@ -504,14 +511,34 @@ if arguments[:1] == ["tag"]:
 if arguments[:1] == ["push"]:
     tag_map = json.loads((state_directory / "tags.json").read_text(encoding="utf-8"))
     reference = arguments[1]
+    local_reference = tag_map[reference]
+    architecture = "amd64" if local_reference.endswith("linux-amd64") else "arm64"
+    runnable_digest = image_manifest_digest(local_reference)
     write_manifest(
         reference,
         {
             "schemaVersion": 2,
-            "mediaType": "application/vnd.oci.image.manifest.v1+json",
-            "config": {"digest": image_id(tag_map[reference])},
-            "layers": [],
+            "mediaType": "application/vnd.oci.image.index.v1+json",
+            "manifests": [
+                {
+                    "digest": runnable_digest,
+                    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                    "platform": {"os": "linux", "architecture": architecture},
+                    "size": 1000,
+                },
+                {
+                    "annotations": {
+                        "vnd.docker.reference.digest": runnable_digest,
+                        "vnd.docker.reference.type": "attestation-manifest",
+                    },
+                    "digest": attestation_manifest_digest(local_reference),
+                    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                    "platform": {"os": "unknown", "architecture": "unknown"},
+                    "size": 500,
+                },
+            ],
         },
+        image_id(local_reference),
     )
     print(f"pushed {reference}")
     raise SystemExit(0)
@@ -529,15 +556,8 @@ if arguments[:3] == ["buildx", "imagetools", "create"]:
     sources = arguments[arguments.index("--tag") + 2 :]
     manifests = []
     for source in sources:
-        _, digest = read_manifest(source)
-        architecture = "amd64" if source.endswith("linux-amd64") else "arm64"
-        manifests.append(
-            {
-                "digest": digest,
-                "mediaType": "application/vnd.oci.image.manifest.v1+json",
-                "platform": {"os": "linux", "architecture": architecture},
-            }
-        )
+        raw, _ = read_manifest(source)
+        manifests.extend(json.loads(raw)["manifests"])
     write_manifest(
         target,
         {

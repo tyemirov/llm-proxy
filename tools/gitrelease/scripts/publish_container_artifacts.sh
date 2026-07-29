@@ -105,8 +105,7 @@ for platform in data["platforms"]:
     exit 1
   fi
   sources=()
-  expected_index_rows="${temporary_directory}/${name}-expected-index.tsv"
-  : >"${expected_index_rows}"
+  platform_raws=()
 
   while IFS=$'\t' read -r platform token local_ref expected_image_id archive_relative expected_sha256; do
     [[ -n "${platform}" ]] || continue
@@ -116,9 +115,12 @@ for platform in data["platforms"]:
     platform_ref="${image}:${version}-${token}"
     platform_raw="${temporary_directory}/${name}-${token}.json"
     if inspect_raw_manifest "${platform_ref}" "${platform_raw}"; then
-      if ! python3 "${container_helper}" validate-platform-manifest \
+      platform_digest="$(bash "${container_manifest_digest_helper}" "${platform_ref}")"
+      if ! python3 "${container_helper}" validate-platform-index \
         --raw "${platform_raw}" \
-        --image-id "${expected_image_id}"
+        --manifest-digest "${platform_digest}" \
+        --image-id "${expected_image_id}" \
+        --platform "${platform}"
       then
         echo "error: immutable container platform conflict for ${platform_ref}" >&2
         exit 1
@@ -136,41 +138,37 @@ for platform in data["platforms"]:
       [[ "${actual_image_id}" == "${expected_image_id}" ]] || { echo "error: loaded image does not match prepared ${name} ${platform}" >&2; exit 1; }
       docker tag "${local_ref}" "${platform_ref}"
       timeout -k "${publish_timeout}s" -s SIGKILL "${publish_timeout}s" docker push "${platform_ref}"
-      bash "${container_manifest_digest_helper}" "${platform_ref}" >/dev/null
+      platform_digest="$(bash "${container_manifest_digest_helper}" "${platform_ref}")"
       inspect_raw_manifest "${platform_ref}" "${platform_raw}" || {
         echo "error: published platform manifest is unreadable for ${platform_ref}" >&2
         exit 1
       }
-      python3 "${container_helper}" validate-platform-manifest \
+      if ! python3 "${container_helper}" validate-platform-index \
         --raw "${platform_raw}" \
-        --image-id "${expected_image_id}"
+        --manifest-digest "${platform_digest}" \
+        --image-id "${expected_image_id}" \
+        --platform "${platform}"
+      then
+        echo "error: immutable container platform conflict for ${platform_ref}" >&2
+        exit 1
+      fi
     fi
-    platform_digest="$(bash "${container_manifest_digest_helper}" "${platform_ref}")"
-    printf '%s\t%s\n' "${platform}" "${platform_digest}" >>"${expected_index_rows}"
     sources+=("${platform_ref}")
+    platform_raws+=("${platform_raw}")
   done < <(tail -n +4 <<<"${metadata}")
 
   [[ "${#sources[@]}" -gt 0 ]] || { echo "error: ${name} has no prepared platforms" >&2; exit 1; }
-  expected_index="${temporary_directory}/${name}-expected-index.json"
-  python3 -c '
-import json
-import pathlib
-import sys
-
-entries = []
-for row in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
-    platform, digest = row.split("\t")
-    operating_system, architecture = platform.split("/")
-    entries.append({"os": operating_system, "architecture": architecture, "digest": digest})
-pathlib.Path(sys.argv[2]).write_text(json.dumps(entries, sort_keys=True) + "\n", encoding="utf-8")
-' "${expected_index_rows}" "${expected_index}"
+  version_validation_arguments=()
+  for platform_raw in "${platform_raws[@]}"; do
+    version_validation_arguments+=(--platform-raw "${platform_raw}")
+  done
 
   version_ref="${image}:${version}"
   version_raw="${temporary_directory}/${name}-version.json"
   if inspect_raw_manifest "${version_ref}" "${version_raw}"; then
-    if ! python3 "${container_helper}" validate-index-manifest \
+    if ! python3 "${container_helper}" validate-version-index \
       --raw "${version_raw}" \
-      --expected "${expected_index}"
+      "${version_validation_arguments[@]}"
     then
       echo "error: immutable container version conflict for ${version_ref}" >&2
       exit 1
@@ -189,9 +187,9 @@ pathlib.Path(sys.argv[2]).write_text(json.dumps(entries, sort_keys=True) + "\n",
       echo "error: published version manifest is unreadable for ${version_ref}" >&2
       exit 1
     }
-    python3 "${container_helper}" validate-index-manifest \
+    python3 "${container_helper}" validate-version-index \
       --raw "${version_raw}" \
-      --expected "${expected_index}"
+      "${version_validation_arguments[@]}"
   fi
 
   version_digest="$(bash "${container_manifest_digest_helper}" "${image}:${version}")"

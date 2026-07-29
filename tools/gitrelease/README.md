@@ -23,6 +23,12 @@ published, registry inspection ambiguity fails closed, and an existing
 conflict is never overwritten. The mutable `latest` tag changes only when its
 digest does not identify the prepared final release.
 
+Each prepared platform tag is one immutable OCI index containing exactly one
+runnable Linux image manifest and its matching provenance attestation. Its
+remote index digest must equal the prepared local image ID. Version and
+`latest` indexes contain the exact union of those platform-index descriptors,
+including the attestations.
+
 Pages artifacts always contain an empty `.nojekyll` file and a schema-versioned
 `.mprlab-release.json` marker. Deployment validates the archive contract and
 matches the release tag to `release_commit` while matching artifact and public
