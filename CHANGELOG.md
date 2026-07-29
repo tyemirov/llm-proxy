@@ -14,6 +14,15 @@ All notable changes to this project will be documented in this file.
 - Keep response construction and managed-usage persistence under request cancellation, classify queue saturation as `proxy_overload`, reject explicit null timeout configuration, and synchronize Python client distribution metadata at `0.2.0`.
 - Make deployment pass the app-owned maximum request budget into the gateway contract verifier, which rejects outer response guards that cannot outwait it.
 
+## [v0.2.52] - 2026-07-29
+
+- test: cover deployment contract with sealed release and tag checks
+- test: update operational deploy tests for removed --skip-ci and add sealed release helper
+- refactor(deploy.sh): require exact sealed release for deploy, remove ci gate
+- docs: clarify release and deployment flow in provider routing plan
+- docs: clarify deploy requirements and explicit no-CI for post-release stages
+- docs(issues): document B094 to run full CI suite once per release lifecycle
+
 ## [v0.2.51] - 2026-07-28
 
 - Merge pull request #235 from tyemirov/bugfix/B093-oci-platform-publication
