@@ -37,6 +37,80 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B090] (P0) Make release, publication, and deployment retries converge on one sealed release.
+  Goal:
+  Make the canonical `make release && make publish && make deploy` lifecycle
+  safe to rerun after any completed or partially completed phase.
+
+  Evidence:
+  - Local and refreshed `origin/master` both point at release commit
+    `2b8202753f4e2022a0d58d47c575cf6a3472fae8`, and the annotated `v0.2.49`
+    tag resolves to that same commit.
+  - A second `make release` selected `v0.2.50`, initialized a replacement
+    staging area, rebuilt at least the Pages payload, and then failed because
+    `v0.2.49..HEAD` contains no commits. The retry erased the sealed local
+    `v0.2.49` manifest, notes, and container payloads instead of recognizing
+    the exact release at `HEAD`.
+  - GitHub already has the non-draft `v0.2.49` release with matching
+    `manifest.json` and `pages.tar.gz`. GHCR has readable `v0.2.49` and
+    `latest` manifests at the same digest. The public Pages marker still names
+    `v0.2.48`, so the lifecycle is legitimately between publication and Pages
+    activation.
+  - Publication currently edits an existing GitHub Release, uploads assets
+    with `--clobber`, and republishes every container platform and manifest on
+    every retry. These are mutable replays rather than exact-state reuse and
+    immutable-conflict rejection.
+
+  Requirements:
+  - Treat a validated release manifest and its exact tag/release/source commit
+    relationship as the authoritative sealed local release. An exact retry at
+    that release commit must return success without selecting a new version,
+    rerunning CI, rebuilding payloads, changing Git, or replacing artifacts.
+  - Prepare a new release outside the last sealed artifact directory and
+    activate it only after its manifest, notes, payload inventory, release
+    commit, and annotated tag are complete. Preserve the prior sealed artifact
+    after any failed preparation.
+  - Make publication resumable and immutable: skip exact GitHub Release
+    metadata/assets and exact platform/version manifests, publish only missing
+    state, update `latest` only when needed, and reject any existing immutable
+    tag, release metadata, asset, platform, or version-manifest conflict.
+  - Keep deployment convergent: reuse an exact Pages branch and matching
+    configuration, wait on an existing queued/building build, and request
+    exactly one replacement build when the matching commit has no build or its
+    newest build failed. Never create duplicate work while a matching build is
+    active.
+  - Keep the backend deployment on the app-owned gateway target. Reapplying
+    the exact published image remains an idempotent desired-state operation;
+    do not add an alternate deployment route, mutable source checkout, or
+    manual recovery command.
+
+  Validation:
+  - Add black-box lifecycle tests for an exact `make release` retry, failed
+    preparation preserving the prior sealed artifact, interrupted-phase
+    recovery, exact and conflicting GitHub Release assets, exact and
+    conflicting container manifests, partial publication resume, repeated
+    Pages activation, active Pages builds, and one failed/missing build retry.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair. Do not run production
+    release, publish, Pages activation, or gateway deployment commands.
+
+  Resolution:
+  - Exact release commits now reuse their validated sealed manifest, while new
+    payloads are prepared separately and atomically activated only after the
+    changelog-only commit, annotated tag, notes, and payload inventory agree.
+    An interrupted release commit resumes from its prepared payloads and a
+    failed new preparation leaves the prior sealed release unchanged.
+  - GitHub Release metadata/assets and GHCR platform/version manifests now
+    reuse exact existing state, publish only confirmed-missing state, and
+    reject immutable conflicts. Ambiguous registry reads fail closed and
+    `latest` changes only when its digest differs.
+  - Pages activation now reuses an exact branch/configuration and built or
+    active matching build, with one bounded replacement request for a missing
+    or failed matching build.
+  - The repository-owned black-box release suite covers exact retries,
+    interrupted/partial resumes, conflict rejection, fail-closed registry
+    inspection, and repeated Pages activation.
+
 - [x] [B089] (P1) Return sanitized, correlated provider errors at the public proxy boundary.
   Goal:
   Let clients distinguish a proxy status from the exact upstream provider
