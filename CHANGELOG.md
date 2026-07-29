@@ -14,6 +14,16 @@ All notable changes to this project will be documented in this file.
 - Keep response construction and managed-usage persistence under request cancellation, classify queue saturation as `proxy_overload`, reject explicit null timeout configuration, and synchronize Python client distribution metadata at `0.2.0`.
 - Make deployment pass the app-owned maximum request budget into the gateway contract verifier, which rejects outer response guards that cannot outwait it.
 
+## [v0.2.50] - 2026-07-28
+
+- Merge pull request #234 from tyemirov/bugfix/B092-container-inspection-test
+- Merge pull request #233 from tyemirov/bugfix/B091-release-gate-orchestration
+- Fix B092 container inspection test determinism
+- Fix B091 release gate orchestration determinism
+- feat(gitrelease): make release publication convergent and immutable
+- docs: clarify retry-safe release process and artifact reuse in README
+- docs(ISSUES): document P0 fix for convergent release and deployment retries
+
 ## [v0.2.49] - 2026-07-28
 
 - Merge pull request #229 from tyemirov/tyemirov/improvement/I042-sqlite-wal-concurrency
