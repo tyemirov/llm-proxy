@@ -2487,12 +2487,14 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
 
-- [ ] [I032] (P2) {B076,I027} Switch provider/model activity breakdowns between bar graphs and segmented disks.
+- [ ] [I032] (P2) {B076,I027} Add donut breakdowns and meaningful axes to Usage Overview charts.
   Goal:
   Let a signed-in user choose one clear presentation for both the selected
-  Usage scope's Provider usage and Model usage activity breakdowns, while
-  preserving the Usage tenant, interval, exact request counts, and the
-  distinction between historical activity and currently connected providers.
+  Usage scope's Provider usage and Model usage activity breakdowns, and make
+  the Requests and Tokens time-series charts explain their scales without
+  guesswork. Preserve the Usage tenant, interval, exact request and token
+  counts, and the distinction between historical activity and currently
+  connected providers.
 
   Evidence:
   - The current usage summary already returns deterministically ordered
@@ -2500,8 +2502,18 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     ranked horizontal bars scaled to the largest category, not shares of the
     breakdown total.
   - The summary has time buckets only for total requests and tokens. It has no
-    provider- or model-specific time series, so `Graph` must mean the ranked
-    horizontal-bar display rather than a new trend chart.
+    provider- or model-specific time series, so the breakdown's `Bar graph`
+    choice must mean the existing ranked horizontal-bar display rather than a
+    new trend chart.
+  - The current Requests and Tokens panels render only a bordered SVG and an
+    independently scaled polyline. They have no visible axes, ticks, time
+    labels, quantity labels, or numeric scale, so the curve alone cannot tell a
+    user when activity happened or whether a peak represents one request or
+    thousands.
+  - The canonical summary already supplies `interval`, `bucket_unit`, and each
+    ordered bucket's RFC3339 `start`, `data.requests`, and
+    `data.total_tokens`. Meaningful time and quantity axes require no new
+    management payload.
   - B076 establishes canonical account-wide and explicitly tenant-filtered
     Usage scopes. I027 then establishes the final dashboard layout and explicitly
     reserves provider/model breakdowns for historical selected-period activity,
@@ -2515,38 +2527,59 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     If final implementation exposes a genuinely missing data field, file and
     order a separate contract issue rather than broadening this UI issue.
   - Add one shared, visible, keyboard-operable `Breakdown view` control for
-    both activity panels. It has exactly `Graph` and `Segmented disk` choices;
-    `Graph` is the default and is the existing ranked horizontal-bar graph.
-    Switching a mode changes both panels together so their distributions remain
-    directly comparable.
+    both activity panels. It has exactly `Bar graph` and `Donut chart` choices;
+    `Bar graph` is the default and is the existing ranked horizontal-bar
+    presentation. Switching a mode changes both panels together so their
+    distributions remain directly comparable.
   - Keep the choice local to the mounted authenticated dashboard. It survives
     interval selection, Refresh, and Usage tenant selection, but resets on
     authentication reset and a full page reload. A mode change is a
     pure presentation action: it must not fetch, mutate the selected interval
     or Usage tenant, or weaken B076's request-identity/stale-response rules.
-  - Build every disk from the same ordered `providers[].data.requests` or
-    `models[].data.requests` data that Graph renders. The percentage denominator
-    is the complete source breakdown total, never token counts or the largest
-    row. Preserve every source category exactly once: Graph always lists each
-    category; the disk may combine the ordered tail into a visibly labelled
-    `Other` segment only when a named, documented, geometry-derived disk-capacity
-    rule would otherwise make the compact panel unreadable. `Other` must expose
-    its exact aggregate count and deterministic share; it cannot discard or
-    relabel source data.
-  - Render the alternative as a dependency-free SVG segmented disk in the
-    existing compact dark dashboard style. Give each segment a deterministic
-    palette assignment from the canonical summary order, but never use color or
-    hover alone to communicate meaning. Show a visible semantic legend/list
-    with category name, request count, and deterministic percentage; rounded
-    legend shares must total 100 percent. Handle zero activity with the existing
-    empty state and one-category activity as one 100-percent segment without
-    invalid SVG geometry.
+  - Build every donut from the same ordered `providers[].data.requests` or
+    `models[].data.requests` data that Bar graph renders. The percentage
+    denominator is the complete source breakdown total, never token counts or
+    the largest row. Preserve every source category exactly once: Bar graph
+    always lists each category; the donut may combine the ordered tail into a
+    visibly labelled `Other` segment only when a named, documented,
+    geometry-derived donut-capacity rule would otherwise make the compact panel
+    unreadable. `Other` must expose its exact aggregate count and deterministic
+    share; it cannot discard or relabel source data.
+  - Render the alternative as a dependency-free SVG donut chart with an
+    unmistakable center cutout in the existing compact dark dashboard style.
+    Give each segment a deterministic palette assignment from the canonical
+    summary order, but never use color or hover alone to communicate meaning.
+    Show a visible semantic legend/list with category name, request count, and
+    deterministic percentage; rounded legend shares must total 100 percent.
+    Handle zero activity with the existing empty state and one-category
+    activity as one 100-percent segment without invalid SVG geometry.
+  - Treat the Requests and Tokens panels as time-series line charts distinct
+    from the breakdown presentation mode. Give each chart visible X and Y axis
+    lines, tick marks, tick values, and axis titles. The X-axis is `Time (UTC)`
+    and comes directly from ordered `buckets[].start`: show UTC hour labels for
+    the `1d` hourly buckets and UTC date labels for the `7d`, `30d`, and `all`
+    daily buckets. The Y-axis begins at zero and uses deterministic integer
+    ticks. Its title is `Requests per hour` or `Requests per day` for
+    `data.requests`, and `Tokens per hour` or `Tokens per day` for
+    `data.total_tokens`, according to `bucket_unit`. Never label the Tokens
+    chart as requests or imply that the two metrics share a numeric scale.
+  - Derive one typed, centralized chart-axis model from the accepted summary.
+    Select a bounded, deterministic subset of X ticks that includes the first
+    and last bucket when they are distinct, keeps labels legible at the current
+    width, and never changes the plotted bucket order or values. Use readable
+    locale-independent UTC labels and compact but unambiguous integer
+    formatting; expose the exact value when compact visible notation is used.
+    Preserve zero-valued buckets, do not smooth or interpolate the source
+    series, and handle a flat or all-zero metric without division-by-zero or a
+    misleading nonzero range.
   - Use centralized frontend copy and typed presentation data for the control,
-    mode names, legend, `Other`, and accessible SVG label. Preserve visible
-    focus and full keyboard operation (`aria-pressed` or an equivalent
-    single-choice control), and keep labels/counts/shares available to assistive
-    technology without a tooltip. Validate desktop and narrow layouts without
-    clipping, overlap, or horizontal overflow.
+    mode names, legend, `Other`, axis titles, tick labels, and accessible SVG
+    text. Preserve visible focus and full keyboard operation (`aria-pressed` or
+    an equivalent single-choice control), and keep breakdown
+    labels/counts/shares plus every time bucket's exact UTC start and metric
+    value available to assistive technology without hover or a tooltip.
+    Validate desktop and narrow layouts without clipping, tick-label overlap,
+    or horizontal overflow.
   - Keep the scope to the authenticated user's Usage Overview. I027's connected
     provider widgets remain a separate `has_key` projection; an inactive
     connected provider and historical activity for a disconnected provider must
@@ -2558,23 +2591,28 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     `scripts/generate_seo_resources.mjs` and regenerate the managed-tenant
     usage resource; do not hand-maintain a divergent generated page. State
     explicitly that this is a client-side view of existing aggregate request
-    data, not a billing, provider-performance, connected-provider, token-share,
-    or new management-API feature. This repository has no PRD.md or
-    ARCHITECTURE.md; do not create partial placeholders for this UI change.
+    data, define both line charts' UTC time and per-bucket quantity axes, and
+    state that the presentation is not a billing, provider-performance,
+    connected-provider, token-share, exact-event-time, or new management-API
+    feature. This repository has no PRD.md or ARCHITECTURE.md; do not create
+    partial placeholders for this UI change.
 
   Deliverables:
   - One typed local presentation-mode contract, pure provider/model distribution
-    transform, shared selector, semantic bar/disk renderings, responsive styles,
-    and centralized copy in Usage Overview.
-  - A legible, deterministic SVG disk/legend treatment that preserves all
+    transform, shared selector, semantic bar/donut renderings, responsive
+    styles, and centralized copy in Usage Overview.
+  - A legible, deterministic SVG donut/legend treatment that preserves all
     request counts and makes any `Other` aggregation explicit.
+  - One typed time-series axis/tick contract and two semantic SVG line charts
+    whose visible and accessible labels identify UTC time and requests or total
+    tokens per canonical hour/day bucket without changing the usage API.
   - Updated README, CHANGELOG.md, implementation documentation, generator-owned
     public usage resource, generated artifact, and browser coverage; no
     management API, Go client, Python client, or CLI wire-contract change.
 
   Validation:
   - Add Playwright coverage through the real management dashboard showing the
-    default Graph mode, keyboard selection of Segmented disk, simultaneous
+    default Bar graph mode, keyboard selection of Donut chart, simultaneous
     changes to provider and model panels, visible names/counts/shares, and no
     additional usage request when the presentation changes.
   - Exercise interval changes, Refresh, Usage tenant selection, loading/failure, and
@@ -2582,8 +2620,16 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     where specified and never presents a stale Usage scope or interval snapshot.
   - Cover zero, one, and many-category distributions, including deterministic
     `Other` aggregation, exact request-count conservation, share totals of 100
-    percent, Graph access to every source category, non-color-only semantics,
-    administrator isolation, and desktop/narrow viewport geometry.
+    percent, Bar graph access to every source category, non-color-only
+    semantics, administrator isolation, and desktop/narrow viewport geometry.
+  - Cover `1d`, `7d`, `30d`, and `all` summaries and prove visible X ticks map
+    to the supplied UTC bucket starts, Requests Y ticks and points map only to
+    `data.requests`, Tokens Y ticks and points map only to
+    `data.total_tokens`, both Y scales start at zero, and exact bucket values
+    remain programmatically available. Exercise empty, flat-zero, single-peak,
+    large-value, desktop, and narrow-viewport cases without clipped or
+    overlapping axes, invented data, tooltip-only meaning, or an additional
+    management request.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
