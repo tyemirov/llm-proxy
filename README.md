@@ -13,9 +13,12 @@ client.
   [canonical OpenAPI contract](docs/openapi.yaml)
 - Choose the provider per request via `provider=...`; omitted provider uses the authenticated tenant default
 - Choose the model per request via `model=...`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
-- Set optional nonblank `reasoning_effort=...` on `GET /`, or in a JSON body for `POST /` and `POST /v2`, to select a capability-supported reasoning level for that exact resolved route. An explicit value overrides the tenant default; an omitted value retains it. Blank or unsupported values fail before an upstream call.
+- Set optional nonblank `reasoning_effort=...` on `GET /`, or in a JSON body for `POST /`, `POST /v2`, and `POST /v2/analyze`, to select a capability-supported reasoning level for that exact resolved route. An explicit value overrides the tenant default; an omitted value retains it. Blank or unsupported values fail before an upstream call.
 - Choose the dictation model per request via `model=...` on `/dictate`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
 - Optional per-request web search via `web_search=1|true|yes` when the selected provider/model is configured to support it
+- Evidence-grade `POST /v2/analyze` requests with typed text/image/audio
+  content, SHA-256-bound binary bytes, mandatory strict JSON Schema output,
+  and proxy request identity
 - Optional logging at `debug` or `info` levels
 - Forwards requests using server-side provider API keys, loaded from the database in management mode
 - Optional TAuth-protected self-service UI where signed-in users automatically receive an llm-proxy client key and their provider settings plus routing defaults autosave
@@ -23,9 +26,10 @@ client.
 
 ## REST Contract
 
-llm-proxy exposes a blocking REST contract for text generation. A caller sends
-one authenticated `GET /`, `POST /`, or `POST /v2` request and receives the final
-formatted answer in that same HTTP response.
+llm-proxy exposes blocking REST contracts for text generation and bounded
+analysis. A caller sends one authenticated `GET /`, `POST /`, `POST /v2`, or
+`POST /v2/analyze` request and receives the final answer in that same HTTP
+response.
 
 ### Canonical OpenAPI ownership
 
@@ -69,6 +73,12 @@ reports its complete stop signal or the overall request deadline expires.
 Safety filters, refusals, tool/intermediate states, malformed responses, and
 missing or unknown signals remain `502` failures and never trigger this loop.
 
+`POST /v2/analyze` is deliberately outside that suffix coordinator. One
+analyzer request must complete as one valid JSON value under its mandatory
+strict schema. Output-budget exhaustion, malformed JSON, and terminal
+incomplete states are upstream failures; the proxy never splices a second
+generation into a schema-constrained report.
+
 A `504 Gateway Timeout` means the overall proxy request deadline expired before
 the selected upstream provider produced a final answer. It is not a prompt for
 the client to poll llm-proxy.
@@ -85,7 +95,8 @@ X-LLM-Proxy-Request-Timeout-Seconds: N
 `N` is the positive whole-number wall-clock budget, in seconds, for that
 request. The budget begins before body parsing and covers validation, queue
 admission, every provider call, OpenAI background polling, and response
-construction for `GET /`, `POST /`, `POST /v2`, and `POST /dictate`.
+construction for `GET /`, `POST /`, `POST /v2`, `POST /v2/analyze`, and
+`POST /dictate`.
 
 If the header is omitted, `server.request_timeout_seconds` is the effective
 budget. A supplied value must be in the inclusive range
@@ -549,11 +560,11 @@ All OpenAI Responses text requests also send `background: true` and
 reaches a documented terminal state or the request's effective work budget
 expires. Only `queued` and `in_progress` are pending states; unknown states do
 not trigger polling. Only `completed` can produce a successful response.
-Plain REST callers use one `GET /`, `POST /`, or `POST /v2` request and receive
-the final formatted answer; they do not stream, poll, or follow a separate
-resume endpoint. Separately published provider-specific deferred, batch, or
-asynchronous APIs are not implicit variants of these routes and are not
-activated by an arbitrary response `id`.
+Plain REST text callers use one `GET /`, `POST /`, or `POST /v2` request and
+receive the final formatted answer; they do not stream, poll, or follow a
+separate resume endpoint. Separately published provider-specific deferred,
+batch, or asynchronous APIs are not implicit variants of these routes and are
+not activated by an arbitrary response `id`.
 
 Provider-specific details:
 
@@ -864,11 +875,11 @@ desktop row, clears an incompatible saved value on a model change, reports `Not
 supported` for routes without a declaration, and autosaves every
 routing-default change without a separate action. The browser rejects malformed
 profile data instead of repairing it. Public
-`GET /` accepts optional query `reasoning_effort`; JSON `POST /` and `POST /v2`
-accept the same optional field in their bodies. When omitted, the saved tenant
-default remains authoritative. An explicit value must be nonblank and exactly
-supported by the resolved provider/model route, otherwise the proxy returns
-`400` before an upstream call.
+`GET /` accepts optional query `reasoning_effort`; JSON `POST /`, `POST /v2`,
+and `POST /v2/analyze` accept the same optional field in their bodies. When
+omitted, the saved tenant default remains authoritative. An explicit value must
+be nonblank and exactly supported by the resolved provider/model route,
+otherwise the proxy returns `400` before an upstream call.
 
 Management startup requires every persisted routing field to be canonical and
 catalog-valid and every nonempty provider default to have the tenant's saved
@@ -1040,7 +1051,7 @@ Production is split-origin:
 | Hostname | Owner | Purpose |
 |----------|-------|---------|
 | `llm-proxy.mprlab.com` | GitHub Pages | Static self-service frontend from `site/`. |
-| `llm-proxy-api.mprlab.com` | MPR gateway/backend | llm-proxy API, management API, `/`, `/v2`, and `/dictate`. |
+| `llm-proxy-api.mprlab.com` | MPR gateway/backend | llm-proxy API, management API, `/`, `/v2`, `/v2/analyze`, and `/dictate`. |
 | `tauth-api.mprlab.com` | TAuth backend | Google login, nonce, logout, `/auth/session`, and session-cookie issuance. |
 
 Add these DNS records:
@@ -1563,6 +1574,77 @@ caller's independent cancellation authority, and the injected `HTTPDoer` may
 have its own explicitly selected transport policy. The package does not add a
 total-response timeout.
 
+For evidence-grade analysis, construct every part and the strict output schema
+before constructing the request. Binary constructors copy the supplied bytes
+and compute the SHA-256 that the proxy independently verifies:
+
+```go
+imageBytes, err := os.ReadFile(framePath)
+if err != nil {
+    return err
+}
+image, err := llmproxyclient.NewImageContent(llmproxyclient.ImageContentInput{
+    MIMEType: "image/png",
+    Data:     imageBytes,
+    Detail:   llmproxyclient.ImageDetailHigh,
+})
+if err != nil {
+    return err
+}
+instruction, err := llmproxyclient.NewTextContent(
+    "Evaluate only the supplied assertions and return the required report.",
+)
+if err != nil {
+    return err
+}
+outputSchema, err := llmproxyclient.NewStrictOutputSchema(
+    llmproxyclient.StrictOutputSchemaInput{
+        Name: "semantic_qa_report",
+        Schema: json.RawMessage(`{
+            "type":"object",
+            "additionalProperties":false,
+            "required":["outcome"],
+            "properties":{
+                "outcome":{"type":"string","enum":["pass","return"]}
+            }
+        }`),
+    },
+)
+if err != nil {
+    return err
+}
+effort := "high"
+workBudget := 900
+request, err := llmproxyclient.NewAnalyzerRequest(
+    llmproxyclient.AnalyzerRequestInput{
+        Messages: []llmproxyclient.AnalyzerMessageInput{
+            {
+                Role:    "user",
+                Content: []llmproxyclient.ContentPart{instruction, image},
+            },
+        },
+        OutputSchema:          outputSchema,
+        Model:                 "gpt-5.5",
+        ReasoningEffort:       &effort,
+        RequestTimeoutSeconds: &workBudget,
+    },
+)
+if err != nil {
+    return err
+}
+result, err := client.PostAnalyzer(ctx, request)
+if err != nil {
+    return err
+}
+reportJSON := result.Text()
+proxyRequestID := result.RequestID()
+```
+
+`PostAnalyzer` requires explicit per-request model selection and returns both
+the completed JSON text and proxy request identity. It never reads model-profile
+files, translates provider request syntax, accepts local paths as evidence, or
+adds a schema-free continuation.
+
 To upgrade the Go package and CLI:
 
 ```shell
@@ -1877,6 +1959,32 @@ the OpenAPI schema, including the omission-versus-explicit-value contract for
 `reasoning_effort`. It rejects `prompt` and body `system_prompt`; send a
 `system` role message instead. The tenant default system prompt is still
 prepended when the submitted messages do not include a system message.
+
+### Strict multimodal analyzer
+
+`POST /v2/analyze` is the closed evidence-analysis operation. The body requires
+an explicit `model`, one or more ordered `system` or `user` messages, and one
+named `output_schema`. Message `content` is an array of typed parts:
+
+- `text` carries nonblank text.
+- `image` carries canonical base64, MIME type, detail, and the lowercase
+  SHA-256 of the decoded bytes.
+- `audio` carries canonical base64, MIME type, and the lowercase SHA-256 of the
+  decoded bytes.
+
+The proxy decodes every binary part and verifies its digest before provider
+admission. Local paths and remote-provider payload fields are not content
+transports. System messages accept text only, and every request must contain a
+user message. The current OpenAI Responses route supports text plus exact
+ordered JPEG, PNG, or WebP image parts. Audio is present in the provider-neutral
+wire and official client contract but returns `400` before upstream work until
+a configured model route supports both audio input and strict structured
+output. Non-OpenAI transports are rejected at the same pre-spend boundary.
+
+Successful responses use `application/json`, satisfy the requested strict
+schema, and include the proxy-owned `X-LLM-Proxy-Request-ID` header. The
+authoritative field and response contracts are in the
+[`POST /v2/analyze` API reference](https://llm-proxy.mprlab.com/docs/#operation-postV2Analyzer).
 
 ### Choose an OpenAI model
 

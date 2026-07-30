@@ -18,6 +18,7 @@ import (
 )
 
 const (
+	acceptApplicationJSON     = "application/json"
 	formatQueryValueTextPlain = "text/plain"
 	headerAccept              = "Accept"
 	headerContentType         = "Content-Type"
@@ -382,6 +383,19 @@ func (client Client) messagesPostRequest(request MessagesRequest) (url.URL, []by
 }
 
 func (client Client) postPayload(contextValue context.Context, requestURL url.URL, requestBody []byte, requestTimeoutSeconds *int) (string, error) {
+	response, postError := client.postPayloadResponse(contextValue, requestURL, requestBody, requestTimeoutSeconds, formatQueryValueTextPlain)
+	if postError != nil {
+		return "", postError
+	}
+	return string(response.body), nil
+}
+
+type clientHTTPResponse struct {
+	body   []byte
+	header http.Header
+}
+
+func (client Client) postPayloadResponse(contextValue context.Context, requestURL url.URL, requestBody []byte, requestTimeoutSeconds *int, accept string) (clientHTTPResponse, error) {
 	httpRequest := (&http.Request{
 		Method:        http.MethodPost,
 		URL:           &requestURL,
@@ -389,7 +403,7 @@ func (client Client) postPayload(contextValue context.Context, requestURL url.UR
 		Body:          io.NopCloser(bytes.NewReader(requestBody)),
 		ContentLength: int64(len(requestBody)),
 	}).WithContext(contextValue)
-	httpRequest.Header.Set(headerAccept, formatQueryValueTextPlain)
+	httpRequest.Header.Set(headerAccept, accept)
 	httpRequest.Header.Set(headerContentType, jsonContentType)
 	if requestTimeoutSeconds != nil {
 		httpRequest.Header.Set(llmproxycontract.HeaderRequestTimeoutSeconds, strconv.Itoa(*requestTimeoutSeconds))
@@ -397,20 +411,20 @@ func (client Client) postPayload(contextValue context.Context, requestURL url.UR
 
 	httpResponse, httpError := client.httpClient.Do(httpRequest)
 	if httpError != nil {
-		return "", fmt.Errorf("%w: post request: %v", ErrClientHTTPFailure, httpError)
+		return clientHTTPResponse{}, fmt.Errorf("%w: post request: %v", ErrClientHTTPFailure, httpError)
 	}
 	responseBody, readError := io.ReadAll(httpResponse.Body)
 	_ = httpResponse.Body.Close()
 	if readError != nil {
-		return "", fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
+		return clientHTTPResponse{}, fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
 	}
 	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
-		return "", fmt.Errorf(
+		return clientHTTPResponse{}, fmt.Errorf(
 			"%w: status=%d body=%q",
 			ErrClientHTTPFailure,
 			httpResponse.StatusCode,
 			strings.TrimSpace(string(responseBody)),
 		)
 	}
-	return string(responseBody), nil
+	return clientHTTPResponse{body: responseBody, header: httpResponse.Header.Clone()}, nil
 }

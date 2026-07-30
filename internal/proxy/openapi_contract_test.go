@@ -97,7 +97,7 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 	for _, operation := range operations {
 		expectedSecurity := [][]string{{"TAuthSession"}}
 		switch operation.Path {
-		case "/", "/v2", "/dictate":
+		case "/", "/v2", "/v2/analyze", "/dictate":
 			expectedSecurity = [][]string{{"TenantClientKey"}}
 		case proxy.ManagementConfigUIPath:
 			expectedSecurity = [][]string{}
@@ -198,6 +198,33 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	v2Response := httptest.NewRecorder()
 	router.ServeHTTP(v2Response, v2Request)
 	assertOpenAPIResponse(t, contract, "/v2", http.MethodPost, v2Response)
+
+	analyzerUpstream := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, _ *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_, _ = responseWriter.Write([]byte(`{
+			"id":"openapi-analyzer",
+			"status":"completed",
+			"output_text":"{\"outcome\":\"pass\"}",
+			"output":[{
+				"type":"message",
+				"role":"assistant",
+				"content":[{"type":"output_text","text":"{\"outcome\":\"pass\"}"}]
+			}]
+		}`))
+	}))
+	t.Cleanup(analyzerUpstream.Close)
+	analyzerRouter := NewTestRouter(t, analyzerUpstream.URL)
+	analyzerBody := analyzerRequestBody(t, []byte("openapi-first-image"), []byte("openapi-second-image"))
+	analyzerRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/v2/analyze?key="+url.QueryEscape(TestSecret)+"&provider=openai",
+		bytes.NewReader(analyzerBody),
+	)
+	analyzerRequest.Header.Set("Content-Type", "application/json")
+	assertOpenAPIRequest(t, contract, "/v2/analyze", analyzerRequest, analyzerBody)
+	analyzerResponse := httptest.NewRecorder()
+	analyzerRouter.ServeHTTP(analyzerResponse, analyzerRequest)
+	assertOpenAPIResponse(t, contract, "/v2/analyze", http.MethodPost, analyzerResponse)
 
 	unsupportedReasoningBody := []byte(`{"messages":[{"role":"user","content":"Validate the route error."}],"model":"deepseek-v4-flash","reasoning_effort":"high"}`)
 	unsupportedReasoningRequest := httptest.NewRequest(

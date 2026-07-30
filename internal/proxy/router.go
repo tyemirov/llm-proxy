@@ -134,6 +134,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	router.GET(rootPath, rootProxyHandler)
 	router.POST(rootPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatJSONHandler(upstreamProviders, providers, configuration.MaxPromptBytes, managedTenants, structuredLogger))))
 	router.POST(v2Path, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatV2JSONHandler(upstreamProviders, providers, configuration.MaxPromptBytes, managedTenants, structuredLogger))))
+	router.POST(v2AnalyzePath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, analyzerJSONHandler(upstreamProviders, providers, configuration.MaxPromptBytes, managedTenants, structuredLogger))))
 	router.POST(dictatePath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, dictateHandler(upstreamProviders, providers, configuration.MaxInputAudioBytes, managedTenants, structuredLogger))))
 	return router, nil
 }
@@ -751,7 +752,7 @@ func validateTextMaxTokens(providerDefinition providerDefinition, modelIdentifie
 
 func statusCodeForError(requestError error) int {
 	switch {
-	case errors.Is(requestError, ErrUnknownProvider), errors.Is(requestError, ErrUnknownModel), errors.Is(requestError, ErrUnsupportedCapability), errors.Is(requestError, ErrUnsupportedEndpoint), errors.Is(requestError, ErrConflictingModelParameters), errors.Is(requestError, ErrInvalidChatMessages):
+	case errors.Is(requestError, ErrUnknownProvider), errors.Is(requestError, ErrUnknownModel), errors.Is(requestError, ErrUnsupportedCapability), errors.Is(requestError, ErrUnsupportedEndpoint), errors.Is(requestError, ErrConflictingModelParameters), errors.Is(requestError, ErrInvalidChatMessages), errors.Is(requestError, ErrInvalidAnalyzerRequest):
 		return http.StatusBadRequest
 	case errors.Is(requestError, ErrProviderNotConfigured), errors.Is(requestError, errQueueFull):
 		return http.StatusServiceUnavailable

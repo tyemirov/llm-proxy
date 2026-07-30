@@ -24,6 +24,8 @@ var (
 	ErrProviderAPI = errors.New(errorProviderAPI)
 	// ErrInvalidChatMessages is returned when a JSON request body contains invalid chat messages.
 	ErrInvalidChatMessages = errors.New(errorInvalidChatMessages)
+	// ErrInvalidAnalyzerRequest is returned when an analyzer request violates its closed input contract.
+	ErrInvalidAnalyzerRequest = errors.New(errorInvalidAnalyzerRequest)
 	// ErrInvalidModelCatalog is returned when configured provider model catalogs are incomplete or inconsistent.
 	ErrInvalidModelCatalog = errors.New("invalid_model_catalog")
 )

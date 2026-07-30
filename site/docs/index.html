@@ -6,12 +6,12 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="1031046624a1706dab111360366d77b803c39b737dd9ab0acc7970b6911f1119">
+    <meta name="openapi-source-sha256" content="e8b15ba737bfbdd5a9062148cfc00a878c1792d9c31c998f21792db331b9d41d">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="1031046624a1706dab111360366d77b803c39b737dd9ab0acc7970b6911f1119">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="e8b15ba737bfbdd5a9062148cfc00a878c1792d9c31c998f21792db331b9d41d">
     <header class="resource-shell resource-topbar">
       <a class="resource-brand" href="/">LLM Proxy</a>
       <nav aria-label="API reference navigation">
@@ -29,7 +29,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>1031046624a1706dab111360366d77b803c39b737dd9ab0acc7970b6911f1119</code></span>
+          <span>Source SHA-256 <code>e8b15ba737bfbdd5a9062148cfc00a878c1792d9c31c998f21792db331b9d41d</code></span>
         </div>
         <div class="resource-actions">
           <a class="resource-button" href="/openapi.yaml">Download exact schema</a>
@@ -59,6 +59,7 @@
 <a href="#operation-getBrowserConfiguration"><span class="api-method api-method-get">GET</span><code>/config-ui.yaml</code><span>Read the browser runtime configuration</span></a>
 <a href="#operation-postDictation"><span class="api-method api-method-post">POST</span><code>/dictate</code><span>Transcribe an audio upload</span></a>
 <a href="#operation-postV2Messages"><span class="api-method api-method-post">POST</span><code>/v2</code><span>Generate text from canonical messages</span></a>
+<a href="#operation-postV2Analyzer"><span class="api-method api-method-post">POST</span><code>/v2/analyze</code><span>Analyze hash-bound evidence with strict structured output</span></a>
         </div>
       </section>
       <section class="api-operation" id="operation-getText">
@@ -937,6 +938,64 @@
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. The proxy internally continues exact output-budget stops through one provider-neutral lifecycle: OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, Gemini MAX_TOKENS, and Anthropic max_tokens. HTTP 200 is returned only after the selected transport reports its complete signal: OpenAI completed, Chat stop, Gemini STOP, or Anthropic end_turn|stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states never return text as success.</td></tr>
+<tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>413</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The configured prompt or audio payload limit was exceeded.</td></tr>
+<tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
+<tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
+<tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The response contains only sanitized provider metadata and never exposes partial generated text, token-count headers, a raw provider body, or a provider error message; provider-reported usage can still be retained in managed failure accounting.</td></tr>
+<tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected provider is not configured or the bounded request queue is full.</td></tr>
+<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-postV2Analyzer">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/v2/analyze</code>
+          <span class="api-operation-id">postV2Analyzer</span>
+        </header>
+        <h2>Analyze hash-bound evidence with strict structured output</h2>
+        <p>The evidence-grade analyzer operation. It accepts ordered system and user messages containing typed text, image, or audio parts, requires a named strict JSON Schema, and returns only one complete schema-constrained JSON object. Binary bytes are canonical base64 and independently verified against their lowercase SHA-256 before provider admission. The current OpenAI Responses adapter supports text and ordered image parts; audio and every unsupported provider/model capability return 400 before upstream work.</p>
+        <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
+        <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>key</code></td><td>query</td><td>Yes</td><td>string</td><td>Tenant client secret.</td></tr>
+<tr><td><code>provider</code></td><td>query</td><td>No</td><td>string</td><td>Canonical provider identifier. Omission uses the tenant default.</td></tr>
+<tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Request fields</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>messages</code></td><td>Yes</td><td>array&lt;AnalyzerMessage&gt;</td><td>Messages must include at least one user message. Either every message omits order or every message supplies one unique non-negative order. System messages accept text parts only.</td></tr>
+<tr><td><code>output_schema</code></td><td>Yes</td><td>object</td><td></td></tr>
+<tr><td><code>model</code></td><td>Yes</td><td>string</td><td>The exact configured analyzer model. Omission is invalid.</td></tr>
+<tr><td><code>max_tokens</code></td><td>No</td><td>integer</td><td></td></tr>
+<tr><td><code>reasoning_effort</code></td><td>No</td><td>string</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>X-LLM-Proxy-Request-ID, X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>One complete JSON value produced under the request&#39;s strict output schema. Output-budget exhaustion, malformed JSON, incomplete provider states, and schema-free continuations are never returned as success.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
 <tr><td><code>413</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The configured prompt or audio payload limit was exceeded.</td></tr>

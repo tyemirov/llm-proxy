@@ -1800,6 +1800,49 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Improvements
 
+- [x] [I044] (P0) Add an evidence-grade multimodal structured analyzer client.
+  Goal:
+  Give bounded semantic analyzers one released, provider-neutral Go client
+  operation that carries exact media bytes, requires strict structured output,
+  and returns proxy request identity without exposing provider request shapes.
+
+  Requirements:
+  - Add one current `/v2/analyze` operation distinct from ordinary text
+    generation. It accepts ordered system/user messages whose content is a
+    non-empty array of typed text, image, or audio parts.
+  - Bind every binary part to an explicit MIME type and SHA-256. The official
+    Go client computes the digest from caller-supplied bytes; the proxy decodes
+    the wire bytes and independently verifies the digest before provider
+    admission.
+  - Require a named JSON Schema and translate it to strict structured output.
+    Do not add optional strictness, free-form analyzer output, string-or-array
+    dual decoding, provider fallbacks, or compatibility aliases.
+  - Support exact ordered image input through OpenAI Responses. Reject audio
+    and every unsupported provider/model capability before an upstream call
+    until a configured route supports both its input modality and strict
+    structured output.
+  - Return the completed response text together with the proxy-owned
+    `X-LLM-Proxy-Request-ID`. Treat a missing request ID on a successful
+    response as an invalid client HTTP result.
+  - Keep output-limit exhaustion and malformed structured completion as
+    operational failures. Do not splice independent continuations into one
+    schema-constrained response.
+  - Update the canonical OpenAPI document, generated reference, README,
+    provider-routing contract, and official Go client in the same patch.
+
+  Validation:
+  - Public client tests prove constructors reject blank text, unsupported MIME
+    types, empty binary content, malformed schemas, invalid names, and
+    incomplete messages before HTTP.
+  - Real-router tests prove exact ordered image bytes and strict schema reach
+    OpenAI Responses, binary digest mismatches and unsupported routes make zero
+    upstream calls, and successful client results carry proxy request identity.
+  - OpenAPI conformance covers a representative analyzer exchange and rejects
+    obsolete or malformed shapes.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
+    last tracked edit.
+
 - [x] [I042] (P1) Remove managed-request serialization from SQLite authentication.
   Goal:
   Keep SQLite as the sole managed-tenant source of truth while allowing each

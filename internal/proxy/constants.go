@@ -16,8 +16,9 @@ const (
 	headerLLMProxyTotalTokens    = "X-LLM-Proxy-Total-Tokens"
 
 	// rootPath defines the HTTP path for the root endpoint.
-	rootPath = "/"
-	v2Path   = "/v2"
+	rootPath      = "/"
+	v2Path        = "/v2"
+	v2AnalyzePath = "/v2/analyze"
 	// dictatePath defines the HTTP path for audio transcription requests.
 	dictatePath = "/dictate"
 
@@ -71,6 +72,7 @@ const (
 	errorMissingMessages            = "missing messages parameter"
 	errorUnsupportedPromptParameter = "unsupported prompt parameter"
 	errorUnsupportedSystemPrompt    = "unsupported system_prompt parameter"
+	errorInvalidAnalyzerRequest     = "invalid analyzer request"
 	errorInvalidAudioForm           = "invalid audio form"
 	errorMissingAudioFile           = "missing audio file"
 	errorAudioPayloadTooLarge       = "audio payload too large"

@@ -235,6 +235,66 @@
         }
       }
     },
+    "/v2/analyze": {
+      "post": {
+        "operationId": "postV2Analyzer",
+        "summary": "Analyze hash-bound evidence with strict structured output",
+        "description": "The evidence-grade analyzer operation. It accepts ordered system and user messages containing typed text, image, or audio parts, requires a named strict JSON Schema, and returns only one complete schema-constrained JSON object. Binary bytes are canonical base64 and independently verified against their lowercase SHA-256 before provider admission. The current OpenAI Responses adapter supports text and ordered image parts; audio and every unsupported provider/model capability return 400 before upstream work.",
+        "tags": [
+          "Proxy"
+        ],
+        "security": [
+          {
+            "TenantClientKey": []
+          }
+        ],
+        "x-llm-proxy-allow-undeclared-query": false,
+        "x-llm-proxy-required-request-content-type": "application/json",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TenantClientKey"
+          },
+          {
+            "$ref": "#/components/parameters/Provider"
+          },
+          {
+            "$ref": "#/components/parameters/RequestTimeout"
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/AnalyzerRequest"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AnalyzerSuccess"
+          },
+          "400": {
+            "$ref": "#/components/responses/ProxyBadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/ProxyForbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/ProxyPayloadTooLarge"
+          },
+          "429": {
+            "$ref": "#/components/responses/ProxyRateLimited"
+          },
+          "499": {
+            "$ref": "#/components/responses/CallerClosed"
+          },
+          "502": {
+            "$ref": "#/components/responses/ProxyBadGateway"
+          },
+          "503": {
+            "$ref": "#/components/responses/ProxyUnavailable"
+          },
+          "504": {
+            "$ref": "#/components/responses/ProxyTimeout"
+          }
+        }
+      }
+    },
     "/dictate": {
       "post": {
         "operationId": "postDictation",
@@ -1242,6 +1302,16 @@
           }
         }
       },
+      "AnalyzerRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AnalyzerRequest"
+            }
+          }
+        }
+      },
       "DictationRequest": {
         "required": true,
         "content": {
@@ -1334,6 +1404,33 @@
           "text/csv": {
             "schema": {
               "type": "string"
+            }
+          }
+        }
+      },
+      "AnalyzerSuccess": {
+        "description": "One complete JSON value produced under the request's strict output schema. Output-budget exhaustion, malformed JSON, incomplete provider states, and schema-free continuations are never returned as success.",
+        "headers": {
+          "X-LLM-Proxy-Request-ID": {
+            "$ref": "#/components/headers/ProxyRequestID"
+          },
+          "X-LLM-Proxy-Request-Timeout-Seconds": {
+            "$ref": "#/components/headers/ResolvedRequestTimeout"
+          },
+          "X-LLM-Proxy-Request-Tokens": {
+            "$ref": "#/components/headers/OptionalTokenCount"
+          },
+          "X-LLM-Proxy-Response-Tokens": {
+            "$ref": "#/components/headers/OptionalTokenCount"
+          },
+          "X-LLM-Proxy-Total-Tokens": {
+            "$ref": "#/components/headers/OptionalTokenCount"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/JSONSchemaObject"
             }
           }
         }
@@ -1839,6 +1936,201 @@
             "type": "string",
             "minLength": 1,
             "description": "Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route."
+          }
+        }
+      },
+      "AnalyzerTextContent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "text"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "text"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "AnalyzerImageContent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "mime_type",
+          "data",
+          "sha256",
+          "detail"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "image"
+          },
+          "mime_type": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp"
+            ]
+          },
+          "data": {
+            "type": "string",
+            "minLength": 1,
+            "contentEncoding": "base64"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "detail": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "low",
+              "high"
+            ]
+          }
+        }
+      },
+      "AnalyzerAudioContent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "mime_type",
+          "data",
+          "sha256"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "audio"
+          },
+          "mime_type": {
+            "type": "string",
+            "enum": [
+              "audio/mpeg",
+              "audio/wav"
+            ]
+          },
+          "data": {
+            "type": "string",
+            "minLength": 1,
+            "contentEncoding": "base64"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "AnalyzerContent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AnalyzerTextContent"
+          },
+          {
+            "$ref": "#/components/schemas/AnalyzerImageContent"
+          },
+          {
+            "$ref": "#/components/schemas/AnalyzerAudioContent"
+          }
+        ]
+      },
+      "AnalyzerMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "content"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "system",
+              "user"
+            ]
+          },
+          "content": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/AnalyzerContent"
+            }
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "JSONSchemaObject": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {}
+      },
+      "StrictOutputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "schema"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "description": {
+            "type": "string"
+          },
+          "schema": {
+            "$ref": "#/components/schemas/JSONSchemaObject"
+          }
+        }
+      },
+      "AnalyzerRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messages",
+          "output_schema",
+          "model"
+        ],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Messages must include at least one user message. Either every message omits order or every message supplies one unique non-negative order. System messages accept text parts only.",
+            "items": {
+              "$ref": "#/components/schemas/AnalyzerMessage"
+            }
+          },
+          "output_schema": {
+            "$ref": "#/components/schemas/StrictOutputSchema"
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The exact configured analyzer model. Omission is invalid."
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reasoning_effort": {
+            "type": "string",
+            "minLength": 1
           }
         }
       },

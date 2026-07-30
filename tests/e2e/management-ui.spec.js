@@ -316,10 +316,12 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
   expect(documentationHTML).toContain(`data-openapi-source-sha256="${sourceDigest}"`);
   expect(documentationHTML).toContain("https://llm-proxy-api.mprlab.com");
   expect(documentationHTML).toContain('id="operation-postV2Messages"');
+  expect(documentationHTML).toContain('id="operation-postV2Analyzer"');
+  expect(canonicalSource).toContain('"/v2/analyze"');
   expect(documentationHTML).not.toContain('id="operation-deleteManagementTenantSecret"');
   expect(documentationHTML).toContain("<code>reasoning_effort</code>");
   expect(documentationHTML).toContain(`href="${openAPIPath}"`);
-  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(20);
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(21);
 });
 
 test("SEO resource pages are crawlable from the public site", async ({ request }) => {

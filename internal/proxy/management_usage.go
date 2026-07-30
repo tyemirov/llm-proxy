@@ -20,6 +20,7 @@ import (
 const (
 	usageEndpointText      = "text"
 	usageEndpointV2        = "v2"
+	usageEndpointAnalyzer  = "analyzer"
 	usageEndpointDictation = "dictation"
 	usageDateFormat        = "2006-01-02"
 	usageIntervalAll       = usageInterval("all")

@@ -8,7 +8,8 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 
 ## Request Contract
 
-- `provider` is an optional query parameter on `GET /`, `POST /`, `POST /v2`, and `POST /dictate`.
+- `provider` is an optional query parameter on `GET /`, `POST /`, `POST /v2`,
+  `POST /v2/analyze`, and `POST /dictate`.
 - Omitted `provider` means the authenticated tenant's default provider.
 - `model` keeps its current meaning; omitted `model` means the authenticated tenant's default model when set, otherwise the selected provider's configured default model.
 - A provider with an API key configured must have a configured default text model so provider-selected requests can omit `model` consistently.
@@ -21,15 +22,36 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - Compatibility JSON `POST /` accepts exactly one text input shape: `prompt` for a single user prompt or `messages[]` for an OpenRouter/OpenAI-compatible chat transcript.
 - Canonical JSON `POST /v2` accepts only `messages[]` as the text input shape; request-body `prompt` and `system_prompt` are invalid.
 - `messages[]` items contain `role` and string `content`. Supported roles are `system`, `user`, and `assistant`; at least one `user` message is required.
+- Evidence-grade `POST /v2/analyze` is a distinct closed operation. It requires
+  an explicit model, ordered system/user messages whose `content` is an array
+  of typed text/image/audio parts, and a named strict JSON Schema. It does not
+  accept prompt strings, assistant messages, web search, system-prompt
+  injection, provider tools, or response-format selection.
+- Analyzer binary parts carry canonical base64, an explicit supported MIME
+  type, and lowercase SHA-256. The proxy decodes and independently verifies
+  the digest before upstream admission. System messages accept text parts only.
+- OpenAI Responses is the current analyzer transport for text and ordered JPEG,
+  PNG, or WebP inputs. Audio and non-OpenAI routes return unsupported capability
+  before provider work until an exact route supports the requested modality
+  together with strict structured output.
+- Analyzer success is one complete `application/json` value plus the
+  proxy-owned request ID. Output-limit exhaustion and malformed JSON are
+  operational upstream failures; analyzer requests never enter the shared
+  missing-suffix continuation loop.
 - `messages[].order` is optional. When any submitted message includes `order`, every submitted message must include a unique non-negative integer `order`; the proxy sorts submitted messages by ascending `order` before adding a request or tenant system prompt and before routing upstream.
 - With `messages[]` on `POST /`, body `system_prompt` is prepended as a system message only when the transcript does not already contain a `system` message. A body containing both `system_prompt` and a system message is invalid. With `POST /v2`, callers send system instructions as `system` role messages.
 - `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies. It is the initial per-attempt output budget and is reused for missing-suffix attempts.
 - Provided `max_tokens` maps to OpenAI Responses `max_output_tokens`, Meta, Moonshot, and MiniMax Chat Completions `max_completion_tokens`, other OpenAI-compatible chat completions `max_tokens`, Anthropic Messages `max_tokens`, and Gemini `generationConfig.maxOutputTokens`.
 - Omitted `max_tokens` means the proxy omits provider max-token fields and lets the selected provider/model default apply, except Anthropic Messages where the upstream API requires `max_tokens` and the proxy sends the selected model's configured synchronous output limit. After an output-budget stop with no visible progress, a configured model output limit becomes the generic ceiling for increasing the next attempt.
 - Known provider-specific output-token ceilings are validated before upstream calls; MiniMax M2.7 rejects `max_tokens` above `2048`, Gemini text models reject values above `65536`, and Claude models reject values above their configured synchronous Messages output limits with `400 Bad Request`.
-- `reasoning_effort` is optional on `GET /` as a query parameter and on JSON `POST /` and `POST /v2` as a body field. Omission retains the resolved tenant default. A supplied value must be nonblank and supported by the exact resolved text provider/model route; blank, `null`, or unsupported values return `400 Bad Request` before a provider call.
+- `reasoning_effort` is optional on `GET /` as a query parameter and on JSON
+  `POST /`, `POST /v2`, and `POST /v2/analyze` as a body field. Omission
+  retains the resolved tenant default. A supplied value must be nonblank and
+  supported by the exact resolved text provider/model route; blank, `null`, or
+  unsupported values return `400 Bad Request` before a provider call.
 - `X-LLM-Proxy-Request-Timeout-Seconds` is an optional positive whole-number
-  header on `GET /`, `POST /`, `POST /v2`, and `POST /dictate`. Omission uses
+  header on `GET /`, `POST /`, `POST /v2`, `POST /v2/analyze`, and
+  `POST /dictate`. Omission uses
   `server.request_timeout_seconds`; a supplied value must be in the inclusive
   range `1..server.max_request_timeout_seconds`.
 - The effective request budget begins at authenticated ingress before body
@@ -226,9 +248,10 @@ Other incomplete reasons are canonical `502` upstream failures. Usage objects
 observed while polling one response id are cumulative snapshots, so the newest
 nonempty snapshot replaces earlier observations. Usage is summed across
 distinct missing-suffix attempts and completed-response synthesis requests.
-Callers use one normal `GET /`, `POST /`, or `POST /v2` request and receive a
-complete formatted answer or a non-2xx response; there is no streaming,
-client-side polling, durable provider-job queue, or later resume contract.
+Ordinary text callers use one normal `GET /`, `POST /`, or `POST /v2` request
+and receive a complete formatted answer or a non-2xx response; there is no
+streaming, client-side polling, durable provider-job queue, or later resume
+contract.
 
 One completion coordinator owns output-budget recovery for all transports.
 Adapters normalize only their exact recoverable signal: OpenAI
@@ -254,13 +277,19 @@ managed event, while successive OpenAI snapshots for one response id replace
 one another. A recovered request records one success and no failure; a request
 deadline records one `504` with all usage observed before the deadline.
 
-Bundled clients intentionally expose only the canonical `POST /v2` text
-contract. The installable Go CLI maps prompt flags or stdin into v2 `system` and
-`user` messages, while the reusable Go and Python packages expose only
-messages-request constructors and `PostMessages`/`post_messages` send methods.
-Their optional `reasoning_effort` input serializes the same canonical field;
-the clients reject only blank local input and leave exact model-capability
-validation to the proxy edge.
+Bundled text clients expose the canonical `POST /v2` contract. The installable
+Go CLI maps prompt flags or stdin into v2 `system` and `user` messages, while
+the reusable Go and Python packages expose messages-request constructors and
+`PostMessages`/`post_messages` send methods. Their optional `reasoning_effort`
+input serializes the same canonical field; the clients reject only blank local
+input and leave exact model-capability validation to the proxy edge.
+
+The reusable Go package additionally exposes the closed `POST /v2/analyze`
+contract through typed text/image/audio constructors, a mandatory named strict
+JSON Schema, `NewAnalyzerRequest`, and `PostAnalyzer`. It computes binary
+digests locally, requires explicit per-request model selection, and returns the
+proxy request id with the completed JSON text. The Go CLI and Python package do
+not expose analyzer convenience APIs.
 Their optional request-timeout input serializes
 `X-LLM-Proxy-Request-Timeout-Seconds` on each messages request. The Go CLI uses
 `--request-timeout-seconds`; the Go and Python packages expose
@@ -514,7 +543,11 @@ that response or structured provider-failure logs.
 - OpenAI-compatible chat providers receive validated and sorted `messages[]` as provider-supported `role` and `content` items.
 - OpenAI Responses payload shape comes from the selected configured model's stable `request_profile`; model-specific web-search support comes from the selected model catalog entry. OpenAI Responses text calls run in background mode with stored responses so long provider work can be polled by llm-proxy while the caller waits on one REST request.
 - Gemini receives user messages as native `contents`, assistant messages as `model` contents, and system messages as `systemInstruction`.
-- OpenAI Responses receives single-prompt requests unchanged and multi-message requests as a deterministic role-labelled transcript.
+- OpenAI Responses receives ordinary single-prompt requests unchanged and
+  ordinary multi-message requests as a deterministic role-labelled transcript.
+  Analyzer requests instead preserve their ordered message and content-part
+  arrays, translate exact image bytes to data URLs only inside the provider
+  adapter, and set `text.format` to the caller's mandatory strict JSON Schema.
 - Dictation routing reuses the multipart transcription adapter with provider-specific URLs. OpenAI, SiliconFlow, and Zhipu send a multipart `model` field; Grok/xAI uses xAI STT and omits the multipart `model` field. Only providers that support `/dictate` expose transcription URL config fields.
 - Response formatting keeps existing text/XML/CSV bodies and existing JSON `request`, `response`, and normalized `usage` fields. JSON responses also include OpenRouter-style `object`, `model`, and `choices[].message.content` metadata, plus caller-visible request `messages` with provided `order` values. Server-injected tenant default system prompts are sent upstream but not echoed in response metadata.
 
@@ -528,6 +561,11 @@ Black-box router tests cover:
   assembly, aggregated usage, and one successful managed event.
 - OpenAI polling only for documented pending states, with missing and unknown
   states rejected without another provider call.
+- Analyzer exact ordered image and strict-schema translation through the public
+  `/v2/analyze` route, including proxy request identity on success.
+- Analyzer validation, hash mismatch, audio, and unsupported-route rejection
+  before provider work, plus strict completion, polling, malformed response,
+  terminal failure, and cancellation coverage.
 - Every configured provider through its public text route, proving the same
   shared continuation transcript, completion order, suffix assembly, and usage
   aggregation for Chat Completions, Gemini, Anthropic, and OpenAI.
