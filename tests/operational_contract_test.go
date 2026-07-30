@@ -22,6 +22,7 @@ const (
 	operationalScriptsDirectory                     = "scripts"
 	operationalReleaseToolsRelative                 = "tools/gitrelease"
 	operationalHelpTimeout                          = 5 * time.Second
+	operationalOrchestrationTimeout                 = 30 * time.Second
 	operationalHelpWaitDelay                        = time.Second
 	operationalScopedEnvironmentMaximumAWKProcesses = 7
 	constrainedPipeHelpCommand                      = `ulimit -p 1 2>/dev/null || true
@@ -287,13 +288,13 @@ exec "${REAL_AWK_PATH:?}" "$@"
 	if startError := command.Start(); startError != nil {
 		testingInstance.Fatalf("start make up: %v", startError)
 	}
-	waitForOperationalFile(testingInstance, curlReadyPath)
-	waitForOperationalOutput(testingInstance, &output, "LLM Proxy local orchestration is ready.")
-	waitForOperationalFile(testingInstance, composePIDPath)
+	waitForOperationalFile(testingInstance, curlReadyPath, operationalOrchestrationTimeout)
+	waitForOperationalOutput(testingInstance, &output, "LLM Proxy local orchestration is ready.", operationalOrchestrationTimeout)
+	waitForOperationalFile(testingInstance, composePIDPath, operationalOrchestrationTimeout)
 	if signalError := syscall.Kill(-command.Process.Pid, syscall.SIGINT); signalError != nil {
 		testingInstance.Fatalf("interrupt make up: %v", signalError)
 	}
-	waitForOperationalCommand(testingInstance, command)
+	waitForOperationalCommand(testingInstance, command, operationalOrchestrationTimeout)
 	assertOperationalProxyChildStopped(testingInstance, composePIDPath)
 
 	composeArguments, readComposeArgumentsError := os.ReadFile(composeArgumentsPath)
@@ -574,9 +575,9 @@ func (output *synchronizedOperationalOutput) String() string {
 	return output.buffer.String()
 }
 
-func waitForOperationalOutput(testingInstance *testing.T, output *synchronizedOperationalOutput, expectedFragment string) {
+func waitForOperationalOutput(testingInstance *testing.T, output *synchronizedOperationalOutput, expectedFragment string, timeout time.Duration) {
 	testingInstance.Helper()
-	deadline := time.Now().Add(operationalHelpTimeout)
+	deadline := time.Now().Add(timeout)
 	for {
 		if strings.Contains(output.String(), expectedFragment) {
 			return
@@ -840,14 +841,22 @@ exit 1
 	}
 }
 
-func TestOperationalMakeDeployDelegatesWithoutResourceArguments(testingInstance *testing.T) {
+func TestOperationalMakeDeployRunsRepositoryOwnedAnsible(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	toolDirectory := testingInstance.TempDir()
 	capturePath := filepath.Join(testingInstance.TempDir(), "deploy-capture")
 	writeOperationalFile(
 		testingInstance,
-		filepath.Join(toolDirectory, "mprlab-deploy"),
-		"#!/usr/bin/env bash\nset -euo pipefail\n[[ $# -eq 0 ]]\nprintf '%s\\t%s\\n' \"$PWD\" \"$#\" >>\"${DEPLOY_CAPTURE}\"\n",
+		filepath.Join(toolDirectory, "uv"),
+		`#!/usr/bin/env bash
+set -euo pipefail
+[[ "${MPRLAB_DEPLOY_MODE}" == "deploy" ]]
+[[ "${ANSIBLE_CONFIG}" == "${PWD}/.mprlab/deploy/ansible/ansible.cfg" ]]
+[[ "$*" == *"tool run --from ansible-core==2.19.8 ansible-playbook"* ]]
+[[ "$*" == *"--ask-become-pass"* ]]
+[[ "$*" == *"${PWD}/.mprlab/deploy/ansible/playbooks/deploy.yml"* ]]
+printf '%s\t%s\n' "${PWD}" "$*" >>"${DEPLOY_CAPTURE}"
+`,
 		0o755,
 	)
 	environment := append(
@@ -869,11 +878,23 @@ func TestOperationalMakeDeployDelegatesWithoutResourceArguments(testingInstance 
 	}
 	captureBytes, readError := os.ReadFile(capturePath)
 	if readError != nil {
-		testingInstance.Fatalf("read deploy delegation capture: %v", readError)
+		testingInstance.Fatalf("read repository-owned deploy capture: %v", readError)
 	}
-	expected := repositoryRoot + "\t0\n" + repositoryRoot + "\t0\n"
-	if string(captureBytes) != expected {
-		testingInstance.Fatalf("unexpected deploy delegation: %s", captureBytes)
+	lines := strings.Split(strings.TrimSpace(string(captureBytes)), "\n")
+	if len(lines) != 2 || lines[0] != lines[1] {
+		testingInstance.Fatalf("deploy retries used different commands: %s", captureBytes)
+	}
+	if !strings.HasPrefix(lines[0], repositoryRoot+"\t") {
+		testingInstance.Fatalf("deploy did not run from the current repository: %s", captureBytes)
+	}
+	for _, forbiddenFragment := range []string{
+		"mprlab-deploy",
+		"/unrelated/checkout",
+		"ignored",
+	} {
+		if strings.Contains(string(captureBytes), forbiddenFragment) {
+			testingInstance.Fatalf("deploy consumed forbidden external input %q: %s", forbiddenFragment, captureBytes)
+		}
 	}
 }
 
@@ -1254,7 +1275,7 @@ func TestOperationalLiveHarnessReapsOwnedProxyChildAfterTermination(testingInsta
 	if startError := command.Start(); startError != nil {
 		testingInstance.Fatalf("start live harness: %v", startError)
 	}
-	waitForOperationalFile(testingInstance, preflightBlockPath)
+	waitForOperationalFile(testingInstance, preflightBlockPath, operationalHelpTimeout)
 	if signalError := command.Process.Signal(syscall.SIGTERM); signalError != nil {
 		testingInstance.Fatalf("terminate live harness: %v", signalError)
 	}
@@ -1418,9 +1439,9 @@ func operationalLoopbackPort(testingInstance *testing.T) int {
 	return reservedAddress.Port
 }
 
-func waitForOperationalFile(testingInstance *testing.T, path string) {
+func waitForOperationalFile(testingInstance *testing.T, path string, timeout time.Duration) {
 	testingInstance.Helper()
-	deadline := time.Now().Add(operationalHelpTimeout)
+	deadline := time.Now().Add(timeout)
 	for {
 		if _, statError := os.Stat(path); statError == nil {
 			return
@@ -1432,7 +1453,7 @@ func waitForOperationalFile(testingInstance *testing.T, path string) {
 	}
 }
 
-func waitForOperationalCommand(testingInstance *testing.T, command *exec.Cmd) {
+func waitForOperationalCommand(testingInstance *testing.T, command *exec.Cmd, timeout time.Duration) {
 	testingInstance.Helper()
 	completed := make(chan error, 1)
 	go func() {
@@ -1440,7 +1461,7 @@ func waitForOperationalCommand(testingInstance *testing.T, command *exec.Cmd) {
 	}()
 	select {
 	case <-completed:
-	case <-time.After(operationalHelpTimeout):
+	case <-time.After(timeout):
 		_ = syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
 		<-completed
 		testingInstance.Fatal("make up did not stop after interruption")

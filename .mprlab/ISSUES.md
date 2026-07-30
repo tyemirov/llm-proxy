@@ -37,6 +37,77 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B096] (P0) Make deployment self-contained in the application repository.
+  Goal:
+  Preserve the exact `make release`, `make publish`, `make deploy` operator
+  surface without requiring an installed MPRLab controller, an
+  `mprlab-gateway` source checkout, or any sibling repository.
+
+  Evidence:
+  - The merged B095 implementation reduced `make deploy` to
+    `mprlab-deploy`, and a clean operator invocation failed with
+    `make: mprlab-deploy: No such file or directory`.
+  - Installing a content-addressed executable under `~/.local/bin` repaired
+    that machine but made application deployment depend on hidden,
+    machine-global MPRLab state.
+  - The release gate also intermittently failed its asynchronous `make up`
+    orchestration fixture because the test reused a five-second help-command
+    deadline for complete Compose startup and shutdown.
+  - A fresh CI run rewrote tracked generated Python `*.egg-info` metadata from
+    version `0.1.0` to the canonical project version `0.2.0`, dirtying the
+    worktree that release admission requires to remain clean.
+
+  Requirements:
+  - Execute only tracked files from this repository plus ordinary documented
+    tools such as Git, Docker, Python/uv, Ansible, SSH, and GitHub CLI.
+  - Keep deployment playbooks, tasks, inventory documentation, and resource
+    declarations under `.mprlab/deploy`; do not locate, download, install, or
+    execute an MPRLab binary, gateway checkout, bundle, or sibling repository.
+  - Preserve exact sealed-release and published-artifact admission before any
+    remote mutation.
+  - Keep retries convergent and conflicts fail-closed.
+  - Give asynchronous orchestration acceptance its own bounded timeout so
+    machine load cannot make an unchanged release nondeterministic.
+  - Keep generated Python build metadata untracked.
+  - Keep production deployment user-owned.
+
+  Validation:
+  - Add black-box Make scenarios proving dry-run and deployment delegation use
+    only the current repository's tracked Ansible entrypoint.
+  - Prove an absent `mprlab-deploy`, absent gateway checkout, and malformed
+    sibling repository cannot affect the transaction.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+
+  Resolution:
+  - `make deploy`, `make deploy-dry-run`, and `make deploy-syntax` now execute
+    the complete tracked `.mprlab/deploy/ansible` transaction through pinned
+    `ansible-core`; no MPRLab-specific executable, controller bundle, gateway
+    checkout, repository-parent selector, or sibling repository is resolved.
+  - Admission proves clean `master`, the exact sealed release commit and
+    annotated tag, the published branch, equal version/`latest` image digests,
+    the published Pages artifact, and regular mode-`0600` private inputs before
+    remote mutation.
+  - The convergent transaction replaces only llm-proxy's TAuth tenant and
+    owned origins, validates the complete Caddy route set before activation,
+    pulls only a missing immutable image, converges one Compose service,
+    verifies both declared public boundaries, and activates Pages last.
+  - Black-box coverage runs the real playbook twice against an isolated target,
+    preserves unrelated TAuth/Caddy state, proves one image pull/restart/reload,
+    and remains successful with a malformed sibling plus obsolete external
+    selector variables.
+  - The local-orchestration acceptance test now has its own bounded 30-second
+    deadline, and generated Python `*.egg-info` files are no longer tracked, so
+    ordinary CI load and package metadata generation do not dirty or randomly
+    fail the release gate.
+  - The ignored operator inventory was migrated in place at mode `0600`; the
+    rejected orphaned controller cache was moved to Trash. No production
+    deployment command was run.
+  - The required final `timeout -k 350s -s SIGKILL 350s make ci` passes with
+    exact 100% Go statement coverage, 33 Python tests, 75 browser tests, one
+    TAuth browser black-box test, 57 release/deployment tests, and the
+    live-provider harness preflight.
+
 - [x] [B095] (P0) Keep deployment declarations app-owned and execution platform-owned.
   Goal:
   Preserve the standard `make release`, `make publish`, `make deploy` lifecycle

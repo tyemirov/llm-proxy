@@ -4,7 +4,6 @@ mprlab_resources:
   repo:
     id: llm-proxy
     directory: llm-proxy
-    dispatch_target: llm-proxy
   resources:
     - type: make_workflow
       name: llm-proxy
@@ -14,6 +13,9 @@ mprlab_resources:
         deploy: deploy
     - type: tauth_tenant
       name: llm-proxy-authentication
+      config_destination: configs/config.tauth.yml
+      environment_destination: configs/.env.tauth
+      container_name: tauth-api
       tenant:
         id: llm-proxy
         display_name: LLM Proxy
@@ -30,30 +32,54 @@ mprlab_resources:
         allow_insecure_http: "${TAUTH_ALLOW_INSECURE_HTTP}"
     - type: container_service
       name: llm-proxy
-      host_group: gateway
       image: ghcr.io/tyemirov/llm-proxy:latest
       ports:
         - container_port: 8080
-      compose_file: docker-compose.yml
+      container_name: llm-proxy
+      compose_template: .mprlab/deploy/ansible/templates/docker-compose.yml.j2
       compose_project: mprlab-nginx-gateway
+      remote_directory: apps/llm-proxy
+      network: mprlab-nginx-gateway_default
+      data_volume: mprlab-nginx-gateway_llm-proxy-data
       runtime_assets:
         - path: .mprlab/deploy/.env
           example_path: configs/.env.sample
-          destination: configs/.env.llm-proxy
+          destination: runtime/.env
           mode: "0600"
         - path: configs/config.yml
-          destination: configs/config.llm-proxy.yml
+          destination: runtime/config.yml
     - type: caddy_route
       name: llm-proxy-api
       host: llm-proxy-api.mprlab.com
       upstream: llm-proxy:8080
-      snippet: llm-proxy.caddy
+      config_template: .mprlab/deploy/ansible/templates/caddy-route.caddy.j2
+      config_destination: caddy/sites/llm-proxy.caddy
+      container_name: caddy2
+      container_config_path: /etc/caddy/Caddyfile
+      trusted_networks:
+        - 172.19.0.0/16
+        - 127.0.0.1/32
+        - 192.168.1.158/32
+      rate_limit:
+        zone: llm
+        events: 10
+        window: 10s
+      transport:
+        dial_timeout: 10s
+        response_header_timeout: 3660s
+        read_timeout: 3660s
     - type: health_check
       name: llm-proxy-api
       path: /
       url: https://llm-proxy-api.mprlab.com/
       status_codes:
         - 403
+    - type: health_check
+      name: llm-proxy-management-config
+      path: /config-ui.yaml
+      url: https://llm-proxy-api.mprlab.com/config-ui.yaml
+      status_codes:
+        - 200
     - type: github_pages
       name: llm-proxy
       target: pages-deploy
