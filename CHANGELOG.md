@@ -16,6 +16,11 @@ All notable changes to this project will be documented in this file.
 - Give the asynchronous local orchestration contract its own bounded startup/shutdown timeout so `make release` does not fail under ordinary CI load.
 - Remove tracked generated Python `*.egg-info` metadata so a clean CI/release gate remains clean.
 
+## [v0.2.54] - 2026-07-29
+
+- Merge pull request #237 from tyemirov/bugfix/B096-self-contained-deploy
+- fix(deploy): make app deployment self-contained
+
 ## [v0.2.53] - 2026-07-29
 
 - Merge pull request #236 from tyemirov/bugfix/B095-app-owned-deploy-bundle
