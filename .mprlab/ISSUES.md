@@ -12,19 +12,22 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 Resolved history: `.mprlab/ISSUES-ARCHIVE.md`; the complete original issue
 bodies, resolution notes, and validation records remain in `v0.2.43`.
 
-Triage, 2026-07-25: B069, F014, I029, and I031 are resolved. The selected
+Triage, 2026-07-30: B069, F014, I029, and I031 are resolved. The selected
 one-issue-at-a-time P1 execution tranche is complete. I027 and P001 are
 independent B076 successors. I032 follows B076
 and I027 so its activity-breakdown presentation is added to the final
 Usage-scope dashboard rather than an obsolete global active-tenant layout. I033
-follows B076 and I029 so its bounded dashboard freshness contract uses the
-canonical account-wide and tenant-filtered operations and response headers. M019 is independently
-ready because M018 is complete. M013 then M012 resolve the product-context
-governance path. Planning proceeds P002 -> P003 -> P004 -> P005, with M020
-already satisfied; recurring maintenance remains scheduled work.
-I036 is an independently ready P1 improvement that verifies every newly
-supplied provider credential before it can be persisted or become routing
-eligible.
+is retired before implementation: F017 replaces unattended Usage polling with
+MPR UI-owned inactivity warning and logout shared by llm-proxy and LoopAware.
+M019 is independently ready because M018 is complete. M013 then M012 resolve
+the product-context governance path. Planning proceeds P002 -> P003 -> P004 ->
+P005, with M020 already satisfied; recurring maintenance remains scheduled
+work.
+I036, I042, and I043 are resolved. I045 is the diagnostic prerequisite for
+B088 so long-request changes are grounded in correlated phase and provider
+progress evidence. I046 follows I045 and addresses the remaining cross-origin
+admission finding from the concurrency audit. B087 remains the production
+Default-tenant Gemini and Moonshot acceptance issue.
 I035 is an independent B076 successor that persists only the authenticated
 user's selected Usage interval across sessions.
 F016 is independently ready and adds the canonical v2 client contract for
@@ -555,28 +558,40 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for any code change.
 
-- [ ] [B088] (P1) Restore Default-tenant long completion routing for OpenAI, Anthropic, and Meta.
+- [ ] [B088] (P1) {I045} Restore Default-tenant long completion routing for OpenAI and Meta.
   Goal:
   Make the Default tenant complete the production live test's deterministic
-  large request through OpenAI, Anthropic, and Meta without a local provider
-  credential, fallback provider, or client-side polling path.
+  large request through OpenAI and Meta without a local provider credential,
+  fallback provider, or client-side polling path. Keep Anthropic's repaired
+  long-completion case as a required regression check.
 
   Evidence:
-  - The expanded `make live-test` run returned HTTP `200` for the three
-    providers' short echo requests using their saved Default-tenant models.
-  - The same run gave OpenAI's named background-polling case its full
-    900-second budget before a safe HTTP `504`; Anthropic and Meta long
-    completion cases each returned safe HTTP `502`.
+  - The initial expanded `make live-test` run returned HTTP `200` for all three
+    providers' short echo requests. OpenAI's background-polling case exhausted
+    its 900-second budget with a safe HTTP `504`; Anthropic and Meta long
+    completion cases returned safe HTTP `502`.
+  - After the shared continuation coordinator shipped in release `v0.2.48`,
+    Anthropic long completion returned HTTP `200` with 18,098 response bytes.
+    OpenAI still exhausted the full budget with HTTP `504`, while Meta moved
+    from the immediate `502` to a full-budget `504`. Anthropic is therefore no
+    longer an unresolved route, while OpenAI and Meta still need diagnosis.
   - The harness sent the same request larger than 16 KiB to all three cases,
     required normalized output for all 120 fictional portfolio records before
     the final marker, printed no response body or credential, and continued
     through the complete eight-case matrix.
+  - B089 supplies a safe proxy request id and provider failure metadata, but
+    the live harness does not print the response request id and the proxy has
+    no correlated phase or provider-progress timeline. I045 owns that
+    prerequisite observability.
 
   Requirements:
-  - Diagnose and restore the exact production route for each failed long
-    completion through the saved Default-tenant provider configuration. Retain
-    OpenAI's server-owned Responses polling and the canonical blocking request
-    contract for Anthropic and Meta.
+  - Implement I045 first, then diagnose and restore the exact OpenAI and Meta
+    production routes through the saved Default-tenant provider configuration.
+    Retain OpenAI's server-owned Responses polling and Meta's canonical
+    blocking request contract.
+  - Keep the repaired Anthropic long-completion case in the production matrix
+    and treat any regression from HTTP `200` as a new failure of this issue's
+    acceptance gate.
   - Do not weaken, skip, shorten, special-case, retry, or replace the
     large-completion live-test cases to conceal a provider, continuation, or
     request-deadline failure.
@@ -586,8 +601,9 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
   Validation:
   - Run `make live-test` with only the Default-tenant client secret and prove
-    the named OpenAI background-polling, Anthropic long-completion, and Meta
-    long-completion cases return HTTP `200` with their final marker.
+    the named OpenAI background-polling and Meta long-completion cases return
+    HTTP `200` with their final marker while Anthropic long completion remains
+    HTTP `200`.
   - For any source change, run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
@@ -1841,6 +1857,166 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     and frontend tests, the TAuth black-box test, release tests, and the live
     provider harness preflight.
 
+- [ ] [I045] (P1) {B089,I042,I043} Correlate proxy phase latency and provider progress.
+  Goal:
+  Make a slow or timed-out request diagnosable without exposing request or
+  response content. Distinguish authentication, proxy admission, rate-limit
+  waiting, provider work, polling, continuation, formatting, and post-response
+  usage enqueue time under the same proxy-owned request id.
+
+  Evidence:
+  - The request logger records only total response latency. Managed usage stores
+    only the same end-to-end latency, so neither surface identifies which
+    proxy-owned phase consumed a request's budget.
+  - The shared upstream limiter emits origin-level rate-limit delay logs, but
+    those events are not a complete request timeline and do not expose ordinary
+    admission wait or aggregate provider HTTP time.
+  - OpenAI's background loop polls until a terminal state without emitting a
+    content-free poll count, provider state, elapsed time, or output-size
+    progress event. The provider-neutral continuation coordinator likewise
+    accumulates output across attempts without attempt or accumulated-byte
+    telemetry.
+  - B088 has reproducible full-budget OpenAI and Meta failures. The production
+    live harness reports only case, provider, HTTP status, and response size,
+    even though B089 already returns a safe request id that could correlate the
+    failed case with structured server evidence.
+
+  Requirements:
+  - Define one centralized structured telemetry contract keyed by the existing
+    proxy request id. A terminal request summary must carry endpoint, canonical
+    provider and model, effective request budget, total latency, and explicit
+    millisecond totals for authentication, upstream admission, upstream
+    rate-limit waiting, provider HTTP work, provider poll waiting,
+    continuation waiting, response formatting, and managed-usage enqueue.
+    Phases not entered use zero; omit no phase and do not infer one phase by
+    subtracting unrelated totals.
+  - Emit content-free provider progress for every OpenAI create/poll lifecycle
+    and every provider-neutral continuation attempt. Include attempt or poll
+    count, normalized provider state or completion signal, elapsed
+    milliseconds, current output bytes, and accumulated output bytes. Do not
+    log upstream response ids, prompts, messages, generated text, provider
+    bodies, headers beyond already-sanitized metadata, credentials, or tenant
+    secrets.
+  - Use monotonic in-process timing and one request-scoped accumulator rather
+    than reconstructing phases from independent log timestamps. Preserve the
+    existing request budget and cancellation ownership; telemetry must not add
+    retries, polling, goroutines, blocking persistence, or timeout inflation.
+  - Keep structured logs as the observability boundary. Do not add phase fields
+    to managed usage persistence, public response bodies, OpenAPI schemas, or
+    bundled client models. The existing `X-LLM-Proxy-Request-ID` remains the
+    sole public correlation value.
+  - Make `make live-test` print the validated proxy request id from the response
+    header on every passed or failed HTTP case while continuing to suppress the
+    tenant secret and response body. A transport failure with no response
+    reports no invented id.
+  - Correct the README command summary to state that the production target runs
+    all five echo cases plus OpenAI, Anthropic, and Meta long-completion cases.
+    Document the phase and progress field meanings in the canonical provider
+    routing guidance without claiming billing accuracy or provider-side
+    execution time outside observed HTTP boundaries.
+
+  Deliverables:
+  - One request-scoped phase accumulator, centralized safe log event and field
+    constants, OpenAI polling and shared-continuation progress events, and a
+    terminal phase summary for every accepted proxy request.
+  - Request-id correlation in the production live harness plus updated README
+    and provider-routing documentation.
+  - No persistent schema change, public payload expansion, upstream identifier
+    disclosure, or content-bearing telemetry.
+
+  Validation:
+  - Drive real public proxy handlers against controlled upstream servers and
+    assert exact phase summaries for success, queue wait, configured rate-limit
+    delay, provider failure, caller cancellation, and proxy-budget expiry.
+  - Cover OpenAI `queued` and `in_progress` polling through completion and
+    provider-neutral output-limit continuation through multiple attempts.
+    Prove counts, normalized states, elapsed values, current bytes, accumulated
+    bytes, and terminal totals belong to the same request id.
+  - Exercise the production live-test script through its fake-curl boundary and
+    prove it reports validated response request ids without printing secrets or
+    bodies, and reports no fabricated id for a transport failure.
+  - Assert that prompts, messages, generated output, upstream response ids,
+    provider bodies, credentials, cookies, and tenant secrets are absent from
+    every new event and command output.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
+    the final run after the last code edit.
+
+- [ ] [I046] (P1) {I045} Make upstream admission fair across provider origins.
+  Goal:
+  Keep upstream work globally bounded while preventing one slow or throttled
+  origin from consuming the active and queued capacity needed by unrelated
+  origins.
+
+  Evidence:
+  - `limitedHTTPDoer` owns one global active channel sized by `server.workers`
+    and one global admission channel sized by
+    `server.workers + server.queue_size`. With the checked-in `4` and `32`
+    values, the fifth simultaneous upstream operation waits even when it targets
+    an unrelated origin, and the thirty-seventh is rejected.
+  - A call waiting for its origin's rolling rate-limit window correctly
+    releases its active worker, but retains its global admission token. A
+    throttled origin can therefore fill all 36 admissions and make another
+    origin receive `request queue full` while active workers are idle.
+  - I042 and I043 removed managed-database authentication and usage-write
+    serialization. They do not alter this shared upstream active/admission
+    contract.
+
+  Requirements:
+  - Replace the global-only worker and admission channels with one canonical
+    origin-aware capacity contract. Key ownership by the exact normalized
+    upstream origin used by the existing rate limiter, so provider transports
+    that intentionally share an origin also share its capacity.
+  - Keep explicit positive global ceilings for active and admitted work and
+    explicit positive per-origin active and queued limits. Validate the complete
+    contract at startup, reject duplicate, missing, unknown, or contradictory
+    origin rules, and remove the obsolete global-only configuration in the same
+    forward-only change rather than retaining aliases or dual scheduling paths.
+  - Schedule ready work fairly across origins. Continuous traffic from one
+    origin must not starve a queued operation from another origin when capacity
+    becomes available, and one origin may not consume another origin's bounded
+    queue allocation.
+  - A call delayed by an origin rate limit may retain only that origin's bounded
+    admission. It must not occupy active global capacity or unrelated-origin
+    admission while sleeping. Cancellation or deadline expiry must remove the
+    waiter and release every owned capacity token exactly once.
+  - Preserve the current response-body ownership rule: an active operation
+    retains its worker until the upstream body is closed. Keep all queues and
+    schedulers bounded, use no per-waiter background goroutine, and preserve the
+    public overload and request-timeout mappings.
+  - Correlate admission decisions, waits, and rejections through I045's safe
+    request telemetry. Update runtime configuration, README, provider-routing
+    guidance, tracked deployment inputs, and configuration examples as one
+    current contract.
+
+  Deliverables:
+  - One bounded origin-aware scheduler with explicit global and per-origin
+    capacity ownership, fair ready-origin selection, cancellation-safe token
+    release, and no legacy global-only path.
+  - Strict configuration parsing and documentation for every configured
+    upstream origin.
+  - Deterministic public-boundary concurrency coverage and a Makefile-owned
+    race-detector gate for the concurrency path.
+
+  Validation:
+  - Use controlled upstream servers on at least two origins. Saturate one
+    origin with active, queued, and rate-limited calls and prove an admissible
+    request to the other origin begins while its own and global capacity are
+    available.
+  - Under continuous contention, prove both origins make bounded progress,
+    per-origin and global maxima are never exceeded, queue-full rejection is
+    isolated to the exhausted capacity, and response-body close releases the
+    exact active slot.
+  - Cover cancellation and request-budget expiry before admission, during
+    ordinary worker wait, during rate-limit wait, and after upstream response
+    acquisition without leaked slots, duplicate release, blocked shutdown, or
+    goroutine growth.
+  - Add a repository Makefile target that runs the public concurrency coverage
+    with Go's race detector and include it in `make ci`.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
+    the final run after the last code edit.
+
 - [ ] [I037] (P1) Model provider wire contracts separately from execution lifecycles.
   Goal:
   Let each configured text model use its provider's exact current request shape
@@ -2376,123 +2552,23 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     disabled states, focus behavior, and autosave-on-field-exit semantics.
   - All 67 rendered-browser scenarios and the real TAuth management flow pass.
 
-- [ ] [I033] (P2) {B076,I029} Keep the visible Usage Overview automatically fresh.
-  Goal:
-  Let a user returning to an unattended account-wide or tenant-filtered Usage
-  Overview see current activity without having to discover and press Refresh.
-  Provide a bounded, observable near-real-time freshness contract rather than
-  claiming a push-based real-time feed.
+- [x] [I033] (P2) {B076,I029} Keep the visible Usage Overview automatically fresh.
+  Decision 2026-07-30:
+  Retired before implementation. F017 addresses the unattended stale-session
+  symptom through shared MPR UI inactivity warning and logout. Keep the
+  explicit Refresh action for active authenticated sessions; do not add the
+  proposed polling scheduler, last-updated state, or visibility-triggered Usage
+  requests. Record a new issue with fresh evidence if foreground Usage
+  freshness remains necessary after F017 is deployed.
 
-  Evidence:
-  - The current dashboard loads usage at authenticated-workspace startup and on
-    interval selection or explicit Refresh only. It has no usage timer or page
-    visibility lifecycle, so an open page can display yesterday's snapshot
-    indefinitely.
-  - The current refresh path clears the rendered summary after a request error.
-    That is safe for a newly selected interval, but an automatic refresh would
-    turn a true prior snapshot into misleading zeroes after a transient failure.
-  - The usage client still uses the browser's default cache behavior. B076
-    established `Cache-Control: no-store` on both the account-wide and
-    tenant-filtered summary operations, but foreground revalidation also needs
-    an explicit browser request-cache contract.
-  - B076 separates the `Usage tenant` scope from the `Settings tenant`; I029
-    makes both usage scopes' headers and response behavior one canonical HTTP
-    contract.
-
-  Requirements:
-  - Implement only after B076 and I029, against the canonical account-wide and
-    tenant-filtered usage operations. Do not add a second polling endpoint,
-    introduce WebSocket/SSE/service-worker push infrastructure, or add a
-    browser-stored freshness preference. This issue is foreground revalidation
-    of the existing aggregate snapshot, not a streaming product.
-  - Define one centralized `USAGE_FRESHNESS_MILLISECONDS` budget of 60 seconds.
-    It is a user-facing maximum ordinary age while the usage view is visible,
-    not an arbitrary retry or transport timeout. The authenticated selected
-    Usage scope revalidates no more often than that budget, and a return from a
-    hidden page revalidates immediately when the accepted snapshot is older
-    than the same budget or absent. Hidden tabs, the admin dashboard, and
-    signed-out/error workspaces perform no periodic usage request.
-  - Maintain exactly one scheduled usage revalidation and at most one in-flight
-    usage request for the selected Usage scope and interval. Schedule the next foreground
-    revalidation only after the current request settles; do not use overlapping
-    interval callbacks or a hot retry loop. Cancel/invalidate scheduled work on
-    logout, authentication reset, Usage tenant or interval change,
-    dashboard-view change, and page teardown. Resume only after the final Usage context is
-    established.
-  - Reuse B076's Usage scope, interval, and request-identity guards. An
-    automatic or visibility-triggered response can update only the still-selected
-    Usage tenant scope and interval; it must not overwrite a newer manual
-    refresh, Usage tenant selection, interval selection, authentication reset,
-    Settings tenant change, or local I032 breakdown presentation choice. A
-    manual Refresh may request immediate revalidation but must join the same
-    single-request lifecycle and reschedule freshness.
-  - Track and visibly expose the receipt time of the last accepted usage
-    snapshot using centralized copy and semantic time markup. Do not announce a
-    success toast every minute. Distinguish a current snapshot, an in-progress
-    refresh, and a stale snapshot accessibly, without presenting browser-clock
-    metadata as server event time.
-  - Preserve a successfully rendered snapshot when a same-scope/same-interval
-    manual, automatic, or return-to-visible refresh fails. Mark it stale and
-    provide a clear retry path; do not replace its counts, charts, breakdowns,
-    or I032 view with empty/zero data. Keep the current clear-before-load rule
-    for a changed Usage tenant or interval so one scope's data can never appear
-    as another scope's. An initial load with no prior accepted snapshot retains
-    the explicit empty/error state rather than fabricating a last-updated time.
-  - Preserve `Cache-Control: no-store` on every canonical account-wide and
-    tenant-filtered usage response and make the browser usage fetch explicitly
-    uncacheable with `cache: "no-store"` so revalidation cannot be satisfied by
-    a stale private cache. Do not change the JSON payload merely to transport
-    client receipt time.
-  - Keep the refresh scope to aggregate usage metadata already authorized for
-    the selected Usage scope. The `All tenants` scope may include only the
-    authenticated owner's tenants; an explicit tenant may include only that
-    tenant. Do not poll or reveal generated secrets, provider keys, prompts,
-    responses, transcripts, audio names, another owner's tenants, or aggregate
-    administrator facts. Continue to make `connected provider` state I027-owned
-    rather than inferring it from refreshed historical activity.
-  - Update README, CHANGELOG.md, `docs/implementation/provider-routing-plan.md`,
-    and the source in `scripts/generate_seo_resources.mjs`, then regenerate the
-    managed-tenant usage resource. Document the exact foreground/hidden behavior,
-    60-second freshness meaning, manual Refresh role, last-updated/stale signal,
-    and the fact that this is not a push, billing, provider-performance, or
-    exact-event-time guarantee. This repository has no PRD.md or
-    ARCHITECTURE.md; do not create partial placeholders for this behavior.
-
-  Deliverables:
-  - One typed usage-refresh reason/lifecycle contract, central freshness budget,
-    visibility-aware single scheduler, cache-safe usage client request, and
-    race-safe Usage-scope state integration.
-  - A compact accessible last-updated/loading/stale status and retry behavior
-    that preserves a valid current-context snapshot across refresh failures.
-  - Canonical no-store response-header documentation/conformance plus updated
-    repository and generated public documentation; no new streaming endpoint,
-    persistence schema, or client-library API.
-
-  Validation:
-  - Preserve real management-router and OpenAPI coverage proving both canonical
-    Usage scopes carry `Cache-Control: no-store` without changing their
-    aggregate JSON shape.
-  - Add Playwright scenarios with controlled time and page visibility for the
-    initial load, one-minute foreground revalidation, no hidden/admin polling,
-    stale-on-return immediate revalidation, one in-flight request, manual
-    Refresh coordination, timer cleanup on logout/Usage-tenant/interval/view
-    changes, and stale-response rejection across scope and interval races.
-  - Prove a failed refresh after a successful snapshot preserves its exact data
-    and marks it stale, while a successful later refresh updates counts and the
-    receipt timestamp; prove a new Usage scope/interval never retains prior data.
-    Cover keyboard/screen-reader status, narrow layouts, no browser storage,
-    no success-notice spam, and absence of sensitive values from DOM/network
-    payloads beyond the existing usage contract.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
-    the final run after the last code edit.
-
-- [ ] [I032] (P2) {B076,I027} Switch provider/model activity breakdowns between bar graphs and segmented disks.
+- [ ] [I032] (P2) {B076,I027} Add donut breakdowns and meaningful axes to Usage Overview charts.
   Goal:
   Let a signed-in user choose one clear presentation for both the selected
-  Usage scope's Provider usage and Model usage activity breakdowns, while
-  preserving the Usage tenant, interval, exact request counts, and the
-  distinction between historical activity and currently connected providers.
+  Usage scope's Provider usage and Model usage activity breakdowns, and make
+  the Requests and Tokens time-series charts explain their scales without
+  guesswork. Preserve the Usage tenant, interval, exact request and token
+  counts, and the distinction between historical activity and currently
+  connected providers.
 
   Evidence:
   - The current usage summary already returns deterministically ordered
@@ -2500,8 +2576,18 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     ranked horizontal bars scaled to the largest category, not shares of the
     breakdown total.
   - The summary has time buckets only for total requests and tokens. It has no
-    provider- or model-specific time series, so `Graph` must mean the ranked
-    horizontal-bar display rather than a new trend chart.
+    provider- or model-specific time series, so the breakdown's `Bar graph`
+    choice must mean the existing ranked horizontal-bar display rather than a
+    new trend chart.
+  - The current Requests and Tokens panels render only a bordered SVG and an
+    independently scaled polyline. They have no visible axes, ticks, time
+    labels, quantity labels, or numeric scale, so the curve alone cannot tell a
+    user when activity happened or whether a peak represents one request or
+    thousands.
+  - The canonical summary already supplies `interval`, `bucket_unit`, and each
+    ordered bucket's RFC3339 `start`, `data.requests`, and
+    `data.total_tokens`. Meaningful time and quantity axes require no new
+    management payload.
   - B076 establishes canonical account-wide and explicitly tenant-filtered
     Usage scopes. I027 then establishes the final dashboard layout and explicitly
     reserves provider/model breakdowns for historical selected-period activity,
@@ -2515,38 +2601,59 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     If final implementation exposes a genuinely missing data field, file and
     order a separate contract issue rather than broadening this UI issue.
   - Add one shared, visible, keyboard-operable `Breakdown view` control for
-    both activity panels. It has exactly `Graph` and `Segmented disk` choices;
-    `Graph` is the default and is the existing ranked horizontal-bar graph.
-    Switching a mode changes both panels together so their distributions remain
-    directly comparable.
+    both activity panels. It has exactly `Bar graph` and `Donut chart` choices;
+    `Bar graph` is the default and is the existing ranked horizontal-bar
+    presentation. Switching a mode changes both panels together so their
+    distributions remain directly comparable.
   - Keep the choice local to the mounted authenticated dashboard. It survives
     interval selection, Refresh, and Usage tenant selection, but resets on
     authentication reset and a full page reload. A mode change is a
     pure presentation action: it must not fetch, mutate the selected interval
     or Usage tenant, or weaken B076's request-identity/stale-response rules.
-  - Build every disk from the same ordered `providers[].data.requests` or
-    `models[].data.requests` data that Graph renders. The percentage denominator
-    is the complete source breakdown total, never token counts or the largest
-    row. Preserve every source category exactly once: Graph always lists each
-    category; the disk may combine the ordered tail into a visibly labelled
-    `Other` segment only when a named, documented, geometry-derived disk-capacity
-    rule would otherwise make the compact panel unreadable. `Other` must expose
-    its exact aggregate count and deterministic share; it cannot discard or
-    relabel source data.
-  - Render the alternative as a dependency-free SVG segmented disk in the
-    existing compact dark dashboard style. Give each segment a deterministic
-    palette assignment from the canonical summary order, but never use color or
-    hover alone to communicate meaning. Show a visible semantic legend/list
-    with category name, request count, and deterministic percentage; rounded
-    legend shares must total 100 percent. Handle zero activity with the existing
-    empty state and one-category activity as one 100-percent segment without
-    invalid SVG geometry.
+  - Build every donut from the same ordered `providers[].data.requests` or
+    `models[].data.requests` data that Bar graph renders. The percentage
+    denominator is the complete source breakdown total, never token counts or
+    the largest row. Preserve every source category exactly once: Bar graph
+    always lists each category; the donut may combine the ordered tail into a
+    visibly labelled `Other` segment only when a named, documented,
+    geometry-derived donut-capacity rule would otherwise make the compact panel
+    unreadable. `Other` must expose its exact aggregate count and deterministic
+    share; it cannot discard or relabel source data.
+  - Render the alternative as a dependency-free SVG donut chart with an
+    unmistakable center cutout in the existing compact dark dashboard style.
+    Give each segment a deterministic palette assignment from the canonical
+    summary order, but never use color or hover alone to communicate meaning.
+    Show a visible semantic legend/list with category name, request count, and
+    deterministic percentage; rounded legend shares must total 100 percent.
+    Handle zero activity with the existing empty state and one-category
+    activity as one 100-percent segment without invalid SVG geometry.
+  - Treat the Requests and Tokens panels as time-series line charts distinct
+    from the breakdown presentation mode. Give each chart visible X and Y axis
+    lines, tick marks, tick values, and axis titles. The X-axis is `Time (UTC)`
+    and comes directly from ordered `buckets[].start`: show UTC hour labels for
+    the `1d` hourly buckets and UTC date labels for the `7d`, `30d`, and `all`
+    daily buckets. The Y-axis begins at zero and uses deterministic integer
+    ticks. Its title is `Requests per hour` or `Requests per day` for
+    `data.requests`, and `Tokens per hour` or `Tokens per day` for
+    `data.total_tokens`, according to `bucket_unit`. Never label the Tokens
+    chart as requests or imply that the two metrics share a numeric scale.
+  - Derive one typed, centralized chart-axis model from the accepted summary.
+    Select a bounded, deterministic subset of X ticks that includes the first
+    and last bucket when they are distinct, keeps labels legible at the current
+    width, and never changes the plotted bucket order or values. Use readable
+    locale-independent UTC labels and compact but unambiguous integer
+    formatting; expose the exact value when compact visible notation is used.
+    Preserve zero-valued buckets, do not smooth or interpolate the source
+    series, and handle a flat or all-zero metric without division-by-zero or a
+    misleading nonzero range.
   - Use centralized frontend copy and typed presentation data for the control,
-    mode names, legend, `Other`, and accessible SVG label. Preserve visible
-    focus and full keyboard operation (`aria-pressed` or an equivalent
-    single-choice control), and keep labels/counts/shares available to assistive
-    technology without a tooltip. Validate desktop and narrow layouts without
-    clipping, overlap, or horizontal overflow.
+    mode names, legend, `Other`, axis titles, tick labels, and accessible SVG
+    text. Preserve visible focus and full keyboard operation (`aria-pressed` or
+    an equivalent single-choice control), and keep breakdown
+    labels/counts/shares plus every time bucket's exact UTC start and metric
+    value available to assistive technology without hover or a tooltip.
+    Validate desktop and narrow layouts without clipping, tick-label overlap,
+    or horizontal overflow.
   - Keep the scope to the authenticated user's Usage Overview. I027's connected
     provider widgets remain a separate `has_key` projection; an inactive
     connected provider and historical activity for a disconnected provider must
@@ -2558,23 +2665,28 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     `scripts/generate_seo_resources.mjs` and regenerate the managed-tenant
     usage resource; do not hand-maintain a divergent generated page. State
     explicitly that this is a client-side view of existing aggregate request
-    data, not a billing, provider-performance, connected-provider, token-share,
-    or new management-API feature. This repository has no PRD.md or
-    ARCHITECTURE.md; do not create partial placeholders for this UI change.
+    data, define both line charts' UTC time and per-bucket quantity axes, and
+    state that the presentation is not a billing, provider-performance,
+    connected-provider, token-share, exact-event-time, or new management-API
+    feature. This repository has no PRD.md or ARCHITECTURE.md; do not create
+    partial placeholders for this UI change.
 
   Deliverables:
   - One typed local presentation-mode contract, pure provider/model distribution
-    transform, shared selector, semantic bar/disk renderings, responsive styles,
-    and centralized copy in Usage Overview.
-  - A legible, deterministic SVG disk/legend treatment that preserves all
+    transform, shared selector, semantic bar/donut renderings, responsive
+    styles, and centralized copy in Usage Overview.
+  - A legible, deterministic SVG donut/legend treatment that preserves all
     request counts and makes any `Other` aggregation explicit.
+  - One typed time-series axis/tick contract and two semantic SVG line charts
+    whose visible and accessible labels identify UTC time and requests or total
+    tokens per canonical hour/day bucket without changing the usage API.
   - Updated README, CHANGELOG.md, implementation documentation, generator-owned
     public usage resource, generated artifact, and browser coverage; no
     management API, Go client, Python client, or CLI wire-contract change.
 
   Validation:
   - Add Playwright coverage through the real management dashboard showing the
-    default Graph mode, keyboard selection of Segmented disk, simultaneous
+    default Bar graph mode, keyboard selection of Donut chart, simultaneous
     changes to provider and model panels, visible names/counts/shares, and no
     additional usage request when the presentation changes.
   - Exercise interval changes, Refresh, Usage tenant selection, loading/failure, and
@@ -2582,8 +2694,16 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     where specified and never presents a stale Usage scope or interval snapshot.
   - Cover zero, one, and many-category distributions, including deterministic
     `Other` aggregation, exact request-count conservation, share totals of 100
-    percent, Graph access to every source category, non-color-only semantics,
-    administrator isolation, and desktop/narrow viewport geometry.
+    percent, Bar graph access to every source category, non-color-only
+    semantics, administrator isolation, and desktop/narrow viewport geometry.
+  - Cover `1d`, `7d`, `30d`, and `all` summaries and prove visible X ticks map
+    to the supplied UTC bucket starts, Requests Y ticks and points map only to
+    `data.requests`, Tokens Y ticks and points map only to
+    `data.total_tokens`, both Y scales start at zero, and exact bucket values
+    remain programmatically available. Exercise empty, flat-zero, single-peak,
+    large-value, desktop, and narrow-viewport cases without clipped or
+    overlapping axes, invented data, tooltip-only meaning, or an additional
+    management request.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
@@ -3130,6 +3250,143 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run `go mod verify`, `npm audit --json`, the locked Python audit, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
 ## Features
+
+- [ ] [F017] (P1) Add shared MPR UI inactivity warning and automatic logout.
+  Goal:
+  Make an authenticated browser session warn and sign out explicitly after
+  bounded user inactivity, before its TAuth session can expire behind a stale
+  application snapshot. Implement the behavior once in MPR UI and consume that
+  same current contract from llm-proxy and LoopAware.
+
+  Evidence:
+  - An unattended llm-proxy Usage view can retain MPR UI's last authenticated
+    state and the last accepted workspace data after the server session has
+    expired. Returning to the tab therefore presents stale data; a full reload
+    then restores the authoritative signed-out first screen.
+  - llm-proxy currently refreshes Usage only during authenticated-workspace
+    startup, scope/interval changes, or explicit Refresh. It receives MPR UI
+    authentication events but has no independent authority to inspect,
+    refresh, or terminate the TAuth session.
+  - LoopAware already proves the desired user flow: its dashboard warns after
+    60 seconds of inactivity, signs out after 120 seconds, responds to activity,
+    renders theme-aware controls, and has browser coverage for warning,
+    dismissal, forced logout, persistence, layout, and logout failure.
+  - The LoopAware implementation is application-owned inline JavaScript and
+    Bootstrap markup. It directly calls TAuth logout/refresh endpoints, stores
+    per-user timeout preferences, uses high-frequency interval and pointer
+    activity, and has no cross-tab coordinator. Copying it into llm-proxy would
+    create a second browser authentication owner and violate the shared
+    MPR UI/TAuth integration contract.
+  - I033 proposed 60-second foreground Usage polling for the stale-snapshot
+    symptom. Product direction now selects explicit inactivity warning/logout
+    instead; active users retain the existing manual Refresh path.
+
+  Requirements:
+  - Implement the inactivity state machine, warning surface, and logout
+    transaction in MPR UI first. Publish it through the canonical literal
+    `mpr-ui@latest` asset and adopt that same implementation in llm-proxy and
+    LoopAware. Neither application may copy the manager, call TAuth
+    login/session/refresh/logout endpoints, or infer authentication from
+    management API failures.
+  - Extend the strict browser configuration contract with optional
+    `auth.autoLogout`. Presence enables the feature and requires exactly two
+    positive integer fields: `promptAfterSeconds` and `logoutAfterSeconds`,
+    with logout strictly later than the prompt. Reject missing, unknown,
+    non-integer, non-positive, or misordered values; do not default, clamp,
+    alias, or infer them.
+  - Configure both applications with the current LoopAware policy: warn at 60
+    seconds and attempt logout at 120 seconds. Keep that logout deadline below
+    every environment's TAuth session TTL. Any later policy change must update
+    the explicit runtime configuration rather than browser storage.
+  - Run the manager only while MPR UI is authoritatively authenticated. Start
+    one lifecycle after authentication, and remove every listener, scheduled
+    deadline, warning surface, coordinator, and pending callback on logout,
+    authentication reset, controller teardown, or configuration failure.
+  - Calculate prompt and logout behavior from one last-activity timestamp and
+    scheduled deadlines rather than a polling interval. Count only trusted,
+    intentional user input; throttle noisy input. Synthetic events,
+    timer ticks, network responses, focus, and visibility changes are not
+    activity. A return to visibility must immediately reconcile the existing
+    deadline so browser timer suspension cannot extend the policy.
+  - Coordinate activity, warning dismissal, and logout across same-origin tabs
+    for the configured TAuth tenant. Store or broadcast only the minimum
+    non-secret timing/coordination state; never include identity, tokens,
+    cookies, session material, profile data, or application payloads. One user
+    action in any participating tab renews the shared deadline, and a deadline
+    produces one deduplicated logout transaction and one terminal transition
+    across tabs.
+  - Render one MPR UI-owned, theme-aware, responsive, keyboard-operable warning
+    with a semantic countdown and the actions `Stay signed in` and `Sign out
+    now`. Move focus intentionally, restore it when the user stays signed in,
+    announce state changes without repeated timer spam, and honor reduced
+    motion. Applications may not supply Bootstrap-specific warning markup,
+    CSS, copy, or overlay behavior.
+  - Route manual and inactivity logout through one MPR UI operation. Deduplicate
+    concurrent requests. On successful TAuth logout, clear the restore hint and
+    profile, emit the canonical status and unauthenticated events with stable
+    reason `inactivity` for this path, remove protected UI, and redirect once
+    through the configured login path.
+  - If the logout request reports that the TAuth session is already absent,
+    reconcile through MPR UI's canonical session operation and complete the
+    unauthenticated transition only when that operation confirms it. For a
+    transport/server failure while the session remains authenticated or cannot
+    be authoritatively classified, keep the authenticated state, show a
+    persistent retry/error action, and do not redirect or emit a false
+    unauthenticated event.
+  - Project the exact configuration through llm-proxy's generated
+    `/config-ui.yaml`. Continue using the existing MPR UI unauthenticated event
+    path to cancel/invalidate pending workspace requests and clear tenants,
+    providers, generated credentials, usage state, notices, and protected DOM
+    content. Do not add a Usage polling scheduler, last-updated contract, or
+    application-owned session timer.
+  - Replace LoopAware's implementation forward-only: delete its inline session
+    timeout manager, warning/banner/overlay ownership, direct browser auth
+    requests, settings toggle and duration fields, per-email localStorage
+    preference and migration, test globals, and feature-specific CSS after the
+    shared MPR UI behavior is adopted. Do not retain a compatibility read or
+    dual path.
+  - Retire I033 before implementation and preserve explicit Refresh as the
+    active-session Usage freshness action. If foreground freshness remains a
+    demonstrated need after F017 is deployed, record it as a new problem with
+    fresh evidence rather than reviving the superseded polling specification.
+  - Update MPR UI integration/configuration documentation plus llm-proxy and
+    LoopAware authentication/user documentation. State the exact policy,
+    activity semantics, cross-tab behavior, failure behavior, and distinction
+    between inactivity logout and the authoritative TAuth session TTL.
+
+  Deliverables:
+  - One MPR UI inactivity controller and accessible warning surface, one strict
+    `auth.autoLogout` configuration contract, one cross-tab coordination
+    contract, and one shared manual/automatic logout transaction.
+  - Exact llm-proxy runtime configuration and complete protected-state cleanup
+    on the canonical unauthenticated event.
+  - Exact LoopAware runtime configuration with the obsolete app-owned
+    inactivity/authentication implementation and persisted preferences removed.
+  - Updated OpenAPI/browser-config, MPR UI event, and repository documentation;
+    no compatibility shim, application-specific auth helper, or production
+    deployment.
+
+  Validation:
+  - In MPR UI, use controlled time and visibility to cover authentication
+    start/reset, activity before/after warning, countdown, stay-signed-in,
+    sign-out-now, automatic deadline, background timer suspension, teardown,
+    reduced motion, focus restoration, keyboard/screen-reader semantics, and
+    strict configuration rejection.
+  - Cover multiple tabs proving shared activity and dismissal, one logout
+    transaction, one redirect/unauthenticated transition, tenant/origin
+    isolation, stale coordinator recovery, and absence of identity/session
+    material from coordination state.
+  - Cover logout success, already-expired reconciliation, unauthorized session,
+    transport/server failure, retry, and concurrent manual/automatic logout
+    without false success, duplicate request, redirect, or event emission.
+  - In both applications, run browser black-box scenarios with real MPR UI and
+    TAuth boundaries. Prove warning and logout at 60/120 seconds, protected
+    state removal, no post-logout stale response mutation, successful
+    reauthentication, and absence of app-owned auth requests, timers,
+    preferences, and obsolete warning DOM.
+  - For each code-changing repository, run its required baseline `make ci`
+    immediately before the first edit and final `make ci` after the last edit.
+    Do not contact or deploy production as part of implementation acceptance.
 
 - [x] [F014] (P1) Support multiple isolated tenants per managed user.
   Goal:
