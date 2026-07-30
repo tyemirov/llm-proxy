@@ -22,10 +22,17 @@ PAGES_DOMAIN ?= llm-proxy.mprlab.com
 PAGES_CONFIG_URL ?= https://llm-proxy-api.mprlab.com/config-ui.yaml
 PAGES_URL ?= https://llm-proxy.mprlab.com/
 PAGES_VERSION ?=
+override DEPLOY_ANSIBLE_CORE_SPEC := ansible-core==2.19.8
+override DEPLOY_ANSIBLE_ROOT := $(abspath $(CURDIR)/.mprlab/deploy/ansible)
+override DEPLOY_ANSIBLE_CONFIG := $(DEPLOY_ANSIBLE_ROOT)/ansible.cfg
+override DEPLOY_ANSIBLE_INVENTORY := $(DEPLOY_ANSIBLE_ROOT)/inventory/hosts.yml
+override DEPLOY_ANSIBLE_INVENTORY_EXAMPLE := $(DEPLOY_ANSIBLE_ROOT)/inventory/hosts.example.yml
+override DEPLOY_ANSIBLE_PLAYBOOK := $(DEPLOY_ANSIBLE_ROOT)/playbooks/deploy.yml
+override DEPLOY_ANSIBLE_LOCAL_TEMP := $(shell git rev-parse --git-path llm-proxy-deploy/ansible-local)
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-package-install-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox release-test test-live-provider-harness test-live-providers test-live-gemini live-test build clean ci up release container-artifacts pages-artifact publish-release publish pages-deploy deploy
+.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-package-install-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox release-test test-live-provider-harness test-live-providers test-live-gemini live-test build clean ci up release container-artifacts pages-artifact publish-release publish pages-deploy deploy deploy-dry-run deploy-syntax
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -118,4 +125,45 @@ pages-deploy:
 	@"$(RELEASE_TOOL_DIR)/deploy_pages_artifact.sh" --remote "$(PUBLISH_REMOTE)" --branch "$(PAGES_BRANCH)" --url "$(PAGES_URL)" $(if $(PAGES_VERSION),--version "$(PAGES_VERSION)") $(DEPLOY_PAGES_ARGS)
 
 deploy:
-	@mprlab-deploy
+	@mkdir -p "$(DEPLOY_ANSIBLE_LOCAL_TEMP)"
+	@MPRLAB_DEPLOY_MODE=deploy \
+		LLM_PROXY_DEPLOY_PUBLISH_REMOTE="$(PUBLISH_REMOTE)" \
+		LLM_PROXY_DEPLOY_PUBLISH_BRANCH="$(PUBLISH_BRANCH)" \
+		LLM_PROXY_DEPLOY_PAGES_BRANCH="$(PAGES_BRANCH)" \
+		LLM_PROXY_DEPLOY_PAGES_URL="$(PAGES_URL)" \
+		ANSIBLE_CONFIG="$(DEPLOY_ANSIBLE_CONFIG)" \
+		ANSIBLE_LOCAL_TEMP="$(DEPLOY_ANSIBLE_LOCAL_TEMP)" \
+		timeout -k 1200s -s SIGKILL 1200s \
+		"$(UV)" tool run --from "$(DEPLOY_ANSIBLE_CORE_SPEC)" ansible-playbook \
+		--ask-become-pass \
+		--inventory "$(DEPLOY_ANSIBLE_INVENTORY)" \
+		"$(DEPLOY_ANSIBLE_PLAYBOOK)"
+
+deploy-dry-run:
+	@mkdir -p "$(DEPLOY_ANSIBLE_LOCAL_TEMP)"
+	@MPRLAB_DEPLOY_MODE=dry-run \
+		LLM_PROXY_DEPLOY_PUBLISH_REMOTE="$(PUBLISH_REMOTE)" \
+		LLM_PROXY_DEPLOY_PUBLISH_BRANCH="$(PUBLISH_BRANCH)" \
+		LLM_PROXY_DEPLOY_PAGES_BRANCH="$(PAGES_BRANCH)" \
+		LLM_PROXY_DEPLOY_PAGES_URL="$(PAGES_URL)" \
+		ANSIBLE_CONFIG="$(DEPLOY_ANSIBLE_CONFIG)" \
+		ANSIBLE_LOCAL_TEMP="$(DEPLOY_ANSIBLE_LOCAL_TEMP)" \
+		timeout -k 1200s -s SIGKILL 1200s \
+		"$(UV)" tool run --from "$(DEPLOY_ANSIBLE_CORE_SPEC)" ansible-playbook \
+		--inventory "$(DEPLOY_ANSIBLE_INVENTORY)" \
+		"$(DEPLOY_ANSIBLE_PLAYBOOK)"
+
+deploy-syntax:
+	@mkdir -p "$(DEPLOY_ANSIBLE_LOCAL_TEMP)"
+	@MPRLAB_DEPLOY_MODE=dry-run \
+		LLM_PROXY_DEPLOY_PUBLISH_REMOTE="$(PUBLISH_REMOTE)" \
+		LLM_PROXY_DEPLOY_PUBLISH_BRANCH="$(PUBLISH_BRANCH)" \
+		LLM_PROXY_DEPLOY_PAGES_BRANCH="$(PAGES_BRANCH)" \
+		LLM_PROXY_DEPLOY_PAGES_URL="$(PAGES_URL)" \
+		ANSIBLE_CONFIG="$(DEPLOY_ANSIBLE_CONFIG)" \
+		ANSIBLE_LOCAL_TEMP="$(DEPLOY_ANSIBLE_LOCAL_TEMP)" \
+		timeout -k 1200s -s SIGKILL 1200s \
+		"$(UV)" tool run --from "$(DEPLOY_ANSIBLE_CORE_SPEC)" ansible-playbook \
+		--syntax-check \
+		--inventory "$(DEPLOY_ANSIBLE_INVENTORY_EXAMPLE)" \
+		"$(DEPLOY_ANSIBLE_PLAYBOOK)"

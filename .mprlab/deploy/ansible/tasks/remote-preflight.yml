@@ -1,0 +1,80 @@
+---
+- name: Require the canonical target inventory
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - mprlab_runtime_root is match('^/\\S+$')
+      - mprlab_docker_cli is match('^/\\S+$')
+      - mprlab_compose_project_name == mprlab_container_resource.compose_project
+      - mprlab_container_resource.network == mprlab_compose_project_name ~ '_default'
+    fail_msg: "The target inventory does not satisfy the LLM Proxy deployment contract."
+
+- name: Require the production Docker engine
+  ansible.builtin.command:
+    argv:
+      - "{{ mprlab_docker_cli }}"
+      - version
+  changed_when: false
+
+- name: Inspect required target runtime objects
+  ansible.builtin.command:
+    argv: "{{ item.argv }}"
+  loop:
+    - name: shared network
+      argv: ["{{ mprlab_docker_cli }}", network, inspect, "{{ mprlab_container_resource.network }}"]
+    - name: TAuth service
+      argv: ["{{ mprlab_docker_cli }}", inspect, "{{ mprlab_tauth_resource.container_name }}"]
+    - name: Caddy service
+      argv: ["{{ mprlab_docker_cli }}", inspect, "{{ mprlab_caddy_resource.container_name }}"]
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: false
+
+- name: Inspect required target files and directories
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+    follow: false
+  loop:
+    - name: remote project root
+      path: "{{ mprlab_runtime_root }}"
+      kind: directory
+      private: false
+    - name: TAuth configuration
+      path: "{{ mprlab_runtime_root }}/{{ mprlab_tauth_resource.config_destination }}"
+      kind: file
+      private: false
+    - name: TAuth environment
+      path: "{{ mprlab_runtime_root }}/{{ mprlab_tauth_resource.environment_destination }}"
+      kind: file
+      private: true
+    - name: Caddy site directory
+      path: "{{ mprlab_runtime_root }}/{{ mprlab_caddy_resource.config_destination | dirname }}"
+      kind: directory
+      private: false
+  loop_control:
+    label: "{{ item.name }}"
+  register: mprlab_target_inputs
+
+- name: Require canonical target files and directories
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - item.stat.exists
+      - not item.stat.islnk
+      - (item.item.kind == 'file' and item.stat.isreg) or (item.item.kind == 'directory' and item.stat.isdir)
+      - not item.item.private or item.stat.mode == '0600'
+    fail_msg: "Invalid target deployment input {{ item.item.name }}."
+  loop: "{{ mprlab_target_inputs.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+- name: Ensure the private application deployment directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ mprlab_remote_app_root }}"
+      mode: "0755"
+    - path: "{{ mprlab_remote_app_root }}/runtime"
+      mode: "0700"

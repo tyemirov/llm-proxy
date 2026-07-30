@@ -1,0 +1,148 @@
+---
+- name: Render the candidate Caddy route
+  ansible.builtin.template:
+    src: "{{ mprlab_repo_root }}/{{ mprlab_caddy_resource.config_template }}"
+    dest: "{{ mprlab_remote_app_root }}/caddy-route.candidate.caddy"
+    mode: "0644"
+
+- name: Discover the active Caddy HTTP routes
+  ansible.builtin.find:
+    paths: "{{ mprlab_runtime_root }}/{{ mprlab_caddy_resource.config_destination | dirname }}"
+    file_type: any
+    follow: false
+    recurse: false
+    patterns:
+      - "*.caddy"
+  register: mprlab_active_caddy_routes
+
+- name: Require regular active Caddy route files
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - item.isreg
+      - not item.islnk
+    fail_msg: "Caddy route {{ item.path }} must be a regular file."
+  loop: "{{ mprlab_active_caddy_routes.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+
+- name: Reset the exact container-local Caddy validation directory
+  ansible.builtin.command:
+    argv:
+      - "{{ mprlab_docker_cli }}"
+      - exec
+      - "{{ mprlab_caddy_resource.container_name }}"
+      - rm
+      - -rf
+      - --
+      - /tmp/llm-proxy-caddy-sites
+  changed_when: false
+
+- name: Create the container-local Caddy validation directory
+  ansible.builtin.command:
+    argv:
+      - "{{ mprlab_docker_cli }}"
+      - exec
+      - "{{ mprlab_caddy_resource.container_name }}"
+      - mkdir
+      - -p
+      - /tmp/llm-proxy-caddy-sites
+  changed_when: false
+
+- name: Copy active routes not owned by LLM Proxy into the validation set
+  ansible.builtin.command:
+    argv:
+      - "{{ mprlab_docker_cli }}"
+      - cp
+      - "{{ item.path }}"
+      - >-
+        {{ mprlab_caddy_resource.container_name }}:/tmp/llm-proxy-caddy-sites/{{ item.path | basename }}
+  loop: "{{ mprlab_active_caddy_routes.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: >-
+    item.path
+    !=
+    mprlab_runtime_root ~ '/' ~ mprlab_caddy_resource.config_destination
+  changed_when: false
+
+- name: Copy the candidate route into the complete validation set
+  ansible.builtin.command:
+    argv:
+      - "{{ mprlab_docker_cli }}"
+      - cp
+      - "{{ mprlab_remote_app_root }}/caddy-route.candidate.caddy"
+      - >-
+        {{ mprlab_caddy_resource.container_name }}:/tmp/llm-proxy-caddy-sites/{{ mprlab_caddy_resource.config_destination | basename }}
+  changed_when: false
+
+- name: Write the complete Caddy validation entrypoint
+  ansible.builtin.copy:
+    content: |
+      import /etc/caddy/globals.caddy
+      import /tmp/llm-proxy-caddy-sites/*.caddy
+    dest: "{{ mprlab_remote_app_root }}/Caddyfile.candidate"
+    mode: "0644"
+
+- name: Copy the candidate validation entrypoint into Caddy
+  ansible.builtin.command:
+    argv:
+      - "{{ mprlab_docker_cli }}"
+      - cp
+      - "{{ mprlab_remote_app_root }}/Caddyfile.candidate"
+      - "{{ mprlab_caddy_resource.container_name }}:/tmp/Caddyfile.llm-proxy"
+  changed_when: false
+
+- name: Validate the candidate Caddy route
+  ansible.builtin.command:
+    argv:
+      - "{{ mprlab_docker_cli }}"
+      - exec
+      - "{{ mprlab_caddy_resource.container_name }}"
+      - caddy
+      - validate
+      - --config
+      - /tmp/Caddyfile.llm-proxy
+  changed_when: false
+
+- name: Activate the validated Caddy route
+  ansible.builtin.copy:
+    src: "{{ mprlab_remote_app_root }}/caddy-route.candidate.caddy"
+    dest: "{{ mprlab_runtime_root }}/{{ mprlab_caddy_resource.config_destination }}"
+    remote_src: true
+    mode: "0644"
+  register: mprlab_caddy_route_activation
+
+- name: Reload Caddy only when its exact route changed
+  ansible.builtin.command:
+    argv:
+      - "{{ mprlab_docker_cli }}"
+      - exec
+      - "{{ mprlab_caddy_resource.container_name }}"
+      - caddy
+      - reload
+      - --config
+      - "{{ mprlab_caddy_resource.container_config_path }}"
+  when: mprlab_caddy_route_activation.changed
+  changed_when: true
+
+- name: Remove candidate Caddy files from the target host
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ mprlab_remote_app_root }}/caddy-route.candidate.caddy"
+    - "{{ mprlab_remote_app_root }}/Caddyfile.candidate"
+
+- name: Remove candidate Caddy files from the running container
+  ansible.builtin.command:
+    argv:
+      - "{{ mprlab_docker_cli }}"
+      - exec
+      - "{{ mprlab_caddy_resource.container_name }}"
+      - rm
+      - -rf
+      - --
+      - /tmp/llm-proxy-caddy-sites
+      - /tmp/Caddyfile.llm-proxy
+  changed_when: false
