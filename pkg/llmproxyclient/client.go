@@ -198,8 +198,9 @@ type message struct {
 
 // MessagesRequestInput is the unvalidated external input for a v2 messages-only JSON POST request.
 type MessagesRequestInput struct {
-	Messages        []MessageInput
-	Model           string
+	Messages []MessageInput
+	Model    string
+	// WebSearch is serialized as the native JSON boolean web_search field.
 	WebSearch       bool
 	MaxTokens       *int
 	ReasoningEffort *string

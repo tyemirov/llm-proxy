@@ -179,7 +179,11 @@ func TestClientPostMessagesSendsV2MessagesBody(testingInstance *testing.T) {
 	if !ok || firstMessage["role"] != "user" || firstMessage["content"] != "Hello" || firstMessage["order"] != float64(1) {
 		testingInstance.Fatalf("firstMessage=%v", rawMessages[0])
 	}
-	if capturedBody["model"] != "deepseek-v4-flash" || capturedBody["web_search"] != true || capturedBody["max_tokens"] != float64(5) || capturedBody["reasoning_effort"] != "high" {
+	webSearch, webSearchOK := capturedBody["web_search"].(bool)
+	if !webSearchOK || !webSearch {
+		testingInstance.Fatalf("web_search=%v must be the JSON boolean true", capturedBody["web_search"])
+	}
+	if capturedBody["model"] != "deepseek-v4-flash" || capturedBody["max_tokens"] != float64(5) || capturedBody["reasoning_effort"] != "high" {
 		testingInstance.Fatalf("body=%v", capturedBody)
 	}
 }
