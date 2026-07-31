@@ -162,7 +162,7 @@ func TestAnalyzerRouteRejectsInvalidDigestAudioAndUnsupportedProviderBeforeUpstr
 			"role":"user",
 			"content":[
 				{"type":"text","text":"Inspect."},
-				{"type":"audio","mime_type":"audio/mpeg","data":"` + base64.StdEncoding.EncodeToString([]byte("audio")) + `","sha256":"` + hex.EncodeToString(audioDigest[:]) + `"}
+				{"type":"audio","mime_type":"audio/mp4","data":"` + base64.StdEncoding.EncodeToString([]byte("audio")) + `","sha256":"` + hex.EncodeToString(audioDigest[:]) + `"}
 			]
 		}],
 		"output_schema":{"name":"report","schema":{"type":"object","additionalProperties":false}},

@@ -358,7 +358,7 @@ func newAnalyzerContent(payload analyzerContentPayload) (analyzerContent, error)
 			return analyzerContent{}, errors.New("audio has unsupported fields")
 		}
 		mimeType := payload.MIMEType
-		if mimeType != "audio/mpeg" && mimeType != "audio/wav" {
+		if mimeType != "audio/mp4" && mimeType != "audio/mpeg" && mimeType != "audio/wav" {
 			return analyzerContent{}, fmt.Errorf("unsupported audio MIME type=%q", payload.MIMEType)
 		}
 		data, digestError := decodeHashBoundAnalyzerData(payload.Data, payload.SHA256)

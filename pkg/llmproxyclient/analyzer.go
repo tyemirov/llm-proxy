@@ -25,6 +25,7 @@ const (
 	imageMIMEJPEG = "image/jpeg"
 	imageMIMEPNG  = "image/png"
 	imageMIMEWebP = "image/webp"
+	audioMIMEMP4  = "audio/mp4"
 	audioMIMEMPEG = "audio/mpeg"
 	audioMIMEWAV  = "audio/wav"
 )
@@ -106,7 +107,7 @@ func NewImageContent(input ImageContentInput) (ContentPart, error) {
 func NewAudioContent(input AudioContentInput) (ContentPart, error) {
 	mimeType := strings.ToLower(strings.TrimSpace(input.MIMEType))
 	switch mimeType {
-	case audioMIMEMPEG, audioMIMEWAV:
+	case audioMIMEMP4, audioMIMEMPEG, audioMIMEWAV:
 	default:
 		return nil, fmt.Errorf("%w: unsupported analyzer audio MIME type=%q", ErrInvalidClientRequest, input.MIMEType)
 	}

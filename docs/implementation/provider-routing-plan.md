@@ -28,8 +28,9 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
   accept prompt strings, assistant messages, web search, system-prompt
   injection, provider tools, or response-format selection.
 - Analyzer binary parts carry canonical base64, an explicit supported MIME
-  type, and lowercase SHA-256. The proxy decodes and independently verifies
-  the digest before upstream admission. System messages accept text parts only.
+  type, and lowercase SHA-256. Audio supports exact MP4, MPEG, or WAV bytes.
+  The proxy decodes and independently verifies the digest before upstream
+  admission. System messages accept text parts only.
 - OpenAI Responses is the current analyzer transport for text and ordered JPEG,
   PNG, or WebP inputs. Audio and non-OpenAI routes return unsupported capability
   before provider work until an exact route supports the requested modality

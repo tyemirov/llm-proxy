@@ -1969,8 +1969,8 @@ named `output_schema`. Message `content` is an array of typed parts:
 - `text` carries nonblank text.
 - `image` carries canonical base64, MIME type, detail, and the lowercase
   SHA-256 of the decoded bytes.
-- `audio` carries canonical base64, MIME type, and the lowercase SHA-256 of the
-  decoded bytes.
+- `audio` carries canonical base64, an `audio/mp4`, `audio/mpeg`, or
+  `audio/wav` MIME type, and the lowercase SHA-256 of the decoded bytes.
 
 The proxy decodes every binary part and verifies its digest before provider
 admission. Local paths and remote-provider payload fields are not content

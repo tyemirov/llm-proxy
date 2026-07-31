@@ -29,7 +29,7 @@ func TestClientPostAnalyzerSendsHashBoundContentAndReturnsRequestIdentity(t *tes
 		t.Fatalf("image content: %v", imageError)
 	}
 	audioPart, audioError := llmproxyclient.NewAudioContent(llmproxyclient.AudioContentInput{
-		MIMEType: "audio/mpeg",
+		MIMEType: "audio/mp4",
 		Data:     audioBytes,
 	})
 	if audioError != nil {
@@ -151,7 +151,7 @@ func TestClientPostAnalyzerSendsHashBoundContentAndReturnsRequestIdentity(t *tes
 		t.Fatalf("content=%v", content)
 	}
 	assertBinaryContentPart(t, content[1], "image", "image/png", imageBytes)
-	assertBinaryContentPart(t, content[2], "audio", "audio/mpeg", audioBytes)
+	assertBinaryContentPart(t, content[2], "audio", "audio/mp4", audioBytes)
 	imagePayload := content[1].(map[string]any)
 	if imagePayload["detail"] != string(llmproxyclient.ImageDetailHigh) {
 		t.Fatalf("image detail=%v", imagePayload["detail"])

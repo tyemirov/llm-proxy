@@ -2016,6 +2016,7 @@
           "mime_type": {
             "type": "string",
             "enum": [
+              "audio/mp4",
               "audio/mpeg",
               "audio/wav"
             ]
