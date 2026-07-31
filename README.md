@@ -1301,7 +1301,7 @@ This repository exposes the standard local targets used by MPR app repos:
 |---------|---------|
 | `npm ci` | Install pinned frontend validation dependencies before running local frontend checks. |
 | `make up` | Require the ignored private `configs/.env.local`, then build and run the complete local browser orchestration: ghttp static UI and same-origin TAuth routes on `localhost:4179`, plus the API on `localhost:8080`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
-| `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, the app lifecycle contract test, and the non-paid live-harness preflight. |
+| `make ci` | Run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, the app lifecycle contract test, and the non-paid live-harness preflight. A successful run ends with a per-gate table, current-run coverage, and an explicit `CI PASSED` receipt. |
 | `make test-live-provider-harness` | Generate the temporary static-mode live-test config and verify authenticated routing without an upstream call. |
 | `make test-live-providers` | Start a disposable managed tenant, verify every available provider key through the canonical management operation, and run that provider's live text smoke only after verification succeeds; use `LIVE_ENV_FILE=/path/to/env` to load key values. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
@@ -1317,6 +1317,12 @@ each key against the provider's configured default model, or the exact model
 override below, before making that provider's smoke request. By default, the
 subsequent smoke omits `model` and proves that the newly saved managed provider
 default is operational; an override is included in both verification and smoke.
+
+`make ci` runs each declared gate sequentially through one top-level runner.
+Coverage is written to a fresh private artifact for that invocation and
+verified again after the final test gate. If orchestration exits before the
+terminal receipt, the command returns nonzero and identifies the active stage;
+an ignored coverage artifact from an earlier run cannot satisfy completion.
 
 | Provider | Key variable | Model override |
 |----------|--------------|----------------|
