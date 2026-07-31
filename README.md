@@ -52,6 +52,22 @@ human-readable reference derived from them at
 `https://llm-proxy-api.mprlab.com` as its API server; the API origin does not
 serve another schema location.
 
+### `web_search` boolean migration
+
+Direct `GET /` callers must send the optional query parameter as exact
+`web_search=true` or `web_search=false`. Omission means false. Former spellings
+such as `1`, `0`, `t`, `f`, `y`, `n`, `yes`, and `no`, along with blank,
+uppercase, or whitespace-padded values, now return HTTP 400 instead of being
+coerced or silently treated as false.
+
+JSON callers continue to send a native boolean body field on `POST /` or
+`POST /v2`. The official Go package exposes `MessagesRequestInput.WebSearch`,
+the Go CLI exposes the boolean `--web-search` flag, and the Python package
+exposes `ClientMessagesRequest.web_search: bool`. All bundled clients use
+`POST /v2`, remove any `web_search` query value inherited from a configured
+base URL, and serialize the request body as `"web_search": true` or
+`"web_search": false`.
+
 The caller does not stream tokens, poll a job endpoint, or follow a resume
 token. OpenAI Responses is the only current text adapter with a pollable
 upstream lifecycle: llm-proxy sends stored background requests and keeps the
