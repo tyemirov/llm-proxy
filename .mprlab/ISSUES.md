@@ -110,17 +110,19 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     verified at its producer and again after the final test stage, then removed.
     A zero-exit stage without current coverage evidence fails before completion.
   - The terminal output now contains per-gate receipts, elapsed time, exact Go
-    coverage, and an explicit `CI PASSED` line that cannot print on an
-    incomplete run.
+    coverage, and an explicit `CI PASSED` line emitted only after private
+    run-state cleanup succeeds. Cleanup failure remains a named failing stage
+    and cannot print the terminal summary or success receipt.
   - Black-box process coverage proves complete success, exact propagation of a
-    child exit 23, and rejection of a zero-exit test sequence missing its
-    current coverage artifact. Hosted CI now selects its Go version directly
-    from `go.mod`.
+    child exit 23, rejection of a zero-exit test sequence missing its current
+    coverage artifact, and rejection of cleanup failure after every declared
+    gate completes. Hosted CI now selects its Go version directly from
+    `go.mod`.
   - The required final `timeout -k 350s -s SIGKILL 350s make ci` returned zero
     after the last code edit with exact 100% Go statement coverage, 33 Python
     tests, 75 browser tests, one TAuth browser black-box test, the OpenAPI Pages
     artifact check, and the live-provider harness preflight. Its terminal table
-    reported all 11 gates passed in 99 seconds.
+    reported all 11 gates passed in 86 seconds.
 
 - [x] [B096] (P0) Make deployment self-contained in the application repository.
   Goal:
@@ -3791,5 +3793,3 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     are not tied to an approved source.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
-
-
