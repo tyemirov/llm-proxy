@@ -2982,6 +2982,10 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     provider-routing contract describe the current standard API. Public-client
     and black-box router scenarios cover immutability, ordering, malformed and
     unsupported rejection, zero upstream work, and non-echoed media.
+  - Review follow-up makes the canonical OpenAPI schema reject mismatched
+    attachment type/MIME pairs and attachments on non-user messages. The
+    optional query `web_search` parameter now accepts only exact `true` or
+    `false`; aliases and malformed supplied values fail at the HTTP boundary.
 
 
 ## Maintenance
