@@ -79,7 +79,9 @@ up:
 clean:
 	rm -rf $(BIN_DIR)
 
-ci: check-format lint test
+ci:
+	@MAKE_BIN="$(MAKE)" GO="$(GO)" GOFMT="$(GOFMT)" NPM="$(NPM)" UV="$(UV)" \
+		PYTHON_PROJECT_DIR="$(PYTHON_PROJECT_DIR)" ./scripts/run_ci.sh
 
 .PHONY: release publish deploy
 
