@@ -57,6 +57,149 @@ func TestOperationalHelpCommandsUseBuiltinOutput(testingInstance *testing.T) {
 	}
 }
 
+func TestOperationalCIRunnerRequiresCurrentCompletionEvidence(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	fakeMakePath := filepath.Join(fixtureRoot, "make")
+	fakeGoPath := filepath.Join(fixtureRoot, "go")
+	runnerPath := filepath.Join(repositoryRoot, operationalScriptsDirectory, "run_ci.sh")
+
+	writeOperationalFile(testingInstance, fakeMakePath, `#!/usr/bin/env bash
+set -euo pipefail
+
+target=""
+for argument in "$@"; do
+  target="${argument}"
+done
+builtin printf '%s\n' "${target}" >>"${CI_TARGET_LOG:?}"
+if [[ "${CI_FAIL_TARGET:-}" == "${target}" ]]; then
+  exit "${CI_FAIL_STATUS:-23}"
+fi
+if [[ "${target}" == "go-test" && "${CI_SKIP_COVERAGE:-0}" != "1" ]]; then
+  builtin printf '%s\n' "mode: count" "fixture.go:1.1,1.2 1 1" >"${COVERAGE_FILE:?}"
+fi
+`, 0o755)
+	writeOperationalFile(testingInstance, fakeGoPath, `#!/usr/bin/env bash
+set -euo pipefail
+
+[[ "$#" -eq 3 ]]
+[[ "$1" == "tool" ]]
+[[ "$2" == "cover" ]]
+coverage_file="${3#-func=}"
+if [[ ! -s "${coverage_file}" ]]; then
+  builtin printf 'current coverage evidence is missing: %s\n' "${coverage_file}" >&2
+  exit 24
+fi
+builtin printf 'total:\t(statements)\t%s\n' "${CI_COVERAGE_TOTAL:-100.0%}"
+`, 0o755)
+
+	expectedTargets := strings.Join([]string{
+		"check-format",
+		"go-lint",
+		"python-lint",
+		"frontend-lint",
+		"go-test",
+		"python-test",
+		"frontend-test",
+		"test-openapi-pages-artifact",
+		"test-management-auth-blackbox",
+		"test-live-provider-harness",
+	}, "\n") + "\n"
+
+	testingInstance.Run("complete", func(testingInstance *testing.T) {
+		targetLogPath := filepath.Join(fixtureRoot, "complete-targets")
+		command := exec.Command(runnerPath)
+		command.Dir = repositoryRoot
+		command.Env = append(
+			os.Environ(),
+			"MAKE_BIN="+fakeMakePath,
+			"GO="+fakeGoPath,
+			"CI_TARGET_LOG="+targetLogPath,
+		)
+		output, commandError := command.CombinedOutput()
+		if commandError != nil {
+			testingInstance.Fatalf("complete CI fixture failed: %v\n%s", commandError, output)
+		}
+		outputText := string(output)
+		for _, expectedFragment := range []string{
+			"CI summary",
+			"Go coverage verification",
+			"100.0%",
+			"CI PASSED: all 11 gates completed; Go statement coverage 100.0%.",
+		} {
+			if !strings.Contains(outputText, expectedFragment) {
+				testingInstance.Fatalf("complete CI output omitted %q:\n%s", expectedFragment, outputText)
+			}
+		}
+		targetLogBytes, readError := os.ReadFile(targetLogPath)
+		if readError != nil {
+			testingInstance.Fatalf("read complete CI target log: %v", readError)
+		}
+		if string(targetLogBytes) != expectedTargets {
+			testingInstance.Fatalf("unexpected CI target order:\n%s", targetLogBytes)
+		}
+	})
+
+	testingInstance.Run("child-failure", func(testingInstance *testing.T) {
+		targetLogPath := filepath.Join(fixtureRoot, "failure-targets")
+		command := exec.Command(runnerPath)
+		command.Dir = repositoryRoot
+		command.Env = append(
+			os.Environ(),
+			"MAKE_BIN="+fakeMakePath,
+			"GO="+fakeGoPath,
+			"CI_TARGET_LOG="+targetLogPath,
+			"CI_FAIL_TARGET=frontend-test",
+			"CI_FAIL_STATUS=23",
+		)
+		output, commandError := command.CombinedOutput()
+		exitError, isExitError := commandError.(*exec.ExitError)
+		if !isExitError || exitError.ExitCode() != 23 {
+			testingInstance.Fatalf("child failure exit=%v, want 23\n%s", commandError, output)
+		}
+		outputText := string(output)
+		if !strings.Contains(outputText, "CI FAILED: stopped during Frontend browser tests (exit 23).") {
+			testingInstance.Fatalf("child failure omitted active stage:\n%s", outputText)
+		}
+		if strings.Contains(outputText, "CI PASSED") {
+			testingInstance.Fatalf("child failure printed a success receipt:\n%s", outputText)
+		}
+	})
+
+	testingInstance.Run("zero-exit-without-coverage", func(testingInstance *testing.T) {
+		targetLogPath := filepath.Join(fixtureRoot, "missing-coverage-targets")
+		command := exec.Command(runnerPath)
+		command.Dir = repositoryRoot
+		command.Env = append(
+			os.Environ(),
+			"MAKE_BIN="+fakeMakePath,
+			"GO="+fakeGoPath,
+			"CI_TARGET_LOG="+targetLogPath,
+			"CI_SKIP_COVERAGE=1",
+		)
+		output, commandError := command.CombinedOutput()
+		exitError, isExitError := commandError.(*exec.ExitError)
+		if !isExitError || exitError.ExitCode() != 24 {
+			testingInstance.Fatalf("missing coverage exit=%v, want 24\n%s", commandError, output)
+		}
+		outputText := string(output)
+		if !strings.Contains(outputText, "current coverage evidence is missing:") ||
+			!strings.Contains(outputText, "CI FAILED: stopped during Go coverage verification (exit 24).") {
+			testingInstance.Fatalf("missing coverage was not reported as incomplete CI:\n%s", outputText)
+		}
+		if strings.Contains(outputText, "CI PASSED") {
+			testingInstance.Fatalf("missing coverage printed a success receipt:\n%s", outputText)
+		}
+		targetLogBytes, readError := os.ReadFile(targetLogPath)
+		if readError != nil {
+			testingInstance.Fatalf("read missing-coverage target log: %v", readError)
+		}
+		if string(targetLogBytes) != expectedTargets {
+			testingInstance.Fatalf("missing-coverage fixture did not return zero from every target:\n%s", targetLogBytes)
+		}
+	})
+}
+
 func TestOperationalEnvironmentExamplesStayDocumentationOnly(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	for _, relativePath := range []string{

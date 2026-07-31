@@ -205,6 +205,21 @@ func TestOperationalPagesArtifactUsesGoWithoutNode(testingInstance *testing.T) {
 	}
 }
 
+func TestOperationalHostedCIUsesModuleGoToolchain(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	workflowBytes, readError := os.ReadFile(filepath.Join(repositoryRoot, ".github", "workflows", "test.yml"))
+	if readError != nil {
+		testingInstance.Fatalf("read hosted CI workflow: %v", readError)
+	}
+	workflowText := string(workflowBytes)
+	if !strings.Contains(workflowText, "go-version-file: go.mod") {
+		testingInstance.Fatal("hosted CI does not select the canonical go.mod toolchain")
+	}
+	if strings.Contains(workflowText, "GO_VERSION:") || strings.Contains(workflowText, "go-version:") {
+		testingInstance.Fatal("hosted CI retains a second Go version declaration")
+	}
+}
+
 func lifecycleStringField(testingInstance *testing.T, document map[string]any, fieldName string) string {
 	testingInstance.Helper()
 	value, available := document[fieldName].(string)
