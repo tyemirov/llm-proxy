@@ -63,9 +63,9 @@ const (
 	// bodyMismatchFormat reports differing response bodies.
 	bodyMismatchFormat = "body=%q want=%q"
 	// toolsMissingMessage reports missing tools in captured payloads.
-	toolsMissingMessage = "tools missing when web_search=1"
+	toolsMissingMessage = "tools missing when web_search=true"
 	// toolsMissingFormat reports missing tools when the captured payload is included.
-	toolsMissingFormat = "tools missing in payload when web_search=1; captured=%v"
+	toolsMissingFormat = "tools missing in payload when web_search=true; captured=%v"
 	// toolsOmittedFormat reports an unexpected tools field for models without tool support.
 	toolsOmittedFormat = "tools must be omitted for %s, got: %v"
 	// temperatureOmittedFormat reports a temperature field when it should be omitted.

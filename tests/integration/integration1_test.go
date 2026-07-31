@@ -88,7 +88,7 @@ func TestProxyResponseDelivery(testingInstance *testing.T) {
 			applicationServer := newIntegrationServer(subTest, openAIServer)
 			requestURL := applicationServer.URL + "?prompt=ping&key=" + integrationServiceSecret
 			if testCase.webSearch {
-				requestURL += "&web_search=1"
+				requestURL += "&web_search=true"
 			}
 			httpResponse, requestError := http.Get(requestURL)
 			if requestError != nil {
@@ -140,7 +140,7 @@ func TestProxyGPT5SavedReasoningEffortFollowsTheResolvedRoute(testingInstance *t
 			queryValues.Set(keyQueryParameter, integrationServiceSecret)
 			queryValues.Set(adaptiveModelQueryParameter, proxy.ModelNameGPT5)
 			if webSearchEnabled {
-				queryValues.Set(webSearchQueryParameter, "1")
+				queryValues.Set(webSearchQueryParameter, "true")
 			}
 			requestURL.RawQuery = queryValues.Encode()
 			httpResponse, requestError := http.Get(requestURL.String())

@@ -51,7 +51,7 @@ func TestClientResponseDelivery(testingInstance *testing.T) {
 			queryValues.Set(promptQueryParameter, promptValue)
 			queryValues.Set(keyQueryParameter, serviceSecretValue)
 			if testCase.webSearch {
-				queryValues.Set(webSearchQueryParameter, "1")
+				queryValues.Set(webSearchQueryParameter, "true")
 			}
 			requestURL.RawQuery = queryValues.Encode()
 			httpResponse, requestError := http.Get(requestURL.String())
