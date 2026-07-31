@@ -20,7 +20,6 @@ import (
 
 const (
 	operationalScriptsDirectory                     = "scripts"
-	operationalReleaseToolsRelative                 = "tools/gitrelease"
 	operationalHelpTimeout                          = 5 * time.Second
 	operationalOrchestrationTimeout                 = 30 * time.Second
 	operationalHelpWaitDelay                        = time.Second
@@ -28,25 +27,6 @@ const (
 	constrainedPipeHelpCommand                      = `ulimit -p 1 2>/dev/null || true
 exec "$@"`
 )
-
-func TestOperationalReleaseWrapperUsesRepositoryOwnedTools(testingInstance *testing.T) {
-	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	fixtureRoot := testingInstance.TempDir()
-	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, operationalScriptsDirectory, "release.sh"), filepath.Join(fixtureRoot, operationalScriptsDirectory, "release.sh"))
-	copyOperationalDirectory(testingInstance, filepath.Join(repositoryRoot, operationalReleaseToolsRelative), filepath.Join(fixtureRoot, operationalReleaseToolsRelative))
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "init")
-
-	output := runOperationalHelpCommand(
-		testingInstance,
-		fixtureRoot,
-		filepath.Join(fixtureRoot, operationalScriptsDirectory, "release.sh"),
-		"--help",
-		nil,
-	)
-	if !strings.Contains(string(output), "Prepares a release entirely from local repository state") {
-		testingInstance.Fatalf("unexpected release help output: %s", output)
-	}
-}
 
 func TestOperationalHelpCommandsUseBuiltinOutput(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
@@ -58,11 +38,6 @@ func TestOperationalHelpCommandsUseBuiltinOutput(testingInstance *testing.T) {
 	}{
 		{name: "live-providers", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "test_live_providers.sh"), expectedFragment: "scripts/test_live_providers.sh [--preflight | --write-config <path>]"},
 		{name: "production-live-test", path: filepath.Join(repositoryRoot, operationalScriptsDirectory, "live_test.sh"), expectedFragment: "Usage: make live-test"},
-		{name: "deploy-pages", path: filepath.Join(repositoryRoot, operationalReleaseToolsRelative, "scripts", "deploy_pages_artifact.sh"), expectedFragment: "deploy_pages_artifact.sh --url <public-url> [options]"},
-		{name: "prepare-container", path: filepath.Join(repositoryRoot, operationalReleaseToolsRelative, "scripts", "prepare_container_artifact.sh"), expectedFragment: "prepare_container_artifact.sh --name <name> --image <registry/repository> [options]"},
-		{name: "prepare-pages", path: filepath.Join(repositoryRoot, operationalReleaseToolsRelative, "scripts", "prepare_pages_artifact.sh"), expectedFragment: "prepare_pages_artifact.sh --source <directory> [options]"},
-		{name: "prepare-release", path: filepath.Join(repositoryRoot, operationalReleaseToolsRelative, "scripts", "prepare_release.sh"), expectedFragment: "prepare_release.sh [options]"},
-		{name: "publish-container", path: filepath.Join(repositoryRoot, operationalReleaseToolsRelative, "scripts", "publish_container_artifacts.sh"), expectedFragment: "publish_container_artifacts.sh"},
 	}
 	for _, helpCommand := range helpCommands {
 		for _, helpArgument := range []string{"--help", "-h"} {
@@ -618,26 +593,24 @@ func TestOperationalShellScriptsDoNotUseHeredocs(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	heredocPattern := regexp.MustCompile(`<<-?[[:space:]]*['"]?[A-Za-z_][A-Za-z0-9_]*['"]?`)
 	offendingScripts := []string{}
-	for _, relativeRoot := range []string{operationalScriptsDirectory, filepath.Join(operationalReleaseToolsRelative, "scripts")} {
-		walkError := filepath.Walk(filepath.Join(repositoryRoot, relativeRoot), func(path string, fileInfo os.FileInfo, pathError error) error {
-			if pathError != nil {
-				return pathError
-			}
-			if fileInfo.IsDir() || filepath.Ext(path) != ".sh" {
-				return nil
-			}
-			fileBytes, readError := os.ReadFile(path)
-			if readError != nil {
-				return readError
-			}
-			if heredocPattern.Match(fileBytes) {
-				offendingScripts = append(offendingScripts, path)
-			}
-			return nil
-		})
-		if walkError != nil {
-			testingInstance.Fatalf("scan shell scripts under %s: %v", relativeRoot, walkError)
+	walkError := filepath.Walk(filepath.Join(repositoryRoot, operationalScriptsDirectory), func(path string, fileInfo os.FileInfo, pathError error) error {
+		if pathError != nil {
+			return pathError
 		}
+		if fileInfo.IsDir() || filepath.Ext(path) != ".sh" {
+			return nil
+		}
+		fileBytes, readError := os.ReadFile(path)
+		if readError != nil {
+			return readError
+		}
+		if heredocPattern.Match(fileBytes) {
+			offendingScripts = append(offendingScripts, path)
+		}
+		return nil
+	})
+	if walkError != nil {
+		testingInstance.Fatalf("scan shell scripts under %s: %v", operationalScriptsDirectory, walkError)
 	}
 	if len(offendingScripts) != 0 {
 		testingInstance.Fatalf("shell scripts feed external commands through heredocs: %s", strings.Join(offendingScripts, ", "))
@@ -725,177 +698,6 @@ esac
 `, 0o755)
 
 	runOperationalCommand(testingInstance, fixtureRoot, append(os.Environ(), "GO="+fakeGoPath), coverageScriptPath)
-}
-
-func TestOperationalContainerArtifactUsesTrackedSnapshot(testingInstance *testing.T) {
-	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	fixtureRoot := testingInstance.TempDir()
-	writeOperationalFile(testingInstance, filepath.Join(fixtureRoot, "Dockerfile"), "FROM scratch\nCOPY . /app\n", 0o644)
-	writeOperationalFile(testingInstance, filepath.Join(fixtureRoot, "tracked.txt"), "tracked\n", 0o644)
-	writeOperationalFile(testingInstance, filepath.Join(fixtureRoot, ".gitignore"), "configs/.env\n", 0o644)
-	writeOperationalFile(testingInstance, filepath.Join(fixtureRoot, "configs", ".env"), "MODEL_API_KEY=must-not-enter-build-context\n", 0o600)
-	copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, operationalScriptsDirectory, "build-container-artifact.sh"), filepath.Join(fixtureRoot, operationalScriptsDirectory, "build-container-artifact.sh"))
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "init")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "config", "user.name", "Operational Test")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "config", "user.email", "operational-test@example.invalid")
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "add", "Dockerfile", "tracked.txt", ".gitignore", operationalScriptsDirectory)
-	runOperationalCommand(testingInstance, fixtureRoot, nil, "git", "commit", "-m", "Fixture")
-
-	toolDirectory := filepath.Join(fixtureRoot, "fake-release-tools")
-	fakeTool := `#!/usr/bin/env bash
-set -euo pipefail
-context=""
-while [[ $# -gt 0 ]]; do
-  if [[ "$1" == "--context" ]]; then context="$2"; shift 2; else shift; fi
-done
-[[ -n "${context}" ]]
-[[ -f "${context}/tracked.txt" ]]
-[[ ! -e "${context}/configs/.env" ]]
-[[ ! -e "${context}/.git" ]]
-`
-	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "prepare_container_artifact.sh"), fakeTool, 0o755)
-	environment := append(os.Environ(), "RELEASE_TOOL_DIR="+toolDirectory)
-	runOperationalCommand(testingInstance, fixtureRoot, environment, filepath.Join(fixtureRoot, operationalScriptsDirectory, "build-container-artifact.sh"))
-}
-
-func TestOperationalContainerArtifactWritesCanonicalDescriptor(testingInstance *testing.T) {
-	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	fixtureRoot := testingInstance.TempDir()
-	artifactDirectory := filepath.Join(fixtureRoot, "release-artifact")
-	writeOperationalFile(testingInstance, filepath.Join(fixtureRoot, "Dockerfile"), "FROM scratch\n", 0o644)
-	writeOperationalFile(testingInstance, filepath.Join(artifactDirectory, "staging.json"), "{}\n", 0o644)
-	fakeBinaryDirectory := filepath.Join(fixtureRoot, "bin")
-	fakeDocker := `#!/usr/bin/env bash
-set -euo pipefail
-if [[ "$1" == "buildx" && "$2" == "version" ]]; then exit 0; fi
-if [[ "$1" == "buildx" && "$2" == "build" ]]; then exit 0; fi
-if [[ "$1" == "image" && "$2" == "inspect" ]]; then builtin printf '%s\n' 'sha256:fixture-image'; exit 0; fi
-if [[ "$1" == "save" ]]; then
-  output=""
-  shift
-  while [[ $# -gt 0 ]]; do
-    if [[ "$1" == "--output" ]]; then output="$2"; shift 2; else shift; fi
-  done
-  [[ -n "${output}" ]]
-  builtin printf '%s\n' 'fixture-archive' >"${output}"
-  exit 0
-fi
-echo "unsupported fake Docker command: $*" >&2
-exit 1
-`
-	writeOperationalFile(testingInstance, filepath.Join(fakeBinaryDirectory, "docker"), fakeDocker, 0o755)
-	environment := append(
-		os.Environ(),
-		"PATH="+fakeBinaryDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"RELEASE_VERSION=v1.2.3",
-		"RELEASE_ARTIFACT_DIR="+artifactDirectory,
-		"RELEASE_CONTAINER_BUILD_TIMEOUT_SECONDS=5",
-		"RELEASE_CONTAINER_SAVE_TIMEOUT_SECONDS=5",
-	)
-	runOperationalCommand(
-		testingInstance,
-		fixtureRoot,
-		environment,
-		filepath.Join(repositoryRoot, operationalReleaseToolsRelative, "scripts", "prepare_container_artifact.sh"),
-		"--name", "fixture",
-		"--image", "example/fixture",
-		"--file", "Dockerfile",
-		"--context", ".",
-		"--platforms", "linux/amd64",
-	)
-	descriptorPath := filepath.Join(artifactDirectory, "payloads", "containers", "fixture", "container.json")
-	descriptorBytes, readError := os.ReadFile(descriptorPath)
-	if readError != nil {
-		testingInstance.Fatalf("read container descriptor: %v", readError)
-	}
-	var descriptor struct {
-		SchemaVersion int    `json:"schema_version"`
-		ArtifactKind  string `json:"artifact_kind"`
-		Name          string `json:"name"`
-		Image         string `json:"image"`
-		Version       string `json:"version"`
-		Platforms     []struct {
-			Platform string `json:"platform"`
-			Token    string `json:"token"`
-			LocalRef string `json:"local_ref"`
-			ImageID  string `json:"image_id"`
-			Archive  string `json:"archive"`
-			SHA256   string `json:"sha256"`
-		} `json:"platforms"`
-	}
-	if unmarshalError := json.Unmarshal(descriptorBytes, &descriptor); unmarshalError != nil {
-		testingInstance.Fatalf("parse container descriptor: %v", unmarshalError)
-	}
-	if descriptor.SchemaVersion != 1 || descriptor.ArtifactKind != "mprlab.container" {
-		testingInstance.Fatalf("unexpected container descriptor contract: %s", descriptorBytes)
-	}
-	if descriptor.Name != "fixture" || descriptor.Image != "example/fixture" || descriptor.Version != "v1.2.3" {
-		testingInstance.Fatalf("unexpected container descriptor identity: %s", descriptorBytes)
-	}
-	if len(descriptor.Platforms) != 1 {
-		testingInstance.Fatalf("unexpected container descriptor platforms: %s", descriptorBytes)
-	}
-	platform := descriptor.Platforms[0]
-	if platform.Platform != "linux/amd64" || platform.Token != "linux-amd64" || platform.LocalRef != "mprlab-release.local/fixture:v1.2.3-linux-amd64" || platform.ImageID != "sha256:fixture-image" || platform.Archive != "payloads/containers/fixture/linux-amd64.tar" || platform.SHA256 == "" {
-		testingInstance.Fatalf("unexpected container platform descriptor: %s", descriptorBytes)
-	}
-}
-
-func TestOperationalMakeDeployRunsRepositoryOwnedAnsible(testingInstance *testing.T) {
-	repositoryRoot := operationalRepositoryRoot(testingInstance)
-	toolDirectory := testingInstance.TempDir()
-	capturePath := filepath.Join(testingInstance.TempDir(), "deploy-capture")
-	writeOperationalFile(
-		testingInstance,
-		filepath.Join(toolDirectory, "uv"),
-		`#!/usr/bin/env bash
-set -euo pipefail
-[[ "${MPRLAB_DEPLOY_MODE}" == "deploy" ]]
-[[ "${ANSIBLE_CONFIG}" == "${PWD}/.mprlab/deploy/ansible/ansible.cfg" ]]
-[[ "$*" == *"tool run --from ansible-core==2.19.8 ansible-playbook"* ]]
-[[ "$*" == *"--ask-become-pass"* ]]
-[[ "$*" == *"${PWD}/.mprlab/deploy/ansible/playbooks/deploy.yml"* ]]
-printf '%s\t%s\n' "${PWD}" "$*" >>"${DEPLOY_CAPTURE}"
-`,
-		0o755,
-	)
-	environment := append(
-		os.Environ(),
-		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"DEPLOY_CAPTURE="+capturePath,
-	)
-	for invocation := 0; invocation < 2; invocation++ {
-		runOperationalCommand(
-			testingInstance,
-			repositoryRoot,
-			environment,
-			"make",
-			"--no-print-directory",
-			"deploy",
-			"DEPLOY_ARGS=ignored",
-			"GATEWAY_DIR=/unrelated/checkout",
-		)
-	}
-	captureBytes, readError := os.ReadFile(capturePath)
-	if readError != nil {
-		testingInstance.Fatalf("read repository-owned deploy capture: %v", readError)
-	}
-	lines := strings.Split(strings.TrimSpace(string(captureBytes)), "\n")
-	if len(lines) != 2 || lines[0] != lines[1] {
-		testingInstance.Fatalf("deploy retries used different commands: %s", captureBytes)
-	}
-	if !strings.HasPrefix(lines[0], repositoryRoot+"\t") {
-		testingInstance.Fatalf("deploy did not run from the current repository: %s", captureBytes)
-	}
-	for _, forbiddenFragment := range []string{
-		"mprlab-deploy",
-		"/unrelated/checkout",
-		"ignored",
-	} {
-		if strings.Contains(string(captureBytes), forbiddenFragment) {
-			testingInstance.Fatalf("deploy consumed forbidden external input %q: %s", forbiddenFragment, captureBytes)
-		}
-	}
 }
 
 func TestOperationalProductionLiveTestUsesDefaultTenantSecretOnly(testingInstance *testing.T) {
@@ -1525,23 +1327,6 @@ GHTTP_SERVE_PORT=4179
 GHTTP_SERVE_DIRECTORY=/app/site
 GHTTP_SERVE_NO_MARKDOWN=true
 `, 0o600)
-}
-
-func copyOperationalDirectory(testingInstance *testing.T, sourceDirectory string, targetDirectory string) {
-	testingInstance.Helper()
-	entries, readError := os.ReadDir(sourceDirectory)
-	if readError != nil {
-		testingInstance.Fatalf("read operational directory %s: %v", sourceDirectory, readError)
-	}
-	for _, entry := range entries {
-		sourcePath := filepath.Join(sourceDirectory, entry.Name())
-		targetPath := filepath.Join(targetDirectory, entry.Name())
-		if entry.IsDir() {
-			copyOperationalDirectory(testingInstance, sourcePath, targetPath)
-			continue
-		}
-		copyOperationalFile(testingInstance, sourcePath, targetPath)
-	}
 }
 
 func copyOperationalFile(testingInstance *testing.T, sourcePath string, targetPath string) {

@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 - Move Go and Python timeout selection from client configuration onto each messages request, replace the CLI `--timeout` flag with `--request-timeout-seconds`, and remove the arbitrary 390-second bundled-client deadline.
 - Add `server.max_request_timeout_seconds`, one ingress-owned deadline shared by body parsing, queue admission, provider calls, and OpenAI polling, plus safe terminal-outcome logging.
 - Keep response construction and managed-usage persistence under request cancellation, classify queue saturation as `proxy_overload`, reject explicit null timeout configuration, and synchronize Python client distribution metadata at `0.2.0`.
-- Make `make deploy` execute the complete tracked Ansible transaction directly, with no installed MPRLab binary, gateway checkout, controller bundle, or sibling-repository dependency.
+- Replace app-owned production lifecycle machinery with one schema-v2 resource declaration and thin `make release`, `make publish`, and `make deploy` entrypoints into the exact sibling `mprlab-gateway`; render Pages with Go and declare no production Node dependency.
 - Give the asynchronous local orchestration contract its own bounded startup/shutdown timeout so `make release` does not fail under ordinary CI load.
 - Remove tracked generated Python `*.egg-info` metadata so a clean CI/release gate remains clean.
 
