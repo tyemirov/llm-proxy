@@ -218,49 +218,89 @@ providers:
           request_profile: "openai_responses_reasoning_tools"
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts:
+              - minimal
+              - low
+              - medium
+              - high
         - id: "gpt-5"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts:
+              - minimal
+              - low
+              - medium
+              - high
         - id: "gpt-5.5"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["none", "low", "medium", "high", "xhigh"]
+            efforts:
+              - none
+              - low
+              - medium
+              - high
+              - xhigh
         - id: "gpt-5.5-pro"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["medium", "high", "xhigh"]
+            efforts:
+              - medium
+              - high
+              - xhigh
         - id: "gpt-5.6"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
+            efforts:
+              - none
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
         - id: "gpt-5.6-sol"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
+            efforts:
+              - none
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
         - id: "gpt-5.6-terra"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
+            efforts:
+              - none
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
         - id: "gpt-5.6-luna"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
+            efforts:
+              - none
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
     dictation:
       default_model: "gpt-4o-mini-transcribe"
       models:
@@ -510,7 +550,11 @@ providers:
           output_token_limit: 65536
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts:
+              - minimal
+              - low
+              - medium
+              - high
 ```
 
 `server.request_timeout_seconds` and `server.max_request_timeout_seconds` must
@@ -554,7 +598,9 @@ providers:
       models:
         - id: "gemini-2.5-flash"
           output_token_limit: 65536
-          media_inputs: ["image", "audio"]
+          media_inputs:
+            - image
+            - audio
 ```
 
 `reasoning_effort` is an optional text-model capability declaration. It appears
