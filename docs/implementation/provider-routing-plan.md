@@ -289,7 +289,13 @@ independent caller-owned cancellation mechanisms.
 When a bundled-client request omits `model`, it deliberately sends no model
 field and delegates selection to the authenticated tenant or selected provider.
 The server keeps `GET /` and compatibility JSON `POST /` available for direct
-REST callers.
+REST callers. Direct `GET /` accepts an optional `web_search` query value only
+as exact `true` or `false`; omission means false, and every other supplied
+spelling returns `400` before route resolution. JSON `POST /` and `POST /v2`
+use a native boolean body field. The Go package, Go CLI, and Python package
+remain v2-only, remove `web_search` inherited from a configured base URL, and
+serialize that body field as a JSON boolean. The Python request constructor
+also rejects non-boolean runtime values before HTTP.
 
 This permits a managed-tenant owner to change the tenant's routing default in
 the LLM Proxy Settings UI and have subsequent model-omitting client requests

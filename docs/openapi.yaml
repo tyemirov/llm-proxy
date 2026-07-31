@@ -620,7 +620,7 @@ components:
       name: web_search
       in: query
       required: false
-      description: Enables web search when true. Omission disables web search.
+      description: Exact boolean query parameter. Use true or false; omission disables web search. Any other supplied spelling is invalid and returns HTTP 400.
       schema:
         type: boolean
     SystemPrompt:
