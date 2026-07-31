@@ -192,6 +192,7 @@ def assert_python_v2_request_conforms_to_openapi(captured_request: CapturedReque
     assert set(captured_request.body).issubset(contract_body_fields)
     assert set(request_schema["required"]).issubset(captured_request.body)
     assert request_schema["additionalProperties"] is False
+    assert isinstance(captured_request.body["web_search"], bool)
 
     declared_query_fields: set[str] = set()
     for raw_parameter in operation["parameters"]:
@@ -606,6 +607,14 @@ def test_config_validation_errors(config_kwargs: dict[str, object], expected_err
         (
             {"messages": (ClientMessage(role="user", content="prompt"),), "reasoning_effort": ""},
             "reasoning_effort must be nonblank",
+        ),
+        (
+            {"messages": (ClientMessage(role="user", content="prompt"),), "web_search": "true"},
+            "web_search must be a boolean",
+        ),
+        (
+            {"messages": (ClientMessage(role="user", content="prompt"),), "web_search": 1},
+            "web_search must be a boolean",
         ),
         (
             {"messages": (ClientMessage(role="user", content="prompt"),), "request_timeout_seconds": 0},
