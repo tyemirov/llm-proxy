@@ -1816,7 +1816,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Improvements
 
-- [ ] [I204] (P0) Adopt the app-owned resource and sibling-gateway lifecycle.
+- [x] [I204] (P0) Adopt the app-owned resource and sibling-gateway lifecycle.
   Goal:
   Make llm-proxy independently releasable and deployable through the shared
   `mprlab-gateway` orchestrator without retaining a second production
@@ -1845,6 +1845,18 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - The sibling gateway accepts a clean committed checkout with
     `make plan-app-release MPRLAB_APP_ROOT=<llm-proxy checkout>` without
     publishing or deploying.
+
+  Resolved 2026-07-30:
+  - Commit `0749142` replaces schema-v1 and app-owned production machinery with
+    the schema-v2 declaration, exact sibling lifecycle wrapper, and Go-only
+    Pages container. Node remains only in developer lint and browser tests.
+  - The complete final `make ci` passes with 100% Go statement coverage, 33
+    Python tests, 75 browser tests, the TAuth black-box test, and the live
+    provider harness preflight.
+  - Gateway commit `6e26e3e` accepts the clean app commit through
+    `plan-app-release`, validates every committed source input and declared
+    resource, and derives only the `tauth.tenants` runtime requirement. No
+    release, publication, deployment, or unrelated-repository scan runs.
 
 - [x] [I042] (P1) Remove managed-request serialization from SQLite authentication.
   Goal:
