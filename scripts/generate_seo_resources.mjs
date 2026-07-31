@@ -479,17 +479,18 @@ if (!this.hasSecret) {
     solution: "LLM Proxy accepts web_search per request but enables it only for OpenAI model catalog entries marked with web_search support.",
     steps: [
       "Mark supported OpenAI model entries with web_search: true in config.yml.",
-      "Send web_search=1 or web_search=true only when the selected route supports it.",
+      "Send exact web_search=true only when the selected route supports it.",
       "Expect unsupported provider/model combinations to fail before an upstream call.",
       "Keep non-OpenAI providers on normal text routing.",
     ],
     features: [
+      ["Exact boolean contract", "GET / accepts only web_search=true or web_search=false.", "Other supplied spellings return 400 instead of silently disabling search."],
       ["Model-aware flag", "The request option is checked against provider and model metadata.", "DeepSeek with web_search returns a client error instead of a hidden fallback."],
       ["Config-owned support", "OpenAI web-search support is explicit in the model catalog.", "Operators can see which model entries expose the capability."],
       ["Early rejection", "Unsupported combinations fail before provider spend.", "Callers get a clear request error."],
     ],
     examples: [
-      ["Research prompt", "A caller selects gpt-5 with web_search=1 for a search-enabled answer."],
+      ["Research prompt", "A caller selects gpt-5 with web_search=true for a search-enabled answer."],
       ["Non-search provider", "A Gemini request with web_search does not silently pretend to search."],
       ["Default model check", "If the tenant default model lacks web search, the request must choose a supporting OpenAI model."],
     ],
