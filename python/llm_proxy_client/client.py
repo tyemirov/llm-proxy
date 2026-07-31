@@ -306,6 +306,8 @@ class ClientMessagesRequest:
         if len(self.messages) == 0:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: missing messages")
         validate_messages(self.messages)
+        if not isinstance(self.web_search, bool):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: web_search must be a boolean")
         if self.max_tokens is not None and self.max_tokens <= 0:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: max_tokens must be positive")
         if self.reasoning_effort is not None and not self.reasoning_effort.strip():

@@ -65,7 +65,7 @@ func TestRequestLogsExcludeQueryContent(testingInstance *testing.T) {
 		},
 		{
 			requestPath:        fmt.Sprintf("/?prompt=%s&system_prompt=%s&key=%s&web_search=%s", promptQueryValue, systemPromptQueryValue, tenantSecretQueryValue, invalidWebSearchQueryValue),
-			expectedStatusCode: http.StatusOK,
+			expectedStatusCode: http.StatusBadRequest,
 		},
 	}
 	for _, requestScenario := range requestScenarios {

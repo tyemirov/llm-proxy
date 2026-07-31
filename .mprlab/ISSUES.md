@@ -2923,6 +2923,73 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     pair for the implementation, with the final run after the last code edit.
 - [ ] [I205] (P2) Let's align the text inside the card to the left so it's on the same vertical line as the left of the title, let's align both the text of the card, such as goal etc to the left so it's visually aligned with the ttitle of the card.
   ![image](images/1785478561383_image.png)
+- [x] [I206] (P0) Carry provider-neutral image and audio attachments on the canonical messages API.
+  Goal:
+  Let application-owned clients send exact current media bytes through the
+  standard `POST /v2` messages contract without adding product-specific
+  endpoints, schemas, prompts, policies, or provider dependencies to the
+  generic proxy.
+  Requirements:
+  - Extend only canonical `POST /v2` messages with optional ordered image and
+    audio attachments on user messages. Keep compatibility `POST /`, `GET /`,
+    and `/dictate` on their existing distinct contracts.
+  - Define one provider-neutral attachment wire shape with an exact media type,
+    canonical MIME type, canonical base64 bytes, and matching lowercase SHA-256
+    digest. Preserve message order and attachment order exactly.
+  - Extend the official Go client with constructor-only immutable image and
+    audio attachment values. Constructors must copy and hash caller bytes;
+    callers must not be able to construct a zero-but-invalid attachment.
+  - Validate external attachment data exactly once at the HTTP edge. Reject
+    malformed, empty, noncanonical, hash-mismatched, unsupported-role,
+    unsupported-MIME, oversized, or unsupported model-route media before any
+    upstream call.
+  - Declare media-input capabilities on exact model catalog entries and map
+    validated attachments only through provider adapters that implement those
+    capabilities. Provider selection remains configuration; no public
+    OpenAI-specific field may enter the canonical request.
+  - Never echo media bytes in response metadata, persist them in managed usage,
+    or expose them in provider errors.
+  Deliverables:
+  - Canonical `/v2`, model-catalog, official Go client, and provider-adapter
+    implementation for image and audio attachments.
+  - Updated OpenAPI, README, model-capability table, and provider-routing
+    contract with the exact current behavior and limits.
+  Validation:
+  - Add black-box public HTTP scenarios proving exact ordered image and audio
+    bytes reach a capable provider adapter and unsupported media makes zero
+    upstream calls.
+  - Add public Go-client scenarios proving constructor immutability, canonical
+    serialization, exact ordering, and rejection of every invalid attachment
+    state.
+  - Cover startup rejection for invalid or adapter-incompatible model media
+    declarations and response metadata that omits encoded media.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after
+    the last code edit.
+  Resolution:
+  - Canonical `POST /v2` now accepts exact ordered image and audio attachments
+    on user messages through one provider-neutral hash-bound wire contract;
+    compatibility routes remain text-only.
+  - The official Go client owns immutable constructor-only media values, and
+    the proxy independently validates their canonical bytes, digest, role,
+    MIME type, resolved-model capability, and bounded request size before
+    upstream admission.
+  - Exact configured Gemini models declare image/audio input support and map
+    validated media to native ordered `inlineData` parts. Other adapters and
+    undeclared exact models remain fail-closed and provider selection stays
+    configuration-owned.
+  - OpenAPI, generated API reference, README capability documentation, and the
+    provider-routing contract describe the current standard API. Public-client
+    and black-box router scenarios cover immutability, ordering, malformed and
+    unsupported rejection, zero upstream work, and non-echoed media.
+  - Review follow-up makes the canonical OpenAPI schema reject mismatched
+    attachment type/MIME pairs and attachments on non-user messages. The
+    optional query `web_search` parameter now accepts only exact `true` or
+    `false`; aliases and malformed supplied values fail at the HTTP boundary.
+  - The breaking query migration is published in the changelog, README,
+    OpenAPI, provider-routing guide, and generated public resource. Go package,
+    Go CLI, and Python contract tests prove native JSON booleans, while the
+    Python constructor rejects non-boolean runtime values before HTTP.
 
 
 ## Maintenance

@@ -30,7 +30,7 @@ type chatRequestPayload struct {
 
 type chatV2RequestPayload struct {
 	Prompt          json.RawMessage             `json:"prompt"`
-	Messages        *[]chatMessagePayload       `json:"messages"`
+	Messages        *[]chatV2MessagePayload     `json:"messages"`
 	Model           string                      `json:"model"`
 	WebSearch       bool                        `json:"web_search"`
 	SystemPrompt    json.RawMessage             `json:"system_prompt"`
@@ -292,10 +292,16 @@ func chatRequestFromQuery(ginContext *gin.Context, defaults textRequestDefaults,
 		return chatRequestParameters{}, false
 	}
 
-	webSearchQuery := strings.TrimSpace(ginContext.Query(queryParameterWebSearch))
-	webSearchEnabled, webSearchParseError := parseWebSearchParameter(webSearchQuery)
-	if webSearchParseError != nil {
-		structuredLogger.Warnw(logEventParseWebSearchParameterFailed)
+	webSearchEnabled := false
+	webSearchQuery, hasWebSearchQuery := ginContext.GetQuery(queryParameterWebSearch)
+	if hasWebSearchQuery {
+		var webSearchParseError error
+		webSearchEnabled, webSearchParseError = parseWebSearchParameter(webSearchQuery)
+		if webSearchParseError != nil {
+			structuredLogger.Warnw(logEventParseWebSearchParameterFailed)
+			ginContext.String(http.StatusBadRequest, errorInvalidWebSearch)
+			return chatRequestParameters{}, false
+		}
 	}
 	maxTokens, maxTokensError := parseMaxTokensParameter(ginContext.Query(queryParameterMaxTokens))
 	if maxTokensError != nil {
@@ -452,9 +458,13 @@ func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayl
 		ginContext.String(http.StatusBadRequest, errorInvalidReasoningEffort)
 		return chatRequestParameters{}, false
 	}
-	messages, messageError := newPayloadChatMessages(*payload.Messages, defaults.systemPrompt, constants.EmptyString)
+	messages, messageError := newV2PayloadChatMessages(*payload.Messages, defaults.systemPrompt)
 	if messageError != nil {
 		ginContext.String(statusCodeForError(messageError), responseMessageForError(messageError))
+		return chatRequestParameters{}, false
+	}
+	if mediaCapabilityError := validateMessageMediaForResolvedTextRoute(providerDefinition, resolvedModel, messages); mediaCapabilityError != nil {
+		ginContext.String(statusCodeForError(mediaCapabilityError), responseMessageForError(mediaCapabilityError))
 		return chatRequestParameters{}, false
 	}
 
@@ -695,14 +705,10 @@ func usageDictationModelIdentifier(ginContext *gin.Context, defaults tenantDefau
 }
 
 func parseWebSearchParameter(rawValue string) (bool, error) {
-	if rawValue == constants.EmptyString {
-		return false, nil
-	}
-	normalizedValue := strings.ToLower(strings.TrimSpace(rawValue))
-	switch normalizedValue {
-	case "1", "t", "true", "y", "yes":
+	switch rawValue {
+	case "true":
 		return true, nil
-	case "0", "f", "false", "n", "no":
+	case "false":
 		return false, nil
 	default:
 		return false, fmt.Errorf("invalid web_search value: %s", rawValue)

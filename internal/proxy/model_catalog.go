@@ -29,6 +29,7 @@ type ModelConfiguration struct {
 	WebSearch        bool
 	OutputTokenLimit int
 	ReasoningEffort  *ReasoningEffortCapability
+	MediaInputs      []string
 }
 
 // ReasoningEffortCapability declares the configured upstream mapping for one
@@ -116,6 +117,9 @@ func validateModelEndpointCatalog(providerName string, endpoint endpointKind, ca
 				return fmt.Errorf("%w: field=%s.reasoning_effort", capabilityError, modelFieldPrefix)
 			}
 		}
+		if _, mediaInputError := validatedMediaInputSet(providerName, endpoint, modelConfiguration.MediaInputs, modelFieldPrefix+".media_inputs"); mediaInputError != nil {
+			return mediaInputError
+		}
 	}
 	if !defaultModelFound {
 		return fmt.Errorf("%w: provider=%s endpoint=%s default_model=%s", ErrInvalidModelCatalog, providerName, endpointName, defaultModel)
@@ -202,10 +206,45 @@ func textModelSet(catalog ModelEndpointCatalog) map[string]textModelDefinition {
 				outputTokenLimit:    modelConfiguration.OutputTokenLimit,
 				hasOutputTokenLimit: modelConfiguration.OutputTokenLimit > 0,
 				reasoningEffort:     configuredReasoningEffortCapability(modelConfiguration.ReasoningEffort),
+				mediaInputs:         configuredMediaInputSet(modelConfiguration.MediaInputs),
 			}
 		}
 	}
 	return models
+}
+
+func validatedMediaInputSet(providerName string, endpoint endpointKind, rawMediaInputs []string, fieldPrefix string) (map[messageMediaType]struct{}, error) {
+	mediaInputs := make(map[messageMediaType]struct{}, len(rawMediaInputs))
+	for mediaInputIndex, rawMediaInput := range rawMediaInputs {
+		mediaInput := messageMediaType(rawMediaInput)
+		if rawMediaInput == constants.EmptyString || rawMediaInput != strings.TrimSpace(rawMediaInput) {
+			return nil, fmt.Errorf("%w: field=%s[%d]", ErrInvalidModelCatalog, fieldPrefix, mediaInputIndex)
+		}
+		if !providerSupportsMessageMedia(providerName, endpoint, mediaInput) {
+			return nil, fmt.Errorf(
+				"%w: field=%s[%d] provider=%s endpoint=%s media_input=%s",
+				ErrInvalidModelCatalog,
+				fieldPrefix,
+				mediaInputIndex,
+				providerName,
+				endpoint,
+				rawMediaInput,
+			)
+		}
+		if _, duplicate := mediaInputs[mediaInput]; duplicate {
+			return nil, fmt.Errorf("%w: field=%s[%d] duplicate=%s", ErrInvalidModelCatalog, fieldPrefix, mediaInputIndex, rawMediaInput)
+		}
+		mediaInputs[mediaInput] = struct{}{}
+	}
+	return mediaInputs, nil
+}
+
+func configuredMediaInputSet(rawMediaInputs []string) map[messageMediaType]struct{} {
+	mediaInputs := make(map[messageMediaType]struct{}, len(rawMediaInputs))
+	for _, rawMediaInput := range rawMediaInputs {
+		mediaInputs[messageMediaType(rawMediaInput)] = struct{}{}
+	}
+	return mediaInputs
 }
 
 func configuredReasoningEffortCapability(configuration *ReasoningEffortCapability) *reasoningEffortCapability {

@@ -5,7 +5,9 @@ Responses API, OpenAI-compatible chat providers, Anthropic's native Messages
 API, Google Gemini's native generateContent API, and audio transcription APIs.
 It exposes protected HTTP endpoints that require a tenant secret and simplify
 integrating provider capabilities without embedding API credentials in each
-client.
+client. Canonical `POST /v2` user messages can also carry provider-neutral,
+ordered image and audio attachments when the exact configured model declares
+that input capability.
 
 ## Features
 
@@ -15,7 +17,8 @@ client.
 - Choose the model per request via `model=...`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
 - Set optional nonblank `reasoning_effort=...` on `GET /`, or in a JSON body for `POST /` and `POST /v2`, to select a capability-supported reasoning level for that exact resolved route. An explicit value overrides the tenant default; an omitted value retains it. Blank or unsupported values fail before an upstream call.
 - Choose the dictation model per request via `model=...` on `/dictate`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
-- Optional per-request web search via `web_search=1|true|yes` when the selected provider/model is configured to support it
+- Optional per-request web search via exact `web_search=true`; `false` or omission keeps it disabled
+- Optional exact image and audio attachments on canonical `POST /v2` user messages when the selected model declares the corresponding `media_inputs`
 - Optional logging at `debug` or `info` levels
 - Forwards requests using server-side provider API keys, loaded from the database in management mode
 - Optional TAuth-protected self-service UI where signed-in users automatically receive an llm-proxy client key and their provider settings plus routing defaults autosave
@@ -23,8 +26,9 @@ client.
 
 ## REST Contract
 
-llm-proxy exposes a blocking REST contract for text generation. A caller sends
-one authenticated `GET /`, `POST /`, or `POST /v2` request and receives the final
+llm-proxy exposes a blocking REST contract for text generation, including
+optional media evidence on canonical `POST /v2`. A caller sends one
+authenticated `GET /`, `POST /`, or `POST /v2` request and receives the final
 formatted answer in that same HTTP response.
 
 ### Canonical OpenAPI ownership
@@ -47,6 +51,22 @@ human-readable reference derived from them at
 [`/docs/`](https://llm-proxy.mprlab.com/docs/). The contract names
 `https://llm-proxy-api.mprlab.com` as its API server; the API origin does not
 serve another schema location.
+
+### `web_search` boolean migration
+
+Direct `GET /` callers must send the optional query parameter as exact
+`web_search=true` or `web_search=false`. Omission means false. Former spellings
+such as `1`, `0`, `t`, `f`, `y`, `n`, `yes`, and `no`, along with blank,
+uppercase, or whitespace-padded values, now return HTTP 400 instead of being
+coerced or silently treated as false.
+
+JSON callers continue to send a native boolean body field on `POST /` or
+`POST /v2`. The official Go package exposes `MessagesRequestInput.WebSearch`,
+the Go CLI exposes the boolean `--web-search` flag, and the Python package
+exposes `ClientMessagesRequest.web_search: bool`. All bundled clients use
+`POST /v2`, remove any `web_search` query value inherited from a configured
+base URL, and serialize the request body as `"web_search": true` or
+`"web_search": false`.
 
 The caller does not stream tokens, poll a job endpoint, or follow a resume
 token. OpenAI Responses is the only current text adapter with a pollable
@@ -214,49 +234,89 @@ providers:
           request_profile: "openai_responses_reasoning_tools"
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts:
+              - minimal
+              - low
+              - medium
+              - high
         - id: "gpt-5"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts:
+              - minimal
+              - low
+              - medium
+              - high
         - id: "gpt-5.5"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["none", "low", "medium", "high", "xhigh"]
+            efforts:
+              - none
+              - low
+              - medium
+              - high
+              - xhigh
         - id: "gpt-5.5-pro"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["medium", "high", "xhigh"]
+            efforts:
+              - medium
+              - high
+              - xhigh
         - id: "gpt-5.6"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
+            efforts:
+              - none
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
         - id: "gpt-5.6-sol"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
+            efforts:
+              - none
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
         - id: "gpt-5.6-terra"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
+            efforts:
+              - none
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
         - id: "gpt-5.6-luna"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["none", "low", "medium", "high", "xhigh", "max"]
+            efforts:
+              - none
+              - low
+              - medium
+              - high
+              - xhigh
+              - max
     dictation:
       default_model: "gpt-4o-mini-transcribe"
       models:
@@ -454,6 +514,16 @@ adapters before they are available through `/dictate`.
 
 All upstream provider credentials are server-side only. Client requests must
 never send OpenAI, Meta, Anthropic, xAI, Gemini, or other upstream API keys.
+Media input is independently model-scoped: the checked-in catalog currently
+declares `image` and `audio` only for `gemini-3.5-flash` and
+`gemini-2.5-flash`. Every other configured model remains text-only on
+`POST /v2`, regardless of capabilities its upstream provider may expose.
+
+| Model | Provider | Standard-message media inputs |
+|-------|----------|-------------------------------|
+| `gemini-3.5-flash` | Gemini | `image`, `audio` |
+| `gemini-2.5-flash` | Gemini | `image`, `audio` |
+| Every other configured model | Its configured provider | None |
 
 ### Model catalog schema
 
@@ -496,7 +566,11 @@ providers:
           output_token_limit: 65536
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts:
+              - minimal
+              - low
+              - medium
+              - high
 ```
 
 `server.request_timeout_seconds` and `server.max_request_timeout_seconds` must
@@ -525,6 +599,25 @@ or `web_search: true` appears outside an OpenAI text model entry.
 proxy-side maximum for `max_tokens`. Anthropic text models require
 `output_token_limit` because Anthropic Messages requires `max_tokens` even when
 the client omits it.
+
+`media_inputs` is an optional exact-model capability list. Its only values are
+`image` and `audio`; values must be canonical and duplicate-free. Startup
+rejects declarations on an endpoint or provider adapter that does not implement
+the corresponding standard-message translation. Omission means that model is
+text-only.
+
+```yaml
+providers:
+  gemini:
+    text:
+      default_model: "gemini-2.5-flash"
+      models:
+        - id: "gemini-2.5-flash"
+          output_token_limit: 65536
+          media_inputs:
+            - image
+            - audio
+```
 
 `reasoning_effort` is an optional text-model capability declaration. It appears
 only under `providers.<provider>.text.models[]` and belongs to that exact
@@ -604,7 +697,8 @@ Provider-specific details:
   Gemini usage metadata into the same response headers and JSON `usage` object
   used by the other text providers. `finishReason=MAX_TOKENS` enters the common
   missing-suffix loop and only `finishReason=STOP` completes the assembled
-  answer.
+  answer. For exact models whose catalog declares `media_inputs`, ordered image
+  and audio attachments become native `inlineData` parts after the message text.
 * Anthropic text requests use `POST /v1/messages` with `x-api-key` and
   `anthropic-version: 2023-06-01`. System messages are translated to
   Anthropic's top-level `system` field. Anthropic requires `max_tokens`, so
@@ -1537,6 +1631,44 @@ if err != nil {
 text, err := client.PostMessages(ctx, request)
 ```
 
+For a route whose model catalog declares image input, construct media through
+the official client and attach it to a user message:
+
+```go
+frameBytes, err := os.ReadFile("frame.png")
+if err != nil {
+    return err
+}
+frame, err := llmproxyclient.NewImageAttachment(llmproxyclient.ImageAttachmentInput{
+    MIMEType: "image/png",
+    Data:     frameBytes,
+})
+if err != nil {
+    return err
+}
+request, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{
+    Messages: []llmproxyclient.MessageInput{{
+        Role:        "user",
+        Content:     "Inspect this exact frame.",
+        Attachments: []llmproxyclient.MessageAttachment{frame},
+    }},
+    Model: "gemini-2.5-flash",
+})
+if err != nil {
+    return err
+}
+text, err := client.PostMessages(ctx, request)
+```
+
+`NewImageAttachment` accepts `image/jpeg`, `image/png`, or `image/webp`.
+`NewAudioAttachment` accepts `audio/mp4`, `audio/mpeg`, or `audio/wav`.
+Both constructors copy the supplied nonempty bytes, compute their lowercase
+SHA-256 digest, and serialize canonical base64. Attachment values cannot be
+constructed directly. The proxy independently decodes and verifies both
+representations at the HTTP edge, preserves attachment order, rejects media on
+non-user messages or unsupported model routes before upstream work, and never
+echoes media bytes in response metadata.
+
 The request value controls only the proxy budget header. `ctx` remains the Go
 caller's independent cancellation authority, and the injected `HTTPDoer` may
 have its own explicitly selected transport policy. The package does not add a
@@ -1856,6 +1988,11 @@ the OpenAPI schema, including the omission-versus-explicit-value contract for
 `reasoning_effort`. It rejects `prompt` and body `system_prompt`; send a
 `system` role message instead. The tenant default system prompt is still
 prepended when the submitted messages do not include a system message.
+Only `POST /v2` user messages may include `attachments`; compatibility
+`POST /`, `GET /`, and `/dictate` do not accept that field. Each attachment
+contains exactly `type`, `mime_type`, canonical padded base64 `data`, and the
+matching lowercase hexadecimal `sha256`. The request body remains bounded by
+`server.max_prompt_bytes`.
 
 ### Choose an OpenAI model
 
@@ -1873,7 +2010,7 @@ curl --get \
 curl --get \
   --data-urlencode "prompt=What changed in the 2025 child tax credit?" \
   --data-urlencode "key=mysecret" \
-  --data-urlencode "web_search=1" \
+  --data-urlencode "web_search=true" \
   "http://localhost:8080/"
 ```
 
@@ -1884,7 +2021,7 @@ curl --get \
   --data-urlencode "prompt=Latest research on quantum gravity" \
   --data-urlencode "key=mysecret" \
   --data-urlencode "model=gpt-5" \
-  --data-urlencode "web_search=1" \
+  --data-urlencode "web_search=true" \
   "http://localhost:8080/"
 ```
 

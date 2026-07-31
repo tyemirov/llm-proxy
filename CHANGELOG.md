@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- **Breaking:** `GET /` now accepts `web_search` only as exact `true` or `false`; former aliases and malformed supplied values return HTTP 400. The bundled Go package, Go CLI, and Python package remain on `POST /v2` and serialize `web_search` as a native JSON boolean.
 - Remove Moonshot's unavailable former default model and promote the verified `kimi-k2.6` model as the sole canonical default without an alias or fallback.
 - Verify every nonempty managed provider key against its exact provider and selected text model before atomic persistence, with automatic paste verification, safe stable failures, stale-attempt cancellation, and live-harness coverage.
 - Persist managed usage after response flush through one bounded FIFO writer, with explicit drop-newest overflow, at-most-once process-local durability, and safe failure logging.

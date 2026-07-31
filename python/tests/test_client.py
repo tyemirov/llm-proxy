@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from llm_proxy_client import (
     Client,
@@ -142,7 +143,8 @@ def replace_model_profile(profile_path: Path, profile_document: str) -> None:
 def canonical_openapi_document() -> dict[str, Any]:
     """Load the sole committed HTTP contract."""
 
-    document = json.loads(CANONICAL_OPENAPI_PATH.read_text(encoding="utf-8"))
+    document = yaml.safe_load(CANONICAL_OPENAPI_PATH.read_text(encoding="utf-8"))
+    assert isinstance(document, dict)
     assert document["openapi"] == "3.1.0"
     return document
 
@@ -190,6 +192,7 @@ def assert_python_v2_request_conforms_to_openapi(captured_request: CapturedReque
     assert set(captured_request.body).issubset(contract_body_fields)
     assert set(request_schema["required"]).issubset(captured_request.body)
     assert request_schema["additionalProperties"] is False
+    assert isinstance(captured_request.body["web_search"], bool)
 
     declared_query_fields: set[str] = set()
     for raw_parameter in operation["parameters"]:
@@ -207,6 +210,15 @@ def canonical_v2_response_statuses() -> set[int]:
 
     responses = canonical_v2_operation(canonical_openapi_document())["responses"]
     return {int(status_code) for status_code in responses}
+
+
+def test_canonical_openapi_declares_web_search_query_as_boolean() -> None:
+    """The query contract uses one canonical boolean instead of textual aliases."""
+
+    document = canonical_openapi_document()
+    web_search_schema = document["components"]["parameters"]["WebSearch"]["schema"]
+
+    assert web_search_schema == {"type": "boolean"}
 
 
 def test_client_posts_v2_body_and_preserves_non_body_query(running_server: RunningServer) -> None:
@@ -595,6 +607,14 @@ def test_config_validation_errors(config_kwargs: dict[str, object], expected_err
         (
             {"messages": (ClientMessage(role="user", content="prompt"),), "reasoning_effort": ""},
             "reasoning_effort must be nonblank",
+        ),
+        (
+            {"messages": (ClientMessage(role="user", content="prompt"),), "web_search": "true"},
+            "web_search must be a boolean",
+        ),
+        (
+            {"messages": (ClientMessage(role="user", content="prompt"),), "web_search": 1},
+            "web_search must be a boolean",
         ),
         (
             {"messages": (ClientMessage(role="user", content="prompt"),), "request_timeout_seconds": 0},

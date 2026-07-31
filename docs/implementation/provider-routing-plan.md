@@ -19,8 +19,17 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
   the exact persisted pair, and read-time routing never substitutes another
   provider or model.
 - Compatibility JSON `POST /` accepts exactly one text input shape: `prompt` for a single user prompt or `messages[]` for an OpenRouter/OpenAI-compatible chat transcript.
-- Canonical JSON `POST /v2` accepts only `messages[]` as the text input shape; request-body `prompt` and `system_prompt` are invalid.
-- `messages[]` items contain `role` and string `content`. Supported roles are `system`, `user`, and `assistant`; at least one `user` message is required.
+- Canonical JSON `POST /v2` accepts only `messages[]`; request-body `prompt`
+  and `system_prompt` are invalid. A user message may additionally contain an
+  ordered `attachments[]` array. Compatibility `GET /`, JSON `POST /`, and
+  `/dictate` never accept message attachments.
+- `messages[]` items contain `role` and nonblank string `content`. Supported
+  roles are `system`, `user`, and `assistant`; at least one `user` message is
+  required. `attachments[]` is allowed only on a user message and each item
+  contains exactly `type`, `mime_type`, canonical padded base64 `data`, and
+  the matching lowercase hexadecimal `sha256`. Image accepts `image/jpeg`,
+  `image/png`, and `image/webp`; audio accepts `audio/mp4`, `audio/mpeg`, and
+  `audio/wav`.
 - `messages[].order` is optional. When any submitted message includes `order`, every submitted message must include a unique non-negative integer `order`; the proxy sorts submitted messages by ascending `order` before adding a request or tenant system prompt and before routing upstream.
 - With `messages[]` on `POST /`, body `system_prompt` is prepended as a system message only when the transcript does not already contain a `system` message. A body containing both `system_prompt` and a system message is invalid. With `POST /v2`, callers send system instructions as `system` role messages.
 - `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies. It is the initial per-attempt output budget and is reused for missing-suffix attempts.
@@ -44,7 +53,13 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - For JSON `POST /`, query `model` may override the body only when the body omits `model` or provides the same value.
 - Conflicting query/body `model` values return `400 Bad Request`.
 - JSON `POST /` bodies that provide both `prompt` and `messages`, neither field, empty messages, unsupported roles, empty content, a missing user message, partially specified `order`, duplicate `order`, or negative `order` return `400 Bad Request`.
-- JSON `POST /v2` bodies that provide `prompt`, body `system_prompt`, missing or empty messages, unsupported roles, empty content, a missing user message, partially specified `order`, duplicate `order`, negative `order`, or unknown JSON fields return `400 Bad Request`.
+- JSON `POST /v2` bodies that provide `prompt`, body `system_prompt`, missing
+  or empty messages, unsupported roles, empty content, a missing user message,
+  partially specified `order`, duplicate `order`, negative `order`, media on a
+  non-user message, `null` or empty attachments, malformed base64, mismatched
+  digests, unsupported media types, or unknown JSON fields return
+  `400 Bad Request`. Media unsupported by the exact resolved model also returns
+  `400` before any provider call.
 - Upstream provider API keys are never accepted from client requests.
 
 ## Providers
@@ -169,6 +184,7 @@ Provider model catalogs:
 - `providers.<provider>.text.default_model`
 - `providers.<provider>.text.models[].id`
 - `providers.<provider>.text.models[].output_token_limit`
+- `providers.<provider>.text.models[].media_inputs`
 - `providers.<provider>.text.models[].reasoning_effort`
 - `providers.openai.text.models[].request_profile`
 - `providers.openai.text.models[].web_search`
@@ -185,8 +201,8 @@ The model catalog is runtime config data. Code owns provider selectors,
 aliases, transports, endpoint shapes, and stable OpenAI request-profile
 implementations. `config.yml` owns provider model ids, provider default models,
 dictation model ids, model-specific web-search enablement, provider/model
-reasoning-effort capability declarations, and known provider-side output-token
-limits.
+reasoning-effort and media-input capability declarations, and known
+provider-side output-token limits.
 
 The README model-capability table mirrors `config.yml`; refresh those two
 catalog representations together and do not hardcode model ids in provider
@@ -254,10 +270,12 @@ managed event, while successive OpenAI snapshots for one response id replace
 one another. A recovered request records one success and no failure; a request
 deadline records one `504` with all usage observed before the deadline.
 
-Bundled clients intentionally expose only the canonical `POST /v2` text
-contract. The installable Go CLI maps prompt flags or stdin into v2 `system` and
-`user` messages, while the reusable Go and Python packages expose only
-messages-request constructors and `PostMessages`/`post_messages` send methods.
+Bundled clients intentionally expose only the canonical `POST /v2` message
+contract. The installable Go CLI maps prompt flags or stdin into v2 `system`
+and `user` messages. The reusable Go package additionally exposes closed
+image/audio attachment constructors that copy bytes, derive the canonical
+base64 and digest representations, and attach only to user messages. The
+Python package and CLI remain text-only callers of the same endpoint.
 Their optional `reasoning_effort` input serializes the same canonical field;
 the clients reject only blank local input and leave exact model-capability
 validation to the proxy edge.
@@ -271,7 +289,13 @@ independent caller-owned cancellation mechanisms.
 When a bundled-client request omits `model`, it deliberately sends no model
 field and delegates selection to the authenticated tenant or selected provider.
 The server keeps `GET /` and compatibility JSON `POST /` available for direct
-REST callers.
+REST callers. Direct `GET /` accepts an optional `web_search` query value only
+as exact `true` or `false`; omission means false, and every other supplied
+spelling returns `400` before route resolution. JSON `POST /` and `POST /v2`
+use a native boolean body field. The Go package, Go CLI, and Python package
+remain v2-only, remove `web_search` inherited from a configured base URL, and
+serialize that body field as a JSON boolean. The Python request constructor
+also rejects non-boolean runtime values before HTTP.
 
 This permits a managed-tenant owner to change the tenant's routing default in
 the LLM Proxy Settings UI and have subsequent model-omitting client requests
@@ -505,11 +529,17 @@ that response or structured provider-failure logs.
 - Non-OpenAI compatible text providers use a shared Chat Completions adapter. It normalizes `finish_reason=length` for shared continuation and requires `finish_reason=stop` to complete content or reasoning text.
 - Meta uses the shared OpenAI-compatible Chat Completions adapter against `providers.meta.base_url`; its proxy contract is text-only and has no Responses fallback.
 - Anthropic uses a native Messages adapter, translating proxy `system` messages to the top-level Anthropic `system` parameter and `user`/`assistant` messages to Anthropic `messages[]`; `max_tokens` continues through the shared coordinator, while `end_turn` and `stop_sequence` are complete text stops.
-- Gemini uses a native generateContent adapter against `providers.gemini.base_url`; `MAX_TOKENS` continues through the shared coordinator, while `STOP` is the complete text finish reason.
+- Gemini uses a native generateContent adapter against
+  `providers.gemini.base_url`; `MAX_TOKENS` continues through the shared
+  coordinator, while `STOP` is the complete text finish reason. For exact
+  models whose catalog declares the capability, ordered image and audio
+  attachments become native `inlineData` parts after the message text.
 - Grok uses the shared OpenAI-compatible Chat Completions adapter against `providers.grok.base_url`.
 - OpenAI-compatible chat providers receive validated and sorted `messages[]` as provider-supported `role` and `content` items.
 - OpenAI Responses payload shape comes from the selected configured model's stable `request_profile`; model-specific web-search support comes from the selected model catalog entry. OpenAI Responses text calls run in background mode with stored responses so long provider work can be polled by llm-proxy while the caller waits on one REST request.
-- Gemini receives user messages as native `contents`, assistant messages as `model` contents, and system messages as `systemInstruction`.
+- Gemini receives user messages as native `contents`, assistant messages as
+  `model` contents, and system messages as `systemInstruction`. Other adapters
+  remain text-only and reject model media declarations at startup.
 - OpenAI Responses receives single-prompt requests unchanged and multi-message requests as a deterministic role-labelled transcript.
 - Dictation routing reuses the multipart transcription adapter with provider-specific URLs. OpenAI, SiliconFlow, and Zhipu send a multipart `model` field; Grok/xAI uses xAI STT and omits the multipart `model` field. Only providers that support `/dictate` expose transcription URL config fields.
 - Response formatting keeps existing text/XML/CSV bodies and existing JSON `request`, `response`, and normalized `usage` fields. JSON responses also include OpenRouter-style `object`, `model`, and `choices[].message.content` metadata, plus caller-visible request `messages` with provided `order` values. Server-injected tenant default system prompts are sent upstream but not echoed in response metadata.
@@ -527,6 +557,11 @@ Black-box router tests cover:
 - Every configured provider through its public text route, proving the same
   shared continuation transcript, completion order, suffix assembly, and usage
   aggregation for Chat Completions, Gemini, Anthropic, and OpenAI.
+- Ordered images and audio through canonical `POST /v2` and Gemini native
+  `inlineData`, with no media echo in response metadata.
+- Malformed, digest-mismatched, misplaced, unsupported-model, and
+  compatibility-route media rejection before any upstream request, plus the
+  existing bounded-body `413` response.
 - Deadline exhaustion and nonrecoverable safety, refusal, tool, malformed,
   missing, and unknown signals, proving partial text is never exposed as a
   failure response.
@@ -539,5 +574,6 @@ Black-box router tests cover:
 - Conflicting JSON body/query models.
 - SiliconFlow dictation routing.
 - Configured text model routing without code changes.
-- Invalid configured model catalog startup failures.
+- Invalid configured model catalog startup failures, including noncanonical,
+  duplicate, and adapter-incompatible `media_inputs`.
 - Existing OpenAI dictation and response-format tests.

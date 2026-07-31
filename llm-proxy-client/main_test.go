@@ -171,6 +171,10 @@ func TestCommandV2ExchangeConformsToCanonicalOpenAPI(t *testing.T) {
 		if decodeError := json.Unmarshal(bodyBytes, &requestBody); decodeError != nil {
 			t.Fatalf("decode CLI request: %v", decodeError)
 		}
+		webSearch, webSearchOK := requestBody["web_search"].(bool)
+		if !webSearchOK || !webSearch {
+			t.Fatalf("CLI web_search=%v must be the JSON boolean true", requestBody["web_search"])
+		}
 		actualFields := make([]string, 0, len(requestBody))
 		for fieldName := range requestBody {
 			actualFields = append(actualFields, fieldName)

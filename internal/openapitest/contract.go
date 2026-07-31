@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 const CanonicalDocumentPath = "docs/openapi.yaml"
@@ -38,14 +40,13 @@ func Load(path string) (*Contract, error) {
 	if readError != nil {
 		return nil, fmt.Errorf("%w: read path=%s: %v", errInvalidContract, path, readError)
 	}
-	decoder := json.NewDecoder(bytes.NewReader(documentBytes))
-	decoder.UseNumber()
+	decoder := yaml.NewDecoder(bytes.NewReader(documentBytes))
 	var document map[string]any
 	if decodeError := decoder.Decode(&document); decodeError != nil {
 		return nil, fmt.Errorf("%w: decode path=%s: %v", errInvalidContract, path, decodeError)
 	}
-	var trailingValue any
-	if trailingError := decoder.Decode(&trailingValue); !errors.Is(trailingError, io.EOF) {
+	var trailingDocument any
+	if trailingError := decoder.Decode(&trailingDocument); !errors.Is(trailingError, io.EOF) {
 		if trailingError == nil {
 			return nil, fmt.Errorf("%w: path=%s contains multiple documents", errInvalidContract, path)
 		}
@@ -579,12 +580,12 @@ func (contract *Contract) validateValue(schema map[string]any, value any, contex
 		if !ok {
 			return fmt.Errorf("%w: %s must be an array", errInvalidContract, context)
 		}
-		if rawMinimumItems, hasMinimumItems := resolvedSchema["minItems"].(json.Number); hasMinimumItems {
-			minimumItems, conversionError := strconv.Atoi(string(rawMinimumItems))
+		if rawMinimumItems, hasMinimumItems := resolvedSchema["minItems"]; hasMinimumItems {
+			minimumItems, conversionError := contractInteger(rawMinimumItems)
 			if conversionError != nil {
 				return fmt.Errorf("%w: %s minItems: %v", errInvalidContract, context, conversionError)
 			}
-			if len(arrayValue) < minimumItems {
+			if int64(len(arrayValue)) < minimumItems {
 				return fmt.Errorf("%w: %s must contain at least %d items", errInvalidContract, context, minimumItems)
 			}
 		}
@@ -605,16 +606,12 @@ func (contract *Contract) validateValue(schema map[string]any, value any, contex
 		}
 		return validateStringSchema(resolvedSchema, stringValue, context)
 	case "integer":
-		numberValue, ok := value.(json.Number)
-		if !ok {
+		integerValue, integerError := contractInteger(value)
+		if integerError != nil {
 			return fmt.Errorf("%w: %s must be an integer", errInvalidContract, context)
 		}
-		integerValue, integerError := numberValue.Int64()
-		if integerError != nil {
-			return fmt.Errorf("%w: %s must be an integer: %v", errInvalidContract, context, integerError)
-		}
-		if rawMinimum, hasMinimum := resolvedSchema["minimum"].(json.Number); hasMinimum {
-			minimum, minimumError := rawMinimum.Int64()
+		if rawMinimum, hasMinimum := resolvedSchema["minimum"]; hasMinimum {
+			minimum, minimumError := contractInteger(rawMinimum)
 			if minimumError != nil {
 				return fmt.Errorf("%w: %s minimum: %v", errInvalidContract, context, minimumError)
 			}
@@ -622,8 +619,8 @@ func (contract *Contract) validateValue(schema map[string]any, value any, contex
 				return fmt.Errorf("%w: %s must be at least %d", errInvalidContract, context, minimum)
 			}
 		}
-		if rawMaximum, hasMaximum := resolvedSchema["maximum"].(json.Number); hasMaximum {
-			maximum, maximumError := rawMaximum.Int64()
+		if rawMaximum, hasMaximum := resolvedSchema["maximum"]; hasMaximum {
+			maximum, maximumError := contractInteger(rawMaximum)
 			if maximumError != nil {
 				return fmt.Errorf("%w: %s maximum: %v", errInvalidContract, context, maximumError)
 			}
@@ -676,12 +673,12 @@ func validateStringSchema(schema map[string]any, value string, context string) e
 	if constant, hasConstant := schema["const"].(string); hasConstant && value != constant {
 		return fmt.Errorf("%w: %s value=%q want=%q", errInvalidContract, context, value, constant)
 	}
-	if rawMinimumLength, hasMinimumLength := schema["minLength"].(json.Number); hasMinimumLength {
-		minimumLength, conversionError := strconv.Atoi(string(rawMinimumLength))
+	if rawMinimumLength, hasMinimumLength := schema["minLength"]; hasMinimumLength {
+		minimumLength, conversionError := contractInteger(rawMinimumLength)
 		if conversionError != nil {
 			return fmt.Errorf("%w: %s minLength: %v", errInvalidContract, context, conversionError)
 		}
-		if len(value) < minimumLength {
+		if int64(len(value)) < minimumLength {
 			return fmt.Errorf("%w: %s must contain at least %d bytes", errInvalidContract, context, minimumLength)
 		}
 	}
@@ -694,6 +691,19 @@ func validateStringSchema(schema map[string]any, value string, context string) e
 		return fmt.Errorf("%w: %s value %q is outside enum", errInvalidContract, context, value)
 	}
 	return nil
+}
+
+func contractInteger(value any) (int64, error) {
+	switch typedValue := value.(type) {
+	case int:
+		return int64(typedValue), nil
+	case int64:
+		return typedValue, nil
+	case json.Number:
+		return typedValue.Int64()
+	default:
+		return 0, fmt.Errorf("value=%v is not an integer", value)
+	}
 }
 
 func contractObject(value any, context string) (map[string]any, error) {

@@ -22,7 +22,10 @@ services:
       context: .
       dockerfile: Dockerfile
     image: llm-proxy-local:latest
-    command: ["/usr/local/bin/llm-proxy", "--config", "/app/configs/config.yml"]
+    command:
+      - /usr/local/bin/llm-proxy
+      - --config
+      - /app/configs/config.yml
     env_file:
       - ./configs/.env.api.local
     environment:

@@ -1255,7 +1255,11 @@ func TestRootCommandRejectsStaleProviderLevelReasoningEffortDeclaration(t *testi
       default_model: "gpt-4.1"`, `    text:
       reasoning_effort:
         adapter: "openai_responses"
-        efforts: ["minimal", "low", "medium", "high"]
+        efforts:
+          - minimal
+          - low
+          - medium
+          - high
       default_model: "gpt-4.1"`, 1)
 	configPath := writeTestConfig(t, tempDir, `
 tenants:
@@ -1950,7 +1954,11 @@ providers:
           request_profile: "openai_responses_reasoning_tools"
           reasoning_effort:
             adapter: "openai_responses"
-            efforts: ["minimal", "low", "medium", "high"]
+            efforts:
+              - minimal
+              - low
+              - medium
+              - high
         - id: "gpt-5"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true

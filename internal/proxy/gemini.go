@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -42,7 +43,13 @@ type geminiRequestContent struct {
 }
 
 type geminiRequestPart struct {
-	Text string `json:"text"`
+	Text       string            `json:"text,omitempty"`
+	InlineData *geminiInlineData `json:"inlineData,omitempty"`
+}
+
+type geminiInlineData struct {
+	MIMEType string `json:"mimeType"`
+	Data     string `json:"data"`
 }
 
 type geminiResponseContent struct {
@@ -119,9 +126,16 @@ func (messages chatMessages) geminiContents() ([]geminiRequestContent, *geminiRe
 		if message.role == chatRoleAssistant {
 			role = "model"
 		}
+		parts := []geminiRequestPart{{Text: message.content}}
+		for _, attachment := range message.attachments {
+			parts = append(parts, geminiRequestPart{InlineData: &geminiInlineData{
+				MIMEType: attachment.mimeType,
+				Data:     base64.StdEncoding.EncodeToString(attachment.data),
+			}})
+		}
 		contents = append(contents, geminiRequestContent{
 			Role:  role,
-			Parts: []geminiRequestPart{{Text: message.content}},
+			Parts: parts,
 		})
 	}
 	if len(systemInstructionParts) == 0 {

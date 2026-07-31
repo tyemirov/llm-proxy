@@ -159,7 +159,7 @@ func newRootCommand(
 	flagSet.StringVar(&options.modelProfilePath, flagModelProfile, "", "path to application-owned JSON provider/model profile")
 	flagSet.StringVar(&options.prompt, flagPrompt, "", "user message text")
 	flagSet.StringVar(&options.promptFile, flagPromptFile, "", "path to user message text file")
-	flagSet.BoolVar(&options.webSearch, flagWebSearch, false, "enable OpenAI web search")
+	flagSet.BoolVar(&options.webSearch, flagWebSearch, false, "enable OpenAI web search in the v2 JSON body")
 	flagSet.StringVar(&options.systemPrompt, flagSystemPrompt, "", "v2 system message content")
 	flagSet.IntVar(&options.maxTokens, flagMaxTokens, 0, "positive output token cap")
 	flagSet.StringVar(&options.reasoningEffort, flagReasoningEffort, "", "model-supported reasoning effort")
