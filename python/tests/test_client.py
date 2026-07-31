@@ -211,6 +211,15 @@ def canonical_v2_response_statuses() -> set[int]:
     return {int(status_code) for status_code in responses}
 
 
+def test_canonical_openapi_declares_web_search_query_as_boolean() -> None:
+    """The query contract uses one canonical boolean instead of textual aliases."""
+
+    document = canonical_openapi_document()
+    web_search_schema = document["components"]["parameters"]["WebSearch"]["schema"]
+
+    assert web_search_schema == {"type": "boolean"}
+
+
 def test_client_posts_v2_body_and_preserves_non_body_query(running_server: RunningServer) -> None:
     """The public client sends v2 messages in the body and auth in query."""
 
