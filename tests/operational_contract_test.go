@@ -198,6 +198,46 @@ builtin printf 'total:\t(statements)\t%s\n' "${CI_COVERAGE_TOTAL:-100.0%}"
 			testingInstance.Fatalf("missing-coverage fixture did not return zero from every target:\n%s", targetLogBytes)
 		}
 	})
+
+	testingInstance.Run("cleanup-failure", func(testingInstance *testing.T) {
+		targetLogPath := filepath.Join(fixtureRoot, "cleanup-failure-targets")
+		bashEnvironmentPath := filepath.Join(fixtureRoot, "cleanup-failure.bash")
+		writeOperationalFile(testingInstance, bashEnvironmentPath, `rm() {
+  command rm "$@"
+  return 29
+}
+`, 0o600)
+		command := exec.Command(runnerPath)
+		command.Dir = repositoryRoot
+		command.Env = append(
+			os.Environ(),
+			"MAKE_BIN="+fakeMakePath,
+			"GO="+fakeGoPath,
+			"CI_TARGET_LOG="+targetLogPath,
+			"BASH_ENV="+bashEnvironmentPath,
+		)
+		output, commandError := command.CombinedOutput()
+		exitError, isExitError := commandError.(*exec.ExitError)
+		if !isExitError || exitError.ExitCode() != 1 {
+			testingInstance.Fatalf("cleanup failure exit=%v, want 1\n%s", commandError, output)
+		}
+		outputText := string(output)
+		if !strings.Contains(outputText, "CI FAILED: stopped during temporary CI state cleanup (exit 1).") {
+			testingInstance.Fatalf("cleanup failure omitted active stage:\n%s", outputText)
+		}
+		for _, forbiddenFragment := range []string{"CI summary", "CI PASSED"} {
+			if strings.Contains(outputText, forbiddenFragment) {
+				testingInstance.Fatalf("cleanup failure printed %q:\n%s", forbiddenFragment, outputText)
+			}
+		}
+		targetLogBytes, readError := os.ReadFile(targetLogPath)
+		if readError != nil {
+			testingInstance.Fatalf("read cleanup-failure target log: %v", readError)
+		}
+		if string(targetLogBytes) != expectedTargets {
+			testingInstance.Fatalf("cleanup failure did not follow every target:\n%s", targetLogBytes)
+		}
+	})
 }
 
 func TestOperationalEnvironmentExamplesStayDocumentationOnly(testingInstance *testing.T) {
