@@ -28,7 +28,6 @@ on:
       - 'Dockerfile'
 
 env:
-  GO_VERSION: '1.25.12'
   NODE_VERSION: '22'
   PYTHON_VERSION: '3.11'
 
@@ -40,7 +39,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
       - name: Set up Node
         uses: actions/setup-node@v4
         with:

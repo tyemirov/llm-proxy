@@ -8,6 +8,9 @@ mprlab_resources:
       id: runtime
       placement: gateway
       profiles: []
+      retired_services:
+        - project: mprlab-nginx-gateway
+          service: llm-proxy
       images:
         - id: llm-proxy-image
           repository: ghcr.io/tyemirov/llm-proxy

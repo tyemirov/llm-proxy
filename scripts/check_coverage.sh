@@ -6,6 +6,7 @@ RUNTIME_COVERPKG="./cmd/cli,./internal/apperrors,./internal/constants,./internal
 CLIENT_COVERPKG="./llm-proxy-client,./pkg/llmproxyclient"
 COVERPKG="$RUNTIME_COVERPKG,$CLIENT_COVERPKG"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+COVERAGE_FILE="${COVERAGE_FILE:-$ROOT_DIR/coverage.out}"
 TMP_DIR="$(mktemp -d)"
 COVERAGE_PROBE_TIMEOUT_SECONDS=5
 CLIENT_COVERAGE_PROBE_PROMPT="coverage probe"
@@ -63,9 +64,9 @@ awk '
       print block, statements[block], counts[block]
     }
   }
-' "$TMP_DIR/go-test.coverprofile" "$TMP_DIR/bin-help.coverprofile" "$TMP_DIR/bin-missing-config.coverprofile" "$TMP_DIR/bin-missing-openai.coverprofile" "$TMP_DIR/bin-client-missing-config.coverprofile" > coverage.out
+' "$TMP_DIR/go-test.coverprofile" "$TMP_DIR/bin-help.coverprofile" "$TMP_DIR/bin-missing-config.coverprofile" "$TMP_DIR/bin-missing-openai.coverprofile" "$TMP_DIR/bin-client-missing-config.coverprofile" >"$COVERAGE_FILE"
 
-coverage_output="$("$GO_BIN" tool cover -func=coverage.out)"
+coverage_output="$("$GO_BIN" tool cover -func="$COVERAGE_FILE")"
 printf '%s\n' "$coverage_output"
 
 total_coverage="$(printf '%s\n' "$coverage_output" | awk '/^total:/ {print $3}')"
@@ -74,7 +75,7 @@ if [[ "$total_coverage" != "100.0%" ]]; then
   exit 1
 fi
 
-uncovered_blocks="$(awk 'FNR > 1 { split($0, fields, " "); if (fields[3] == 0) print fields[1] }' coverage.out)"
+uncovered_blocks="$(awk 'FNR > 1 { split($0, fields, " "); if (fields[3] == 0) print fields[1] }' "$COVERAGE_FILE")"
 if [[ -n "$uncovered_blocks" ]]; then
   printf 'uncovered coverage blocks remain:\n%s\n' "$uncovered_blocks" >&2
   exit 1
