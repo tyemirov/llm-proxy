@@ -620,20 +620,9 @@ components:
       name: web_search
       in: query
       required: false
-      description: Boolean-like query value accepted by the legacy query operation.
+      description: Enables web search when true. Omission disables web search.
       schema:
-        type: string
-        enum:
-          - '1'
-          - t
-          - 'true'
-          - y
-          - yes
-          - '0'
-          - f
-          - 'false'
-          - n
-          - no
+        type: boolean
     SystemPrompt:
       name: system_prompt
       in: query
@@ -1089,6 +1078,11 @@ components:
           type: integer
           minimum: 0
     MessageAttachment:
+      description: One provider-neutral image or audio input with a MIME type that matches its declared media type.
+      oneOf:
+        - $ref: '#/components/schemas/ImageMessageAttachment'
+        - $ref: '#/components/schemas/AudioMessageAttachment'
+    ImageMessageAttachment:
       type: object
       additionalProperties: false
       required:
@@ -1099,15 +1093,36 @@ components:
       properties:
         type:
           type: string
-          enum:
-            - image
-            - audio
+          const: image
         mime_type:
           type: string
           enum:
             - image/jpeg
             - image/png
             - image/webp
+        data:
+          type: string
+          minLength: 4
+          description: Exact nonempty media bytes encoded as canonical padded RFC 4648 base64.
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          description: Lowercase hexadecimal SHA-256 of the decoded media bytes.
+    AudioMessageAttachment:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - mime_type
+        - data
+        - sha256
+      properties:
+        type:
+          type: string
+          const: audio
+        mime_type:
+          type: string
+          enum:
             - audio/mp4
             - audio/mpeg
             - audio/wav
@@ -1120,6 +1135,33 @@ components:
           pattern: ^[0-9a-f]{64}$
           description: Lowercase hexadecimal SHA-256 of the decoded media bytes.
     V2ChatMessage:
+      description: A user message that may carry attachments, or a text-only system or assistant message.
+      oneOf:
+        - $ref: '#/components/schemas/V2UserChatMessage'
+        - $ref: '#/components/schemas/V2SystemOrAssistantChatMessage'
+    V2UserChatMessage:
+      type: object
+      additionalProperties: false
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          const: user
+        content:
+          type: string
+          minLength: 1
+        attachments:
+          type: array
+          minItems: 1
+          description: Ordered exact media inputs accepted only when the resolved model declares each media type.
+          items:
+            $ref: '#/components/schemas/MessageAttachment'
+        order:
+          type: integer
+          minimum: 0
+    V2SystemOrAssistantChatMessage:
       type: object
       additionalProperties: false
       required:
@@ -1130,17 +1172,10 @@ components:
           type: string
           enum:
             - system
-            - user
             - assistant
         content:
           type: string
           minLength: 1
-        attachments:
-          type: array
-          minItems: 1
-          description: Ordered exact media inputs. Attachments are accepted only on user messages and only when the resolved model declares each media type.
-          items:
-            $ref: '#/components/schemas/MessageAttachment'
         order:
           type: integer
           minimum: 0
