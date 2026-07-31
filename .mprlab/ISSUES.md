@@ -45,7 +45,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   Preserve the exact `make release`, `make publish`, `make deploy` operator
   surface without requiring an installed MPRLab controller, an
   `mprlab-gateway` source checkout, or any sibling repository.
-
   Evidence:
   - The merged B095 implementation reduced `make deploy` to
     `mprlab-deploy`, and a clean operator invocation failed with
@@ -59,7 +58,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - A fresh CI run rewrote tracked generated Python `*.egg-info` metadata from
     version `0.1.0` to the canonical project version `0.2.0`, dirtying the
     worktree that release admission requires to remain clean.
-
   Requirements:
   - Execute only tracked files from this repository plus ordinary documented
     tools such as Git, Docker, Python/uv, Ansible, SSH, and GitHub CLI.
@@ -73,7 +71,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     machine load cannot make an unchanged release nondeterministic.
   - Keep generated Python build metadata untracked.
   - Keep production deployment user-owned.
-
   Validation:
   - Add black-box Make scenarios proving dry-run and deployment delegation use
     only the current repository's tracked Ansible entrypoint.
@@ -81,7 +78,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     sibling repository cannot affect the transaction.
   - Run the required final
     `timeout -k 350s -s SIGKILL 350s make ci`.
-
   Resolution:
   - `make deploy`, `make deploy-dry-run`, and `make deploy-syntax` now execute
     the complete tracked `.mprlab/deploy/ansible` transaction through pinned
@@ -110,20 +106,17 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     exact 100% Go statement coverage, 33 Python tests, 75 browser tests, one
     TAuth browser black-box test, 57 release/deployment tests, and the
     live-provider harness preflight.
-
 - [x] [B095] (P0) Keep deployment declarations app-owned and execution platform-owned.
   Goal:
   Preserve the standard `make release`, `make publish`, `make deploy` lifecycle
   while making every retry convergent and removing deployment-resource
   orchestration from llm-proxy.
-
   Evidence:
   - The prior deploy flow selected sibling checkouts and failed on unrelated
     app manifests.
   - A proposed app-bundled gateway archive moved platform implementation into
     llm-proxy and introduced direct TAuth/Caddy awareness instead of removing
     the coupling.
-
   Requirements:
   - Keep only declarative deployment resource and Ansible inventory YAML in
     `.mprlab/deploy`.
@@ -136,7 +129,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     repeated.
   - Keep TAuth runtime integration in the published client/session boundary and
     keep TAuth/Caddy deployment reconciliation outside application code.
-
   Validation:
   - Add black-box repeated zero-argument Make delegation and declaration-only
     repository contracts.
@@ -144,7 +136,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     without production contact.
   - Run the required final
     `timeout -k 350s -s SIGKILL 350s make ci`.
-
   Resolution:
   - `make deploy` is now a zero-argument handoff to the installed
     `mprlab-deploy` controller. It carries no product selector, gateway
@@ -158,13 +149,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     propagate, and only the declaration files remain tracked.
   - The gateway controller and installer gates pass without production
     contact. The required final repository `make ci` passes.
-
 - [x] [B094] (P1) Run the full CI suite once per release lifecycle.
   Goal:
   Make `make release` the sole full-suite validation stage while requiring
   `make publish` and `make deploy` to prove they continue that exact sealed
   release.
-
   Evidence:
   - `tools/gitrelease/scripts/prepare_release.sh` runs `make ci` before it
     seals `.git/mprlab-release`.
@@ -172,7 +161,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - `scripts/deploy.sh` reruns `make ci` before deployment and exposes
     `--skip-ci` plus a deploy-only CI timeout, even though it separately checks
     the release tag, published image, and Pages artifact.
-
   Requirements:
   - Keep the complete `make ci` gate in `make release`.
   - Remove the deploy-time CI run, skip flag, and deploy-only CI timeout.
@@ -181,7 +169,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     deployed.
   - Keep publication and deployment artifact verification intact; do not add a
     fallback, compatibility path, or manually asserted success marker.
-
   Validation:
   - Add black-box lifecycle scenarios for a missing sealed release, a sealed
     version mismatch, and a valid continuation that reaches the gateway
@@ -190,7 +177,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
   - Run the gateway `make verify-app-workflows` cross-repository contract
     without production contact.
-
   Resolution:
   - `make release` remains the lifecycle's sole full `make ci` gate.
     Deployment no longer has a CI invocation, CI timeout, or `--skip-ci`
@@ -207,13 +193,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     live-provider harness preflight.
   - Gateway `make verify-app-workflows` reports llm-proxy ready and passes the
     cross-repository lifecycle contract without production contact.
-
 - [x] [B093] (P0) Publish prepared OCI platform indexes without rejecting attestations.
   Goal:
   Make `make publish` converge when current Docker Buildx publishes each
   prepared platform image as an OCI index containing the runnable image
   manifest and its provenance attestation.
-
   Evidence:
   - The real `make release` completed for `v0.2.50`, including all CI gates,
     both platform archives, the Pages archive, the changelog-only release
@@ -229,7 +213,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - The publisher assumes a bare image manifest and compares its config digest
     with the local image ID. With the current Docker containerd image store,
     that local ID identifies the complete platform index instead.
-
   Requirements:
   - Treat one OCI index with exactly one declared Linux platform image and its
     matching provenance attestation as the canonical platform artifact.
@@ -241,7 +224,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     replace, delete, or retag an immutable published object.
   - Continue using only standard Docker CLI publication and inspection
     boundaries.
-
   Validation:
   - Cover fresh publication, exact retry, missing version/latest recovery,
     uncertain inspection, and immutable conflict through the black-box release
@@ -250,7 +232,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     `timeout -k 350s -s SIGKILL 350s make ci` after the last code edit.
   - Merge through a ready PR with hosted CI, then verify the forward release
     with exact `make release && make publish` retries on clean `master`.
-
   Resolution:
   - Platform publication now accepts only the canonical OCI index containing
     exactly one runnable Linux image descriptor and its matching provenance
@@ -261,12 +242,10 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - The 54-scenario black-box release suite, direct standard-Docker inspection
     of the published platform index and composed version index, and the final
     repository `make ci` all pass.
-
 - [x] [B092] (P0) Make the container inspection-bound test deterministic.
   Goal:
   Verify that every registry inspection is independently bounded without
   coupling the release gate to nested wall-clock timers.
-
   Evidence:
   - B091's final `make ci` proved the repaired operational test under a
     22.777-second Go package run, then failed in
@@ -277,7 +256,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     delay inside an outer five-second timeout. Host scheduling can consume the
     outer budget before the second process starts, so the assertion measures
     scheduler timing rather than the script's per-attempt command contract.
-
   Requirements:
   - Replace real nested timers with fake `timeout` and `sleep` process
     boundaries that capture and validate the exact arguments.
@@ -285,12 +263,10 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     configured inter-attempt delay.
   - Do not increase a timeout or change the production registry-readiness
     script.
-
   Validation:
   - Run the focused release suite and the required final
     `timeout -k 350s -s SIGKILL 350s make ci`.
   - Do not run `make release`, `make publish`, or `make deploy`.
-
   Resolution:
   - Replaced the nested real timers with fake `timeout` and `sleep`
     executables that capture the public command boundary.
@@ -299,12 +275,10 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     unreadable-manifest error without depending on scheduler timing.
   - All 54 repository-owned release tests passed in 87.971 seconds under the
     same contended host conditions.
-
 - [x] [B091] (P0) Remove synthetic local-orchestration latency from the release gate.
   Goal:
   Keep the black-box `make up` contract deterministic when `make release` runs
   the complete CI suite under host contention.
-
   Evidence:
   - The user-run release gate failed after five seconds waiting for the fake
     management-boundary `curl-ready` file even though the proxy tests around
@@ -320,7 +294,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - The required pre-change `make ci` passed, but showed the same host
     contention: the Go `tests` package took 16.562 seconds and the release
     suite took 106.887 seconds.
-
   Requirements:
   - Remove the fake `awk` sleep and its environment control. Do not increase
     the five-second diagnostic guard.
@@ -329,13 +302,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     per-variable environment projection.
   - Do not change production `scripts/up.sh`; its batched environment
     projection and readiness sequence are not the failing contract.
-
   Validation:
   - Run the focused black-box operational test repeatedly.
   - Run the required final
     `timeout -k 350s -s SIGKILL 350s make ci` after the last code edit.
   - Do not run `make release`, `make publish`, or `make deploy`.
-
   Resolution:
   - Removed the fake `awk` delay and its environment control without changing
     the five-second diagnostic guard or production `scripts/up.sh`.
@@ -343,12 +314,10 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     exact Compose, HTTP readiness, scoped-environment, cleanup, and maximum
     process-count contracts.
   - Thirty consecutive focused black-box runs passed in 36.283 seconds.
-
 - [x] [B090] (P0) Make release, publication, and deployment retries converge on one sealed release.
   Goal:
   Make the canonical `make release && make publish && make deploy` lifecycle
   safe to rerun after any completed or partially completed phase.
-
   Evidence:
   - Local and refreshed `origin/master` both point at release commit
     `2b8202753f4e2022a0d58d47c575cf6a3472fae8`, and the annotated `v0.2.49`
@@ -367,7 +336,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     with `--clobber`, and republishes every container platform and manifest on
     every retry. These are mutable replays rather than exact-state reuse and
     immutable-conflict rejection.
-
   Requirements:
   - Treat a validated release manifest and its exact tag/release/source commit
     relationship as the authoritative sealed local release. An exact retry at
@@ -390,7 +358,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     the exact published image remains an idempotent desired-state operation;
     do not add an alternate deployment route, mutable source checkout, or
     manual recovery command.
-
   Validation:
   - Add black-box lifecycle tests for an exact `make release` retry, failed
     preparation preserving the prior sealed artifact, interrupted-phase
@@ -400,7 +367,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair. Do not run production
     release, publish, Pages activation, or gateway deployment commands.
-
   Resolution:
   - Exact release commits now reuse their validated sealed manifest, while new
     payloads are prepared separately and atomically activated only after the
@@ -417,12 +383,10 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - The repository-owned black-box release suite covers exact retries,
     interrupted/partial resumes, conflict rejection, fail-closed registry
     inspection, and repeated Pages activation.
-
 - [x] [B089] (P1) Return sanitized, correlated provider errors at the public proxy boundary.
   Goal:
   Let clients distinguish a proxy status from the exact upstream provider
   condition without exposing provider-controlled error bodies or messages.
-
   Requirements:
   - Replace provider-originated plaintext `429` and `502` bodies with one
     canonical JSON envelope containing `code`, canonical `provider`,
@@ -446,7 +410,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Apply the contract to OpenAI Responses and dictation,
     OpenAI-compatible providers, Gemini, and Anthropic. Never retain a raw
     provider error body in the public response or provider-failure log.
-
   Validation:
   - Exercise the public router against controlled OpenAI, Anthropic, Meta,
     Gemini, Moonshot, and dictation failures. Assert exact proxy and upstream
@@ -456,7 +419,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     the new `429` and `502` contract.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
   Resolution:
   - Added typed provider HTTP metadata across every provider adapter and a
     single public error writer that returns the six-field sanitized envelope.
@@ -467,13 +429,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Added public-boundary coverage for all five live-test providers plus
     dictation and response-protocol failures, and updated README/OpenAPI
     documentation and generated API reference.
-
 - [x] [B086] (P1) Make Default-tenant production live tests repeatable.
   Goal:
   Provide one paid, production-boundary command that proves the Default tenant
   can route text through its saved provider credentials without putting any
   upstream credential in the local test environment.
-
   Requirements:
   - Add `make live-test`, separate from the disposable local provider harness
     and excluded from `make ci`.
@@ -492,7 +452,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run every case even after a failure, redact all credentials and response
     bodies from output, and return nonzero when any case does not return the
     expected completed response.
-
   Validation:
   - Add black-box operational coverage for `make live-test` using a fake curl
     boundary. Prove all eight canonical requests use the production origin,
@@ -501,7 +460,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair, then execute the paid
     `make live-test` command and record its exact safe provider outcomes.
-
   Resolution:
   - Extended the production-only harness to eight cases: five echo requests
     plus the identical large completion request through OpenAI, Anthropic, and
@@ -517,12 +475,10 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     The harness completed all eight cases, redacted their bodies, and correctly
     returned nonzero. The echo failures remain B087; the long-completion
     failures are tracked in B088.
-
 - [ ] [B087] (P1) Restore Default-tenant Gemini and Moonshot production routing.
   Goal:
   Restore successful text generation for the Default tenant's saved Gemini and
   Moonshot provider routes without weakening the production live-test contract.
-
   Evidence:
   - The current eight-case `make live-test` production run returned `200` for
     OpenAI, Anthropic, and Meta echo cases using the same Default-tenant client
@@ -539,7 +495,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     `kimi-k2.6`. The disposable managed-key harness then verified that new
     default and completed its smoke request (`200`/`200`); the production
     Default-tenant saved route remains unverified.
-
   Requirements:
   - Diagnose the exact Default-tenant Gemini `502` and Moonshot `429` at the
     public proxy/provider boundary without exposing secrets, prompts, response
@@ -550,21 +505,18 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Preserve `make live-test` as an honest production boundary: it must retain
     all five providers, the short marker requests, the OpenAI polling case, and
     the Anthropic and Meta long-completion cases.
-
   Validation:
   - Run `make live-test` with the Default-tenant client secret and prove the
     Gemini and Moonshot echo cases return HTTP `200` with their required
     completion markers while retaining the complete eight-case matrix.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for any code change.
-
 - [ ] [B088] (P1) {I045} Restore Default-tenant long completion routing for OpenAI and Meta.
   Goal:
   Make the Default tenant complete the production live test's deterministic
   large request through OpenAI and Meta without a local provider credential,
   fallback provider, or client-side polling path. Keep Anthropic's repaired
   long-completion case as a required regression check.
-
   Evidence:
   - The initial expanded `make live-test` run returned HTTP `200` for all three
     providers' short echo requests. OpenAI's background-polling case exhausted
@@ -583,7 +535,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     the live harness does not print the response request id and the proxy has
     no correlated phase or provider-progress timeline. I045 owns that
     prerequisite observability.
-
   Requirements:
   - Implement I045 first, then diagnose and restore the exact OpenAI and Meta
     production routes through the saved Default-tenant provider configuration.
@@ -598,7 +549,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Do not add local provider keys, a client polling endpoint, a fallback
     provider, or an unbounded timeout. Keep request and response data redacted
     from user-facing failures and issue evidence.
-
   Validation:
   - Run `make live-test` with only the Default-tenant client secret and prove
     the named OpenAI background-polling and Meta long-completion cases return
@@ -606,14 +556,12 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     HTTP `200`.
   - For any source change, run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
 - [x] [B085] (P1) {B080} Complete truncated provider output through one shared coordinator.
   Goal:
   Make every configured text provider recover from output-budget truncation
   inside the caller's existing blocking request, using one provider-neutral
   completion lifecycle instead of recording a recoverable partial result as an
   upstream failure.
-
   Evidence:
   - The production Meta Muse Spark path returns HTTP `200` with
     `finish_reason=length` when the caller selects a 256-token completion
@@ -633,7 +581,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     errors. OpenAI pending-response polling is also embedded in its adapter, so
     there is no shared owner for completion state, continuation accounting, or
     the request deadline.
-
   Requirements:
   - Introduce one provider-neutral completion coordinator used by every
     configured text provider. It must keep the original public request open and
@@ -673,7 +620,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     provider-routing documentation. Keep the client-facing operation blocking;
     do not add a client polling endpoint, durable job queue, compatibility
     path, or provider-specific public option.
-
   Validation:
   - Exercise every canonical text provider selector through the public
     `POST /v2` boundary with an output-budget truncation followed by a complete
@@ -692,7 +638,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     not appear in account-wide or tenant failure details.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
   Resolution:
   - Resolved 2026-07-27: one provider-neutral coordinator now continues exact
     output-budget signals across all 12 configured providers and all four
@@ -708,12 +653,10 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     black-box coverage exercises every configured provider, repeated and
     zero-progress continuations, transcript and suffix assembly, exact usage
     accounting, deadline expiry, and representative non-recoverable states.
-
 - [x] [B084] (P1) {I029} Restore the generated API reference after OpenAPI contract merges.
   Goal:
   Keep the committed human-readable API reference derived from the exact
   canonical OpenAPI source after forward-only branch merges.
-
   Evidence:
   - Merge commit `39869d3` combined OpenAPI changes from both parents into
     `docs/openapi.yaml` but retained `site/docs/index.html` from a parent.
@@ -723,18 +666,15 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     `5a6683d01dc04a10d6e045df3c3c265cd6b66aa43d9f39518ec9ecfa47c39b88`.
   - The required baseline `make ci` passes Go and Python static checks, then
     fails frontend lint with `openapi_docs_out_of_date`.
-
   Requirements:
   - Regenerate `site/docs/index.html` from the current `docs/openapi.yaml`
     through the canonical generator.
   - Do not change the canonical contract, generator, runtime behavior, or add
     another schema or documentation source.
-
   Validation:
   - Verify the reference records the exact canonical source digest.
   - Run the required final
     `timeout -k 350s -s SIGKILL 350s make ci` after the last code edit.
-
   Resolved 2026-07-27:
   - Regenerated `site/docs/index.html` from the unchanged canonical
     `docs/openapi.yaml`; its three provenance fields now record the exact
@@ -743,12 +683,10 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - The full final `make ci` passes after the generated-document check, exact
     100% Go coverage, Python, rendered-browser, TAuth black-box, release, and
     live-provider harness gates.
-
 - [x] [B083] (P1) Keep tracked environment examples out of runtime use.
   Goal:
   Preserve sample environment files as deliberately unrealistic documentation
   while requiring real runtime values only from ignored private dotenv files.
-
   Evidence:
   - `configs/.env.local.example` and `configs/.env.sample` now identify
     themselves as documentation-only and contain non-operational values.
@@ -757,7 +695,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     configuration and contradicted the private-env boundary.
   - The runtime and orchestration tests now use an explicitly created
     `configs/.env.local`, but README still documents the obsolete copy behavior.
-
   Requirements:
   - Never source, copy, or infer runtime configuration from a tracked sample.
   - Require the operator to create the ignored real `configs/.env.local`
@@ -765,7 +702,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Fail before Docker startup when the private file is absent.
   - Keep `configs/.env`, `configs/.env.local`, and generated service-scoped
     dotenv files ignored and excluded from container build context.
-
   Validation:
   - Exercise the missing-private-env failure and the complete local
     orchestration path through the public `make up` boundary.
@@ -774,7 +710,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
     last tracked edit.
-
   Resolved 2026-07-26:
   - Both tracked examples now remain visibly documentation-only with
     deliberately unrealistic values and cannot seed local runtime state.
@@ -783,12 +718,10 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Operational coverage verifies the sample-file boundary, missing-file
     failure, generated local secrets, scoped projections, and complete
     orchestration flow.
-
 - [x] [B082] (P1) {F014} Restore persisted-routing and dictation-size enforcement.
   Goal:
   Make management startup reject catalog-invalid persisted state and make the
   public dictation endpoint enforce its published upload limit.
-
   Evidence:
   - Schema-version-2 startup verifies the usage outcome column and index, then
     returns without validating persisted tenant routing defaults against the
@@ -800,7 +733,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     an audio part that exceeds `server.max_input_audio_bytes` while the complete
     multipart body remains inside its separate overhead allowance, despite the
     canonical OpenAPI `413` response.
-
   Requirements:
   - Validate every current-schema tenant routing default at startup and fail
     with owner, tenant, endpoint, provider, and model context; never repair or
@@ -811,7 +743,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Return `413 Payload Too Large` when either the audio part exceeds
     `server.max_input_audio_bytes` or the bounded multipart reader overflows,
     and do not call an upstream transcription provider.
-
   Validation:
   - Exercise restart through the real router construction boundary with an
     invalid current-schema tenant, legacy preflight with alias/case variants,
@@ -819,20 +750,17 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
     last tracked edit.
-
   Resolved 2026-07-26:
   - Current-schema startup now rejects catalog-invalid routing rows, legacy
     preflight rejects noncanonical provider/model values, and `/dictate`
     returns `413` for either audio-part or bounded-body overflow.
   - Router-boundary, migration, and public dictation scenarios cover the
     corrected contracts.
-
 - [x] [B081] (P1) {F014,B079} Keep managed routing defaults on providers with saved tenant keys.
   Goal:
   Ensure every managed routing default is immediately usable by the owning
   tenant instead of retaining a catalog default for a provider whose API key is
   absent.
-
   Requirements:
   - Treat a saved tenant provider key as a hard eligibility boundary for
     managed routing defaults. Preserve an existing text or dictation default
@@ -854,7 +782,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     reject noncanonical persisted state after migration.
   - Keep static-configuration tenant defaults unchanged; this contract applies
     only to managed tenants and their tenant-owned provider keys.
-
   Validation:
   - Exercise the real management API and public proxy with arbitrary keyed
     providers, including a sole text-only provider, multiple eligible
@@ -865,7 +792,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
     last tracked edit.
-
   Resolved 2026-07-26:
   - Managed defaults now remain on deterministic keyed providers, reconcile
     atomically with provider-key mutations, and persist one canonical unset
@@ -873,13 +799,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Settings exposes only keyed routing candidates and disables dictation when
     no keyed provider supports it; provider-agnostic API/runtime, migration,
     restart, and rendered-browser coverage verifies the contract.
-
-- [x] [B080] (P1) Reject incomplete OpenAI responses that contain partial text
+- [x] [B080] (P1) Reject incomplete OpenAI responses that contain partial text.
   Goal:
   Make every successful text-provider result complete so callers never receive
   a provider-truncated prefix or intermediate result as an HTTP 200 response,
   while keeping asynchronous job handling explicit to each supported adapter.
-
   Evidence:
   - Fruits of the Quill Story Plan generation failed in production at
     `2026-07-27 00:14:16 UTC` after its strict JSON decoder reported
@@ -908,7 +832,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     routes do not imply each provider's separate deferred or batch API.
   - This issue is the upstream owner for the dependent Story Service correction
     tracked as `story-generator` B007.
-
   Requirements:
   - Define HTTP success for the OpenAI Responses adapter as a provider response
     whose terminal status is complete. An upstream `status=incomplete` must
@@ -944,7 +867,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     text endpoint.
   - Include B080 in the next immutable release prepared by B077. Production
     activation remains operator-owned.
-
   Validation:
   - Exercise the real public `POST /v2` handler against a fake OpenAI endpoint
     that returns HTTP 200, `status=incomplete`, nonempty partial output,
@@ -965,7 +887,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     double-counting earlier snapshots.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
   Resolution:
   - OpenAI Responses now accepts only exact `status=completed` as success,
     polls only explicit `queued` or `in_progress` work, and rejects incomplete,
@@ -992,13 +913,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - The managed-routing public proxy fixture now returns the required
     `finish_reason=stop` completed Chat Completions response, and the full final
     `make ci` passes.
-
 - [!] [B077] (P1) {B069,F014,I029,I031} Publish and activate the merged LLM Proxy contract.
   Goal:
   Make the production API and management UI run the same canonical contract
   that is merged and marked resolved in this repository, with immutable release
   provenance that can be verified before dependent provider work resumes.
-
   Evidence:
   - The production `umna-moma-i-tsar` Creative Director canary selected
     `gpt-5.6-terra`, reasoning effort `max`, and the explicit 900-second request
@@ -1022,7 +941,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     normalized failure record needed to distinguish an LLM Proxy timeout from
     an upstream provider or transport 504 without exposing prompts, responses,
     or raw provider errors.
-
   Requirements:
   - Prepare a clean immutable release from committed source that contains the
     resolved B069, F014, I029, and I031 contracts. Do not publish from the
@@ -1040,7 +958,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Do not work around the failure by inflating another timeout, bypassing the
     public LLM Proxy API, querying private provider state, or retrying the paid
     F001 canary before release activation is proven.
-
   Deliverables:
   - A versioned release and matching `latest` image containing the merged
     request-timeout, tenant-management, OpenAPI, and normalized failure-details
@@ -1049,7 +966,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     containing the immutable source/tag/digest tuple.
   - Read-only post-deploy evidence for the canonical health, timeout-header,
     tenant failure-details, and management UI boundaries.
-
   Validation:
   - Prove the version tag and `latest` resolve to the same newly published
     manifest and that the manifest was built from the recorded source commit.
@@ -1063,7 +979,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     explicit 900-second request timeout. Use its normalized usage/failure record
     to classify any subsequent provider failure before resuming the full F001
     batch.
-
   Verified 2026-07-27:
   - Release `v0.2.47` points to release commit
     `943a9b5b582534c11526a5242c145a2d234f6f09`; its immutable source commit is
@@ -1089,18 +1004,15 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     B080 correctly maps the incomplete 256-token result without leaking partial
     output. The current Gix commit-message path owns that 256-token ceiling and
     fails over to its lower-priority OpenAI connection.
-
   Blocked: direct inspection of the running production container image still
   requires the gateway operator's sudo authority, and the required post-release
   Terra/max 900-second Creative Director canary has not been rerun. Keep B077
   blocked until the operator records the running container's image ID and
   matching repo digest, then completes the single normalized Terra canary.
-
 - [x] [B079] (P1) {B074,B076,F014} Consolidate tenant and client-key lifecycle into one Settings row.
   Goal:
   Make the selected Settings tenant and its client key one compact, logical
   control surface without exposing a standalone key-deletion state.
-
   Problem:
   Settings currently repeats the selected tenant across a selector row and a
   separate identity row, then separates the same tenant's client key into a
@@ -1108,7 +1020,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   explicit invalidation confirmation, and the client key has a revoke action
   even though the intended lifecycle is replacement or deletion of the owning
   tenant.
-
   Requirements:
   - Replace the Settings-tenant selector, tenant identity row, and client-key
     row with one semantic compact row containing the selected tenant dropdown,
@@ -1138,7 +1049,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
     last tracked edit.
-
   Validation:
   - Exercise selection independence, modal rename success/conflict/cancel,
     confirmed key replacement and cancellation, one-time key reveal/copy,
@@ -1148,7 +1058,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     expose `DELETE /api/management/tenants/{tenant_id}/secrets`.
   - Prove the combined row remains contained and ordered across desktop,
     compact, and mobile viewports.
-
   Resolved 2026-07-26:
   - Replaced the repeated tenant selector, identity, and key rows with one
     semantic `Tenant access` row. Desktop stays on one line; narrow screens
@@ -1170,13 +1079,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Standardized the generated client-key Copy control on the Material Symbols
     `content_copy` glyph and removed its custom inline SVG while retaining the
     existing accessible clipboard behavior.
-
 - [x] [B078] (P1) {F014,B075} Fail visibly when the management application runtime is blocked.
   Goal:
   Make local browser startup terminate in either the management application or
   an actionable error instead of leaving the MPR authentication transition
   visible forever.
-
   Problem:
   The local ghttp frontend publishes no cache policy and every application
   module has an unversioned URL. Chrome can therefore combine modules cached
@@ -1187,7 +1094,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   but LLM Proxy never mounted Alpine, requested the management account, or
   dispatched `llm-proxy:management-ready`; the user remained on
   `Opening LLM Proxy` indefinitely.
-
   Requirements:
   - Revise the complete first-party module graph once so browser copies cached
     before the local cache policy cannot mix with current files.
@@ -1214,7 +1120,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
     last tracked edit.
-
   Resolved 2026-07-26:
   The local frontend now disables browser caching and uses one revised URL
   across the complete first-party ES-module graph, preventing the observed
@@ -1225,13 +1130,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   browser suite passes, including both failure boundaries, and clean reloads in
   real Chrome and the in-app browser reach the signed-out application with
   `data-llm-proxy-application="ready"` and no startup error.
-
 - [x] [B076] (P1) {F014,I029,I031} Separate active tenants from Settings and Usage selection.
   Goal:
   Keep every owned tenant simultaneously operational while making Settings the
   sole tenant-management surface and making Usage Overview an account-wide
   report by default with an independent tenant filter.
-
   Problem:
   F014 introduced one global `active tenant` that simultaneously chooses the
   Settings profile, Usage Overview scope, URL workspace, and tenant lifecycle
@@ -1240,7 +1143,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   only the oldest tenant. The product contract is instead that every tenant's
   secret remains active independently; UI selection chooses only what the user
   is editing or reporting.
-
   Requirements:
   - Delete the global active-tenant toolbar, `Active tenant` copy, immutable-id
     banner, create action, and URL/history-owned workspace contract. Do not add
@@ -1287,7 +1189,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     generator-owned public usage resource, and unresolved F014-dependent issue
     wording to distinguish `Settings tenant`, `Usage tenant`, and `All tenants`
     from operational tenant activity. Do not hand-edit a generated artifact.
-
   Validation:
   - Add real management-router and OpenAPI scenarios proving exact owner-wide
     totals/buckets/breakdowns, weighted latency, all-time bounds, empty usage,
@@ -1306,32 +1207,27 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
     last code edit.
-
   Resolved 2026-07-26:
   The global active-tenant toolbar and URL/history workspace state are removed.
   Tenant selection and creation now live in Settings as an editor-only context,
   while Usage Overview independently defaults to `All tenants` and `30 days`
   with its tenant selector immediately before the interval controls. Every
   tenant secret remains independently routable.
-
   Canonical owner-wide usage and failure operations now aggregate every owned
   tenant at the database boundary under one captured time/snapshot contract.
   Tenant-scoped operations remain distinct; all-tenant failure rows add only
   safe tenant attribution, and opaque cursors cannot cross scopes. OpenAPI,
   README, implementation guidance, generated public resources, and dependent
   backlog wording now describe the same forward-only contract.
-
   The required pre-change and post-change `make ci` runs pass. Exact-coverage Go
   scenarios, 63 Playwright scenarios, and the real TAuth black-box prove
   aggregation, isolation, simultaneous routing, independent Settings and Usage
   selection, stale-response rejection, failure pagination, accessibility, and
   desktop/mobile layout.
-
 - [x] [B075] (P1) {F014} Keep local browser authentication on the ghttp front door.
   Goal:
   Make the canonical `make up` browser login path reach the TAuth container
   regardless of unrelated host processes.
-
   Problem:
   The local runtime config publishes `http://localhost:8082` while Compose
   binds TAuth only on IPv4 `127.0.0.1:8082`. An unrelated process can own the
@@ -1339,7 +1235,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   receives no TAuth CORS headers, and cannot restore a session or request a
   nonce even though `make up` reports ready because readiness checks IPv4
   directly.
-
   Requirements:
   - Keep production's explicit split-origin contract unchanged.
   - Publish the ghttp `http://localhost:4179` front door as the local TAuth URL
@@ -1352,31 +1247,26 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     service-scoped secret ownership.
   - Prove the operational contract, the real Compose stack, and the browser
     login bootstrap, then pass the required final `make ci`.
-
   Resolved 2026-07-26:
   Local browser authentication now stays on the ghttp front door. Compose owns
   the canonical `/auth/*` and `/me` proxy mappings plus the browser-facing
   `tauthUrl`, so stale ignored local environment entries cannot restore the
   obsolete direct-port topology. TAuth remains internal to the Compose network
   and production's split-origin configuration is unchanged.
-
   `make up` now verifies the exact `localhost` URLs used by the browser,
   including `GET /auth/session` and `POST /auth/nonce`. The real stack reached
   ready with session `204`, nonce `200`, anonymous management `401`, and no
   host TAuth port. Reloading the real local UI and activating **Sign in**
   produced a same-origin nonce request in TAuth without the prior CORS or
   `:8082` browser requests.
-
   The required pre-change and post-change `make ci` runs pass. The final run
   follows the last tracked edit and passes static analysis, exact 100% Go
   coverage, 33 Python tests, package installation, 63 browser scenarios, the
   TAuth black-box test, 47 release tests, and live-provider preflight.
-
 - [x] [B074] (P1) {F014} Make tenant context and lifecycle controls compact.
   Goal:
   Make multi-tenant context immediately legible without presenting the active
   tenant as a permanently open edit form.
-
   Problem:
   The active-tenant toolbar stacks its label above the selector and separates
   the immutable id into a wide second column. In Settings, the tenant name is
@@ -1384,7 +1274,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   lines. This gives stable tenant identity the visual weight of a pending form,
   pushes the client key away from its owning context, and makes the final-tenant
   guard read like an error during ordinary use.
-
   Requirements:
   - Keep the canonical F014 account, URL, isolation, and tenant lifecycle
     behavior unchanged; this is one frontend presentation and interaction fix.
@@ -1405,37 +1294,31 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     geometry.
   - Extend Playwright coverage through the real rendered interface and pass the
     required final `make ci` after the last code edit.
-
   Resolved 2026-07-26:
   The global tenant selector, immutable id, and create action now share one
   dense context toolbar. Settings renders the active tenant as a compact
   name/id row with an `Only tenant` protection chip and colocated destructive
   action; the name input appears only after Rename and returns focus after save
   or cancel.
-
   The client-key contract remains a separate row with unchanged one-time
   reveal, copy, replace, revoke, and mandatory-setup behavior. Its narrow
   layout now gives key status the full row before placing the create/replace
   action below it, avoiding the prior squeezed vertical copy.
-
   Browser coverage proves lifecycle behavior, stale-response isolation, focus,
   final-tenant protection, and bounded desktop/compact/mobile geometry. The
   required pre-change and post-change `make ci` runs pass. The final run
   followed the last code edit and passed static analysis, exact 100% Go
   coverage, 33 Python tests, package installation, 63 browser scenarios, the
   TAuth black-box test, 47 release tests, and live-provider preflight.
-
 - [x] [B073] (P1) {B070,F014,I031} Migrate persisted caller-cancellation usage outcomes.
   Goal:
   Let existing management databases containing valid caller-cancellation
   usage rows start and migrate to the canonical outcome schema.
-
   Problem:
   Runtime usage recording already persists caller cancellation as status `499`
   with outcome `request_timeout`, but the bounded historical mapper accepts
   only status `504` for that outcome. A persisted schema-1 or pre-F014 `499`
   row therefore fails migration preflight and prevents router startup.
-
   Requirements:
   - Map historical status `499` to `request_timeout` through the existing
     canonical caller-cancellation status constant.
@@ -1445,29 +1328,24 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Document that caller cancellation `499` and proxy-budget expiry `504`
     share the normalized `request_timeout` outcome.
   - Pass the required post-edit `make ci`.
-
   Resolved 2026-07-26:
   The historical outcome mapper now uses the canonical caller-cancellation
   status constant to map persisted `499` rows to `request_timeout`, matching
   current runtime recording and presentation. Unknown historical statuses
   remain rejected before mutation.
-
   The schema-1-to-2 and pre-F014 disposable SQLite startup migrations both
   contain caller-cancellation rows and prove their status and normalized
   outcome survive the bounded upgrade. README and implementation runbooks now
   state that `499` caller cancellation and `504` proxy-budget expiry share the
   canonical outcome without conflating their HTTP meanings.
-
   The required pre-change and post-change `make ci` runs pass. The final run
   followed the last code edit and passed static analysis, exact 100% Go
   coverage, 33 Python tests, package installation, 63 browser scenarios, the
   TAuth black-box test, 47 release tests, and live-provider preflight.
-
 - [x] [B072] (P1) {F014,B071} Preserve legacy SQLite index names through the ownership migration.
   Goal:
   Let `make up` start against an existing pre-F014 SQLite volume without
   deleting tenant, provider-key, or usage data.
-
   Problem:
   The deployed one-workspace schema contains
   `idx_managed_tenant_records_secret_digest` and
@@ -1475,7 +1353,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   GORM renames the legacy tables, so creating the current tables fails with
   `index ... already exists`. The disposable migration fixture omitted the
   historical index tags and therefore did not reproduce the real volume.
-
   Requirements:
   - Make the disposable legacy SQLite fixture reproduce the exact historical
     tenant and usage indexes from the pre-F014 GORM models.
@@ -1487,34 +1364,28 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Update the migration runbook, pass the required final `make ci`, then run
     `make up` against the preserved named volume and verify every readiness
     boundary.
-
   Resolved 2026-07-26:
   The ownership migration now renames the two colliding historical indexes
   through the GORM Migrator inside its existing transaction before it renames
   the legacy tables. No runtime raw SQL, alternate database, compatibility
   path, or data deletion was added.
-
   The disposable legacy fixture now recreates the exact pre-F014 GORM indexes.
   Migration coverage proves the current tables receive their canonical index
   names and every injected failure restores the original legacy table and
   index shape.
-
   The pre-change `make ci` baseline reached two existing local-orchestration
   timing failures after the immediately preceding full gate had passed. The
   required post-change `make ci` passed static analysis, exact 100% Go
   coverage, 33 Python tests, package installation, 63 browser scenarios, the
   TAuth black-box test, 47 release tests, and live-provider preflight.
-
   `make up` then migrated the preserved named SQLite volume and passed static,
   runtime-config, API, TAuth-session, and management-session readiness. A
   normal interrupt removed the containers and network while preserving
   `llm-proxy-local_llm_proxy_local_data`.
-
 - [x] [B071] (P1) {F014,I029,I031} Restore the SQLite-only GORM management database contract.
   Goal:
   Select the management database by its SQLite location and keep all runtime
   persistence behind GORM model APIs, without a PostgreSQL or raw-SQL path.
-
   Requirements:
   - Replace `management.database_dialect` and `management.database_dsn` with
     one required `management.database_path` field and the matching
@@ -1529,31 +1400,26 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     compatibility reads.
   - Preserve the real SQLite migration and management API coverage, then pass
     the required post-edit `make ci`.
-
   Resolved 2026-07-26:
   Replaced the dialect/DSN pair with the required `management.database_path`
   and `LLM_PROXY_MANAGEMENT_DATABASE_PATH` contract. Runtime persistence now
   opens that SQLite location through GORM, while injected GORM dialectors
   remain test-only boundaries.
-
   Removed the PostgreSQL driver and transitive dependencies, raw identity
   sequence SQL, PostgreSQL workflow service and environment, disposable
   PostgreSQL harness, target, and database-specific tests. Updated the current
   configuration examples, local and deployment environment files, repository
   guidance, migration runbooks, issue records, and generated public resources
   to the SQLite-only contract without an alias or fallback.
-
   The required pre-change `make ci` established a failing exact-coverage
   baseline at two `management_usage.go` branches. After the final code edit,
   `make ci` passed static analysis, exact 100% Go coverage, 33 Python tests,
   package installation, 63 browser scenarios, the TAuth black-box test, 47
   release tests, and live-provider preflight.
-
 - [x] [B070] (P1) {F014,I029,I031} Correct review-discovered management presentation and OpenAPI gaps.
   Goal:
   Keep canonical failure presentation and OpenAPI conformance aligned with the
   released multi-tenant management contract.
-
   Requirements:
   - Present the persisted caller-cancellation status `499` through the same
     strict status-label and tenant-scoped failure-detail paths as every other
@@ -1564,49 +1430,41 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     conformance validator.
   - Cover each correction through the real-router, OpenAPI, and Playwright
     integration boundaries, then pass the required post-edit `make ci`.
-
   Resolved 2026-07-26:
   Persisted caller cancellation now renders as canonical status `499 Client
   closed request` in both usage breakdowns and tenant-scoped failure details.
   The real management router proves cancellation persists only the normalized
   `request_timeout` outcome, while Playwright proves the complete response
   remains usable and secret-safe.
-
   The canonical OpenAPI request describes empty `api_key` as the existing
   retain-credential operation, its generated reference is synchronized, and a
   real provider-settings request passes both schema and server validation.
   Integer `maximum` values are enforced, with the documented failure-page
   limit rejecting `101` in both the conformance gate and real handler.
-
   The required pre-change and post-change `make ci` runs pass. The final run
   followed the last code edit and passed exact 100% Go coverage, 33 Python
   tests, 63 management-browser tests, TAuth black-box coverage, release
   checks, and live-provider preflight.
-
 - [x] [B069] (P1) Make upstream request timeouts an explicit, bounded client-to-proxy contract.
   Goal:
   Let each client choose the exact bounded amount of time LLM Proxy may spend
   on one upstream request, while keeping caller cancellation, provider work,
   and gateway protection under distinct owners.
-
   Problem:
   A production-sized F001 `POST /v2` request reached the caller's independent
   300-second HTTP deadline before LLM Proxy returned either a result or its own
   360-second timeout. The owned gateway was staged with 420-second outer
   deadlines. The Go CLI and Python package separately use 390 seconds, but that
   number has no product, protocol, provider, or deployment significance.
-
   The defect is not that one of these constants is too small. The defect is
   that the caller, proxy, provider adapters, and gateway each own an implicit
   clock, so a client cannot ask LLM Proxy for the work budget its request needs
   and cannot know which layer ended the request.
-
   Consequence:
   Kamu F001 cannot safely retry its Bulgarian source-world review. The failed
   one-shot request produced no response or durable completion receipt, and the
   available aggregate usage count cannot establish whether provider work later
   completed or the proxy eventually reached its deadline.
-
   Evidence:
   - A small `gpt-5.5` request with explicit `reasoning_effort: "high"` returned
     `200` in about 2.6 seconds, so the released field, route, credentials, and
@@ -1623,7 +1481,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     creates another deadline in the text handler, and lets dictation rely on
     provider-local deadlines. There is no single request-ingress deadline
     shared consistently by every upstream operation.
-
   Contract:
   Define one optional request header for every public operation that can start
   upstream work:
@@ -1632,14 +1489,12 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   ```
   It applies to `GET /`, `POST /`, `POST /v2`, and `POST /dictate`; management
   and static-site operations are out of scope.
-
   The header is the maximum wall-clock budget LLM Proxy may spend on the
   authenticated request. It begins before request-body parsing and includes
   validation, admission/queue wait, the provider call, OpenAI background
   polling, and response construction. It is a ceiling, not a promise that the
   operation will run for that long: validation, queue saturation, provider
   failure, or explicit caller cancellation may finish it earlier.
-
   - If the header is omitted, use `server.request_timeout_seconds` as the
     effective budget.
   - Add `server.max_request_timeout_seconds` as the operator-owned capacity
@@ -1658,19 +1513,16 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Create the deadline once at authenticated request ingress and propagate
     that context unchanged. Provider adapters must not start a fresh timeout or
     extend the remaining budget.
-
   Caller cancellation is a separate concern. A Go context, process signal, or
   explicitly configured transport policy may cancel a request sooner, in which
   case no response is guaranteed. Bundled clients must not hide such a policy
   behind the server-budget setting or impose an unrelated total-response
   deadline by default.
-
   The owned gateway is the final outer guard. Its response-header and read
   deadlines must be strictly greater than
   `server.max_request_timeout_seconds`, with the relationship validated from
   deployment configuration. The gateway must not use a client-specific magic
   number.
-
   Requirements:
   1. Validate the server default and maximum at startup: both effective values
      are positive and the default does not exceed the maximum. An explicitly
@@ -1703,7 +1555,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
        document decision and must carry this final behavior into any canonical
        documents it introduces. I029 will subsequently freeze the wire
        contract in canonical OpenAPI.
-
   Deployment dependency:
   The current gateway schema-v1 `caddy_route` declaration cannot express
   transport timeout values and rejects unknown fields. Do not invent an
@@ -1712,7 +1563,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   I204 `caddy_fragment` migration to make the edge guard greater than the
   configured proxy maximum, plus non-deploying validation of the assembled
   Caddy configuration. Production deployment itself remains user-owned.
-
   Validation:
   - Add black-box tests proving omission uses the server default; a shorter
     accepted value times out and cancels work; a value longer than the default
@@ -1735,7 +1585,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final `make ci` pair, with the final run after
     the last code edit. Verify the released artifact and deployed timeout
     relationship before F001 retries the request.
-
   Implemented 2026-07-24:
   LLM Proxy now accepts the canonical request-scoped header on all four
   upstream routes, validates the configured default and maximum, starts one
@@ -1744,7 +1593,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   dictation, and OpenAI background polling share that deadline without adapter
   resets. Safe terminal evidence distinguishes validation failure, success,
   proxy timeout, proxy overload, provider failure, and caller cancellation.
-
   The Go package, Go CLI, and Python package now serialize the budget per
   request and impose no hidden total-response deadline. Go integrations move
   `ConfigInput.Timeout` to
@@ -1753,7 +1601,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   `ClientMessagesRequest.request_timeout_seconds`; the CLI uses only
   `--request-timeout-seconds`. README, changelog, implementation plans,
   generated public client guides, and upgrade commands document the migration.
-
   The app deployment preflight reads its tracked maximum and supplies it to the
   companion gateway verifier. The gateway parses only its own Caddy
   configuration, rejects outer guards that are not strictly greater, and sets
@@ -1762,12 +1609,10 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   remains independent. Focused Go coverage is 100%, Python checks pass, the
   complete gateway test suite and pinned-container Caddy validation pass, and
   no production deployment command was run.
-
   The required pre-change and post-change `make ci` runs pass. The final run
   followed the last code edit and passed exact 100% Go coverage, 34 Python
   tests, 51 management-browser tests, the black-box authentication test,
   release-contract checks, and the live-provider harness preflight.
-
   Review follow-up 2026-07-24:
   Response bodies are now fully constructed and checked against the request
   context before success is selected. Managed-usage persistence runs only
@@ -1776,7 +1621,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   can therefore leave terminal log evidence without a managed-usage row, which
   is documented in README, but persistence can no longer outwait the accepted
   request budget or change the selected response.
-
   Explicit YAML `null` and empty timeout values now fail startup instead of
   selecting defaults, while true omission still selects the compiled default.
   Queue saturation records `proxy_overload` rather than
@@ -1784,14 +1628,12 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   version `0.2.0`, with a package-metadata regression test. The required
   review-follow-up baseline and final `make ci` runs pass; the final run follows
   the last tracked edit.
-
   Packaging contract cleanup 2026-07-24:
   `python/pyproject.toml` is the sole Python distribution definition. The
   root-level package-install check stages that project in a temporary directory,
   installs it as a normal package, and verifies both its public import surface
   and installed version against the canonical metadata. Setuptools and coverage
   outputs remain generated, ignored local artifacts rather than tracked sources.
-
   Gateway review correction 2026-07-24:
   The final `deploy-llm-proxy-backend` invocation now receives the same
   app-owned maximum that was read once from the tracked configuration and
@@ -1799,7 +1641,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   value, so direct or aggregate gateway deployment cannot bypass the
   request-capacity contract. The public deployment fixture and final
   post-edit `make ci` pass without production contact.
-
   Flag-free gateway correction 2026-07-24:
   The app deploy script no longer reads or forwards the capacity. Gateway now
   discovers the canonical LLM Proxy checkout, verifies the exact committed
@@ -1807,12 +1648,12 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   ready-fleet plan. The app invokes the verifier and deployment target without
   `LLM_PROXY_MAX_REQUEST_TIMEOUT_SECONDS`; focused operational coverage rejects
   any reintroduction of that environment handoff.
-
   Resolved 2026-07-25:
   - The coordinated app and gateway changes were released and deployed by the operator; released client `v0.2.46` exposes the request-level budget without a hidden total-response deadline.
   - A live `gpt-5.6-terra` / `max` control returned `OK` with a 900-second request budget.
   - A production-sized Bulgarian source-world request using the same model, effort, and budget remained connected beyond the former 300-second caller deadline and the 360-second proxy default, then returned a complete passing review after roughly 6.5 minutes.
   - Kamu F001 can therefore resume with the declared 900-second budget; no retry, direct-provider path, prompt chunking, or tenant mutation is required.
+
 
 ## Improvements
 
@@ -1821,7 +1662,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   Make llm-proxy independently releasable and deployable through the shared
   `mprlab-gateway` orchestrator without retaining a second production
   controller inside this repository.
-
   Requirements:
   - Keep exactly one tracked production declaration at
     `.mprlab/deploy/resources.yml`, using schema version 2 for the llm-proxy
@@ -1837,7 +1677,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Render the Pages artifact from committed source with the Go CLI. Keep Node
     only for developer frontend validation; declare no Node or npm production
     resource.
-
   Validation:
   - Black-box Go coverage validates the exact resource declaration, sibling
     lifecycle entrypoint, forbidden production paths, and Go-only Pages build.
@@ -1845,7 +1684,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - The sibling gateway accepts a clean committed checkout with
     `make plan-app-release MPRLAB_APP_ROOT=<llm-proxy checkout>` without
     publishing or deploying.
-
   Resolved 2026-07-30:
   - Commit `0749142` replaces schema-v1 and app-owned production machinery with
     the schema-v2 declaration, exact sibling lifecycle wrapper, and Go-only
@@ -1857,13 +1695,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     `plan-app-release`, validates every committed source input and declared
     resource, and derives only the `tauth.tenants` runtime requirement. No
     release, publication, deployment, or unrelated-repository scan runs.
-
 - [x] [I042] (P1) Remove managed-request serialization from SQLite authentication.
   Goal:
   Keep SQLite as the sole managed-tenant source of truth while allowing each
   proxy request to wait only for its own database read and selected provider,
   rather than another request's usage write or management mutation.
-
   Requirements:
   - Open the canonical runtime GORM SQLite database in WAL mode with a bounded
     busy timeout. Keep injected dialectors test-only and add no application
@@ -1878,7 +1714,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     provider-key decryption, routing-default, usage, and migration contracts.
   - Document SQLite/GORM concurrency ownership in the canonical management
     persistence guidance.
-
   Validation:
   - Public HTTP coverage using a disposable runtime SQLite database proves WAL
     mode permits managed authentication and upstream routing while another
@@ -1886,7 +1721,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Concurrency coverage proves an in-flight managed usage write cannot block
     authentication for an independent request.
   - The required post-change `make ci` passes after the final code edit.
-
   Resolved 2026-07-27:
   - Runtime managed SQLite connections now use WAL journaling and a five-second
     busy timeout. Authentication uses the caller context and one read-only GORM
@@ -1898,14 +1732,12 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - The final `make ci` passed with exact 100% Go statement coverage, all Python
     and frontend tests, the TAuth black-box test, release tests, and the live
     provider harness preflight.
-
 - [ ] [I045] (P1) {B089,I042,I043} Correlate proxy phase latency and provider progress.
   Goal:
   Make a slow or timed-out request diagnosable without exposing request or
   response content. Distinguish authentication, proxy admission, rate-limit
   waiting, provider work, polling, continuation, formatting, and post-response
   usage enqueue time under the same proxy-owned request id.
-
   Evidence:
   - The request logger records only total response latency. Managed usage stores
     only the same end-to-end latency, so neither surface identifies which
@@ -1922,7 +1754,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     live harness reports only case, provider, HTTP status, and response size,
     even though B089 already returns a safe request id that could correlate the
     failed case with structured server evidence.
-
   Requirements:
   - Define one centralized structured telemetry contract keyed by the existing
     proxy request id. A terminal request summary must carry endpoint, canonical
@@ -1956,7 +1787,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     Document the phase and progress field meanings in the canonical provider
     routing guidance without claiming billing accuracy or provider-side
     execution time outside observed HTTP boundaries.
-
   Deliverables:
   - One request-scoped phase accumulator, centralized safe log event and field
     constants, OpenAI polling and shared-continuation progress events, and a
@@ -1965,7 +1795,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     and provider-routing documentation.
   - No persistent schema change, public payload expansion, upstream identifier
     disclosure, or content-bearing telemetry.
-
   Validation:
   - Drive real public proxy handlers against controlled upstream servers and
     assert exact phase summaries for success, queue wait, configured rate-limit
@@ -1983,13 +1812,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-
 - [ ] [I046] (P1) {I045} Make upstream admission fair across provider origins.
   Goal:
   Keep upstream work globally bounded while preventing one slow or throttled
   origin from consuming the active and queued capacity needed by unrelated
   origins.
-
   Evidence:
   - `limitedHTTPDoer` owns one global active channel sized by `server.workers`
     and one global admission channel sized by
@@ -2003,7 +1830,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - I042 and I043 removed managed-database authentication and usage-write
     serialization. They do not alter this shared upstream active/admission
     contract.
-
   Requirements:
   - Replace the global-only worker and admission channels with one canonical
     origin-aware capacity contract. Key ownership by the exact normalized
@@ -2030,7 +1856,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     request telemetry. Update runtime configuration, README, provider-routing
     guidance, tracked deployment inputs, and configuration examples as one
     current contract.
-
   Deliverables:
   - One bounded origin-aware scheduler with explicit global and per-origin
     capacity ownership, fair ready-origin selection, cancellation-safe token
@@ -2039,7 +1864,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     upstream origin.
   - Deterministic public-boundary concurrency coverage and a Makefile-owned
     race-detector gate for the concurrency path.
-
   Validation:
   - Use controlled upstream servers on at least two origins. Saturate one
     origin with active, queued, and rate-limited calls and prove an admissible
@@ -2058,13 +1882,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-
 - [ ] [I037] (P1) Model provider wire contracts separately from execution lifecycles.
   Goal:
   Let each configured text model use its provider's exact current request shape
   and execution lifecycle without inferring OpenAI Responses semantics from an
   endpoint name, an SDK, or the presence of an upstream identifier.
-
   Evidence:
   - The registry currently collapses wire format and execution behavior into
     four transport constants: OpenAI Responses, OpenAI-compatible Chat
@@ -2103,7 +1925,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
       https://dev.meta.ai/docs/features/chat-completion
   - Only DashScope, Qwen Cloud, Gemini, and Grok produced independently
     actionable provider work; their issues follow this prerequisite.
-
   Requirements:
   - Replace the combined transport enum with closed, validated provider/model
     capabilities for wire contract and execution lifecycle. Active lifecycle
@@ -2133,7 +1954,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Document the capability matrix and data-retention consequences in the
     canonical provider-routing guide and generated API reference. Delete the
     obsolete combined transport contract in the same forward-only change.
-
   Validation:
   - Black-box routing coverage enumerates every registered provider/model and
     fails when its wire contract or lifecycle is absent, contradictory, or
@@ -2141,19 +1961,16 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Public-boundary fixtures prove synchronous, pollable, continuation,
     cancellation, timeout, and provider-terminal-error behavior without
     exposing upstream IDs or provider bodies.
-
 - [ ] [I038] (P2) {I037} Adopt DashScope's synchronous Responses API without background mode.
   Goal:
   Move eligible DashScope Qwen models from Chat Completions to Alibaba's newer
   Responses wire format while retaining its explicitly synchronous lifecycle.
-
   Evidence:
   - Alibaba documents an OpenAI-compatible Responses endpoint with typed output,
     tools, `previous_response_id`, and storage controls:
     https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses
   - The same reference states that `background` is unsupported and that only
     synchronous calls are processed. Unlisted OpenAI fields may be ignored.
-
   Requirements:
   - Verify the Responses support matrix for every configured DashScope model.
     Migrate supported models to a dedicated DashScope Responses wire adapter;
@@ -2168,17 +1985,14 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     merely because the fields exist.
   - Use output-limit continuation only after a terminal incomplete result.
     Never issue `GET /responses/{id}` as a progress poll.
-
   Validation:
   - Public black-box tests prove the eligible-model request shape, typed text
     extraction, synchronous incomplete continuation, usage, safe errors, and
     rejection of accidental `background` or unsupported OpenAI-only fields.
-
 - [!] [I039] (P1) {I037} Replace or retire the backend-ineligible Qwen Cloud Token Plan provider.
   Goal:
   Stop treating an interactive-tool subscription as an application-backend
   provider before considering any Responses API refactor.
-
   Evidence:
   - The canonical `qwencloud` provider points at
     `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`.
@@ -2190,13 +2004,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Token Plan documentation mentions Responses-powered harness tools, but that
     does not authorize LLM Proxy production traffic or establish an interactive
     background-resource contract.
-
   Blocked:
   An operator/product decision and eligible Alibaba service credential are
   required: either replace `qwencloud` with a distinct backend-authorized
   service contract, or remove the redundant provider and use the canonical
   DashScope provider.
-
   Requirements:
   - Send no LLM Proxy backend traffic to the Token Plan endpoint after this
     issue is resolved. Do not probe newer API shapes with production tenant
@@ -2208,17 +2020,14 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     explicitly invalidate existing persisted selections, and delete the
     provider, environment placeholders, docs, and tests. Do not alias it to
     DashScope or silently fall back to DashScope credentials.
-
   Validation:
   - Runtime configuration and public routing tests prove that no Token Plan
     domain can receive backend inference requests and that obsolete persisted
     provider selections are handled by the chosen bounded migration.
-
 - [ ] [I040] (P1) {I037,B087} Migrate Gemini from generateContent to Interactions resources.
   Goal:
   Adopt Google's recommended current Gemini interface and use its real
   background interaction lifecycle for models that support it.
-
   Evidence:
   - Google states that the Interactions API is GA, recommended for new
     projects, and the home for future Gemini capabilities:
@@ -2227,7 +2036,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     or deleted; statuses include `in_progress`, `requires_action`, `completed`,
     `failed`, and `cancelled`:
     https://ai.google.dev/gemini-api/docs/background-execution
-
   Requirements:
   - Verify Interactions and background support for every configured Gemini
     model and register capability per model. Migrate eligible models from
@@ -2242,18 +2050,15 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     subject to Google's documented lifecycle.
   - Keep the public proxy request blocking and keep output-limit continuation
     separate from observing the original interaction.
-
   Validation:
   - Public fixtures cover immediate and delayed completion, terminal failure,
     cancellation, deletion, `requires_action`, usage, and safe errors.
   - The Default-tenant Gemini echo and complex live cases run through
     Interactions and prove actual upstream polling.
-
 - [ ] [I041] (P2) {I037} Migrate Grok to xAI Responses without OpenAI background assumptions.
   Goal:
   Move Grok off xAI's deprecated Chat Completions surface while preserving
   xAI's actual synchronous Responses behavior.
-
   Evidence:
   - xAI calls Responses its preferred API and Chat Completions deprecated:
     https://docs.x.ai/developers/model-capabilities/text/comparison
@@ -2264,7 +2069,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     final result retrievable exactly once, but that operation belongs to the
     deprecated Chat family:
     https://docs.x.ai/developers/advanced-api-usage/deferred-chat-completions
-
   Requirements:
   - Verify Responses support for every configured Grok model and migrate each
     eligible model to an xAI-owned Responses codec. Do not reuse OpenAI's
@@ -2279,18 +2083,15 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Do not adopt Deferred Chat merely to manufacture polling. If xAI later
     offers deferred execution on its current Responses contract, audit that
     lifecycle in a separate issue.
-
   Validation:
   - Public fixtures prove xAI Responses request/response mapping, synchronous
     continuation, storage policy, usage, safe errors, and absence of
     `background` polling; existing xAI speech routing remains independent.
-
 - [x] [I036] (P1) {F014,B081} Verify pasted provider API keys before persisting them.
   Goal:
   Make a provider connected and routing-eligible only after LLM Proxy
   automatically proves that a newly supplied credential is operational for
   the exact selected provider and text model.
-
   Evidence:
   - The Settings API-key input currently marks the provider draft dirty on
     input and submits it only on change, provider switch, or Settings close. A
@@ -2304,7 +2105,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     for routing defaults, and may establish the tenant's first default route.
     An unusable credential can therefore appear connected until the user's
     first real proxy request fails upstream.
-
   Requirements:
   - Treat every nonempty `api_key` submitted to the existing provider-settings
     operation as an unverified new or replacement credential. Verify it
@@ -2354,7 +2154,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Update the canonical OpenAPI source and generated reference, README,
     provider-routing documentation, frontend types and copy, and CHANGELOG in
     the same implementation.
-
   Deliverables:
   - One provider-neutral operational credential verifier with exact adapters
     for all canonical providers, wired into the existing authenticated
@@ -2364,7 +2163,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     Settings.
   - Canonical and generated documentation for the verify-before-persist
     contract and its safe failure statuses.
-
   Validation:
   - Exercise every canonical provider through the real management router and
     its actual transport shape against controlled upstream servers. Prove an
@@ -2388,7 +2186,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-
   Resolved 2026-07-27:
   - Added one provider-neutral, single-operation verifier for every canonical
     transport and made the authenticated provider-settings mutation verify
@@ -2413,13 +2210,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     current catalog and promoted verified `kimi-k2.6` to the canonical default
     without an alias or fallback. The disposable managed-key verification and
     default-model smoke request both returned `200`.
-
 - [x] [I043] (P1) Persist managed usage through one bounded asynchronous writer.
   Goal:
   Keep selected proxy responses independent from managed usage database
   latency without creating one goroutine per response or an unbounded
   telemetry backlog.
-
   Evidence:
   - Every managed proxy request currently flushes its selected response and
     then performs `recordUsage` synchronously on the request goroutine under a
@@ -2429,7 +2224,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     with unrelated managed authentication and mutation traffic.
   - Managed usage powers operational dashboards and failure inspection; it is
     not a billing, accounting, or provider-job ledger.
-
   Requirements:
   - Give each management runtime exactly one bounded FIFO usage channel and one
     writer goroutine. Add a positive `management.usage_queue_size` setting with
@@ -2450,7 +2244,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     uncommitted events.
   - Keep prompts, responses, audio, transcripts, secrets, raw provider bodies,
     and free-form upstream errors out of both queued events and logs.
-
   Validation:
   - Public HTTP coverage blocks the first usage insert, proves later managed
     responses still complete, fills the one-slot test queue, and proves the
@@ -2463,7 +2256,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-
   Resolution:
   - Managed responses now flush before a non-blocking send to one bounded,
     runtime-owned FIFO writer. Accepted records receive one detached insert
@@ -2476,14 +2268,12 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     process-local at-most-once durability documentation, and public HTTP
     coverage for response independence, FIFO persistence, overflow, and safe
     logging.
-
 - [ ] [I035] (P2) {B076} Persist each user's selected Usage interval across sessions.
   Goal:
   Make the Usage Overview reopen with the last interval the authenticated user
   successfully selected. A user who selects `7 days` must start the next login
   at `7 days`; after changing to `1 day`, subsequent logins must start at
   `1 day`.
-
   Evidence:
   - The frontend initializes `selectedUsageInterval` from the hard-coded
     `30d` default. Selecting another interval changes only the mounted Alpine
@@ -2493,7 +2283,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - The managed user record and `GET /api/management/account` response contain
     no dashboard preference, so the current selection cannot survive logout,
     reload, session restoration, or another browser/device.
-
   Requirements:
   - Persist exactly one canonical account-owned `usage_interval` preference for
     each authenticated managed user. Accepted values are `all`, `30d`, `7d`,
@@ -2535,7 +2324,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Update the canonical OpenAPI source, generated API reference, frontend
     types, README, CHANGELOG.md, and
     `docs/implementation/provider-routing-plan.md` in the same implementation.
-
   Deliverables:
   - One typed Usage-interval preference contract, forward-only managed-user
     schema migration, owner-isolated read/update store path, canonical account
@@ -2544,7 +2332,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Updated canonical and generated documentation describing the account-owned
     persistence boundary and the unchanged local-only state outside this
     preference.
-
   Validation:
   - Exercise the real management router and a disposable SQLite database to
     prove a new user starts at `30d`, can save each supported interval, retains
@@ -2564,12 +2351,10 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-
 - [x] [I034] (P2) {B079} Minimize Settings system-prompt editors by default.
   Goal:
   Keep tenant-wide and provider-specific system prompts out of the dense
   Settings layout until a user explicitly asks to edit one.
-
   Requirements:
   - Render each system-prompt editor as a semantic disclosure that is collapsed
     whenever Settings opens and whenever its tenant or provider context changes.
@@ -2578,7 +2363,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     is hidden.
   - Preserve the existing values, disabled states, serialized mutation
     behavior, and autosave-on-field-exit contract.
-
   Validation:
   - Exercise both disclosures through the rendered browser, including initial
     hidden state, pointer and keyboard expansion, context-reset behavior, and
@@ -2586,14 +2370,12 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
     last tracked edit.
-
   Resolved 2026-07-26:
   - Tenant-wide and provider-specific prompts now use collapsed semantic
     disclosures with visible `Hidden` and `Expanded` indicators.
   - Settings-open, tenant-switch, and provider-switch resets preserve values,
     disabled states, focus behavior, and autosave-on-field-exit semantics.
   - All 67 rendered-browser scenarios and the real TAuth management flow pass.
-
 - [x] [I033] (P2) {B076,I029} Keep the visible Usage Overview automatically fresh.
   Decision 2026-07-30:
   Retired before implementation. F017 addresses the unattended stale-session
@@ -2602,7 +2384,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   proposed polling scheduler, last-updated state, or visibility-triggered Usage
   requests. Record a new issue with fresh evidence if foreground Usage
   freshness remains necessary after F017 is deployed.
-
 - [ ] [I032] (P2) {B076,I027} Add donut breakdowns and meaningful axes to Usage Overview charts.
   Goal:
   Let a signed-in user choose one clear presentation for both the selected
@@ -2611,7 +2392,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   guesswork. Preserve the Usage tenant, interval, exact request and token
   counts, and the distinction between historical activity and currently
   connected providers.
-
   Evidence:
   - The current usage summary already returns deterministically ordered
     provider and model aggregates with request counts. The existing rows are
@@ -2634,7 +2414,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     Usage scopes. I027 then establishes the final dashboard layout and explicitly
     reserves provider/model breakdowns for historical selected-period activity,
     rather than current `has_key` connection state.
-
   Requirements:
   - Implement only after B076 and I027, against the canonical response for the
     selected Usage scope. Do not add a presentation-specific endpoint, response
@@ -2712,7 +2491,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     connected-provider, token-share, exact-event-time, or new management-API
     feature. This repository has no PRD.md or ARCHITECTURE.md; do not create
     partial placeholders for this UI change.
-
   Deliverables:
   - One typed local presentation-mode contract, pure provider/model distribution
     transform, shared selector, semantic bar/donut renderings, responsive
@@ -2725,7 +2503,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Updated README, CHANGELOG.md, implementation documentation, generator-owned
     public usage resource, generated artifact, and browser coverage; no
     management API, Go client, Python client, or CLI wire-contract change.
-
   Validation:
   - Add Playwright coverage through the real management dashboard showing the
     default Bar graph mode, keyboard selection of Donut chart, simultaneous
@@ -2749,7 +2526,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-
 - [x] [I031] (P1) {I029,F014} Add tenant-scoped failure details to the usage dashboard.
   Goal:
   Let a signed-in tenant owner open a selected-period **failed requests** link
@@ -2757,7 +2533,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   A 55% success rate over 22 requests means 10 failed requests, but that is not
   necessarily 10 provider failures: client validation and upstream/runtime
   failures must remain distinguishable.
-
   Evidence:
   - Managed usage rows already retain event time, endpoint, provider, model,
     HTTP status, success, and latency, while the current usage response already
@@ -2766,7 +2541,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - F014 replaces the current singular management/usage API with canonical
     tenant-scoped routes, and I029 makes OpenAPI the sole HTTP contract source.
     A new unscoped endpoint now would be immediately obsolete.
-
   Requirements:
   - Implement only after I029 and F014. Use F014's canonical tenant-scoped
     management contract; do not add an unscoped endpoint, alias, compatibility
@@ -2816,7 +2590,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     routing documentation, and any generator-owned public usage documentation
     from the final single API contract. Document that historical rows receive
     normalized status-derived codes, not reconstructed raw error messages.
-
   Deliverables:
   - Tenant-scoped failure-event query, cursor domain type, outcome-code domain
     type, indexed current-schema migration, and safe request-boundary recording.
@@ -2824,7 +2597,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     styles, and selected-interval/status-summary presentation.
   - Canonical OpenAPI and product documentation describing the operation,
     response, privacy boundary, and safe diagnostic vocabulary.
-
   Validation:
   - Add black-box HTTP coverage through the real management router for interval
     validation, owner/tenant isolation, newest-first stable pagination, all
@@ -2846,7 +2618,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     then run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair, with the final run after the
     last code edit.
-
   Resolved 2026-07-25:
   - Added the owner-only tenant failure operation with strict interval, limit,
     and cursor inputs; stable snapshot pagination; exact safe row fields; and
@@ -2865,14 +2636,12 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     coverage, real SQLite migration checks, 33 Python tests, package
     installation, 63 browser scenarios, the TAuth black-box test, release
     checks, and the live-provider harness preflight.
-
 - [x] [I029] (P1) {B069,F014} Publish one canonical OpenAPI contract and enforce server/client conformance.
   Goal:
   Make one committed OpenAPI 3.1 document the sole canonical HTTP wire
   contract for every llm-proxy-owned endpoint, publish that exact artifact on
   the public site, and make CI reject drift in handlers, bundled clients, or
   human-facing API documentation.
-
   Evidence:
   - The repository currently has no OpenAPI or Swagger artifact and no
     contract-conformance gate.
@@ -2881,7 +2650,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - The published canonical-v2 prose page omits the request-level
     `reasoning_effort` field delivered by B068, demonstrating that independently
     maintained prose can drift from the live wire contract.
-
   Dependencies:
   - B069 must settle the final public per-request timeout and attributable
     error boundary before this issue freezes its request/response
@@ -2889,7 +2657,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - F014 replaces the singular management endpoints with tenant-scoped routes.
     This contract must describe only that final management surface, rather than
     documenting a shape that F014 immediately removes.
-
   Requirements:
   - Add exactly one hand-maintained canonical contract at
     `docs/openapi.yaml`. Do not add aliases, fallback schema locations,
@@ -2939,7 +2706,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     API resource pages, or derive and verify them from the OpenAPI artifact.
     In particular, the canonical-v2 documentation must expose
     `reasoning_effort` without creating another source of truth.
-
   Deliverables:
   - The canonical `docs/openapi.yaml` contract and documented ownership/update
     rule.
@@ -2949,7 +2715,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     sitemap, and release/publication verification.
   - Updated repository and site documentation that points contributors and
     clients to the canonical contract.
-
   Validation:
   - Run the required baseline `make ci` before the first implementation edit
     and the required final `make ci` after the last edit.
@@ -2962,7 +2727,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - After the user-owned production deployment, capture live `200` responses
     for `/openapi.yaml` and `/docs/` and verify the published schema matches the
     released source artifact.
-
   Resolved 2026-07-25:
   - Added `docs/openapi.yaml` as the sole OpenAPI 3.1 source for all 18 owned
     operations, with exact production server, authentication, request,
@@ -2979,7 +2743,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     60 browser scenarios, the TAuth black-box test, release checks, and the
     live-provider harness preflight. Live publication verification remains
     user-owned after production deployment.
-
 - [ ] [I027] (P1) {B076} Redesign the user dashboard around connected-provider widgets.
   Goal:
   Make the authenticated dashboard answer, at a glance, which upstream
@@ -2987,14 +2750,12 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   a separate measure of activity so an unused connected provider remains
   visible and historical traffic never implies that a provider is still
   connected.
-
   Dependencies:
   - B076 makes Usage account-wide by default and gives it an independent tenant
     filter. Build the widgets against that final scope contract: one explicitly
     selected Usage tenant shows that tenant's connections, while `All tenants`
     shows tenant-labelled connections across all owned tenants. The Settings
     tenant must not silently control the dashboard projection.
-
   Requirements:
   - Define a connected provider solely from canonical authenticated profile
     data whose `has_key` value is `true`. Do not infer connection from catalog
@@ -3049,7 +2810,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     masked/raw key material in the owner-wide response.
   - Update dashboard and self-service documentation so `connected provider` and
     `active provider` have explicit, non-overlapping meanings.
-
   Deliverables:
   - Add the connected-provider widget grid, connected count, provider-specific
     Settings navigation, empty/error states, and responsive styling to the user
@@ -3059,7 +2819,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     while keeping registration authoritative to `has_key`.
   - Update first-party frontend types, copy, documentation, and rendered-browser
     coverage for the final dashboard contract.
-
   Validation:
   - Add Playwright scenarios for `All tenants` and one explicit Usage tenant;
     zero, one, and multiple connected providers; duplicate provider IDs in two
@@ -3078,6 +2837,9 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     layout without overlap or horizontal overflow.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
+- [ ] [I205] (P2) Let's align the text inside the card to the left so it's on the same vertical line as the left of the title, let's align both the text of the card, such as goal etc to the left so it's visually aligned with the ttitle of the card.
+  ![image](images/1785478561383_image.png)
+
 
 ## Maintenance
 
@@ -3277,7 +3039,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Root governance references that resolve to current product-context files.
   Validation:
   - Verify every product-context path named by root `AGENTS.md` exists and contains current repository guidance.
-
 - [ ] [M019] (P2) Refresh non-security direct dependency pins.
   Goal:
   Bring direct Go, frontend, and Python development dependencies to their current supported releases after the security graph is stable.
@@ -3291,6 +3052,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   Validation:
   - Run `go mod verify`, `npm audit --json`, the locked Python audit, and the required baseline/final `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
+
 ## Features
 
 - [ ] [F017] (P1) Add shared MPR UI inactivity warning and automatic logout.
@@ -3299,7 +3061,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   bounded user inactivity, before its TAuth session can expire behind a stale
   application snapshot. Implement the behavior once in MPR UI and consume that
   same current contract from llm-proxy and LoopAware.
-
   Evidence:
   - An unattended llm-proxy Usage view can retain MPR UI's last authenticated
     state and the last accepted workspace data after the server session has
@@ -3322,7 +3083,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - I033 proposed 60-second foreground Usage polling for the stale-snapshot
     symptom. Product direction now selects explicit inactivity warning/logout
     instead; active users retain the existing manual Refresh path.
-
   Requirements:
   - Implement the inactivity state machine, warning surface, and logout
     transaction in MPR UI first. Publish it through the canonical literal
@@ -3395,7 +3155,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     LoopAware authentication/user documentation. State the exact policy,
     activity semantics, cross-tab behavior, failure behavior, and distinction
     between inactivity logout and the authoritative TAuth session TTL.
-
   Deliverables:
   - One MPR UI inactivity controller and accessible warning surface, one strict
     `auth.autoLogout` configuration contract, one cross-tab coordination
@@ -3407,7 +3166,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Updated OpenAPI/browser-config, MPR UI event, and repository documentation;
     no compatibility shim, application-specific auth helper, or production
     deployment.
-
   Validation:
   - In MPR UI, use controlled time and visibility to cover authentication
     start/reset, activity before/after warning, countdown, stay-signed-in,
@@ -3429,7 +3187,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - For each code-changing repository, run its required baseline `make ci`
     immediately before the first edit and final `make ci` after the last edit.
     Do not contact or deploy production as part of implementation acceptance.
-
 - [x] [F014] (P1) Support multiple isolated tenants per managed user.
   Goal:
   Let one authenticated TAuth user create, select, rename, and delete multiple independently configured LLM Proxy tenants. Each tenant owns its own generated client secret, provider credentials and settings, routing defaults, request examples, and usage history. This feature is one-user-to-many-tenants; shared tenants, invitations, memberships, and team roles are outside scope.
@@ -3481,7 +3238,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Add Playwright coverage for first-user bootstrap, create, switch, URL reload/history, independent tabs, rename, guarded final-tenant deletion, confirmed deletion, unsaved-edit handling, one-time secret/key cleanup, response-order races, explicit invalid-URL errors, admin tenant lists, keyboard use, and desktop/mobile geometry.
   - Extend the real local TAuth black-box path to create and use two tenants for one verified session and prove a second verified user cannot access either tenant.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with the final run occurring after the last code edit.
-
   Resolved 2026-07-25:
   - Replaced the one-user/one-tenant persistence and unscoped management
     surface with account-owned opaque tenants, tenant-bound credentials,
@@ -3499,14 +3255,12 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     coverage, the real SQLite migrations, 33 Python tests,
     package installation, 59 browser scenarios, the real two-user TAuth
     black-box test, release checks, and live-provider harness preflight.
-
 - [ ] [F016] (P1) Add an installable Node.js client for canonical v2 messages.
   Goal:
   Let server-side Node.js applications install `llm-proxy-client`, create one
   validated client from an application-supplied LLM Proxy base URL and tenant
   secret, and await canonical `/v2` message requests without duplicating
   authentication, URL, model-profile, timeout, or error-handling logic.
-
   Evidence:
   - `pkg/llmproxyclient` is the reusable Go client, `python/llm_proxy_client` is
     the installable Python package, and `llm-proxy-client` is the standalone Go
@@ -3517,7 +3271,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - `docs/openapi.yaml` is the sole public HTTP contract, and repository CI
     already uses Node.js 22. The Node package can therefore use the built-in
     Fetch API without adding a runtime dependency or another wire schema.
-
   Requirements:
   - Add exactly one package project under `node/`, named
     `llm-proxy-client`, initially versioned `0.1.0`, with
@@ -3593,7 +3346,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     Node.js-client page and examples. Do not change the public HTTP contract to
     accommodate the client; prove the package conforms to the existing
     `docs/openapi.yaml`.
-
   Deliverables:
   - One installable zero-runtime-dependency Node.js ESM package with generated
     declarations, validated public request/config types, injectable Fetch
@@ -3602,7 +3354,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     package artifact, and explicit operator-owned publication path.
   - Updated product, client-authentication, provider-routing, package, and
     generated public documentation for the Node.js integration.
-
   Validation:
   - Pack the package, install only that tarball into disposable JavaScript and
     TypeScript consumer projects, import only its public export, compile the
@@ -3630,6 +3381,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
 
+
 ## Planning
 *do not implement yet*
 
@@ -3642,7 +3394,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   setup must make the chosen provider/model the Settings tenant's usable text
   route without asking the user to reconcile separate provider, default, and
   client-secret forms.
-
   Requirements:
   - Build the flow inside Settings on B076's editor-only `Settings tenant`
     context. It must read and write only that selected tenant and must not change
@@ -3675,7 +3426,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Keep the generated client-secret step visibly separate but adjacent to
     completion, including one-time secret display and copyable route examples.
     Do not create a second client-authentication or provider-key storage path.
-
   Deliverables:
   - Add a validated, sanitized provider catalog projection containing the
     provider identity, label, text models, capability metadata, and official
@@ -3688,7 +3438,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Do not add provider aliases, hidden default selection, a browser-maintained
     catalog, a compatibility endpoint, a key-import shortcut, or a best-effort
     retry/fallback path.
-
   Validation:
   - Add black-box configuration and management API coverage for invalid/missing
     credential URLs, provider/model mismatches, atomic rollback, tenant/user
@@ -3701,7 +3450,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     narrow layouts, saved-key updates, and explicit failure states.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
-
 - [ ] [P002] (P1) Create a canonical public landing page and generated capability catalog.
   Goal:
   Make the Pages root an indexable, useful LLM Proxy landing page that accurately
@@ -3709,7 +3457,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   currently supported provider/model capability. Move the existing authenticated
   management workspace to the one canonical `/manage/` route so public product
   discovery and key-management workspaces are not competing root pages.
-
   Requirements:
   - Serve a public, useful `https://llm-proxy.mprlab.com/` landing page without
     requiring a management session. Keep the separate API origin's `GET /`,
@@ -3742,7 +3489,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     and current integration documentation. Use semantic HTML, visible focus,
     accessible tables/filters, concise unique metadata, canonical root URLs,
     and structured data that describes only visible landing-page content.
-
   Deliverables:
   - Add the canonical catalog projection/build contract and a static public
     landing page with capability sections, provider/model matrix, limitations,
@@ -3755,7 +3501,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Do not duplicate catalogs in HTML/JavaScript/docs, make availability claims
     based on whether a particular user has a key, expose secrets, or preserve a
     second root management implementation.
-
   Validation:
   - Add black-box build/render coverage proving the public matrix exactly
     reflects the validated catalog, has no secret-bearing fields, and rejects
@@ -3768,14 +3513,12 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     sitemap output.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
-
 - [ ] [P003] (P1) {P002} Re-audit and expand the SEO/use-case resource system from verified product contracts.
   Goal:
   Refresh LLM Proxy's search and resource strategy from the current repository
   contract so prospective users can discover concrete, supported ways to use
   the service without creating duplicate doorway pages or claiming roadmap work
   as shipped functionality.
-
   Requirements:
   - Produce a new repo-grounded SEO report before changing public copy. It must
     inventory current capabilities, limits, public routes, existing resource
@@ -3813,7 +3556,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     generic copy. Each indexable page must have a concrete repository-derived
     command/configuration example, problem-specific FAQ, limitation section,
     meaningful CTA, and accessible/lazy-loaded presentation where applicable.
-
   Deliverables:
   - Update `docs/marketing/seo-resource-cluster-report.md` with the fresh repo
     analysis, use-case opportunity list, recommended generation order,
@@ -3829,7 +3571,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Do not manufacture pages merely to reach a count, rely on sitemap-only
     discoverability, repeat a generic FAQ across a cluster, or retain stale
     provider/model and roadmap claims as marketing copy.
-
   Validation:
   - Make generation fail on missing evidence, duplicate or orphaned pages,
     unsupported claims, stale date metadata, incompatible canonical URLs,
@@ -3844,13 +3585,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     integrity before publication.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
-
 - [ ] [P004] (P1) {P002,P003} Make Resources an always-available footer surface and enforce the resource-page shell.
   Goal:
   Make the public Resources entry point continuously discoverable from the
   shared footer, and make every public resource page use one unambiguous
   document order: header, resource content, then footer.
-
   Requirements:
   - Render a semantic `Resources` navigation section in the shared public
     footer on the landing page, the resource hub, and every generated public
@@ -3874,7 +3613,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     P003's canonical trailing-slash, accessibility, and indexing contracts.
     The footer must never expose tenant data, secrets, private API routes, or
     noindex management URLs as public resource navigation.
-
   Deliverables:
   - Extend the generated public site shell with the canonical footer Resources
     navigation and apply it consistently to the landing page, resource hub,
@@ -3887,7 +3625,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     canonical hub URL, and proves generated resource pages place all visible
     resource content between the shared header and footer at desktop and narrow
     widths.
-
   Validation:
   - Make generation fail when a public resource page omits the canonical
     header, `main`, footer, or footer Resources anchor; when those elements are
@@ -3898,13 +3635,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     and noindex pages out of resource navigation.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
-
 - [ ] [P005] (P1) {P002,P004} Normalize public Privacy and Terms pages using PoodleScanner's legal-page contract as the structural reference.
   Goal:
   Give LLM Proxy one coherent, public legal-page experience: canonical Privacy
   and Terms pages with LLM Proxy-specific, evidence-backed content, a readable
   no-JavaScript fallback, and consistent legal links in the shared footer.
-
   Requirements:
   - Establish `/privacy/` and `/terms/` as the only canonical public legal
     routes. Use those exact trailing-slash URLs in page metadata, Open Graph,
@@ -3949,7 +3684,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     rendered fallback synchronized from one canonical site contract. Do not
     hand-maintain divergent footer fragments, duplicate legal copy, or a
     legacy management-only footer path.
-
   Deliverables:
   - Add a deterministic, canonical legal-page source/template and render the
     public `/privacy/` and `/terms/` pages from it with the current MPR UI
@@ -3960,7 +3694,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Update public-site and deployment documentation with the final legal URLs,
     policy-content ownership, effective/modified-date source, and indexability
     decision.
-
   Validation:
   - Add black-box static-site and Playwright coverage that requests both legal
     routes, verifies their public metadata, visible headings, canonical URLs,
@@ -3976,3 +3709,5 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     are not tied to an approved source.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
+
+
