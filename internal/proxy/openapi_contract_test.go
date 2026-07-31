@@ -112,6 +112,87 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 	}
 }
 
+func TestOpenAPIContractEnforcesCanonicalWebSearchQuery(t *testing.T) {
+	contract, loadError := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if loadError != nil {
+		t.Fatalf("load canonical OpenAPI contract: %v", loadError)
+	}
+
+	for _, rawValue := range []string{"true", "false"} {
+		request := httptest.NewRequest(
+			http.MethodGet,
+			"/?key=contract-test-key&prompt=contract&web_search="+url.QueryEscape(rawValue),
+			nil,
+		)
+		if validationError := contract.ValidateRequest("/", request.Method, request, nil); validationError != nil {
+			t.Fatalf("web_search=%q rejected: %v", rawValue, validationError)
+		}
+	}
+
+	for _, rawValue := range []string{"", "1", "0", "t", "f", "y", "n", "yes", "no", "TRUE", "FALSE"} {
+		request := httptest.NewRequest(
+			http.MethodGet,
+			"/?key=contract-test-key&prompt=contract&web_search="+url.QueryEscape(rawValue),
+			nil,
+		)
+		if validationError := contract.ValidateRequest("/", request.Method, request, nil); validationError == nil {
+			t.Fatalf("web_search=%q accepted", rawValue)
+		}
+	}
+}
+
+func TestOpenAPIContractEnforcesV2MediaRelationships(t *testing.T) {
+	contract, loadError := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if loadError != nil {
+		t.Fatalf("load canonical OpenAPI contract: %v", loadError)
+	}
+
+	testCases := []struct {
+		name      string
+		body      string
+		wantValid bool
+	}{
+		{
+			name:      "user image attachment",
+			body:      `{"messages":[{"role":"user","content":"Describe the image.","attachments":[{"type":"image","mime_type":"image/png","data":"YQ==","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
+			wantValid: true,
+		},
+		{
+			name:      "user audio attachment",
+			body:      `{"messages":[{"role":"user","content":"Transcribe the audio.","attachments":[{"type":"audio","mime_type":"audio/wav","data":"YQ==","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
+			wantValid: true,
+		},
+		{
+			name:      "assistant text",
+			body:      `{"messages":[{"role":"assistant","content":"Text only."}]}`,
+			wantValid: true,
+		},
+		{
+			name: "image type with audio MIME",
+			body: `{"messages":[{"role":"user","content":"Reject mismatched media.","attachments":[{"type":"image","mime_type":"audio/wav","data":"YQ==","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
+		},
+		{
+			name: "system attachment",
+			body: `{"messages":[{"role":"system","content":"Reject attached system media.","attachments":[{"type":"image","mime_type":"image/png","data":"YQ==","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			body := []byte(testCase.body)
+			request := httptest.NewRequest(http.MethodPost, "/v2?key=contract-test-key", bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			validationError := contract.ValidateRequest("/v2", request.Method, request, body)
+			if testCase.wantValid && validationError != nil {
+				t.Fatalf("valid request rejected: %v", validationError)
+			}
+			if !testCase.wantValid && validationError == nil {
+				t.Fatal("invalid request accepted")
+			}
+		})
+	}
+}
+
 func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	contract, loadError := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
 	if loadError != nil {

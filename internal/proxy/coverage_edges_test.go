@@ -251,18 +251,20 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid web search value is ignored as false", func(subTest *testing.T) {
-		queryParameters := url.Values{}
-		queryParameters.Set("web_search", "maybe")
-		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
-		if statusCode != http.StatusOK {
-			subTest.Fatalf("status=%d body=%s", statusCode, body)
+	t.Run("noncanonical web search values are rejected", func(subTest *testing.T) {
+		for _, rawValue := range []string{"", "1", "0", "t", "f", "y", "n", "yes", "no", "TRUE", "FALSE", " true", "false ", "maybe"} {
+			queryParameters := url.Values{}
+			queryParameters.Set("web_search", rawValue)
+			statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
+			if statusCode != http.StatusBadRequest || !strings.Contains(body, "invalid web_search parameter") {
+				subTest.Fatalf("web_search=%q status=%d body=%s", rawValue, statusCode, body)
+			}
 		}
 	})
 
-	t.Run("false web search value is accepted", func(subTest *testing.T) {
+	t.Run("canonical false web search value is accepted", func(subTest *testing.T) {
 		queryParameters := url.Values{}
-		queryParameters.Set("web_search", "0")
+		queryParameters.Set("web_search", "false")
 		statusCode, body, _ := performCoverageTextRequest(subTest, router, queryParameters, "")
 		if statusCode != http.StatusOK {
 			subTest.Fatalf("status=%d body=%s", statusCode, body)

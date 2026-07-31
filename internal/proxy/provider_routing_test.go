@@ -1887,7 +1887,7 @@ func TestProviderRoutingRejectsGeminiUnsupportedAndInvalidRequests(t *testing.T)
 		expectedCode int
 	}{
 		{name: "unknown model", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&model=unknown", expectedCode: http.StatusBadRequest},
-		{name: "unsupported web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&web_search=1", expectedCode: http.StatusBadRequest},
+		{name: "unsupported web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=gemini&web_search=true", expectedCode: http.StatusBadRequest},
 		{name: "unsupported dictation", method: http.MethodPost, target: "/dictate?key=" + TestSecret + "&provider=gemini", expectedCode: http.StatusBadRequest},
 	}
 	for _, testCase := range testCases {
@@ -1944,9 +1944,9 @@ func TestProviderRoutingRejectsAnthropicMetaAndGrokUnsupportedCapabilities(t *te
 		target string
 		method string
 	}{
-		{name: "anthropic web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=anthropic&web_search=1"},
-		{name: "meta web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=meta&web_search=1"},
-		{name: "grok web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=grok&web_search=1"},
+		{name: "anthropic web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=anthropic&web_search=true"},
+		{name: "meta web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=meta&web_search=true"},
+		{name: "grok web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=grok&web_search=true"},
 		{name: "anthropic dictation", method: http.MethodPost, target: "/dictate?key=" + TestSecret + "&provider=anthropic"},
 		{name: "meta dictation", method: http.MethodPost, target: "/dictate?key=" + TestSecret + "&provider=meta"},
 	}
@@ -2333,7 +2333,7 @@ func TestProviderRoutingRejectsUnsupportedWebSearch(t *testing.T) {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
 
-	request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&provider=deepseek&model="+proxy.ModelNameDeepSeekV4Flash+"&web_search=1", nil)
+	request := httptest.NewRequest(http.MethodGet, "/?key="+TestSecret+"&prompt=hello&provider=deepseek&model="+proxy.ModelNameDeepSeekV4Flash+"&web_search=true", nil)
 	responseRecorder := httptest.NewRecorder()
 
 	router.ServeHTTP(responseRecorder, request)
