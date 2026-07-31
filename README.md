@@ -17,7 +17,7 @@ that input capability.
 - Choose the model per request via `model=...`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
 - Set optional nonblank `reasoning_effort=...` on `GET /`, or in a JSON body for `POST /` and `POST /v2`, to select a capability-supported reasoning level for that exact resolved route. An explicit value overrides the tenant default; an omitted value retains it. Blank or unsupported values fail before an upstream call.
 - Choose the dictation model per request via `model=...` on `/dictate`; omitted model uses the tenant default when `provider` is omitted, otherwise the selected provider's configured default
-- Optional per-request web search via `web_search=1|true|yes` when the selected provider/model is configured to support it
+- Optional per-request web search via exact `web_search=true`; `false` or omission keeps it disabled
 - Optional exact image and audio attachments on canonical `POST /v2` user messages when the selected model declares the corresponding `media_inputs`
 - Optional logging at `debug` or `info` levels
 - Forwards requests using server-side provider API keys, loaded from the database in management mode
@@ -1994,7 +1994,7 @@ curl --get \
 curl --get \
   --data-urlencode "prompt=What changed in the 2025 child tax credit?" \
   --data-urlencode "key=mysecret" \
-  --data-urlencode "web_search=1" \
+  --data-urlencode "web_search=true" \
   "http://localhost:8080/"
 ```
 
@@ -2005,7 +2005,7 @@ curl --get \
   --data-urlencode "prompt=Latest research on quantum gravity" \
   --data-urlencode "key=mysecret" \
   --data-urlencode "model=gpt-5" \
-  --data-urlencode "web_search=1" \
+  --data-urlencode "web_search=true" \
   "http://localhost:8080/"
 ```
 
