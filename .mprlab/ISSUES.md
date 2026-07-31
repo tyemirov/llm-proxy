@@ -2986,6 +2986,10 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     attachment type/MIME pairs and attachments on non-user messages. The
     optional query `web_search` parameter now accepts only exact `true` or
     `false`; aliases and malformed supplied values fail at the HTTP boundary.
+  - The breaking query migration is published in the changelog, README,
+    OpenAPI, provider-routing guide, and generated public resource. Go package,
+    Go CLI, and Python contract tests prove native JSON booleans, while the
+    Python constructor rejects non-boolean runtime values before HTTP.
 
 
 ## Maintenance
