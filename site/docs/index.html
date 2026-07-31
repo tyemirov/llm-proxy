@@ -6,12 +6,12 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="84cc3b66294f64e4c900c17f037b749de50a7eaacdc869c53709be92ce3a0143">
+    <meta name="openapi-source-sha256" content="9bedcfe24bef1de14e903a692491521391bcbdb24699cf8fe20c83f21a242531">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="84cc3b66294f64e4c900c17f037b749de50a7eaacdc869c53709be92ce3a0143">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="9bedcfe24bef1de14e903a692491521391bcbdb24699cf8fe20c83f21a242531">
     <header class="resource-shell resource-topbar">
       <a class="resource-brand" href="/">LLM Proxy</a>
       <nav aria-label="API reference navigation">
@@ -29,7 +29,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>84cc3b66294f64e4c900c17f037b749de50a7eaacdc869c53709be92ce3a0143</code></span>
+          <span>Source SHA-256 <code>9bedcfe24bef1de14e903a692491521391bcbdb24699cf8fe20c83f21a242531</code></span>
         </div>
         <div class="resource-actions">
           <a class="resource-button" href="/openapi.yaml">Download exact schema</a>
@@ -79,7 +79,7 @@
 <tr><td><code>prompt</code></td><td>query</td><td>Yes</td><td>string</td><td>User prompt.</td></tr>
 <tr><td><code>provider</code></td><td>query</td><td>No</td><td>string</td><td>Canonical provider identifier. Omission uses the tenant default.</td></tr>
 <tr><td><code>model</code></td><td>query</td><td>No</td><td>string</td><td>Model identifier. Omission uses the resolved provider default.</td></tr>
-<tr><td><code>web_search</code></td><td>query</td><td>No</td><td>string</td><td>Boolean-like query value accepted by the legacy query operation.</td></tr>
+<tr><td><code>web_search</code></td><td>query</td><td>No</td><td>boolean</td><td>Exact boolean query parameter. Use true or false; omission disables web search. Any other supplied spelling is invalid and returns HTTP 400.</td></tr>
 <tr><td><code>system_prompt</code></td><td>query</td><td>No</td><td>string</td><td></td></tr>
 <tr><td><code>max_tokens</code></td><td>query</td><td>No</td><td>integer</td><td>Initial per-attempt output budget. The same budget is reused when the proxy requests a missing suffix; after a zero-text output-budget stop, a configured model output limit bounds any generic increase.</td></tr>
 <tr><td><code>reasoning_effort</code></td><td>query</td><td>No</td><td>string</td><td>Non-blank effort supported by the resolved route. Omission selects the tenant or route default.</td></tr>

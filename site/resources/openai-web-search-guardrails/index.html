@@ -69,7 +69,7 @@
             <h2>How it works</h2>
             <ol class="resource-steps">
               <li>Mark supported OpenAI model entries with web_search: true in config.yml.</li>
-<li>Send web_search=1 or web_search=true only when the selected route supports it.</li>
+<li>Send exact web_search=true only when the selected route supports it.</li>
 <li>Expect unsupported provider/model combinations to fail before an upstream call.</li>
 <li>Keep non-OpenAI providers on normal text routing.</li>
             </ol>
@@ -87,6 +87,13 @@
                   </tr>
                 </thead>
                 <tbody>
+
+                        <tr>
+                          <td>Exact boolean contract</td>
+                          <td>GET / accepts only web_search=true or web_search=false.</td>
+                          <td>Other supplied spellings return 400 instead of silently disabling search.</td>
+                        </tr>
+
 
                         <tr>
                           <td>Model-aware flag</td>
@@ -119,7 +126,7 @@
 
                     <section class="resource-card">
                       <h3>Research prompt</h3>
-                      <p>A caller selects gpt-5 with web_search=1 for a search-enabled answer.</p>
+                      <p>A caller selects gpt-5 with web_search=true for a search-enabled answer.</p>
                     </section>
 
 
