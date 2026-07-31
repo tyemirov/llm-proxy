@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from llm_proxy_client import (
     Client,
@@ -142,7 +143,8 @@ def replace_model_profile(profile_path: Path, profile_document: str) -> None:
 def canonical_openapi_document() -> dict[str, Any]:
     """Load the sole committed HTTP contract."""
 
-    document = json.loads(CANONICAL_OPENAPI_PATH.read_text(encoding="utf-8"))
+    document = yaml.safe_load(CANONICAL_OPENAPI_PATH.read_text(encoding="utf-8"))
+    assert isinstance(document, dict)
     assert document["openapi"] == "3.1.0"
     return document
 
