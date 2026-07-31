@@ -11,9 +11,33 @@ RUN_STARTED_SECONDS=$SECONDS
 COMPLETED_STAGE_NAMES=()
 COMPLETED_STAGE_EVIDENCE=()
 
+print_ci_success() {
+  local stage_index
+  local total_elapsed_seconds=$((SECONDS - RUN_STARTED_SECONDS))
+
+  printf '\nCI summary\n' || return $?
+  printf '%-3s %-42s %-8s %s\n' "#" "Gate" "Result" "Evidence" || return $?
+  for ((stage_index = 0; stage_index < ${#COMPLETED_STAGE_NAMES[@]}; stage_index++)); do
+    printf '%-3d %-42s %-8s %s\n' \
+      "$((stage_index + 1))" \
+      "${COMPLETED_STAGE_NAMES[$stage_index]}" \
+      "PASS" \
+      "${COMPLETED_STAGE_EVIDENCE[$stage_index]}" || return $?
+  done
+  printf '%-3s %-42s %-8s %s\n' \
+    "" \
+    "Continuous integration" \
+    "PASS" \
+    "${total_elapsed_seconds}s" || return $?
+  printf '\nCI PASSED: all %d gates completed; Go statement coverage %s.\n' \
+    "${#COMPLETED_STAGE_NAMES[@]}" \
+    "$coverage_total"
+}
+
 finish_ci_run() {
   local exit_status=$?
   local cleanup_failed=0
+  local receipt_status=0
   trap - EXIT INT TERM
 
   if [[ -n "$RUN_DIRECTORY" && -d "$RUN_DIRECTORY" ]]; then
@@ -24,7 +48,15 @@ finish_ci_run() {
     CI_COMPLETE=0
     CURRENT_STAGE="temporary CI state cleanup"
   fi
-  if [[ "$CI_COMPLETE" -ne 1 ]]; then
+  if [[ "$CI_COMPLETE" -eq 1 && "$exit_status" -eq 0 ]]; then
+    CURRENT_STAGE="terminal completion receipt"
+    print_ci_success || receipt_status=$?
+    if [[ "$receipt_status" -ne 0 ]]; then
+      exit_status="$receipt_status"
+      CI_COMPLETE=0
+    fi
+  fi
+  if [[ "$CI_COMPLETE" -ne 1 || "$exit_status" -ne 0 ]]; then
     if [[ "$exit_status" -eq 0 ]]; then
       exit_status=1
     fi
@@ -108,20 +140,5 @@ completed_stage_index=${#COMPLETED_STAGE_NAMES[@]}
 COMPLETED_STAGE_NAMES[$completed_stage_index]="$CURRENT_STAGE"
 COMPLETED_STAGE_EVIDENCE[$completed_stage_index]="$coverage_total"
 
-total_elapsed_seconds=$((SECONDS - RUN_STARTED_SECONDS))
-printf '\nCI summary\n'
-printf '%-3s %-42s %-8s %s\n' "#" "Gate" "Result" "Evidence"
-for ((stage_index = 0; stage_index < ${#COMPLETED_STAGE_NAMES[@]}; stage_index++)); do
-  printf '%-3d %-42s %-8s %s\n' \
-    "$((stage_index + 1))" \
-    "${COMPLETED_STAGE_NAMES[$stage_index]}" \
-    "PASS" \
-    "${COMPLETED_STAGE_EVIDENCE[$stage_index]}"
-done
-printf '%-3s %-42s %-8s %s\n' "" "Continuous integration" "PASS" "${total_elapsed_seconds}s"
-
 CURRENT_STAGE="terminal completion receipt"
-printf '\nCI PASSED: all %d gates completed; Go statement coverage %s.\n' \
-  "${#COMPLETED_STAGE_NAMES[@]}" \
-  "$coverage_total"
 CI_COMPLETE=1
