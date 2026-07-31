@@ -40,6 +40,64 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B098] (P0) Make canonical CI completion fail closed and visible.
+  Goal:
+  Make `make ci` prove that every declared gate completed in the current run,
+  show the enforced coverage at the terminal tail, and return nonzero whenever
+  orchestration stops before that proof is complete.
+
+  Evidence:
+  - A captured successful baseline returned zero after all current gates, but
+    its `total: ... 100.0%` coverage line appeared at line 533 while the final
+    line 650 was only the live-provider harness preflight message.
+  - The dependency-only `ci` target has no start/end receipt, active-stage
+    failure report, fresh run identity, or terminal success assertion.
+  - A future summary that reads the repository-level ignored `coverage.out`
+    could accept stale evidence when a coverage command exits zero without
+    producing a current artifact.
+  - Hosted CI selects Go `1.25.12` independently while `go.mod` and both
+    production builders require Go `1.26.5`.
+
+  Requirements:
+  - Run the canonical gates sequentially through one top-level runner even when
+    the caller supplies parallel Make flags.
+  - Treat every exit before terminal completion as failure, including an
+    accidental zero exit from the runner, and identify the active stage.
+  - Require a fresh run-scoped coverage artifact and independently verify exact
+    100% Go statement coverage after all test gates.
+  - Print one terminal table containing every completed gate, the coverage
+    result, elapsed time, and an unambiguous `CI PASSED` line only after the
+    complete contract succeeds.
+  - Select the hosted Go toolchain from `go.mod` instead of a second version
+    declaration.
+
+  Validation:
+  - Add black-box runner scenarios for complete success, a nonzero child gate,
+    and a child that returns zero without producing current coverage evidence.
+  - Prove failure output names the interrupted stage and never prints the
+    success receipt.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+
+  Resolution:
+  - `make ci` now owns one sequential ten-stage runner with an exit trap that
+    converts every incomplete exit into failure and names the active gate.
+  - Go coverage is written to a private artifact created for that invocation,
+    verified at its producer and again after the final test stage, then removed.
+    A zero-exit stage without current coverage evidence fails before completion.
+  - The terminal output now contains per-gate receipts, elapsed time, exact Go
+    coverage, and an explicit `CI PASSED` line that cannot print on an
+    incomplete run.
+  - Black-box process coverage proves complete success, exact propagation of a
+    child exit 23, and rejection of a zero-exit test sequence missing its
+    current coverage artifact. Hosted CI now selects its Go version directly
+    from `go.mod`.
+  - The required final `timeout -k 350s -s SIGKILL 350s make ci` returned zero
+    after the last code edit with exact 100% Go statement coverage, 33 Python
+    tests, 75 browser tests, one TAuth browser black-box test, the OpenAPI Pages
+    artifact check, and the live-provider harness preflight. Its terminal table
+    reported all 11 gates passed in 99 seconds.
+
 - [x] [B096] (P0) Make deployment self-contained in the application repository.
   Goal:
   Preserve the exact `make release`, `make publish`, `make deploy` operator
