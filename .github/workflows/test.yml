@@ -20,11 +20,11 @@ on:
       - 'playwright.config.js'
       - 'playwright.blackbox.config.js'
       - 'scripts/**'
-      - 'tools/gitrelease/**'
+      - '.mprlab/deploy/resources.yml'
+      - 'docker/pages/Dockerfile'
       - 'site/**'
       - 'tests/**'
       - '.github/workflows/test.yml'
-      - '.github/workflows/release.yml'
       - 'Dockerfile'
 
 env:

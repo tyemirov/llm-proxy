@@ -1816,6 +1816,48 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Improvements
 
+- [x] [I204] (P0) Adopt the app-owned resource and sibling-gateway lifecycle.
+  Goal:
+  Make llm-proxy independently releasable and deployable through the shared
+  `mprlab-gateway` orchestrator without retaining a second production
+  controller inside this repository.
+
+  Requirements:
+  - Keep exactly one tracked production declaration at
+    `.mprlab/deploy/resources.yml`, using schema version 2 for the llm-proxy
+    runtime, retained data, HTTP capability, public route and health checks,
+    GitHub Pages site, and TAuth tenant.
+  - Keep `make release`, `make publish`, and `make deploy` as thin entrypoints
+    into the exact sibling `../mprlab-gateway`, with this checkout passed as the
+    selected app. Do not discover an installed binary, controller bundle,
+    alternate gateway path, or unrelated repository.
+  - Remove application-owned production Ansible, Compose, Caddy, release,
+    publish, and deploy implementation. Local and black-box development
+    orchestration remains application-owned.
+  - Render the Pages artifact from committed source with the Go CLI. Keep Node
+    only for developer frontend validation; declare no Node or npm production
+    resource.
+
+  Validation:
+  - Black-box Go coverage validates the exact resource declaration, sibling
+    lifecycle entrypoint, forbidden production paths, and Go-only Pages build.
+  - The final `make ci` passes on the complete tracked change.
+  - The sibling gateway accepts a clean committed checkout with
+    `make plan-app-release MPRLAB_APP_ROOT=<llm-proxy checkout>` without
+    publishing or deploying.
+
+  Resolved 2026-07-30:
+  - Commit `0749142` replaces schema-v1 and app-owned production machinery with
+    the schema-v2 declaration, exact sibling lifecycle wrapper, and Go-only
+    Pages container. Node remains only in developer lint and browser tests.
+  - The complete final `make ci` passes with 100% Go statement coverage, 33
+    Python tests, 75 browser tests, the TAuth black-box test, and the live
+    provider harness preflight.
+  - Gateway commit `6e26e3e` accepts the clean app commit through
+    `plan-app-release`, validates every committed source input and declared
+    resource, and derives only the `tauth.tenants` runtime requirement. No
+    release, publication, deployment, or unrelated-repository scan runs.
+
 - [x] [I042] (P1) Remove managed-request serialization from SQLite authentication.
   Goal:
   Keep SQLite as the sole managed-tenant source of truth while allowing each

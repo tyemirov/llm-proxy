@@ -7,32 +7,10 @@ UV ?= uv
 BIN_DIR ?= bin
 BINARY_NAME ?= llm-proxy
 PYTHON_PROJECT_DIR ?= python
-PUBLISH_RELEASE_ARGS ?=
-DEPLOY_PAGES_ARGS ?=
-RELEASE_ARGS ?=
-RELEASE_HELPER ?=
-RELEASE_ARTIFACT_TARGETS ?= container-artifacts pages-artifact
-RELEASE_TOOL_DIR ?= $(abspath $(CURDIR)/tools/gitrelease/scripts)
-PUBLISH_PLATFORMS ?= linux/amd64,linux/arm64
-DOCKER_IMAGE ?= ghcr.io/tyemirov/llm-proxy
-PUBLISH_REMOTE ?= origin
-PUBLISH_BRANCH ?= master
-PAGES_BRANCH ?= gh-pages
-PAGES_DOMAIN ?= llm-proxy.mprlab.com
-PAGES_CONFIG_URL ?= https://llm-proxy-api.mprlab.com/config-ui.yaml
-PAGES_URL ?= https://llm-proxy.mprlab.com/
-PAGES_VERSION ?=
-override DEPLOY_ANSIBLE_CORE_SPEC := ansible-core==2.19.8
-override DEPLOY_ANSIBLE_ROOT := $(abspath $(CURDIR)/.mprlab/deploy/ansible)
-override DEPLOY_ANSIBLE_CONFIG := $(DEPLOY_ANSIBLE_ROOT)/ansible.cfg
-override DEPLOY_ANSIBLE_INVENTORY := $(DEPLOY_ANSIBLE_ROOT)/inventory/hosts.yml
-override DEPLOY_ANSIBLE_INVENTORY_EXAMPLE := $(DEPLOY_ANSIBLE_ROOT)/inventory/hosts.example.yml
-override DEPLOY_ANSIBLE_PLAYBOOK := $(DEPLOY_ANSIBLE_ROOT)/playbooks/deploy.yml
-override DEPLOY_ANSIBLE_LOCAL_TEMP := $(shell git rev-parse --git-path llm-proxy-deploy/ansible-local)
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-package-install-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox release-test test-live-provider-harness test-live-providers test-live-gemini live-test build clean ci up release container-artifacts pages-artifact publish-release publish pages-deploy deploy deploy-dry-run deploy-syntax
+.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-package-install-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox test-live-provider-harness test-live-providers test-live-gemini live-test build clean ci up
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -58,7 +36,7 @@ python-lint:
 frontend-lint:
 	$(NPM) run frontend:lint
 
-test: go-test python-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox release-test test-live-provider-harness
+test: go-test python-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox test-live-provider-harness
 
 go-test:
 	@GO="$(GO)" ./scripts/check_coverage.sh
@@ -78,9 +56,6 @@ test-openapi-pages-artifact:
 
 test-management-auth-blackbox:
 	$(NPM) run frontend:test:blackbox
-
-release-test:
-	python3 -m unittest discover -s tools/gitrelease/tests -p 'test_*.py'
 
 test-live-provider-harness:
 	@GO="$(GO)" ./scripts/test_live_providers.sh --preflight
@@ -106,64 +81,15 @@ clean:
 
 ci: check-format lint test
 
-release:
-	@RELEASE_HELPER="$(RELEASE_HELPER)" RELEASE_ARTIFACT_TARGETS="$(RELEASE_ARTIFACT_TARGETS)" ./scripts/release.sh $(RELEASE_ARGS)
+.PHONY: release publish deploy
 
-container-artifacts:
-	@RELEASE_TOOL_DIR="$(RELEASE_TOOL_DIR)" DOCKER_IMAGE="$(DOCKER_IMAGE)" PUBLISH_PLATFORMS="$(PUBLISH_PLATFORMS)" ./scripts/build-container-artifact.sh
-
-pages-artifact:
-	@RELEASE_TOOL_DIR="$(RELEASE_TOOL_DIR)" PAGES_CONFIG_URL="$(PAGES_CONFIG_URL)" PAGES_DOMAIN="$(PAGES_DOMAIN)" ./scripts/build-pages-artifact.sh
-
-publish-release:
-	@RELEASE_HELPER="$(RELEASE_HELPER)" ./scripts/publish-release.sh --remote "$(PUBLISH_REMOTE)" $(PUBLISH_RELEASE_ARGS)
-
-publish: publish-release
-	@"$(RELEASE_TOOL_DIR)/publish_container_artifacts.sh"
-
-pages-deploy:
-	@"$(RELEASE_TOOL_DIR)/deploy_pages_artifact.sh" --remote "$(PUBLISH_REMOTE)" --branch "$(PAGES_BRANCH)" --url "$(PAGES_URL)" $(if $(PAGES_VERSION),--version "$(PAGES_VERSION)") $(DEPLOY_PAGES_ARGS)
-
-deploy:
-	@mkdir -p "$(DEPLOY_ANSIBLE_LOCAL_TEMP)"
-	@MPRLAB_DEPLOY_MODE=deploy \
-		LLM_PROXY_DEPLOY_PUBLISH_REMOTE="$(PUBLISH_REMOTE)" \
-		LLM_PROXY_DEPLOY_PUBLISH_BRANCH="$(PUBLISH_BRANCH)" \
-		LLM_PROXY_DEPLOY_PAGES_BRANCH="$(PAGES_BRANCH)" \
-		LLM_PROXY_DEPLOY_PAGES_URL="$(PAGES_URL)" \
-		ANSIBLE_CONFIG="$(DEPLOY_ANSIBLE_CONFIG)" \
-		ANSIBLE_LOCAL_TEMP="$(DEPLOY_ANSIBLE_LOCAL_TEMP)" \
-		timeout -k 1200s -s SIGKILL 1200s \
-		"$(UV)" tool run --from "$(DEPLOY_ANSIBLE_CORE_SPEC)" ansible-playbook \
-		--ask-become-pass \
-		--inventory "$(DEPLOY_ANSIBLE_INVENTORY)" \
-		"$(DEPLOY_ANSIBLE_PLAYBOOK)"
-
-deploy-dry-run:
-	@mkdir -p "$(DEPLOY_ANSIBLE_LOCAL_TEMP)"
-	@MPRLAB_DEPLOY_MODE=dry-run \
-		LLM_PROXY_DEPLOY_PUBLISH_REMOTE="$(PUBLISH_REMOTE)" \
-		LLM_PROXY_DEPLOY_PUBLISH_BRANCH="$(PUBLISH_BRANCH)" \
-		LLM_PROXY_DEPLOY_PAGES_BRANCH="$(PAGES_BRANCH)" \
-		LLM_PROXY_DEPLOY_PAGES_URL="$(PAGES_URL)" \
-		ANSIBLE_CONFIG="$(DEPLOY_ANSIBLE_CONFIG)" \
-		ANSIBLE_LOCAL_TEMP="$(DEPLOY_ANSIBLE_LOCAL_TEMP)" \
-		timeout -k 1200s -s SIGKILL 1200s \
-		"$(UV)" tool run --from "$(DEPLOY_ANSIBLE_CORE_SPEC)" ansible-playbook \
-		--inventory "$(DEPLOY_ANSIBLE_INVENTORY)" \
-		"$(DEPLOY_ANSIBLE_PLAYBOOK)"
-
-deploy-syntax:
-	@mkdir -p "$(DEPLOY_ANSIBLE_LOCAL_TEMP)"
-	@MPRLAB_DEPLOY_MODE=dry-run \
-		LLM_PROXY_DEPLOY_PUBLISH_REMOTE="$(PUBLISH_REMOTE)" \
-		LLM_PROXY_DEPLOY_PUBLISH_BRANCH="$(PUBLISH_BRANCH)" \
-		LLM_PROXY_DEPLOY_PAGES_BRANCH="$(PAGES_BRANCH)" \
-		LLM_PROXY_DEPLOY_PAGES_URL="$(PAGES_URL)" \
-		ANSIBLE_CONFIG="$(DEPLOY_ANSIBLE_CONFIG)" \
-		ANSIBLE_LOCAL_TEMP="$(DEPLOY_ANSIBLE_LOCAL_TEMP)" \
-		timeout -k 1200s -s SIGKILL 1200s \
-		"$(UV)" tool run --from "$(DEPLOY_ANSIBLE_CORE_SPEC)" ansible-playbook \
-		--syntax-check \
-		--inventory "$(DEPLOY_ANSIBLE_INVENTORY_EXAMPLE)" \
-		"$(DEPLOY_ANSIBLE_PLAYBOOK)"
+release publish deploy:
+	@application_root="$$(git rev-parse --show-toplevel)"; \
+	gateway_root="$$(dirname "$${application_root}")/mprlab-gateway"; \
+	if [ ! -d "$${gateway_root}" ]; then \
+		printf "required sibling gateway is missing: %s; clone mprlab-gateway at exactly %s\n" \
+			"$${gateway_root}" "$${gateway_root}" >&2; \
+		exit 2; \
+	fi; \
+	$(MAKE) --no-print-directory -C "$${gateway_root}" "app-$@" \
+		MPRLAB_APP_ROOT="$${application_root}"

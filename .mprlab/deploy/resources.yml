@@ -1,87 +1,122 @@
 ---
 mprlab_resources:
-  schema_version: 1
-  repo:
-    id: llm-proxy
-    directory: llm-proxy
+  schema_version: 2
+  owner: llm-proxy
+  dependencies: []
   resources:
-    - type: make_workflow
-      name: llm-proxy
-      targets:
-        release: release
-        publish: publish
-        deploy: deploy
-    - type: tauth_tenant
-      name: llm-proxy-authentication
-      config_destination: configs/config.tauth.yml
-      environment_destination: configs/.env.tauth
-      container_name: tauth-api
+    - kind: compose_project
+      id: runtime
+      placement: gateway
+      profiles: []
+      images:
+        - id: llm-proxy-image
+          repository: ghcr.io/tyemirov/llm-proxy
+          visibility: public
+          build:
+            context: .
+            dockerfile: Dockerfile
+            platforms:
+              - linux/amd64
+              - linux/arm64
+      services:
+        - id: llm-proxy
+          image: llm-proxy-image
+          environment_files:
+            - secret: llm-proxy.runtime-environment
+          assets:
+            - source: configs/config.yml
+              target: /app/config.yml
+              mode: "0444"
+          mounts:
+            - volume: data
+              target: /app/data
+              read_only: false
+          ports:
+            - container_port: 8080
+          readiness:
+            protocol: http
+            port: 8080
+            path: /config-ui.yaml
+            expected_status: 200
+      volumes:
+        - id: data
+          name: mprlab-nginx-gateway_llm-proxy-data
+          retention: retain
+    - kind: runtime_capability
+      id: http
+      name: llm-proxy.http
+      version: 1
+      project: runtime
+      service: llm-proxy
+      endpoint:
+        scope: same_host
+        scheme: http
+        alias: llm-proxy
+        port: 8080
+      health:
+        protocol: http
+        path: /config-ui.yaml
+        expected_status: 200
+    - kind: caddy_route
+      id: public-api
+      hostname: llm-proxy-api.mprlab.com
+      listener: https
+      handlers:
+        - id: default
+          path_prefix: /
+          upstream: llm-proxy.http
+          transport:
+            protocol: http
+            dial_timeout_seconds: 10
+            response_header_timeout_seconds: 3660
+            read_timeout_seconds: 3660
+      tls:
+        mode: automatic
+      access:
+        trusted_networks:
+          - 127.0.0.1/32
+          - 172.19.0.0/16
+          - 192.168.1.158/32
+        rate_limit:
+          events: 10
+          window_seconds: 10
+    - kind: health_check
+      id: api-auth-boundary
+      protocol: http
+      url: https://llm-proxy-api.mprlab.com/
+      expected_status: 403
+    - kind: health_check
+      id: management-config
+      protocol: http
+      url: https://llm-proxy-api.mprlab.com/config-ui.yaml
+      expected_status: 200
+    - kind: github_pages
+      id: website
+      repository: tyemirov/llm-proxy
+      branch: gh-pages
+      domain: llm-proxy.mprlab.com
+      url: https://llm-proxy.mprlab.com/
+      source:
+        kind: container
+        context: .
+        dockerfile: docker/pages/Dockerfile
+        target: pages
+      verification:
+        path: /.mprlab-release.json
+    - kind: tauth_tenant
+      id: authentication
+      capability: tauth.tenants
+      version: 1
       tenant:
         id: llm-proxy
         display_name: LLM Proxy
-        tenant_origins:
+        origins:
           - https://llm-proxy.mprlab.com
-        google_web_client_id: "${TAUTH_GOOGLE_WEB_CLIENT_ID_LLM_PROXY}"
-        jwt_signing_key: "${TAUTH_JWT_SIGNING_KEY_LLM_PROXY}"
-        cookie_domain: .mprlab.com
-        session_cookie_name: app_session_llm_proxy
-        refresh_cookie_name: app_refresh_llm_proxy
-        session_ttl: "${TAUTH_SESSION_TTL}"
-        refresh_ttl: "${TAUTH_REFRESH_TTL}"
-        nonce_ttl: "${TAUTH_NONCE_TTL}"
-        allow_insecure_http: "${TAUTH_ALLOW_INSECURE_HTTP}"
-    - type: container_service
-      name: llm-proxy
-      image: ghcr.io/tyemirov/llm-proxy:latest
-      ports:
-        - container_port: 8080
-      container_name: llm-proxy
-      compose_template: .mprlab/deploy/ansible/templates/docker-compose.yml.j2
-      compose_project: mprlab-nginx-gateway
-      remote_directory: apps/llm-proxy
-      network: mprlab-nginx-gateway_default
-      data_volume: mprlab-nginx-gateway_llm-proxy-data
-      runtime_assets:
-        - path: .mprlab/deploy/.env
-          example_path: configs/.env.sample
-          destination: runtime/.env
-          mode: "0600"
-        - path: configs/config.yml
-          destination: runtime/config.yml
-    - type: caddy_route
-      name: llm-proxy-api
-      host: llm-proxy-api.mprlab.com
-      upstream: llm-proxy:8080
-      config_template: .mprlab/deploy/ansible/templates/caddy-route.caddy.j2
-      config_destination: caddy/sites/llm-proxy.caddy
-      container_name: caddy2
-      container_config_path: /etc/caddy/Caddyfile
-      trusted_networks:
-        - 172.19.0.0/16
-        - 127.0.0.1/32
-        - 192.168.1.158/32
-      rate_limit:
-        zone: llm
-        events: 10
-        window: 10s
-      transport:
-        dial_timeout: 10s
-        response_header_timeout: 3660s
-        read_timeout: 3660s
-    - type: health_check
-      name: llm-proxy-api
-      path: /
-      url: https://llm-proxy-api.mprlab.com/
-      status_codes:
-        - 403
-    - type: health_check
-      name: llm-proxy-management-config
-      path: /config-ui.yaml
-      url: https://llm-proxy-api.mprlab.com/config-ui.yaml
-      status_codes:
-        - 200
-    - type: github_pages
-      name: llm-proxy
-      target: pages-deploy
-      url: https://llm-proxy.mprlab.com/
-      source_marker_path: /.mprlab-release.json
+        google_web_client_id:
+          secret: llm-proxy.google-web-client-id
+        jwt_signing_key:
+          secret: llm-proxy.jwt-signing-key
+        cookie:
+          domain: .mprlab.com
+          session_name: app_session_llm_proxy
+          refresh_name: app_refresh_llm_proxy
