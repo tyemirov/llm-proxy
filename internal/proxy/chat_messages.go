@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -23,14 +25,29 @@ type chatMessagePayload struct {
 	Order   *int   `json:"order,omitempty"`
 }
 
+type chatV2MessagePayload struct {
+	Role        string          `json:"role"`
+	Content     string          `json:"content"`
+	Attachments json.RawMessage `json:"attachments"`
+	Order       *int            `json:"order,omitempty"`
+}
+
 type chatMessage struct {
 	role              chatRole
 	content           string
+	attachments       []messageMedia
 	order             *int
 	visibleInResponse bool
 }
 
 type chatMessages []chatMessage
+
+type chatMessageCandidate struct {
+	role        string
+	content     string
+	attachments []messageMedia
+	order       *int
+}
 
 func newPromptChatMessages(userPrompt string, systemPrompt string, systemPromptVisibleInResponse bool) (chatMessages, error) {
 	if userPrompt == constants.EmptyString {
@@ -45,23 +62,82 @@ func newPromptChatMessages(userPrompt string, systemPrompt string, systemPromptV
 }
 
 func newPayloadChatMessages(payloadMessages []chatMessagePayload, defaultSystemPrompt string, requestSystemPrompt string) (chatMessages, error) {
-	if len(payloadMessages) == 0 {
+	candidates := make([]chatMessageCandidate, 0, len(payloadMessages))
+	for _, payloadMessage := range payloadMessages {
+		candidates = append(candidates, chatMessageCandidate{
+			role:    payloadMessage.Role,
+			content: payloadMessage.Content,
+			order:   payloadMessage.Order,
+		})
+	}
+	return newCandidateChatMessages(candidates, defaultSystemPrompt, requestSystemPrompt)
+}
+
+func newV2PayloadChatMessages(payloadMessages []chatV2MessagePayload, defaultSystemPrompt string) (chatMessages, error) {
+	candidates := make([]chatMessageCandidate, 0, len(payloadMessages))
+	for messageIndex, payloadMessage := range payloadMessages {
+		attachmentPayloads, attachmentsError := decodeChatMessageAttachments(payloadMessage.Attachments)
+		if attachmentsError != nil {
+			return nil, fmt.Errorf("messages[%d].attachments: %w", messageIndex, attachmentsError)
+		}
+		attachments := make([]messageMedia, 0, len(attachmentPayloads))
+		for attachmentIndex, attachmentPayload := range attachmentPayloads {
+			attachment, attachmentError := newMessageMedia(attachmentPayload)
+			if attachmentError != nil {
+				return nil, fmt.Errorf("messages[%d].attachments[%d]: %w", messageIndex, attachmentIndex, attachmentError)
+			}
+			attachments = append(attachments, attachment)
+		}
+		candidates = append(candidates, chatMessageCandidate{
+			role:        payloadMessage.Role,
+			content:     payloadMessage.Content,
+			attachments: attachments,
+			order:       payloadMessage.Order,
+		})
+	}
+	return newCandidateChatMessages(candidates, defaultSystemPrompt, constants.EmptyString)
+}
+
+func decodeChatMessageAttachments(rawAttachments json.RawMessage) ([]chatMessageAttachmentPayload, error) {
+	if rawAttachments == nil {
+		return nil, nil
+	}
+	if bytes.Equal(bytes.TrimSpace(rawAttachments), []byte("null")) {
+		return nil, fmt.Errorf("%w: attachments must be an array", ErrInvalidChatMessages)
+	}
+	var attachments []chatMessageAttachmentPayload
+	decoder := json.NewDecoder(bytes.NewReader(rawAttachments))
+	decoder.DisallowUnknownFields()
+	if decodeError := decoder.Decode(&attachments); decodeError != nil {
+		return nil, fmt.Errorf("%w: invalid attachments: %v", ErrInvalidChatMessages, decodeError)
+	}
+	if len(attachments) == 0 {
+		return nil, fmt.Errorf("%w: attachments is empty", ErrInvalidChatMessages)
+	}
+	return attachments, nil
+}
+
+func newCandidateChatMessages(candidates []chatMessageCandidate, defaultSystemPrompt string, requestSystemPrompt string) (chatMessages, error) {
+	if len(candidates) == 0 {
 		return nil, fmt.Errorf("%w: empty messages", ErrInvalidChatMessages)
 	}
-	orderedPayloadMessages, orderError := sortPayloadMessagesByOrder(payloadMessages)
+	orderedCandidates, orderError := sortChatMessageCandidatesByOrder(candidates)
 	if orderError != nil {
 		return nil, orderError
 	}
 	messages := chatMessages{}
 	hasSystemMessage := false
 	hasUserMessage := false
-	for messageIndex, payloadMessage := range orderedPayloadMessages {
-		role, roleError := newChatRole(payloadMessage.Role)
+	for messageIndex, candidate := range orderedCandidates {
+		role, roleError := newChatRole(candidate.role)
 		if roleError != nil {
 			return nil, fmt.Errorf("%w: messages[%d].role", roleError, messageIndex)
 		}
-		if utils.IsBlank(payloadMessage.Content) {
+		if utils.IsBlank(candidate.content) {
 			return nil, fmt.Errorf("%w: messages[%d].content is empty", ErrInvalidChatMessages, messageIndex)
+		}
+		if len(candidate.attachments) > 0 && role != chatRoleUser {
+			return nil, fmt.Errorf("%w: messages[%d].attachments require user role", ErrInvalidChatMessages, messageIndex)
 		}
 		if role == chatRoleSystem {
 			hasSystemMessage = true
@@ -69,7 +145,13 @@ func newPayloadChatMessages(payloadMessages []chatMessagePayload, defaultSystemP
 		if role == chatRoleUser {
 			hasUserMessage = true
 		}
-		messages = append(messages, chatMessage{role: role, content: payloadMessage.Content, order: payloadMessage.Order, visibleInResponse: true})
+		messages = append(messages, chatMessage{
+			role:              role,
+			content:           candidate.content,
+			attachments:       candidate.attachments,
+			order:             copyChatMessageOrder(candidate.order),
+			visibleInResponse: true,
+		})
 	}
 	if !hasUserMessage {
 		return nil, fmt.Errorf("%w: messages must include a user message", ErrInvalidChatMessages)
@@ -86,35 +168,43 @@ func newPayloadChatMessages(payloadMessages []chatMessagePayload, defaultSystemP
 	return messages, nil
 }
 
-func sortPayloadMessagesByOrder(payloadMessages []chatMessagePayload) ([]chatMessagePayload, error) {
-	orderedPayloadMessages := append([]chatMessagePayload(nil), payloadMessages...)
+func sortChatMessageCandidatesByOrder(candidates []chatMessageCandidate) ([]chatMessageCandidate, error) {
+	orderedCandidates := append([]chatMessageCandidate(nil), candidates...)
 	hasExplicitOrder := false
-	for _, payloadMessage := range orderedPayloadMessages {
-		if payloadMessage.Order != nil {
+	for _, candidate := range orderedCandidates {
+		if candidate.order != nil {
 			hasExplicitOrder = true
 			break
 		}
 	}
 	if !hasExplicitOrder {
-		return orderedPayloadMessages, nil
+		return orderedCandidates, nil
 	}
 	seenOrders := map[int]struct{}{}
-	for messageIndex, payloadMessage := range orderedPayloadMessages {
-		if payloadMessage.Order == nil {
+	for messageIndex, candidate := range orderedCandidates {
+		if candidate.order == nil {
 			return nil, fmt.Errorf("%w: messages[%d].order missing", ErrInvalidChatMessages, messageIndex)
 		}
-		if *payloadMessage.Order < 0 {
+		if *candidate.order < 0 {
 			return nil, fmt.Errorf("%w: messages[%d].order is negative", ErrInvalidChatMessages, messageIndex)
 		}
-		if _, exists := seenOrders[*payloadMessage.Order]; exists {
-			return nil, fmt.Errorf("%w: duplicate messages[].order=%d", ErrInvalidChatMessages, *payloadMessage.Order)
+		if _, exists := seenOrders[*candidate.order]; exists {
+			return nil, fmt.Errorf("%w: duplicate messages[].order=%d", ErrInvalidChatMessages, *candidate.order)
 		}
-		seenOrders[*payloadMessage.Order] = struct{}{}
+		seenOrders[*candidate.order] = struct{}{}
 	}
-	sort.SliceStable(orderedPayloadMessages, func(firstIndex int, secondIndex int) bool {
-		return *orderedPayloadMessages[firstIndex].Order < *orderedPayloadMessages[secondIndex].Order
+	sort.SliceStable(orderedCandidates, func(firstIndex int, secondIndex int) bool {
+		return *orderedCandidates[firstIndex].order < *orderedCandidates[secondIndex].order
 	})
-	return orderedPayloadMessages, nil
+	return orderedCandidates, nil
+}
+
+func copyChatMessageOrder(order *int) *int {
+	if order == nil {
+		return nil
+	}
+	copiedOrder := *order
+	return &copiedOrder
 }
 
 func newChatRole(rawRole string) (chatRole, error) {

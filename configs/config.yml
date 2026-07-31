@@ -167,6 +167,7 @@ providers:
       models:
         - id: "gemini-3.5-flash"
           output_token_limit: 65536
+          media_inputs: ["image", "audio"]
         - id: "gemini-3.1-pro-preview"
           output_token_limit: 65536
         - id: "gemini-3-flash-preview"
@@ -175,6 +176,7 @@ providers:
           output_token_limit: 65536
         - id: "gemini-2.5-flash"
           output_token_limit: 65536
+          media_inputs: ["image", "audio"]
         - id: "gemini-2.5-flash-lite"
           output_token_limit: 65536
         - id: "gemini-2.5-pro"

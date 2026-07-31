@@ -174,7 +174,7 @@
       "post": {
         "operationId": "postV2Messages",
         "summary": "Generate text from canonical messages",
-        "description": "The current messages-only operation. `messages` is required. `model`, `web_search`, `max_tokens`, and `reasoning_effort` are optional. Omitting `reasoning_effort` selects the tenant or route default; an explicitly supplied value must be non-blank and supported by the resolved provider/model route. Unsupported route capabilities return the canonical plain-text 400 error response.",
+        "description": "The current messages-only operation. `messages` is required. User messages may include provider-neutral ordered image or audio attachments with canonical base64 bytes and matching SHA-256 digests. `model`, `web_search`, `max_tokens`, and `reasoning_effort` are optional. Omitting `reasoning_effort` selects the tenant or route default; an explicitly supplied value must be non-blank and supported by the resolved provider/model route. Unsupported media or route capabilities return the canonical plain-text 400 error response before an upstream call.",
         "tags": [
           "Proxy"
         ],
@@ -1385,7 +1385,7 @@
         }
       },
       "ProxyPayloadTooLarge": {
-        "description": "The configured prompt or audio payload limit was exceeded.",
+        "description": "The configured JSON request or dictation audio payload limit was exceeded.",
         "headers": {
           "X-LLM-Proxy-Request-Timeout-Seconds": {
             "$ref": "#/components/headers/ResolvedRequestTimeout"
@@ -1770,6 +1770,80 @@
           }
         }
       },
+      "MessageAttachment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "mime_type",
+          "data",
+          "sha256"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "image",
+              "audio"
+            ]
+          },
+          "mime_type": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "audio/mp4",
+              "audio/mpeg",
+              "audio/wav"
+            ]
+          },
+          "data": {
+            "type": "string",
+            "minLength": 4,
+            "description": "Exact nonempty media bytes encoded as canonical padded RFC 4648 base64."
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "Lowercase hexadecimal SHA-256 of the decoded media bytes."
+          }
+        }
+      },
+      "V2ChatMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "content"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "system",
+              "user",
+              "assistant"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1
+          },
+          "attachments": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Ordered exact media inputs. Attachments are accepted only on user messages and only when the resolved model declares each media type.",
+            "items": {
+              "$ref": "#/components/schemas/MessageAttachment"
+            }
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
       "TextRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -1816,9 +1890,9 @@
           "messages": {
             "type": "array",
             "minItems": 1,
-            "description": "All messages must have an allowed role and non-blank content, include at least one user message, and either all omit order or all provide unique non-negative order values.",
+            "description": "All messages must have an allowed role and non-blank content, include at least one user message, and either all omit order or all provide unique non-negative order values. Only user messages may carry attachments; message order and attachment order are preserved.",
             "items": {
-              "$ref": "#/components/schemas/ChatMessage"
+              "$ref": "#/components/schemas/V2ChatMessage"
             }
           },
           "model": {

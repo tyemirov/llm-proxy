@@ -148,6 +148,7 @@ type modelConfiguration struct {
 	WebSearch        bool                             `mapstructure:"web_search"`
 	OutputTokenLimit int                              `mapstructure:"output_token_limit"`
 	ReasoningEffort  *reasoningEffortCapabilityConfig `mapstructure:"reasoning_effort"`
+	MediaInputs      []string                         `mapstructure:"media_inputs"`
 }
 
 type reasoningEffortCapabilityConfig struct {
@@ -451,6 +452,7 @@ func (configuration modelEndpointConfiguration) proxyCatalog() proxy.ModelEndpoi
 			WebSearch:        currentModel.WebSearch,
 			OutputTokenLimit: currentModel.OutputTokenLimit,
 			ReasoningEffort:  proxyReasoningEffortCapability(currentModel.ReasoningEffort),
+			MediaInputs:      append([]string(nil), currentModel.MediaInputs...),
 		})
 	}
 	return proxy.ModelEndpointCatalog{

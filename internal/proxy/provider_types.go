@@ -234,10 +234,16 @@ type textModelDefinition struct {
 	outputTokenLimit    int
 	hasOutputTokenLimit bool
 	reasoningEffort     *reasoningEffortCapability
+	mediaInputs         map[messageMediaType]struct{}
 }
 
 func (definition textModelDefinition) string() string {
 	return definition.identifier.string()
+}
+
+func (definition textModelDefinition) supportsMediaInput(mediaInput messageMediaType) bool {
+	_, supported := definition.mediaInputs[mediaInput]
+	return supported
 }
 
 type providerDefinition struct {

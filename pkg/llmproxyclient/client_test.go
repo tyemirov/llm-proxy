@@ -153,6 +153,8 @@ func TestClientPostMessagesSendsV2MessagesBody(testingInstance *testing.T) {
 	if requestError != nil {
 		testingInstance.Fatalf("request error: %v", requestError)
 	}
+	*maxTokens = 99
+	reasoningEffort = "changed"
 	requestTimeoutSeconds = 99
 
 	responseText, postError := client.PostMessages(context.Background(), request)

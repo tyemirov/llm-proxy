@@ -182,16 +182,18 @@ func v2EndpointPath(basePath string) string {
 
 // MessageInput is an unvalidated chat message for a v2 JSON POST request.
 type MessageInput struct {
-	Role    string
-	Content string
+	Role        string
+	Content     string
+	Attachments []MessageAttachment
 	// Order is optional; when any message sets it, every message in the request must set a unique non-negative value.
 	Order *int
 }
 
 type message struct {
-	role    string
-	content string
-	order   *int
+	role        string
+	content     string
+	attachments []messageAttachment
+	order       *int
 }
 
 // MessagesRequestInput is the unvalidated external input for a v2 messages-only JSON POST request.
@@ -242,8 +244,8 @@ func NewMessagesRequest(input MessagesRequestInput) (MessagesRequest, error) {
 		messages:              messages,
 		model:                 strings.TrimSpace(input.Model),
 		webSearch:             input.WebSearch,
-		maxTokens:             input.MaxTokens,
-		reasoningEffort:       input.ReasoningEffort,
+		maxTokens:             copyOptionalInteger(input.MaxTokens),
+		reasoningEffort:       copyOptionalString(input.ReasoningEffort),
 		requestTimeoutSeconds: requestTimeoutSeconds,
 	}, nil
 }
@@ -280,13 +282,28 @@ func newMessages(inputMessages []MessageInput) ([]message, error) {
 		default:
 			return nil, fmt.Errorf("%w: messages[%d].role unsupported", ErrInvalidClientRequest, messageIndex)
 		}
-		if inputMessage.Content == "" {
+		if strings.TrimSpace(inputMessage.Content) == "" {
 			return nil, fmt.Errorf("%w: messages[%d].content is empty", ErrInvalidClientRequest, messageIndex)
+		}
+		attachments := make([]messageAttachment, 0, len(inputMessage.Attachments))
+		for attachmentIndex, inputAttachment := range inputMessage.Attachments {
+			if inputAttachment == nil {
+				return nil, fmt.Errorf("%w: messages[%d].attachments[%d] is invalid", ErrInvalidClientRequest, messageIndex, attachmentIndex)
+			}
+			attachments = append(attachments, inputAttachment.clientMessageAttachment())
+		}
+		if len(attachments) > 0 && role != messageRoleUser {
+			return nil, fmt.Errorf("%w: messages[%d].attachments require user role", ErrInvalidClientRequest, messageIndex)
 		}
 		if role == messageRoleUser {
 			hasUserMessage = true
 		}
-		messages = append(messages, message{role: role, content: inputMessage.Content, order: inputMessage.Order})
+		messages = append(messages, message{
+			role:        role,
+			content:     inputMessage.Content,
+			attachments: attachments,
+			order:       copyOptionalInteger(inputMessage.Order),
+		})
 	}
 	if len(inputMessages) > 0 && !hasUserMessage {
 		return nil, fmt.Errorf("%w: messages must include a user message", ErrInvalidClientRequest)
@@ -332,12 +349,31 @@ func messagePayload(messages []message) []map[string]any {
 			"role":    requestMessage.role,
 			"content": requestMessage.content,
 		}
+		if len(requestMessage.attachments) > 0 {
+			payloadMessage["attachments"] = messageAttachmentPayload(requestMessage.attachments)
+		}
 		if requestMessage.order != nil {
 			payloadMessage["order"] = *requestMessage.order
 		}
 		payload = append(payload, payloadMessage)
 	}
 	return payload
+}
+
+func copyOptionalInteger(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	copiedValue := *value
+	return &copiedValue
+}
+
+func copyOptionalString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	copiedValue := *value
+	return &copiedValue
 }
 
 // Client calls llm-proxy using a configured HTTP transport.
