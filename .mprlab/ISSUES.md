@@ -40,6 +40,30 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [-] [B099] (P0) Retire the exact legacy llm-proxy Compose service.
+  Goal:
+  Make the first schema-v2 deployment remove the obsolete llm-proxy container
+  from the shared legacy Compose project without deleting its retained data
+  volume or affecting another application.
+
+  Evidence:
+  - The current production service is still identified as
+    `mprlab-nginx-gateway/llm-proxy`.
+  - The schema-v2 manifest owns the replacement runtime and retains the
+    existing `mprlab-nginx-gateway_llm-proxy-data` volume, but did not declare
+    the old service that the gateway must retire.
+
+  Requirements:
+  - Declare exactly the legacy project `mprlab-nginx-gateway` and service
+    `llm-proxy` on the selected runtime resource.
+  - Keep the existing data volume retained.
+  - Prove the declaration structurally and document the bounded first-deploy
+    transition.
+
+  Validation:
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+
 - [x] [B098] (P0) Make canonical CI completion fail closed and visible.
   Goal:
   Make `make ci` prove that every declared gate completed in the current run,

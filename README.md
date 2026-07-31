@@ -1429,6 +1429,12 @@ reconciliation, inventory, and production verification. There is no
 application-owned production Ansible, Compose, Caddy, release, publish, or
 deploy implementation.
 
+The runtime declaration identifies the exact legacy
+`mprlab-nginx-gateway/llm-proxy` Compose service. During the first schema-v2
+deployment, the gateway verifies that service belongs to llm-proxy before
+removing only its old container. The retained
+`mprlab-nginx-gateway_llm-proxy-data` volume is not removed.
+
 The Pages declaration uses `docker/pages/Dockerfile`, whose renderer is the Go
 CLI built from committed source. Node remains a developer dependency for
 frontend lint and browser tests only; llm-proxy declares no production Node or

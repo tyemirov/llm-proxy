@@ -64,15 +64,39 @@ func TestOperationalRepositoryOwnsSchemaV2Lifecycle(testingInstance *testing.T) 
 		testingInstance.Fatalf("lifecycle manifest has no resources list: %#v", resourcesDocument["resources"])
 	}
 	resourceIdentities := make([]string, 0, len(resources))
+	composeProjectFound := false
 	for _, resourceValue := range resources {
 		resource, resourceAvailable := resourceValue.(map[string]any)
 		if !resourceAvailable {
 			testingInstance.Fatalf("lifecycle resource is not a mapping: %#v", resourceValue)
 		}
+		resourceKind := lifecycleStringField(testingInstance, resource, "kind")
+		resourceID := lifecycleStringField(testingInstance, resource, "id")
 		resourceIdentities = append(
 			resourceIdentities,
-			lifecycleStringField(testingInstance, resource, "kind")+"/"+lifecycleStringField(testingInstance, resource, "id"),
+			resourceKind+"/"+resourceID,
 		)
+		if resourceKind != "compose_project" || resourceID != "runtime" {
+			continue
+		}
+		composeProjectFound = true
+		retiredServices, retiredServicesAvailable := resource["retired_services"].([]any)
+		if !retiredServicesAvailable || len(retiredServices) != 1 {
+			testingInstance.Fatalf("unexpected retired runtime services: %#v", resource["retired_services"])
+		}
+		retiredService, retiredServiceAvailable := retiredServices[0].(map[string]any)
+		if !retiredServiceAvailable {
+			testingInstance.Fatalf("retired runtime service is not a mapping: %#v", retiredServices[0])
+		}
+		if project := lifecycleStringField(testingInstance, retiredService, "project"); project != "mprlab-nginx-gateway" {
+			testingInstance.Fatalf("unexpected retired runtime project: %q", project)
+		}
+		if service := lifecycleStringField(testingInstance, retiredService, "service"); service != "llm-proxy" {
+			testingInstance.Fatalf("unexpected retired runtime service: %q", service)
+		}
+	}
+	if !composeProjectFound {
+		testingInstance.Fatal("lifecycle manifest has no runtime compose project")
 	}
 	slices.Sort(resourceIdentities)
 	expectedResourceIdentities := []string{
