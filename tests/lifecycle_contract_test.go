@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -29,7 +30,7 @@ var expectedSiblingGatewayWrapper = strings.Join([]string{
 	"\t\tMPRLAB_APP_ROOT=\"$${application_root}\"",
 }, "\n")
 
-func TestOperationalRepositoryOwnsSchemaV2Lifecycle(testingInstance *testing.T) {
+func TestOperationalRepositoryOwnsSchemaV3Lifecycle(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	manifestPath := filepath.Join(repositoryRoot, filepath.FromSlash(lifecycleManifestRelativePath))
 	manifestBytes, readError := os.ReadFile(manifestPath)
@@ -48,15 +49,17 @@ func TestOperationalRepositoryOwnsSchemaV2Lifecycle(testingInstance *testing.T) 
 	if !available {
 		testingInstance.Fatalf("lifecycle manifest has no mprlab_resources mapping: %#v", document)
 	}
-	if schemaVersion, schemaAvailable := resourcesDocument["schema_version"].(int); !schemaAvailable || schemaVersion != 2 {
+	if schemaVersion, schemaAvailable := resourcesDocument["schema_version"].(int); !schemaAvailable || schemaVersion != 3 {
 		testingInstance.Fatalf("unexpected lifecycle schema version: %#v", resourcesDocument["schema_version"])
 	}
 	if owner, ownerAvailable := resourcesDocument["owner"].(string); !ownerAvailable || owner != "llm-proxy" {
 		testingInstance.Fatalf("unexpected lifecycle owner: %#v", resourcesDocument["owner"])
 	}
-	dependencies, dependenciesAvailable := resourcesDocument["dependencies"].([]any)
-	if !dependenciesAvailable || len(dependencies) != 0 {
-		testingInstance.Fatalf("llm-proxy must declare no runtime dependencies: %#v", resourcesDocument["dependencies"])
+	if _, dependenciesAvailable := resourcesDocument["dependencies"]; dependenciesAvailable {
+		testingInstance.Fatalf("lifecycle manifest must not declare top-level dependencies: %#v", resourcesDocument["dependencies"])
+	}
+	if len(resourcesDocument) != 3 {
+		testingInstance.Fatalf("lifecycle manifest must contain only schema_version, owner, and resources: %#v", resourcesDocument)
 	}
 
 	resources, resourcesAvailable := resourcesDocument["resources"].([]any)
@@ -64,6 +67,7 @@ func TestOperationalRepositoryOwnsSchemaV2Lifecycle(testingInstance *testing.T) 
 		testingInstance.Fatalf("lifecycle manifest has no resources list: %#v", resourcesDocument["resources"])
 	}
 	resourceIdentities := make([]string, 0, len(resources))
+	resourcesByIdentity := make(map[string]map[string]any, len(resources))
 	composeProjectFound := false
 	for _, resourceValue := range resources {
 		resource, resourceAvailable := resourceValue.(map[string]any)
@@ -72,10 +76,9 @@ func TestOperationalRepositoryOwnsSchemaV2Lifecycle(testingInstance *testing.T) 
 		}
 		resourceKind := lifecycleStringField(testingInstance, resource, "kind")
 		resourceID := lifecycleStringField(testingInstance, resource, "id")
-		resourceIdentities = append(
-			resourceIdentities,
-			resourceKind+"/"+resourceID,
-		)
+		resourceIdentity := resourceKind + "/" + resourceID
+		resourceIdentities = append(resourceIdentities, resourceIdentity)
+		resourcesByIdentity[resourceIdentity] = resource
 		if resourceKind != "compose_project" || resourceID != "runtime" {
 			continue
 		}
@@ -105,6 +108,7 @@ func TestOperationalRepositoryOwnsSchemaV2Lifecycle(testingInstance *testing.T) 
 		"github_pages/website",
 		"health_check/api-auth-boundary",
 		"health_check/management-config",
+		"private_values/private",
 		"runtime_capability/http",
 		"tauth_tenant/authentication",
 	}
@@ -112,9 +116,82 @@ func TestOperationalRepositoryOwnsSchemaV2Lifecycle(testingInstance *testing.T) 
 		testingInstance.Fatalf("unexpected llm-proxy lifecycle resources: %#v", resourceIdentities)
 	}
 
+	privateBindings := resourcesByIdentity["private_values/private"]["bindings"]
+	expectedPrivateBindings := map[string]any{
+		"admin-emails":                "LLM_PROXY_MANAGEMENT_ADMIN_EMAILS",
+		"google-web-client-id":        "LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID",
+		"jwt-signing-key":             "LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY",
+		"provider-key-encryption-key": "LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY",
+	}
+	if !reflect.DeepEqual(privateBindings, expectedPrivateBindings) {
+		testingInstance.Fatalf("unexpected private-value bindings: %#v", privateBindings)
+	}
+
+	runtimeServices, servicesAvailable := resourcesByIdentity["compose_project/runtime"]["services"].([]any)
+	if !servicesAvailable || len(runtimeServices) != 1 {
+		testingInstance.Fatalf("unexpected runtime services: %#v", resourcesByIdentity["compose_project/runtime"]["services"])
+	}
+	runtimeService, runtimeServiceAvailable := runtimeServices[0].(map[string]any)
+	if !runtimeServiceAvailable {
+		testingInstance.Fatalf("runtime service is not a mapping: %#v", runtimeServices[0])
+	}
+	if _, environmentFilesAvailable := runtimeService["environment_files"]; environmentFilesAvailable {
+		testingInstance.Fatalf("runtime service retains environment_files: %#v", runtimeService["environment_files"])
+	}
+	runtimeEnvironment, environmentAvailable := runtimeService["environment"].(map[string]any)
+	if !environmentAvailable {
+		testingInstance.Fatalf("runtime service has no typed environment: %#v", runtimeService["environment"])
+	}
+	runtimeEnvironmentNames := make([]string, 0, len(runtimeEnvironment))
+	for environmentName := range runtimeEnvironment {
+		runtimeEnvironmentNames = append(runtimeEnvironmentNames, environmentName)
+	}
+	slices.Sort(runtimeEnvironmentNames)
+	expectedRuntimeEnvironmentNames := []string{
+		"LLM_PROXY_MANAGEMENT_ADMIN_EMAILS",
+		"LLM_PROXY_MANAGEMENT_API_ORIGIN",
+		"LLM_PROXY_MANAGEMENT_DATABASE_PATH",
+		"LLM_PROXY_MANAGEMENT_ENABLED",
+		"LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID",
+		"LLM_PROXY_MANAGEMENT_JWT_ISSUER",
+		"LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY",
+		"LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN",
+		"LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN",
+		"LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY",
+		"LLM_PROXY_MANAGEMENT_PROXY_ORIGIN",
+		"LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN",
+		"LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME",
+		"LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH",
+		"LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH",
+		"LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH",
+		"LLM_PROXY_MANAGEMENT_TAUTH_SESSION_PATH",
+		"LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID",
+		"LLM_PROXY_MANAGEMENT_TAUTH_URL",
+		"LLM_PROXY_MANAGEMENT_UI_DESCRIPTION",
+	}
+	if !slices.Equal(runtimeEnvironmentNames, expectedRuntimeEnvironmentNames) {
+		testingInstance.Fatalf("unexpected runtime environment keys: %#v", runtimeEnvironmentNames)
+	}
+	for environmentName, expectedBinding := range map[string]map[string]any{
+		"LLM_PROXY_MANAGEMENT_ADMIN_EMAILS":                {"resource": "private", "output": "admin-emails"},
+		"LLM_PROXY_MANAGEMENT_API_ORIGIN":                  {"resource": "public-api", "output": "origin"},
+		"LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID":            {"resource": "authentication", "output": "google-web-client-id"},
+		"LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY":             {"resource": "authentication", "output": "jwt-signing-key"},
+		"LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY": {"resource": "private", "output": "provider-key-encryption-key"},
+		"LLM_PROXY_MANAGEMENT_PROXY_ORIGIN":                {"resource": "public-api", "output": "origin"},
+		"LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN":               {"resource": "website", "output": "origin"},
+		"LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME":         {"resource": "authentication", "output": "session-cookie-name"},
+		"LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID":             {"resource": "authentication", "output": "tenant-id"},
+		"LLM_PROXY_MANAGEMENT_TAUTH_URL":                   {"capability": "tauth.http", "component": "url"},
+	} {
+		if !reflect.DeepEqual(runtimeEnvironment[environmentName], expectedBinding) {
+			testingInstance.Errorf("unexpected %s binding: %#v", environmentName, runtimeEnvironment[environmentName])
+		}
+	}
+
 	manifestText := string(manifestBytes)
 	for _, requiredContract := range []string{
-		"secret: llm-proxy.runtime-environment",
+		"kind: private_values",
 		"source: configs/config.yml",
 		"target: /app/config.yml",
 		"name: mprlab-nginx-gateway_llm-proxy-data",
@@ -132,6 +209,9 @@ func TestOperationalRepositoryOwnsSchemaV2Lifecycle(testingInstance *testing.T) 
 	}
 	for _, forbiddenContract := range []string{
 		"schema_version: 1",
+		"environment_files:",
+		"profiles:",
+		"secret:",
 		"make_workflow",
 		"ansible_task_bundle",
 		"container_name:",

@@ -448,15 +448,21 @@ a tenant secret or response body.
 
 Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, requires API keys for each configured static tenant's default text and dictation providers when management mode is disabled, allows non-default provider API keys to be blank so those providers are disabled until configured, requires every configured provider base URL, requires transcription URLs for dictation-capable providers, requires text model catalogs for every provider, requires dictation model catalogs for dictation-capable providers, rejects blank or duplicate model ids, rejects defaults not listed in their model catalog, rejects `web_search` outside OpenAI text model entries, validates OpenAI request profiles, validates exact model-owned reasoning-effort lists, validates each configured static tenant's default text provider/model and effort, and validates endpoint/credential support for each configured static tenant's default dictation provider/model. When `management.enabled` is false, at least one static tenant is required. When `management.enabled` is true, static tenants and nonblank config-level provider API keys are rejected because managed tokens and provider credentials are user-owned database state.
 
-The repository owns the schema-v2 production declaration at
+The repository owns the schema-v3 production declaration at
 `.mprlab/deploy/resources.yml` and the standard `make release`, `make publish`,
 and `make deploy` entrypoints. Those targets resolve the exact sibling
 `../mprlab-gateway`, which owns the canonical SemVer lifecycle, schema
 validation, artifact sealing and publication, Ansible inventory and
 reconciliation, and production verification. The selected transaction reads
-only this app checkout and its declared capability dependencies; it does not
-inspect unrelated repositories. Publish and deploy consume the exact sealed
+only this app checkout and the references nested in its typed resources; it
+does not inspect unrelated repositories. Publish and deploy consume the exact sealed
 release without rerunning CI or rebuilding.
+
+The ignored `.mprlab/deploy/.env` file is the selected application's private
+deployment input. The manifest binds exact dotenv keys to closed private
+outputs. Deployment generates one service environment from private, TAuth,
+Caddy, Pages, and capability outputs. Release and publication do not read the
+private input.
 
 The management UI is served as a static GitHub Pages app from `site/` on `https://llm-proxy.mprlab.com`; the Go backend does not serve management HTML or assets. The declared `docker/pages/Dockerfile` builds the Go CLI and uses it to render and validate the Pages archive without a production Node dependency. The gateway publishes that immutable archive without changing the live site and deploy activates it on `gh-pages` after the backend rollout. The backend serves one public browser config file at `/config-ui.yaml` from the already-loaded management config, with credentialed CORS restricted to `management.public_origin`.
 

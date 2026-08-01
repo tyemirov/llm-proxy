@@ -8,12 +8,17 @@ All notable changes to this project will be documented in this file.
 - Remove Moonshot's unavailable former default model and promote the verified `kimi-k2.6` model as the sole canonical default without an alias or fallback.
 - Verify every nonempty managed provider key against its exact provider and selected text model before atomic persistence, with automatic paste verification, safe stable failures, stale-attempt cancellation, and live-harness coverage.
 - Persist managed usage after response flush through one bounded FIFO writer, with explicit drop-newest overflow, at-most-once process-local durability, and safe failure logging.
-- Declare the llm-proxy TAuth tenant requirements in the app-owned deployment manifest for gateway assembly.
+- Migrate the app-owned lifecycle manifest to schema v3, remove the parallel
+  dependency list and unused Compose profiles, and let the gateway derive
+  TAuth requirements from the typed tenant resource.
+- Bind deployment-private values to exact keys in `.mprlab/deploy/.env`, use
+  closed TAuth, Caddy, and Pages outputs, and remove the whole-file service
+  environment contract.
 - Add the bounded `X-LLM-Proxy-Request-Timeout-Seconds` contract across text and dictation routes, including effective response headers and canonical `400 invalid_request_timeout` and `504 request_timeout` JSON errors.
 - Move Go and Python timeout selection from client configuration onto each messages request, replace the CLI `--timeout` flag with `--request-timeout-seconds`, and remove the arbitrary 390-second bundled-client deadline.
 - Add `server.max_request_timeout_seconds`, one ingress-owned deadline shared by body parsing, queue admission, provider calls, and OpenAI polling, plus safe terminal-outcome logging.
 - Keep response construction and managed-usage persistence under request cancellation, classify queue saturation as `proxy_overload`, reject explicit null timeout configuration, and synchronize Python client distribution metadata at `0.2.0`.
-- Replace app-owned production lifecycle machinery with one schema-v2 resource declaration and thin `make release`, `make publish`, and `make deploy` entrypoints into the exact sibling `mprlab-gateway`; render Pages with Go and declare no production Node dependency.
+- Replace app-owned production lifecycle machinery with one schema-v3 resource declaration and thin `make release`, `make publish`, and `make deploy` entrypoints into the exact sibling `mprlab-gateway`; render Pages with Go and declare no production Node dependency.
 - Give the asynchronous local orchestration contract its own bounded startup/shutdown timeout so `make release` does not fail under ordinary CI load.
 - Remove tracked generated Python `*.egg-info` metadata so a clean CI/release gate remains clean.
 
