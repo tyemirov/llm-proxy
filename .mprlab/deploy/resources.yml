@@ -12,7 +12,6 @@ mprlab_resources:
         provider-key-encryption-key: LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY
     - kind: compose_project
       id: runtime
-      placement: gateway
       retired_services:
         - project: mprlab-nginx-gateway
           service: llm-proxy
@@ -29,6 +28,9 @@ mprlab_resources:
       services:
         - id: llm-proxy
           image: llm-proxy-image
+          placement:
+            group: gateway
+            cardinality: one
           environment:
             LLM_PROXY_MANAGEMENT_ADMIN_EMAILS:
               resource: private
