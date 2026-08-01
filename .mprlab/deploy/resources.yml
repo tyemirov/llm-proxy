@@ -1,13 +1,17 @@
 ---
 mprlab_resources:
-  schema_version: 2
+  schema_version: 3
   owner: llm-proxy
-  dependencies: []
   resources:
+    - kind: private_values
+      id: private
+      bindings:
+        admin-emails: LLM_PROXY_MANAGEMENT_ADMIN_EMAILS
+        google-web-client-id: LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID
+        jwt-signing-key: LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY
+        provider-key-encryption-key: LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY
     - kind: compose_project
       id: runtime
-      placement: gateway
-      profiles: []
       retired_services:
         - project: mprlab-nginx-gateway
           service: llm-proxy
@@ -24,8 +28,60 @@ mprlab_resources:
       services:
         - id: llm-proxy
           image: llm-proxy-image
-          environment_files:
-            - secret: llm-proxy.runtime-environment
+          placement:
+            group: gateway
+            cardinality: one
+          environment:
+            LLM_PROXY_MANAGEMENT_ADMIN_EMAILS:
+              resource: private
+              output: admin-emails
+            LLM_PROXY_MANAGEMENT_API_ORIGIN:
+              resource: public-api
+              output: origin
+            LLM_PROXY_MANAGEMENT_DATABASE_PATH:
+              value: /app/data/llm-proxy-management.sqlite
+            LLM_PROXY_MANAGEMENT_ENABLED:
+              value: "true"
+            LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID:
+              resource: authentication
+              output: google-web-client-id
+            LLM_PROXY_MANAGEMENT_JWT_ISSUER:
+              value: tauth
+            LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY:
+              resource: authentication
+              output: jwt-signing-key
+            LLM_PROXY_MANAGEMENT_LOCALHOST_ORIGIN:
+              value: http://localhost:4179
+            LLM_PROXY_MANAGEMENT_LOOPBACK_ORIGIN:
+              value: http://127.0.0.1:4179
+            LLM_PROXY_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY:
+              resource: private
+              output: provider-key-encryption-key
+            LLM_PROXY_MANAGEMENT_PROXY_ORIGIN:
+              resource: public-api
+              output: origin
+            LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN:
+              resource: website
+              output: origin
+            LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME:
+              resource: authentication
+              output: session-cookie-name
+            LLM_PROXY_MANAGEMENT_TAUTH_LOGIN_PATH:
+              value: /auth/google
+            LLM_PROXY_MANAGEMENT_TAUTH_LOGOUT_PATH:
+              value: /auth/logout
+            LLM_PROXY_MANAGEMENT_TAUTH_NONCE_PATH:
+              value: /auth/nonce
+            LLM_PROXY_MANAGEMENT_TAUTH_SESSION_PATH:
+              value: /auth/session
+            LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID:
+              resource: authentication
+              output: tenant-id
+            LLM_PROXY_MANAGEMENT_TAUTH_URL:
+              capability: tauth.http
+              component: url
+            LLM_PROXY_MANAGEMENT_UI_DESCRIPTION:
+              value: LLM Proxy
           assets:
             - source: configs/config.yml
               target: /app/config.yml
@@ -116,9 +172,11 @@ mprlab_resources:
         origins:
           - https://llm-proxy.mprlab.com
         google_web_client_id:
-          secret: llm-proxy.google-web-client-id
+          resource: private
+          output: google-web-client-id
         jwt_signing_key:
-          secret: llm-proxy.jwt-signing-key
+          resource: private
+          output: jwt-signing-key
         cookie:
           domain: .mprlab.com
           session_name: app_session_llm_proxy
