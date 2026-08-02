@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-labelledby="title desc">
+  <title id="title">LLM Proxy favicon</title>
+  <desc id="desc">A small MPR-style provider-routing mark.</desc>
+  <defs>
+    <linearGradient id="llm-proxy-favicon-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#092635"/>
+      <stop offset="1" stop-color="#12372a"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="5" fill="url(#llm-proxy-favicon-bg)"/>
+  <path
+    d="M7.5 10.8h5.2L16 16l3.3-5.2h5.2M7.5 21.2h5.2L16 16l3.3 5.2h5.2"
+    fill="none"
+    stroke="#ffd369"
+    stroke-width="1.9"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="7.5" cy="10.8" r="1.9" fill="#4ad3d9"/>
+  <circle cx="24.5" cy="10.8" r="1.9" fill="#4ad3d9"/>
+  <circle cx="7.5" cy="21.2" r="1.9" fill="#4ad3d9"/>
+  <circle cx="24.5" cy="21.2" r="1.9" fill="#4ad3d9"/>
+  <circle cx="16" cy="16" r="2.5" fill="none" stroke="#4ad3d9" stroke-width="1.9"/>
+</svg>
