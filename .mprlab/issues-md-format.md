@@ -28,7 +28,7 @@ Each issue entry is a single list item with this shape:
 
 Rules:
 
-- `[ ]` means open (unresolved), `[!]` means blocked (unresolved), `[x]` means closed (resolved).
+- `[ ]` means open (unresolved), `[-]` means taken (actively being worked, but still unresolved), `[!]` means blocked (unresolved), `[x]` means closed (resolved).
 - The external ID is required.
 - Priority and dependencies are optional and appear immediately after the ID.
 - The title is required.
