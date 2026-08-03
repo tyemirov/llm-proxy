@@ -1728,7 +1728,18 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - A live `gpt-5.6-terra` / `max` control returned `OK` with a 900-second request budget.
   - A production-sized Bulgarian source-world request using the same model, effort, and budget remained connected beyond the former 300-second caller deadline and the 360-second proxy default, then returned a complete passing review after roughly 6.5 minutes.
   - Kamu F001 can therefore resume with the declared 900-second budget; no retry, direct-provider path, prompt chunking, or tenant mutation is required.
-- [ ] [B100] (P0) I want to consider a redesign of the whole UI. I want effectively to keep what we can't have in the dashboard where we have unified graphs. And underneath I want to have a card for every single provider. And then people can just enter the credentials and defaults for the provider. And I think that will make it much easier to use and effectively settings will go away. And it's a very simple or at least it looks like a simple app.
+- [ ] [B100] (P0) Redesign dashboard around unified graphs and provider cards.
+  Goal:
+  Simplify the app UI by making the dashboard the primary place for unified graphs and provider configuration, reducing or eliminating the need for a separate settings area.
+  
+  Requirements:
+  Preserve the existing dashboard concept for unified graphs. Add a clear card-based area for each provider beneath the graphs. Each provider card should let users enter that provider’s credentials and default options. The redesign should make provider setup easier to discover and should keep the app feeling simple rather than adding extra navigation or complexity.
+  
+  Deliverables:
+  A proposed UI redesign for the dashboard showing unified graphs plus per-provider configuration cards. Updated implementation or design artifacts for the new provider-card flow. Any necessary cleanup of settings-related UI if the new dashboard flow replaces it.
+  
+  Validation:
+  A user can open the dashboard, see the unified graphs, find a card for each provider, and enter credentials and defaults without needing a separate settings page. The resulting UI is easier to understand at a glance and does not remove required provider configuration capabilities.
 
 
 ## Improvements
