@@ -45,31 +45,26 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   Make the first schema-v2 deployment remove the obsolete llm-proxy container
   from the shared legacy Compose project without deleting its retained data
   volume or affecting another application.
-
   Evidence:
   - The current production service is still identified as
     `mprlab-nginx-gateway/llm-proxy`.
   - The schema-v2 manifest owns the replacement runtime and retains the
     existing `mprlab-nginx-gateway_llm-proxy-data` volume, but did not declare
     the old service that the gateway must retire.
-
   Requirements:
   - Declare exactly the legacy project `mprlab-nginx-gateway` and service
     `llm-proxy` on the selected runtime resource.
   - Keep the existing data volume retained.
   - Prove the declaration structurally and document the bounded first-deploy
     transition.
-
   Validation:
   - Run the required final
     `timeout -k 350s -s SIGKILL 350s make ci`.
-
 - [x] [B098] (P0) Make canonical CI completion fail closed and visible.
   Goal:
   Make `make ci` prove that every declared gate completed in the current run,
   show the enforced coverage at the terminal tail, and return nonzero whenever
   orchestration stops before that proof is complete.
-
   Evidence:
   - A captured successful baseline returned zero after all current gates, but
     its `total: ... 100.0%` coverage line appeared at line 533 while the final
@@ -81,7 +76,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     producing a current artifact.
   - Hosted CI selects Go `1.25.12` independently while `go.mod` and both
     production builders require Go `1.26.5`.
-
   Requirements:
   - Run the canonical gates sequentially through one top-level runner even when
     the caller supplies parallel Make flags.
@@ -94,7 +88,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     complete contract succeeds.
   - Select the hosted Go toolchain from `go.mod` instead of a second version
     declaration.
-
   Validation:
   - Add black-box runner scenarios for complete success, a nonzero child gate,
     and a child that returns zero without producing current coverage evidence.
@@ -102,7 +95,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     success receipt.
   - Run the required final
     `timeout -k 350s -s SIGKILL 350s make ci`.
-
   Resolution:
   - `make ci` now owns one sequential ten-stage runner with an exit trap that
     converts every incomplete exit into failure and names the active gate.
@@ -123,7 +115,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     tests, 75 browser tests, one TAuth browser black-box test, the OpenAPI Pages
     artifact check, and the live-provider harness preflight. Its terminal table
     reported all 11 gates passed in 86 seconds.
-
 - [x] [B096] (P0) Make deployment self-contained in the application repository.
   Goal:
   Preserve the exact `make release`, `make publish`, `make deploy` operator
@@ -3206,6 +3197,18 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Features
 
+- [ ] [F018] (P1) Redesign dashboard around unified graphs and provider cards.
+  Goal:
+  Simplify the app UI by making the dashboard the primary place for unified graphs and provider configuration, reducing or eliminating the need for a separate settings area.
+  
+  Requirements:
+  Preserve the existing dashboard concept for unified graphs. Add a clear card-based area for each provider beneath the graphs. Each provider card should let users enter that provider’s credentials and default options. The redesign should make provider setup easier to discover and should keep the app feeling simple rather than adding extra navigation or complexity.
+  
+  Deliverables:
+  A proposed UI redesign for the dashboard showing unified graphs plus per-provider configuration cards. Updated implementation or design artifacts for the new provider-card flow. Any necessary cleanup of settings-related UI if the new dashboard flow replaces it.
+  
+  Validation:
+  A user can open the dashboard, see the unified graphs, find a card for each provider, and enter credentials and defaults without needing a separate settings page. The resulting UI is easier to understand at a glance and does not remove required provider configuration capabilities.
 - [ ] [F017] (P1) Add shared MPR UI inactivity warning and automatic logout.
   Goal:
   Make an authenticated browser session warn and sign out explicitly after
@@ -3860,3 +3863,5 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     are not tied to an approved source.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
+
+
