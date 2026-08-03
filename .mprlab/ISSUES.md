@@ -3197,7 +3197,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Features
 
-- [ ] [F018] (P0) Redesign dashboard around unified graphs and provider cards.
+- [ ] [F018] (P1) Redesign dashboard around unified graphs and provider cards.
   Goal:
   Simplify the app UI by making the dashboard the primary place for unified graphs and provider configuration, reducing or eliminating the need for a separate settings area.
   
