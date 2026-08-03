@@ -45,31 +45,26 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   Make the first schema-v2 deployment remove the obsolete llm-proxy container
   from the shared legacy Compose project without deleting its retained data
   volume or affecting another application.
-
   Evidence:
   - The current production service is still identified as
     `mprlab-nginx-gateway/llm-proxy`.
   - The schema-v2 manifest owns the replacement runtime and retains the
     existing `mprlab-nginx-gateway_llm-proxy-data` volume, but did not declare
     the old service that the gateway must retire.
-
   Requirements:
   - Declare exactly the legacy project `mprlab-nginx-gateway` and service
     `llm-proxy` on the selected runtime resource.
   - Keep the existing data volume retained.
   - Prove the declaration structurally and document the bounded first-deploy
     transition.
-
   Validation:
   - Run the required final
     `timeout -k 350s -s SIGKILL 350s make ci`.
-
 - [x] [B098] (P0) Make canonical CI completion fail closed and visible.
   Goal:
   Make `make ci` prove that every declared gate completed in the current run,
   show the enforced coverage at the terminal tail, and return nonzero whenever
   orchestration stops before that proof is complete.
-
   Evidence:
   - A captured successful baseline returned zero after all current gates, but
     its `total: ... 100.0%` coverage line appeared at line 533 while the final
@@ -81,7 +76,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     producing a current artifact.
   - Hosted CI selects Go `1.25.12` independently while `go.mod` and both
     production builders require Go `1.26.5`.
-
   Requirements:
   - Run the canonical gates sequentially through one top-level runner even when
     the caller supplies parallel Make flags.
@@ -94,7 +88,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     complete contract succeeds.
   - Select the hosted Go toolchain from `go.mod` instead of a second version
     declaration.
-
   Validation:
   - Add black-box runner scenarios for complete success, a nonzero child gate,
     and a child that returns zero without producing current coverage evidence.
@@ -102,7 +95,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     success receipt.
   - Run the required final
     `timeout -k 350s -s SIGKILL 350s make ci`.
-
   Resolution:
   - `make ci` now owns one sequential ten-stage runner with an exit trap that
     converts every incomplete exit into failure and names the active gate.
@@ -123,7 +115,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     tests, 75 browser tests, one TAuth browser black-box test, the OpenAPI Pages
     artifact check, and the live-provider harness preflight. Its terminal table
     reported all 11 gates passed in 86 seconds.
-
 - [x] [B096] (P0) Make deployment self-contained in the application repository.
   Goal:
   Preserve the exact `make release`, `make publish`, `make deploy` operator
@@ -1737,6 +1728,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - A live `gpt-5.6-terra` / `max` control returned `OK` with a 900-second request budget.
   - A production-sized Bulgarian source-world request using the same model, effort, and budget remained connected beyond the former 300-second caller deadline and the 360-second proxy default, then returned a complete passing review after roughly 6.5 minutes.
   - Kamu F001 can therefore resume with the declared 900-second budget; no retry, direct-provider path, prompt chunking, or tenant mutation is required.
+- [ ] [B100] (P0) I want to consider a redesign of the whole UI. I want effectively to keep what we can't have in the dashboard where we have unified graphs. And underneath I want to have a card for every single provider. And then people can just enter the credentials and defaults for the provider. And I think that will make it much easier to use and effectively settings will go away. And it's a very simple or at least it looks like a simple app.
 
 
 ## Improvements
@@ -3860,3 +3852,5 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     are not tied to an approved source.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
+
+
