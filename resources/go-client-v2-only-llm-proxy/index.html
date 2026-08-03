@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Go LLM Proxy client with a v2-only transport</title>
+    <meta name="description" content="Use the Go package to send canonical messages requests through POST /v2.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/">
+    <meta property="og:title" content="Go LLM Proxy client with a v2-only transport">
+    <meta property="og:description" content="Use the Go package to send canonical messages requests through POST /v2.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Go LLM Proxy client with a v2-only transport","description":"Use the Go package to send canonical messages requests through POST /v2.","url":"https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/","datePublished":"2026-07-06","dateModified":"2026-07-26","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/","about":["LLM Proxy","Clients","Go LLM proxy client v2"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Go LLM Proxy client with a v2-only transport","item":"https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of Go LLM proxy client v2?","acceptedAnswer":{"@type":"Answer","text":"The Go package under pkg/llmproxyclient exposes the canonical MessagesRequest and Client.PostMessages path for text requests."}},{"@type":"Question","name":"Who should read this clients resource?","acceptedAnswer":{"@type":"Answer","text":"Go developers integrating application backends with LLM Proxy."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Authenticate an LLM Proxy client with a tenant secret, which covers LLM Proxy client authentication."}}]}</script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
+  </head>
+  <body class="resource-page">
+
+      <header class="resource-shell resource-topbar">
+        <a class="resource-brand" href="/">LLM Proxy</a>
+        <nav aria-label="Resource navigation">
+          <a href="/docs/">API reference</a>
+          <a href="/openapi.yaml">OpenAPI</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
+          <a href="/">Main page</a>
+        </nav>
+      </header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Go LLM Proxy client with a v2-only transport</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Clients</p>
+            <h1>Go LLM Proxy client with a v2-only transport</h1>
+            <p class="resource-deck">Use the Go package to send canonical messages requests through POST /v2.</p>
+            <p class="resource-audience">Go developers integrating application backends with LLM Proxy.</p>
+            <div class="resource-actions">
+              <a class="resource-button" href="/docs/">Open API reference</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>Reusable clients can expose too many legacy request shapes and force callers to choose between prompt JSON and chat messages.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>The Go package under pkg/llmproxyclient exposes the canonical MessagesRequest and Client.PostMessages path for text requests.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Import github.com/tyemirov/llm-proxy/pkg/llmproxyclient.</li>
+<li>Build a MessagesRequest with NewMessagesRequest.</li>
+<li>Configure base URL and tenant secret.</li>
+<li>Let omitted model stay omitted when provider defaults should apply.</li>
+<li>Set MessagesRequestInput.ReasoningEffort only for a nonblank value the resolved route declares.</li>
+<li>Set MessagesRequestInput.RequestTimeoutSeconds only when this request needs a specific proxy work budget.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+
+                        <tr>
+                          <td>v2-only API</td>
+                          <td>The reusable package exposes messages requests rather than multiple text shapes.</td>
+                          <td>Callers standardize on POST /v2.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Provider query preservation</td>
+                          <td>Base URLs can include non-payload query parameters such as provider.</td>
+                          <td>Provider-selected requests still use the canonical body.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Omitted-model behavior</td>
+                          <td>The client omits model unless the caller specifies it.</td>
+                          <td>Server-side defaults remain authoritative.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Reasoning-effort override</td>
+                          <td>MessagesRequestInput serializes an optional nonblank ReasoningEffort value.</td>
+                          <td>The proxy, not the client, validates exact model capability.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Per-request work budget</td>
+                          <td>RequestTimeoutSeconds serializes the canonical timeout header.</td>
+                          <td>Go context cancellation remains separate and caller-owned.</td>
+                        </tr>
+
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+
+                    <section class="resource-card">
+                      <h3>Backend service</h3>
+                      <p>A Go service sends system and user messages through Client.PostMessages.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Provider-specific base URL</h3>
+                      <p>The base URL includes ?provider=gemini while the request body omits model.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Max-token override</h3>
+                      <p>A caller adds max_tokens for one request without changing provider defaults.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Long review</h3>
+                      <p>A caller requests a larger bounded proxy work budget without changing the HTTP client's total timeout.</p>
+                    </section>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>The Go client is for text messages, not /dictate multipart uploads.</li>
+<li>It does not implement OpenAI background polling because the server owns that lifecycle.</li>
+<li>Direct REST callers can still use server GET and compatibility POST endpoints outside the client package.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>Repository evidence</h2>
+            <pre class="usage-snippet"><code>config, err := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
+    BaseURL:            &quot;http://localhost:8080/&quot;,
+    Secret:             serviceSecret,
+    ModelProfilePath:   userModelProfilePath,
+    ModelProfileReader: os.ReadFile,
+})
+if err != nil {
+    return err
+}
+client, err := llmproxyclient.NewClient(config, http.DefaultClient)
+if err != nil {
+    return err
+}
+requestTimeoutSeconds := 900
+request, err := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{
+    Messages: []llmproxyclient.MessageInput{
+        {Role: &quot;user&quot;, Content: &quot;Summarize this&quot;},
+    },
+    RequestTimeoutSeconds: &amp;requestTimeoutSeconds,
+})</code></pre>
+            <p>Verified 2026-07-26 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+
+                    <details>
+                      <summary>What is the main job of Go LLM proxy client v2?</summary>
+                      <p>The Go package under pkg/llmproxyclient exposes the canonical MessagesRequest and Client.PostMessages path for text requests.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Who should read this clients resource?</summary>
+                      <p>Go developers integrating application backends with LLM Proxy.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Does this page claim provider performance or pricing advantages?</summary>
+                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Where should setup details come from?</summary>
+                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is Authenticate an LLM Proxy client with a tenant secret, which covers LLM Proxy client authentication.</p>
+                    </details>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+
+                    <a class="resource-related" href="/resources/llm-proxy-client-authentication/">
+                      <span>Clients</span>
+                      <strong>Authenticate an LLM Proxy client with a tenant secret</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/python-client-v2-only-llm-proxy/">
+                      <span>Clients</span>
+                      <strong>Python LLM Proxy client with v2 messages</strong>
+                    </a>
+
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Use this pattern in LLM Proxy</h2>
+            <p>Start from the canonical API reference, then use the management surface when the workflow needs tenant or provider configuration.</p>
+            <a class="resource-button" href="/docs/">Open API reference</a>
+          </section>
+        </article>
+      </main>
+      <footer class="resource-shell resource-footer">
+        <a href="/">LLM Proxy main page</a>
+        <a href="/docs/">API reference</a>
+        <a href="/openapi.yaml">OpenAPI schema</a>
+        <a href="/resources/">Resource hub</a>
+        <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
+        <a href="/sitemap.xml">Sitemap</a>
+      </footer>
+
+  </body>
+</html>
