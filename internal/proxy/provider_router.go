@@ -19,6 +19,22 @@ type providerRouter struct {
 	anthropicClient *anthropicMessagesClient
 }
 
+type textRouteAdapter interface {
+	generateText(context.Context, *providerRouter, chatRequestParameters, *zap.SugaredLogger) (textGenerationResult, error)
+}
+
+type openAIResponsesTextRouteAdapter struct{}
+type openAIChatCompletionsTextRouteAdapter struct{}
+type geminiGenerateContentTextRouteAdapter struct{}
+type anthropicMessagesTextRouteAdapter struct{}
+
+var textRouteAdapters = map[textRouteCapabilities]textRouteAdapter{
+	openAIResponsesPollableRouteCapabilities:          openAIResponsesTextRouteAdapter{},
+	openAIChatCompletionsSynchronousRouteCapabilities: openAIChatCompletionsTextRouteAdapter{},
+	geminiGenerateContentSynchronousRouteCapabilities: geminiGenerateContentTextRouteAdapter{},
+	anthropicMessagesSynchronousRouteCapabilities:     anthropicMessagesTextRouteAdapter{},
+}
+
 func newProviderRouter(openAIClient *OpenAIClient, chatClient *openAICompatibleChatClient, geminiClient *geminiGenerateContentClient, anthropicClient *anthropicMessagesClient) *providerRouter {
 	return &providerRouter{
 		openAIClient:    openAIClient,
@@ -57,40 +73,23 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 }
 
 func (router *providerRouter) generateTextAttempt(requestContext context.Context, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	if request.provider.textTransport == textTransportOpenAIResponses {
-		return router.openAIClient.openAIRequest(
-			requestContext,
-			request.provider.credentialFor(endpointKindText),
-			request.model,
-			request.messages,
-			request.webSearchEnabled,
-			request.maxTokens,
-			request.reasoningEffort,
-			structuredLogger,
-		)
-	}
-	if request.provider.textTransport == textTransportGeminiGenerate {
-		return router.geminiClient.generateText(
-			requestContext,
-			request.provider.credentialFor(endpointKindText),
-			request.provider.textBaseURL,
-			request.model,
-			request.messages,
-			request.maxTokens,
-			structuredLogger,
-		)
-	}
-	if request.provider.textTransport == textTransportAnthropicMessages {
-		return router.anthropicClient.generateText(
-			requestContext,
-			request.provider.credentialFor(endpointKindText),
-			request.provider.textBaseURL,
-			request.model,
-			request.messages,
-			request.maxTokens,
-			structuredLogger,
-		)
-	}
+	return request.model.routeAdapter.generateText(requestContext, router, request, structuredLogger)
+}
+
+func (openAIResponsesTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	return router.openAIClient.openAIRequest(
+		requestContext,
+		request.provider.credentialFor(endpointKindText),
+		request.model,
+		request.messages,
+		request.webSearchEnabled,
+		request.maxTokens,
+		request.reasoningEffort,
+		structuredLogger,
+	)
+}
+
+func (openAIChatCompletionsTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	return router.chatClient.generateText(
 		requestContext,
 		request.provider.credentialFor(endpointKindText),
@@ -99,6 +98,30 @@ func (router *providerRouter) generateTextAttempt(requestContext context.Context
 		request.messages,
 		request.maxTokens,
 		request.provider.chatTokenLimitParameter,
+		structuredLogger,
+	)
+}
+
+func (geminiGenerateContentTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	return router.geminiClient.generateText(
+		requestContext,
+		request.provider.credentialFor(endpointKindText),
+		request.provider.textBaseURL,
+		request.model,
+		request.messages,
+		request.maxTokens,
+		structuredLogger,
+	)
+}
+
+func (anthropicMessagesTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+	return router.anthropicClient.generateText(
+		requestContext,
+		request.provider.credentialFor(endpointKindText),
+		request.provider.textBaseURL,
+		request.model,
+		request.messages,
+		request.maxTokens,
 		structuredLogger,
 	)
 }

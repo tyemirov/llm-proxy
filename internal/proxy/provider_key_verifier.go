@@ -34,17 +34,17 @@ var (
 		statusCompleted:  {},
 		statusIncomplete: {},
 	}
-	providerKeyVerificationRequestBuilders = map[providerTextTransport]providerKeyVerificationRequestBuilder{
-		textTransportOpenAIResponses:      buildOpenAIProviderKeyVerificationRequest,
-		textTransportOpenAICompatibleChat: buildChatProviderKeyVerificationRequest,
-		textTransportGeminiGenerate:       buildGeminiProviderKeyVerificationRequest,
-		textTransportAnthropicMessages:    buildAnthropicProviderKeyVerificationRequest,
+	providerKeyVerificationRequestBuilders = map[textWireContract]providerKeyVerificationRequestBuilder{
+		textWireContractOpenAIResponses:       buildOpenAIProviderKeyVerificationRequest,
+		textWireContractOpenAIChatCompletions: buildChatProviderKeyVerificationRequest,
+		textWireContractGeminiGenerateContent: buildGeminiProviderKeyVerificationRequest,
+		textWireContractAnthropicMessages:     buildAnthropicProviderKeyVerificationRequest,
 	}
-	providerKeyVerificationResponseValidators = map[providerTextTransport]providerKeyVerificationResponseValidator{
-		textTransportOpenAIResponses:      validOpenAIProviderKeyVerificationResponse,
-		textTransportOpenAICompatibleChat: validChatProviderKeyVerificationResponse,
-		textTransportGeminiGenerate:       validGeminiProviderKeyVerificationResponse,
-		textTransportAnthropicMessages:    validAnthropicProviderKeyVerificationResponse,
+	providerKeyVerificationResponseValidators = map[textWireContract]providerKeyVerificationResponseValidator{
+		textWireContractOpenAIResponses:       validOpenAIProviderKeyVerificationResponse,
+		textWireContractOpenAIChatCompletions: validChatProviderKeyVerificationResponse,
+		textWireContractGeminiGenerateContent: validGeminiProviderKeyVerificationResponse,
+		textWireContractAnthropicMessages:     validAnthropicProviderKeyVerificationResponse,
 	}
 )
 
@@ -92,7 +92,7 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 	verificationContext, cancelVerification := context.WithTimeout(parentContext, verifier.timeout)
 	defer cancelVerification()
 
-	requestBuilder := providerKeyVerificationRequestBuilders[provider.textTransport]
+	requestBuilder := providerKeyVerificationRequestBuilders[model.wireContract]
 	httpRequest, buildError := requestBuilder(verificationContext, verifier.endpoints, provider, model, strings.TrimSpace(apiKey))
 	if buildError != nil {
 		return errProviderKeyVerificationUnavailable
@@ -110,7 +110,7 @@ func (verifier *operationalProviderKeyVerifier) verify(parentContext context.Con
 	if readError != nil || int64(len(responseBytes)) > providerKeyVerificationResponseLimit {
 		return errProviderKeyVerificationUnavailable
 	}
-	responseValidator := providerKeyVerificationResponseValidators[provider.textTransport]
+	responseValidator := providerKeyVerificationResponseValidators[model.wireContract]
 	if !responseValidator(responseBytes) {
 		return errProviderKeyVerificationUnavailable
 	}

@@ -40,14 +40,22 @@ providers:
       default_model: "gpt-4.1"
       models:
         - id: "gpt-4o-mini"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_temperature"
         - id: "gpt-4o"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_temperature_tools"
           web_search: true
         - id: "gpt-4.1"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_temperature_tools"
           web_search: true
         - id: "gpt-5-mini"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_reasoning_tools"
           reasoning_effort:
             adapter: "openai_responses"
@@ -57,6 +65,8 @@ providers:
               - medium
               - high
         - id: "gpt-5"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
@@ -67,6 +77,8 @@ providers:
               - medium
               - high
         - id: "gpt-5.5"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
@@ -78,6 +90,8 @@ providers:
               - high
               - xhigh
         - id: "gpt-5.5-pro"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
@@ -87,6 +101,8 @@ providers:
               - high
               - xhigh
         - id: "gpt-5.6"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
@@ -99,6 +115,8 @@ providers:
               - xhigh
               - max
         - id: "gpt-5.6-sol"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
@@ -111,6 +129,8 @@ providers:
               - xhigh
               - max
         - id: "gpt-5.6-terra"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
@@ -123,6 +143,8 @@ providers:
               - xhigh
               - max
         - id: "gpt-5.6-luna"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
           reasoning_effort:
@@ -145,36 +167,58 @@ providers:
       default_model: "deepseek-v4-flash"
       models:
         - id: "deepseek-v4-flash"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "deepseek-v4-pro"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "deepseek-chat"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "deepseek-reasoner"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
   dashscope:
     base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
     text:
       default_model: "qwen-plus"
       models:
         - id: "qwen-plus"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
   qwencloud:
     base_url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
     text:
       default_model: "qwen3.8-max-preview"
       models:
         - id: "qwen3.8-max-preview"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
   moonshot:
     base_url: "https://api.moonshot.ai/v1"
     text:
       default_model: "kimi-k2.6"
       models:
         - id: "kimi-k2.6"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "kimi-k3"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "kimi-k2.7-code"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "kimi-k2.7-code-highspeed"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
   minimax:
     base_url: "https://api.minimax.io/v1"
     text:
       default_model: "MiniMax-M2.7"
       models:
         - id: "MiniMax-M2.7"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 2048
   siliconflow:
     base_url: "https://api.siliconflow.com/v1"
@@ -183,6 +227,8 @@ providers:
       default_model: "deepseek-ai/DeepSeek-R1"
       models:
         - id: "deepseek-ai/DeepSeek-R1"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
     dictation:
       default_model: "FunAudioLLM/SenseVoiceSmall"
       models:
@@ -194,7 +240,11 @@ providers:
       default_model: "glm-5.1"
       models:
         - id: "glm-5.1"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "glm-5.2"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 131072
     dictation:
       default_model: "glm-asr-2512"
@@ -206,24 +256,38 @@ providers:
       default_model: "gemini-2.5-flash"
       models:
         - id: "gemini-3.5-flash"
+          wire_contract: "gemini_generate_content"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
           media_inputs:
             - image
             - audio
         - id: "gemini-3.1-pro-preview"
+          wire_contract: "gemini_generate_content"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
         - id: "gemini-3-flash-preview"
+          wire_contract: "gemini_generate_content"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
         - id: "gemini-3.1-flash-lite"
+          wire_contract: "gemini_generate_content"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
         - id: "gemini-2.5-flash"
+          wire_contract: "gemini_generate_content"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
           media_inputs:
             - image
             - audio
         - id: "gemini-2.5-flash-lite"
+          wire_contract: "gemini_generate_content"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
         - id: "gemini-2.5-pro"
+          wire_contract: "gemini_generate_content"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
   anthropic:
     base_url: "https://api.anthropic.com"
@@ -231,24 +295,44 @@ providers:
       default_model: "claude-sonnet-4-6"
       models:
         - id: "claude-fable-5"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 128000
         - id: "claude-sonnet-5"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 128000
         - id: "claude-opus-4-8"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 128000
         - id: "claude-sonnet-4-6"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 64000
         - id: "claude-haiku-4-5-20251001"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 64000
         - id: "claude-haiku-4-5"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 64000
         - id: "claude-sonnet-4-5-20250929"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 64000
         - id: "claude-sonnet-4-5"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 64000
         - id: "claude-opus-4-1-20250805"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 32000
         - id: "claude-opus-4-1"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 32000
   meta:
     base_url: "https://api.meta.ai/v1"
@@ -256,6 +340,8 @@ providers:
       default_model: "muse-spark-1.1"
       models:
         - id: "muse-spark-1.1"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
   grok:
     base_url: "https://api.x.ai/v1"
     transcriptions_url: "https://api.x.ai/v1/stt"
@@ -263,15 +349,35 @@ providers:
       default_model: "grok-4.3"
       models:
         - id: "grok-4.3"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "grok-4.3-latest"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "grok-4.5"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "grok-4.20-0309-reasoning"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "grok-4.20-0309-non-reasoning"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "grok-latest"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "grok-build-0.1"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "grok-code-fast"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "grok-code-fast-1"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "grok-code-fast-1-0825"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
     dictation:
       default_model: "xai-stt"
       models:

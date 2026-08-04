@@ -1022,9 +1022,12 @@ func TestManagementRoutingDefaultsRequireSavedProviderKeys(t *testing.T) {
 func TestManagementRoutingDefaultsDoNotRequireConfiguredStaticDefault(t *testing.T) {
 	configuration := withProviderModelCatalogs(t, managementConfigurationWithDatabasePath(proxy.Configuration{}, filepath.Join(t.TempDir(), "managed-tenants.db")))
 	openAIModels := configuration.ProviderModels[proxy.ProviderNameOpenAI]
+	configuredModel := openAIModels.Text.Models[0]
+	configuredModel.ID = "gpt-4o-mini"
+	configuredModel.RequestProfile = "openai_responses_temperature"
 	openAIModels.Text = proxy.ModelEndpointCatalog{
 		DefaultModel: "gpt-4o-mini",
-		Models:       []proxy.ModelConfiguration{{ID: "gpt-4o-mini", RequestProfile: "openai_responses_temperature"}},
+		Models:       []proxy.ModelConfiguration{configuredModel},
 	}
 	configuration.ProviderModels[proxy.ProviderNameOpenAI] = openAIModels
 	if _, buildError := buildRouterWithCatalogs(t, configuration, zap.NewNop().Sugar()); buildError != nil {

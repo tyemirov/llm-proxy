@@ -133,13 +133,44 @@ const (
 	endpointKindDictation endpointKind = "dictation"
 )
 
-type providerTextTransport string
+type textWireContract string
 
 const (
-	textTransportOpenAIResponses      providerTextTransport = "openai_responses"
-	textTransportOpenAICompatibleChat providerTextTransport = "openai_compatible_chat"
-	textTransportGeminiGenerate       providerTextTransport = "gemini_generate"
-	textTransportAnthropicMessages    providerTextTransport = "anthropic_messages"
+	textWireContractOpenAIResponses       textWireContract = "openai_responses"
+	textWireContractOpenAIChatCompletions textWireContract = "openai_chat_completions"
+	textWireContractGeminiGenerateContent textWireContract = "gemini_generate_content"
+	textWireContractAnthropicMessages     textWireContract = "anthropic_messages"
+)
+
+type textExecutionLifecycle string
+
+const (
+	textExecutionLifecycleSynchronousCompletion textExecutionLifecycle = "synchronous_completion"
+	textExecutionLifecyclePollableResource      textExecutionLifecycle = "pollable_resource"
+)
+
+type textRouteCapabilities struct {
+	wireContract       textWireContract
+	executionLifecycle textExecutionLifecycle
+}
+
+var (
+	openAIResponsesPollableRouteCapabilities = textRouteCapabilities{
+		wireContract:       textWireContractOpenAIResponses,
+		executionLifecycle: textExecutionLifecyclePollableResource,
+	}
+	openAIChatCompletionsSynchronousRouteCapabilities = textRouteCapabilities{
+		wireContract:       textWireContractOpenAIChatCompletions,
+		executionLifecycle: textExecutionLifecycleSynchronousCompletion,
+	}
+	geminiGenerateContentSynchronousRouteCapabilities = textRouteCapabilities{
+		wireContract:       textWireContractGeminiGenerateContent,
+		executionLifecycle: textExecutionLifecycleSynchronousCompletion,
+	}
+	anthropicMessagesSynchronousRouteCapabilities = textRouteCapabilities{
+		wireContract:       textWireContractAnthropicMessages,
+		executionLifecycle: textExecutionLifecycleSynchronousCompletion,
+	}
 )
 
 type chatCompletionTokenLimitParameter string
@@ -229,6 +260,9 @@ func (capability *reasoningEffortCapability) supports(effort string) bool {
 
 type textModelDefinition struct {
 	identifier          modelID
+	wireContract        textWireContract
+	executionLifecycle  textExecutionLifecycle
+	routeAdapter        textRouteAdapter
 	requestProfile      modelRequestProfile
 	supportsWebSearch   bool
 	outputTokenLimit    int
@@ -259,7 +293,6 @@ type providerDefinition struct {
 	textModels                map[string]textModelDefinition
 	transcriptionModels       map[string]modelID
 	supportsDictation         bool
-	textTransport             providerTextTransport
 	chatTokenLimitParameter   chatCompletionTokenLimitParameter
 }
 
