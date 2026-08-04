@@ -2173,16 +2173,17 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     an id.
   - One `gemini_interactions` adapter now uses the exact model-owned lifecycle:
     3.x creates stored background interactions, polls only `queued` and
-    `in_progress`, cancels active resources, and deletes every resource; 2.5
-    sends `background: false` and `store: false` and requires an immediate
-    terminal result. Both use `Api-Revision: 2026-05-20`, normalized complete
-    usage, safe terminal errors, and distinct output-limit continuation calls.
+    `in_progress`, cancels active resources, and deletes every resource through
+    independent bounded cancel and delete contexts. Gemini 2.5 sends
+    `background: false` and `store: false` and requires an immediate terminal
+    result. Both use `Api-Revision: 2026-05-20`, normalized complete usage, safe
+    terminal errors, and distinct output-limit continuation calls.
   - Public black-box fixtures cover synchronous id-less completion, delayed and
     immediate background completion, usage including thought tokens, every
-    terminal status, cancellation, cancel/delete ordering, cleanup failures,
-    media shape, continuation, and credential verification. The production
-    live suite pins its complex Gemini case to `gemini-3.5-flash` while the echo
-    retains the saved Default-tenant model.
+    terminal status, cancellation, cancel/delete ordering, independent cleanup
+    contexts, cleanup failures, media shape, continuation, and credential
+    verification. The production live suite pins its complex Gemini case to
+    `gemini-3.5-flash` while the echo retains the saved Default-tenant model.
   - Paid branch acceptance passed for both `gemini-2.5-flash` and
     `gemini-3.5-flash`. The final `make ci` passed all 11 gates with 100.0% Go
     statement coverage; deployment and the post-deploy production invocation
@@ -2206,6 +2207,10 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     https://ai.google.dev/gemini-api/docs/thinking
   - The Interactions schema defines the same four-value `thinking_level` enum:
     https://ai.google.dev/api/interactions-api
+  - Google's Gemini 3.6 migration contract rejects a request whose final
+    nonempty turn is a model turn with HTTP 400 and directs multi-turn
+    Interactions callers away from manually prefilled model turns:
+    https://ai.google.dev/gemini-api/docs/latest-model
   Requirements:
   - Add only the exact stable model id `gemini-3.6-flash`. Do not add or alias
     the requested but unpublished `gemini-2.6-flash` name, use a moving
@@ -2216,6 +2221,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     create, active status, retrieval, cancellation, and deletion. Register the
     model as `gemini_interactions` plus `pollable_resource` only after that
     proof succeeds.
+  - At the resolved Gemini 3.6 route edge, reject with the canonical HTTP 400
+    invalid-messages response any request whose final non-system message is an
+    assistant turn. Do not send that turn as a terminal `model_output`, rewrite
+    it into another role, or change assistant-prefill behavior for other model
+    routes as an incidental part of this issue.
   - Add the exact `gemini_interactions` reasoning-effort adapter, valid only for
     the Gemini Interactions text route. Declare the model's ordered capability
     as `minimal`, `low`, `medium`, and `high`; serialize an explicitly resolved
@@ -2239,8 +2249,9 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Startup and public-boundary fixtures prove the Gemini-only adapter mapping,
     all four explicit effort payloads, omitted-effort omission, continuation
     preservation, early rejection of unsupported efforts, 65,536-token cap,
-    media declarations, management profile exposure, and saved tenant-default
-    routing.
+    media declarations, management profile exposure, saved tenant-default
+    routing, and pre-upstream rejection of a terminal assistant turn only on
+    the Gemini 3.6 route.
   - Authenticated branch acceptance runs one small request for each explicit
     thinking level and one omitted-level request, then proves one background
     create/poll/delete flow for `gemini-3.6-flash`. The final `make ci` passes
