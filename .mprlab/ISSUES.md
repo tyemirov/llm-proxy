@@ -2187,6 +2187,65 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     `gemini-3.5-flash`. The final `make ci` passed all 11 gates with 100.0% Go
     statement coverage; deployment and the post-deploy production invocation
     remain operator-owned.
+- [ ] [I207] (P1) {I040} Add Gemini 3.6 Flash with route-bound Interactions thinking levels.
+  Goal:
+  Add Google's current stable Flash model to the Gemini Interactions catalog
+  and carry the existing provider-neutral `reasoning_effort` contract onto its
+  documented thinking controls.
+  Evidence:
+  - Google identifies Gemini 3.6 Flash as GA and production-ready under the
+    exact stable model id `gemini-3.6-flash`, with a 65,536-token output limit
+    and `medium` as its default thinking level:
+    https://ai.google.dev/gemini-api/docs/latest-model
+  - The model page confirms that `gemini-3.6-flash` supports text, image, video,
+    audio, and PDF input, text output, and thinking:
+    https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash
+  - Google's Interactions thinking guide documents
+    `generation_config.thinking_level`; Gemini 3.6 Flash supports exactly
+    `minimal`, `low`, `medium`, and `high`, with `medium` as the default:
+    https://ai.google.dev/gemini-api/docs/thinking
+  - The Interactions schema defines the same four-value `thinking_level` enum:
+    https://ai.google.dev/api/interactions-api
+  Requirements:
+  - Add only the exact stable model id `gemini-3.6-flash`. Do not add or alias
+    the requested but unpublished `gemini-2.6-flash` name, use a moving
+    `gemini-flash-latest` alias, or change the Gemini provider default as an
+    incidental part of this issue.
+  - Before registering the route lifecycle, verify at the paid Google boundary
+    that this exact model supports stored background Interactions through
+    create, active status, retrieval, cancellation, and deletion. Register the
+    model as `gemini_interactions` plus `pollable_resource` only after that
+    proof succeeds.
+  - Add the exact `gemini_interactions` reasoning-effort adapter, valid only for
+    the Gemini Interactions text route. Declare the model's ordered capability
+    as `minimal`, `low`, `medium`, and `high`; serialize an explicitly resolved
+    public effort unchanged as `generation_config.thinking_level` on the
+    initial request and every output-limit continuation.
+  - When neither the request nor tenant default selects an effort, omit
+    `thinking_level` so Google's documented `medium` default remains
+    authoritative. Reject blank, `none`, `xhigh`, `max`, and every other
+    unsupported value before an upstream call. Do not translate values, send a
+    2.5-era `thinking_budget`, or add a second Gemini request adapter.
+  - Keep the current 65,536 proxy output limit. Declare only the image and audio
+    inputs already implemented by the public messages contract; do not imply
+    public video, PDF, tools, thought-summary, streaming, or computer-use
+    support from the broader upstream model capability list.
+  - Expose the exact route capability through the management profile and
+    Settings autosave contract, and update configuration, constants, README,
+    OpenAPI, provider-routing documentation, generated resources, and the model
+    capability table together. No persisted-routing migration or default-model
+    change is part of this issue.
+  Validation:
+  - Startup and public-boundary fixtures prove the Gemini-only adapter mapping,
+    all four explicit effort payloads, omitted-effort omission, continuation
+    preservation, early rejection of unsupported efforts, 65,536-token cap,
+    media declarations, management profile exposure, and saved tenant-default
+    routing.
+  - Authenticated branch acceptance runs one small request for each explicit
+    thinking level and one omitted-level request, then proves one background
+    create/poll/delete flow for `gemini-3.6-flash`. The final `make ci` passes
+    after the last implementation edit; deployment and production acceptance
+    remain operator-owned.
 - [ ] [I041] (P2) {I037} Migrate Grok to xAI Responses without OpenAI background assumptions.
   Goal:
   Move Grok off xAI's deprecated Chat Completions surface while preserving
