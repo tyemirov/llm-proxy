@@ -105,7 +105,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	upstreamHTTPClient := newLimitedHTTPDoer(HTTPClient, configuration.WorkerCount, configuration.QueueSize, configuration.upstreamRateLimits, structuredLogger, systemUpstreamRateLimitClock{})
 	openAIClient := NewOpenAIClient(upstreamHTTPClient, configuration.Endpoints)
 	chatClient := newOpenAICompatibleChatClient(upstreamHTTPClient)
-	geminiClient := newGeminiGenerateContentClient(upstreamHTTPClient)
+	geminiClient := newGeminiInteractionsClient(upstreamHTTPClient)
 	anthropicClient := newAnthropicMessagesClient(upstreamHTTPClient)
 	upstreamProviders := newProviderRouter(openAIClient, chatClient, geminiClient, anthropicClient)
 	keyVerifier := newOperationalProviderKeyVerifier(upstreamHTTPClient, configuration.Endpoints, time.Duration(configuration.RequestTimeoutSeconds)*time.Second)

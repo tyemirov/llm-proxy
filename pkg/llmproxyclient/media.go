@@ -14,7 +14,7 @@ const (
 )
 
 const (
-	audioMIMEMP4  = "audio/mp4"
+	audioMIMEM4A  = "audio/m4a"
 	audioMIMEMPEG = "audio/mpeg"
 	audioMIMEWAV  = "audio/wav"
 	imageMIMEJPEG = "image/jpeg"
@@ -70,7 +70,7 @@ func NewImageAttachment(input ImageAttachmentInput) (MessageAttachment, error) {
 func NewAudioAttachment(input AudioAttachmentInput) (MessageAttachment, error) {
 	mimeType := strings.ToLower(strings.TrimSpace(input.MIMEType))
 	switch mimeType {
-	case audioMIMEMP4, audioMIMEMPEG, audioMIMEWAV:
+	case audioMIMEM4A, audioMIMEMPEG, audioMIMEWAV:
 	default:
 		return nil, fmt.Errorf("%w: unsupported audio MIME type=%q", ErrInvalidClientRequest, input.MIMEType)
 	}

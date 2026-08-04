@@ -1426,7 +1426,7 @@ providers:
     transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
   gemini:
     api_key: ""
-    base_url: "https://generativelanguage.googleapis.com/v1"
+    base_url: "https://generativelanguage.googleapis.com/v1beta"
   anthropic:
     api_key: "sk-anthropic"
     base_url: "https://api.anthropic.com"
@@ -1466,7 +1466,7 @@ providers:
     base_url: "https://open.bigmodel.cn/api/paas/v4"
   gemini:
     api_key: "sk-gemini"
-    base_url: "https://generativelanguage.googleapis.com/v1"
+    base_url: "https://generativelanguage.googleapis.com/v1beta"
   anthropic:
     api_key: "sk-anthropic"
     base_url: "https://api.anthropic.com"
@@ -1507,7 +1507,7 @@ providers:
     transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
   gemini:
     api_key: "sk-gemini"
-    base_url: "https://generativelanguage.googleapis.com/v1"
+    base_url: "https://generativelanguage.googleapis.com/v1beta"
   anthropic:
     api_key: "sk-anthropic"
     base_url: "https://api.anthropic.com"
@@ -1548,7 +1548,7 @@ providers:
     transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
   gemini:
     api_key: "sk-gemini"
-    base_url: "https://generativelanguage.googleapis.com/v1"
+    base_url: "https://generativelanguage.googleapis.com/v1beta"
   anthropic:
     api_key: "sk-anthropic"
     base_url: "https://api.anthropic.com"
@@ -1589,7 +1589,7 @@ providers:
     transcriptions_url: ""
   gemini:
     api_key: "sk-gemini"
-    base_url: "https://generativelanguage.googleapis.com/v1"
+    base_url: "https://generativelanguage.googleapis.com/v1beta"
   anthropic:
     api_key: "sk-anthropic"
     base_url: "https://api.anthropic.com"
@@ -1630,7 +1630,7 @@ providers:
     transcriptions_url: "https://api.z.ai/api/paas/v4/audio/transcriptions"
   gemini:
     api_key: "sk-gemini"
-    base_url: "https://generativelanguage.googleapis.com/v1"
+    base_url: "https://generativelanguage.googleapis.com/v1beta"
   anthropic:
     api_key: "sk-anthropic"
     base_url: "https://api.anthropic.com"
@@ -1968,7 +1968,7 @@ func defaultProviderYAMLValues() providerYAMLValues {
 		ZhipuBaseURL:                 "https://open.bigmodel.cn/api/paas/v4",
 		ZhipuTranscriptionsURL:       "https://api.z.ai/api/paas/v4/audio/transcriptions",
 		GeminiAPIKey:                 "sk-gemini",
-		GeminiBaseURL:                "https://generativelanguage.googleapis.com/v1",
+		GeminiBaseURL:                "https://generativelanguage.googleapis.com/v1beta",
 		AnthropicAPIKey:              "sk-anthropic",
 		AnthropicBaseURL:             "https://api.anthropic.com",
 		MetaAPIKey:                   "sk-meta",
@@ -2124,23 +2124,23 @@ providers:
       default_model: "gemini-2.5-flash"
       models:
         - id: "gemini-3.5-flash"
-          wire_contract: "gemini_generate_content"
-          execution_lifecycle: "synchronous_completion"
+          wire_contract: "gemini_interactions"
+          execution_lifecycle: "pollable_resource"
           output_token_limit: 65536
         - id: "gemini-3.1-flash-lite"
-          wire_contract: "gemini_generate_content"
-          execution_lifecycle: "synchronous_completion"
+          wire_contract: "gemini_interactions"
+          execution_lifecycle: "pollable_resource"
           output_token_limit: 65536
         - id: "gemini-2.5-flash"
-          wire_contract: "gemini_generate_content"
+          wire_contract: "gemini_interactions"
           execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
         - id: "gemini-2.5-flash-lite"
-          wire_contract: "gemini_generate_content"
+          wire_contract: "gemini_interactions"
           execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
         - id: "gemini-2.5-pro"
-          wire_contract: "gemini_generate_content"
+          wire_contract: "gemini_interactions"
           execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
   anthropic:

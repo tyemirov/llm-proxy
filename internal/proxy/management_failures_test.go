@@ -263,13 +263,15 @@ func TestProviderCompletionSignalsRecoverPartialTextAndAggregateUsageAtPublicV2B
 				return
 			}
 			_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"` + chatPartialText + `"},"finish_reason":"length"}],"usage":{"prompt_tokens":31,"completion_tokens":47,"total_tokens":78}}`))
-		case strings.HasSuffix(request.URL.Path, ":generateContent"):
+		case request.Method == http.MethodDelete && strings.HasPrefix(request.URL.Path, testGeminiInteractionsPath+"/managed-continuation-"):
+			writeGeminiInteractionDeleted(testingInstance, responseWriter)
+		case request.Method == http.MethodPost && request.URL.Path == testGeminiInteractionsPath:
 			upstreamRequestCounts["gemini"]++
 			if upstreamRequestCounts["gemini"] == 2 {
-				_, _ = responseWriter.Write([]byte(`{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"` + completionText + `"}]}}],"usageMetadata":{"promptTokenCount":5,"candidatesTokenCount":7,"totalTokenCount":12}}`))
+				writeGeminiInteractionSnapshot(testingInstance, responseWriter, "managed-continuation-2", "completed", completionText, &testGeminiInteractionUsage{Input: 5, Output: 7, Total: 12})
 				return
 			}
-			_, _ = responseWriter.Write([]byte(`{"candidates":[{"finishReason":"MAX_TOKENS","content":{"parts":[{"text":"` + geminiPartialText + `"}]}}],"usageMetadata":{"promptTokenCount":41,"candidatesTokenCount":53,"totalTokenCount":94}}`))
+			writeGeminiInteractionSnapshot(testingInstance, responseWriter, "managed-continuation-1", "incomplete", geminiPartialText, &testGeminiInteractionUsage{Input: 41, Output: 53, Total: 94})
 		case request.URL.Path == "/v1/messages":
 			upstreamRequestCounts["anthropic"]++
 			if upstreamRequestCounts["anthropic"] == 2 {

@@ -45,7 +45,7 @@ func TestClientPostMessagesSerializesImmutableOrderedMediaAttachments(testingIns
 		testingInstance.Fatalf("image attachment: %v", imageError)
 	}
 	audioAttachment, audioError := llmproxyclient.NewAudioAttachment(llmproxyclient.AudioAttachmentInput{
-		MIMEType: " AUDIO/MP4 ",
+		MIMEType: " AUDIO/M4A ",
 		Data:     audioBytes,
 	})
 	if audioError != nil {
@@ -107,7 +107,7 @@ func TestClientPostMessagesSerializesImmutableOrderedMediaAttachments(testingIns
 		testingInstance.Fatalf("attachments=%v", messagePayload["attachments"])
 	}
 	assertClientAttachmentPayload(testingInstance, rawAttachments[0], "image", "image/png", expectedImageBytes)
-	assertClientAttachmentPayload(testingInstance, rawAttachments[1], "audio", "audio/mp4", expectedAudioBytes)
+	assertClientAttachmentPayload(testingInstance, rawAttachments[1], "audio", "audio/m4a", expectedAudioBytes)
 	if capturedBody["max_tokens"] != float64(512) || capturedBody["reasoning_effort"] != nil {
 		testingInstance.Fatalf("mutable request fields leaked into payload=%v", capturedBody)
 	}

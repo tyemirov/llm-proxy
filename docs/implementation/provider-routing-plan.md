@@ -28,12 +28,12 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
   required. `attachments[]` is allowed only on a user message and each item
   contains exactly `type`, `mime_type`, canonical padded base64 `data`, and
   the matching lowercase hexadecimal `sha256`. Image accepts `image/jpeg`,
-  `image/png`, and `image/webp`; audio accepts `audio/mp4`, `audio/mpeg`, and
+  `image/png`, and `image/webp`; audio accepts `audio/m4a`, `audio/mpeg`, and
   `audio/wav`.
 - `messages[].order` is optional. When any submitted message includes `order`, every submitted message must include a unique non-negative integer `order`; the proxy sorts submitted messages by ascending `order` before adding a request or tenant system prompt and before routing upstream.
 - With `messages[]` on `POST /`, body `system_prompt` is prepended as a system message only when the transcript does not already contain a `system` message. A body containing both `system_prompt` and a system message is invalid. With `POST /v2`, callers send system instructions as `system` role messages.
 - `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies. It is the initial per-attempt output budget and is reused for missing-suffix attempts.
-- Provided `max_tokens` maps to OpenAI Responses `max_output_tokens`, Meta, Moonshot, and MiniMax Chat Completions `max_completion_tokens`, other OpenAI-compatible chat completions `max_tokens`, Anthropic Messages `max_tokens`, and Gemini `generationConfig.maxOutputTokens`.
+- Provided `max_tokens` maps to OpenAI Responses `max_output_tokens`, Meta, Moonshot, and MiniMax Chat Completions `max_completion_tokens`, other OpenAI-compatible chat completions `max_tokens`, Anthropic Messages `max_tokens`, and Gemini Interactions `generation_config.max_output_tokens`.
 - Omitted `max_tokens` means the proxy omits provider max-token fields and lets the selected provider/model default apply, except Anthropic Messages where the upstream API requires `max_tokens` and the proxy sends the selected model's configured synchronous output limit. After an output-budget stop with no visible progress, a configured model output limit becomes the generic ceiling for increasing the next attempt.
 - Known provider-specific output-token ceilings are validated before upstream calls; MiniMax M2.7 rejects `max_tokens` above `2048`, Gemini text models reject values above `65536`, and Claude models reject values above their configured synchronous Messages output limits with `400 Bad Request`.
 - `reasoning_effort` is optional on `GET /` as a query parameter and on JSON `POST /` and `POST /v2` as a body field. Omission retains the resolved tenant default. A supplied value must be nonblank and supported by the exact resolved text provider/model route; blank, `null`, or unsupported values return `400 Bad Request` before a provider call.
@@ -75,7 +75,7 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 | `minimax` | none | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
 | `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | OpenAI-compatible audio transcription | Not supported |
 | `zhipu` | `glm` | `openai_chat_completions` | `synchronous_completion` | Z.AI GLM-ASR transcription | Not supported |
-| `gemini` | none | `gemini_generate_content` | `synchronous_completion` | Not supported | Not supported |
+| `gemini` | none | `gemini_interactions` | Model-specific: Gemini 3.x `pollable_resource`; Gemini 2.5 `synchronous_completion` | Not supported | Not supported |
 | `anthropic` | `claude` | `anthropic_messages` | `synchronous_completion` | Not supported | Not supported |
 | `grok` | `xai` | `openai_chat_completions` | `synchronous_completion` | xAI STT | Not supported |
 
@@ -237,7 +237,7 @@ Every text model must explicitly declare one current `wire_contract` and one
 `execution_lifecycle`; the loader does not infer either capability from the
 provider, base URL, request profile, or presence of an upstream identifier.
 The closed wire values are `openai_responses`, `openai_chat_completions`,
-`gemini_generate_content`, and `anthropic_messages`. The closed lifecycle
+`gemini_interactions`, and `anthropic_messages`. The closed lifecycle
 values are `synchronous_completion` and `pollable_resource`. Startup rejects
 missing, unknown, contradictory, or provider-incompatible pairs and rejects
 these text-only fields on dictation entries. A future one-read deferred result
@@ -259,23 +259,42 @@ Callers use one normal `GET /`, `POST /`, or `POST /v2` request and receive a
 complete formatted answer or a non-2xx response; there is no streaming,
 client-side polling, durable provider-job queue, or later resume contract.
 
+Every Gemini text request uses `POST /interactions`, `x-goog-api-key`, and
+`Api-Revision: 2026-05-20`. The configured base URL is the `v1beta` API because
+that revision exposes the full configured model catalog. Gemini 3.x creates a
+stored background interaction; a nonblank interaction id is polled only while
+its status is `queued` or `in_progress`. Gemini 2.5 uses the same wire adapter
+synchronously with `background: false` and `store: false`; an immediate
+terminal response may omit `id`, while an active status fails closed. For both
+lifecycles, `completed` with visible text is success, `incomplete` is the
+provider-neutral output-limit signal, and `failed`, `cancelled`,
+`budget_exceeded`, `requires_action`, malformed, missing, or unknown states
+fail closed. The newest nonempty usage snapshot replaces earlier observations
+for one interaction; input, output, and total counts are taken from
+`total_input_tokens`, `total_output_tokens`, and `total_tokens`, so
+provider-counted thought tokens remain represented.
+
 OpenAI background Responses are stored upstream. llm-proxy keeps their ids only
 in memory for the active request and never returns or persists them, but the
 current adapter does not cancel or delete the stored resource after completion,
 failure, timeout, or caller cancellation; OpenAI account retention policy
-therefore applies. Synchronous adapters create no reusable provider resource
-and expose no lifecycle cancel/delete operation, while each provider's normal
-request-retention policy still applies. Output-limit continuation creates a new
-inference request and is never resource observation.
+therefore applies. Background Gemini interaction ids are likewise request-local
+and never returned or persisted. The proxy cancels every still-active Gemini
+interaction and then deletes it; terminal interactions are deleted directly. A
+cancel failure never skips deletion, and a deletion failure prevents a
+successful or output-limit result from escaping as success. Synchronous Gemini
+2.5 interactions are non-stored and create no reusable provider resource.
+Output-limit continuation creates a new inference request and is never resource
+observation.
 
 One completion coordinator owns output-budget recovery for all transports.
 Adapters normalize only their exact recoverable signal: OpenAI
-`incomplete/max_output_tokens`, Chat Completions `length`, Gemini
-`MAX_TOKENS`, and Anthropic `max_tokens`. The coordinator preserves the
+`incomplete/max_output_tokens`, Chat Completions `length`, Gemini Interactions
+`incomplete`, and Anthropic `max_tokens`. The coordinator preserves the
 original messages, appends all accumulated assistant text plus one
 missing-suffix user instruction, repeats the selected provider call, and joins
-the returned suffixes until OpenAI reports `completed`, Chat reports `stop`,
-Gemini reports `STOP`, or Anthropic reports `end_turn`/`stop_sequence`. The
+the returned suffixes until OpenAI or Gemini reports `completed`, Chat reports
+`stop`, or Anthropic reports `end_turn`/`stop_sequence`. The
 overall request deadline is the hard bound. Safety/filter, refusal,
 tool/intermediate, failed/cancelled, malformed, missing, and unknown signals
 return the canonical failure without exposing partial text. Provider-specific
@@ -350,8 +369,9 @@ non-user-content inference through the provider's canonical text transport:
 - DeepSeek, DashScope, Qwen Cloud, Moonshot, MiniMax, SiliconFlow, Zhipu, Meta,
   and Grok use one authenticated OpenAI-compatible `POST /chat/completions`
   with the provider's declared token-limit parameter.
-- Gemini uses one `generateContent` request with `x-goog-api-key` and
-  `maxOutputTokens: 16`.
+- Gemini uses one synchronous, non-stored `POST /interactions` request with
+  `x-goog-api-key`, `Api-Revision: 2026-05-20`, `background: false`,
+  `store: false`, and `generation_config.max_output_tokens: 16`.
 - Anthropic uses one Messages request with `x-api-key`,
   `anthropic-version: 2023-06-01`, and `max_tokens: 16`.
 
@@ -459,14 +479,15 @@ uses canonical `POST /v2` calls with explicit OpenAI, Anthropic, Meta, Gemini,
 and Moonshot providers and no explicit model, so managed production provider
 settings remain authoritative. Five echo-marker requests verify those routes;
 matching deterministic requests larger than 16 KiB target OpenAI, Anthropic,
-and Meta with a 900-second request budget and a required normalized line for
-each portfolio record before the final marker. OpenAI keeps one blocking request
-open while the proxy owns its Responses background polling. Anthropic and Meta
-exercise their canonical synchronous completion paths, including shared
-output-continuation work when needed. The client validates only the final
-marker, status, and resolved timeout header. This paid check remains outside
-`make ci`, runs all eight cases even after an earlier failure, and never prints
-a tenant secret or response body.
+Meta, and Gemini with a 900-second request budget and a required normalized line
+for each portfolio record before the final marker. The Gemini long case selects
+`gemini-3.5-flash`, while the Gemini echo retains the saved provider model.
+OpenAI and Gemini 3.5 keep one blocking request open while the proxy owns their
+resource polling. Anthropic and Meta exercise their canonical synchronous completion paths, including shared
+output-continuation work when needed. The client validates only the final marker,
+status, and resolved timeout header. This paid check remains outside `make ci`,
+runs all nine cases even after an earlier failure, and never prints a tenant
+secret or response body.
 
 Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, requires API keys for each configured static tenant's default text and dictation providers when management mode is disabled, allows non-default provider API keys to be blank so those providers are disabled until configured, requires every configured provider base URL, requires transcription URLs for dictation-capable providers, requires text model catalogs for every provider, requires dictation model catalogs for dictation-capable providers, rejects blank or duplicate model ids, rejects defaults not listed in their model catalog, rejects `web_search` outside OpenAI text model entries, validates OpenAI request profiles, validates exact model-owned reasoning-effort lists, validates each configured static tenant's default text provider/model and effort, and validates endpoint/credential support for each configured static tenant's default dictation provider/model. When `management.enabled` is false, at least one static tenant is required. When `management.enabled` is true, static tenants and nonblank config-level provider API keys are rejected because managed tokens and provider credentials are user-owned database state.
 
@@ -557,17 +578,19 @@ that response or structured provider-failure logs.
 - Non-OpenAI compatible text providers use a shared Chat Completions adapter. It normalizes `finish_reason=length` for shared continuation and requires `finish_reason=stop` to complete content or reasoning text.
 - Meta uses the shared OpenAI-compatible Chat Completions adapter against `providers.meta.base_url`; its proxy contract is text-only and has no Responses fallback.
 - Anthropic uses a native Messages adapter, translating proxy `system` messages to the top-level Anthropic `system` parameter and `user`/`assistant` messages to Anthropic `messages[]`; `max_tokens` continues through the shared coordinator, while `end_turn` and `stop_sequence` are complete text stops.
-- Gemini uses a native generateContent adapter against
-  `providers.gemini.base_url`; `MAX_TOKENS` continues through the shared
-  coordinator, while `STOP` is the complete text finish reason. For exact
-  models whose catalog declares the capability, ordered image and audio
-  attachments become native `inlineData` parts after the message text.
+- Gemini uses a native Interactions adapter against
+  `providers.gemini.base_url`; `incomplete` continues through the shared
+  coordinator as a new interaction, while `completed` with visible model text
+  succeeds. Gemini 3.x uses stored background polling; Gemini 2.5 uses a
+  non-stored synchronous request. For exact models whose catalog declares the capability, ordered
+  image and audio attachments become typed interaction content after the
+  message text.
 - Grok uses the shared OpenAI-compatible Chat Completions adapter against `providers.grok.base_url`.
 - OpenAI-compatible chat providers receive validated and sorted `messages[]` as provider-supported `role` and `content` items.
 - OpenAI Responses payload shape comes from the selected configured model's stable `request_profile`; model-specific web-search support comes from the selected model catalog entry. OpenAI Responses text calls run in background mode with stored responses so long provider work can be polled by llm-proxy while the caller waits on one REST request.
-- Gemini receives user messages as native `contents`, assistant messages as
-  `model` contents, and system messages as `systemInstruction`. Other adapters
-  remain text-only and reject model media declarations at startup.
+- Gemini receives user messages as `user_input` steps, assistant messages as
+  `model_output` steps, and system messages as `system_instruction`. Other
+  adapters remain text-only and reject model media declarations at startup.
 - OpenAI Responses receives single-prompt requests unchanged and multi-message requests as a deterministic role-labelled transcript.
 - Dictation routing reuses the multipart transcription adapter with provider-specific URLs. OpenAI, SiliconFlow, and Zhipu send a multipart `model` field; Grok/xAI uses xAI STT and omits the multipart `model` field. Only providers that support `/dictate` expose transcription URL config fields.
 - Response formatting keeps existing text/XML/CSV bodies and existing JSON `request`, `response`, and normalized `usage` fields. JSON responses also include OpenRouter-style `object`, `model`, and `choices[].message.content` metadata, plus caller-visible request `messages` with provided `order` values. Server-injected tenant default system prompts are sent upstream but not echoed in response metadata.

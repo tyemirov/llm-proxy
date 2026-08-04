@@ -2133,7 +2133,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Runtime configuration and public routing tests prove that no Token Plan
     domain can receive backend inference requests and that obsolete persisted
     provider selections are handled by the chosen bounded migration.
-- [ ] [I040] (P1) {I037,B087} Migrate Gemini from generateContent to Interactions resources.
+- [x] [I040] (P1) {I037,B087} Migrate Gemini from generateContent to Interactions resources.
   Goal:
   Adopt Google's recommended current Gemini interface and use its real
   background interaction lifecycle for models that support it.
@@ -2164,6 +2164,29 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     cancellation, deletion, `requires_action`, usage, and safe errors.
   - The Default-tenant Gemini echo and complex live cases run through
     Interactions and prove actual upstream polling.
+  Resolution:
+  - Paid Google boundary checks recorded background `in_progress` support for
+    `gemini-3.5-flash`, `gemini-3.1-pro-preview`, `gemini-3-flash-preview`, and
+    `gemini-3.1-flash-lite`. Each configured 2.5 model returned HTTP 400
+    `INVALID_ARGUMENT` with `Model '<model-id>' does not support background
+    interactions.`; a synchronous non-stored 2.5 Interaction completed without
+    an id.
+  - One `gemini_interactions` adapter now uses the exact model-owned lifecycle:
+    3.x creates stored background interactions, polls only `queued` and
+    `in_progress`, cancels active resources, and deletes every resource; 2.5
+    sends `background: false` and `store: false` and requires an immediate
+    terminal result. Both use `Api-Revision: 2026-05-20`, normalized complete
+    usage, safe terminal errors, and distinct output-limit continuation calls.
+  - Public black-box fixtures cover synchronous id-less completion, delayed and
+    immediate background completion, usage including thought tokens, every
+    terminal status, cancellation, cancel/delete ordering, cleanup failures,
+    media shape, continuation, and credential verification. The production
+    live suite pins its complex Gemini case to `gemini-3.5-flash` while the echo
+    retains the saved Default-tenant model.
+  - Paid branch acceptance passed for both `gemini-2.5-flash` and
+    `gemini-3.5-flash`. The final `make ci` passed all 11 gates with 100.0% Go
+    statement coverage; deployment and the post-deploy production invocation
+    remain operator-owned.
 - [ ] [I041] (P2) {I037} Migrate Grok to xAI Responses without OpenAI background assumptions.
   Goal:
   Move Grok off xAI's deprecated Chat Completions surface while preserving

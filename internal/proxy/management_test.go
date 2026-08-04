@@ -55,7 +55,7 @@ func (httpDoer managementProviderKeyVerificationHTTPDoer) Do(request *http.Reque
 	responseBody := `{"choices":[{}]}`
 	switch {
 	case request.Header.Get("x-goog-api-key") != "":
-		responseBody = `{"candidates":[{}]}`
+		responseBody = `{"status":"completed"}`
 	case request.Header.Get("x-api-key") != "":
 		responseBody = `{"id":"verification","type":"message","role":"assistant"}`
 	case strings.HasSuffix(request.URL.Path, "/responses"):
