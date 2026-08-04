@@ -240,6 +240,9 @@ func TestGeminiInteractionsPollFailureStillDeletesWhenCancellationFails(testingI
 	const privatePollBody = "private poll failure"
 	const privateCancelBody = "private cancel failure"
 	var observedRequests []string
+	var cancelRequestContext context.Context
+	var deleteRequestContext context.Context
+	deleteRequestStartedWithLiveContext := false
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		observedRequests = append(observedRequests, request.Method+" "+request.URL.Path)
 		assertGeminiInteractionHeaders(testingInstance, request, testGeminiKey)
@@ -257,8 +260,22 @@ func TestGeminiInteractionsPollFailureStillDeletesWhenCancellationFails(testingI
 		}
 	}))
 	testingInstance.Cleanup(upstreamServer.Close)
+	previousHTTPClient := proxy.HTTPClient
+	testingInstance.Cleanup(func() { proxy.HTTPClient = previousHTTPClient })
+	proxy.HTTPClient = coverageHTTPDoer(func(request *http.Request) (*http.Response, error) {
+		switch {
+		case request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/cancel"):
+			cancelRequestContext = request.Context()
+		case request.Method == http.MethodDelete:
+			deleteRequestContext = request.Context()
+			deleteRequestStartedWithLiveContext = deleteRequestContext.Err() == nil
+		}
+		return upstreamServer.Client().Do(request)
+	})
+	router := geminiInteractionsTestRouter(testingInstance, upstreamServer.URL)
+	proxy.HTTPClient = previousHTTPClient
 
-	response := performGeminiInteractionsRequest(testingInstance, geminiInteractionsTestRouter(testingInstance, upstreamServer.URL), context.Background())
+	response := performGeminiInteractionsRequest(testingInstance, router, context.Background())
 	upstreamStatus := http.StatusInternalServerError
 	assertProviderErrorResponse(testingInstance, response, providerErrorExpectation{
 		statusCode:     http.StatusBadGateway,
@@ -279,6 +296,15 @@ func TestGeminiInteractionsPollFailureStillDeletesWhenCancellationFails(testingI
 	}
 	if strings.Join(observedRequests, "|") != strings.Join(expectedRequests, "|") {
 		testingInstance.Fatalf("poll failure requests=%v want=%v", observedRequests, expectedRequests)
+	}
+	if cancelRequestContext == nil || deleteRequestContext == nil {
+		testingInstance.Fatalf("missing cleanup contexts cancel=%v delete=%v", cancelRequestContext, deleteRequestContext)
+	}
+	if cancelRequestContext == deleteRequestContext {
+		testingInstance.Fatal("cancel and delete reused one cleanup context")
+	}
+	if !deleteRequestStartedWithLiveContext {
+		testingInstance.Fatal("delete cleanup started with an exhausted context")
 	}
 }
 
