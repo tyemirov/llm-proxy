@@ -23,11 +23,10 @@ M019 is independently ready because M018 is complete. M013 then M012 resolve
 the product-context governance path. Planning proceeds P002 -> P003 -> P004 ->
 P005, with M020 already satisfied; recurring maintenance remains scheduled
 work.
-I036, I042, and I043 are resolved. I045 is the diagnostic prerequisite for
-B088 so long-request changes are grounded in correlated phase and provider
+I036, I042, I043, and B087 are resolved. I045 is the diagnostic prerequisite
+for B088 so long-request changes are grounded in correlated phase and provider
 progress evidence. I046 follows I045 and addresses the remaining cross-origin
-admission finding from the concurrency audit. B087 remains the production
-Default-tenant Gemini and Moonshot acceptance issue.
+admission finding from the concurrency audit.
 I035 is an independent B076 successor that persists only the authenticated
 user's selected Usage interval across sessions.
 F016 is independently ready and adds the canonical v2 client contract for
@@ -548,9 +547,9 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     returned `502`, Moonshot echo returned `429`, OpenAI long completion
     returned `504`, and Anthropic and Meta long completions returned `502`.
     The harness completed all eight cases, redacted their bodies, and correctly
-    returned nonzero. The echo failures remain B087; the long-completion
-    failures are tracked in B088.
-- [ ] [B087] (P1) Restore Default-tenant Gemini and Moonshot production routing.
+    returned nonzero. The historical echo failures are resolved by this issue;
+    the long-completion failures remain tracked in B088.
+- [x] [B087] (P1) Restore Default-tenant Gemini and Moonshot production routing.
   Goal:
   Restore successful text generation for the Default tenant's saved Gemini and
   Moonshot provider routes without weakening the production live-test contract.
@@ -586,6 +585,14 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     completion markers while retaining the complete eight-case matrix.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for any code change.
+  Resolved 2026-08-04:
+  - The paid production `make live-test` run returned HTTP `200` with the
+    required echo marker for both the Default-tenant Gemini and Moonshot
+    routes. It retained the complete eight-case matrix without printing
+    response bodies or credentials.
+  - The independent B088 cases remain open: Anthropic long completion passed,
+    while OpenAI returned HTTP `200` without the required completion marker and
+    Meta returned HTTP `504`.
 - [ ] [B088] (P1) {I045} Restore Default-tenant long completion routing for OpenAI and Meta.
   Goal:
   Make the Default tenant complete the production live test's deterministic
@@ -2280,7 +2287,8 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     Muse11 credentials and their smoke requests (`200`/`200`). The supplied
     Kimi credential authenticated successfully, the former configured model
     was absent and rejected, and cataloged `kimi-k2.6` verified and completed
-    (`200`/`200`); the production default-route repair remains tracked by B087.
+    (`200`/`200`); the production default-route repair was separately tracked
+    by B087.
   - Follow-up 2026-07-28: removed the unavailable former Moonshot model from the
     current catalog and promoted verified `kimi-k2.6` to the canonical default
     without an alias or fallback. The disposable managed-key verification and
