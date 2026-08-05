@@ -1,13 +1,25 @@
 version: 3
 runner:
-  type: bundled
-  input_contract_identity: sha256:8b3c77531875a2b25e0516d7ff63df3e36172968d798cebc3b2d86d98e7ed990
+    type: bundled
+    workdir: ""
+    input_contract_identity: sha256:b4824eb9f1fda3d51964779dd98a80384a1e54794da17d157c8e9ac9c79c8086
 requirements:
-  files: ["Makefile"]
+    files:
+        - Makefile
 validation:
-  control_files: [".mprlab/runtime.yml", "Makefile"]
+    control_files:
+        - .mprlab/runtime.yml
+        - Makefile
 commands:
-  test:
-    argv: ["make", "test"]
-  ci:
-    argv: ["make", "ci"]
+    ci:
+        display: ""
+        argv:
+            - make
+            - ci
+        timeout_seconds: 0
+    test:
+        display: ""
+        argv:
+            - make
+            - test
+        timeout_seconds: 0
