@@ -319,7 +319,7 @@ if (!this.hasSecret) {
     title: "OpenAI, Claude, and Gemini through one endpoint",
     description: "Use one proxy contract while LLM Proxy maps requests into OpenAI, Anthropic, and Gemini APIs.",
     audience: "Product teams comparing native model providers without adding three client integrations.",
-    problem: "OpenAI Responses, Anthropic Messages, and Gemini generateContent have different payloads, model limits, auth headers, and response shapes.",
+    problem: "OpenAI Responses, Anthropic Messages, and Gemini Interactions have different payloads, model limits, auth headers, and response shapes.",
     solution: "LLM Proxy keeps a shared caller contract and routes native providers server-side with provider-specific adapters.",
     steps: [
       "Configure native provider base URLs, keys, and model catalogs.",
@@ -328,7 +328,7 @@ if (!this.hasSecret) {
       "Read the formatted proxy response and normalized usage metadata when available.",
     ],
     features: [
-      ["Native provider adapters", "The backend handles OpenAI Responses, Anthropic Messages, and Gemini generateContent differences.", "Gemini messages become native contents; Claude system messages use Anthropic's system field."],
+      ["Native provider adapters", "The backend handles OpenAI Responses, Anthropic Messages, and Gemini Interactions differences.", "Gemini messages become interaction steps; Claude system messages use Anthropic's system field."],
       ["Common status mapping", "Provider errors, timeouts, rate limits, and invalid inputs map to documented proxy statuses.", "Callers do not parse three provider error formats."],
       ["Model validation", "Model IDs are checked against configured provider catalogs.", "A Gemini model is not accepted under Anthropic routing."],
     ],
@@ -1257,14 +1257,14 @@ text = client.post_messages(
     ],
   }),
   page({
-    slug: "gemini-generatecontent-proxy",
+    slug: "gemini-interactions-proxy",
     category: "Provider routing",
-    primaryKeyword: "Gemini generateContent proxy",
-    title: "Gemini generateContent proxy for shared LLM calls",
-    description: "Map shared proxy messages into Gemini native generateContent requests with configured model limits.",
+    primaryKeyword: "Gemini Interactions proxy",
+    title: "Gemini Interactions proxy for shared LLM calls",
+    description: "Run model-specific Gemini Interactions lifecycles while callers keep one blocking proxy request.",
     audience: "Developers adding Gemini as a provider without bringing Gemini-specific payloads into every app.",
-    problem: "Gemini native generateContent uses a different route and content structure from OpenAI-compatible chat providers.",
-    solution: "LLM Proxy implements a Gemini adapter that receives the shared proxy request, routes to the configured Gemini base URL, and normalizes usage metadata where available.",
+    problem: "Gemini models differ between stored background Interactions and non-stored synchronous Interactions, which shared proxy callers should not have to coordinate.",
+    solution: "LLM Proxy selects the configured model lifecycle, polls and cleans up Gemini 3.x resources, and resolves Gemini 2.5 synchronously behind one blocking caller request.",
     steps: [
       "Configure providers.gemini.api_key, base_url, and text model catalog.",
       "Select provider=gemini or set Gemini as a tenant default.",
@@ -1272,7 +1272,8 @@ text = client.post_messages(
       "Keep max_tokens within configured Gemini output limits.",
     ],
     features: [
-      ["Native adapter", "The backend maps user and assistant messages into Gemini contents.", "System instructions use Gemini's systemInstruction shape."],
+      ["Native adapter", "The backend maps user and assistant messages into Gemini interaction steps.", "System instructions use Gemini's system_instruction shape."],
+      ["Resource lifecycle", "The proxy polls queued and in-progress Gemini 3.x interactions server-side.", "Gemini 2.5 requests are synchronous and non-stored; active 3.x resources are cancelled and deleted on exit."],
       ["Configured defaults", "Omitted model uses the Gemini text default_model.", "The default currently comes from config, not client code."],
       ["Output limit validation", "Gemini max_tokens values above configured limits return 400 before upstream calls.", "Known constraints are enforced at the edge."],
     ],
@@ -2285,7 +2286,7 @@ Generated: ${currentResourceModifiedDate}
 
 | Capability | Description | Evidence source | Confidence | Current / roadmap / unclear | Safe for page copy? |
 |---|---|---|---|---|---|
-| Multi-provider text routing | Routes OpenAI Responses, Meta Muse Spark and other OpenAI-compatible providers, Anthropic Messages, Gemini generateContent, and Grok/xAI text. | README provider matrix, provider routing notes | High | Current | Yes |
+| Multi-provider text routing | Routes OpenAI Responses, Meta Muse Spark and other OpenAI-compatible providers, Anthropic Messages, Gemini Interactions, and Grok/xAI text. | README provider matrix, provider routing notes | High | Current | Yes |
 | Dictation endpoint | Routes multipart audio through /dictate for supported dictation providers. | README dictation section, dictation plan | High | Current | Yes |
 | Tenant-secret auth | Public proxy endpoints require key=<tenant secret>. | README REST and security sections | High | Current | Yes |
 | Server-side provider credentials | Public requests must not send upstream provider keys; credentials stay server-side. | README security, provider routing notes | High | Current | Yes |

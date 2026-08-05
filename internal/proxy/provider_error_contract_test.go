@@ -82,7 +82,7 @@ func TestProviderErrorContractSanitizesEveryTextTransport(t *testing.T) {
 			},
 		},
 		{
-			name:               "Gemini generateContent",
+			name:               "Gemini Interactions",
 			provider:           proxy.ProviderNameGemini,
 			upstreamStatus:     http.StatusTooManyRequests,
 			upstreamRetryAfter: "Sunday, 06-Nov-94 08:49:37 GMT",

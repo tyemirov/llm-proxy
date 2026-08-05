@@ -60,7 +60,8 @@ var providerTextRouteCapabilities = map[string]map[textRouteCapabilities]struct{
 		openAIChatCompletionsSynchronousRouteCapabilities: {},
 	},
 	ProviderNameGemini: {
-		geminiGenerateContentSynchronousRouteCapabilities: {},
+		geminiInteractionsPollableRouteCapabilities:    {},
+		geminiInteractionsSynchronousRouteCapabilities: {},
 	},
 	ProviderNameAnthropic: {
 		anthropicMessagesSynchronousRouteCapabilities: {},
@@ -216,7 +217,7 @@ func knownTextWireContract(wireContract textWireContract) bool {
 	switch wireContract {
 	case textWireContractOpenAIResponses,
 		textWireContractOpenAIChatCompletions,
-		textWireContractGeminiGenerateContent,
+		textWireContractGeminiInteractions,
 		textWireContractAnthropicMessages:
 		return true
 	default:

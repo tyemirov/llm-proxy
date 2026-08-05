@@ -2,7 +2,7 @@
 
 LLM Proxy is a lightweight HTTP service that forwards user prompts to OpenAI's
 Responses API, OpenAI-compatible chat providers, Anthropic's native Messages
-API, Google Gemini's native generateContent API, and audio transcription APIs.
+API, Google Gemini's native Interactions API, and audio transcription APIs.
 It exposes protected HTTP endpoints that require a tenant secret and simplify
 integrating provider capabilities without embedding API credentials in each
 client. Canonical `POST /v2` user messages can also carry provider-neutral,
@@ -69,19 +69,19 @@ base URL, and serialize the request body as `"web_search": true` or
 `"web_search": false`.
 
 The caller does not stream tokens, poll a job endpoint, or follow a resume
-token. OpenAI Responses is the only current text adapter with a pollable
-upstream lifecycle: llm-proxy sends stored background requests and keeps the
-client request open while it polls a nonblank response id reported with
-`status=queued` or `status=in_progress`, or returned by a proxy-initiated
-stored background synthesis. A documented terminal status is resolved
-immediately, and a missing or unknown status is rejected rather than polled.
-The response id remains in the active request lifecycle; llm-proxy has no
-durable provider-job queue or later resume endpoint.
+token. OpenAI Responses and Gemini 3.x Interactions use pollable upstream
+lifecycles: llm-proxy sends stored background requests and keeps the client
+request open while it polls a nonblank resource id through `status=queued` and
+`status=in_progress`. Gemini 2.5 Interactions instead complete synchronously
+with `background: false` and `store: false`. A documented terminal status is
+resolved immediately, and a missing or unknown status is rejected rather than
+polled. Provider resource ids remain in the active request lifecycle;
+llm-proxy has no durable provider-job queue or later resume endpoint.
 
 Every current text route uses one provider-neutral completion coordinator.
 When an upstream attempt exhausts its output budget—OpenAI Responses
 `status=incomplete` with `reason=max_output_tokens`, Chat Completions
-`finish_reason=length`, Gemini `finishReason=MAX_TOKENS`, or Anthropic
+`finish_reason=length`, Gemini Interactions `status=incomplete`, or Anthropic
 `stop_reason=max_tokens`—the coordinator retains the original messages,
 appends the accumulated assistant output and one missing-suffix instruction,
 and calls the same selected provider again. It repeats until the adapter
@@ -442,36 +442,36 @@ providers:
       models:
         - id: "glm-asr-2512"
   gemini:
-    base_url: "https://generativelanguage.googleapis.com/v1"
+    base_url: "https://generativelanguage.googleapis.com/v1beta"
     text:
       default_model: "gemini-2.5-flash"
       models:
         - id: "gemini-3.5-flash"
-          wire_contract: "gemini_generate_content"
-          execution_lifecycle: "synchronous_completion"
+          wire_contract: "gemini_interactions"
+          execution_lifecycle: "pollable_resource"
           output_token_limit: 65536
         - id: "gemini-3.1-pro-preview"
-          wire_contract: "gemini_generate_content"
-          execution_lifecycle: "synchronous_completion"
+          wire_contract: "gemini_interactions"
+          execution_lifecycle: "pollable_resource"
           output_token_limit: 65536
         - id: "gemini-3-flash-preview"
-          wire_contract: "gemini_generate_content"
-          execution_lifecycle: "synchronous_completion"
+          wire_contract: "gemini_interactions"
+          execution_lifecycle: "pollable_resource"
           output_token_limit: 65536
         - id: "gemini-3.1-flash-lite"
-          wire_contract: "gemini_generate_content"
-          execution_lifecycle: "synchronous_completion"
+          wire_contract: "gemini_interactions"
+          execution_lifecycle: "pollable_resource"
           output_token_limit: 65536
         - id: "gemini-2.5-flash"
-          wire_contract: "gemini_generate_content"
+          wire_contract: "gemini_interactions"
           execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
         - id: "gemini-2.5-flash-lite"
-          wire_contract: "gemini_generate_content"
+          wire_contract: "gemini_interactions"
           execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
         - id: "gemini-2.5-pro"
-          wire_contract: "gemini_generate_content"
+          wire_contract: "gemini_interactions"
           execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
   anthropic:
@@ -614,7 +614,7 @@ adapters before they are available through `/dictate`.
 | `minimax` | none | `openai_chat_completions` | `synchronous_completion` | `MiniMax-M2.7` | `providers.minimax.api_key` | `https://api.minimax.io/v1` | No | No |
 | `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | `deepseek-ai/DeepSeek-R1` | `providers.siliconflow.api_key` | `https://api.siliconflow.com/v1` | Yes: `FunAudioLLM/SenseVoiceSmall` | No |
 | `zhipu` | `glm` | `openai_chat_completions` | `synchronous_completion` | `glm-5.1` | `providers.zhipu.api_key` | `https://open.bigmodel.cn/api/paas/v4` | Yes: `glm-asr-2512` | No |
-| `gemini` | none | `gemini_generate_content` | `synchronous_completion` | `gemini-2.5-flash` | `providers.gemini.api_key` | `https://generativelanguage.googleapis.com/v1` | No | No |
+| `gemini` | none | `gemini_interactions` | Model-specific: Gemini 3.x `pollable_resource`; Gemini 2.5 `synchronous_completion` | `gemini-2.5-flash` | `providers.gemini.api_key` | `https://generativelanguage.googleapis.com/v1beta` | No | No |
 | `anthropic` | `claude` | `anthropic_messages` | `synchronous_completion` | `claude-sonnet-4-6` | `providers.anthropic.api_key` | `https://api.anthropic.com` | No | No |
 | `grok` | `xai` | `openai_chat_completions` | `synchronous_completion` | `grok-4.3` | `providers.grok.api_key` | `https://api.x.ai/v1` | Yes: `xai-stt` | No |
 
@@ -703,14 +703,15 @@ providers:
 ```
 
 `wire_contract` is required on every text model and currently accepts
-`openai_responses`, `openai_chat_completions`, `gemini_generate_content`, or
+`openai_responses`, `openai_chat_completions`, `gemini_interactions`, or
 `anthropic_messages`. `execution_lifecycle` is also required and accepts
 `synchronous_completion` or `pollable_resource`. Startup rejects missing,
 unknown, provider-incompatible, or contradictory pairs and rejects either
-field on dictation models. The only current pollable pair is OpenAI Responses;
-all other registered pairs complete synchronously. A future one-read deferred
-result requires a new exact lifecycle value rather than reusing
-`pollable_resource`.
+field on dictation models. OpenAI Responses is pollable; Gemini Interactions is
+pollable for the registered 3.x models and synchronous for the registered 2.5
+models. The registered Chat Completions and Anthropic Messages pairs complete
+synchronously. A future one-read deferred result requires a new exact
+lifecycle value rather than reusing `pollable_resource`.
 
 Catalog validation also fails startup when a provider text catalog is missing, a
 dictation-capable provider dictation catalog is missing, a model id is blank or
@@ -734,7 +735,7 @@ providers:
       default_model: "gemini-2.5-flash"
       models:
         - id: "gemini-2.5-flash"
-          wire_contract: "gemini_generate_content"
+          wire_contract: "gemini_interactions"
           execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
           media_inputs:
@@ -777,11 +778,20 @@ proxy call and is never returned to the caller or persisted by llm-proxy. The
 current adapter stops observing the resource when the caller cancels or the
 proxy budget expires; it does not issue an upstream cancel or delete after
 success, failure, timeout, or cancellation, so OpenAI account retention policy
-continues to govern that stored resource. The synchronous adapters do not ask
-for a reusable provider resource and have no cancel/delete operation; their
-providers' ordinary request-retention policies still apply. Output-limit
-continuation always starts a distinct inference request and never treats an
-arbitrary upstream identifier as pollable state.
+continues to govern that stored resource.
+
+Gemini 3.x Interactions requires `store: true` for background execution. The
+proxy sends `Api-Revision: 2026-05-20`, polls only `queued` and `in_progress`,
+and never exposes or persists an interaction id. On every exit it cancels an
+interaction that is still active and then deletes the resource; a terminal
+interaction is deleted directly. Cancel and delete each receive an independent
+bounded cleanup context, so a stalled or failed cancel cannot consume the
+delete attempt. A failed deletion prevents a successful or output-limit result
+from escaping as success. Gemini 2.5 uses the same Interactions adapter
+synchronously with `background: false` and `store: false`, so it accepts an
+immediate terminal response without requiring or cleaning up an id.
+Output-limit continuation always starts a distinct inference request and never
+treats an arbitrary upstream identifier as pollable state.
 
 Provider-specific details:
 
@@ -828,12 +838,24 @@ Provider-specific details:
   `providers.siliconflow.transcriptions_url`, Zhipu uses
   `providers.zhipu.transcriptions_url`, and Grok/xAI uses
   `providers.grok.transcriptions_url`.
-* Gemini text requests use the native `generateContent` route and normalize
-  Gemini usage metadata into the same response headers and JSON `usage` object
-  used by the other text providers. `finishReason=MAX_TOKENS` enters the common
-  missing-suffix loop and only `finishReason=STOP` completes the assembled
-  answer. For exact models whose catalog declares `media_inputs`, ordered image
-  and audio attachments become native `inlineData` parts after the message text.
+* Gemini text requests use native `POST /interactions` against the configured
+  `v1beta` base URL with `x-goog-api-key` and
+  `Api-Revision: 2026-05-20`. Gemini 3.x sends `background: true` and
+  `store: true`; its `queued` and `in_progress` states are polled server-side.
+  Gemini 2.5 sends `background: false` and `store: false` and must return an
+  immediate terminal state. User and assistant history becomes `user_input`
+  and `model_output` steps, while system messages become the top-level
+  `system_instruction`. Only `completed` with visible model text succeeds.
+  `incomplete` enters the common missing-suffix loop through a new interaction.
+  `failed`, `cancelled`, `budget_exceeded`, `requires_action`, malformed,
+  missing, and unknown states are safe upstream failures. Usage
+  totals map from `total_input_tokens`, `total_output_tokens`, and
+  `total_tokens`, preserving provider-counted thought tokens. For exact models
+  whose catalog declares `media_inputs`, ordered image and audio attachments
+  become native typed interaction content after the message text. See Google's
+  [Interactions overview](https://ai.google.dev/gemini-api/docs/interactions-overview),
+  [background execution guide](https://ai.google.dev/gemini-api/docs/background-execution),
+  and [Interactions API reference](https://ai.google.dev/api/interactions-api).
 * Anthropic text requests use `POST /v1/messages` with `x-api-key` and
   `anthropic-version: 2023-06-01`. System messages are translated to
   Anthropic's top-level `system` field. Anthropic requires `max_tokens`, so
@@ -1534,7 +1556,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make test-live-provider-harness` | Generate the temporary static-mode live-test config and verify authenticated routing without an upstream call. |
 | `make test-live-providers` | Start a disposable managed tenant, verify every available provider key through the canonical management operation, and run that provider's live text smoke only after verification succeeds; use `LIVE_ENV_FILE=/path/to/env` to load key values. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
-| `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_SECRET`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus one large OpenAI background-polling request. |
+| `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_SECRET`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus large completion cases for OpenAI, Anthropic, Meta, and Gemini. |
 | `make release` | Delegate this clean checkout and its schema-v3 resource declaration to the exact sibling `../mprlab-gateway` release transaction. |
 | `make publish` | Delegate publication of the exact sealed release to `../mprlab-gateway`; it does not rebuild or deploy. |
 | `make deploy` | Delegate convergence of only this app's declared runtime, route, health, Pages, and TAuth resources to `../mprlab-gateway`. |
@@ -1609,19 +1631,22 @@ loads a dotenv file nor reads, accepts, or sends a local upstream-provider key.
 The saved provider credentials and per-provider default models remain entirely
 on the production tenant.
 
-The command sends canonical `POST /v2` requests with an explicit provider and
-no model, so it exercises each saved Default-tenant provider model. It runs a
-small echo-marker request for OpenAI, Anthropic, Meta, Gemini, and Moonshot,
-then the same deterministic request larger than 16 KiB through OpenAI,
-Anthropic, and Meta. The long request requires normalized output for every
-portfolio record before its final marker and uses a 900-second request budget.
-OpenAI keeps the blocking caller request open while the Responses adapter
-performs server-owned background polling. Anthropic and Meta use their canonical
+The command sends canonical `POST /v2` requests with an explicit provider. Its
+echo cases omit `model`, so they exercise each saved Default-tenant provider
+model. It runs those echo markers for OpenAI, Anthropic, Meta, Gemini, and
+Moonshot, then sends the same deterministic request larger than 16 KiB through
+OpenAI, Anthropic, Meta, and Gemini. The long Gemini case explicitly selects
+`gemini-3.5-flash` so the production check proves the background Interactions
+path even when the tenant's saved Gemini model is a synchronous 2.5 model. The
+long request requires normalized output for every portfolio record before its
+final marker and uses a 900-second request budget. OpenAI and Gemini 3.5 keep
+the blocking caller request open while their resource adapters perform
+server-owned background polling. Anthropic and Meta use their canonical
 synchronous completion paths (including shared output-continuation work when
-needed); the test client never polls a provider or llm-proxy itself. Each case
-verifies HTTP `200`, the echoed request budget, and a completion marker without
-printing the response body or tenant secret. It runs all eight cases before
-returning nonzero for any failed case.
+needed); the test client never polls a provider or llm-proxy itself.
+Each case verifies HTTP `200`, the echoed request budget, and a completion marker
+without printing the response body or tenant secret. It runs all nine cases
+before returning nonzero for any failed case.
 
 Set only the Default-tenant client secret before invoking it:
 
@@ -1803,7 +1828,7 @@ text, err := client.PostMessages(ctx, request)
 ```
 
 `NewImageAttachment` accepts `image/jpeg`, `image/png`, or `image/webp`.
-`NewAudioAttachment` accepts `audio/mp4`, `audio/mpeg`, or `audio/wav`.
+`NewAudioAttachment` accepts `audio/m4a`, `audio/mpeg`, or `audio/wav`.
 Both constructors copy the supplied nonempty bytes, compute their lowercase
 SHA-256 digest, and serialize canonical base64. Attachment values cannot be
 constructed directly. The proxy independently decodes and verifies both

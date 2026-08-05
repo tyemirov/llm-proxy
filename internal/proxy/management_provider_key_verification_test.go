@@ -614,10 +614,16 @@ func assertProviderKeyVerificationRequest(t *testing.T, request *http.Request, t
 			t.Errorf("chat verification path=%q headers=%v payload=%v", request.URL.Path, request.Header, payload)
 		}
 	case verificationTransportGemini:
-		expectedPath := "/models/" + transportCase.model + ":generateContent"
-		if request.URL.Path != expectedPath ||
+		generationConfig, generationConfigOK := payload["generation_config"].(map[string]any)
+		input, inputOK := payload["input"].([]any)
+		if request.URL.Path != testGeminiInteractionsPath ||
 			request.Header.Get("x-goog-api-key") != candidateKey ||
-			!bytes.Contains(requestBody, []byte(`"maxOutputTokens":16`)) {
+			request.Header.Get(testGeminiAPIRevisionHeader) != testGeminiAPIRevisionValue ||
+			payload["model"] != transportCase.model ||
+			payload["background"] != false ||
+			payload["store"] != false ||
+			!generationConfigOK || generationConfig["max_output_tokens"] != float64(16) ||
+			!inputOK || len(input) != 1 || geminiInteractionStepText(t, input[0]) != testProviderKeyVerificationPrompt {
 			t.Errorf("Gemini verification path=%q headers=%v payload=%v", request.URL.Path, request.Header, payload)
 		}
 	case verificationTransportAnthropic:
@@ -638,7 +644,7 @@ func writeProviderKeyVerificationSuccess(responseWriter http.ResponseWriter, tra
 	case verificationTransportOpenAI:
 		responseBody = `{"id":"verification-response","status":"queued"}`
 	case verificationTransportGemini:
-		responseBody = `{"candidates":[{}]}`
+		responseBody = `{"status":"incomplete"}`
 	case verificationTransportAnthropic:
 		responseBody = `{"id":"verification-message","type":"message","role":"assistant"}`
 	}

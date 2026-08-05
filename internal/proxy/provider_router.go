@@ -15,7 +15,7 @@ const completionContinuationInstruction = "Continue exactly where the previous r
 type providerRouter struct {
 	openAIClient    *OpenAIClient
 	chatClient      *openAICompatibleChatClient
-	geminiClient    *geminiGenerateContentClient
+	geminiClient    *geminiInteractionsClient
 	anthropicClient *anthropicMessagesClient
 }
 
@@ -25,17 +25,18 @@ type textRouteAdapter interface {
 
 type openAIResponsesTextRouteAdapter struct{}
 type openAIChatCompletionsTextRouteAdapter struct{}
-type geminiGenerateContentTextRouteAdapter struct{}
+type geminiInteractionsTextRouteAdapter struct{}
 type anthropicMessagesTextRouteAdapter struct{}
 
 var textRouteAdapters = map[textRouteCapabilities]textRouteAdapter{
 	openAIResponsesPollableRouteCapabilities:          openAIResponsesTextRouteAdapter{},
 	openAIChatCompletionsSynchronousRouteCapabilities: openAIChatCompletionsTextRouteAdapter{},
-	geminiGenerateContentSynchronousRouteCapabilities: geminiGenerateContentTextRouteAdapter{},
+	geminiInteractionsPollableRouteCapabilities:       geminiInteractionsTextRouteAdapter{},
+	geminiInteractionsSynchronousRouteCapabilities:    geminiInteractionsTextRouteAdapter{},
 	anthropicMessagesSynchronousRouteCapabilities:     anthropicMessagesTextRouteAdapter{},
 }
 
-func newProviderRouter(openAIClient *OpenAIClient, chatClient *openAICompatibleChatClient, geminiClient *geminiGenerateContentClient, anthropicClient *anthropicMessagesClient) *providerRouter {
+func newProviderRouter(openAIClient *OpenAIClient, chatClient *openAICompatibleChatClient, geminiClient *geminiInteractionsClient, anthropicClient *anthropicMessagesClient) *providerRouter {
 	return &providerRouter{
 		openAIClient:    openAIClient,
 		chatClient:      chatClient,
@@ -102,7 +103,7 @@ func (openAIChatCompletionsTextRouteAdapter) generateText(requestContext context
 	)
 }
 
-func (geminiGenerateContentTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
+func (geminiInteractionsTextRouteAdapter) generateText(requestContext context.Context, router *providerRouter, request chatRequestParameters, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	return router.geminiClient.generateText(
 		requestContext,
 		request.provider.credentialFor(endpointKindText),
@@ -110,6 +111,7 @@ func (geminiGenerateContentTextRouteAdapter) generateText(requestContext context
 		request.model,
 		request.messages,
 		request.maxTokens,
+		request.model.executionLifecycle,
 		structuredLogger,
 	)
 }

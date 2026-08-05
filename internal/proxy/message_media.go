@@ -17,7 +17,7 @@ const (
 )
 
 const (
-	messageAudioMIMEMP4  = "audio/mp4"
+	messageAudioMIMEM4A  = "audio/m4a"
 	messageAudioMIMEMPEG = "audio/mpeg"
 	messageAudioMIMEWAV  = "audio/wav"
 	messageImageMIMEJPEG = "image/jpeg"
@@ -58,7 +58,7 @@ func newMessageMedia(payload chatMessageAttachmentPayload) (messageMedia, error)
 		}
 	case messageMediaTypeAudio:
 		switch payload.MIMEType {
-		case messageAudioMIMEMP4, messageAudioMIMEMPEG, messageAudioMIMEWAV:
+		case messageAudioMIMEM4A, messageAudioMIMEMPEG, messageAudioMIMEWAV:
 		default:
 			return messageMedia{}, fmt.Errorf("%w: unsupported audio MIME type=%q", ErrInvalidChatMessages, payload.MIMEType)
 		}

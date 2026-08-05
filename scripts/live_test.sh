@@ -13,7 +13,7 @@ readonly LONG_COMPLETION_MAX_TOKENS=512
 readonly LONG_COMPLETION_MINIMUM_REQUEST_BYTES=16384
 
 LIVE_TEST_PROVIDERS=(openai anthropic meta gemini moonshot)
-LONG_COMPLETION_PROVIDERS=(openai anthropic meta)
+LONG_COMPLETION_PROVIDERS=(openai anthropic meta gemini)
 TEMPORARY_DIRECTORY=""
 ENCODED_TENANT_SECRET=""
 
@@ -26,8 +26,8 @@ usage() {
     'It never loads dotenv files or local upstream-provider credentials.' \
     '' \
     'The command sends one echo-marker request to OpenAI, Anthropic, Meta, Gemini, and Moonshot,' \
-    'then sends matching large-completion requests through OpenAI, Anthropic, and Meta.' \
-    'OpenAI waits for server-owned background polling; Anthropic and Meta exercise long synchronous completion.'
+    'then sends matching large-completion requests through OpenAI, Anthropic, Meta, and Gemini.' \
+    'The Gemini long case selects gemini-3.5-flash so OpenAI and Gemini prove server-owned background polling.'
 }
 
 fail() {
@@ -103,11 +103,17 @@ print(json.dumps(payload, separators=(",", ":")))
 
 write_curl_config() {
   local provider_identifier="$1"
-  local curl_config_path="$2"
-  builtin printf 'url = "%s/v2?provider=%s&format=text%%2Fplain&key=%s"\n' \
+  local model_identifier="$2"
+  local curl_config_path="$3"
+  local model_query=""
+  if [[ -n "${model_identifier}" ]]; then
+    model_query="&model=${model_identifier}"
+  fi
+  builtin printf 'url = "%s/v2?provider=%s&format=text%%2Fplain&key=%s%s"\n' \
     "${PRODUCTION_API_ORIGIN}" \
     "${provider_identifier}" \
-    "${ENCODED_TENANT_SECRET}" >"${curl_config_path}"
+    "${ENCODED_TENANT_SECRET}" \
+    "${model_query}" >"${curl_config_path}"
 }
 
 response_size() {
@@ -133,13 +139,14 @@ run_live_case() {
   local expected_marker="$4"
   local request_timeout_seconds="$5"
   local curl_timeout_seconds="$6"
+  local model_identifier="$7"
   local curl_config_path="${TEMPORARY_DIRECTORY}/${case_identifier}.curl"
   local headers_path="${TEMPORARY_DIRECTORY}/${case_identifier}.headers"
   local response_path="${TEMPORARY_DIRECTORY}/${case_identifier}.response"
   local http_status=""
   local response_bytes
 
-  write_curl_config "${provider_identifier}" "${curl_config_path}"
+  write_curl_config "${provider_identifier}" "${model_identifier}" "${curl_config_path}"
   if ! http_status="$(
     printf '%s' "${request_body}" | curl \
       --silent \
@@ -215,7 +222,8 @@ for provider_identifier in "${LIVE_TEST_PROVIDERS[@]}"; do
     "${echo_request_body}" \
     "${ECHO_RESPONSE_MARKER}" \
     "${ECHO_REQUEST_TIMEOUT_SECONDS}" \
-    "${ECHO_CURL_TIMEOUT_SECONDS}"; then
+    "${ECHO_CURL_TIMEOUT_SECONDS}" \
+    ""; then
     failed_case_count=$((failed_case_count + 1))
   fi
 done
@@ -224,13 +232,20 @@ for provider_identifier in "${LONG_COMPLETION_PROVIDERS[@]}"; do
   if [[ "${provider_identifier}" == 'openai' ]]; then
     case_identifier='openai-background-polling'
   fi
+  if [[ "${provider_identifier}" == 'gemini' ]]; then
+    case_identifier='gemini-background-polling'
+    model_identifier='gemini-3.5-flash'
+  else
+    model_identifier=''
+  fi
   if ! run_live_case \
     "${case_identifier}" \
     "${provider_identifier}" \
     "${long_completion_request_body}" \
     "${LONG_COMPLETION_RESPONSE_MARKER}" \
     "${LONG_COMPLETION_REQUEST_TIMEOUT_SECONDS}" \
-    "${LONG_COMPLETION_CURL_TIMEOUT_SECONDS}"; then
+    "${LONG_COMPLETION_CURL_TIMEOUT_SECONDS}" \
+    "${model_identifier}"; then
     failed_case_count=$((failed_case_count + 1))
   fi
 done

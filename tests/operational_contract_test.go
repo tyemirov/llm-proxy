@@ -993,13 +993,14 @@ builtin printf '%s' '200'
 	if strings.Contains(output, defaultTenantSecret) {
 		testingInstance.Fatalf("production live-test output exposed the tenant secret: %s", output)
 	}
-	if !strings.Contains(output, "live test passed: total_cases=8") {
+	if !strings.Contains(output, "live test passed: total_cases=9") {
 		testingInstance.Fatalf("production live-test did not report all cases: %s", output)
 	}
 	for _, expectedCase := range []string{
 		"case=openai-background-polling provider=openai status=200",
 		"case=anthropic-long-completion provider=anthropic status=200",
 		"case=meta-long-completion provider=meta status=200",
+		"case=gemini-background-polling provider=gemini status=200",
 	} {
 		if !strings.Contains(output, expectedCase) {
 			testingInstance.Fatalf("production live-test omitted long-completion result %q: %s", expectedCase, output)
@@ -1014,7 +1015,7 @@ builtin printf '%s' '200'
 		Messages  []liveTestMessage `json:"messages"`
 		MaxTokens *int              `json:"max_tokens"`
 	}
-	expectedProviders := []string{"openai", "anthropic", "meta", "gemini", "moonshot", "openai", "anthropic", "meta"}
+	expectedProviders := []string{"openai", "anthropic", "meta", "gemini", "moonshot", "openai", "anthropic", "meta", "gemini"}
 	for callIndex, expectedProvider := range expectedProviders {
 		captureIndex := callIndex + 1
 		requestURLBytes, readURLError := os.ReadFile(filepath.Join(captureDirectory, "url-"+strconv.Itoa(captureIndex)))
@@ -1032,7 +1033,11 @@ builtin printf '%s' '200'
 		if query.Get("key") != defaultTenantSecret || query.Get("provider") != expectedProvider || query.Get("format") != "text/plain" {
 			testingInstance.Fatalf("production live-test call %d used unexpected tenant or route query: %s", captureIndex, requestURL)
 		}
-		if query.Has("model") {
+		if captureIndex == 9 {
+			if query.Get("model") != "gemini-3.5-flash" {
+				testingInstance.Fatalf("production Gemini background call used model=%q", query.Get("model"))
+			}
+		} else if query.Has("model") {
 			testingInstance.Fatalf("production live-test call %d bypassed the saved provider default model: %s", captureIndex, requestURL)
 		}
 

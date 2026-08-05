@@ -88,7 +88,7 @@ Constraint: every post in the `Post` column is under 300 characters.
 | 39 | 2026-08-13 | PM | Key management should not require every engineer to edit YAML. LLM Proxy's authenticated UI lets users save provider keys and generate access secrets. |
 | 40 | 2026-08-14 | AM | Teams need provider choices without teaching users provider APIs. LLM Proxy exposes simple selectors while preserving provider-specific routing behind the service. |
 | 40 | 2026-08-14 | PM | OpenAI-compatible providers still differ in setup and availability. LLM Proxy centralizes credentials, base URLs, defaults, and disabled-provider behavior. |
-| 41 | 2026-08-15 | AM | Native Gemini requests should not force a Gemini-specific client in every app. LLM Proxy maps shared messages into Gemini `generateContent`. |
+| 41 | 2026-08-15 | AM | Native Gemini requests should not force a Gemini-specific client in every app. LLM Proxy maps shared messages into Gemini Interactions and owns each model's synchronous or background lifecycle. |
 | 41 | 2026-08-15 | PM | Native Anthropic Messages should not require separate client plumbing. LLM Proxy handles Claude routing and output-token requirements server-side. |
 | 42 | 2026-08-16 | AM | Transcripts, prompts, and model outputs are sensitive. LLM Proxy's managed usage events omit those contents while still preserving operational metrics. |
 | 42 | 2026-08-16 | PM | Admin views should help operators without becoming a data leak. LLM Proxy admin usage summaries exclude provider keys, prompts, responses, audio, and transcripts. |

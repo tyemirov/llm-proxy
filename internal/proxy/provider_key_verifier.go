@@ -37,13 +37,13 @@ var (
 	providerKeyVerificationRequestBuilders = map[textWireContract]providerKeyVerificationRequestBuilder{
 		textWireContractOpenAIResponses:       buildOpenAIProviderKeyVerificationRequest,
 		textWireContractOpenAIChatCompletions: buildChatProviderKeyVerificationRequest,
-		textWireContractGeminiGenerateContent: buildGeminiProviderKeyVerificationRequest,
+		textWireContractGeminiInteractions:    buildGeminiProviderKeyVerificationRequest,
 		textWireContractAnthropicMessages:     buildAnthropicProviderKeyVerificationRequest,
 	}
 	providerKeyVerificationResponseValidators = map[textWireContract]providerKeyVerificationResponseValidator{
 		textWireContractOpenAIResponses:       validOpenAIProviderKeyVerificationResponse,
 		textWireContractOpenAIChatCompletions: validChatProviderKeyVerificationResponse,
-		textWireContractGeminiGenerateContent: validGeminiProviderKeyVerificationResponse,
+		textWireContractGeminiInteractions:    validGeminiProviderKeyVerificationResponse,
 		textWireContractAnthropicMessages:     validAnthropicProviderKeyVerificationResponse,
 	}
 )
@@ -71,7 +71,7 @@ type chatProviderKeyVerificationResponse struct {
 }
 
 type geminiProviderKeyVerificationResponse struct {
-	Candidates []json.RawMessage `json:"candidates"`
+	Status string `json:"status"`
 }
 
 type anthropicProviderKeyVerificationResponse struct {
@@ -154,21 +154,28 @@ func buildChatProviderKeyVerificationRequest(requestContext context.Context, _ *
 }
 
 func buildGeminiProviderKeyVerificationRequest(requestContext context.Context, _ *Endpoints, provider providerDefinition, model textModelDefinition, apiKey string) (*http.Request, error) {
-	payload := geminiGenerateContentRequest{
-		Contents: []geminiRequestContent{{
-			Role:  string(chatRoleUser),
-			Parts: []geminiRequestPart{{Text: providerKeyVerificationPrompt}},
+	payload := geminiInteractionRequest{
+		Model: model.string(),
+		Input: []geminiInteractionStep{{
+			Type: geminiInteractionStepUserInput,
+			Content: []geminiInteractionContent{{
+				Type: geminiInteractionContentText,
+				Text: providerKeyVerificationPrompt,
+			}},
 		}},
-		GenerationConfig: &geminiGenerationConfig{MaxOutputTokens: providerKeyVerificationMaxTokens},
+		GenerationConfig: &geminiInteractionGeneration{MaxOutputTokens: providerKeyVerificationMaxTokens},
+		Background:       false,
+		Store:            false,
 	}
 	payloadBytes, _ := json.Marshal(payload)
 	return buildProviderKeyVerificationRequestWithHeaders(
 		requestContext,
-		geminiGenerateContentURL(provider.textBaseURL, model),
+		geminiInteractionsURL(provider.textBaseURL),
 		payloadBytes,
 		map[string]string{
-			headerContentType:  mimeApplicationJSON,
-			geminiAPIKeyHeader: apiKey,
+			headerContentType:       mimeApplicationJSON,
+			geminiAPIKeyHeader:      apiKey,
+			geminiAPIRevisionHeader: geminiAPIRevisionValue,
 		},
 	)
 }
@@ -243,7 +250,8 @@ func validChatProviderKeyVerificationResponse(responseBytes []byte) bool {
 func validGeminiProviderKeyVerificationResponse(responseBytes []byte) bool {
 	var response geminiProviderKeyVerificationResponse
 	decodeError := json.Unmarshal(responseBytes, &response)
-	return decodeError == nil && len(response.Candidates) > 0
+	return decodeError == nil &&
+		(response.Status == statusCompleted || response.Status == statusIncomplete)
 }
 
 func validAnthropicProviderKeyVerificationResponse(responseBytes []byte) bool {

@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,20 +17,19 @@ import (
 
 func TestV2RoutesExactOrderedImageAndAudioAttachmentsThroughGemini(testingInstance *testing.T) {
 	var capturedPayload map[string]any
+	deleteCount := 0
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
-		if httpRequest.Method != http.MethodPost ||
-			httpRequest.URL.Path != "/models/"+proxy.ModelNameGemini25Flash+":generateContent" {
+		assertGeminiInteractionHeaders(testingInstance, httpRequest, testGeminiKey)
+		if httpRequest.Method == http.MethodDelete && httpRequest.URL.Path == testGeminiInteractionsPath+"/media-input" {
+			deleteCount++
+			writeGeminiInteractionDeleted(testingInstance, responseWriter)
+			return
+		}
+		if httpRequest.Method != http.MethodPost || httpRequest.URL.Path != testGeminiInteractionsPath {
 			testingInstance.Fatalf("upstream request=%s %s", httpRequest.Method, httpRequest.URL.Path)
 		}
-		bodyBytes, readError := io.ReadAll(httpRequest.Body)
-		if readError != nil {
-			testingInstance.Fatalf("read upstream body: %v", readError)
-		}
-		if decodeError := json.Unmarshal(bodyBytes, &capturedPayload); decodeError != nil {
-			testingInstance.Fatalf("decode upstream body: %v", decodeError)
-		}
-		responseWriter.Header().Set("Content-Type", "application/json")
-		_, _ = responseWriter.Write([]byte(`{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"media accepted"}]}}]}`))
+		capturedPayload = decodeGeminiInteractionRequest(testingInstance, httpRequest)
+		writeGeminiInteractionSnapshot(testingInstance, responseWriter, "media-input", "completed", "media accepted", nil)
 	}))
 	defer upstreamServer.Close()
 
@@ -52,10 +50,10 @@ func TestV2RoutesExactOrderedImageAndAudioAttachmentsThroughGemini(testingInstan
 	firstImage := []byte("first-image")
 	secondImage := []byte("second-image")
 	audio := []byte("voice-track")
-	requestBody := mediaV2RequestBody(testingInstance, proxy.ModelNameGemini25Flash, "Inspect in exact order.", []map[string]any{
+	requestBody := mediaV2RequestBody(testingInstance, proxy.ModelNameGemini35Flash, "Inspect in exact order.", []map[string]any{
 		messageMediaPayload("image", "image/png", firstImage),
 		messageMediaPayload("image", "image/jpeg", secondImage),
-		messageMediaPayload("audio", "audio/mp4", audio),
+		messageMediaPayload("audio", "audio/m4a", audio),
 	})
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -70,22 +68,22 @@ func TestV2RoutesExactOrderedImageAndAudioAttachmentsThroughGemini(testingInstan
 	if responseRecorder.Code != http.StatusOK {
 		testingInstance.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
 	}
-	contents, contentsOK := capturedPayload["contents"].([]any)
-	if !contentsOK || len(contents) != 1 {
-		testingInstance.Fatalf("contents=%v", capturedPayload["contents"])
+	input, inputOK := capturedPayload["input"].([]any)
+	if !inputOK || len(input) != 1 || deleteCount != 1 {
+		testingInstance.Fatalf("input=%v deletes=%d", capturedPayload["input"], deleteCount)
 	}
-	userContent, contentOK := contents[0].(map[string]any)
-	if !contentOK || userContent["role"] != "user" {
-		testingInstance.Fatalf("content=%v", contents[0])
+	userStep, stepOK := input[0].(map[string]any)
+	if !stepOK || userStep["type"] != testGeminiInteractionUserStep {
+		testingInstance.Fatalf("step=%v", input[0])
 	}
-	parts, partsOK := userContent["parts"].([]any)
-	if !partsOK || len(parts) != 4 {
-		testingInstance.Fatalf("parts=%v", userContent["parts"])
+	content, contentOK := userStep["content"].([]any)
+	if !contentOK || len(content) != 4 {
+		testingInstance.Fatalf("content=%v", userStep["content"])
 	}
-	assertGeminiTextPart(testingInstance, parts[0], "Inspect in exact order.")
-	assertGeminiInlineDataPart(testingInstance, parts[1], "image/png", firstImage)
-	assertGeminiInlineDataPart(testingInstance, parts[2], "image/jpeg", secondImage)
-	assertGeminiInlineDataPart(testingInstance, parts[3], "audio/mp4", audio)
+	assertGeminiInteractionTextContent(testingInstance, content[0], "Inspect in exact order.")
+	assertGeminiInteractionMediaContent(testingInstance, content[1], "image", "image/png", firstImage)
+	assertGeminiInteractionMediaContent(testingInstance, content[2], "image", "image/jpeg", secondImage)
+	assertGeminiInteractionMediaContent(testingInstance, content[3], "audio", "audio/m4a", audio)
 
 	var responsePayload map[string]any
 	if decodeError := json.Unmarshal(responseRecorder.Body.Bytes(), &responsePayload); decodeError != nil {
@@ -318,25 +316,23 @@ func messageMediaPayload(mediaType string, mimeType string, data []byte) map[str
 	}
 }
 
-func assertGeminiTextPart(testingInstance *testing.T, rawPart any, expectedText string) {
+func assertGeminiInteractionTextContent(testingInstance *testing.T, rawContent any, expectedText string) {
 	testingInstance.Helper()
-	part, partOK := rawPart.(map[string]any)
-	if !partOK || part["text"] != expectedText || part["inlineData"] != nil {
-		testingInstance.Fatalf("text part=%v", rawPart)
+	content, contentOK := rawContent.(map[string]any)
+	if !contentOK || content["type"] != "text" || content["text"] != expectedText || content["data"] != nil || content["mime_type"] != nil {
+		testingInstance.Fatalf("text content=%v", rawContent)
 	}
 }
 
-func assertGeminiInlineDataPart(testingInstance *testing.T, rawPart any, expectedMIMEType string, expectedData []byte) {
+func assertGeminiInteractionMediaContent(testingInstance *testing.T, rawContent any, expectedType string, expectedMIMEType string, expectedData []byte) {
 	testingInstance.Helper()
-	part, partOK := rawPart.(map[string]any)
-	if !partOK || part["text"] != nil {
-		testingInstance.Fatalf("inline part=%v", rawPart)
-	}
-	inlineData, inlineDataOK := part["inlineData"].(map[string]any)
-	if !inlineDataOK ||
-		inlineData["mimeType"] != expectedMIMEType ||
-		inlineData["data"] != base64.StdEncoding.EncodeToString(expectedData) {
-		testingInstance.Fatalf("inline data=%v", part["inlineData"])
+	content, contentOK := rawContent.(map[string]any)
+	if !contentOK ||
+		content["type"] != expectedType ||
+		content["mime_type"] != expectedMIMEType ||
+		content["data"] != base64.StdEncoding.EncodeToString(expectedData) ||
+		content["text"] != nil {
+		testingInstance.Fatalf("media content=%v", rawContent)
 	}
 }
 

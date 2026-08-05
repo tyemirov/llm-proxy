@@ -48,7 +48,7 @@ const (
 	defaultSiliconFlowBaseURL     = "https://api.siliconflow.com/v1"
 	defaultZhipuBaseURL           = "https://open.bigmodel.cn/api/paas/v4"
 	defaultZhipuTranscriptionsURL = "https://api.z.ai/api/paas/v4/audio/transcriptions"
-	defaultGeminiBaseURL          = "https://generativelanguage.googleapis.com/v1"
+	defaultGeminiBaseURL          = "https://generativelanguage.googleapis.com/v1beta"
 	defaultAnthropicBaseURL       = "https://api.anthropic.com"
 	defaultMetaBaseURL            = "https://api.meta.ai/v1"
 	defaultGrokBaseURL            = "https://api.x.ai/v1"
@@ -138,7 +138,7 @@ type textWireContract string
 const (
 	textWireContractOpenAIResponses       textWireContract = "openai_responses"
 	textWireContractOpenAIChatCompletions textWireContract = "openai_chat_completions"
-	textWireContractGeminiGenerateContent textWireContract = "gemini_generate_content"
+	textWireContractGeminiInteractions    textWireContract = "gemini_interactions"
 	textWireContractAnthropicMessages     textWireContract = "anthropic_messages"
 )
 
@@ -163,8 +163,12 @@ var (
 		wireContract:       textWireContractOpenAIChatCompletions,
 		executionLifecycle: textExecutionLifecycleSynchronousCompletion,
 	}
-	geminiGenerateContentSynchronousRouteCapabilities = textRouteCapabilities{
-		wireContract:       textWireContractGeminiGenerateContent,
+	geminiInteractionsPollableRouteCapabilities = textRouteCapabilities{
+		wireContract:       textWireContractGeminiInteractions,
+		executionLifecycle: textExecutionLifecyclePollableResource,
+	}
+	geminiInteractionsSynchronousRouteCapabilities = textRouteCapabilities{
+		wireContract:       textWireContractGeminiInteractions,
 		executionLifecycle: textExecutionLifecycleSynchronousCompletion,
 	}
 	anthropicMessagesSynchronousRouteCapabilities = textRouteCapabilities{
