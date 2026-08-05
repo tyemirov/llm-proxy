@@ -24,12 +24,53 @@ type ModelEndpointCatalog struct {
 
 // ModelConfiguration declares runtime metadata for one configured model.
 type ModelConfiguration struct {
-	ID               string
-	RequestProfile   string
-	WebSearch        bool
-	OutputTokenLimit int
-	ReasoningEffort  *ReasoningEffortCapability
-	MediaInputs      []string
+	ID                 string
+	WireContract       string
+	ExecutionLifecycle string
+	RequestProfile     string
+	WebSearch          bool
+	OutputTokenLimit   int
+	ReasoningEffort    *ReasoningEffortCapability
+	MediaInputs        []string
+}
+
+var providerTextRouteCapabilities = map[string]map[textRouteCapabilities]struct{}{
+	ProviderNameOpenAI: {
+		openAIResponsesPollableRouteCapabilities: {},
+	},
+	ProviderNameDeepSeek: {
+		openAIChatCompletionsSynchronousRouteCapabilities: {},
+	},
+	ProviderNameDashScope: {
+		openAIChatCompletionsSynchronousRouteCapabilities: {},
+	},
+	ProviderNameQwenCloud: {
+		openAIChatCompletionsSynchronousRouteCapabilities: {},
+	},
+	ProviderNameMoonshot: {
+		openAIChatCompletionsSynchronousRouteCapabilities: {},
+	},
+	ProviderNameMiniMax: {
+		openAIChatCompletionsSynchronousRouteCapabilities: {},
+	},
+	ProviderNameSiliconFlow: {
+		openAIChatCompletionsSynchronousRouteCapabilities: {},
+	},
+	ProviderNameZhipu: {
+		openAIChatCompletionsSynchronousRouteCapabilities: {},
+	},
+	ProviderNameGemini: {
+		geminiGenerateContentSynchronousRouteCapabilities: {},
+	},
+	ProviderNameAnthropic: {
+		anthropicMessagesSynchronousRouteCapabilities: {},
+	},
+	ProviderNameMeta: {
+		openAIChatCompletionsSynchronousRouteCapabilities: {},
+	},
+	ProviderNameGrok: {
+		openAIChatCompletionsSynchronousRouteCapabilities: {},
+	},
 }
 
 // ReasoningEffortCapability declares the configured upstream mapping for one
@@ -104,10 +145,13 @@ func validateModelEndpointCatalog(providerName string, endpoint endpointKind, ca
 		if providerName == ProviderNameAnthropic && endpoint == endpointKindText && modelConfiguration.OutputTokenLimit <= 0 {
 			return fmt.Errorf("%w: provider=%s endpoint=%s field=%s.models[%d].output_token_limit", ErrInvalidModelCatalog, providerName, endpointName, fieldPrefix, modelIndex)
 		}
+		modelFieldPrefix := fmt.Sprintf("%s.models[%d]", fieldPrefix, modelIndex)
+		if _, capabilityError := validatedTextRouteCapabilities(providerName, endpoint, modelConfiguration, modelFieldPrefix); capabilityError != nil {
+			return capabilityError
+		}
 		if profileError := validateModelRequestProfile(providerName, endpoint, modelConfiguration); profileError != nil {
 			return fmt.Errorf("%w: field=%s.models[%d].request_profile", profileError, fieldPrefix, modelIndex)
 		}
-		modelFieldPrefix := fmt.Sprintf("%s.models[%d]", fieldPrefix, modelIndex)
 		modelReasoningEffort, modelCapabilityError := validatedReasoningEffortCapability(modelConfiguration.ReasoningEffort, modelFieldPrefix+".reasoning_effort")
 		if modelCapabilityError != nil {
 			return fmt.Errorf("%w: provider=%s endpoint=%s", modelCapabilityError, providerName, endpointName)
@@ -125,6 +169,69 @@ func validateModelEndpointCatalog(providerName string, endpoint endpointKind, ca
 		return fmt.Errorf("%w: provider=%s endpoint=%s default_model=%s", ErrInvalidModelCatalog, providerName, endpointName, defaultModel)
 	}
 	return nil
+}
+
+func validatedTextRouteCapabilities(providerName string, endpoint endpointKind, modelConfiguration ModelConfiguration, fieldPrefix string) (textRouteCapabilities, error) {
+	rawWireContract := modelConfiguration.WireContract
+	rawExecutionLifecycle := modelConfiguration.ExecutionLifecycle
+	if endpoint != endpointKindText {
+		if rawWireContract != constants.EmptyString {
+			return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s endpoint=%s field=%s.wire_contract", ErrInvalidModelCatalog, providerName, endpoint, fieldPrefix)
+		}
+		if rawExecutionLifecycle != constants.EmptyString {
+			return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s endpoint=%s field=%s.execution_lifecycle", ErrInvalidModelCatalog, providerName, endpoint, fieldPrefix)
+		}
+		return textRouteCapabilities{}, nil
+	}
+	if rawWireContract == constants.EmptyString || rawWireContract != strings.TrimSpace(rawWireContract) {
+		return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s endpoint=%s field=%s.wire_contract", ErrInvalidModelCatalog, providerName, endpoint, fieldPrefix)
+	}
+	if rawExecutionLifecycle == constants.EmptyString || rawExecutionLifecycle != strings.TrimSpace(rawExecutionLifecycle) {
+		return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s endpoint=%s field=%s.execution_lifecycle", ErrInvalidModelCatalog, providerName, endpoint, fieldPrefix)
+	}
+	capabilities := textRouteCapabilities{
+		wireContract:       textWireContract(rawWireContract),
+		executionLifecycle: textExecutionLifecycle(rawExecutionLifecycle),
+	}
+	if !knownTextWireContract(capabilities.wireContract) {
+		return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s endpoint=%s field=%s.wire_contract wire_contract=%s", ErrInvalidModelCatalog, providerName, endpoint, fieldPrefix, rawWireContract)
+	}
+	if !knownTextExecutionLifecycle(capabilities.executionLifecycle) {
+		return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s endpoint=%s field=%s.execution_lifecycle execution_lifecycle=%s", ErrInvalidModelCatalog, providerName, endpoint, fieldPrefix, rawExecutionLifecycle)
+	}
+	if _, allowed := providerTextRouteCapabilities[providerName][capabilities]; !allowed {
+		return textRouteCapabilities{}, fmt.Errorf(
+			"%w: provider=%s endpoint=%s wire_contract=%s execution_lifecycle=%s",
+			ErrInvalidModelCatalog,
+			providerName,
+			endpoint,
+			rawWireContract,
+			rawExecutionLifecycle,
+		)
+	}
+	return capabilities, nil
+}
+
+func knownTextWireContract(wireContract textWireContract) bool {
+	switch wireContract {
+	case textWireContractOpenAIResponses,
+		textWireContractOpenAIChatCompletions,
+		textWireContractGeminiGenerateContent,
+		textWireContractAnthropicMessages:
+		return true
+	default:
+		return false
+	}
+}
+
+func knownTextExecutionLifecycle(executionLifecycle textExecutionLifecycle) bool {
+	switch executionLifecycle {
+	case textExecutionLifecycleSynchronousCompletion,
+		textExecutionLifecyclePollableResource:
+		return true
+	default:
+		return false
+	}
 }
 
 func validatedReasoningEffortCapability(rawCapability *ReasoningEffortCapability, fieldPrefix string) (*reasoningEffortCapability, error) {
@@ -199,8 +306,15 @@ func textModelSet(catalog ModelEndpointCatalog) map[string]textModelDefinition {
 	for _, modelConfiguration := range catalog.Models {
 		trimmedModelIdentifier := strings.TrimSpace(modelConfiguration.ID)
 		if trimmedModelIdentifier != constants.EmptyString {
+			routeCapabilities := textRouteCapabilities{
+				wireContract:       textWireContract(strings.TrimSpace(modelConfiguration.WireContract)),
+				executionLifecycle: textExecutionLifecycle(strings.TrimSpace(modelConfiguration.ExecutionLifecycle)),
+			}
 			models[strings.ToLower(trimmedModelIdentifier)] = textModelDefinition{
 				identifier:          modelID(trimmedModelIdentifier),
+				wireContract:        routeCapabilities.wireContract,
+				executionLifecycle:  routeCapabilities.executionLifecycle,
+				routeAdapter:        textRouteAdapters[routeCapabilities],
 				requestProfile:      modelRequestProfile(strings.TrimSpace(modelConfiguration.RequestProfile)),
 				supportsWebSearch:   modelConfiguration.WebSearch,
 				outputTokenLimit:    modelConfiguration.OutputTokenLimit,

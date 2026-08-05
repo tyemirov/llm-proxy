@@ -220,6 +220,13 @@ P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlh
 	if len(openAIModels) < 3 || openAIModels[2].ID != "gpt-4.1" || openAIModels[2].RequestProfile != "openai_responses_temperature_tools" || !openAIModels[2].WebSearch {
 		t.Fatalf("openai model catalog=%+v", openAIModels)
 	}
+	for providerName, providerCatalog := range capturedConfiguration.ProviderModels {
+		for _, model := range providerCatalog.Text.Models {
+			if model.WireContract == "" || model.ExecutionLifecycle == "" {
+				t.Fatalf("provider=%s model=%s missing route capabilities: %+v", providerName, model.ID, model)
+			}
+		}
+	}
 }
 
 func TestRootCommandRunsProductionLoggerFromConfigFile(t *testing.T) {
@@ -1639,7 +1646,7 @@ providers:
 		},
 		{
 			name:          "missing provider text models",
-			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "models:\n        - id: \"qwen-plus\"", "models: []", 1),
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "models:\n        - id: \"qwen-plus\"\n          wire_contract: \"openai_chat_completions\"\n          execution_lifecycle: \"synchronous_completion\"", "models: []", 1),
 			expectedError: "invalid_model_catalog: provider=dashscope endpoint=text field=providers.dashscope.text.models",
 		},
 		{
@@ -1684,8 +1691,48 @@ providers:
 		},
 		{
 			name:          "anthropic output token limit required",
-			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "id: \"claude-sonnet-4-6\"\n          output_token_limit: 64000", "id: \"claude-sonnet-4-6\"\n          output_token_limit: 0", 1),
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "id: \"claude-sonnet-4-6\"\n          wire_contract: \"anthropic_messages\"\n          execution_lifecycle: \"synchronous_completion\"\n          output_token_limit: 64000", "id: \"claude-sonnet-4-6\"\n          wire_contract: \"anthropic_messages\"\n          execution_lifecycle: \"synchronous_completion\"\n          output_token_limit: 0", 1),
 			expectedError: "invalid_model_catalog: provider=anthropic endpoint=text field=providers.anthropic.text.models[1].output_token_limit",
+		},
+		{
+			name:          "missing text wire contract",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "\n          wire_contract: \"openai_responses\"", "", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=text field=providers.openai.text.models[0].wire_contract",
+		},
+		{
+			name:          "missing text execution lifecycle",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "\n          execution_lifecycle: \"pollable_resource\"", "", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=text field=providers.openai.text.models[0].execution_lifecycle",
+		},
+		{
+			name:          "unknown text wire contract",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "wire_contract: \"openai_responses\"", "wire_contract: \"future_responses\"", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=text field=providers.openai.text.models[0].wire_contract wire_contract=future_responses",
+		},
+		{
+			name:          "unknown text execution lifecycle",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "execution_lifecycle: \"pollable_resource\"", "execution_lifecycle: \"deferred_once\"", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=text field=providers.openai.text.models[0].execution_lifecycle execution_lifecycle=deferred_once",
+		},
+		{
+			name:          "contradictory openai lifecycle",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "execution_lifecycle: \"pollable_resource\"", "execution_lifecycle: \"synchronous_completion\"", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=text wire_contract=openai_responses execution_lifecycle=synchronous_completion",
+		},
+		{
+			name:          "provider incompatible wire contract",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "wire_contract: \"openai_chat_completions\"", "wire_contract: \"anthropic_messages\"", 1),
+			expectedError: "invalid_model_catalog: provider=deepseek endpoint=text wire_contract=anthropic_messages execution_lifecycle=synchronous_completion",
+		},
+		{
+			name:          "dictation wire contract",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "id: \"gpt-4o-mini-transcribe\"", "id: \"gpt-4o-mini-transcribe\"\n          wire_contract: \"openai_responses\"", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=dictation field=providers.openai.dictation.models[0].wire_contract",
+		},
+		{
+			name:          "dictation execution lifecycle",
+			providersYAML: strings.Replace(completeLiteralProvidersYAML(), "id: \"gpt-4o-mini-transcribe\"", "id: \"gpt-4o-mini-transcribe\"\n          execution_lifecycle: \"synchronous_completion\"", 1),
+			expectedError: "invalid_model_catalog: provider=openai endpoint=dictation field=providers.openai.dictation.models[0].execution_lifecycle",
 		},
 		{
 			name:          "blank openai request profile",
@@ -1943,14 +1990,22 @@ providers:
       default_model: "gpt-4.1"
       models:
         - id: "gpt-4o-mini"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_temperature"
         - id: "gpt-4o"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_temperature_tools"
           web_search: true
         - id: "gpt-4.1"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_temperature_tools"
           web_search: true
         - id: "gpt-5-mini"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_reasoning_tools"
           reasoning_effort:
             adapter: "openai_responses"
@@ -1960,12 +2015,18 @@ providers:
               - medium
               - high
         - id: "gpt-5"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
         - id: "gpt-5.5"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
         - id: "gpt-5.5-pro"
+          wire_contract: "openai_responses"
+          execution_lifecycle: "pollable_resource"
           request_profile: "openai_responses_reasoning_tools"
           web_search: true
     dictation:
@@ -1980,9 +2041,17 @@ providers:
       default_model: "deepseek-v4-flash"
       models:
         - id: "deepseek-v4-flash"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "deepseek-v4-pro"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "deepseek-chat"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "deepseek-reasoner"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
   dashscope:
     api_key: "%s"
     base_url: "%s"
@@ -1990,6 +2059,8 @@ providers:
       default_model: "qwen-plus"
       models:
         - id: "qwen-plus"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
   qwencloud:
     api_key: "%s"
     base_url: "%s"
@@ -1997,6 +2068,8 @@ providers:
       default_model: "qwen3.8-max-preview"
       models:
         - id: "qwen3.8-max-preview"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
   moonshot:
     api_key: "%s"
     base_url: "%s"
@@ -2004,6 +2077,8 @@ providers:
       default_model: "%s"
       models:
         - id: "%s"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
   minimax:
     api_key: "%s"
     base_url: "%s"
@@ -2011,6 +2086,8 @@ providers:
       default_model: "MiniMax-M2.7"
       models:
         - id: "MiniMax-M2.7"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 2048
   siliconflow:
     api_key: "%s"
@@ -2020,6 +2097,8 @@ providers:
       default_model: "deepseek-ai/DeepSeek-R1"
       models:
         - id: "deepseek-ai/DeepSeek-R1"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
     dictation:
       default_model: "FunAudioLLM/SenseVoiceSmall"
       models:
@@ -2032,6 +2111,8 @@ providers:
       default_model: "glm-5.1"
       models:
         - id: "glm-5.1"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
     dictation:
       default_model: "glm-asr-2512"
       models:
@@ -2043,14 +2124,24 @@ providers:
       default_model: "gemini-2.5-flash"
       models:
         - id: "gemini-3.5-flash"
+          wire_contract: "gemini_generate_content"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
         - id: "gemini-3.1-flash-lite"
+          wire_contract: "gemini_generate_content"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
         - id: "gemini-2.5-flash"
+          wire_contract: "gemini_generate_content"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
         - id: "gemini-2.5-flash-lite"
+          wire_contract: "gemini_generate_content"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
         - id: "gemini-2.5-pro"
+          wire_contract: "gemini_generate_content"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 65536
   anthropic:
     api_key: "%s"
@@ -2059,20 +2150,36 @@ providers:
       default_model: "claude-sonnet-4-6"
       models:
         - id: "claude-opus-4-8"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 128000
         - id: "claude-sonnet-4-6"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 64000
         - id: "claude-haiku-4-5-20251001"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 64000
         - id: "claude-haiku-4-5"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 64000
         - id: "claude-sonnet-4-5-20250929"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 64000
         - id: "claude-sonnet-4-5"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 64000
         - id: "claude-opus-4-1-20250805"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 32000
         - id: "claude-opus-4-1"
+          wire_contract: "anthropic_messages"
+          execution_lifecycle: "synchronous_completion"
           output_token_limit: 32000
   meta:
     api_key: "%s"
@@ -2081,6 +2188,8 @@ providers:
       default_model: "muse-spark-1.1"
       models:
         - id: "muse-spark-1.1"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
   grok:
     api_key: "%s"
     base_url: "%s"
@@ -2089,12 +2198,26 @@ providers:
       default_model: "grok-4.3"
       models:
         - id: "grok-4.3"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "grok-4.3-latest"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "grok-latest"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "grok-build-0.1"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "grok-code-fast"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "grok-code-fast-1"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
         - id: "grok-code-fast-1-0825"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
     dictation:
       default_model: "xai-stt"
       models:

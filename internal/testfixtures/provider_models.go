@@ -24,12 +24,14 @@ type providerModelsEndpointConfiguration struct {
 }
 
 type providerModelsModelConfiguration struct {
-	ID               string                               `mapstructure:"id"`
-	RequestProfile   string                               `mapstructure:"request_profile"`
-	WebSearch        bool                                 `mapstructure:"web_search"`
-	OutputTokenLimit int                                  `mapstructure:"output_token_limit"`
-	ReasoningEffort  *providerModelsReasoningEffortConfig `mapstructure:"reasoning_effort"`
-	MediaInputs      []string                             `mapstructure:"media_inputs"`
+	ID                 string                               `mapstructure:"id"`
+	WireContract       string                               `mapstructure:"wire_contract"`
+	ExecutionLifecycle string                               `mapstructure:"execution_lifecycle"`
+	RequestProfile     string                               `mapstructure:"request_profile"`
+	WebSearch          bool                                 `mapstructure:"web_search"`
+	OutputTokenLimit   int                                  `mapstructure:"output_token_limit"`
+	ReasoningEffort    *providerModelsReasoningEffortConfig `mapstructure:"reasoning_effort"`
+	MediaInputs        []string                             `mapstructure:"media_inputs"`
 }
 
 type providerModelsReasoningEffortConfig struct {
@@ -76,12 +78,14 @@ func (configuration providerModelsEndpointConfiguration) proxyCatalog() proxy.Mo
 	models := make([]proxy.ModelConfiguration, 0, len(configuration.Models))
 	for _, modelConfiguration := range configuration.Models {
 		models = append(models, proxy.ModelConfiguration{
-			ID:               modelConfiguration.ID,
-			RequestProfile:   modelConfiguration.RequestProfile,
-			WebSearch:        modelConfiguration.WebSearch,
-			OutputTokenLimit: modelConfiguration.OutputTokenLimit,
-			ReasoningEffort:  providerModelsReasoningEffortCapability(modelConfiguration.ReasoningEffort),
-			MediaInputs:      append([]string(nil), modelConfiguration.MediaInputs...),
+			ID:                 modelConfiguration.ID,
+			WireContract:       modelConfiguration.WireContract,
+			ExecutionLifecycle: modelConfiguration.ExecutionLifecycle,
+			RequestProfile:     modelConfiguration.RequestProfile,
+			WebSearch:          modelConfiguration.WebSearch,
+			OutputTokenLimit:   modelConfiguration.OutputTokenLimit,
+			ReasoningEffort:    providerModelsReasoningEffortCapability(modelConfiguration.ReasoningEffort),
+			MediaInputs:        append([]string(nil), modelConfiguration.MediaInputs...),
 		})
 	}
 	return proxy.ModelEndpointCatalog{

@@ -64,20 +64,20 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 
 ## Providers
 
-| Provider | Aliases | Text | Dictation | Web Search |
-|----------|---------|------|-----------|------------|
-| `openai` | none | OpenAI Responses API | OpenAI audio transcription | Supported by configured OpenAI model entries with `web_search: true` |
-| `meta` | none | Meta Model API OpenAI-compatible chat completions | Not supported | Not supported |
-| `deepseek` | none | OpenAI-compatible chat completions | Not supported | Not supported |
-| `dashscope` | `qwen` | OpenAI-compatible chat completions | Not supported | Not supported |
-| `qwencloud` | none | Qwen Cloud Token Plan OpenAI-compatible chat completions | Not supported | Not supported |
-| `moonshot` | `kimi` | OpenAI-compatible chat completions | Not supported | Not supported |
-| `minimax` | none | MiniMax OpenAI-compatible chat completions | Not supported | Not supported |
-| `siliconflow` | none | OpenAI-compatible chat completions | OpenAI-compatible audio transcription | Not supported |
-| `zhipu` | `glm` | OpenAI-compatible chat completions | Z.AI GLM-ASR transcription | Not supported |
-| `gemini` | none | Native Gemini generateContent | Not supported | Not supported |
-| `anthropic` | `claude` | Native Anthropic Messages | Not supported | Not supported |
-| `grok` | `xai` | xAI OpenAI-compatible chat completions | xAI STT | Not supported |
+| Provider | Aliases | Wire contract | Execution lifecycle | Dictation | Web Search |
+|----------|---------|---------------|---------------------|-----------|------------|
+| `openai` | none | `openai_responses` | `pollable_resource` | OpenAI audio transcription | Supported by configured OpenAI model entries with `web_search: true` |
+| `meta` | none | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
+| `deepseek` | none | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
+| `dashscope` | `qwen` | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
+| `qwencloud` | none | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
+| `moonshot` | `kimi` | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
+| `minimax` | none | `openai_chat_completions` | `synchronous_completion` | Not supported | Not supported |
+| `siliconflow` | none | `openai_chat_completions` | `synchronous_completion` | OpenAI-compatible audio transcription | Not supported |
+| `zhipu` | `glm` | `openai_chat_completions` | `synchronous_completion` | Z.AI GLM-ASR transcription | Not supported |
+| `gemini` | none | `gemini_generate_content` | `synchronous_completion` | Not supported | Not supported |
+| `anthropic` | `claude` | `anthropic_messages` | `synchronous_completion` | Not supported | Not supported |
+| `grok` | `xai` | `openai_chat_completions` | `synchronous_completion` | xAI STT | Not supported |
 
 This matrix describes capabilities wired through `llm-proxy`. Upstream products
 can expose speech APIs that are not yet proxy adapters; do not mark them
@@ -183,6 +183,8 @@ Provider model catalogs:
 
 - `providers.<provider>.text.default_model`
 - `providers.<provider>.text.models[].id`
+- `providers.<provider>.text.models[].wire_contract`
+- `providers.<provider>.text.models[].execution_lifecycle`
 - `providers.<provider>.text.models[].output_token_limit`
 - `providers.<provider>.text.models[].media_inputs`
 - `providers.<provider>.text.models[].reasoning_effort`
@@ -198,8 +200,9 @@ Provider model catalogs:
 - `providers.grok.dictation.models[].id`
 
 The model catalog is runtime config data. Code owns provider selectors,
-aliases, transports, endpoint shapes, and stable OpenAI request-profile
-implementations. `config.yml` owns provider model ids, provider default models,
+aliases, allowed wire/lifecycle pairs, endpoint shapes, adapters, and stable
+OpenAI request-profile implementations. `config.yml` owns provider model ids,
+each model's explicit wire contract and execution lifecycle, provider default models,
 dictation model ids, model-specific web-search enablement, provider/model
 reasoning-effort and media-input capability declarations, and known
 provider-side output-token limits.
@@ -230,6 +233,16 @@ OpenAI `request_profile` values select stable payload shapes:
 - `openai_responses_temperature_tools`
 - `openai_responses_reasoning_tools`
 
+Every text model must explicitly declare one current `wire_contract` and one
+`execution_lifecycle`; the loader does not infer either capability from the
+provider, base URL, request profile, or presence of an upstream identifier.
+The closed wire values are `openai_responses`, `openai_chat_completions`,
+`gemini_generate_content`, and `anthropic_messages`. The closed lifecycle
+values are `synchronous_completion` and `pollable_resource`. Startup rejects
+missing, unknown, contradictory, or provider-incompatible pairs and rejects
+these text-only fields on dictation entries. A future one-read deferred result
+must introduce a distinct lifecycle value.
+
 Every OpenAI Responses text request includes `background: true` and
 `store: true`. A nonblank response id is polled server-side only for the
 documented `queued` and `in_progress` pending states or for a proxy-initiated
@@ -245,6 +258,15 @@ distinct missing-suffix attempts and completed-response synthesis requests.
 Callers use one normal `GET /`, `POST /`, or `POST /v2` request and receive a
 complete formatted answer or a non-2xx response; there is no streaming,
 client-side polling, durable provider-job queue, or later resume contract.
+
+OpenAI background Responses are stored upstream. llm-proxy keeps their ids only
+in memory for the active request and never returns or persists them, but the
+current adapter does not cancel or delete the stored resource after completion,
+failure, timeout, or caller cancellation; OpenAI account retention policy
+therefore applies. Synchronous adapters create no reusable provider resource
+and expose no lifecycle cancel/delete operation, while each provider's normal
+request-retention policy still applies. Output-limit continuation creates a new
+inference request and is never resource observation.
 
 One completion coordinator owns output-budget recovery for all transports.
 Adapters normalize only their exact recoverable signal: OpenAI

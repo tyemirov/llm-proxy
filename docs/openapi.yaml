@@ -2,7 +2,18 @@ openapi: 3.1.0
 info:
   title: LLM Proxy HTTP API
   version: 1.0.0
-  description: The sole canonical wire contract for llm-proxy-owned proxy, browser configuration, and management endpoints. Contributors must update this document in the same change as any owned handler or bundled-client wire change. TAuth-owned endpoints are outside this contract.
+  description: >-
+    The sole canonical wire contract for llm-proxy-owned proxy, browser
+    configuration, and management endpoints. Each configured text model owns
+    one explicit upstream wire contract and execution lifecycle. OpenAI
+    Responses uses a stored pollable resource; OpenAI-compatible Chat
+    Completions, Gemini generateContent, and Anthropic Messages complete
+    synchronously. Public proxy operations remain blocking and never expose an
+    upstream resource id. OpenAI resource ids remain in memory only, but the
+    current adapter does not cancel or delete stored Responses, so OpenAI
+    account retention policy applies. TAuth-owned endpoints are outside this
+    contract. Contributors must update this document in the same change as any
+    owned handler or bundled-client wire change.
 servers:
   - url: https://llm-proxy-api.mprlab.com
     description: Production API origin
@@ -782,7 +793,7 @@ components:
             $ref: '#/components/schemas/EmptyObject'
   responses:
     TextSuccess:
-      description: 'Complete generated text in the selected representation. The proxy internally continues exact output-budget stops through one provider-neutral lifecycle: OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, Gemini MAX_TOKENS, and Anthropic max_tokens. HTTP 200 is returned only after the selected transport reports its complete signal: OpenAI completed, Chat stop, Gemini STOP, or Anthropic end_turn|stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states never return text as success.'
+      description: 'Complete generated text in the selected representation. The selected model has one validated wire contract and one execution lifecycle; no lifecycle is inferred from an endpoint or upstream id. The proxy internally observes OpenAI queued and in_progress states for its pollable resource and keeps every public operation blocking. Separately, it continues exact output-budget stops through new provider calls: OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, Gemini MAX_TOKENS, and Anthropic max_tokens. HTTP 200 is returned only after the adapter reports its complete signal: OpenAI completed, Chat stop, Gemini STOP, or Anthropic end_turn|stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states never return text as success.'
       headers:
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: '#/components/headers/ResolvedRequestTimeout'

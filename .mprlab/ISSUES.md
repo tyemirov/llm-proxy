@@ -1964,7 +1964,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-- [ ] [I037] (P1) Model provider wire contracts separately from execution lifecycles.
+- [x] [I037] (P1) Model provider wire contracts separately from execution lifecycles.
   Goal:
   Let each configured text model use its provider's exact current request shape
   and execution lifecycle without inferring OpenAI Responses semantics from an
@@ -2043,6 +2043,24 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Public-boundary fixtures prove synchronous, pollable, continuation,
     cancellation, timeout, and provider-terminal-error behavior without
     exposing upstream IDs or provider bodies.
+  Resolution:
+  - Every configured text model now declares one closed `wire_contract` and one
+    closed `execution_lifecycle`. Startup rejects absent, unknown,
+    provider-incompatible, contradictory, or dictation-scoped declarations;
+    no route capability is inferred from a provider, URL, request profile, or
+    upstream identifier.
+  - Model-owned route adapters now select OpenAI Responses polling,
+    OpenAI-compatible Chat Completions, Gemini generateContent, or Anthropic
+    Messages. Provider-key verification uses the selected model's wire
+    contract, and the obsolete provider-level combined transport enum is gone.
+  - The checked-in catalog records OpenAI as `pollable_resource` and every
+    audited no-migration provider as `synchronous_completion`. Public routing
+    coverage enumerates every configured provider/model, while existing public
+    lifecycle fixtures continue to prove continuation, cancellation, timeout,
+    terminal errors, safe responses, and blocking callers.
+  - README, the canonical provider-routing guide, and OpenAPI now publish the
+    capability matrix, continuation separation, and exact upstream storage,
+    cancellation, deletion, and retention consequences.
 - [ ] [I038] (P2) {I037} Adopt DashScope's synchronous Responses API without background mode.
   Goal:
   Move eligible DashScope Qwen models from Chat Completions to Alibaba's newer

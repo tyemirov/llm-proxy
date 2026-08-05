@@ -344,8 +344,10 @@ func internalManagedUsageWriterProviderModels() ProviderModelCatalogs {
 	textModel := ModelEndpointCatalog{
 		DefaultModel: ModelNameGPT41,
 		Models: []ModelConfiguration{{
-			ID:             ModelNameGPT41,
-			RequestProfile: string(requestProfileOpenAIResponsesTemperatureTools),
+			ID:                 ModelNameGPT41,
+			WireContract:       string(textWireContractOpenAIResponses),
+			ExecutionLifecycle: string(textExecutionLifecyclePollableResource),
+			RequestProfile:     string(requestProfileOpenAIResponsesTemperatureTools),
 		}},
 	}
 	return ProviderModelCatalogs{

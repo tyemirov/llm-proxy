@@ -67,7 +67,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			textModels:                textModelSet(openAIModels.Text),
 			transcriptionModels:       dictationModelSet(openAIModels.Dictation),
 			supportsDictation:         true,
-			textTransport:             textTransportOpenAIResponses,
 		},
 		deepSeekProviderID: {
 			identifier:              deepSeekProviderID,
@@ -76,7 +75,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			defaultTextModel:        modelID(deepSeekModels.Text.DefaultModel),
 			textModels:              textModelSet(deepSeekModels.Text),
 			transcriptionModels:     map[string]modelID{},
-			textTransport:           textTransportOpenAICompatibleChat,
 			chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
 		},
 		dashScopeProviderID: {
@@ -87,7 +85,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			defaultTextModel:        modelID(dashScopeModels.Text.DefaultModel),
 			textModels:              textModelSet(dashScopeModels.Text),
 			transcriptionModels:     map[string]modelID{},
-			textTransport:           textTransportOpenAICompatibleChat,
 			chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
 		},
 		qwenCloudProviderID: {
@@ -97,7 +94,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			defaultTextModel:        modelID(qwenCloudModels.Text.DefaultModel),
 			textModels:              textModelSet(qwenCloudModels.Text),
 			transcriptionModels:     map[string]modelID{},
-			textTransport:           textTransportOpenAICompatibleChat,
 			chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
 		},
 		moonshotProviderID: {
@@ -108,7 +104,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			defaultTextModel:        modelID(moonshotModels.Text.DefaultModel),
 			textModels:              textModelSet(moonshotModels.Text),
 			transcriptionModels:     map[string]modelID{},
-			textTransport:           textTransportOpenAICompatibleChat,
 			chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
 		},
 		miniMaxProviderID: {
@@ -118,7 +113,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			defaultTextModel:        modelID(miniMaxModels.Text.DefaultModel),
 			textModels:              textModelSet(miniMaxModels.Text),
 			transcriptionModels:     map[string]modelID{},
-			textTransport:           textTransportOpenAICompatibleChat,
 			chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
 		},
 		siliconFlowProviderID: {
@@ -133,7 +127,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			textModels:                textModelSet(siliconFlowModels.Text),
 			transcriptionModels:       dictationModelSet(siliconFlowModels.Dictation),
 			supportsDictation:         true,
-			textTransport:             textTransportOpenAICompatibleChat,
 			chatTokenLimitParameter:   chatCompletionTokenLimitMaxTokens,
 		},
 		zhipuProviderID: {
@@ -149,7 +142,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			textModels:                textModelSet(zhipuModels.Text),
 			transcriptionModels:       dictationModelSet(zhipuModels.Dictation),
 			supportsDictation:         true,
-			textTransport:             textTransportOpenAICompatibleChat,
 			chatTokenLimitParameter:   chatCompletionTokenLimitMaxTokens,
 		},
 		geminiProviderID: {
@@ -159,7 +151,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			defaultTextModel:    modelID(geminiModels.Text.DefaultModel),
 			textModels:          textModelSet(geminiModels.Text),
 			transcriptionModels: map[string]modelID{},
-			textTransport:       textTransportGeminiGenerate,
 		},
 		anthropicProviderID: {
 			identifier:          anthropicProviderID,
@@ -169,7 +160,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			defaultTextModel:    modelID(anthropicModels.Text.DefaultModel),
 			textModels:          textModelSet(anthropicModels.Text),
 			transcriptionModels: map[string]modelID{},
-			textTransport:       textTransportAnthropicMessages,
 		},
 		metaProviderID: {
 			identifier:              metaProviderID,
@@ -178,7 +168,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			defaultTextModel:        modelID(metaModels.Text.DefaultModel),
 			textModels:              textModelSet(metaModels.Text),
 			transcriptionModels:     map[string]modelID{},
-			textTransport:           textTransportOpenAICompatibleChat,
 			chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
 		},
 		grokProviderID: {
@@ -194,7 +183,6 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 			textModels:                textModelSet(grokModels.Text),
 			transcriptionModels:       dictationModelSet(grokModels.Dictation),
 			supportsDictation:         true,
-			textTransport:             textTransportOpenAICompatibleChat,
 			chatTokenLimitParameter:   chatCompletionTokenLimitMaxTokens,
 		},
 	}

@@ -99,6 +99,163 @@ func TestProviderRoutingUsesConfiguredOpenAIURLsForTextAndDictation(t *testing.T
 	}
 }
 
+func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) {
+	providerOrder := []string{
+		proxy.ProviderNameOpenAI,
+		proxy.ProviderNameDeepSeek,
+		proxy.ProviderNameDashScope,
+		proxy.ProviderNameQwenCloud,
+		proxy.ProviderNameMoonshot,
+		proxy.ProviderNameMiniMax,
+		proxy.ProviderNameSiliconFlow,
+		proxy.ProviderNameZhipu,
+		proxy.ProviderNameGemini,
+		proxy.ProviderNameAnthropic,
+		proxy.ProviderNameMeta,
+		proxy.ProviderNameGrok,
+	}
+	expectedCapabilities := map[string]struct {
+		wireContract       string
+		executionLifecycle string
+	}{
+		proxy.ProviderNameOpenAI:      {wireContract: "openai_responses", executionLifecycle: "pollable_resource"},
+		proxy.ProviderNameDeepSeek:    {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
+		proxy.ProviderNameDashScope:   {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
+		proxy.ProviderNameQwenCloud:   {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
+		proxy.ProviderNameMoonshot:    {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
+		proxy.ProviderNameMiniMax:     {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
+		proxy.ProviderNameSiliconFlow: {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
+		proxy.ProviderNameZhipu:       {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
+		proxy.ProviderNameGemini:      {wireContract: "gemini_generate_content", executionLifecycle: "synchronous_completion"},
+		proxy.ProviderNameAnthropic:   {wireContract: "anthropic_messages", executionLifecycle: "synchronous_completion"},
+		proxy.ProviderNameMeta:        {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
+		proxy.ProviderNameGrok:        {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
+	}
+	catalogs := testfixtures.ProviderModelCatalogs(t)
+	providerByModel := map[string]string{}
+	for _, providerName := range providerOrder {
+		for _, model := range catalogs[providerName].Text.Models {
+			if existingProvider, duplicate := providerByModel[model.ID]; duplicate {
+				t.Fatalf("model=%s is shared by providers=%s,%s", model.ID, existingProvider, providerName)
+			}
+			providerByModel[model.ID] = providerName
+		}
+	}
+
+	pollModel := catalogs[proxy.ProviderNameOpenAI].Text.Models[0].ID
+	observedPaths := map[string][]string{}
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/json")
+		if request.URL.Path == "/responses/capability-poll" {
+			routeKey := proxy.ProviderNameOpenAI + "/" + pollModel
+			observedPaths[routeKey] = append(observedPaths[routeKey], request.Method+" "+request.URL.Path)
+			_, _ = responseWriter.Write([]byte(`{"id":"capability-poll","status":"completed","output_text":"route ok"}`))
+			return
+		}
+
+		var payload struct {
+			Model string `json:"model"`
+		}
+		_ = json.NewDecoder(request.Body).Decode(&payload)
+		modelIdentifier := payload.Model
+		if strings.HasPrefix(request.URL.Path, "/models/") && strings.HasSuffix(request.URL.Path, ":generateContent") {
+			modelIdentifier = strings.TrimSuffix(strings.TrimPrefix(request.URL.Path, "/models/"), ":generateContent")
+		}
+		providerName, configured := providerByModel[modelIdentifier]
+		if !configured {
+			t.Fatalf("unrecognized upstream model=%q path=%s", modelIdentifier, request.URL.Path)
+		}
+		routeKey := providerName + "/" + modelIdentifier
+		observedPaths[routeKey] = append(observedPaths[routeKey], request.Method+" "+request.URL.Path)
+
+		switch request.URL.Path {
+		case "/responses":
+			if modelIdentifier == pollModel {
+				_, _ = responseWriter.Write([]byte(`{"id":"capability-poll","status":"queued"}`))
+				return
+			}
+			_, _ = responseWriter.Write([]byte(`{"id":"capability-complete","status":"completed","output_text":"route ok"}`))
+		case "/chat/completions":
+			_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"route ok"},"finish_reason":"stop"}]}`))
+		case "/v1/messages":
+			_, _ = responseWriter.Write([]byte(`{"id":"capability-message","type":"message","role":"assistant","content":[{"type":"text","text":"route ok"}],"stop_reason":"end_turn"}`))
+		default:
+			if !strings.HasPrefix(request.URL.Path, "/models/") || !strings.HasSuffix(request.URL.Path, ":generateContent") {
+				t.Fatalf("unexpected upstream path=%s", request.URL.Path)
+			}
+			_, _ = responseWriter.Write([]byte(`{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"route ok"}]}}]}`))
+		}
+	}))
+	t.Cleanup(upstreamServer.Close)
+
+	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
+		Tenants:                      proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:                    TestAPIKey,
+		DeepSeekKey:                  testDeepSeekKey,
+		DashScopeKey:                 "sk-dashscope",
+		QwenCloudKey:                 "sk-qwencloud",
+		MoonshotKey:                  "sk-moonshot",
+		MiniMaxKey:                   "sk-minimax",
+		SiliconFlowKey:               testSiliconFlowKey,
+		ZhipuKey:                     testZhipuKey,
+		GeminiKey:                    testGeminiKey,
+		AnthropicKey:                 testAnthropicKey,
+		MetaKey:                      testMetaKey,
+		GrokKey:                      testGrokKey,
+		OpenAIBaseURL:                upstreamServer.URL,
+		OpenAITranscriptionsURL:      upstreamServer.URL + "/audio/transcriptions",
+		DeepSeekBaseURL:              upstreamServer.URL,
+		DashScopeBaseURL:             upstreamServer.URL,
+		QwenCloudBaseURL:             upstreamServer.URL,
+		MoonshotBaseURL:              upstreamServer.URL,
+		MiniMaxBaseURL:               upstreamServer.URL,
+		SiliconFlowBaseURL:           upstreamServer.URL,
+		SiliconFlowTranscriptionsURL: upstreamServer.URL + "/audio/transcriptions",
+		ZhipuBaseURL:                 upstreamServer.URL,
+		ZhipuTranscriptionsURL:       upstreamServer.URL + "/audio/transcriptions",
+		GeminiBaseURL:                upstreamServer.URL,
+		AnthropicBaseURL:             upstreamServer.URL,
+		MetaBaseURL:                  upstreamServer.URL,
+		GrokBaseURL:                  upstreamServer.URL,
+		GrokTranscriptionsURL:        upstreamServer.URL + "/audio/transcriptions",
+		LogLevel:                     proxy.LogLevelInfo,
+		WorkerCount:                  1,
+		QueueSize:                    1,
+		RequestTimeoutSeconds:        TestTimeout,
+		ProviderModels:               catalogs,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		t.Fatalf(messageBuildRouterError, buildError)
+	}
+
+	for _, providerName := range providerOrder {
+		expected := expectedCapabilities[providerName]
+		for _, model := range catalogs[providerName].Text.Models {
+			if model.WireContract != expected.wireContract || model.ExecutionLifecycle != expected.executionLifecycle {
+				t.Fatalf("provider=%s model=%s capabilities=%s/%s want=%s/%s", providerName, model.ID, model.WireContract, model.ExecutionLifecycle, expected.wireContract, expected.executionLifecycle)
+			}
+			queryParameters := url.Values{}
+			queryParameters.Set("key", TestSecret)
+			queryParameters.Set("prompt", "enumerate route capabilities")
+			queryParameters.Set("provider", providerName)
+			queryParameters.Set("model", model.ID)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil))
+			if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != "route ok" {
+				t.Fatalf("provider=%s model=%s status=%d body=%q", providerName, model.ID, response.Code, response.Body.String())
+			}
+			routeKey := providerName + "/" + model.ID
+			expectedRequestCount := 1
+			if model.ID == pollModel {
+				expectedRequestCount = 2
+			}
+			if len(observedPaths[routeKey]) != expectedRequestCount {
+				t.Fatalf("provider=%s model=%s upstream=%v want requests=%d", providerName, model.ID, observedPaths[routeKey], expectedRequestCount)
+			}
+		}
+	}
+}
+
 func TestProviderRoutingSupportsDeepSeekChatCompletions(t *testing.T) {
 	var capturedPayload map[string]any
 	requestCount := 0
@@ -536,7 +693,9 @@ func TestProviderRoutingUsesConfiguredTextModelCatalog(t *testing.T) {
 	}
 	configuredCatalogs := baseConfiguration.ProviderModels
 	deepSeekCatalog := configuredCatalogs[proxy.ProviderNameDeepSeek]
-	deepSeekCatalog.Text.Models = append(deepSeekCatalog.Text.Models, proxy.ModelConfiguration{ID: configuredDeepSeekModel})
+	configuredModel := deepSeekCatalog.Text.Models[0]
+	configuredModel.ID = configuredDeepSeekModel
+	deepSeekCatalog.Text.Models = append(deepSeekCatalog.Text.Models, configuredModel)
 	configuredCatalogs[proxy.ProviderNameDeepSeek] = deepSeekCatalog
 
 	var capturedPayload map[string]any
