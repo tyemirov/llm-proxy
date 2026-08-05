@@ -272,7 +272,9 @@ provider-neutral output-limit signal, and `failed`, `cancelled`,
 fail closed. The newest nonempty usage snapshot replaces earlier observations
 for one interaction; input, output, and total counts are taken from
 `total_input_tokens`, `total_output_tokens`, and `total_tokens`, so
-provider-counted thought tokens remain represented.
+provider-counted thought tokens remain represented. Active-resource cancel and
+delete operations use independent bounded contexts, so cancel exhaustion cannot
+prevent the delete request from starting.
 
 OpenAI background Responses are stored upstream. llm-proxy keeps their ids only
 in memory for the active request and never returns or persists them, but the

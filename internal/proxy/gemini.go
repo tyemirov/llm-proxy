@@ -195,32 +195,35 @@ func (client *geminiInteractionsClient) getInteraction(parentContext context.Con
 }
 
 func (client *geminiInteractionsClient) releaseInteraction(parentContext context.Context, apiKey string, baseURL string, interactionIdentifier string, cleanupMode geminiInteractionCleanupMode, structuredLogger *zap.SugaredLogger) error {
-	cleanupContext, cancelCleanup := context.WithTimeout(context.WithoutCancel(parentContext), geminiInteractionCleanupTimeout)
-	defer cancelCleanup()
-
+	detachedContext := context.WithoutCancel(parentContext)
 	var cancelError error
 	if cleanupMode == geminiInteractionCancelAndDelete {
-		_, cancelError = client.performInteractionRequest(
-			cleanupContext,
+		cancelError = client.performInteractionCleanupRequest(
+			detachedContext,
 			http.MethodPost,
 			geminiInteractionResourceURL(baseURL, interactionIdentifier)+"/cancel",
 			apiKey,
-			nil,
 			structuredLogger,
 		)
 	}
-	_, deleteError := client.performInteractionRequest(
-		cleanupContext,
+	deleteError := client.performInteractionCleanupRequest(
+		detachedContext,
 		http.MethodDelete,
 		geminiInteractionResourceURL(baseURL, interactionIdentifier),
 		apiKey,
-		nil,
 		structuredLogger,
 	)
 	if cancelError != nil {
 		return cancelError
 	}
 	return deleteError
+}
+
+func (client *geminiInteractionsClient) performInteractionCleanupRequest(parentContext context.Context, method string, requestURL string, apiKey string, structuredLogger *zap.SugaredLogger) error {
+	cleanupContext, cancelCleanup := context.WithTimeout(parentContext, geminiInteractionCleanupTimeout)
+	defer cancelCleanup()
+	_, requestError := client.performInteractionRequest(cleanupContext, method, requestURL, apiKey, nil, structuredLogger)
+	return requestError
 }
 
 func (client *geminiInteractionsClient) performInteractionRequest(parentContext context.Context, method string, requestURL string, apiKey string, payload any, structuredLogger *zap.SugaredLogger) ([]byte, error) {

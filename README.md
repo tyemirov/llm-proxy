@@ -784,13 +784,14 @@ Gemini 3.x Interactions requires `store: true` for background execution. The
 proxy sends `Api-Revision: 2026-05-20`, polls only `queued` and `in_progress`,
 and never exposes or persists an interaction id. On every exit it cancels an
 interaction that is still active and then deletes the resource; a terminal
-interaction is deleted directly. A failed cancel does not skip deletion, and a
-failed deletion prevents a successful or output-limit result from escaping as
-success. Gemini 2.5 uses the same Interactions adapter synchronously with
-`background: false` and `store: false`, so it accepts an immediate terminal
-response without requiring or cleaning up an id. Output-limit continuation
-always starts a distinct inference request and never treats an arbitrary
-upstream identifier as pollable state.
+interaction is deleted directly. Cancel and delete each receive an independent
+bounded cleanup context, so a stalled or failed cancel cannot consume the
+delete attempt. A failed deletion prevents a successful or output-limit result
+from escaping as success. Gemini 2.5 uses the same Interactions adapter
+synchronously with `background: false` and `store: false`, so it accepts an
+immediate terminal response without requiring or cleaning up an id.
+Output-limit continuation always starts a distinct inference request and never
+treats an arbitrary upstream identifier as pollable state.
 
 Provider-specific details:
 
