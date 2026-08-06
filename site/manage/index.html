@@ -1,0 +1,937 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Manage LLM Proxy</title>
+    <meta name="description" content="Private LLM Proxy workspace for provider credentials, client access, routing defaults, and usage visibility.">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/manage/">
+    <meta property="og:title" content="LLM Proxy">
+    <meta property="og:description" content="Route text, dictation, provider credentials, and usage workflows through one tenant-secret LLM proxy.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/manage/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,key,visibility,visibility_off&amp;display=block">
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
+    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260727i036"></script>
+    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260727i036"></script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
+  </head>
+  <body x-data="llmProxyKeyManagement" x-init="init()">
+    <mpr-header
+      id="llm-proxy-header"
+      data-config-url="/config-ui.yaml"
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your key workspace.","completionEvent":"llm-proxy:management-ready"}'
+    >
+      <a slot="brand" class="llm-proxy-header-brand" href="/" aria-label="LLM Proxy home">
+        <img class="llm-proxy-header-brand__logo" src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" aria-hidden="true">
+        <span class="llm-proxy-header-brand__title">LLM Proxy</span>
+      </a>
+      <notification-region
+        slot="aux"
+        x-cloak
+        x-show="notice.message"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <p class="notice" x-bind:data-kind="notice.kind" x-text="notice.message"></p>
+      </notification-region>
+      <mpr-user slot="aux" display-mode="avatar" logout-url="/" logout-label="Sign out"></mpr-user>
+    </mpr-header>
+
+    <main class="llm-proxy-main">
+      <section
+        id="llm-proxy-runtime-failure"
+        class="llm-panel runtime-failure"
+        role="alert"
+        aria-live="assertive"
+        aria-labelledby="llm-proxy-runtime-failure-title"
+        aria-describedby="llm-proxy-runtime-failure-description"
+        tabindex="-1"
+        hidden
+      >
+        <p id="llm-proxy-runtime-failure-eyebrow" class="eyebrow"></p>
+        <h1 id="llm-proxy-runtime-failure-title"></h1>
+        <p id="llm-proxy-runtime-failure-description" class="runtime-failure-copy"></p>
+        <button id="llm-proxy-runtime-failure-reload" class="resource-button" type="button"></button>
+      </section>
+
+      <llm-proxy-key-management x-bind:data-auth-state="authState">
+        <section class="llm-panel" x-cloak x-show="authState === states.loading">
+          <p class="eyebrow" x-text="copy.loadingEyebrow"></p>
+          <h1 x-text="copy.loadingTitle"></h1>
+        </section>
+
+        <section class="llm-panel" x-cloak x-show="authState === states.unauthenticated">
+          <p class="eyebrow" x-text="copy.signedOutEyebrow"></p>
+          <h1 x-text="copy.signedOutTitle"></h1>
+        </section>
+
+        <section class="llm-panel" x-cloak x-show="authState === states.error">
+          <p class="eyebrow" x-text="copy.profileErrorEyebrow"></p>
+          <h1 x-text="copy.profileErrorTitle"></h1>
+        </section>
+
+        <template x-if="authState === states.authenticated">
+          <workspace-surface>
+            <section class="dashboard-hero">
+              <header class="section-header">
+                <div>
+                  <p class="eyebrow" x-text="dashboardEyebrow"></p>
+                  <h1 x-text="dashboardTitle"></h1>
+                </div>
+                <dashboard-actions>
+                  <button type="button" x-show="dashboardView === dashboardViews.ADMIN" x-on:click="openUsageDashboard()" x-text="copy.openUsageDashboard"></button>
+                  <label class="usage-tenant-control" x-show="dashboardView === dashboardViews.USAGE">
+                    <span class="visually-hidden" x-text="copy.usageTenant"></span>
+                    <select
+                      x-ref="usageTenantSelector"
+                      x-bind:value="selectedUsageTenantID"
+                      x-on:change="handleUsageTenantSelection($event)"
+                      x-bind:disabled="usageControlsDisabled"
+                      x-bind:aria-label="copy.usageTenant"
+                    >
+                      <option value="" x-bind:selected="usageScopeIsAllTenants" x-text="copy.allTenants"></option>
+                      <template x-for="tenant in tenants" x-bind:key="tenant.id">
+                        <option x-bind:value="tenant.id" x-bind:selected="tenant.id === selectedUsageTenantID" x-text="tenant.name"></option>
+                      </template>
+                    </select>
+                  </label>
+                  <div class="usage-interval-control" role="group" x-show="dashboardView === dashboardViews.USAGE" x-bind:aria-label="copy.usageInterval">
+                    <template x-for="interval in usageIntervals" x-bind:key="interval.id">
+                      <button
+                        type="button"
+                        class="usage-interval-button"
+                        x-bind:class="{ 'is-active': selectedUsageInterval === interval.id }"
+                        x-bind:aria-pressed="selectedUsageInterval === interval.id ? 'true' : 'false'"
+                        x-bind:disabled="usageControlsDisabled"
+                        x-on:click="selectUsageInterval(interval.id)"
+                        x-text="interval.label"
+                      ></button>
+                    </template>
+                  </div>
+                  <button type="button" x-on:click="refreshDashboard()" x-bind:disabled="dashboardRefreshDisabled" x-text="dashboardRefreshCopy"></button>
+                </dashboard-actions>
+              </header>
+            </section>
+
+            <template x-if="dashboardView === dashboardViews.USAGE">
+              <usage-dashboard>
+                <usage-metrics>
+                  <usage-card>
+                    <span x-text="copy.usageRequests"></span>
+                    <strong x-text="usageTotalRequests"></strong>
+                  </usage-card>
+                  <usage-card>
+                    <span x-text="copy.usageTokens"></span>
+                    <strong x-text="usageTotalTokens"></strong>
+                  </usage-card>
+                  <usage-card>
+                    <span x-text="copy.usageSuccessRate"></span>
+                    <strong x-text="usageSuccessRate"></strong>
+                    <button
+                      type="button"
+                      class="usage-failure-action"
+                      x-cloak
+                      x-show="hasUsageFailures"
+                      x-ref="usageFailuresAction"
+                      aria-haspopup="dialog"
+                      aria-controls="usage-failures-dialog"
+                      x-on:click="openUsageFailures()"
+                      x-text="usageFailuresActionCopy"
+                    ></button>
+                  </usage-card>
+                  <usage-card>
+                    <span x-text="copy.usageProviders"></span>
+                    <strong x-text="usageProviderCount"></strong>
+                  </usage-card>
+                </usage-metrics>
+
+                <section class="dashboard-grid">
+                  <usage-chart-panel class="llm-panel">
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.usageRequestTrend"></p>
+                        <h2 x-text="copy.usageRequests"></h2>
+                      </div>
+                    </header>
+                    <svg class="usage-chart-svg" x-show="hasUsage" x-bind:viewBox="chartViewBox" x-bind:aria-label="copy.usageRequestTrend" role="img">
+                      <polyline x-bind:points="usageRequestPolyline"></polyline>
+                    </svg>
+                    <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
+                  </usage-chart-panel>
+
+                  <usage-chart-panel class="llm-panel">
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.usageTokenTrend"></p>
+                        <h2 x-text="copy.usageTokens"></h2>
+                      </div>
+                    </header>
+                    <svg class="usage-chart-svg" x-show="hasUsage" x-bind:viewBox="chartViewBox" x-bind:aria-label="copy.usageTokenTrend" role="img">
+                      <polyline x-bind:points="usageTokenPolyline"></polyline>
+                    </svg>
+                    <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
+                  </usage-chart-panel>
+                </section>
+
+                <section class="dashboard-grid">
+                  <usage-breakdown class="llm-panel">
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.usageByProvider"></p>
+                        <h2 x-text="copy.usageProviders"></h2>
+                      </div>
+                    </header>
+                    <usage-row-list x-show="hasUsage">
+                      <template x-for="row in providerUsageRows" x-bind:key="row.label">
+                        <usage-row>
+                          <span x-text="row.label"></span>
+                          <strong x-text="row.requests"></strong>
+                          <usage-bar><i x-bind:style="`width: ${row.width}`"></i></usage-bar>
+                        </usage-row>
+                      </template>
+                    </usage-row-list>
+                    <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
+                  </usage-breakdown>
+
+                  <usage-breakdown class="llm-panel">
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.usageByModel"></p>
+                        <h2 x-text="copy.usageByModel"></h2>
+                      </div>
+                    </header>
+                    <usage-row-list x-show="hasUsage">
+                      <template x-for="row in modelUsageRows" x-bind:key="row.label">
+                        <usage-row>
+                          <span x-text="row.label"></span>
+                          <strong x-text="row.requests"></strong>
+                          <usage-bar><i x-bind:style="`width: ${row.width}`"></i></usage-bar>
+                        </usage-row>
+                      </template>
+                    </usage-row-list>
+                    <p class="usage-empty" x-show="!hasUsage" x-text="copy.usageEmpty"></p>
+                  </usage-breakdown>
+                </section>
+              </usage-dashboard>
+            </template>
+
+            <template x-if="dashboardView === dashboardViews.ADMIN">
+              <admin-dashboard class="llm-panel">
+                <admin-user-list x-show="hasAdminUsers">
+                  <template x-for="adminUser in adminUsers" x-bind:key="adminUser.user.id">
+                    <admin-user-card>
+                      <header>
+                        <div>
+                          <h2 x-text="adminUserLabel(adminUser)"></h2>
+                          <p x-text="adminUser.user.display_name || adminUser.user.id"></p>
+                        </div>
+                        <span x-text="`${adminUser.tenant_count} ${adminUser.tenant_count === 1 ? 'tenant' : 'tenants'}`"></span>
+                      </header>
+                      <template x-for="adminTenant in adminUser.tenants" x-bind:key="adminTenant.id">
+                        <admin-tenant-card>
+                          <header>
+                            <div>
+                              <h3 x-text="adminTenant.name"></h3>
+                              <code x-text="adminTenant.id"></code>
+                            </div>
+                            <span x-text="adminTenant.has_secret ? copy.adminSecretReady : copy.adminSecretMissing"></span>
+                          </header>
+                          <dl class="admin-user-facts">
+                            <div>
+                              <dt x-text="copy.usageRequests"></dt>
+                              <dd x-text="adminTenantRequests(adminTenant)"></dd>
+                            </div>
+                            <div>
+                              <dt x-text="copy.usageTokens"></dt>
+                              <dd x-text="adminTenantTokens(adminTenant)"></dd>
+                            </div>
+                            <div>
+                              <dt x-text="copy.usageSuccessRate"></dt>
+                              <dd x-text="adminTenantSuccessRate(adminTenant)"></dd>
+                            </div>
+                          </dl>
+                        </admin-tenant-card>
+                      </template>
+                    </admin-user-card>
+                  </template>
+                </admin-user-list>
+                <p class="usage-empty" x-show="!hasAdminUsers" x-text="copy.adminEmpty"></p>
+              </admin-dashboard>
+            </template>
+
+            <usage-failures-overlay
+              x-cloak
+              x-show="usageFailuresOpen"
+              x-on:click.self="closeUsageFailures()"
+              x-on:keydown.escape.window="usageFailuresOpen && closeUsageFailures()"
+              role="presentation"
+            >
+              <usage-failures-dialog
+                id="usage-failures-dialog"
+                x-ref="usageFailuresDialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="usage-failures-title"
+                aria-describedby="usage-failures-description"
+                x-bind:aria-busy="usageFailuresLoading ? 'true' : 'false'"
+                x-on:keydown.tab="trapUsageFailuresFocus($event)"
+              >
+                <header class="usage-failures-header">
+                  <div>
+                    <p class="eyebrow" x-text="usageFailuresIntervalLabel"></p>
+                    <h2 id="usage-failures-title" x-text="copy.usageFailuresTitle"></h2>
+                  </div>
+                  <button
+                    type="button"
+                    class="icon-only"
+                    x-ref="usageFailuresClose"
+                    x-on:click="closeUsageFailures()"
+                    x-bind:title="copy.closeUsageFailures"
+                    x-bind:aria-label="copy.closeUsageFailures"
+                  >
+                    <svg class="utility-icon close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
+                      <path d="M6 6l12 12"></path>
+                      <path d="M18 6L6 18"></path>
+                    </svg>
+                  </button>
+                </header>
+
+                <usage-failures-body>
+                  <p id="usage-failures-description" class="usage-failures-description" x-text="copy.usageFailuresDescription"></p>
+
+                  <section class="usage-failure-statuses" aria-labelledby="usage-failure-statuses-title">
+                    <h3 id="usage-failure-statuses-title" x-text="copy.usageFailuresStatusBreakdown"></h3>
+                    <usage-failure-status-list>
+                      <template x-for="status in usageFailureStatusRows" x-bind:key="status.statusCode">
+                        <usage-failure-status>
+                          <strong x-text="status.statusCode"></strong>
+                          <span x-text="status.label"></span>
+                          <b x-text="status.requests"></b>
+                        </usage-failure-status>
+                      </template>
+                    </usage-failure-status-list>
+                  </section>
+
+                  <p class="usage-failures-loading" x-show="usageFailuresLoading" role="status" aria-live="polite" x-text="copy.usageFailuresLoading"></p>
+
+                  <div class="usage-failures-error" x-show="usageFailuresError" role="alert">
+                    <p x-text="usageFailuresError"></p>
+                    <button type="button" x-on:click="retryUsageFailures()" x-bind:disabled="usageFailuresLoading" x-text="copy.usageFailuresRetry"></button>
+                  </div>
+
+                  <p
+                    class="usage-failures-empty"
+                    x-show="!usageFailuresLoading && !usageFailuresError && !hasLoadedUsageFailures"
+                    x-text="copy.usageFailuresEmpty"
+                  ></p>
+
+                  <usage-failure-list x-show="hasLoadedUsageFailures" role="list" x-bind:aria-label="copy.usageFailuresTitle">
+                    <template x-for="(row, index) in usageFailureRows" x-bind:key="index">
+                      <usage-failure-row role="listitem">
+                        <dl>
+                          <div x-show="row.tenant">
+                            <dt x-text="copy.usageFailuresTenant"></dt>
+                            <dd x-text="row.tenant"></dd>
+                          </div>
+                          <div>
+                            <dt x-text="copy.usageFailuresOccurredAt"></dt>
+                            <dd x-text="row.occurredAt"></dd>
+                          </div>
+                          <div>
+                            <dt x-text="copy.usageFailuresEndpoint"></dt>
+                            <dd x-text="row.endpoint"></dd>
+                          </div>
+                          <div>
+                            <dt x-text="copy.usageFailuresProvider"></dt>
+                            <dd x-text="row.provider"></dd>
+                          </div>
+                          <div>
+                            <dt x-text="copy.usageFailuresModel"></dt>
+                            <dd x-text="row.model"></dd>
+                          </div>
+                          <div>
+                            <dt x-text="copy.usageFailuresStatus"></dt>
+                            <dd x-text="row.status"></dd>
+                          </div>
+                          <div>
+                            <dt x-text="copy.usageFailuresOutcome"></dt>
+                            <dd x-text="row.outcome"></dd>
+                          </div>
+                          <div>
+                            <dt x-text="copy.usageFailuresLatency"></dt>
+                            <dd x-text="row.latency"></dd>
+                          </div>
+                        </dl>
+                      </usage-failure-row>
+                    </template>
+                  </usage-failure-list>
+
+                  <footer class="usage-failures-footer" x-show="canLoadMoreUsageFailures && !usageFailuresError">
+                    <button
+                      type="button"
+                      x-on:click="loadMoreUsageFailures()"
+                      x-bind:disabled="usageFailuresLoading"
+                      x-text="copy.usageFailuresLoadMore"
+                    ></button>
+                  </footer>
+                </usage-failures-body>
+              </usage-failures-dialog>
+            </usage-failures-overlay>
+
+            <settings-overlay
+              x-cloak
+              x-show="settingsOpen"
+              x-on:click.self="closeSettings()"
+              x-on:keydown.escape.window="handleSettingsEscape()"
+              role="presentation"
+            >
+              <settings-modal
+                x-ref="settingsModal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="settings-title"
+                x-bind:aria-describedby="settingsRequired ? 'settings-requirement' : null"
+                x-bind:inert="providerRemovalConfirmationOpen || tenantRenameDialogOpen || clientKeyReplacementConfirmationOpen || deleteTenantConfirmationOpen || createTenantDialogOpen || discardTenantChangesOpen"
+                x-on:keydown.tab="trapSettingsFocus($event)"
+              >
+                <header class="settings-header">
+                  <p id="settings-title" class="eyebrow" x-text="copy.settingsEyebrow"></p>
+                  <button type="button" class="icon-only settings-close" x-ref="settingsClose" x-on:mousedown.prevent x-on:click="closeSettings()" x-bind:disabled="settingsClosePending || providerKeyVerificationPending" x-bind:title="copy.closeSettings" x-bind:aria-label="copy.closeSettings">
+                    <svg class="utility-icon close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
+                      <path d="M6 6l12 12"></path>
+                      <path d="M18 6L6 18"></path>
+                    </svg>
+                  </button>
+                </header>
+
+                <p
+                  id="settings-requirement"
+                  class="settings-requirement"
+                  x-ref="settingsRequirement"
+                  x-cloak
+                  x-show="settingsRequired"
+                  x-text="settingsRequirementCopy"
+                  role="alert"
+                  tabindex="-1"
+                ></p>
+
+                <settings-body>
+                  <tenant-access-row role="group" x-bind:aria-label="copy.tenantAccess">
+                    <label class="tenant-selector-control">
+                      <span class="eyebrow" x-text="copy.tenantContext"></span>
+                      <select
+                        x-ref="settingsTenantSelector"
+                        x-bind:value="settingsTenantID"
+                        x-on:change="handleSettingsTenantSelection($event)"
+                        x-bind:disabled="settingsControlsDisabled"
+                        x-bind:aria-label="copy.tenantContext"
+                      >
+                        <template x-for="tenant in tenants" x-bind:key="tenant.id">
+                          <option x-bind:value="tenant.id" x-bind:selected="tenant.id === settingsTenantID" x-text="tenant.name"></option>
+                        </template>
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      class="tenant-rename"
+                      x-ref="tenantRenameButton"
+                      x-on:click="beginTenantNameEdit()"
+                      x-bind:disabled="settingsControlsDisabled"
+                      x-text="copy.renameTenantAction"
+                    ></button>
+                    <client-access-key>
+                      <span class="eyebrow" x-text="copy.clientKey"></span>
+                      <client-key-row>
+                        <input id="generated-client-key" type="text" readonly x-cloak x-show="hasGeneratedSecret" x-bind:value="generatedSecretValue" x-bind:aria-label="copy.clientKey">
+                        <p class="client-key-state" x-cloak x-show="hasSecret && !hasGeneratedSecret" x-text="copy.clientKeyRetained"></p>
+                        <p class="client-key-state" x-cloak x-show="!hasSecret" x-text="copy.clientKeyMissing"></p>
+                        <button type="button" class="icon-only client-key-visibility-toggle" x-ref="clientKeyVisibilityButton" x-cloak x-show="hasGeneratedSecret" x-on:click="toggleGeneratedSecretVisibility()" x-bind:disabled="settingsControlsDisabled" x-bind:title="generatedSecretVisibilityActionCopy" x-bind:aria-label="generatedSecretVisibilityActionCopy" x-bind:aria-pressed="generatedSecretVisible">
+                          <span class="material-symbols-outlined" x-show="!generatedSecretVisible" aria-hidden="true">visibility</span>
+                          <span class="material-symbols-outlined" x-show="generatedSecretVisible" aria-hidden="true">visibility_off</span>
+                        </button>
+                        <button type="button" class="icon-only client-key-copy" x-ref="clientKeyCopyButton" x-cloak x-show="hasGeneratedSecret" x-on:click="copyGeneratedSecret()" x-bind:disabled="settingsControlsDisabled" x-bind:title="copy.copyClientKey" x-bind:aria-label="copy.copyClientKey">
+                          <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+                        </button>
+                      </client-key-row>
+                    </client-access-key>
+                    <button
+                      type="button"
+                      class="icon-button client-key-create"
+                      x-cloak
+                      x-show="!hasSecret"
+                      x-on:click="generateSecret()"
+                      x-bind:disabled="settingsControlsDisabled"
+                      x-bind:title="copy.createKey"
+                      x-bind:aria-label="copy.createKey"
+                    >
+                      <span aria-hidden="true">+</span>
+                      <span class="tenant-access-action-label" x-text="copy.createKey"></span>
+                    </button>
+                    <button
+                      type="button"
+                      class="icon-button client-key-replace"
+                      x-ref="clientKeyReplaceButton"
+                      x-cloak
+                      x-show="hasSecret"
+                      x-on:click="requestClientKeyReplacement()"
+                      x-bind:disabled="settingsControlsDisabled"
+                      x-bind:title="copy.replaceKey"
+                      x-bind:aria-label="copy.replaceKey"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">key</span>
+                      <span class="tenant-access-action-label" x-text="copy.replaceKey"></span>
+                    </button>
+                    <button
+                      type="button"
+                      class="icon-only danger tenant-delete"
+                      x-ref="deleteTenantButton"
+                      x-on:click="requestTenantDeletion()"
+                      x-bind:disabled="settingsControlsDisabled || !canDeleteSettingsTenant"
+                      x-bind:title="canDeleteSettingsTenant ? copy.deleteTenant : copy.finalTenantDeletion"
+                      x-bind:aria-label="copy.deleteTenant"
+                      x-bind:aria-describedby="!canDeleteSettingsTenant ? 'final-tenant-deletion' : null"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="icon-only tenant-create"
+                      x-ref="createTenantButton"
+                      x-on:click="openCreateTenantDialog()"
+                      x-bind:disabled="settingsControlsDisabled"
+                      x-bind:title="copy.createTenant"
+                      x-bind:aria-label="copy.createTenant"
+                    >
+                      <span class="tenant-create-symbol" aria-hidden="true">+</span>
+                    </button>
+                    <p
+                      id="final-tenant-deletion"
+                      class="visually-hidden"
+                      x-cloak
+                      x-show="!canDeleteSettingsTenant"
+                      x-text="copy.finalTenantDeletion"
+                    ></p>
+                  </tenant-access-row>
+
+                  <settings-section>
+                    <header class="section-header compact">
+                      <div>
+                        <p class="eyebrow" x-text="copy.defaultsEyebrow"></p>
+                        <h2 x-text="copy.defaultsTitle"></h2>
+                      </div>
+                    </header>
+                    <form class="settings-grid-form" x-bind:aria-busy="routingDefaultsAutosavePending">
+                      <div class="text-routing-controls">
+                        <label>
+                          <span x-text="copy.textProvider"></span>
+                          <select x-model="defaults.provider" x-on:change="handleTextProviderDefaultChange($event)" x-bind:disabled="settingsControlsDisabled || !hasKeyedTextProviders">
+                            <template x-if="!hasKeyedTextProviders">
+                              <option value="" x-text="copy.routingDefaultUnavailable"></option>
+                            </template>
+                            <template x-for="provider in keyedTextProviders" x-bind:key="provider.id">
+                              <option x-bind:value="provider.id" x-text="provider.label"></option>
+                            </template>
+                          </select>
+                        </label>
+                        <label>
+                          <span x-text="copy.textModel"></span>
+                          <select x-model="defaults.model" x-on:change="handleTextModelDefaultChange($event)" x-bind:disabled="settingsControlsDisabled || !hasKeyedTextProviders">
+                            <template x-if="!hasKeyedTextProviders">
+                              <option value="" x-text="copy.routingDefaultUnavailable"></option>
+                            </template>
+                            <template x-for="model in selectedTextModels" x-bind:key="model">
+                              <option x-bind:value="model" x-text="model"></option>
+                            </template>
+                          </select>
+                        </label>
+                        <label x-show="hasReasoningEffortOptions">
+                          <span x-text="copy.reasoningEffort"></span>
+                          <select x-model="defaults.reasoning_effort" x-on:change="handleReasoningEffortDefaultChange($event)" x-bind:disabled="settingsControlsDisabled">
+                            <option value="" x-text="copy.reasoningEffortUnset"></option>
+                            <template x-for="effort in reasoningEffortOptions" x-bind:key="effort">
+                              <option x-bind:value="effort" x-text="effort"></option>
+                            </template>
+                          </select>
+                        </label>
+                        <p class="reasoning-effort-unsupported" role="status" x-show="!hasReasoningEffortOptions">
+                          <span x-text="copy.reasoningEffort"></span>
+                          <strong x-text="copy.reasoningEffortUnsupported"></strong>
+                        </p>
+                      </div>
+                      <label>
+                        <span x-text="copy.dictationProvider"></span>
+                        <select x-model="defaults.dictation_provider" x-on:change="handleDictationProviderDefaultChange($event)" x-bind:disabled="settingsControlsDisabled || !hasDictationProviders">
+                          <template x-if="!hasDictationProviders">
+                            <option value="" x-text="copy.routingDefaultUnavailable"></option>
+                          </template>
+                          <template x-for="provider in dictationProviders" x-bind:key="provider.id">
+                            <option x-bind:value="provider.id" x-text="provider.label"></option>
+                          </template>
+                        </select>
+                      </label>
+                      <label>
+                        <span x-text="copy.dictationModel"></span>
+                        <select x-model="defaults.dictation_model" x-on:change="handleDictationModelDefaultChange($event)" x-bind:disabled="settingsControlsDisabled || !hasDictationProviders">
+                          <template x-if="!hasDictationProviders">
+                            <option value="" x-text="copy.routingDefaultUnavailable"></option>
+                          </template>
+                          <template x-for="model in selectedDictationModels" x-bind:key="model">
+                            <option x-bind:value="model" x-text="model"></option>
+                          </template>
+                        </select>
+                      </label>
+                      <details
+                        class="settings-form-wide system-prompt-disclosure"
+                        x-bind:open="routingSystemPromptOpen"
+                        x-on:toggle="routingSystemPromptOpen = $event.currentTarget.open"
+                      >
+                        <summary class="system-prompt-summary">
+                          <span id="routing-system-prompt-label" x-text="copy.systemPrompt"></span>
+                          <span
+                            class="system-prompt-disclosure-state"
+                            aria-hidden="true"
+                            x-text="routingSystemPromptOpen ? copy.systemPromptExpanded : copy.systemPromptHidden"
+                          ></span>
+                        </summary>
+                        <textarea
+                          id="routing-system-prompt-input"
+                          rows="4"
+                          aria-labelledby="routing-system-prompt-label"
+                          x-bind:value="defaults.system_prompt"
+                          x-on:input="handleRoutingSystemPromptInput($event)"
+                          x-on:change="autosaveRoutingDefaults()"
+                          x-bind:disabled="settingsControlsDisabled"
+                        ></textarea>
+                      </details>
+                    </form>
+                  </settings-section>
+
+                  <details
+                    class="settings-section usage-examples-section"
+                    x-bind:open="usageExamplesOpen"
+                    x-on:toggle="usageExamplesOpen = $event.currentTarget.open"
+                  >
+                    <summary class="section-header compact usage-examples-summary">
+                      <div>
+                        <p class="eyebrow" x-text="copy.examplesEyebrow"></p>
+                        <h2 x-text="copy.examplesTitle"></h2>
+                      </div>
+                    </summary>
+                    <example-list>
+                      <template x-for="example in requestExamples" x-bind:key="example.id">
+                        <request-example x-bind:data-example-id="example.id">
+                          <header class="example-header">
+                            <h3 x-text="example.title"></h3>
+                            <button
+                              type="button"
+                              x-on:click="copyRequestExample(example.command)"
+                              x-bind:title="copy.copyExample"
+                              x-bind:aria-label="copy.copyExample"
+                              x-text="copy.copyExample"
+                            ></button>
+                          </header>
+                          <pre class="usage-snippet" x-text="example.command"></pre>
+                        </request-example>
+                      </template>
+                    </example-list>
+                  </details>
+
+                  <settings-section aria-labelledby="provider-settings-title">
+                    <header class="section-header compact provider-section-header">
+                      <h2 id="provider-settings-title" class="eyebrow" x-text="copy.providersEyebrow"></h2>
+                    </header>
+                    <provider-editor>
+                      <template x-if="selectedProvider">
+                        <provider-settings-fields>
+                          <label class="provider-selector">
+                            <span class="visually-hidden" x-text="copy.providerSelector"></span>
+                            <select x-ref="providerSelector" x-on:change="selectProvider($event.target.value)" x-bind:disabled="settingsControlsDisabled || providerKeyRevealPending">
+                              <template x-for="provider in providers" x-bind:key="provider.id">
+                                <option x-bind:value="provider.id" x-bind:selected="provider.id === selectedProviderID" x-text="provider.label"></option>
+                              </template>
+                            </select>
+                          </label>
+                          <provider-key-field>
+                            <label for="provider-api-key-input">
+                              <span x-text="selectedProvider.label + copy.providerKeySuffix"></span>
+                            </label>
+                            <provider-key-input>
+                              <input id="provider-api-key-input" x-ref="providerKeyInput" type="text" autocomplete="off" x-bind:value="selectedProviderKeyInputValue" x-on:paste="handleSelectedProviderKeyPaste()" x-on:input="handleSelectedProviderKeyInput($event)" x-on:change="autosaveSelectedProvider()" x-bind:readonly="selectedProviderKeyInputReadOnly" x-bind:disabled="busy || settingsClosePending || providerKeyRevealPending">
+                              <button type="button" class="icon-only provider-key-visibility-toggle" x-show="selectedProvider.has_key || selectedProviderKeyHasInput" x-on:mousedown.prevent x-on:click="handleSelectedProviderKeyAction()" x-bind:disabled="settingsControlsDisabled || providerAutosavePending || providerKeyRevealPending" x-bind:title="selectedProviderKeyActionCopy" x-bind:aria-label="selectedProviderKeyActionCopy" x-bind:aria-pressed="providerKeyVisible">
+                                <span class="material-symbols-outlined" x-show="!providerKeyVisible" aria-hidden="true">visibility</span>
+                                <span class="material-symbols-outlined" x-show="providerKeyVisible" aria-hidden="true">visibility_off</span>
+                              </button>
+                              <button type="button" class="icon-only danger provider-key-remove" x-ref="providerKeyRemove" x-show="selectedProvider.has_key || selectedProviderKeyHasInput" x-on:mousedown.prevent x-on:click="requestSelectedProviderKeyRemoval()" x-bind:disabled="settingsControlsDisabled || providerAutosavePending || providerKeyRevealPending" x-bind:title="copy.removeProviderKey" x-bind:aria-label="copy.removeProviderKey">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                              </button>
+                            </provider-key-input>
+                            <p class="field-hint provider-key-verification-pending" role="status" aria-live="polite" x-cloak x-show="providerKeyVerificationPending" x-text="copy.providerKeyVerifying"></p>
+                            <provider-key-verification-error class="field-error" role="alert" x-cloak x-show="providerKeyVerificationFailed">
+                              <span x-text="providerKeyVerificationFailure"></span>
+                              <button type="button" x-on:click="retrySelectedProviderKeyVerification()" x-bind:disabled="settingsControlsDisabled" x-text="copy.providerKeyRetry"></button>
+                            </provider-key-verification-error>
+                          </provider-key-field>
+                          <label>
+                            <span x-text="copy.providerTextModel"></span>
+                            <select x-bind:value="providerEditorSession.textModel" x-on:change="handleSelectedProviderTextModelChange($event)" x-bind:disabled="settingsControlsDisabled || providerKeyRevealPending">
+                              <template x-for="model in selectedProvider.text_models" x-bind:key="model.id">
+                                <option x-bind:value="model.id" x-bind:selected="model.id === providerEditorSession.textModel" x-text="model.id"></option>
+                              </template>
+                            </select>
+                          </label>
+                          <details
+                            class="provider-system-prompt system-prompt-disclosure"
+                            x-bind:open="providerSystemPromptOpen"
+                            x-on:toggle="providerSystemPromptOpen = $event.currentTarget.open"
+                          >
+                            <summary class="system-prompt-summary">
+                              <span id="provider-system-prompt-label" x-text="copy.providerSystemPrompt"></span>
+                              <span
+                                class="system-prompt-disclosure-state"
+                                aria-hidden="true"
+                                x-text="providerSystemPromptOpen ? copy.systemPromptExpanded : copy.systemPromptHidden"
+                              ></span>
+                            </summary>
+                            <textarea
+                              id="provider-system-prompt-input"
+                              rows="3"
+                              aria-labelledby="provider-system-prompt-label"
+                              x-bind:value="providerEditorSession.systemPrompt"
+                              x-on:input="handleSelectedProviderSystemPromptInput($event)"
+                              x-on:change="autosaveSelectedProvider()"
+                              x-bind:disabled="settingsControlsDisabled || providerKeyRevealPending"
+                            ></textarea>
+                          </details>
+                        </provider-settings-fields>
+                      </template>
+                    </provider-editor>
+                  </settings-section>
+                </settings-body>
+              </settings-modal>
+              <provider-removal-overlay
+                x-cloak
+                x-show="providerRemovalConfirmationOpen"
+                x-on:click.self="cancelProviderKeyRemoval()"
+                role="presentation"
+              >
+                <provider-removal-dialog
+                  role="alertdialog"
+                  aria-modal="true"
+                  aria-labelledby="provider-removal-title"
+                  aria-describedby="provider-removal-description"
+                  x-on:keydown.tab="trapProviderKeyRemovalFocus($event)"
+                >
+                  <h3 id="provider-removal-title" x-text="copy.removeProviderKeyConfirmationTitle"></h3>
+                  <p id="provider-removal-description" x-text="copy.removeProviderKeyConfirmationMessage"></p>
+                  <footer class="provider-removal-actions">
+                    <button type="button" x-ref="providerRemovalCancel" x-on:click="cancelProviderKeyRemoval()" x-text="copy.cancelProviderKeyRemoval"></button>
+                    <button type="button" class="danger provider-removal-confirm" x-ref="providerRemovalConfirm" x-on:click="confirmProviderKeyRemoval()" x-text="copy.confirmProviderKeyRemoval"></button>
+                  </footer>
+                </provider-removal-dialog>
+              </provider-removal-overlay>
+              <tenant-dialog-overlay
+                class="tenant-rename-overlay"
+                x-cloak
+                x-show="tenantRenameDialogOpen"
+                x-on:click.self="cancelTenantNameEdit()"
+                role="presentation"
+              >
+                <tenant-dialog
+                  class="tenant-rename-dialog"
+                  x-ref="tenantRenameDialog"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="rename-tenant-title"
+                  x-bind:aria-describedby="tenantNameError ? 'rename-tenant-error' : 'rename-tenant-hint'"
+                  x-on:keydown.escape.stop.prevent="cancelTenantNameEdit()"
+                  x-on:keydown.tab="trapRenameTenantFocus($event)"
+                >
+                  <form x-on:submit.prevent="saveTenantName()">
+                    <h2 id="rename-tenant-title" x-text="copy.renameTenant"></h2>
+                    <label for="rename-tenant-name">
+                      <span x-text="copy.tenantName"></span>
+                      <input
+                        id="rename-tenant-name"
+                        x-ref="tenantNameInput"
+                        type="text"
+                        maxlength="80"
+                        autocomplete="off"
+                        x-bind:value="tenantNameDraft"
+                        x-on:input="handleTenantNameInput($event)"
+                        x-bind:disabled="settingsControlsDisabled"
+                        x-bind:aria-invalid="tenantNameError ? 'true' : 'false'"
+                      >
+                    </label>
+                    <p id="rename-tenant-hint" class="field-hint" x-text="copy.tenantNameHint"></p>
+                    <p id="rename-tenant-error" class="field-error" x-show="tenantNameError" x-text="tenantNameError" role="alert"></p>
+                    <footer>
+                      <button type="button" x-ref="tenantRenameCancel" x-on:click="cancelTenantNameEdit()" x-bind:disabled="settingsControlsDisabled" x-text="copy.cancelTenantName"></button>
+                      <button type="submit" x-bind:disabled="settingsControlsDisabled || !tenantNameDirty" x-text="copy.saveTenantName"></button>
+                    </footer>
+                  </form>
+                </tenant-dialog>
+              </tenant-dialog-overlay>
+              <tenant-dialog-overlay
+                class="client-key-replace-overlay"
+                x-cloak
+                x-show="clientKeyReplacementConfirmationOpen"
+                x-on:click.self="cancelClientKeyReplacement()"
+                role="presentation"
+              >
+                <tenant-dialog
+                  class="client-key-replace-dialog"
+                  x-ref="clientKeyReplacementDialog"
+                  role="alertdialog"
+                  aria-modal="true"
+                  aria-labelledby="replace-client-key-title"
+                  aria-describedby="replace-client-key-description"
+                  x-bind:aria-busy="clientKeyReplacementPending"
+                  x-on:keydown.escape.stop.prevent="cancelClientKeyReplacement()"
+                  x-on:keydown.tab="trapClientKeyReplacementFocus($event)"
+                >
+                  <h2 id="replace-client-key-title" x-text="copy.replaceKeyTitle"></h2>
+                  <p id="replace-client-key-description" x-text="copy.replaceKeyDescription"></p>
+                  <footer>
+                    <button type="button" x-ref="clientKeyReplacementCancel" x-on:click="cancelClientKeyReplacement()" x-bind:disabled="clientKeyReplacementPending" x-text="copy.cancelReplaceKey"></button>
+                    <button type="button" x-ref="clientKeyReplacementConfirm" x-on:click="confirmClientKeyReplacement()" x-bind:disabled="clientKeyReplacementPending" x-text="copy.confirmReplaceKey"></button>
+                  </footer>
+                </tenant-dialog>
+              </tenant-dialog-overlay>
+              <tenant-delete-overlay
+                x-cloak
+                x-show="deleteTenantConfirmationOpen"
+                x-on:click.self="cancelTenantDeletion()"
+                role="presentation"
+              >
+                <tenant-delete-dialog
+                  x-ref="deleteTenantDialog"
+                  role="alertdialog"
+                  aria-modal="true"
+                  aria-labelledby="tenant-delete-title"
+                  aria-describedby="tenant-delete-description"
+                  x-on:keydown.tab="trapDeleteTenantFocus($event)"
+                >
+                  <h3 id="tenant-delete-title" x-text="deleteTenantTitle"></h3>
+                  <p id="tenant-delete-description">
+                    <strong x-text="settingsTenantName"></strong>
+                    <span x-text="copy.deleteTenantDescription"></span>
+                  </p>
+                  <footer class="provider-removal-actions">
+                    <button
+                      type="button"
+                      x-ref="deleteTenantCancel"
+                      x-on:click="cancelTenantDeletion()"
+                      x-bind:disabled="deleteTenantPending"
+                      x-text="copy.cancelDeleteTenant"
+                    ></button>
+                    <button
+                      type="button"
+                      class="danger"
+                      x-on:click="confirmTenantDeletion()"
+                      x-bind:disabled="deleteTenantPending"
+                      x-text="copy.deleteTenantConfirmation"
+                    ></button>
+                  </footer>
+                </tenant-delete-dialog>
+              </tenant-delete-overlay>
+            </settings-overlay>
+
+          </workspace-surface>
+        </template>
+        <tenant-dialog-overlay
+          x-cloak
+          x-show="createTenantDialogOpen"
+          x-on:click.self="closeCreateTenantDialog()"
+          role="presentation"
+        >
+          <tenant-dialog
+            x-ref="createTenantDialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-tenant-title"
+            x-bind:aria-describedby="createTenantError ? 'create-tenant-error' : 'create-tenant-hint'"
+            x-on:keydown.tab="trapCreateTenantFocus($event)"
+          >
+            <form x-on:submit.prevent="submitCreateTenant()">
+              <h2 id="create-tenant-title" x-text="copy.createTenantTitle"></h2>
+              <label for="create-tenant-name">
+                <span x-text="copy.tenantName"></span>
+                <input
+                  id="create-tenant-name"
+                  x-ref="createTenantName"
+                  type="text"
+                  maxlength="80"
+                  autocomplete="off"
+                  x-bind:value="createTenantName"
+                  x-on:input="handleCreateTenantNameInput($event)"
+                  x-bind:disabled="createTenantPending"
+                  x-bind:aria-invalid="createTenantError ? 'true' : 'false'"
+                >
+              </label>
+              <p id="create-tenant-hint" class="field-hint" x-text="copy.tenantNameHint"></p>
+              <p id="create-tenant-error" class="field-error" x-show="createTenantError" x-text="createTenantError" role="alert"></p>
+              <footer>
+                <button type="button" x-on:click="closeCreateTenantDialog()" x-bind:disabled="createTenantPending" x-text="copy.cancelCreateTenant"></button>
+                <button type="submit" x-bind:disabled="createTenantPending" x-text="copy.confirmCreateTenant"></button>
+              </footer>
+            </form>
+          </tenant-dialog>
+        </tenant-dialog-overlay>
+
+        <tenant-dialog-overlay
+          x-cloak
+          x-show="discardTenantChangesOpen"
+          role="presentation"
+        >
+          <tenant-dialog
+            x-ref="discardTenantDialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="discard-tenant-title"
+            aria-describedby="discard-tenant-description"
+            x-on:keydown.tab="trapDiscardTenantFocus($event)"
+          >
+            <h2 id="discard-tenant-title" x-text="copy.discardTenantChangesTitle"></h2>
+            <p id="discard-tenant-description" x-text="copy.discardTenantChangesDescription"></p>
+            <footer>
+              <button type="button" x-ref="discardTenantStay" x-on:click="cancelTenantSwitch()" x-text="copy.stayOnTenant"></button>
+              <button type="button" class="danger" x-on:click="confirmTenantSwitch()" x-text="copy.discardAndSwitchTenant"></button>
+            </footer>
+          </tenant-dialog>
+        </tenant-dialog-overlay>
+      </llm-proxy-key-management>
+      <section class="public-resource-link" aria-labelledby="public-resource-title">
+        <div>
+          <p class="eyebrow">Resources</p>
+          <h2 id="public-resource-title">LLM Proxy implementation guides</h2>
+          <p>Read repo-grounded pages on client authentication, provider routing, tenant secrets, dictation, usage, runtime config, and the management UI.</p>
+        </div>
+        <div class="public-resource-actions">
+          <a href="/docs/">API reference</a>
+          <a href="/openapi.yaml">OpenAPI schema</a>
+          <a href="/resources/llm-proxy-client-authentication/">Client authentication</a>
+          <a href="/resources/">Browse resources</a>
+        </div>
+      </section>
+    </main>
+
+    <mpr-footer theme-switcher="square"></mpr-footer>
+  </body>
+</html>
