@@ -118,7 +118,30 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 	staticServer := httptest.NewServer(http.FileServer(http.Dir("../../site")))
 	defer staticServer.Close()
 
-	staticIndexResponse, indexError := http.Get(staticServer.URL + "/")
+	landingResponse, landingError := http.Get(staticServer.URL + "/")
+	if landingError != nil {
+		t.Fatalf("static landing request: %v", landingError)
+	}
+	defer landingResponse.Body.Close()
+	if landingResponse.StatusCode != http.StatusOK {
+		t.Fatalf("static landing status=%d want=%d", landingResponse.StatusCode, http.StatusOK)
+	}
+	landingBytes, readLandingError := io.ReadAll(landingResponse.Body)
+	if readLandingError != nil {
+		t.Fatalf("read static landing: %v", readLandingError)
+	}
+	landingHTML := string(landingBytes)
+	for _, requiredFragment := range []string{
+		`One stable interface for the models your products depend on.`,
+		`href="/manage/"`,
+		`<!-- llm-proxy-capability-catalog -->`,
+	} {
+		if !strings.Contains(landingHTML, requiredFragment) {
+			t.Fatalf("static landing missing %q", requiredFragment)
+		}
+	}
+
+	staticIndexResponse, indexError := http.Get(staticServer.URL + "/manage/")
 	if indexError != nil {
 		t.Fatalf("static index request: %v", indexError)
 	}
