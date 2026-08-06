@@ -390,7 +390,7 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   expect((await logoutResponsePromise).status()).toBe(httpNoContent);
 
   await expect(page).toHaveURL(`${stack.frontendOrigin}/`);
-  await expect(page.getByRole("heading", { name: "One stable interface for the models your products depend on." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Integrate once. Use the model that fits." })).toBeVisible();
   await expect(page.locator("llm-proxy-key-management")).toHaveCount(0);
   await expectCookies(context, {
     session: false,

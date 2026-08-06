@@ -30,7 +30,23 @@ const sitemapPath = "/sitemap.xml";
 const robotsPath = "/robots.txt";
 const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
-const repositoryUsageURL = "https://github.com/tyemirov/llm-proxy#usage";
+const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
+const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
+const applicationModuleRevision = "20260806b109";
+const applicationModuleFiles = Object.freeze([
+  "alpineRuntime.js",
+  "app.js",
+  "constants.js",
+  "startupGuard.js",
+  "core/backendClient.js",
+  "core/mprShell.js",
+  "core/runtimeTransition.js",
+  "ui/applicationStartup.js",
+  "ui/keyManagement.js",
+  "ui/runtimeFailure.js",
+  "ui/usagePresentation.js",
+]);
+const repositoryURL = "https://github.com/tyemirov/llm-proxy";
 const mprUICSSURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css";
 const mprUIConfigURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js";
 const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
@@ -41,6 +57,16 @@ const httpNotFound = 404;
 const httpInternalServerError = 500;
 const noticeClockPauseLeadMilliseconds = 5_000;
 const noticeClockPreDeadlineAdvanceMilliseconds = 4_000;
+
+/**
+ * @param {string} moduleSource
+ * @returns {string[]}
+ */
+function runtimeJavaScriptSpecifiers(moduleSource) {
+  return [...moduleSource.matchAll(/^\s*import(?:[\s\S]*?\sfrom\s+)?["']([^"']+\.js(?:\?v=[^"']+)*)["'];/gmu)]
+    .map((match) => match[1])
+    .filter((specifier) => specifier.startsWith("."));
+}
 const noticeClockPostDeadlineAdvanceMilliseconds = 2_000;
 const tenantAccessDesktopMaxHeight = 64;
 const usageIntervals = Object.freeze([
@@ -62,9 +88,10 @@ const generatedResourcePageCount = 46;
 const landingModifiedDate = "2026-08-06";
 const seoContentModifiedDate = "2026-07-11";
 const seoCurrentContentModifiedDate = "2026-07-22";
-const seoMigrationContentModifiedDate = "2026-07-25";
 const seoUsageContentModifiedDate = "2026-07-26";
-const seoClientDocumentationModifiedDate = "2026-07-26";
+const seoClientDocumentationModifiedDate = landingModifiedDate;
+const seoSecretRotationModifiedDate = "2026-07-26";
+const obsoletePublicTermPattern = new RegExp(["work", "space"].join(""), "i");
 const settingsLayerViewports = Object.freeze([
   { name: "desktop", width: 1280, height: 720 },
   { name: "compact", width: 480, height: 780 },
@@ -129,16 +156,51 @@ test("public landing explains the product and exposes the generated capability c
   expect(htmlResponse.status()).toBe(httpOK);
   let html = await htmlResponse.text();
   expect(html).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/">');
-  expect(html).toContain("One stable interface for the models your products depend on.");
-  expect(html).toContain("Client access can be generated and rotated independently");
-  expect(html).toContain("plain text, JSON, XML, or CSV responses");
+  expect(html).toContain("Integrate once. Use the model that fits.");
+  expect(html).toContain("official Go, Python, and command-line clients");
+  expect(html).toContain("AI-assisted builders");
+  expect(html).toContain("Startups and product teams");
+  expect(html).toContain("Platform and engineering teams");
+  expect(html).toContain("The catalog is the source of truth.");
+  expect(html).toContain("Provider lifecycle, model-onboarding, and hosted uptime commitments are outside the current catalog contract");
+  const integrationOffset = html.indexOf('id="integrate"');
+  const audienceOffset = html.indexOf('id="audience-title"');
+  const capabilitiesOffset = html.indexOf('id="capabilities"');
+  const modelsOffset = html.indexOf('id="models"');
+  expect(integrationOffset).toBeGreaterThan(-1);
+  expect(integrationOffset).toBeLessThan(audienceOffset);
+  expect(audienceOffset).toBeLessThan(capabilitiesOffset);
+  expect(capabilitiesOffset).toBeLessThan(modelsOffset);
   expect(html).toContain(`href="${applicationPath}"`);
-  expect(html).toContain(`href="${resourcesPath}"`);
+  expect(html).toContain(`"href":"${resourcesPath}"`);
   expect(html).toContain(`href="${apiDocumentationPath}"`);
-  expect(html).toContain(`"href":"${openAPIPath}"`);
+  expect(html).toContain(`"href":"${openAPISchemaViewerPath}"`);
   expect(html).toContain('<table class="catalog-table">');
-  expect(html).toContain('<strong>12</strong><span>Text providers</span>');
-  expect(html).toContain('<code>gpt-4.1</code><span class="catalog-model__default">Default</span>');
+  expect(html).toContain('<strong>12</strong><span>Providers</span>');
+  expect(html).toContain('<strong>58</strong><span>Models</span>');
+  expect(html).toContain('<strong>6</strong><span>Filterable capabilities</span>');
+  expect(html).toContain('data-catalog-sort-header="provider"');
+  expect(html).toContain('data-catalog-sort-header="model"');
+  expect(html).toContain('data-catalog-sort-header="capabilities"');
+  expect(html).not.toContain('<th scope="col">Dictation models</th>');
+  expect(html).toContain(
+    '<code data-catalog-model-id>gpt-4.1</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span>',
+  );
+  expect(html).toContain(
+    '<code data-catalog-model-id>gpt-4o-mini-transcribe</code><span class="catalog-model__default" title="This is the provider catalog default for dictation routing; account settings can select another model.">Default for dictation</span>',
+  );
+  expect(html).toContain('data-model="gpt-4o-mini-transcribe" data-capabilities="dictation"');
+  expect(html).toContain('aria-label="Search all model characteristics"');
+  expect(html).toContain("data-catalog-search-submit");
+  expect(html).toContain("data-catalog-filter-panel");
+  expect(html).toContain("data-catalog-search-text");
+  expect(html).toContain("data-capability-count");
+  expect(html).toContain("data-catalog-capability");
+  expect(html).toContain("data-catalog-sort");
+  expect(html).not.toContain('data-catalog-capability-action="background"');
+  expect(html).not.toContain('data-catalog-capability-action="synchronous"');
+  expect(html).not.toContain("data-catalog-provider");
+  expect(html).not.toContain("<select");
   expect(html).toContain("gpt-4o-mini-transcribe");
   expect(html).toContain("gemini-2.5-flash");
   expect(html).toContain("claude-sonnet-4-6");
@@ -148,8 +210,10 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).not.toContain("data-config-url");
   expect(html).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
   expect(html).toContain(`<script defer src="${mprUIBundleURL}"></script>`);
+  expect(html).toContain('<link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">');
   expect(html).not.toContain(mprUIConfigURL);
-  expect(html).toContain('<mpr-footer\n      size="small"\n      sticky="false"');
+  expect(html).toContain('<mpr-header\n      class="public-site-header"');
+  expect(html).toContain('<mpr-footer\n      class="public-site-footer"\n      size="small"\n      sticky="false"');
   expect(html).toContain('prefix-text="LLM Proxy"');
   expect(html).toContain('privacy-link-hidden="true"');
   expect(html).toContain('<meta name="theme-color" content="#0f1114">');
@@ -163,10 +227,19 @@ test("public landing explains the product and exposes the generated capability c
   expect(managementHTML).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
   expect(managementHTML).toContain(`<script src="${mprUIConfigURL}"></script>`);
   expect(managementHTML).toContain(`data-mpr-ui-bundle-src="${mprUIBundleURL}"`);
-  expect(managementHTML).toContain('<script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260727i036"></script>');
+  expect(managementHTML).toContain(`<script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=${applicationModuleRevision}"></script>`);
   expect(managementHTML).toContain(
-    '<script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260727i036"></script>',
+    `<script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=${applicationModuleRevision}"></script>`,
   );
+  for (const moduleFile of applicationModuleFiles) {
+    const moduleSource = await readFile(path.join(siteSourceRoot, "assets/llm-proxy/js", moduleFile), "utf8");
+    for (const specifier of runtimeJavaScriptSpecifiers(moduleSource)) {
+      expect(specifier, `${moduleFile} must use the current application module revision`).toContain(`?v=${applicationModuleRevision}`);
+    }
+    for (const revision of moduleSource.matchAll(/\?v=([a-z0-9]+)/gu)) {
+      expect(revision[1], `${moduleFile} must not reference a stale application module revision`).toBe(applicationModuleRevision);
+    }
+  }
   expect(managementHTML).not.toContain("MarcoPoloResearchLab/mpr-ui@v");
   expect(managementHTML).not.toContain("tauth.js");
   expect(managementHTML).toMatch(/<notification-region\s+slot="aux"[\s\S]*?<mpr-user\s+slot="aux"/);
@@ -198,9 +271,9 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
   expect(html).toContain(`<script src="${mprUIConfigURL}"></script>`);
   expect(html).toContain(`data-mpr-ui-bundle-src="${mprUIBundleURL}"`);
-  expect(html).toContain('<script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260727i036"></script>');
+  expect(html).toContain(`<script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=${applicationModuleRevision}"></script>`);
   expect(html).toContain(
-    '<script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260727i036"></script>',
+    `<script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=${applicationModuleRevision}"></script>`,
   );
   expect(html).not.toContain("MarcoPoloResearchLab/mpr-ui@v");
   expect(html).not.toContain("tauth.js");
@@ -392,17 +465,286 @@ test("public landing explains the product and exposes the generated capability c
   expect(appIconSVG).toContain("#4ad3d9");
 });
 
+test("the capability catalog remains complete without JavaScript", async ({ browser }) => {
+  const browserContext = await browser.newContext({ javaScriptEnabled: false });
+  const page = await browserContext.newPage();
+  await page.goto(baseURL);
+
+  const catalog = page.locator("capability-catalog");
+  await expect(catalog).toHaveAttribute("data-enhanced", "false");
+  await expect(catalog.locator("[data-catalog-toolbar]")).toBeHidden();
+  await expect(catalog.getByRole("columnheader")).toHaveText(["Provider", "Model", "Capabilities"]);
+  await expect(catalog.locator("[data-catalog-row]")).toHaveCount(58);
+  await expect(catalog.locator('[data-model="gpt-4o-mini-transcribe"]')).toContainText("Dictation");
+
+  await browserContext.close();
+});
+
+test("visitors can disclose filters, search every characteristic, and sort through table headers", async ({ page }) => {
+  await installAssetRoutes(page);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`${baseURL}/#models`);
+
+  const catalog = page.locator("capability-catalog");
+  const rows = catalog.locator("[data-catalog-row]");
+  const visibleRows = catalog.locator("[data-catalog-row]:visible");
+  const resultCount = catalog.locator("[data-catalog-result-count]");
+  const searchInput = catalog.getByLabel("Search all model characteristics");
+  const searchSubmit = catalog.getByRole("button", { name: "Toggle capability filters" });
+  const filterPanel = catalog.locator("[data-catalog-filter-panel]");
+  const providerHeader = catalog.locator('[data-catalog-sort-header="provider"]');
+  const modelHeader = catalog.locator('[data-catalog-sort-header="model"]');
+  const capabilitiesHeader = catalog.locator('[data-catalog-sort-header="capabilities"]');
+  await expect(catalog).toHaveAttribute("data-enhanced", "true");
+  await expect(rows).toHaveCount(58);
+  await expect(resultCount).toHaveText("58 of 58 models");
+  await expect(filterPanel).toBeHidden();
+  await expect(searchSubmit).toHaveAttribute("aria-expanded", "false");
+
+  await searchSubmit.click();
+  await expect(filterPanel).toBeVisible();
+  await expect(searchSubmit).toHaveAttribute("aria-expanded", "true");
+
+  await searchSubmit.click();
+  await expect(filterPanel).toBeHidden();
+  await expect(searchSubmit).toHaveAttribute("aria-expanded", "false");
+
+  await searchInput.focus();
+  await expect(filterPanel).toBeVisible();
+  await expect(searchSubmit).toHaveAttribute("aria-expanded", "true");
+  await searchInput.press("Escape");
+  await expect(filterPanel).toBeHidden();
+  await expect(searchSubmit).toHaveAttribute("aria-expanded", "false");
+  await expect(catalog.locator('[data-catalog-search-text*="background"]')).toHaveCount(0);
+  await expect(catalog.locator('[data-catalog-search-text*="synchronous"]')).toHaveCount(0);
+  await searchInput.fill("gemini-3.5-flash image_input audio_input");
+  await expect(filterPanel).toBeVisible();
+  await expect(resultCount).toHaveText("1 of 58 model");
+  await expect(visibleRows).toHaveAttribute("data-model", "gemini-3.5-flash");
+
+  await searchInput.fill("gpt-5.5-pro openai_responses xhigh");
+  await expect(resultCount).toHaveText("1 of 58 model");
+  await expect(visibleRows).toHaveAttribute("data-model", "gpt-5.5-pro");
+
+  await searchInput.fill("glm-5.2 131072 token");
+  await expect(resultCount).toHaveText("1 of 58 model");
+  await expect(visibleRows).toHaveAttribute("data-model", "glm-5.2");
+
+  await catalog.getByRole("button", { name: "Reset" }).click();
+  await searchInput.fill("default dictation");
+  await expect(resultCount).toHaveText("4 of 58 models");
+  for (const visibleRow of await visibleRows.all()) {
+    await expect(visibleRow).toHaveAttribute("data-capabilities", "dictation");
+  }
+
+  await catalog.getByRole("button", { name: "Reset" }).click();
+  await catalog.getByRole("checkbox", { name: "Image input" }).check();
+  await catalog.getByRole("checkbox", { name: "Audio message input" }).check();
+  await expect(resultCount).toHaveText("2 of 58 models");
+  await expect(visibleRows).toHaveCount(2);
+
+  await searchSubmit.click();
+  await expect(filterPanel).toBeHidden();
+  await expect(resultCount).toHaveText("2 of 58 models");
+  await searchSubmit.click();
+  await expect(filterPanel).toBeVisible();
+  await expect(catalog.getByRole("checkbox", { name: "Image input" })).toBeChecked();
+  await expect(catalog.getByRole("checkbox", { name: "Audio message input" })).toBeChecked();
+
+  await catalog.getByRole("checkbox", { name: "Dictation" }).check();
+  await expect(resultCount).toHaveText("0 of 58 models");
+  await expect(catalog.locator("[data-catalog-empty]")).toBeVisible();
+
+  await catalog.getByRole("button", { name: "Reset" }).click();
+  await expect(resultCount).toHaveText("58 of 58 models");
+  await searchInput.press("Escape");
+  await catalog.getByRole("button", { name: "Filter by Dictation" }).first().click();
+  await expect(filterPanel).toBeVisible();
+  await expect(catalog.getByRole("checkbox", { name: "Dictation" })).toBeChecked();
+  await expect(resultCount).toHaveText("5 of 58 models");
+
+  await catalog.getByRole("button", { name: "Reset" }).click();
+  await expect(providerHeader).toHaveAttribute("aria-sort", "ascending");
+  await catalog.getByRole("button", { name: "Sort by Provider descending" }).click();
+  await expect(providerHeader).toHaveAttribute("aria-sort", "descending");
+  await expect
+    .poll(async () => rows.evaluateAll((elements) => {
+        const providersAndModels = elements.map((element) => [
+          element.getAttribute("data-provider") || "",
+          element.getAttribute("data-model") || "",
+        ]);
+        return providersAndModels.every((entry, index) => {
+          if (index === 0) {
+            return true;
+          }
+          const previous = providersAndModels[index - 1];
+          return previous[0].localeCompare(entry[0], undefined, { sensitivity: "base" }) > 0 ||
+            (previous[0].localeCompare(entry[0], undefined, { sensitivity: "base" }) === 0 &&
+              previous[1].localeCompare(entry[1], undefined, { sensitivity: "base" }) >= 0);
+        });
+      }))
+    .toBe(true);
+
+  await catalog.getByRole("button", { name: "Sort by Model ascending" }).click();
+  await expect(modelHeader).toHaveAttribute("aria-sort", "ascending");
+  await expect(providerHeader).not.toHaveAttribute("aria-sort");
+  await expect
+    .poll(async () => rows.evaluateAll((elements) => {
+        const models = elements.map((element) => element.getAttribute("data-model") || "");
+        return models.every(
+          (model, index) => index === 0 || models[index - 1].localeCompare(model, undefined, { sensitivity: "base" }) <= 0,
+        );
+      }))
+    .toBe(true);
+
+  await catalog.getByRole("button", { name: "Sort by Model descending" }).click();
+  await expect(modelHeader).toHaveAttribute("aria-sort", "descending");
+  await catalog.getByRole("button", { name: "Sort by Capabilities descending" }).click();
+  await expect(capabilitiesHeader).toHaveAttribute("aria-sort", "descending");
+  await expect
+    .poll(async () => rows.evaluateAll((elements) => {
+        const capabilityCounts = elements.map((element) => Number(element.getAttribute("data-capability-count")));
+        return capabilityCounts.every(
+          (capabilityCount, index) => index === 0 || capabilityCounts[index - 1] >= capabilityCount,
+        );
+      }))
+    .toBe(true);
+
+  await catalog.getByRole("button", { name: "Reset" }).click();
+  await expect(providerHeader).toHaveAttribute("aria-sort", "ascending");
+  await expect(modelHeader).not.toHaveAttribute("aria-sort");
+  await expect(capabilitiesHeader).not.toHaveAttribute("aria-sort");
+
+  await searchInput.focus();
+  await searchInput.press("Escape");
+  await expect(filterPanel).toBeHidden();
+  await searchInput.press("Enter");
+  await expect(filterPanel).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 780 });
+  await expect(searchInput).toBeVisible();
+  await expect(filterPanel).toBeVisible();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth),
+  ).toBe(true);
+});
+
+test("every public HTML page publishes the identical MPR header and footer", async ({ request }) => {
+  const sitemapResponse = await request.get(`${baseURL}${sitemapPath}`);
+  expect(sitemapResponse.status()).toBe(httpOK);
+  const sitemapXML = await sitemapResponse.text();
+  const publicPaths = [...sitemapXML.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => new URL(match[1]).pathname);
+  expect(publicPaths).toHaveLength(generatedResourcePageCount + 3);
+
+  let canonicalHeader = "";
+  let canonicalFooter = "";
+  for (const publicPath of publicPaths) {
+    const response = await request.get(`${baseURL}${publicPath}`);
+    expect(response.status(), publicPath).toBe(httpOK);
+    const html = await response.text();
+    const shell = publicShellMarkup(html);
+    canonicalHeader ||= shell.header;
+    canonicalFooter ||= shell.footer;
+    expect(shell.header, publicPath).toBe(canonicalHeader);
+    expect(shell.footer, publicPath).toBe(canonicalFooter);
+    expect(html, publicPath).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
+    expect(html, publicPath).toContain('<link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">');
+    expect(html, publicPath).toContain(`<script defer src="${mprUIBundleURL}"></script>`);
+    expect(html, publicPath).not.toContain('class="resource-shell resource-topbar"');
+    expect(html, publicPath).not.toContain('class="resource-shell resource-footer"');
+    expect(html, publicPath).not.toContain('class="landing-header"');
+    expect(shell.headerOffset, publicPath).toBeLessThan(shell.mainOffset);
+    expect(shell.mainOffset, publicPath).toBeLessThan(shell.footerOffset);
+  }
+});
+
+test("the published site uses only app, login, account, and tenant terminology", async ({ request }) => {
+  const sitemapResponse = await request.get(`${baseURL}${sitemapPath}`);
+  expect(sitemapResponse.status()).toBe(httpOK);
+  const sitemapXML = await sitemapResponse.text();
+  expect(sitemapXML).not.toMatch(obsoletePublicTermPattern);
+  expect(sitemapXML).toContain(
+    "<loc>https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/</loc>",
+  );
+
+  const publicPaths = [...sitemapXML.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => new URL(match[1]).pathname);
+  for (const publicPath of [...publicPaths, applicationPath]) {
+    const response = await request.get(`${baseURL}${publicPath}`);
+    expect(response.status(), publicPath).toBe(httpOK);
+    expect(await response.text(), publicPath).not.toMatch(obsoletePublicTermPattern);
+  }
+});
+
+test("public route families hydrate the shared MPR shell at desktop and mobile widths", async ({ page }) => {
+  await installAssetRoutes(page);
+  const representativePublicPaths = ["/", apiDocumentationPath, resourcesPath, representativeResourcePath];
+
+  for (const viewport of [
+    { width: 1280, height: 800 },
+    { width: 390, height: 780 },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const publicPath of representativePublicPaths) {
+      await page.goto(`${baseURL}${publicPath}`);
+      const header = page.locator("mpr-header");
+      const main = page.locator("body > main");
+      const footer = page.locator("mpr-footer");
+      await expect(header, publicPath).toHaveCount(1);
+      await expect(main, publicPath).toHaveCount(1);
+      await expect(footer, publicPath).toHaveCount(1);
+      await expect(header.getByRole("link", { name: "LLM Proxy home" }), publicPath).toBeVisible();
+      await expect(header.getByRole("link", { name: "API", exact: true }), publicPath).toHaveAttribute(
+        "href",
+        apiDocumentationPath,
+      );
+      await expect(header.getByRole("link", { name: "Log In" }), publicPath).toHaveAttribute("href", applicationPath);
+      await expect(footer.getByRole("contentinfo"), publicPath).toBeVisible();
+      await expect(footer.getByRole("link", { name: "Resources" }), publicPath).toHaveAttribute("href", resourcesPath);
+      const documentOrderIsCanonical = await page.evaluate(() => {
+        const headerElement = document.querySelector("body > mpr-header");
+        const mainElement = document.querySelector("body > main");
+        const footerElement = document.querySelector("body > mpr-footer");
+        if (!headerElement || !mainElement || !footerElement) {
+          return false;
+        }
+        return Boolean(
+          headerElement.compareDocumentPosition(mainElement) & Node.DOCUMENT_POSITION_FOLLOWING &&
+            mainElement.compareDocumentPosition(footerElement) & Node.DOCUMENT_POSITION_FOLLOWING,
+        );
+      });
+      expect(documentOrderIsCanonical, publicPath).toBe(true);
+      await footer.scrollIntoViewIfNeeded();
+      await expectCompactFooterGeometry(footer);
+    }
+  }
+});
+
 test("public landing is keyboard navigable and responsive in Chromium", async ({ page }) => {
   await installAssetRoutes(page);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(baseURL);
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "One stable interface for the models your products depend on.",
+    "Integrate once. Use the model that fits.",
   );
+  await expect(page.getByRole("heading", { name: "Use the API directly or start with a client." })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Use the Go client" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Use the Python client" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Install the CLI" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "One boundary. Three ways to benefit." })).toBeVisible();
   await expect(page.getByRole("link", { name: "Log In" }).first()).toHaveAttribute("href", applicationPath);
   await expect(page.getByRole("region", { name: "Provider and model capability matrix" })).toBeVisible();
   await expect(page.getByRole("table")).toBeVisible();
+  const dictationDefaultRow = page.locator('[data-provider="openai"][data-model="gpt-4o-mini-transcribe"]');
+  const dictationDefault = dictationDefaultRow.locator(".catalog-model__default");
+  await expect(dictationDefault).toHaveText("Default for dictation");
+  await expect(dictationDefault).toHaveAttribute(
+    "title",
+    "This is the provider catalog default for dictation routing; account settings can select another model.",
+  );
+  await expect
+    .poll(() => dictationDefaultRow.locator(".catalog-model").evaluate((element) => parseFloat(getComputedStyle(element).columnGap)))
+    .toBeGreaterThanOrEqual(8);
   await expectCenteredValueStrip(page);
   const footer = page.locator("mpr-footer");
   await expect(footer).toHaveAttribute("size", "small");
@@ -410,7 +752,10 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
   await expect(footer.getByRole("contentinfo")).toBeVisible();
   await expect(footer.getByRole("link", { name: "Log In" })).toHaveAttribute("href", applicationPath);
   await expect(footer.getByRole("link", { name: "API", exact: true })).toHaveAttribute("href", apiDocumentationPath);
-  await expect(footer.getByRole("link", { name: "OpenAPI", exact: true })).toHaveAttribute("href", openAPIPath);
+  await expect(footer.getByRole("link", { name: "OpenAPI", exact: true })).toHaveAttribute(
+    "href",
+    openAPISchemaViewerPath,
+  );
   await expect(footer.getByRole("link", { name: "Resources" })).toHaveAttribute("href", resourcesPath);
   await expect(footer.getByRole("link", { name: "GitHub" })).toHaveAttribute(
     "href",
@@ -425,6 +770,9 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.getByRole("link", { name: "Log In" }).first()).toBeVisible();
   await expect(page.getByRole("region", { name: "Provider and model capability matrix" })).toBeVisible();
+  await expect
+    .poll(() => dictationDefaultRow.locator(".catalog-model").evaluate((element) => parseFloat(getComputedStyle(element).columnGap)))
+    .toBeGreaterThanOrEqual(8);
   await expectCenteredValueStrip(page);
   await expectCompactFooterGeometry(footer);
 });
@@ -445,6 +793,11 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
   expect(documentationHTML).toContain(`<link rel="canonical" href="https://llm-proxy.mprlab.com${apiDocumentationPath}">`);
   expect(documentationHTML).toContain(`data-openapi-source-sha256="${sourceDigest}"`);
   expect(documentationHTML).toContain("https://llm-proxy-api.mprlab.com");
+  expect(documentationHTML).toContain('<section id="openapi-schema" class="resource-hero">');
+  expect(documentationHTML).toContain('<a class="resource-button" href="#openapi-yaml">View YAML</a>');
+  expect(documentationHTML).toContain(
+    `<a class="resource-button" href="${openAPIPath}" download="${openAPIDownloadFilename}">Download YAML</a>`,
+  );
   expect(documentationHTML).toContain('id="operation-postV2Messages"');
   expect(documentationHTML).not.toContain('id="operation-deleteManagementTenantSecret"');
   expect(documentationHTML).toContain("<code>reasoning_effort</code>");
@@ -452,17 +805,49 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
   expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(20);
 });
 
+test("OpenAPI reference views and downloads the exact canonical YAML", async ({ page }) => {
+  const canonicalSource = await readFile(canonicalOpenAPIFile, "utf8");
+  await installAssetRoutes(page);
+  await page.goto(`${baseURL}${openAPISchemaViewerPath}`);
+
+  const rawViewLink = page.getByRole("link", { name: "View YAML", exact: true });
+  const downloadLink = page.getByRole("link", { name: "Download YAML" });
+  await expect(rawViewLink).toHaveAttribute("href", "#openapi-yaml");
+  await expect(downloadLink).toHaveAttribute("href", openAPIPath);
+  await expect(downloadLink).toHaveAttribute("download", openAPIDownloadFilename);
+
+  await rawViewLink.click();
+  await expect(page).toHaveURL(`${baseURL}${apiDocumentationPath}#openapi-yaml`);
+  const sourceViewer = page.locator(".api-schema-source");
+  await expect(sourceViewer).toBeVisible();
+  expect(await sourceViewer.textContent()).toBe(canonicalSource);
+
+  const downloadStarted = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Download YAML" }).click();
+  const download = await downloadStarted;
+  expect(download.suggestedFilename()).toBe(openAPIDownloadFilename);
+  const downloadedPath = await download.path();
+  expect(downloadedPath).not.toBeNull();
+  expect(await readFile(downloadedPath, "utf8")).toBe(canonicalSource);
+});
+
 test("SEO resource pages are crawlable from the public site", async ({ request }) => {
   const hubResponse = await request.get(`${baseURL}${resourcesPath}`);
   expect(hubResponse.status()).toBe(httpOK);
   expect(hubResponse.headers()["content-type"]).toContain(mimeTypes[".html"]);
   const hubHTML = await hubResponse.text();
-  expect(hubHTML).toContain("LLM Proxy resource hub");
+  expect(hubHTML).toContain("Keep your model options open.");
+  expect(hubHTML).toContain("Official Go client");
+  expect(hubHTML).toContain("Official Python client");
+  expect(hubHTML).toContain("Official CLI");
+  expect(hubHTML).toContain("AI-assisted builders");
+  expect(hubHTML).toContain("Startups and product teams");
+  expect(hubHTML).toContain("Platform and engineering teams");
   expect(hubHTML).toContain('<script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>');
   expect(hubHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/">');
   expect(hubHTML).toContain('"@type":"CollectionPage"');
   expect(hubHTML).toContain(`href="${apiDocumentationPath}"`);
-  expect(hubHTML).toContain(`href="${openAPIPath}"`);
+  expect(hubHTML).toContain(`"href":"${openAPISchemaViewerPath}"`);
   expect(hubHTML).toContain(`href="${representativeResourcePath}"`);
   expect(hubHTML).toContain(`href="${clientAuthenticationResourcePath}"`);
   const resourceLinks = hubHTML.match(/href="\/resources\/[^"]+\/"/g) || [];
@@ -472,13 +857,44 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
   expect(pageResponse.status()).toBe(httpOK);
   expect(pageResponse.headers()["content-type"]).toContain(mimeTypes[".html"]);
   const pageHTML = await pageResponse.text();
-  expect(pageHTML).toContain("<h1>Multi-provider LLM proxy for internal tools</h1>");
+  expect(pageHTML).toContain("<h1>Integrate once through one multi-provider LLM proxy</h1>");
   expect(pageHTML).toContain('<script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>');
   expect(pageHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/">');
   expect(pageHTML).toContain('"@type":"FAQPage"');
+  expect(pageHTML).toContain('"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}');
   expect(pageHTML).toContain(`<a class="resource-button" href="${apiDocumentationPath}">Open API reference</a>`);
   expect(pageHTML).toContain('href="/resources/openai-claude-gemini-one-endpoint/"');
-  expect(pageHTML).toContain(`"dateModified":"${seoContentModifiedDate}"`);
+  expect(pageHTML).toContain(`"dateModified":"${landingModifiedDate}"`);
+  expect(pageHTML).toContain("https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_SECRET&amp;provider=gemini");
+  expect(pageHTML).toContain(`Reviewed ${landingModifiedDate}`);
+  expect(pageHTML).toContain('href="https://github.com/tyemirov" rel="author"');
+
+  const audienceResourceExpectations = [
+    {
+      path: "/resources/openai-claude-gemini-one-endpoint/",
+      title: "Switch OpenAI, Claude, and Gemini behind one endpoint",
+      audience: "Startups and product teams",
+      evidence: "for provider in openai anthropic gemini; do",
+    },
+    {
+      path: "/resources/internal-ai-gateway-for-product-tools/",
+      title: "Internal AI gateway for durable product integrations",
+      audience: "Institutional engineering and platform teams",
+      evidence: "$PRODUCT_TOOL_CLIENT_KEY",
+    },
+  ];
+  for (const resourceExpectation of audienceResourceExpectations) {
+    const audienceResourceResponse = await request.get(`${baseURL}${resourceExpectation.path}`);
+    expect(audienceResourceResponse.status()).toBe(httpOK);
+    const audienceResourceHTML = await audienceResourceResponse.text();
+    expect(audienceResourceHTML).toContain(`<h1>${resourceExpectation.title}</h1>`);
+    expect(audienceResourceHTML).toContain(resourceExpectation.audience);
+    expect(audienceResourceHTML).toContain(resourceExpectation.evidence);
+    expect(audienceResourceHTML).toContain("<strong>Quick verdict</strong>");
+    expect(audienceResourceHTML).toContain("<h2>Repository evidence</h2>");
+    expect(audienceResourceHTML).toContain(`"dateModified":"${landingModifiedDate}"`);
+    expect(audienceResourceHTML).toContain('href="https://github.com/tyemirov" rel="author"');
+  }
 });
 
 test("SEO client-authentication guide documents the credential and configuration boundaries", async ({ request }) => {
@@ -496,7 +912,7 @@ test("SEO client-authentication guide documents the credential and configuration
   expect(pageHTML).toContain("no user-level or system-level YAML lookup");
   expect(pageHTML).toContain("LLM_PROXY_BASE_URL and LLM_PROXY_SECRET");
   expect(pageHTML).toContain("configured MPR UI and TAuth session");
-  expect(pageHTML).toContain(`<a href="${repositoryUsageURL}">README</a>`);
+  expect(pageHTML).toContain(`"label":"GitHub","href":"${repositoryURL}"`);
   expect(pageHTML).toContain('href="/resources/tenant-secret-ai-gateway/"');
   expect(pageHTML).toContain('href="/resources/server-side-provider-api-keys/"');
   expect(pageHTML).toContain('href="/resources/canonical-v2-chat-messages-api/"');
@@ -518,7 +934,7 @@ test("SEO client and security resources link to the canonical authentication gui
     expect(response.status()).toBe(httpOK);
     const pageHTML = await response.text();
     expect(pageHTML).toContain(`href="${clientAuthenticationResourcePath}"`);
-    expect(pageHTML).toContain(`<a href="${repositoryUsageURL}">README</a>`);
+    expect(pageHTML).toContain(`"label":"GitHub","href":"${repositoryURL}"`);
   }
 });
 
@@ -552,14 +968,14 @@ test("SEO management resources document required onboarding and secret-safe exam
       title: "Self-service LLM key management for internal teams",
       copy: "creates a missing client key after authentication, autosaves provider settings, and keeps Settings open",
       faqQuestion: "What lets a user leave Settings?",
-      modifiedDate: seoCurrentContentModifiedDate,
+      modifiedDate: landingModifiedDate,
     },
     {
       slug: "generated-secret-rotation",
       title: "Rotate generated LLM Proxy client keys with confidence",
       copy: "Request examples retain the &lt;generated-secret&gt; placeholder after creation.",
       faqQuestion: "Can the raw generated client key be retrieved later?",
-      modifiedDate: seoClientDocumentationModifiedDate,
+      modifiedDate: seoSecretRotationModifiedDate,
     },
     {
       slug: "copyable-llm-curl-examples",
@@ -607,6 +1023,9 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
   expect(sitemapXML).toContain("<loc>https://llm-proxy.mprlab.com/resources/</loc>");
   expect(sitemapXML).toContain(`<loc>https://llm-proxy.mprlab.com${apiDocumentationPath}</loc>`);
   expect(sitemapXML).toContain(
+    `<loc>https://llm-proxy.mprlab.com${apiDocumentationPath}</loc>\n    <lastmod>${landingModifiedDate}</lastmod>`,
+  );
+  expect(sitemapXML).toContain(
     "<loc>https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/</loc>",
   );
   const sitemapModificationDates = sitemapXML.match(/<lastmod>[^<]+<\/lastmod>/g) || [];
@@ -615,14 +1034,16 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
     new Set([
       `<lastmod>${seoContentModifiedDate}</lastmod>`,
       `<lastmod>${seoCurrentContentModifiedDate}</lastmod>`,
-      `<lastmod>${seoMigrationContentModifiedDate}</lastmod>`,
       `<lastmod>${seoUsageContentModifiedDate}</lastmod>`,
       `<lastmod>${seoClientDocumentationModifiedDate}</lastmod>`,
       `<lastmod>${landingModifiedDate}</lastmod>`,
     ]),
   );
   expect(sitemapXML).toContain(
-    `<loc>https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/</loc>\n    <lastmod>${seoCurrentContentModifiedDate}</lastmod>`,
+    `<loc>https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/</loc>\n    <lastmod>${landingModifiedDate}</lastmod>`,
+  );
+  expect(sitemapXML).toContain(
+    `<loc>https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/</loc>\n    <lastmod>${landingModifiedDate}</lastmod>`,
   );
   expect(sitemapXML).toContain(
     `<loc>https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/</loc>\n    <lastmod>${seoUsageContentModifiedDate}</lastmod>`,
@@ -631,7 +1052,7 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
     `<loc>https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/</loc>\n    <lastmod>${seoClientDocumentationModifiedDate}</lastmod>`,
   );
   expect(sitemapXML).toContain(
-    `<loc>https://llm-proxy.mprlab.com/resources/generated-secret-rotation/</loc>\n    <lastmod>${seoClientDocumentationModifiedDate}</lastmod>`,
+    `<loc>https://llm-proxy.mprlab.com/resources/generated-secret-rotation/</loc>\n    <lastmod>${seoSecretRotationModifiedDate}</lastmod>`,
   );
   expect(sitemapXML).not.toContain("generated-secret-rotation-and-revocation");
   expect(sitemapXML).not.toContain("config-ui.yaml");
@@ -707,7 +1128,7 @@ test("obsolete tenant query parameters do not choose Settings or Usage state", a
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   await expect(page.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_1");
-  await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toHaveCount(0);
 });
 
 test("tenant lifecycle is keyboard accessible, responsive, and guards the final tenant", async ({ page }) => {
@@ -2713,25 +3134,25 @@ test("reasoning effort is exact to the selected text route and the controls rema
   await expect(settingsDialog.locator(".text-routing-controls").getByRole("combobox", { name: "Reasoning effort" })).toHaveValue("max");
 });
 
-test("malformed routing-default profiles become workspace integrity errors", async ({ page }) => {
+test("malformed routing-default profiles become app data integrity errors", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page, { malformedRoutingDefaults: true });
 
   await page.goto(`${baseURL}${applicationPath}`);
 
-  await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toBeVisible();
-  await expect(page.getByText("Workspace integrity error")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+  await expect(page.getByText("App data integrity error")).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Settings" })).toBeHidden();
 });
 
-test("invalid persisted routing-default profiles become workspace integrity errors", async ({ page }) => {
+test("invalid persisted routing-default profiles become app data integrity errors", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page, { profileStatus: 500, profileError: "managed_routing_defaults_invalid" });
 
   await page.goto(`${baseURL}${applicationPath}`);
 
-  await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toBeVisible();
-  await expect(page.getByText("Workspace integrity error")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+  await expect(page.getByText("App data integrity error")).toBeVisible();
 });
 
 test("dashboard loads only after MPR UI authenticates the user", async ({ page }) => {
@@ -2849,13 +3270,13 @@ test("authenticated profile failures replace loading and signed-out states", asy
 
   await page.goto(`${baseURL}${applicationPath}`);
 
-  await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Loading key workspace" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Loading LLM Proxy" })).toBeHidden();
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeHidden();
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Loading key workspace" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Unable to load LLM Proxy" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Loading LLM Proxy" })).toBeHidden();
 });
 
 test("signed-out panel presents a direct sign-in prompt without auth instructions", async ({ page }) => {
@@ -3570,7 +3991,7 @@ test("management notices occupy the header aux slot immediately before the avata
     await expect(notificationRegion).toHaveAttribute("role", "status");
     await expect(notificationRegion).toHaveAttribute("aria-live", "polite");
     await expect(notificationRegion).toHaveAttribute("aria-atomic", "true");
-    await expect(notice).toHaveText("Workspace loaded");
+    await expect(notice).toHaveText("App ready");
     await expect(notice).toHaveAttribute("data-kind", "success");
     await expectHeaderNoticeGeometry(page);
 
@@ -3634,7 +4055,7 @@ test("management notices auto-dismiss after ten seconds and replacement notices 
   const notice = notificationRegion.locator(".notice");
   const refresh = page.getByRole("button", { name: "Refresh" });
   const requests = page.locator("usage-metrics usage-card").first().locator("strong");
-  await expect(notice).toHaveText("Workspace loaded");
+  await expect(notice).toHaveText("App ready");
   await page.clock.fastForward(9_000);
   await expect(notificationRegion).toBeVisible();
   await page.clock.fastForward(1_000);
@@ -3846,6 +4267,22 @@ async function expectCompactFooterGeometry(footer) {
   }));
   expect(geometry.height).toBeLessThanOrEqual(compactLandingFooterMaxHeight);
   expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
+}
+
+/**
+ * @param {string} html
+ * @returns {{ header: string, footer: string, headerOffset: number, mainOffset: number, footerOffset: number }}
+ */
+function publicShellMarkup(html) {
+  const header = html.match(/    <mpr-header[\s\S]*?    <\/mpr-header>/)?.[0] || "";
+  const footer = html.match(/    <mpr-footer[\s\S]*?    ><\/mpr-footer>/)?.[0] || "";
+  const headerOffset = html.indexOf(header);
+  const mainOffset = html.indexOf("<main");
+  const footerOffset = html.indexOf(footer);
+  if (!header || !footer || headerOffset === -1 || mainOffset === -1 || footerOffset === -1) {
+    throw new Error("public_site_shell_missing");
+  }
+  return { header, footer, headerOffset, mainOffset, footerOffset };
 }
 
 /**
@@ -5123,6 +5560,9 @@ function mprUIBundleMock(initialAuthStatus, emitInitialAuthEvent) {
 class MprHeader extends HTMLElement {
   connectedCallback() {
     this.mountActions();
+    if (!this.hasAttribute("data-config-url")) {
+      return;
+    }
     this.setAuthStatus(${JSON.stringify(initialAuthStatus)});
     queueMicrotask(() => {
       this.dispatchEvent(new CustomEvent("mpr-ui:auth:status-change", {
@@ -5139,14 +5579,31 @@ class MprHeader extends HTMLElement {
   }
 
   mountActions() {
+    const horizontalLinks = JSON.parse(this.getAttribute("horizontal-links") || '{"links":[]}');
+    if (horizontalLinks.links.length > 0) {
+      const navigation = document.createElement("nav");
+      navigation.setAttribute("aria-label", "Utility links");
+      horizontalLinks.links.forEach((item) => {
+        const anchor = document.createElement("a");
+        anchor.textContent = item.label;
+        anchor.setAttribute("href", item.href || item.url);
+        navigation.append(anchor);
+      });
+      this.append(navigation);
+    }
     const actions = document.createElement("div");
     actions.className = "mpr-header__actions";
-    const signIn = document.createElement("button");
-    signIn.type = "button";
-    signIn.dataset.testid = "sign-in";
-    signIn.textContent = "Sign in";
-    actions.append(signIn, ...this.querySelectorAll('[slot="aux"]'));
-    this.append(actions);
+    if (this.hasAttribute("data-config-url")) {
+      const signIn = document.createElement("button");
+      signIn.type = "button";
+      signIn.dataset.testid = "sign-in";
+      signIn.textContent = "Sign in";
+      actions.append(signIn);
+    }
+    actions.append(...this.querySelectorAll('[slot="aux"]'));
+    if (actions.childElementCount > 0) {
+      this.append(actions);
+    }
   }
 
   setAuthStatus(status) {
@@ -5305,6 +5762,15 @@ mpr-header .mpr-header__actions {
   display: flex;
   min-inline-size: 0;
   align-items: center;
+}
+
+mpr-header > nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 mpr-footer {

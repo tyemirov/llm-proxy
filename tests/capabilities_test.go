@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -129,20 +130,37 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 	if len(catalog.Providers) != 12 || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
 		testingInstance.Fatalf("catalog summary=%+v", catalog)
 	}
+	geminiCapabilityFound := false
+	openAIDictationCapabilityFound := false
 	for _, provider := range catalog.Providers {
-		if provider.Identifier != proxy.ProviderNameGemini {
-			continue
-		}
-		for _, model := range provider.TextModels {
-			if model.Identifier == proxy.ModelNameGemini35Flash {
-				if strings.Join(model.MediaInputs, ",") != "audio,image" {
-					testingInstance.Fatalf("Gemini media inputs=%v", model.MediaInputs)
+		for _, model := range provider.Models {
+			for _, capability := range model.Capabilities {
+				if capability == "background" || capability == "synchronous" {
+					testingInstance.Fatalf("public capability catalog exposed execution lifecycle provider=%s model=%s capability=%s", provider.Identifier, model.Identifier, capability)
 				}
-				return
+			}
+			switch {
+			case provider.Identifier == proxy.ProviderNameGemini && model.Identifier == proxy.ModelNameGemini35Flash:
+				geminiCapabilityFound = true
+				if !slices.Equal(model.Capabilities, []string{
+					proxy.PublicModelCapabilityText,
+					proxy.PublicModelCapabilityAudioInput,
+					proxy.PublicModelCapabilityImageInput,
+				}) {
+					testingInstance.Fatalf("Gemini capabilities=%v", model.Capabilities)
+				}
+			case provider.Identifier == proxy.ProviderNameOpenAI && model.Identifier == proxy.DefaultDictationModel:
+				openAIDictationCapabilityFound = true
+				if !slices.Equal(model.Capabilities, []string{proxy.PublicModelCapabilityDictation}) ||
+					!slices.Equal(model.DefaultEndpoints, []string{proxy.PublicModelCapabilityDictation}) {
+					testingInstance.Fatalf("OpenAI dictation capability=%+v", model)
+				}
 			}
 		}
 	}
-	testingInstance.Fatal("Gemini 3.5 Flash public capability missing")
+	if !geminiCapabilityFound || !openAIDictationCapabilityFound {
+		testingInstance.Fatalf("public capability catalog projections missing gemini=%t openai_dictation=%t", geminiCapabilityFound, openAIDictationCapabilityFound)
+	}
 }
 
 func TestPublicCapabilityCatalogRejectsNoncanonicalRuntimeRegistries(testingInstance *testing.T) {
