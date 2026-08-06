@@ -14,6 +14,7 @@
     <meta name="theme-color" content="#0f1114">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/landing.css">
     <script type="application/ld+json">
       {
@@ -34,6 +35,7 @@
         ]
       }
     </script>
+    <script defer src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"></script>
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
@@ -51,7 +53,7 @@
           <a href="#models">Models</a>
           <a href="/docs/">API</a>
           <a href="/resources/">Resources</a>
-          <a class="button button--compact" href="/manage/">Open workspace</a>
+          <a class="button button--compact" href="/app/">Log In</a>
         </div>
       </nav>
     </header>
@@ -65,7 +67,7 @@
             LLM Proxy gives your applications one authenticated API for text, multimodal messages, and dictation—while provider credentials, routing policy, and model changes stay behind the proxy.
           </p>
           <div class="hero__actions" aria-label="Get started">
-            <a class="button button--primary" href="/manage/">Configure your proxy <span aria-hidden="true">→</span></a>
+            <a class="button button--primary" href="/app/">Configure your proxy <span aria-hidden="true">→</span></a>
             <a class="button" href="#integrate">See how to integrate</a>
           </div>
           <ul class="hero__proof" aria-label="Key benefits">
@@ -228,27 +230,18 @@
           <p>Configure a workspace, generate client access, and connect through the API or an official integration client.</p>
         </div>
         <div class="final-cta__actions">
-          <a class="button button--primary" href="/manage/">Open workspace <span aria-hidden="true">→</span></a>
+          <a class="button button--primary" href="/app/">Log In <span aria-hidden="true">→</span></a>
           <a class="button" href="/resources/llm-proxy-client-authentication/">Read the authentication guide</a>
         </div>
       </section>
     </main>
 
-    <footer class="landing-footer">
-      <div class="landing-shell landing-footer__inner">
-        <a class="landing-brand" href="/">
-          <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="28" height="28">
-          <span>LLM Proxy</span>
-        </a>
-        <p>One authenticated interface across a changing provider landscape.</p>
-        <nav aria-label="Footer navigation">
-          <a href="/manage/">Workspace</a>
-          <a href="/docs/">API reference</a>
-          <a href="/openapi.yaml">OpenAPI schema</a>
-          <a href="/resources/">Resources</a>
-          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
-        </nav>
-      </div>
-    </footer>
+    <mpr-footer
+      size="small"
+      sticky="false"
+      prefix-text="LLM Proxy"
+      privacy-link-hidden="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Log In","href":"/app/"},{"label":"API","href":"/docs/"},{"label":"OpenAPI","href":"/openapi.yaml"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+    ></mpr-footer>
   </body>
 </html>
