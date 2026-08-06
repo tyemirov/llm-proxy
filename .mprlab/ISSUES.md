@@ -20,8 +20,9 @@ Usage-scope dashboard rather than an obsolete global active-tenant layout. I033
 is retired before implementation: F017 replaces unattended Usage polling with
 MPR UI-owned inactivity warning and logout shared by llm-proxy and LoopAware.
 M019 is independently ready because M018 is complete. M013 then M012 resolve
-the product-context governance path. Planning proceeds P002 -> P003 -> P004 ->
-P005, with M020 already satisfied; recurring maintenance remains scheduled
+the product-context governance path. F019 establishes the public landing and
+private workspace boundary; planning proceeds P003 -> P004 -> P005, with M020
+already satisfied; recurring maintenance remains scheduled
 work.
 I036, I042, I043, and B087 are resolved. I045 is the diagnostic prerequisite
 for B088 so long-request changes are grounded in correlated phase and provider
@@ -3694,6 +3695,81 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
+- [x] [F019] (P1) Create a canonical public landing page and generated capability catalog.
+  Goal:
+  Make the Pages root an indexable, useful LLM Proxy landing page that accurately
+  explains what the service does, who it is for, how it is used, and every
+  currently supported provider/model capability. Move the existing authenticated
+  management workspace to the one canonical `/manage/` route so public product
+  discovery and key-management workspaces are not competing root pages.
+  Requirements:
+  - Serve a public, useful `https://llm-proxy.mprlab.com/` landing page without
+    requiring a management session. Keep the separate API origin's `GET /`,
+    `POST /`, `/v2`, and `/dictate` contracts unchanged; only the Pages
+    information architecture changes.
+  - Move the current MPR UI/TAuth management shell, its rendered
+    `data-config-url`, header navigation, logout destination, browser tests,
+    and release renderer to `/manage/`. `/manage/` is a private workspace
+    entry, uses `noindex`, and is absent from the public sitemap; do not leave
+    a duplicate root workspace, JavaScript/meta-refresh redirect, or legacy
+    management route.
+  - Generate a sanitized public capability catalog from the same validated
+    provider registry used for request validation and management profiles. The
+    landing matrix must enumerate every supported text and dictation provider
+    and model, defaults, dictation availability, web-search availability, and
+    known proxy output limits without exposing provider keys, tenant state,
+    configured base URLs, or non-public deployment data.
+  - Do not maintain a second hand-written provider/model table. A catalog change
+    must update the landing matrix deterministically or fail the site build,
+    including missing/duplicate providers or models and capabilities that cannot
+    be represented publicly.
+  - Describe the full current capability set with evidence-backed language:
+    tenant-secret authenticated text and canonical `/v2` messages, native and
+    compatible provider routing, dictation, constrained OpenAI web search,
+    response formats and normalized usage metadata, request limits/clear error
+    behavior, self-service encrypted provider-key management, generated-secret
+    rotation, usage visibility, and Go/Python/CLI integration options. State
+    model/provider limitations rather than implying universal feature parity.
+  - Provide clear crawlable calls to action for `/manage/`, the resource hub,
+    and current integration documentation. Use semantic HTML, visible focus,
+    accessible tables/filters, concise unique metadata, canonical root URLs,
+    and structured data that describes only visible landing-page content.
+  Deliverables:
+  - Add the canonical catalog projection/build contract and a static public
+    landing page with capability sections, provider/model matrix, limitations,
+    and conversion paths.
+  - Relocate and render the management application at `/manage/`, update all
+    root/resource/header/footer links, and document the new public-vs-private
+    Pages route contract in README and deployment/site-render guidance.
+  - Update the resource hub and shared site shell so public navigation points to
+    the landing page while management calls to action point only to `/manage/`.
+  - Do not duplicate catalogs in HTML/JavaScript/docs, make availability claims
+    based on whether a particular user has a key, expose secrets, or preserve a
+    second root management implementation.
+  Validation:
+  - Add black-box build/render coverage proving the public matrix exactly
+    reflects the validated catalog, has no secret-bearing fields, and rejects
+    catalog/render drift.
+  - Add Playwright coverage for an anonymous public landing, its accessible
+    provider/model matrix and CTAs, navigation to `/manage/`, and the full
+    existing authenticated management lifecycle at that new route.
+  - Verify root canonical, Open Graph, JSON-LD, sitemap, and resource links use
+    the final public URL form, while `/manage/` is noindex and excluded from
+    sitemap output.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
+  Resolved 2026-08-06:
+  - Replaced the Pages root management shell with an accessible public product
+    landing and moved the only authenticated workspace to noindex `/manage/`.
+  - Added a deterministic, secret-free provider/model capability projection
+    from the validated runtime registry and made invalid config, catalog, or
+    landing markers fail the Pages render.
+  - Updated resource/API navigation, metadata, sitemap, deployment rendering,
+    README guidance, and browser flows for the public/private route boundary.
+  - The required pre-change and post-change `make ci` runs pass. The final run
+    followed the last code edit and passed all 11 gates: exact 100% Go coverage,
+    36 Python tests, 76 browser scenarios, the real TAuth black-box scenario,
+    Pages artifact checks, and live-provider harness preflight.
 
 
 ## Planning
@@ -3764,70 +3840,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     narrow layouts, saved-key updates, and explicit failure states.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
-- [ ] [P002] (P1) Create a canonical public landing page and generated capability catalog.
-  Goal:
-  Make the Pages root an indexable, useful LLM Proxy landing page that accurately
-  explains what the service does, who it is for, how it is used, and every
-  currently supported provider/model capability. Move the existing authenticated
-  management workspace to the one canonical `/manage/` route so public product
-  discovery and key-management workspaces are not competing root pages.
-  Requirements:
-  - Serve a public, useful `https://llm-proxy.mprlab.com/` landing page without
-    requiring a management session. Keep the separate API origin's `GET /`,
-    `POST /`, `/v2`, and `/dictate` contracts unchanged; only the Pages
-    information architecture changes.
-  - Move the current MPR UI/TAuth management shell, its rendered
-    `data-config-url`, header navigation, logout destination, browser tests,
-    and release renderer to `/manage/`. `/manage/` is a private workspace
-    entry, uses `noindex`, and is absent from the public sitemap; do not leave
-    a duplicate root workspace, JavaScript/meta-refresh redirect, or legacy
-    management route.
-  - Generate a sanitized public capability catalog from the same validated
-    provider registry used for request validation and management profiles. The
-    landing matrix must enumerate every supported text and dictation provider
-    and model, defaults, dictation availability, web-search availability, and
-    known proxy output limits without exposing provider keys, tenant state,
-    configured base URLs, or non-public deployment data.
-  - Do not maintain a second hand-written provider/model table. A catalog change
-    must update the landing matrix deterministically or fail the site build,
-    including missing/duplicate providers or models and capabilities that cannot
-    be represented publicly.
-  - Describe the full current capability set with evidence-backed language:
-    tenant-secret authenticated text and canonical `/v2` messages, native and
-    compatible provider routing, dictation, constrained OpenAI web search,
-    response formats and normalized usage metadata, request limits/clear error
-    behavior, self-service encrypted provider-key management, generated-secret
-    rotation, usage visibility, and Go/Python/CLI integration options. State
-    model/provider limitations rather than implying universal feature parity.
-  - Provide clear crawlable calls to action for `/manage/`, the resource hub,
-    and current integration documentation. Use semantic HTML, visible focus,
-    accessible tables/filters, concise unique metadata, canonical root URLs,
-    and structured data that describes only visible landing-page content.
-  Deliverables:
-  - Add the canonical catalog projection/build contract and a static public
-    landing page with capability sections, provider/model matrix, limitations,
-    and conversion paths.
-  - Relocate and render the management application at `/manage/`, update all
-    root/resource/header/footer links, and document the new public-vs-private
-    Pages route contract in README and deployment/site-render guidance.
-  - Update the resource hub and shared site shell so public navigation points to
-    the landing page while management calls to action point only to `/manage/`.
-  - Do not duplicate catalogs in HTML/JavaScript/docs, make availability claims
-    based on whether a particular user has a key, expose secrets, or preserve a
-    second root management implementation.
-  Validation:
-  - Add black-box build/render coverage proving the public matrix exactly
-    reflects the validated catalog, has no secret-bearing fields, and rejects
-    catalog/render drift.
-  - Add Playwright coverage for an anonymous public landing, its accessible
-    provider/model matrix and CTAs, navigation to `/manage/`, and the full
-    existing authenticated management lifecycle at that new route.
-  - Verify root canonical, Open Graph, JSON-LD, sitemap, and resource links use
-    the final public URL form, while `/manage/` is noindex and excluded from
-    sitemap output.
-  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
-    pair for the implementation, with the final run after the last code edit.
-- [ ] [P003] (P1) {P002} Re-audit and expand the SEO/use-case resource system from verified product contracts.
+- [ ] [P003] (P1) {F019} Re-audit and expand the SEO/use-case resource system from verified product contracts.
   Goal:
   Refresh LLM Proxy's search and resource strategy from the current repository
   contract so prospective users can discover concrete, supported ways to use
@@ -3837,7 +3850,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Produce a new repo-grounded SEO report before changing public copy. It must
     inventory current capabilities, limits, public routes, existing resource
     pages, claim evidence, unsupported claims, the final landing/`/manage/`
-    separation, and every current provider/model capability from P002's
+    separation, and every current provider/model capability from F019's
     generated catalog.
   - Audit and cover distinct user jobs including: self-service bring-your-own
     provider-key onboarding; multi-provider and model routing; provider/default
@@ -3899,7 +3912,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     integrity before publication.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
-- [ ] [P004] (P1) {P002,P003} Make Resources an always-available footer surface and enforce the resource-page shell.
+- [ ] [P004] (P1) {F019,P003} Make Resources an always-available footer surface and enforce the resource-page shell.
   Goal:
   Make the public Resources entry point continuously discoverable from the
   shared footer, and make every public resource page use one unambiguous
@@ -3923,7 +3936,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     same deterministic site manifest/template contract as the hub, pages,
     canonical URLs, and sitemap. Do not hand-maintain duplicate footer links,
     retain the current hub-only footer, or create a legacy layout path.
-  - Preserve P002's public-root versus private-`/manage/` separation and
+  - Preserve F019's public-root versus private-`/manage/` separation and
     P003's canonical trailing-slash, accessibility, and indexing contracts.
     The footer must never expose tenant data, secrets, private API routes, or
     noindex management URLs as public resource navigation.
@@ -3949,7 +3962,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     and noindex pages out of resource navigation.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
-- [ ] [P005] (P1) {P002,P004} Normalize public Privacy and Terms pages using PoodleScanner's legal-page contract as the structural reference.
+- [ ] [P005] (P1) {F019,P004} Normalize public Privacy and Terms pages using PoodleScanner's legal-page contract as the structural reference.
   Goal:
   Give LLM Proxy one coherent, public legal-page experience: canonical Privacy
   and Terms pages with LLM Proxy-specific, evidence-backed content, a readable
@@ -3965,7 +3978,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     product-specific clauses, dates, contact details, YouTube sections, refund
     policy, branding, or external-link assertions into LLM Proxy.
   - Render each legal page through the canonical public shell established by
-    P002 and P004: one shared header, one `main` element containing the legal
+    F019 and P004: one shared header, one `main` element containing the legal
     document, and the shared footer. The footer must expose descriptive,
     crawlable `Privacy` and `Terms` links on the landing page, `/manage/`, the
     resource hub, every resource page, and both legal pages themselves.
