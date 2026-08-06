@@ -31,41 +31,60 @@ const (
 	binaryBytesPerMiB            = 1024 * 1024
 )
 
-const siteCapabilityCatalogTemplate = `<div class="catalog-summary" aria-label="Catalog summary">
-  <p><strong>{{.ProviderCount}}</strong><span>Text providers</span></p>
-  <p><strong>{{.TextModelCount}}</strong><span>Text routes</span></p>
-  <p><strong>{{.DictationProviderCount}}</strong><span>Dictation providers</span></p>
-  <p><strong>{{.DictationModelCount}}</strong><span>Dictation routes</span></p>
-</div>
-<div class="catalog-table-wrap" tabindex="0" role="region" aria-label="Provider and model capability matrix">
-  <table class="catalog-table">
-    <caption>Current text and dictation routes generated from the validated LLM Proxy provider registry.</caption>
-    <thead>
-      <tr>
-        <th scope="col">Provider</th>
-        <th scope="col">Text model</th>
-        <th scope="col">Route capabilities</th>
-        <th scope="col">Output limit</th>
-        <th scope="col">Dictation models</th>
-      </tr>
-    </thead>
-    {{range .Providers}}<tbody>
-      {{range .TextModels}}<tr>
-        <td class="catalog-provider"><strong>{{ProviderLabel .ProviderIdentifier}}</strong><code>{{.ProviderIdentifier}}</code></td>
-        <td class="catalog-model"><code>{{.Identifier}}</code>{{if .Default}}<span class="catalog-model__default">Default</span>{{end}}</td>
-        <td><div class="catalog-capabilities">
-          <span class="capability-badge">{{.WireContract}}</span>
-          <span class="capability-badge">{{.ExecutionLifecycle}}</span>
-          {{if .WebSearch}}<span class="capability-badge capability-badge--success">Web search</span>{{end}}
-          {{range .MediaInputs}}<span class="capability-badge capability-badge--info">{{.}} input</span>{{end}}
-          {{if .ReasoningEfforts}}<span class="capability-badge capability-badge--info">Reasoning: {{.ReasoningEfforts}}</span>{{end}}
-        </div></td>
-        <td>{{if .OutputTokenLimit}}<code>{{.OutputTokenLimit}}</code> tokens{{else}}<span class="catalog-muted">Provider enforced</span>{{end}}</td>
-        <td>{{if .DictationModels}}<code>{{.DictationModels}}</code>{{if .DictationDefaultModel}}<span class="catalog-model__default">Default: {{.DictationDefaultModel}}</span>{{end}}{{else}}<span class="catalog-muted">—</span>{{end}}</td>
-      </tr>{{end}}
-    </tbody>{{end}}
-  </table>
-</div>
+const siteCapabilityCatalogTemplate = `<capability-catalog data-enhanced="false">
+  <div class="catalog-summary" aria-label="Catalog summary">
+    <p><strong>{{.ProviderCount}}</strong><span>Providers</span></p>
+    <p><strong>{{.ModelCount}}</strong><span>Models</span></p>
+    <p><strong>{{.CapabilityCount}}</strong><span>Filterable capabilities</span></p>
+  </div>
+  <form class="catalog-toolbar" data-catalog-toolbar role="search" aria-label="Search and filter models">
+    <div class="catalog-search-row">
+      <input type="search" name="catalog-search" autocomplete="off" aria-label="Search all model characteristics" placeholder="Search provider, model, capability, contract, or limit" data-catalog-search>
+      <button type="button" class="catalog-search-submit" aria-label="Toggle capability filters" aria-controls="catalog-capability-filters" aria-expanded="false" data-catalog-search-submit>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.5 15.5 4.5 4.5"></path></svg>
+      </button>
+    </div>
+    <div id="catalog-capability-filters" class="catalog-filter-panel" data-catalog-filter-panel hidden>
+      <fieldset class="catalog-filter-group">
+        <legend>Capabilities <span>Match all selected</span></legend>
+        <div class="catalog-filters">
+          {{range .CapabilityFilters}}<label class="catalog-filter"><input type="checkbox" name="catalog-capability" value="{{.Identifier}}" data-catalog-capability><span>{{.Label}}</span></label>{{end}}
+        </div>
+      </fieldset>
+      <div class="catalog-toolbar__status">
+        <output aria-live="polite" data-catalog-result-count>{{.ModelCount}} models</output>
+        <button type="reset" data-catalog-reset>Reset</button>
+      </div>
+    </div>
+  </form>
+  <div class="catalog-table-wrap" tabindex="0" role="region" aria-label="Provider and model capability matrix">
+    <table class="catalog-table">
+      <caption>Current model capabilities generated from the validated LLM Proxy provider registry.</caption>
+      <thead>
+        <tr>
+          <th scope="col" aria-sort="ascending" data-catalog-sort-header="provider"><button type="button" class="catalog-sort-button" data-catalog-sort="provider" data-sort-label="Provider" disabled>Provider<span class="catalog-sort-indicator" aria-hidden="true"></span></button></th>
+          <th scope="col" data-catalog-sort-header="model"><button type="button" class="catalog-sort-button" data-catalog-sort="model" data-sort-label="Model" disabled>Model<span class="catalog-sort-indicator" aria-hidden="true"></span></button></th>
+          <th scope="col" data-catalog-sort-header="capabilities"><button type="button" class="catalog-sort-button" data-catalog-sort="capabilities" data-sort-label="Capabilities" disabled>Capabilities<span class="catalog-sort-indicator" aria-hidden="true"></span></button></th>
+        </tr>
+      </thead>
+      <tbody data-catalog-body>
+        {{range .Models}}<tr data-catalog-row data-provider="{{.ProviderIdentifier}}" data-model="{{.Identifier}}" data-capabilities="{{.CapabilityIdentifiers}}" data-capability-count="{{len .Capabilities}}" data-catalog-search-text="{{.SearchText}}">
+          <td class="catalog-provider"><strong>{{.ProviderLabel}}</strong><code>{{.ProviderIdentifier}}</code></td>
+          <td class="catalog-model"><code data-catalog-model-id>{{.Identifier}}</code>{{range .Defaults}}<span class="catalog-model__default" title="{{.Description}}">{{.Label}}</span>{{end}}</td>
+          <td><div class="catalog-capabilities">
+            {{range .Capabilities}}<button type="button" class="capability-badge {{.ClassName}}" aria-label="Filter by {{.Label}}" data-catalog-capability-action="{{.Identifier}}" disabled>{{.Label}}</button>{{end}}
+          </div>
+          <div class="catalog-technical">
+            {{if .WireContract}}<code>{{.WireContract}}</code>{{end}}
+            {{if .ReasoningEfforts}}<span>Reasoning: {{.ReasoningEfforts}}</span>{{end}}
+            {{if .OutputLimitLabel}}<span>{{.OutputLimitLabel}}</span>{{end}}
+          </div></td>
+        </tr>{{end}}
+      </tbody>
+    </table>
+    <p class="catalog-empty" data-catalog-empty hidden>No models match the selected filters.</p>
+  </div>
+</capability-catalog>
 <div class="catalog-limits" aria-label="Proxy request limits">
   <p><strong>{{.MaxPromptSize}}</strong>Maximum JSON request body</p>
   <p><strong>{{.MaxAudioSize}}</strong>Maximum input audio</p>
@@ -77,33 +96,39 @@ var errSiteRenderFailed = errors.New("site_render_failed")
 type siteConfigURL string
 
 type siteCapabilityCatalogView struct {
-	ProviderCount          int
-	TextModelCount         int
-	DictationProviderCount int
-	DictationModelCount    int
-	Providers              []siteCapabilityProviderView
-	MaxPromptSize          string
-	MaxAudioSize           string
-	MaxRequestTimeout      string
-	providerLabels         map[string]string
-}
-
-type siteCapabilityProviderView struct {
-	TextModels []siteCapabilityModelView
+	ProviderCount     int
+	ModelCount        int
+	CapabilityCount   int
+	CapabilityFilters []siteCapabilityDefinition
+	Models            []siteCapabilityModelView
+	MaxPromptSize     string
+	MaxAudioSize      string
+	MaxRequestTimeout string
 }
 
 type siteCapabilityModelView struct {
 	ProviderIdentifier    string
+	ProviderLabel         string
 	Identifier            string
-	Default               bool
+	Defaults              []siteDefaultDefinition
+	Capabilities          []siteCapabilityDefinition
+	CapabilityIdentifiers string
 	WireContract          string
-	ExecutionLifecycle    string
-	WebSearch             bool
 	OutputTokenLimit      int
+	OutputLimitLabel      string
 	ReasoningEfforts      string
-	MediaInputs           []string
-	DictationModels       string
-	DictationDefaultModel string
+	SearchText            string
+}
+
+type siteCapabilityDefinition struct {
+	Identifier string
+	Label      string
+	ClassName  string
+}
+
+type siteDefaultDefinition struct {
+	Label       string
+	Description string
 }
 
 var (
@@ -313,9 +338,7 @@ func writeRenderedCapabilityCatalog(outputDirectory string, capabilityCatalog pr
 
 func renderSiteCapabilityCatalog(capabilityCatalog proxy.PublicCapabilityCatalog) (string, error) {
 	catalogView := newSiteCapabilityCatalogView(capabilityCatalog)
-	catalogTemplate, parseError := template.New("capability-catalog").Funcs(template.FuncMap{
-		"ProviderLabel": catalogView.providerLabel,
-	}).Parse(siteCapabilityCatalogTemplateSource)
+	catalogTemplate, parseError := template.New("capability-catalog").Parse(siteCapabilityCatalogTemplateSource)
 	if parseError != nil {
 		return constants.EmptyString, fmt.Errorf("%w: capability catalog template: %v", errSiteRenderFailed, parseError)
 	}
@@ -327,55 +350,121 @@ func renderSiteCapabilityCatalog(capabilityCatalog proxy.PublicCapabilityCatalog
 }
 
 func newSiteCapabilityCatalogView(capabilityCatalog proxy.PublicCapabilityCatalog) siteCapabilityCatalogView {
-	providerViews := make([]siteCapabilityProviderView, 0, len(capabilityCatalog.Providers))
-	providerLabels := make(map[string]string, len(capabilityCatalog.Providers))
-	textModelCount := 0
-	dictationProviderCount := 0
-	dictationModelCount := 0
+	modelViews := make([]siteCapabilityModelView, 0)
+	availableCapabilities := make(map[string]struct{})
 	for _, provider := range capabilityCatalog.Providers {
-		providerLabels[provider.Identifier] = provider.Label
-		textModelCount += len(provider.TextModels)
-		if len(provider.DictationModels) != 0 {
-			dictationProviderCount++
-			dictationModelCount += len(provider.DictationModels)
-		}
-		textModelViews := make([]siteCapabilityModelView, 0, len(provider.TextModels))
-		for _, model := range provider.TextModels {
-			textModelViews = append(textModelViews, siteCapabilityModelView{
+		for _, model := range provider.Models {
+			capabilities := siteCapabilities(model.Capabilities)
+			for _, capability := range capabilities {
+				availableCapabilities[capability.Identifier] = struct{}{}
+			}
+			modelViews = append(modelViews, siteCapabilityModelView{
 				ProviderIdentifier:    provider.Identifier,
+				ProviderLabel:         provider.Label,
 				Identifier:            model.Identifier,
-				Default:               model.Default,
-				WireContract:          publicCapabilityLabel(model.WireContract),
-				ExecutionLifecycle:    publicCapabilityLabel(model.ExecutionLifecycle),
-				WebSearch:             model.WebSearch,
+				Defaults:              siteDefaults(model.DefaultEndpoints),
+				Capabilities:          capabilities,
+				CapabilityIdentifiers: strings.Join(model.Capabilities, " "),
+				WireContract:          model.WireContract,
 				OutputTokenLimit:      model.OutputTokenLimit,
+				OutputLimitLabel:      siteOutputLimitLabel(model),
 				ReasoningEfforts:      strings.Join(model.ReasoningEfforts, ", "),
-				MediaInputs:           append([]string(nil), model.MediaInputs...),
-				DictationModels:       strings.Join(provider.DictationModels, ", "),
-				DictationDefaultModel: provider.DictationDefaultModel,
+				SearchText:            siteModelSearchText(provider.Identifier, provider.Label, model, capabilities),
 			})
 		}
-		providerViews = append(providerViews, siteCapabilityProviderView{TextModels: textModelViews})
+	}
+	capabilityFilters := make([]siteCapabilityDefinition, 0, len(availableCapabilities))
+	for _, definition := range siteCapabilityDefinitions {
+		if _, available := availableCapabilities[definition.Identifier]; available {
+			capabilityFilters = append(capabilityFilters, definition)
+		}
 	}
 	return siteCapabilityCatalogView{
-		ProviderCount:          len(capabilityCatalog.Providers),
-		TextModelCount:         textModelCount,
-		DictationProviderCount: dictationProviderCount,
-		DictationModelCount:    dictationModelCount,
-		Providers:              providerViews,
-		MaxPromptSize:          publicBinarySize(capabilityCatalog.MaxPromptBytes),
-		MaxAudioSize:           publicBinarySize(capabilityCatalog.MaxInputAudioBytes),
-		MaxRequestTimeout:      strconv.Itoa(capabilityCatalog.MaxRequestTimeoutSeconds) + " seconds",
-		providerLabels:         providerLabels,
+		ProviderCount:     len(capabilityCatalog.Providers),
+		ModelCount:        len(modelViews),
+		CapabilityCount:   len(capabilityFilters),
+		CapabilityFilters: capabilityFilters,
+		Models:            modelViews,
+		MaxPromptSize:     publicBinarySize(capabilityCatalog.MaxPromptBytes),
+		MaxAudioSize:      publicBinarySize(capabilityCatalog.MaxInputAudioBytes),
+		MaxRequestTimeout: strconv.Itoa(capabilityCatalog.MaxRequestTimeoutSeconds) + " seconds",
 	}
 }
 
-func (view siteCapabilityCatalogView) providerLabel(providerIdentifier string) string {
-	return view.providerLabels[providerIdentifier]
+func siteModelSearchText(providerIdentifier string, providerLabel string, model proxy.PublicModelCapability, capabilities []siteCapabilityDefinition) string {
+	searchValues := []string{
+		providerIdentifier,
+		providerLabel,
+		model.Identifier,
+		model.WireContract,
+		strconv.Itoa(model.OutputTokenLimit),
+		siteOutputLimitLabel(model),
+	}
+	searchValues = append(searchValues, model.DefaultEndpoints...)
+	for _, defaultDefinition := range siteDefaults(model.DefaultEndpoints) {
+		searchValues = append(searchValues, defaultDefinition.Label, defaultDefinition.Description)
+	}
+	searchValues = append(searchValues, model.Capabilities...)
+	searchValues = append(searchValues, model.ReasoningEfforts...)
+	for _, capability := range capabilities {
+		searchValues = append(searchValues, capability.Label)
+	}
+	return strings.Join(searchValues, " ")
 }
 
-func publicCapabilityLabel(rawValue string) string {
-	return strings.ReplaceAll(rawValue, "_", " ")
+var siteCapabilityDefinitions = []siteCapabilityDefinition{
+	{Identifier: proxy.PublicModelCapabilityText, Label: "Text generation", ClassName: "capability-badge--primary"},
+	{Identifier: proxy.PublicModelCapabilityDictation, Label: "Dictation", ClassName: "capability-badge--info"},
+	{Identifier: proxy.PublicModelCapabilityImageInput, Label: "Image input", ClassName: "capability-badge--info"},
+	{Identifier: proxy.PublicModelCapabilityAudioInput, Label: "Audio message input", ClassName: "capability-badge--info"},
+	{Identifier: proxy.PublicModelCapabilityWebSearch, Label: "Web search", ClassName: "capability-badge--success"},
+	{Identifier: proxy.PublicModelCapabilityReasoning, Label: "Reasoning", ClassName: "capability-badge--success"},
+}
+
+func siteCapabilities(capabilityIdentifiers []string) []siteCapabilityDefinition {
+	capabilities := make([]siteCapabilityDefinition, 0, len(capabilityIdentifiers))
+	for _, definition := range siteCapabilityDefinitions {
+		if containsString(capabilityIdentifiers, definition.Identifier) {
+			capabilities = append(capabilities, definition)
+		}
+	}
+	return capabilities
+}
+
+func siteDefaults(defaultEndpoints []string) []siteDefaultDefinition {
+	defaults := make([]siteDefaultDefinition, 0, len(defaultEndpoints))
+	if containsString(defaultEndpoints, proxy.PublicModelCapabilityText) {
+		defaults = append(defaults, siteDefaultDefinition{
+			Label:       "Default for text",
+			Description: "This is the provider catalog default for text routing; account settings can select another model.",
+		})
+	}
+	if containsString(defaultEndpoints, proxy.PublicModelCapabilityDictation) {
+		defaults = append(defaults, siteDefaultDefinition{
+			Label:       "Default for dictation",
+			Description: "This is the provider catalog default for dictation routing; account settings can select another model.",
+		})
+	}
+	return defaults
+}
+
+func siteOutputLimitLabel(model proxy.PublicModelCapability) string {
+	if !containsString(model.Capabilities, proxy.PublicModelCapabilityText) {
+		return constants.EmptyString
+	}
+	if model.OutputTokenLimit == 0 {
+		return "Provider-enforced output"
+	}
+	return strconv.Itoa(model.OutputTokenLimit) + " token output"
+}
+
+func containsString(values []string, expectedValue string) bool {
+	for _, value := range values {
+		if value == expectedValue {
+			return true
+		}
+	}
+	return false
 }
 
 func publicBinarySize(byteCount int64) string {

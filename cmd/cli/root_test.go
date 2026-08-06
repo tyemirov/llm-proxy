@@ -576,15 +576,40 @@ func TestRootCommandRendersStaticSiteFromPublicCatalogConfig(t *testing.T) {
 	landingHTML := string(landingBytes)
 	for _, expectedCatalogFragment := range []string{
 		`class="catalog-table"`,
-		`<strong>12</strong><span>Text providers</span>`,
-		`<code>gpt-4.1</code><span class="catalog-model__default">Default</span>`,
-		`gpt-4o-mini-transcribe`,
+		`<strong>12</strong><span>Providers</span>`,
+		`</strong><span>Models</span>`,
+		`<strong>4</strong><span>Filterable capabilities</span>`,
+		`data-catalog-sort-header="provider"`,
+		`data-catalog-sort-header="model"`,
+		`data-catalog-sort-header="capabilities"`,
+		`<code data-catalog-model-id>gpt-4.1</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span>`,
+		`<code data-catalog-model-id>gpt-4o-mini-transcribe</code><span class="catalog-model__default" title="This is the provider catalog default for dictation routing; account settings can select another model.">Default for dictation</span>`,
+		`data-model="gpt-4o-mini-transcribe" data-capabilities="dictation"`,
+		`aria-label="Search all model characteristics"`,
+		`data-catalog-search-submit`,
+		`data-catalog-filter-panel`,
+		`data-catalog-search-text=`,
+		`data-capability-count=`,
+		`data-catalog-capability`,
+		`data-catalog-sort`,
 		`<strong>4 MiB</strong>Maximum JSON request body`,
 		`<strong>25 MiB</strong>Maximum input audio`,
 		`<strong>3600 seconds</strong>Maximum request work budget`,
 	} {
 		if !strings.Contains(landingHTML, expectedCatalogFragment) {
 			t.Fatalf("rendered landing page omitted %q", expectedCatalogFragment)
+		}
+	}
+	if strings.Contains(landingHTML, `<th scope="col">Dictation models</th>`) {
+		t.Fatal("rendered landing page retained the split dictation column")
+	}
+	if strings.Contains(landingHTML, `data-catalog-provider`) || strings.Contains(landingHTML, `<select`) {
+		t.Fatal("rendered landing page retained a standalone catalog dropdown")
+	}
+	for _, lifecycleIdentifier := range []string{"background", "synchronous"} {
+		if strings.Contains(landingHTML, `data-catalog-capability-action="`+lifecycleIdentifier+`"`) ||
+			strings.Contains(landingHTML, `value="`+lifecycleIdentifier+`"`) {
+			t.Fatalf("rendered landing page exposed execution lifecycle %q as a capability", lifecycleIdentifier)
 		}
 	}
 	if strings.Contains(landingHTML, siteCapabilityCatalogMarker) || strings.Contains(landingHTML, "api_key") || strings.Contains(landingHTML, "base_url") {
