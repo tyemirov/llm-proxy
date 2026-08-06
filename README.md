@@ -11,9 +11,10 @@ that input capability.
 
 The public [LLM Proxy landing page](https://llm-proxy.mprlab.com/) explains the
 current provider, model, dictation, web-search, request-limit, and integration
-surface. Its capability matrix is generated from the same validated runtime
-catalog used by request routing. The authenticated management workspace lives
-only at [`/app/`](https://llm-proxy.mprlab.com/app/).
+surface. Its filterable model matrix projects text, dictation, media, search,
+reasoning, default, contract, and output-limit metadata from the
+same validated runtime catalog used by request routing. The authenticated
+management app lives only at [`/app/`](https://llm-proxy.mprlab.com/app/).
 
 ## Features
 
@@ -56,7 +57,9 @@ The Pages release copies those committed bytes to
 human-readable reference derived from them at
 [`/docs/`](https://llm-proxy.mprlab.com/docs/). The contract names
 `https://llm-proxy-api.mprlab.com` as its API server; the API origin does not
-serve another schema location.
+serve another schema location. The public OpenAPI navigation opens the schema
+actions on `/docs/`: visitors can view the complete YAML in the generated
+reference or download the same canonical bytes as `llm-proxy-openapi.yaml`.
 
 ### `web_search` boolean migration
 
@@ -902,8 +905,8 @@ Unknown YAML keys fail startup.
 
 Set `management.enabled: true` to enable TAuth-protected management APIs under
 `/api/management`. The browser site is static and lives in `site/`: `/` is the
-public product landing page and `/app/` is the only authenticated management
-workspace route. The site is declared as a `github_pages` resource in
+public product landing page and `/app/` is the only authenticated app route.
+The site is declared as a `github_pages` resource in
 `.mprlab/deploy/resources.yml`.
 `make release`, `make publish`, and `make deploy` delegate that resource to the
 exact sibling `../mprlab-gateway`; GitHub Actions is not used for Pages
@@ -922,13 +925,24 @@ from application JavaScript. The Pages artifact contains no static
 container renders the static site with
 `https://llm-proxy-api.mprlab.com/config-ui.yaml` in the declarative header
 attribute and replaces the public landing's capability marker with a sanitized
-projection of `configs/config.yml`. Production Pages rendering has no Node
-runtime or environment expansion path. A missing or invalid provider/model
-catalog, management config attribute, or landing catalog marker fails the site
-build. That single API-served YAML points browser management API
+model-centric projection of `configs/config.yml`. Every model remains present
+in server-rendered HTML without JavaScript; browser enhancement supplies
+one all-characteristics search surface, disclosed match-all capability filters,
+sortable table headers, a live result count, and reset. Production Pages
+rendering has no Node runtime or environment
+expansion path. A missing or invalid provider/model catalog, management config
+attribute, or landing catalog marker fails the site build. That single
+API-served YAML points browser management API
 calls, generated usage examples, and MPR UI/TAuth at the configured origins.
 Browser-facing values are projected from the already-loaded backend
 `config.yml`.
+
+Every public HTML route also uses the MPR component shell. `/`, `/docs/`,
+`/resources/`, and every generated resource article render the same canonical
+`mpr-header` and compact `mpr-footer` from `scripts/public_site_shell.mjs`, in
+that exact order around one `main` region. The landing shell check and both
+public-page generators consume that contract, so public navigation cannot
+drift into page-specific native header or footer variants.
 
 Release rendering also copies the exact committed `docs/openapi.yaml` bytes to
 the Pages artifact root and verifies the SHA-256 provenance embedded in the
@@ -945,7 +959,7 @@ to reconcile the current state after startup, and does not request
 `/api/management/account` until MPR UI reports `authenticated`. LLM Proxy does
 not inspect TAuth cookies, storage, tokens, or claims and does not call TAuth
 authentication endpoints. After MPR UI reports authentication, a management
-API failure renders an explicit workspace error; it does not reinterpret the
+API failure renders an explicit app error; it does not reinterpret the
 MPR UI session as signed out.
 
 The Go backend consumes TAuth's published `pkg/sessionvalidator` for the
@@ -1088,7 +1102,7 @@ select a provider and omit `model` use the saved provider text model; when
 request-level system instructions are omitted, the provider-specific system
 prompt is injected before routing upstream. The F014 ownership migration accepts
 only already-encrypted legacy provider-key rows, decrypts them with their prior
-user binding, and re-encrypts them with the preserved opaque workspace id as
+user binding, and re-encrypts them with the preserved opaque tenant id as
 AES-GCM associated data. Plaintext, corrupt, orphaned, or non-canonical rows
 fail startup before the migration transaction begins. The backend decrypts
 provider keys only inside the runtime
@@ -1142,7 +1156,7 @@ time. The bounded schema-version-3 migration performs the one-time reconciliatio
 of older managed defaults against saved provider keys, preserves tenant
 timestamps, verifies the result, and records the new version in one
 transaction. Invalid keys, models, or routing data stop startup with the owner,
-workspace, endpoint, provider, and model context.
+tenant, endpoint, provider, and model context.
 
 Configured authenticated users land on Usage Overview. An independent `Usage
 tenant` selector sits immediately before the ordered `ALL`, `30 days`, `7
@@ -1228,7 +1242,7 @@ user ids; prompts; responses; audio; transcripts; client secrets; provider
 keys; raw upstream bodies; or free-form errors. The administrator surface
 remains aggregate-only and cannot fetch another owner's rows.
 
-Usage events are recorded only for managed workspaces when they call the public
+Usage events are recorded only for managed tenants when they call the public
 proxy endpoints with a generated secret. Account-wide usage queries apply the
 authenticated owner and all owned tenant ids at the database boundary;
 tenant-scoped queries additionally require the explicit tenant id. Every query
@@ -1244,10 +1258,10 @@ audio, transcripts, responses, tenant secrets, provider API keys, raw upstream
 bodies, and free-form error text are not stored in usage events.
 
 Management mode no longer imports config tenants or global provider keys.
-TAuth subjects own personal workspaces directly; there is no shared-workspace,
+TAuth subjects own personal tenants directly; there is no shared-tenant,
 membership, role, invitation, or team-tenancy contract.
 
-F014 upgrades the previous one-workspace-per-user database to schema version 1
+F014 upgrades the previous one-tenant-per-user database to schema version 1
 as one bounded startup transaction:
 
 1. Drain every old llm-proxy instance and take an operator-owned database
@@ -1258,16 +1272,16 @@ as one bounded startup transaction:
 3. Start one new instance. Preflight reads all legacy tenant, provider-key, and
    usage rows before opening the mutation transaction. It rejects missing
    tables, unclaimed `static-config:` owners, blank or duplicate owners and
-   workspace ids, duplicate or malformed secret digests, orphan provider or
+   tenant ids, duplicate or malformed secret digests, orphan provider or
    usage rows, plaintext or corrupt provider keys, and non-canonical routing
    data.
 4. The transaction renames the two colliding legacy GORM indexes and the three
-   legacy tables, creates explicit user and workspace tables, preserves every
+   legacy tables, creates explicit user and tenant tables, preserves every
    opaque tenant id, moves secret digests and routing data, rebinds encrypted
-   provider keys from the prior user id to the workspace id, copies usage rows,
+   provider keys from the prior user id to the tenant id, copies usage rows,
    verifies counts and values including decryption, writes schema version 1,
    and removes the bounded legacy tables.
-5. Verify account, workspace, provider, secret, routing, and usage behavior
+5. Verify account, tenant, provider, secret, routing, and usage behavior
    before adding capacity. A failed stage rolls the transaction back to the
    untouched legacy schema and prevents startup. Correct the source data or
    restore the backup; do not hand-edit a partially migrated shape.
@@ -1304,7 +1318,7 @@ Production is split-origin:
 
 | Hostname | Owner | Purpose |
 |----------|-------|---------|
-| `llm-proxy.mprlab.com` | GitHub Pages | Public landing at `/`; noindex self-service workspace at `/app/`. |
+| `llm-proxy.mprlab.com` | GitHub Pages | Public landing at `/`; noindex self-service app at `/app/`. |
 | `llm-proxy-api.mprlab.com` | MPR gateway/backend | llm-proxy API, management API, `/`, `/v2`, and `/dictate`. |
 | `tauth-api.mprlab.com` | TAuth backend | Google login, nonce, logout, `/auth/session`, and session-cookie issuance. |
 
@@ -1422,6 +1436,12 @@ Run the canonical local browser stack:
 make up
 ```
 
+Stop that local browser stack from another terminal:
+
+```shell
+make down
+```
+
 Before the first run, explicitly create the ignored private
 `configs/.env.local`, populate it with real local values, and set mode `0600`.
 The tracked `configs/.env.local.example` and `configs/.env.sample` files are
@@ -1438,15 +1458,24 @@ tenant inputs, including the signing key it shares with the API. Only llm-proxy
 receives the provider-key encryption configuration; aggregate dotenv files and
 live provider smoke-test credentials are not injected into auxiliary
 containers. The API image is built from the current source and runs the
-canonical `configs/config.yml` configuration. The stack has two explicit
+canonical `configs/config.yml` configuration. The stack has these explicit
 browser-facing endpoints:
 
-- Public landing: `http://localhost:4179/`, served from `site/` by ghttp.
+- Public landing: `http://localhost:4179/`, served by ghttp from the rendered
+  local site artifact.
 - Management UI: `http://localhost:4179/app/`, served from the same static artifact.
+- API reference: `http://localhost:4179/docs/`, generated from the canonical
+  schema with explicit raw-view and exact-YAML download actions.
 - OpenAPI schema: `http://localhost:4179/openapi.yaml`, served through the
   frontend from the canonical read-only `docs/openapi.yaml` mount.
 - Backend API: `http://localhost:8080/`, including the proxy and
   `/api/management/*` endpoints.
+
+`make up` renders an isolated local site artifact from `configs/config.yml`
+before the API starts. The renderer projects the validated provider registry
+into the public capability matrix, and ghttp serves that rendered artifact
+read-only. Startup rejects an absent or unrendered matrix, and shutdown removes
+the temporary artifact.
 
 ghttp proxies `http://localhost:4179/config-ui.yaml` to the API and the
 same-origin `/auth/*` and `/me` routes to the internal TAuth service. The
@@ -1467,9 +1496,10 @@ OpenAPI mount (`200`), the ghttp-served runtime config (`200`), the
 unauthenticated API boundary (`403`), the same-origin TAuth session (`204`) and
 nonce (`200`) boundaries, and the unauthenticated management API boundary
 (`401`). It does not call a paid provider. After readiness, Compose logs remain
-attached in the foreground. Use `Ctrl-C` to stop the containers and network;
-the named local data volumes keep local TAuth and management state for the next
-run.
+attached in the foreground. Use `Ctrl-C` there or run `make down` from another
+terminal to stop the same local containers, project network, and orphaned
+services. Both shutdown paths retain the named local data volumes so local
+TAuth and management state remain available for the next run.
 
 Browser startup additionally loads the pinned Alpine 3.13.5 module from
 `https://cdn.jsdelivr.net`. `make up` cannot override a Chrome extension,
@@ -1567,6 +1597,7 @@ This repository exposes the standard local targets used by MPR app repos:
 |---------|---------|
 | `make frontend-dependencies` | Install the pinned npm graph and Chromium into ignored project-local state. Focused frontend validation, `make lint`, `make test`, and `make ci` invoke this target automatically. |
 | `make up` | Require the ignored private `configs/.env.local`, then build and run the complete local browser orchestration: ghttp static UI and same-origin TAuth routes on `localhost:4179`, plus the API on `localhost:8080`. It waits for Compose startup before verifying the static/config/auth/API boundaries and reporting ready. |
+| `make down` | Stop the exact local Compose project started by `make up`, including orphaned services and its project network, while retaining the named local TAuth and management data volumes. |
 | `make ci` | Prepare pinned frontend dependencies, then run format checks, Go lint (`go vet`, `staticcheck`, `ineffassign`), Python strict mypy, frontend syntax checks, the 100% coverage-gated Go test suite, Python pytest, Playwright browser tests, the app lifecycle contract test, and the non-paid live-harness preflight. A successful run ends with a per-gate table, current-run coverage, and an explicit `CI PASSED` receipt. |
 | `make test-live-provider-harness` | Generate the temporary static-mode live-test config and verify authenticated routing without an upstream call. |
 | `make test-live-providers` | Start a disposable managed tenant, verify every available provider key through the canonical management operation, and run that provider's live text smoke only after verification succeeds; use `LIVE_ENV_FILE=/path/to/env` to load key values. |
