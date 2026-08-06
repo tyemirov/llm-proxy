@@ -19,6 +19,7 @@ const (
 )
 
 var runtimeConfiguration proxy.Configuration
+var siteCapabilityCatalog proxy.PublicCapabilityCatalog
 var serveProxy = proxy.Serve
 var loadConfiguration = loadRuntimeConfiguration
 
@@ -49,6 +50,12 @@ var rootCmd = &cobra.Command{
 	Example: rootCmdExample,
 	PreRunE: func(command *cobra.Command, arguments []string) error {
 		if command.Flags().Changed(flagRenderSiteOutput) {
+			configPath, _ := command.Flags().GetString(flagConfig)
+			capabilityCatalog, catalogError := loadSiteCapabilityCatalog(configPath)
+			if catalogError != nil {
+				return catalogError
+			}
+			siteCapabilityCatalog = capabilityCatalog
 			return nil
 		}
 		configPath, _ := command.Flags().GetString(flagConfig)
@@ -68,7 +75,7 @@ var rootCmd = &cobra.Command{
 			if configURLError != nil {
 				return configURLError
 			}
-			return renderSiteArtifact(siteSource, renderSiteOutput, siteConfigURLValue)
+			return renderSiteArtifact(siteSource, renderSiteOutput, siteConfigURLValue, siteCapabilityCatalog)
 		}
 
 		logger := loggerForLevel(runtimeConfiguration.LogLevel)
