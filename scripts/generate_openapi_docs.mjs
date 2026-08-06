@@ -4,13 +4,19 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { load } from "js-yaml";
+import {
+  renderPublicFooter,
+  renderPublicHeader,
+  renderPublicShellHeadAssets,
+} from "./public_site_shell.mjs";
 
 const CONTRACT_PATH = "docs/openapi.yaml";
 const OUTPUT_PATH = "site/docs/index.html";
 const PUBLIC_ORIGIN = "https://llm-proxy.mprlab.com";
 const API_ORIGIN = "https://llm-proxy-api.mprlab.com";
 const SOURCE_URL = "https://github.com/tyemirov/llm-proxy/blob/master/docs/openapi.yaml";
-const APPLICATION_PATH = "/app/";
+const PUBLIC_SCHEMA_PATH = "/openapi.yaml";
+const DOWNLOAD_FILENAME = "llm-proxy-openapi.yaml";
 const HTTP_METHODS = new Set(["get", "post", "put", "delete", "patch", "head", "options", "trace"]);
 const CHECK_ARGUMENT = "--check";
 
@@ -24,7 +30,7 @@ const parsedDocument = load(contractSource);
 const document = objectValue(parsedDocument, "document");
 validateDocument(document);
 const sourceDigest = createHash("sha256").update(contractSource).digest("hex");
-const renderedDocument = renderDocument(document, sourceDigest);
+const renderedDocument = renderDocument(document, sourceDigest, contractSource);
 
 if (process.argv.includes(CHECK_ARGUMENT)) {
   const committedDocument = await readFile(OUTPUT_PATH, "utf8").catch(() => "");
@@ -73,9 +79,10 @@ function validateDocument(document) {
 /**
  * @param {Record<string, unknown>} document
  * @param {string} sourceDigest
+ * @param {string} contractSource
  * @returns {string}
  */
-function renderDocument(document, sourceDigest) {
+function renderDocument(document, sourceDigest, contractSource) {
   const info = objectValue(document.info, "info");
   const operations = documentOperations(document);
   const operationMarkup = operations.map((operation) => renderOperation(document, operation)).join("\n");
@@ -89,22 +96,14 @@ function renderDocument(document, sourceDigest) {
     <link rel="canonical" href="${PUBLIC_ORIGIN}/docs/">
     <meta name="openapi-source-sha256" content="${sourceDigest}">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+${renderPublicShellHeadAssets()}
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
   <body class="resource-page api-reference-page" data-openapi-source-sha256="${sourceDigest}">
-    <header class="resource-shell resource-topbar">
-      <a class="resource-brand" href="/">LLM Proxy</a>
-      <nav aria-label="API reference navigation">
-        <a href="/docs/" aria-current="page">API reference</a>
-        <a href="/openapi.yaml">OpenAPI schema</a>
-        <a href="/resources/">Resources</a>
-        <a href="${APPLICATION_PATH}">Workspace</a>
-        <a href="${SOURCE_URL}">Source</a>
-      </nav>
-    </header>
+${renderPublicHeader()}
     <main class="resource-shell resource-article api-reference">
-      <section class="resource-hero">
+      <section id="openapi-schema" class="resource-hero">
         <p class="eyebrow">Canonical API contract</p>
         <h1>${escapeHTML(String(info.title))}</h1>
         <p class="resource-deck">${escapeHTML(String(info.description))}</p>
@@ -113,10 +112,16 @@ function renderDocument(document, sourceDigest) {
           <span>API server ${escapeHTML(API_ORIGIN)}</span>
           <span>Source SHA-256 <code>${sourceDigest}</code></span>
         </div>
-        <div class="resource-actions">
-          <a class="resource-button" href="/openapi.yaml">Download exact schema</a>
+        <div class="resource-actions" aria-label="OpenAPI schema actions">
+          <a class="resource-button" href="#openapi-yaml">View YAML</a>
+          <a class="resource-button" href="${PUBLIC_SCHEMA_PATH}" download="${DOWNLOAD_FILENAME}">Download YAML</a>
           <a class="resource-link" href="${SOURCE_URL}">View committed source</a>
         </div>
+      </section>
+      <section id="openapi-yaml" aria-labelledby="openapi-yaml-title">
+        <h2 id="openapi-yaml-title">OpenAPI YAML</h2>
+        <p>The complete canonical manifest is shown below. The download action publishes these exact source bytes.</p>
+        <pre class="api-schema-source" tabindex="0"><code>${escapeHTML(contractSource)}</code></pre>
       </section>
       <section aria-labelledby="operation-index-title">
         <h2 id="operation-index-title">Operations</h2>
@@ -131,13 +136,7 @@ function renderDocument(document, sourceDigest) {
       </section>
       ${operationMarkup}
     </main>
-    <footer class="resource-shell resource-footer">
-      <a href="/">LLM Proxy main page</a>
-      <a href="/openapi.yaml">Canonical OpenAPI schema</a>
-      <a href="/resources/">Resource hub</a>
-      <a href="${APPLICATION_PATH}">Workspace</a>
-      <a href="/sitemap.xml">Sitemap</a>
-    </footer>
+${renderPublicFooter()}
   </body>
 </html>
 `;

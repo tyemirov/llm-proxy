@@ -3,21 +3,23 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { load } from "js-yaml";
+import {
+  renderPublicFooter,
+  renderPublicHeader,
+  renderPublicShellHeadAssets,
+} from "./public_site_shell.mjs";
 
 const PUBLIC_ORIGIN = "https://llm-proxy.mprlab.com";
 const RESOURCE_ROOT = "site/resources";
 const REPORT_PATH = "docs/marketing/seo-resource-cluster-report.md";
 const RESOURCE_PUBLISHED_DATE = "2026-07-06";
 const RESOURCE_DEFAULT_MODIFIED_DATE = "2026-07-11";
-const LANDING_MODIFIED_DATE = "2026-08-06";
+const CURRENT_PUBLIC_CONTENT_MODIFIED_DATE = "2026-08-06";
+const LANDING_MODIFIED_DATE = CURRENT_PUBLIC_CONTENT_MODIFIED_DATE;
 const PRODUCT_NAME = "LLM Proxy";
-const REPOSITORY_URL = "https://github.com/tyemirov/llm-proxy";
-const README_USAGE_URL = `${REPOSITORY_URL}#usage`;
 const API_DOCUMENTATION_PATH = "/docs/";
-const OPENAPI_SCHEMA_PATH = "/openapi.yaml";
-const APPLICATION_PATH = "/app/";
 const CLIENT_AUTHENTICATION_RESOURCE_SLUG = "llm-proxy-client-authentication";
-const CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE = "2026-07-26";
+const CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE = CURRENT_PUBLIC_CONTENT_MODIFIED_DATE;
 const MIN_PAGE_COUNT = 40;
 const MAX_PAGE_COUNT = 50;
 const canonicalV2Contract = await readCanonicalV2Contract();
@@ -30,36 +32,82 @@ const evidence = Object.freeze({
 });
 
 const pages = Object.freeze([
-  page({
+  evidencedPage({
     slug: "multi-provider-llm-proxy",
     category: "Provider routing",
+    relatedSlugs: [
+      "openai-claude-gemini-one-endpoint",
+      "go-client-v2-only-llm-proxy",
+      "python-client-v2-only-llm-proxy",
+      "installable-llm-proxy-cli",
+    ],
     primaryKeyword: "multi-provider LLM proxy",
-    title: "Multi-provider LLM proxy for internal tools",
-    description: "Route OpenAI, Meta Muse, Claude, Gemini, Grok, and compatible providers through one tenant-secret HTTP boundary.",
-    audience: "Platform engineers consolidating several model providers behind one internal service.",
-    problem: "Teams often add one SDK, key path, and retry surface per provider. That creates scattered credentials, inconsistent defaults, and provider behavior that leaks into every caller.",
-    solution: "LLM Proxy keeps the caller contract centered on GET, JSON POST, canonical POST /v2, and /dictate while routing to configured providers server-side.",
+    title: "Integrate once through one multi-provider LLM proxy",
+    description: "Connect through one canonical API or official client, then select any supported text provider and model route without rebuilding the application integration.",
+    audience: "AI-assisted builders, startups, product teams, and platform groups that need model choice without repeated provider integrations.",
+    problem: "Adding a provider SDK, credential flow, payload mapper, and error parser for every model family turns model choice into application integration work.",
+    solution: "LLM Proxy gives callers one tenant-secret-authenticated POST /v2 messages contract. Provider and model selection change the route while provider-specific credentials and wire formats stay behind the proxy.",
     steps: [
-      "Configure supported providers and model catalogs in config.yml.",
-      "Give each tenant a default provider and model, or let managed users choose defaults in Settings.",
-      "Send provider and model only when a request needs to override the default route.",
-      "Keep upstream API keys server-side and authenticate clients with the tenant secret.",
+      "Choose direct HTTP, the official Go package, the official Python package, or the installable CLI.",
+      "Authenticate the application with one tenant client key while provider API keys stay server-side.",
+      "Send canonical messages through POST /v2 and omit provider or model when managed defaults should apply.",
+      "Change provider and model selectors when the product needs another supported route; keep the integration contract unchanged.",
     ],
     features: [
-      ["Provider selector", "Callers can choose providers per request without switching client libraries.", "Use provider=meta for Muse Spark 1.1 and provider=anthropic for Claude."],
-      ["Configured model catalogs", "Unknown or unsupported model choices fail before upstream calls.", "Gemini and Claude max-token ceilings are validated at the edge."],
-      ["One response contract", "Plain text, JSON, XML, and CSV formatting stay behind the proxy.", "Apps keep one integration while the backend owns provider differences."],
+      ["One canonical request", "Every bundled client sends the same POST /v2 messages shape.", "A prototype can begin with curl and move to Go or Python without adopting a provider payload."],
+      ["Explicit route selection", "Provider and model values change routing instead of the client library.", "The same application request can target a supported Gemini, Anthropic, OpenAI, Meta, or compatible route."],
+      ["Server-side adapters", "The proxy owns provider authentication, payload mapping, validation, and status translation.", "Product code does not parse separate OpenAI Responses, Anthropic Messages, and Gemini Interactions contracts."],
+      ["Current capability catalog", "The public matrix comes from the validated registry used by request routing.", "A caller can verify image input, audio input, reasoning, web search, dictation, and output-limit support before selecting a route."],
     ],
     examples: [
-      ["Model trial", "A team tests Meta Muse Spark 1.1, Claude, and Gemini by changing provider selectors, not app code."],
-      ["Internal gateway", "A platform team gives product apps a tenant secret while keeping OpenAI, Meta, Anthropic, Gemini, and xAI credentials in backend config or management storage."],
-      ["Provider fallback planning", "Operators can keep non-default providers disabled until a key exists, then enable them without changing callers."],
+      ["AI-assisted prototype", "Generated application code calls one documented endpoint and never receives an upstream provider key."],
+      ["Product model comparison", "A startup sends the same transcript to supported OpenAI, Anthropic, and Gemini routes by changing only route selection."],
+      ["Institutional application platform", "A platform team gives several applications separate client keys while managing provider credentials and route defaults centrally."],
     ],
     limitations: [
-      "A provider must be wired through the proxy before callers can use it.",
-      "Provider API keys are still required server-side before a provider can serve traffic.",
-      "The proxy does not make unsupported upstream capabilities available by naming a provider.",
+      "The public capability matrix defines the currently supported provider, model, and feature combinations.",
+      "A configured server-side provider credential is required before that provider can serve a tenant request.",
+      "Provider-specific capabilities remain route-specific and must be declared by the selected model.",
+      "Provider lifecycle, model-onboarding, and hosted uptime commitments are outside the current catalog contract pending an approved support and SLA policy.",
     ],
+    repoExample: {
+      source: "README.md",
+      verifiedOn: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
+      code: `curl -X POST \
+  "https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_SECRET&provider=gemini" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Summarize this"}]}'`,
+    },
+    quickVerdict: "Use one canonical messages integration when provider and model choice should remain a routing decision instead of becoming application architecture.",
+    faq: [
+      {
+        question: "What changes when an application switches providers?",
+        answer: "The caller changes the provider selector and optionally the model. POST /v2, tenant client-key authentication, messages, response formatting, and proxy status behavior remain on the same contract.",
+      },
+      {
+        question: "Which official LLM Proxy clients are available?",
+        answer: "The repository supplies a typed Go package, a synchronous Python package, and an installable Go command-line client. Direct HTTP callers use the same canonical POST /v2 operation.",
+      },
+      {
+        question: "Can every model use every capability?",
+        answer: "No. The generated model matrix publishes the exact capabilities declared for each supported route, and the proxy rejects unsupported route-capability combinations before provider dispatch.",
+      },
+      {
+        question: "Does the supported catalog include an uptime or model-addition SLA?",
+        answer: "The catalog states the current implemented routing contract. Provider lifecycle, model-onboarding time, and hosted availability are outside that contract pending a separately approved support and SLA policy.",
+      },
+    ],
+    cta: {
+      heading: "Choose one integration surface",
+      body: "Start with direct HTTP, Go, Python, or the command line, then use the live catalog to select a supported route.",
+      label: "Compare integration options",
+      href: "/#integrate",
+    },
+    publicationBrief: {
+      allowedClaims: "One canonical POST /v2 contract, direct HTTP, official Go, Python, and CLI clients, explicit supported-route selection, server-side provider credentials, and a generated current capability matrix.",
+      forbiddenClaims: "Universal upstream feature parity, automatic fallback, benchmark leadership, savings, provider longevity, model-onboarding time, or hosted uptime guarantees.",
+      differentiation: "This is the integrate-once cornerstone: it explains how the client contract stays stable while provider and model routing change.",
+    },
   }),
   page({
     slug: "server-side-provider-api-keys",
@@ -128,9 +176,10 @@ const pages = Object.freeze([
   evidencedPage({
     slug: "self-service-llm-key-management",
     category: "Management UI",
+    modifiedDate: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
     primaryKeyword: "self-service LLM key management",
     title: "Self-service LLM key management for internal teams",
-    description: "Select a signed-in user's workspace, create its LLM Proxy client key, and autosave one provider API key before they leave Settings.",
+    description: "Log in to the LLM Proxy app, create a client key for the selected tenant, and autosave one provider API key before leaving Settings.",
     audience: "Teams that want user-owned AI access without asking operators to edit YAML for every change.",
     problem: "Operator-provisioned AI access does not scale when each user or team needs provider keys, defaults, generated secrets, and examples updated separately.",
     solution: "LLM Proxy includes an optional TAuth-protected management UI that creates a missing client key after authentication, autosaves provider settings, and keeps Settings open until at least one managed provider key persists.",
@@ -158,7 +207,7 @@ const pages = Object.freeze([
     ],
     repoExample: {
       source: "site/assets/llm-proxy/js/ui/keyManagement.js",
-      verifiedOn: "2026-07-22",
+      verifiedOn: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
       code: `if (this.settingsRequired) {
   this.openSettings();
 }
@@ -170,7 +219,7 @@ if (!this.hasSecret) {
     faq: [
       {
         question: "How does first-run LLM Proxy setup begin?",
-        answer: "After MPR UI reports an authenticated session, the account and selected workspace profile load. The UI automatically creates a client key when that workspace has none.",
+        answer: "After MPR UI reports an authenticated session, the account and selected tenant profile load. The app automatically creates a client key when that tenant has none.",
       },
       {
         question: "What lets a user leave Settings?",
@@ -314,23 +363,29 @@ if (!this.hasSecret) {
       "Not all provider text models are dictation models.",
     ],
   }),
-  page({
+  evidencedPage({
     slug: "openai-claude-gemini-one-endpoint",
     category: "Provider routing",
+    relatedSlugs: [
+      "multi-provider-llm-proxy",
+      "per-request-provider-model-selection",
+      "model-catalog-configuration",
+    ],
     primaryKeyword: "OpenAI Claude Gemini one endpoint",
-    title: "OpenAI, Claude, and Gemini through one endpoint",
-    description: "Use one proxy contract while LLM Proxy maps requests into OpenAI, Anthropic, and Gemini APIs.",
-    audience: "Product teams comparing native model providers without adding three client integrations.",
-    problem: "OpenAI Responses, Anthropic Messages, and Gemini Interactions have different payloads, model limits, auth headers, and response shapes.",
-    solution: "LLM Proxy keeps a shared caller contract and routes native providers server-side with provider-specific adapters.",
+    title: "Switch OpenAI, Claude, and Gemini behind one endpoint",
+    description: "Send one canonical messages request to supported OpenAI, Anthropic, or Gemini models while LLM Proxy owns each provider's native API contract.",
+    audience: "Startups and product teams comparing native model families without maintaining three product integrations.",
+    problem: "OpenAI Responses, Anthropic Messages, and Gemini Interactions use different authentication, payload, model-limit, lifecycle, and response contracts.",
+    solution: "LLM Proxy maps the same authenticated POST /v2 messages request into the selected native provider adapter and returns provider-neutral status and usage behavior to the caller.",
     steps: [
-      "Configure native provider base URLs, keys, and model catalogs.",
-      "Send the same GET, POST, or /v2 request shape to llm-proxy.",
-      "Select provider=openai, provider=anthropic, or provider=gemini when needed.",
-      "Read the formatted proxy response and normalized usage metadata when available.",
+      "Configure and verify the required provider credentials behind LLM Proxy.",
+      "Integrate the application once through POST /v2 or one of the official clients.",
+      "Select provider=openai, provider=anthropic, or provider=gemini while keeping the messages body unchanged.",
+      "Use the capability matrix to choose an exact supported model and any route-specific options.",
     ],
     features: [
       ["Native provider adapters", "The backend handles OpenAI Responses, Anthropic Messages, and Gemini Interactions differences.", "Gemini messages become interaction steps; Claude system messages use Anthropic's system field."],
+      ["One blocking caller contract", "Provider resource lifecycles remain internal while the caller waits for one final response.", "The product does not add OpenAI or Gemini polling code."],
       ["Common status mapping", "Provider errors, timeouts, rate limits, and invalid inputs map to documented proxy statuses.", "Callers do not parse three provider error formats."],
       ["Model validation", "Model IDs are checked against configured provider catalogs.", "A Gemini model is not accepted under Anthropic routing."],
     ],
@@ -341,9 +396,49 @@ if (!this.hasSecret) {
     ],
     limitations: [
       "Provider-specific capabilities remain provider-specific; web search is currently exposed only for configured OpenAI models.",
-      "Native provider model catalogs must be kept current in config.",
+      "The generated catalog is authoritative for the currently supported model routes and capabilities.",
       "The endpoint is shared, but the selected provider still controls upstream behavior and availability.",
     ],
+    repoExample: {
+      source: "README.md",
+      verifiedOn: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
+      code: `for provider in openai anthropic gemini; do
+  curl -X POST \
+    "https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_SECRET&provider=$provider" \
+    -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"user","content":"Summarize this"}]}'
+done`,
+    },
+    quickVerdict: "Use one endpoint when model evaluation should change provider routing without introducing OpenAI, Anthropic, and Gemini contracts into product code.",
+    faq: [
+      {
+        question: "Does the request body change between OpenAI, Claude, and Gemini?",
+        answer: "The canonical POST /v2 messages body stays the same. LLM Proxy maps it into OpenAI Responses, Anthropic Messages, or Gemini Interactions according to the selected provider and model route.",
+      },
+      {
+        question: "Can the application omit the model?",
+        answer: "Yes. An omitted model uses the tenant default when provider is omitted or the selected provider's configured default when provider is explicit.",
+      },
+      {
+        question: "Are capabilities identical across these providers?",
+        answer: "No. Image input, audio input, web search, reasoning, output limits, and other capabilities remain exact to the selected catalog route.",
+      },
+      {
+        question: "Where can a team compare the supported models?",
+        answer: "The public landing page renders the complete current matrix from the same validated provider registry used by request routing.",
+      },
+    ],
+    cta: {
+      heading: "Compare the current native-provider routes",
+      body: "Search the generated model matrix by provider, model, capability, contract, reasoning level, default, or output limit.",
+      label: "Explore supported models",
+      href: "/#models",
+    },
+    publicationBrief: {
+      allowedClaims: "One canonical messages body, native OpenAI Responses, Anthropic Messages, and Gemini Interactions adapters, explicit route selection, blocking caller behavior, and current catalog validation.",
+      forbiddenClaims: "Identical upstream behavior, identical capabilities, provider performance rankings, automatic fallback, availability guarantees, or universal model access.",
+      differentiation: "This page is a concrete three-provider comparison for product teams; it explains which contract stays shared and which behavior remains route-specific.",
+    },
   }),
   page({
     slug: "openai-background-response-polling",
@@ -657,25 +752,26 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d`,
   page({
     slug: "tauth-protected-management-api",
     category: "Management UI",
+    modifiedDate: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
     primaryKeyword: "TAuth protected management API",
     title: "TAuth-protected management API for LLM Proxy",
-    description: "Gate account, workspace, provider key, defaults, usage, and admin APIs behind validated TAuth sessions.",
+    description: "Gate account, tenant, provider key, defaults, usage, and admin APIs behind validated TAuth sessions.",
     audience: "Teams adopting the MPR/TAuth shell for authenticated AI self-service.",
     problem: "Key management APIs need a stronger boundary than a public static page. They must know who is signed in and which tenant that user owns.",
     solution: "LLM Proxy validates configured TAuth session cookies on /api/management/* and returns unauthenticated or forbidden responses for invalid sessions.",
     steps: [
       "Configure TAuth URL, tenant ID, session cookie name, issuer, and signing key.",
       "Serve browser-facing MPR UI/TAuth config through /config-ui.yaml.",
-      "Require authenticated sessions before returning account, workspace, provider, default, secret, usage, or admin data.",
+      "Require authenticated sessions before returning account, tenant, provider, default, secret, usage, or admin data.",
       "Use the shared MPR header, user menu, and footer in the static UI.",
     ],
     features: [
       ["Session validation", "Management APIs validate TAuth session cookies server-side.", "Unauthenticated requests return 401."],
-      ["Workspace ownership", "Signed-in users manage one or more personal workspaces, each with isolated secrets, provider keys, defaults, examples, and usage.", "Foreign workspace ids return 404 without disclosure."],
+      ["Tenant ownership", "Signed-in users manage one or more personal tenants, each with isolated secrets, provider keys, defaults, examples, and usage.", "Foreign tenant ids return 404 without disclosure."],
       ["Admin derivation", "Admin status is derived from configured emails and authenticated session data.", "Admin APIs return 403 for non-admin users."],
     ],
     examples: [
-      ["Account load", "The static UI calls /api/management/account after TAuth reports authentication, then loads /api/management/tenants/:tenant_id for the selected workspace."],
+      ["Account load", "The static app calls /api/management/account after TAuth reports authentication, then loads /api/management/tenants/:tenant_id for the selected tenant."],
       ["Settings mutation", "Provider key saves and secret generation require JSON content and the public origin."],
       ["Admin dashboard", "A configured admin receives an Admin menu item after profile load."],
     ],
@@ -835,30 +931,29 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d`,
       "This is a config discipline feature, not a secrets manager.",
     ],
   }),
-  page({
-    slug: "multi-workspace-ownership-migration",
+  evidencedPage({
+    slug: "multi-tenant-ownership-migration",
     category: "Configuration",
-    modifiedDate: "2026-07-25",
-    primaryKeyword: "multi workspace tenant migration",
-    title: "Transactional multi-workspace ownership migration",
-    description: "Upgrade one-workspace-per-user state into explicit TAuth accounts and isolated personal workspaces without changing opaque tenant ids.",
-    audience: "Operators upgrading an existing management database to the multi-workspace ownership schema.",
-    problem: "The earlier persistence shape coupled one tenant row to one user, so one TAuth subject could not own multiple isolated workspaces.",
-    solution: "LLM Proxy preflights the complete legacy dataset, then atomically creates explicit user and workspace records, preserves tenant ids and usage, and rebinds encrypted provider keys to workspace ownership.",
+    primaryKeyword: "multi-tenant ownership migration",
+    title: "Transactional multi-tenant account ownership migration",
+    description: "Upgrade one-tenant-per-user state into explicit TAuth accounts and isolated personal tenants without changing opaque tenant ids.",
+    audience: "Operators upgrading an existing management database to the multi-tenant ownership schema.",
+    problem: "The earlier persistence shape coupled one tenant row to one user, so one TAuth subject could not own multiple isolated tenants.",
+    solution: "LLM Proxy preflights the complete legacy dataset, then atomically creates explicit user and tenant records, preserves tenant ids and usage, and rebinds encrypted provider keys to tenant ownership.",
     steps: [
       "Drain old service instances and take an operator-owned database backup.",
       "Exercise the SQLite migration scenario through the repository test targets.",
       "Start one new instance so preflight and the bounded schema-version transaction run once.",
-      "Verify account, workspace, secret, provider, routing, and usage isolation before adding capacity.",
+      "Verify account, tenant, secret, provider, routing, and usage isolation before adding capacity.",
     ],
     features: [
       ["Fail-closed preflight", "Missing tables, static owners, duplicates, malformed secrets, orphan rows, plaintext keys, corrupt ciphertext, and invalid routing data stop startup before mutation.", "Invalid data never becomes a partial migration."],
       ["SQLite index continuity", "Colliding legacy GORM index names move inside the same transaction before current tables are created.", "Preserved volumes migrate without deleting tenant or usage data."],
-      ["Tenant and usage continuity", "Opaque tenant ids, secret digests, routing defaults, timestamps, and every usage event are preserved.", "Existing client secrets continue to identify the same workspace."],
-      ["Provider key re-encryption", "Provider ciphertext is decrypted under the prior user binding and re-encrypted with the preserved tenant id as AES-GCM associated data.", "Each key becomes workspace-bound."],
+      ["Tenant and usage continuity", "Opaque tenant ids, secret digests, routing defaults, timestamps, and every usage event are preserved.", "Existing client secrets continue to identify the same tenant."],
+      ["Provider key re-encryption", "Provider ciphertext is decrypted under the prior user binding and re-encrypted with the preserved tenant id as AES-GCM associated data.", "Each key becomes tenant-bound."],
     ],
     examples: [
-      ["SQLite verification", "A disposable legacy database migrates and reopens with explicit user and workspace tables."],
+      ["SQLite verification", "A disposable legacy database migrates and reopens with explicit user and tenant tables."],
       ["Configured path verification", "The real startup path opens and migrates a disposable SQLite database at the supplied location."],
       ["Rollback", "An injected failure at any rename, create, verify, version, or drop stage leaves the legacy schema untouched."],
     ],
@@ -867,16 +962,56 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d`,
       "Plaintext or corrupt provider keys are rejected rather than repaired.",
       "Old and new service versions must not run concurrently against the migration database.",
     ],
+    repoExample: {
+      source: "internal/proxy/management_store.go",
+      verifiedOn: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
+      code: `dataset, preflightError := preflightLegacyManagedTenantSchema(database, providerKeyCipher, providers)
+if preflightError != nil {
+\treturn preflightError
+}
+return database.Transaction(func(transaction *gorm.DB) error {`,
+    },
+    quickVerdict: "Use this bounded startup migration when an existing one-tenant-per-user database must become explicit account and tenant ownership without changing tenant identities or usage history.",
+    faq: [
+      {
+        question: "What happens before the ownership migration writes data?",
+        answer: "LLM Proxy preflights the complete legacy dataset and rejects missing, duplicate, orphaned, plaintext, corrupt, or non-canonical records before opening the mutation transaction.",
+      },
+      {
+        question: "Which values remain stable through the migration?",
+        answer: "The transaction preserves opaque tenant ids, secret digests, routing defaults, timestamps, and usage events while moving ownership into explicit account and tenant records.",
+      },
+      {
+        question: "What makes the ownership update atomic?",
+        answer: "Schema renames, current-table creation, record copies, verification, versioning, and legacy-table removal run in one database transaction. A failed stage rolls back and prevents startup.",
+      },
+      {
+        question: "Can old and new service versions run concurrently?",
+        answer: "No. Drain old instances, take a database backup, exercise the repository migration scenario, and start one new instance before adding capacity.",
+      },
+    ],
+    cta: {
+      heading: "Run the bounded ownership migration",
+      body: "Follow the repository runbook to back up the database, exercise the exact SQLite scenario, start one new instance, and verify tenant isolation before adding capacity.",
+      label: "Read the migration runbook",
+      href: "https://github.com/tyemirov/llm-proxy#self-service-management-ui",
+    },
+    publicationBrief: {
+      allowedClaims: "Bounded preflight, atomic migration, preserved tenant ids and usage, and tenant-bound provider-key re-encryption.",
+      forbiddenClaims: "Performance, pricing, compliance, benchmark, and zero-downtime claims.",
+      differentiation: "Operator runbook for the one-tenant-per-user ownership upgrade, distinct from general GORM persistence guidance.",
+    },
   }),
   page({
     slug: "gorm-managed-tenant-persistence",
     category: "Configuration",
+    modifiedDate: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
     primaryKeyword: "GORM managed tenant persistence",
-    title: "GORM-managed workspace persistence for LLM Proxy",
-    description: "Persist TAuth accounts, isolated workspaces, provider settings, generated secret digests, defaults, and usage through GORM.",
+    title: "GORM-managed tenant persistence for LLM Proxy",
+    description: "Persist TAuth accounts, isolated tenants, provider settings, generated secret digests, defaults, and usage through GORM.",
     audience: "Backend operators deciding how management-mode state is stored.",
     problem: "Self-service management needs persistent tenant state without mutating runtime config files or adding raw SQL paths.",
-    solution: "LLM Proxy stores TAuth users, their personal workspaces, provider keys, defaults, generated secret digests, and usage events in a GORM-managed database.",
+    solution: "LLM Proxy stores TAuth users, their personal tenants, provider keys, defaults, generated secret digests, and usage events in a GORM-managed database.",
     steps: [
       "Configure management.database_path with the SQLite database location.",
       "Run management mode with the required provider-key encryption key.",
@@ -1417,6 +1552,7 @@ text = client.post_messages(
   page({
     slug: "usage-metadata-without-prompts",
     category: "Usage",
+    modifiedDate: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
     primaryKeyword: "usage metadata without prompts",
     title: "Usage metadata without storing prompts or responses",
     description: "Track managed-tenant usage signals while excluding prompt, transcript, audio, response, and secret content.",
@@ -1431,7 +1567,7 @@ text = client.post_messages(
     ],
     features: [
       ["Canonical outcomes", "Every event stores one bounded code such as invalid_request, rate_limited, request_timeout, or upstream_error.", "Dashboards do not persist raw error strings."],
-      ["Tenant isolation", "Signed-in owners can inspect their own safe failure rows.", "Admins remain aggregate-only and foreign workspace ids return the same not-found response."],
+      ["Tenant isolation", "Signed-in owners can inspect their own safe failure rows.", "Admins remain aggregate-only and foreign tenant ids return the same not-found response."],
       ["Bounded diagnostic rows", "Failure pages contain only occurred_at, endpoint, provider, model, status_code, outcome_code, and latency_ms.", "Operational investigation does not become content export."],
     ],
     examples: [
@@ -1506,6 +1642,7 @@ text = client.post_messages(
   page({
     slug: "provider-specific-system-prompts",
     category: "Management UI",
+    modifiedDate: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
     primaryKeyword: "provider-specific system prompts",
     title: "Provider-specific system prompts in LLM Proxy Settings",
     description: "Store each provider's text model and system prompt with its managed provider configuration.",
@@ -1530,7 +1667,7 @@ text = client.post_messages(
     ],
     limitations: [
       "Request-level system instructions take precedence over server-injected defaults.",
-      "Provider settings are scoped to the selected workspace owned by the authenticated TAuth subject.",
+      "Provider settings are scoped to the selected tenant owned by the authenticated TAuth subject.",
       "Autosave responses return masked key status; raw retrieval requires the separate owner-authenticated reveal action.",
     ],
   }),
@@ -1630,36 +1767,81 @@ text = client.post_messages(
       "They are complementary to, not replacements for, black-box CI tests.",
     ],
   }),
-  page({
+  evidencedPage({
     slug: "internal-ai-gateway-for-product-tools",
     category: "Use cases",
+    relatedSlugs: [
+      "multi-provider-llm-proxy",
+      "server-side-provider-api-keys",
+      "managed-tenant-usage-dashboard",
+      "llm-proxy-client-authentication",
+    ],
     primaryKeyword: "internal AI gateway",
-    title: "Internal AI gateway for product tools",
-    description: "Centralize provider routing, tenant secrets, request validation, and usage signals for internal AI tools.",
-    audience: "Product and platform teams with several internal tools calling LLMs or dictation providers.",
-    problem: "Internal tools can quietly accumulate provider SDKs, raw keys, inconsistent defaults, and untracked usage as teams add AI features one by one.",
-    solution: "LLM Proxy gives internal tools one tenant-secret HTTP boundary while centralizing provider credentials, routing, request validation, and managed usage dashboards.",
+    title: "Internal AI gateway for durable product integrations",
+    description: "Give institutional teams one AI integration while platform engineering centralizes provider credentials, routing, validation, and usage signals.",
+    audience: "Institutional engineering and platform teams standardizing AI access across multiple applications and product groups.",
+    problem: "Applications that adopt provider SDKs independently create duplicated credential handling, inconsistent route validation, provider-specific failures, and fragmented usage visibility.",
+    solution: "LLM Proxy becomes one tenant-client-key boundary for applications while platform engineering owns upstream credentials, supported routes, managed defaults, request validation, and usage metadata centrally.",
     steps: [
-      "Run llm-proxy as the shared service boundary.",
-      "Configure tenant defaults and provider catalogs centrally.",
-      "Give each internal app a tenant secret or generated managed secret.",
-      "Review usage metadata in the dashboard without storing prompts or responses.",
+      "Run LLM Proxy as the shared API boundary and configure the supported provider registry centrally.",
+      "Give each application its own tenant client key instead of upstream provider credentials.",
+      "Standardize new product integrations on POST /v2 or an official client and use managed route defaults where appropriate.",
+      "Review requests, tokens, provider, model, and status metadata without persisting prompt or response bodies.",
     ],
     features: [
-      ["Central routing", "Provider and model selection happen at the proxy boundary.", "Apps do not need provider-specific SDKs."],
-      ["Credential separation", "Client apps receive tenant secrets, not upstream provider keys.", "Provider keys stay server-side."],
-      ["Usage visibility", "Managed tenant dashboards summarize requests, tokens, provider, model, and status.", "Teams can see operational patterns."],
+      ["Shared integration contract", "Applications use canonical messages instead of provider SDKs.", "A product team can change an approved route without rebuilding its AI boundary."],
+      ["Credential separation", "Client applications receive tenant keys while upstream provider credentials stay server-side.", "Provider-key rotation does not require distributing a replacement key to every application."],
+      ["Central route policy", "Validated provider catalogs and managed defaults define the available routes.", "Unsupported model and capability combinations fail before upstream dispatch."],
+      ["Usage visibility", "Managed dashboards summarize requests, tokens, provider, model, and status without storing content.", "Platform teams can inspect operational patterns across account or tenant scopes."],
     ],
     examples: [
-      ["Support console", "A support tool routes summaries through the shared proxy with a tenant secret."],
-      ["Admin automation", "An internal script uses the CLI client for repeated analysis tasks."],
-      ["Voice input", "A tool adds /dictate without creating a second credential path."],
+      ["Product portfolio", "Several product backends use separate client keys and one canonical messages contract while platform engineering maintains supported provider routes."],
+      ["Engineering automation", "Internal scripts use the official CLI instead of distributing provider keys to developer machines."],
+      ["Managed model change", "A tenant owner changes the default route in the app and model-omitting client requests follow that route without an application deployment."],
     ],
     limitations: [
       "The proxy is not a full policy engine for every AI governance need.",
       "Provider spend and availability still depend on upstream accounts.",
       "Network controls are recommended before public exposure.",
     ],
+    repoExample: {
+      source: "README.md",
+      verifiedOn: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
+      code: `curl -X POST \
+  "https://llm-proxy-api.mprlab.com/v2?key=$PRODUCT_TOOL_CLIENT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Summarize this"}]}'`,
+    },
+    quickVerdict: "Use LLM Proxy as an internal AI gateway when platform engineering should own provider complexity and product teams should own only one supported application contract.",
+    faq: [
+      {
+        question: "What credential does an internal application receive?",
+        answer: "The application receives an LLM Proxy tenant client key. Upstream provider API keys remain in server-side configuration or authenticated management storage.",
+      },
+      {
+        question: "Can platform teams change a tenant's default model centrally?",
+        answer: "Yes. When an official client omits provider and model, the next request follows that tenant's saved routing default without an application code or deployment change.",
+      },
+      {
+        question: "What usage data does the management app expose?",
+        answer: "It summarizes request counts, token usage, provider, model, status, and time buckets. The documented managed-usage contract excludes prompt, audio, transcript, and response bodies.",
+      },
+      {
+        question: "Does the gateway replace every governance control?",
+        answer: "No. It provides the documented integration, credential, routing, validation, failure, and usage boundary. Organizations still own their wider network, identity, procurement, data, and policy controls.",
+      },
+    ],
+    cta: {
+      heading: "Standardize the first application request",
+      body: "Use the authentication guide to separate the application client key, management session, and upstream provider credentials.",
+      label: "Read the authentication guide",
+      href: "/resources/llm-proxy-client-authentication/",
+    },
+    publicationBrief: {
+      allowedClaims: "One tenant-client-key boundary, canonical messages integration, server-side provider keys, managed routing defaults, route validation, official clients, and content-free usage summaries.",
+      forbiddenClaims: "Complete AI governance, compliance certification, data residency, procurement guarantees, hosted availability, or replacement of organizational security controls.",
+      differentiation: "This page addresses institutional ownership and operating boundaries across many applications rather than provider comparison or individual developer setup.",
+    },
   }),
   page({
     slug: "provider-overload-timeout-handling",
@@ -1740,6 +1922,8 @@ console.log(`generated ${pages.length} SEO resource pages`);
  *   repoExample?: { source: string, code: string, verifiedOn: string },
  *   quickVerdict?: string,
  *   faq?: { question: string, answer: string }[],
+ *   cta?: { heading: string, body: string, label: string, href: string },
+ *   publicationBrief?: { allowedClaims: string, forbiddenClaims: string, differentiation: string },
  * }} input
  */
 function page(input) {
@@ -1790,6 +1974,12 @@ function evidencedPage(input) {
 function renderResourcePage(resourcePage) {
   const relatedPages = relatedFor(resourcePage);
   const faq = faqFor(resourcePage, relatedPages[0]);
+  const cta = resourcePage.cta || {
+    heading: "Use this pattern in LLM Proxy",
+    body: "Start from the canonical API reference, then use the management surface when the workflow needs tenant or provider configuration.",
+    label: "Open API reference",
+    href: API_DOCUMENTATION_PATH,
+  };
   const articleJsonLd = {
     "@context": "https://schema.org",
     "@type": "Article",
@@ -1800,6 +1990,11 @@ function renderResourcePage(resourcePage) {
     dateModified: resourcePage.modifiedDate,
     mainEntityOfPage: resourcePage.canonical,
     about: [PRODUCT_NAME, resourcePage.category, resourcePage.primaryKeyword],
+    author: {
+      "@type": "Person",
+      name: "Tyemirov",
+      url: "https://github.com/tyemirov",
+    },
   };
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
@@ -1830,17 +2025,7 @@ function renderResourcePage(resourcePage) {
     bodyClass: "resource-page",
     jsonLd: [articleJsonLd, breadcrumbJsonLd, faqJsonLd],
     body: `
-      <header class="resource-shell resource-topbar">
-        <a class="resource-brand" href="/">LLM Proxy</a>
-        <nav aria-label="Resource navigation">
-          <a href="${API_DOCUMENTATION_PATH}">API reference</a>
-          <a href="${OPENAPI_SCHEMA_PATH}">OpenAPI</a>
-          <a href="/resources/">Resources</a>
-          <a href="${APPLICATION_PATH}">Workspace</a>
-          <a href="${README_USAGE_URL}">README</a>
-          <a href="/">Main page</a>
-        </nav>
-      </header>
+${renderPublicHeader()}
       <main class="resource-shell resource-article">
         <nav class="breadcrumbs" aria-label="Breadcrumb">
           <a href="/">Home</a>
@@ -1854,7 +2039,8 @@ function renderResourcePage(resourcePage) {
             <p class="eyebrow">${escapeHTML(resourcePage.category)}</p>
             <h1>${escapeHTML(resourcePage.title)}</h1>
             <p class="resource-deck">${escapeHTML(resourcePage.description)}</p>
-            <p class="resource-audience">${escapeHTML(resourcePage.audience)}</p>${resourcePage.quickVerdict ? `
+            <p class="resource-audience">${escapeHTML(resourcePage.audience)}</p>
+            <p class="resource-byline">Reviewed ${resourcePage.modifiedDate} by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>${resourcePage.quickVerdict ? `
             <aside class="resource-verdict" aria-label="Quick verdict">
               <strong>Quick verdict</strong>
               <p>${escapeHTML(resourcePage.quickVerdict)}</p>
@@ -1972,21 +2158,13 @@ function renderResourcePage(resourcePage) {
           </section>
 
           <section class="resource-final-cta">
-            <h2>Use this pattern in LLM Proxy</h2>
-            <p>Start from the canonical API reference, then use the management surface when the workflow needs tenant or provider configuration.</p>
-            <a class="resource-button" href="${API_DOCUMENTATION_PATH}">Open API reference</a>
+            <h2>${escapeHTML(cta.heading)}</h2>
+            <p>${escapeHTML(cta.body)}</p>
+            <a class="resource-button" href="${escapeHTML(cta.href)}">${escapeHTML(cta.label)}</a>
           </section>
         </article>
       </main>
-      <footer class="resource-shell resource-footer">
-        <a href="/">LLM Proxy main page</a>
-        <a href="${API_DOCUMENTATION_PATH}">API reference</a>
-        <a href="${OPENAPI_SCHEMA_PATH}">OpenAPI schema</a>
-        <a href="/resources/">Resource hub</a>
-        <a href="${APPLICATION_PATH}">Workspace</a>
-        <a href="${README_USAGE_URL}">README</a>
-        <a href="/sitemap.xml">Sitemap</a>
-      </footer>
+${renderPublicFooter()}
     `,
   });
 }
@@ -2000,7 +2178,7 @@ function renderHub() {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: "LLM Proxy Resources",
-    description: "Repo-grounded resources for using LLM Proxy as a multi-provider AI gateway.",
+    description: "Repo-grounded resources for integrating once with LLM Proxy and routing across supported AI providers and models.",
     url: `${PUBLIC_ORIGIN}/resources/`,
     mainEntity: pages.map((resourcePage) => ({
       "@type": "Article",
@@ -2018,34 +2196,96 @@ function renderHub() {
   };
 
   return htmlDocument({
-    title: "LLM Proxy Resources",
-    description: "Use-case resources for routing LLM, dictation, provider keys, usage, and management workflows through LLM Proxy.",
+    title: "LLM Proxy Resources — One integration across supported models",
+    description: "Choose an LLM Proxy integration, find the path for your team, and use source-backed guides for supported providers, clients, security, and operations.",
     canonical: `${PUBLIC_ORIGIN}/resources/`,
     ogType: "website",
     bodyClass: "resource-page resource-hub-page",
     jsonLd: [collectionJsonLd, breadcrumbJsonLd],
     body: `
-      <header class="resource-shell resource-topbar">
-        <a class="resource-brand" href="/">LLM Proxy</a>
-        <nav aria-label="Resource navigation">
-          <a href="${API_DOCUMENTATION_PATH}">API reference</a>
-          <a href="${OPENAPI_SCHEMA_PATH}">OpenAPI</a>
-          <a href="/resources/">Resources</a>
-          <a href="${APPLICATION_PATH}">Workspace</a>
-          <a href="${README_USAGE_URL}">README</a>
-          <a href="/">Main page</a>
-        </nav>
-      </header>
+${renderPublicHeader()}
       <main class="resource-shell resource-hub">
         <section class="resource-hero">
-          <p class="eyebrow">Resources</p>
-          <h1>LLM Proxy resource hub</h1>
-          <p class="resource-deck">Use-case pages for teams routing text generation, dictation, provider credentials, runtime config, and usage visibility through LLM Proxy.</p>
+          <p class="eyebrow">Integrate once</p>
+          <h1>Keep your model options open.</h1>
+          <p class="resource-deck">Choose direct HTTP or an official client once, then use these source-backed guides to route across supported providers and models without rebuilding the application boundary.</p>
           <div class="resource-actions">
-            <a class="resource-button" href="${API_DOCUMENTATION_PATH}">Open API reference</a>
-            <a class="resource-link" href="${OPENAPI_SCHEMA_PATH}">Download OpenAPI</a>
-            <a class="resource-link" href="/sitemap.xml">View sitemap</a>
+            <a class="resource-button" href="/#integrate">Choose an integration</a>
+            <a class="resource-link" href="/#models">Explore supported models</a>
+            <a class="resource-link" href="${API_DOCUMENTATION_PATH}">Open API reference</a>
+            <a class="resource-link" href="/app/">Log In</a>
           </div>
+        </section>
+
+        <section class="resource-guide" aria-labelledby="resource-integrations-title">
+          <header class="section-header compact">
+            <div>
+              <p class="eyebrow">Integration surfaces</p>
+              <h2 id="resource-integrations-title">Start with the interface your stack already speaks.</h2>
+            </div>
+          </header>
+          <div class="resource-guide-grid resource-guide-grid--integrations">
+            <a class="resource-guide-card" href="${API_DOCUMENTATION_PATH}#operation-postV2Messages">
+              <span>HTTP API</span>
+              <strong>Canonical JSON from any language</strong>
+              <p>Use POST /v2 directly with one tenant client key.</p>
+            </a>
+            <a class="resource-guide-card" href="/resources/go-client-v2-only-llm-proxy/">
+              <span>Official Go client</span>
+              <strong>Typed messages and media</strong>
+              <p>Construct validated requests and preserve typed failures.</p>
+            </a>
+            <a class="resource-guide-card" href="/resources/python-client-v2-only-llm-proxy/">
+              <span>Official Python client</span>
+              <strong>Small synchronous transport</strong>
+              <p>Send canonical messages from scripts and services.</p>
+            </a>
+            <a class="resource-guide-card" href="/resources/installable-llm-proxy-cli/">
+              <span>Official CLI</span>
+              <strong>Prompt workflows from the shell</strong>
+              <p>Pipe text from scripts without a provider SDK.</p>
+            </a>
+          </div>
+        </section>
+
+        <section class="resource-guide" aria-labelledby="resource-audiences-title">
+          <header class="section-header compact">
+            <div>
+              <p class="eyebrow">Choose your path</p>
+              <h2 id="resource-audiences-title">Use the guide closest to the way your team ships.</h2>
+            </div>
+          </header>
+          <div class="resource-guide-grid">
+            <a class="resource-guide-card" href="/resources/copyable-llm-curl-examples/">
+              <span>AI-assisted builders</span>
+              <strong>Start from one copyable request</strong>
+              <p>Give prototypes and coding agents a durable API boundary.</p>
+            </a>
+            <a class="resource-guide-card" href="/resources/openai-claude-gemini-one-endpoint/">
+              <span>Startups and product teams</span>
+              <strong>Compare model fit behind one endpoint</strong>
+              <p>Change provider routing without multiplying product integrations.</p>
+            </a>
+            <a class="resource-guide-card" href="/resources/internal-ai-gateway-for-product-tools/">
+              <span>Platform and engineering teams</span>
+              <strong>Standardize access across applications</strong>
+              <p>Centralize credentials, supported routes, and usage signals.</p>
+            </a>
+          </div>
+        </section>
+
+        <section class="resource-guide resource-guide--cornerstone" aria-labelledby="resource-cornerstone-title">
+          <header class="section-header compact">
+            <div>
+              <p class="eyebrow">Start here</p>
+              <h2 id="resource-cornerstone-title">Understand the integrate-once contract.</h2>
+            </div>
+          </header>
+          <a class="resource-cornerstone" href="/resources/multi-provider-llm-proxy/">
+            <span>Multi-provider LLM proxy</span>
+            <strong>Integrate once through one multi-provider LLM proxy</strong>
+            <p>See what stays stable, what changes per route, which clients are available, and where the current support boundary lives.</p>
+          </a>
         </section>
         ${categories
           .map((category) => {
@@ -2076,14 +2316,7 @@ function renderHub() {
           })
           .join("\n")}
       </main>
-      <footer class="resource-shell resource-footer">
-        <a href="/">LLM Proxy main page</a>
-        <a href="${API_DOCUMENTATION_PATH}">API reference</a>
-        <a href="${OPENAPI_SCHEMA_PATH}">OpenAPI schema</a>
-        <a href="${APPLICATION_PATH}">Workspace</a>
-        <a href="${README_USAGE_URL}">README</a>
-        <a href="/sitemap.xml">Sitemap</a>
-      </footer>
+${renderPublicFooter()}
     `,
   });
 }
@@ -2117,7 +2350,7 @@ function htmlDocument(input) {
     <meta name="theme-color" content="#0076c3">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+${renderPublicShellHeadAssets()}
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
@@ -2252,14 +2485,31 @@ Sitemap: ${PUBLIC_ORIGIN}/sitemap.xml
  */
 function renderReport() {
   const currentResourceModifiedDate = latestResourceModifiedDate();
+  const positioningCornerstoneSlugs = new Set([
+    "multi-provider-llm-proxy",
+    "openai-claude-gemini-one-endpoint",
+    "internal-ai-gateway-for-product-tools",
+  ]);
   const pageRows = pages
-    .map(
-      (resourcePage, index) =>
-        `| ${index + 1} | ${resourcePage.title} | ${resourcePage.audience} | ${resourcePage.problem} | ${resourcePage.primaryKeyword} | ${resourcePage.category} | /resources/${resourcePage.slug}/ | Low | Generate |`,
-    )
+    .map((resourcePage, index) => {
+      const recommendation = positioningCornerstoneSlugs.has(resourcePage.slug) ? "Refresh as cornerstone" : "Maintain existing resource";
+      return `| ${index + 1} | ${resourcePage.title} | ${resourcePage.audience} | ${resourcePage.problem} | ${resourcePage.primaryKeyword} | ${resourcePage.category} | /resources/${resourcePage.slug}/ | Low | ${recommendation} |`;
+    })
     .join("\n");
   const categoryRows = [...new Set(pages.map((resourcePage) => resourcePage.category))]
     .map((category) => `| ${category} | ${pages.filter((resourcePage) => resourcePage.category === category).length} | Distinct workflow and examples within this category. |`)
+    .join("\n");
+  const publicationBriefRows = pages
+    .filter((resourcePage) => resourcePage.publicationBrief)
+    .map((resourcePage) => {
+      const publicationBrief = resourcePage.publicationBrief;
+      const repoExample = resourcePage.repoExample;
+      const cta = resourcePage.cta;
+      if (!publicationBrief || !repoExample || !cta) {
+        throw new Error(`seo_resource_publication_brief_incomplete: slug=${resourcePage.slug}`);
+      }
+      return `| ${resourcePage.title} | ${publicationBrief.allowedClaims} | ${publicationBrief.forbiddenClaims} | ${publicationBrief.differentiation} | ${repoExample.source}, verified ${repoExample.verifiedOn} | ${cta.label} | ${resourcePage.path} | ${resourcePage.modifiedDate} |`;
+    })
     .join("\n");
 
   return `# LLM Proxy SEO Resource Cluster Report
@@ -2272,7 +2522,7 @@ Generated: ${currentResourceModifiedDate}
 
 | File | Type | Why reviewed | Key findings | Confidence |
 |---|---|---|---|---|
-| ${evidence.readme} | Required product docs | Primary product description, REST contract, config, public landing, management UI, clients, deployment, and security wording | LLM Proxy is a lightweight HTTP proxy for text and dictation providers with tenant-secret auth, server-side credentials, a public capability landing page, a TAuth management workspace at /app/, usage dashboards, provider routing, and strict config loading. | High |
+| ${evidence.readme} | Required product docs | Primary product description, REST contract, config, public landing, management UI, clients, deployment, and security wording | LLM Proxy is a lightweight HTTP proxy for text and dictation providers with tenant-secret auth, server-side credentials, a public capability landing page, a TAuth management app at /app/, usage dashboards, provider routing, and strict config loading. | High |
 | ${evidence.providerRouting} | Implementation notes | Provider routing, config ownership, management mode, error contract, and adapter notes | Multi-provider routing, model catalogs, omitted-model behavior, split-origin management, usage storage, and provider-key security are implemented contracts. | High |
 | ${evidence.dictation} | Implementation notes | Dictation endpoint contract | /dictate accepts multipart audio with key auth and returns JSON text; dictation routing is implemented for supported providers in the current README. | High |
 | ${evidence.campaign} | Marketing copy | Existing audience and claim framing | Existing public claims emphasize server-side provider keys, multi-provider routing, dictation, usage dashboards, API-served config, and careful encrypted-at-rest wording. | Medium |
@@ -2280,12 +2530,12 @@ Generated: ${currentResourceModifiedDate}
 ### Product Summary
 
 - Product name: LLM Proxy
-- Product category: Multi-provider LLM and dictation HTTP proxy with a public capability catalog and self-service management workspace.
-- One-sentence description: LLM Proxy forwards authenticated text and audio requests to configured upstream providers while keeping provider credentials server-side and giving callers one tenant-secret HTTP contract.
-- Primary users: Developers, platform engineers, technical founders, AI platform operators, and internal-tool teams.
+- Product category: Multi-provider LLM integration layer with direct HTTP, official clients, a public capability catalog, and a self-service management app.
+- One-sentence description: LLM Proxy lets applications integrate once through one authenticated messages contract, then select supported providers and models while the proxy owns upstream credentials and provider-specific APIs.
+- Primary users: AI-assisted builders, startups and product teams, institutional platform and engineering teams, and internal-tool developers.
 - Secondary users: Managed end users who sign in, receive a client key, save provider keys, copy request examples, and inspect usage.
-- Primary job-to-be-done: Centralize provider routing, credentials, request validation, response formatting, dictation, usage metadata, and management workflows behind one service boundary.
-- Installation or usage model: Run the Go backend from config.yml; publish the static landing and /app/ workspace from site/ to GitHub Pages; call GET /, POST /, POST /v2, or POST /dictate with key=<tenant secret>.
+- Primary job-to-be-done: Keep one durable application integration while provider and model choice changes behind a validated routing boundary.
+- Installation or usage model: Run the Go backend from config.yml; publish the static landing and authenticated app at /app/ from site/ to GitHub Pages; call GET /, POST /, POST /v2, or POST /dictate with key=<tenant secret>.
 - Current maturity: Implemented repo contract with Go/Python/frontend validation and documented release/deploy workflows.
 
 ### Product Capabilities
@@ -2296,7 +2546,7 @@ Generated: ${currentResourceModifiedDate}
 | Dictation endpoint | Routes multipart audio through /dictate for supported dictation providers. | README dictation section, dictation plan | High | Current | Yes |
 | Tenant-secret auth | Public proxy endpoints require key=<tenant secret>. | README REST and security sections | High | Current | Yes |
 | Server-side provider credentials | Public requests must not send upstream provider keys; credentials stay server-side. | README security, provider routing notes | High | Current | Yes |
-| TAuth management UI | Static noindex Pages workspace at /app/ with authenticated profile, provider key, generated secret, settings, usage, and admin views. | README management UI section | High | Current | Yes |
+| TAuth management UI | Static noindex Pages app at /app/ with authenticated profile, provider key, generated secret, settings, usage, and admin views. | README management UI section | High | Current | Yes |
 | Encrypted-at-rest managed provider keys | AES-GCM storage with base64 32-byte key and honest non-zero-knowledge wording. | README management UI section | High | Current | Yes, with caution wording |
 | Usage dashboard | Selectable all-time, 30-day, 7-day, and 1-day usage summaries by request, token, provider, model, status, and time bucket. | README management UI section | High | Current | Yes |
 | API-served runtime config | Browser config comes from backend /config-ui.yaml, not a static Pages config artifact. | README hosted split-origin section | High | Current | Yes |
@@ -2319,6 +2569,8 @@ Generated: ${currentResourceModifiedDate}
 ### Safe Claims
 
 - LLM Proxy exposes GET /, POST /, POST /v2, and POST /dictate behind tenant-secret authentication.
+- Direct HTTP, the official Go package, the official Python package, and the installable CLI converge on canonical POST /v2 messages for text.
+- Provider and model selection can change the supported route without replacing the application's canonical messages integration.
 - It routes text to OpenAI, Meta Muse Spark 1.1 and other OpenAI-compatible providers, Anthropic, Gemini, and Grok/xAI as documented in the provider matrix.
 - It routes dictation through /dictate for OpenAI, SiliconFlow, Zhipu, and Grok/xAI as documented.
 - It keeps upstream provider API keys server-side and rejects provider-key-like fields on public proxy requests.
@@ -2328,7 +2580,16 @@ Generated: ${currentResourceModifiedDate}
 
 ### Unsupported Claims Excluded
 
-- Customer logos, testimonials, case studies, revenue impact, benchmark results, search volume, pricing savings, uptime guarantees, compliance certifications, or named competitor comparisons.
+- Customer logos, testimonials, case studies, revenue impact, benchmark results, search volume, pricing savings, provider-longevity promises, model-onboarding targets, uptime guarantees, compliance certifications, or named competitor comparisons.
+
+## Positioning Opportunity Decisions
+
+| Opportunity | Decision | Reason | Public path |
+|---|---|---|---|
+| Integrate once across supported models | Refresh one evidence-backed cornerstone | It is the primary product job and can own the shared contract, clients, route choice, limits, and proof without an audience swap. | /resources/multi-provider-llm-proxy/ |
+| AI-assisted builder page | Serve through the hub and copyable-request guide | A standalone audience page would substantially repeat the HTTP/client quick start. The existing guide provides the concrete request this audience needs. | /resources/copyable-llm-curl-examples/ |
+| Startup-specific LLM proxy page | Serve through the hub and native-provider comparison | A standalone startup page would repeat provider comparison and model-selection content. The existing comparison is a distinct product-team job. | /resources/openai-claude-gemini-one-endpoint/ |
+| Institutional engineering page | Refresh the existing internal-gateway resource | This audience has a distinct ownership, credential, routing-default, usage, and operating-boundary job. | /resources/internal-ai-gateway-for-product-tools/ |
 
 ## Use-Case Opportunity List
 
@@ -2342,31 +2603,41 @@ ${pageRows}
 |---|---:|---|
 ${categoryRows}
 
+## Page-Specific Publication Briefs
+
+| Page | Allowed claims | Forbidden claims | Differentiation | Repository evidence | CTA | Canonical path | Significant update |
+|---|---|---|---|---|---|---|---|
+${publicationBriefRows}
+
 ## Site Integration And Discoverability
 
-- The main page links to /docs/, /openapi.yaml, and /resources/ through crawlable anchors in the public HTML.
-- The /resources/ hub links every generated resource page grouped by category.
-- Every resource page links to the derived API reference, exact schema, /, /resources/, sitemap.xml, and related resources.
+- The main page links to integration guides, audience resources, /docs/, the generated model matrix, /app/, and /resources/ through crawlable anchors in public HTML.
+- The /resources/ hub leads with HTTP, Go, Python, and CLI integration paths, routes three audience needs into differentiated existing guides, and links every generated page by category.
+- Every resource page carries author attribution and links to the derived API reference, /resources/, the shared public shell, and related resources; /docs/ exposes view and download actions for the exact OpenAPI schema.
 - sitemap.xml lists /, /docs/, /resources/, and all ${pages.length} page URLs with the same trailing-slash canonical form used in internal links.
 - robots.txt allows crawling and references the sitemap.
 
 ## Evaluation Report
 
+Independent quality and risk evaluation: ${currentResourceModifiedDate}
+
 | Category | Score | Notes |
 |---|---:|---|
-| Repo grounding | 5 | Claims are limited to README/docs evidence and the existing marketing document. |
-| Use-case specificity | 4 | Pages are split by workflow, audience need, examples, and limitations. |
-| Doorway-page safety | 4 | Pages do not vary only by keyword or industry; each uses a distinct product contract. |
-| SEO metadata quality | 4 | Each page has unique title, description, canonical, Open Graph, Twitter card, and schema. |
-| Keyword naturalness | 4 | Keywords are used in titles/H1/FAQ without repeated stuffing. |
-| Factual integrity | 5 | Unsupported proof, customer, compliance, benchmark, pricing, and competitor claims are excluded. |
-| Conversion clarity | 4 | CTAs route to the main management surface and resource hub. |
-| Duplicate-content risk | 4 | Repeated template structure is balanced by distinct problem, workflow, feature, examples, and limitations. |
-| Site integration and discoverability | 5 | Public landing, /app/ separation, hub, related links, breadcrumbs, sitemap, and robots all align. |
-| Google indexing readiness | 4 | Static pages use canonical trailing-slash URLs, visible FAQ, JSON-LD, and crawlable links. |
-| Subagent handoff quality | 4 | This report preserves evidence, opportunity list, integration plan, and evaluation notes. |
+| Repo grounding | 5 | API, client, routing, credential, capability, usage, and lifecycle claims trace to README and implementation contracts. |
+| Use-case specificity | 4 | Builder, product-team, and institutional paths have distinct problems, workflows, examples, and CTAs. |
+| Doorway-page safety | 5 | Audience-swapped pages were rejected; existing concrete guides serve each path. |
+| SEO metadata quality | 4 | Unique titles, descriptions, canonicals, Open Graph, Twitter metadata, and appropriate schema are present. |
+| Keyword naturalness | 5 | Integrate-once and provider terms read as product language rather than keyword insertion. |
+| Factual integrity | 5 | Current capabilities are repository-supported, route-specific limits are disclosed, and no unapproved SLA or proof claim is current copy. |
+| Conversion clarity | 5 | Landing, hub, and cornerstone pages lead to integration selection, model comparison, or authentication guidance. |
+| Duplicate-content risk | 4 | Shared structure remains, but cornerstone workflows, evidence, examples, limitations, FAQ, and CTAs differ materially. |
+| Site integration and discoverability | 5 | Landing, hub, headers, related links, breadcrumbs, categories, sitemap, and robots form complete crawlable paths. |
+| Google indexing readiness | 4 | Canonicals, sitemap URLs, lastmod, schema dates, verification dates, and robots align; post-deploy Search Console validation remains. |
+| Subagent handoff quality | 5 | The report preserves source analysis, excluded claims, opportunity decisions, publication briefs, differentiation, dates, and canonical paths. |
 
-Final decision: Pass.
+Highest-risk copy was qualified to supported text routes so the promoted POST /v2 clients cannot be read as covering dictation-only models. Future SLA publication language was also reduced to the exact current-contract boundary.
+
+Final decision: Pass. All binding thresholds are met, including factual integrity at 5.
 `;
 }
 
