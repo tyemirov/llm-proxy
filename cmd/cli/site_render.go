@@ -19,7 +19,7 @@ import (
 const (
 	siteCNAMEFileName            = "CNAME"
 	siteIndexFileName            = "index.html"
-	siteManagementDirectory      = "manage"
+	siteApplicationDirectory     = "app"
 	siteConfigURLAttribute       = "data-config-url"
 	siteConfigURLSourceAttribute = siteConfigURLAttribute + `="` + proxy.ManagementConfigUIPath + `"`
 	siteLegacyRuntimeConfig      = "llm-proxy-config.json"
@@ -273,7 +273,7 @@ func removeCopiedStaticConfig(outputDirectory string, fileName string) error {
 }
 
 func writeRenderedManagementIndex(outputDirectory string, configURL siteConfigURL) error {
-	outputPath := filepath.Join(outputDirectory, siteManagementDirectory, siteIndexFileName)
+	outputPath := filepath.Join(outputDirectory, siteApplicationDirectory, siteIndexFileName)
 	indexBytes, readError := siteReadFile(outputPath)
 	if readError != nil {
 		return fmt.Errorf("%w: output=%s: %v", errSiteRenderFailed, outputPath, readError)

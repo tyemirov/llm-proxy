@@ -557,14 +557,17 @@ func TestRootCommandRendersStaticSiteFromPublicCatalogConfig(t *testing.T) {
 	if _, statError := os.Stat(filepath.Join(outputDirectory, siteLegacyRuntimeConfig)); !os.IsNotExist(statError) {
 		t.Fatalf("rendered %s stat error=%v want absent", siteLegacyRuntimeConfig, statError)
 	}
-	indexBytes, readIndexError := os.ReadFile(filepath.Join(outputDirectory, "manage", "index.html"))
+	indexBytes, readIndexError := os.ReadFile(filepath.Join(outputDirectory, "app", "index.html"))
 	if readIndexError != nil {
-		t.Fatalf("rendered manage/index.html: %v", readIndexError)
+		t.Fatalf("rendered app/index.html: %v", readIndexError)
 	}
 	indexHTML := string(indexBytes)
 	if !strings.Contains(indexHTML, `data-config-url="https://llm-proxy-api.example/config-ui.yaml"`) ||
 		!strings.Contains(indexHTML, "data-mpr-ui-bundle-src=") {
-		t.Fatalf("rendered manage/index.html=%s", indexHTML)
+		t.Fatalf("rendered app/index.html=%s", indexHTML)
+	}
+	if _, statError := os.Stat(filepath.Join(outputDirectory, "manage")); !os.IsNotExist(statError) {
+		t.Fatalf("rendered manage directory stat error=%v want absent", statError)
 	}
 	landingBytes, readLandingError := os.ReadFile(filepath.Join(outputDirectory, "index.html"))
 	if readLandingError != nil {
@@ -1094,8 +1097,8 @@ func TestRootCommandRejectsSiteRenderManagementIndexWithoutCanonicalConfigURL(t 
 			sourceDirectory := filepath.Join(tempDir, "site-source")
 			outputDirectory := filepath.Join(tempDir, "rendered-site")
 			writeTestSiteSource(subTest, sourceDirectory)
-			if writeError := os.WriteFile(filepath.Join(sourceDirectory, siteManagementDirectory, "index.html"), []byte(testCase.indexHTML+"\n"), 0600); writeError != nil {
-				subTest.Fatalf("write manage/index.html: %v", writeError)
+			if writeError := os.WriteFile(filepath.Join(sourceDirectory, siteApplicationDirectory, "index.html"), []byte(testCase.indexHTML+"\n"), 0600); writeError != nil {
+				subTest.Fatalf("write app/index.html: %v", writeError)
 			}
 			withServeProxy(subTest, failingServeProxy(subTest))
 
@@ -2099,16 +2102,16 @@ func writeTestDotEnv(t *testing.T, tempDir string, dotEnvContent string) {
 
 func writeTestSiteSource(t *testing.T, sourceDirectory string) {
 	t.Helper()
-	if mkdirError := os.MkdirAll(filepath.Join(sourceDirectory, siteManagementDirectory), 0700); mkdirError != nil {
+	if mkdirError := os.MkdirAll(filepath.Join(sourceDirectory, siteApplicationDirectory), 0700); mkdirError != nil {
 		t.Fatalf("create test site source: %v", mkdirError)
 	}
 	if mkdirError := os.MkdirAll(filepath.Join(sourceDirectory, "assets"), 0700); mkdirError != nil {
 		t.Fatalf("create test site assets: %v", mkdirError)
 	}
-	if writeError := os.WriteFile(filepath.Join(sourceDirectory, siteManagementDirectory, "index.html"), []byte(`<!doctype html>
+	if writeError := os.WriteFile(filepath.Join(sourceDirectory, siteApplicationDirectory, "index.html"), []byte(`<!doctype html>
 	<mpr-header data-config-url="/config-ui.yaml"></mpr-header>
 `), 0600); writeError != nil {
-		t.Fatalf("write manage/index.html: %v", writeError)
+		t.Fatalf("write app/index.html: %v", writeError)
 	}
 	if writeError := os.WriteFile(filepath.Join(sourceDirectory, "index.html"), []byte(`<!doctype html>
 	`+siteCapabilityCatalogMarker+`
