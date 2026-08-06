@@ -9,6 +9,12 @@ client. Canonical `POST /v2` user messages can also carry provider-neutral,
 ordered image and audio attachments when the exact configured model declares
 that input capability.
 
+The public [LLM Proxy landing page](https://llm-proxy.mprlab.com/) explains the
+current provider, model, dictation, web-search, request-limit, and integration
+surface. Its capability matrix is generated from the same validated runtime
+catalog used by request routing. The authenticated management workspace lives
+only at [`/manage/`](https://llm-proxy.mprlab.com/manage/).
+
 ## Features
 
 - Minimal HTTP server whose complete owned operation surface is defined by the
@@ -895,8 +901,10 @@ Unknown YAML keys fail startup.
 ### Self-service management UI
 
 Set `management.enabled: true` to enable TAuth-protected management APIs under
-`/api/management`. The browser UI is static and lives in `site/`, which is
-declared as a `github_pages` resource in `.mprlab/deploy/resources.yml`.
+`/api/management`. The browser site is static and lives in `site/`: `/` is the
+public product landing page and `/manage/` is the only authenticated management
+workspace route. The site is declared as a `github_pages` resource in
+`.mprlab/deploy/resources.yml`.
 `make release`, `make publish`, and `make deploy` delegate that resource to the
 exact sibling `../mprlab-gateway`; GitHub Actions is not used for Pages
 deployment. The backend does not serve management HTML or assets; `GET /`
@@ -905,7 +913,7 @@ does serve public `/config-ui.yaml` from the loaded management config so the
 GitHub Pages frontend can consume the current llm-proxy runtime, MPR UI, and
 TAuth bootstrap values from `llm-proxy-api`.
 
-The static UI uses the shared MPR shell through API-served `config-ui.yaml`,
+The `/manage/` UI uses the shared MPR shell through API-served `config-ui.yaml`,
 literal `mpr-ui@latest` assets, `mpr-ui-config.js`,
 `<mpr-header data-config-url="...">`, the `@latest` bundle marker, `<mpr-user>`,
 and `<mpr-footer>`. It does not load `tauth.js` directly or apply MPR UI config
@@ -913,8 +921,11 @@ from application JavaScript. The Pages artifact contains no static
 `config-ui.yaml` or `llm-proxy-config.json`. The declared Go-only Pages
 container renders the static site with
 `https://llm-proxy-api.mprlab.com/config-ui.yaml` in the declarative header
-attribute; production Pages rendering has no Node runtime or environment
-expansion path. That single API-served YAML points browser management API
+attribute and replaces the public landing's capability marker with a sanitized
+projection of `configs/config.yml`. Production Pages rendering has no Node
+runtime or environment expansion path. A missing or invalid provider/model
+catalog, management config attribute, or landing catalog marker fails the site
+build. That single API-served YAML points browser management API
 calls, generated usage examples, and MPR UI/TAuth at the configured origins.
 Browser-facing values are projected from the already-loaded backend
 `config.yml`.
@@ -1293,7 +1304,7 @@ Production is split-origin:
 
 | Hostname | Owner | Purpose |
 |----------|-------|---------|
-| `llm-proxy.mprlab.com` | GitHub Pages | Static self-service frontend from `site/`. |
+| `llm-proxy.mprlab.com` | GitHub Pages | Public landing at `/`; noindex self-service workspace at `/manage/`. |
 | `llm-proxy-api.mprlab.com` | MPR gateway/backend | llm-proxy API, management API, `/`, `/v2`, and `/dictate`. |
 | `tauth-api.mprlab.com` | TAuth backend | Google login, nonce, logout, `/auth/session`, and session-cookie issuance. |
 
@@ -1430,7 +1441,8 @@ containers. The API image is built from the current source and runs the
 canonical `configs/config.yml` configuration. The stack has two explicit
 browser-facing endpoints:
 
-- Static UI: `http://localhost:4179/`, served from `site/` by ghttp.
+- Public landing: `http://localhost:4179/`, served from `site/` by ghttp.
+- Management UI: `http://localhost:4179/manage/`, served from the same static artifact.
 - Backend API: `http://localhost:8080/`, including the proxy and
   `/api/management/*` endpoints.
 
@@ -1697,7 +1709,10 @@ removing only its old container. The retained
 `mprlab-nginx-gateway_llm-proxy-data` volume is not removed.
 
 The Pages declaration uses `docker/pages/Dockerfile`, whose renderer is the Go
-CLI built from committed source. Node remains a developer dependency for
+CLI built from committed source. The renderer reads the provider/model and
+request-limit subtrees of `configs/config.yml`, validates the canonical runtime
+catalog, emits only public capability fields at `/`, and injects the browser
+configuration URL only into `/manage/`. Node remains a developer dependency for
 frontend lint and browser tests only; llm-proxy declares no production Node or
 npm resource. Application runtime code has no Caddy deployment knowledge, and
 its TAuth knowledge remains limited to the published client/session
