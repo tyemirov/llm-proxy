@@ -132,9 +132,11 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 	}
 	landingHTML := string(landingBytes)
 	for _, requiredFragment := range []string{
-		`One stable interface for the models your products depend on.`,
+		`Integrate once. Use the model that fits.`,
 		`href="/app/"`,
 		`<!-- llm-proxy-capability-catalog -->`,
+		`<mpr-header`,
+		`<mpr-footer`,
 	} {
 		if !strings.Contains(landingHTML, requiredFragment) {
 			t.Fatalf("static landing missing %q", requiredFragment)
@@ -158,8 +160,8 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		`href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css"`,
 		`src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"`,
 		`data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"`,
-		`src="/assets/llm-proxy/js/startupGuard.js?v=20260727i036"`,
-		`src="/assets/llm-proxy/js/app.js?v=20260727i036"`,
+		`src="/assets/llm-proxy/js/startupGuard.js?v=20260806b109"`,
+		`src="/assets/llm-proxy/js/app.js?v=20260806b109"`,
 		`data-config-url="/config-ui.yaml"`,
 		`<mpr-user`,
 		`<mpr-footer`,
