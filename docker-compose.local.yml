@@ -5,17 +5,29 @@ services:
     depends_on:
       api:
         condition: service_started
+      schema:
+        condition: service_started
       tauth:
         condition: service_started
     env_file:
       - ./configs/.env.frontend.local
     environment:
-      GHTTP_SERVE_PROXIES: "/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080"
+      GHTTP_SERVE_PROXIES: "/openapi.yaml=http://schema:4179,/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080"
       GHTTP_SERVE_RESPONSE_HEADERS: "/=Cache-Control:no-store"
     ports:
       - "127.0.0.1:4179:4179"
     volumes:
       - ./site:/app/site:ro
+
+  schema:
+    image: ghcr.io/tyemirov/ghttp:latest
+    pull_policy: always
+    environment:
+      GHTTP_SERVE_PORT: "4179"
+      GHTTP_SERVE_DIRECTORY: "/app/docs"
+      GHTTP_SERVE_NO_MARKDOWN: "true"
+    volumes:
+      - ./docs:/app/docs:ro
 
   api:
     build:
