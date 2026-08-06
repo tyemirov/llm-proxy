@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Make every public frontend validation path install the pinned npm graph and project-local Chromium before use, including clean `make test` and `make ci` executions.
 - **Breaking:** `GET /` now accepts `web_search` only as exact `true` or `false`; former aliases and malformed supplied values return HTTP 400. The bundled Go package, Go CLI, and Python package remain on `POST /v2` and serialize `web_search` as a native JSON boolean.
 - Remove Moonshot's unavailable former default model and promote the verified `kimi-k2.6` model as the sole canonical default without an alias or fallback.
 - Verify every nonempty managed provider key against its exact provider and selected text model before atomic persistence, with automatic paste verification, safe stable failures, stale-attempt cancellation, and live-harness coverage.

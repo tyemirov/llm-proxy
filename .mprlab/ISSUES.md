@@ -39,6 +39,47 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B100] (P0) Make declared frontend validation self-contained in a clean checkout.
+  Goal:
+  Make the public `make test` and `make ci` contracts install their exact pinned
+  frontend dependencies and Chromium before invoking Playwright.
+  Evidence:
+  - Agentic execution of recurring issue M001R at exact remote revision
+    `95457e317a93e85b6b225babd9064284089dab1d` passed Go and Python baseline
+    validation, then failed with `playwright: not found` and zero provider
+    requests.
+  - The GitHub workflow installs npm dependencies and Chromium before calling
+    `make ci`, while the repository Make targets assume that untracked state
+    already exists.
+  Requirements:
+  - Give Make one canonical dependency-preparation target using the pinned npm
+    lock and the declared Chromium browser.
+  - Make clean `make test`, `make lint`, focused frontend targets, and `make ci`
+    cross that preparation boundary before frontend validation.
+  - Remove workflow-only duplicate setup so hosted and Agentic execution use
+    the same public contract.
+  - Keep dependency state untracked and do not add an alternate validation
+    path or fallback browser.
+  Validation:
+  - Add a black-box Make regression that invokes the public targets with an
+    empty dependency state and records exact npm preparation/test ordering.
+  - Run the focused regression and the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+  Resolution:
+  - Make now installs the exact lockfile graph and invokes its pinned Playwright
+    binary to install Chromium into ignored project-local state before any
+    frontend validation target runs.
+  - The preparation stamp makes recursive `make ci` stages reuse that exact
+    state, while a changed package manifest or lockfile requires preparation
+    again.
+  - Black-box Make fixtures prove clean focused frontend, `make test`, and
+    `make ci` executions prepare dependencies exactly once and in the required
+    order. Hosted CI now delegates the same setup to `make ci` instead of
+    maintaining a second workflow-only path.
+  - The focused dependency-contract target, real pinned dependency and browser
+    preparation, 75 frontend browser tests, and one TAuth browser black-box
+    test passed. The required final `make ci` returned zero with all 11 gates
+    complete and exact 100% Go statement coverage.
 - [-] [B099] (P0) Retire the exact legacy llm-proxy Compose service.
   Goal:
   Make the first schema-v2 deployment remove the obsolete llm-proxy container
@@ -3982,5 +4023,3 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     are not tied to an approved source.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
-
-

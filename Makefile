@@ -7,10 +7,14 @@ UV ?= uv
 BIN_DIR ?= bin
 BINARY_NAME ?= llm-proxy
 PYTHON_PROJECT_DIR ?= python
+PLAYWRIGHT_BROWSERS_PATH := $(CURDIR)/node_modules/.cache/ms-playwright
+FRONTEND_DEPENDENCY_STAMP := $(PLAYWRIGHT_BROWSERS_PATH)/.llm-proxy-frontend-dependencies
+
+export PLAYWRIGHT_BROWSERS_PATH
 
 GO_SOURCES := $(shell find . -name '*.go' -not -path './vendor/*')
 
-.PHONY: fmt check-format lint go-lint python-lint frontend-lint test go-test python-test python-package-install-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox test-live-provider-harness test-live-providers test-live-gemini live-test build clean ci up
+.PHONY: fmt check-format lint go-lint python-lint frontend-dependencies frontend-lint test go-test python-test python-package-install-test frontend-test test-frontend-dependency-contract test-openapi-pages-artifact test-management-auth-blackbox test-live-provider-harness test-live-providers test-live-gemini live-test build clean ci up
 
 fmt:
 	$(GOFMT) -w $(GO_SOURCES)
@@ -33,7 +37,14 @@ go-lint:
 python-lint:
 	cd $(PYTHON_PROJECT_DIR) && $(UV) run --group dev mypy --strict llm_proxy_client
 
-frontend-lint:
+frontend-dependencies: $(FRONTEND_DEPENDENCY_STAMP)
+
+$(FRONTEND_DEPENDENCY_STAMP): package.json package-lock.json
+	$(NPM) ci
+	./node_modules/.bin/playwright install --with-deps chromium
+	@touch "$@"
+
+frontend-lint: frontend-dependencies
 	$(NPM) run frontend:lint
 
 test: go-test python-test frontend-test test-openapi-pages-artifact test-management-auth-blackbox test-live-provider-harness
@@ -48,13 +59,16 @@ python-test:
 python-package-install-test:
 	@set -eu; temporary_package_directory="$$(mktemp -d)"; trap 'rm -rf "$$temporary_package_directory"' 0; cp "$(PYTHON_PROJECT_DIR)/pyproject.toml" "$$temporary_package_directory/pyproject.toml"; cp -R "$(PYTHON_PROJECT_DIR)/llm_proxy_client" "$$temporary_package_directory/llm_proxy_client"; LLM_PROXY_CLIENT_PROJECT_PATH="$$temporary_package_directory/pyproject.toml" $(UV) run --no-project --with "$$temporary_package_directory" python -c 'from importlib.metadata import version; from pathlib import Path; import os, tomllib; from llm_proxy_client import Client, ClientConfig, ClientMessage, ClientMessagesRequest, LLMProxyModelProfileError; assert version("llm-proxy-client") == tomllib.loads(Path(os.environ["LLM_PROXY_CLIENT_PROJECT_PATH"]).read_text(encoding="utf-8"))["project"]["version"]; assert Client and ClientConfig and ClientMessage and ClientMessagesRequest and LLMProxyModelProfileError'
 
-frontend-test:
+frontend-test: frontend-dependencies
 	$(NPM) run frontend:test
+
+test-frontend-dependency-contract:
+	$(GO) test ./tests -run '^TestOperationalFrontendValidationPreparesPinnedDependencies$$' -count=1
 
 test-openapi-pages-artifact:
 	@./scripts/test-openapi-pages-artifact.sh
 
-test-management-auth-blackbox:
+test-management-auth-blackbox: frontend-dependencies
 	$(NPM) run frontend:test:blackbox
 
 test-live-provider-harness:
