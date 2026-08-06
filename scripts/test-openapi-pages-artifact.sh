@@ -12,6 +12,7 @@ cd "${repository_root}"
 }
 
 go run ./cmd/cli \
+  --config configs/config.yml \
   --site-source site \
   --site-config-url https://llm-proxy-api.mprlab.com/config-ui.yaml \
   --render-site-output "${temporary_directory}/site"
