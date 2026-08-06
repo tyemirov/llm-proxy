@@ -358,7 +358,7 @@ case "${1:?}" in
     exit 0
     ;;
   ps)
-    builtin printf '%s\n' api frontend tauth
+    builtin printf '%s\n' api frontend schema tauth
     ;;
   logs)
     builtin printf '%s\n' "$$" >"${COMPOSE_PID_CAPTURE:?}"
@@ -500,6 +500,7 @@ exec "${REAL_AWK_PATH:?}" "$@"
 	}
 	for _, expectedURL := range []string{
 		"http://localhost:4179/",
+		"http://localhost:4179/openapi.yaml",
 		"http://localhost:4179/config-ui.yaml",
 		"http://localhost:4179/auth/session",
 		"http://localhost:4179/auth/nonce",
@@ -587,12 +588,14 @@ exec "${REAL_AWK_PATH:?}" "$@"
 				"./configs/.env.frontend.local",
 				"./configs/.env.api.local",
 				"./configs/.env.tauth.local",
-				"GHTTP_SERVE_PROXIES: \"/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080\"",
+				"GHTTP_SERVE_PROXIES: \"/openapi.yaml=http://schema:4179,/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080\"",
 				"GHTTP_SERVE_RESPONSE_HEADERS: \"/=Cache-Control:no-store\"",
 				"LLM_PROXY_MANAGEMENT_TAUTH_URL: \"http://localhost:4179\"",
 				"127.0.0.1:4179:4179",
 				"127.0.0.1:8080:8080",
 				"./site:/app/site:ro",
+				"GHTTP_SERVE_DIRECTORY: \"/app/docs\"",
+				"./docs:/app/docs:ro",
 			},
 		},
 		{

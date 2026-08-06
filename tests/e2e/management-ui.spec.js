@@ -16,7 +16,8 @@ const siteSourceRoot = path.join(repoRoot, "site");
 const executeFile = promisify(execFile);
 const canonicalOpenAPIFile = path.join(repoRoot, "docs/openapi.yaml");
 const configPath = "/config-ui.yaml";
-const managementPath = "/manage/";
+const applicationPath = "/app/";
+const removedApplicationPath = "/manage/";
 const defaultTenantID = "tenant_1";
 const managementDefaultTenantPath = `/api/management/tenants/${defaultTenantID}`;
 const managementProviderKeysPath = `${managementDefaultTenantPath}/provider-keys`;
@@ -33,8 +34,10 @@ const repositoryUsageURL = "https://github.com/tyemirov/llm-proxy#usage";
 const mprUICSSURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css";
 const mprUIConfigURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js";
 const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
+const compactLandingFooterMaxHeight = 56;
 const b020ScreenshotDirectory = path.join(repoRoot, "output/playwright");
 const httpOK = 200;
+const httpNotFound = 404;
 const httpInternalServerError = 500;
 const noticeClockPauseLeadMilliseconds = 5_000;
 const noticeClockPreDeadlineAdvanceMilliseconds = 4_000;
@@ -91,6 +94,11 @@ test.beforeAll(async () => {
     ],
     { cwd: repoRoot },
   );
+  await executeFile(
+    "./scripts/stage-openapi-publication.sh",
+    ["docs/openapi.yaml", renderedSiteRoot],
+    { cwd: repoRoot },
+  );
   siteRoot = renderedSiteRoot;
   server = http.createServer(staticSiteHandler);
   await new Promise((resolve) => {
@@ -124,10 +132,10 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain("One stable interface for the models your products depend on.");
   expect(html).toContain("Client access can be generated and rotated independently");
   expect(html).toContain("plain text, JSON, XML, or CSV responses");
-  expect(html).toContain(`href="${managementPath}"`);
+  expect(html).toContain(`href="${applicationPath}"`);
   expect(html).toContain(`href="${resourcesPath}"`);
   expect(html).toContain(`href="${apiDocumentationPath}"`);
-  expect(html).toContain(`href="${openAPIPath}"`);
+  expect(html).toContain(`"href":"${openAPIPath}"`);
   expect(html).toContain('<table class="catalog-table">');
   expect(html).toContain('<strong>12</strong><span>Text providers</span>');
   expect(html).toContain('<code>gpt-4.1</code><span class="catalog-model__default">Default</span>');
@@ -138,14 +146,19 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).not.toContain("api_key");
   expect(html).not.toContain("base_url");
   expect(html).not.toContain("data-config-url");
-  expect(html).not.toContain("mpr-ui@latest");
+  expect(html).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
+  expect(html).toContain(`<script defer src="${mprUIBundleURL}"></script>`);
+  expect(html).not.toContain(mprUIConfigURL);
+  expect(html).toContain('<mpr-footer\n      size="small"\n      sticky="false"');
+  expect(html).toContain('prefix-text="LLM Proxy"');
+  expect(html).toContain('privacy-link-hidden="true"');
   expect(html).toContain('<meta name="theme-color" content="#0f1114">');
 
-  const page = await request.get(`${baseURL}${managementPath}`);
+  const page = await request.get(`${baseURL}${applicationPath}`);
   expect(page.status()).toBe(httpOK);
   const managementHTML = await page.text();
   expect(managementHTML).toContain('<meta name="robots" content="noindex, nofollow">');
-  expect(managementHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/manage/">');
+  expect(managementHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/app/">');
   expect(managementHTML).toContain(`data-config-url="${configPath}"`);
   expect(managementHTML).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
   expect(managementHTML).toContain(`<script src="${mprUIConfigURL}"></script>`);
@@ -173,6 +186,9 @@ test("public landing explains the product and exposes the generated capability c
   expect(managementHTML).toContain(
     '<span class="material-symbols-outlined" x-show="providerKeyVisible" aria-hidden="true">visibility_off</span>',
   );
+
+  const removedApplicationResponse = await request.get(`${baseURL}${removedApplicationPath}`);
+  expect(removedApplicationResponse.status()).toBe(httpNotFound);
 
   html = managementHTML;
   expect(html).toContain('<meta name="theme-color" content="#0076c3">');
@@ -377,23 +393,40 @@ test("public landing explains the product and exposes the generated capability c
 });
 
 test("public landing is keyboard navigable and responsive in Chromium", async ({ page }) => {
+  await installAssetRoutes(page);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(baseURL);
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "One stable interface for the models your products depend on.",
   );
-  await expect(page.getByRole("link", { name: "Open workspace" }).first()).toHaveAttribute("href", managementPath);
+  await expect(page.getByRole("link", { name: "Log In" }).first()).toHaveAttribute("href", applicationPath);
   await expect(page.getByRole("region", { name: "Provider and model capability matrix" })).toBeVisible();
   await expect(page.getByRole("table")).toBeVisible();
+  await expectCenteredValueStrip(page);
+  const footer = page.locator("mpr-footer");
+  await expect(footer).toHaveAttribute("size", "small");
+  await expect(footer).toHaveAttribute("sticky", "false");
+  await expect(footer.getByRole("contentinfo")).toBeVisible();
+  await expect(footer.getByRole("link", { name: "Log In" })).toHaveAttribute("href", applicationPath);
+  await expect(footer.getByRole("link", { name: "API", exact: true })).toHaveAttribute("href", apiDocumentationPath);
+  await expect(footer.getByRole("link", { name: "OpenAPI", exact: true })).toHaveAttribute("href", openAPIPath);
+  await expect(footer.getByRole("link", { name: "Resources" })).toHaveAttribute("href", resourcesPath);
+  await expect(footer.getByRole("link", { name: "GitHub" })).toHaveAttribute(
+    "href",
+    "https://github.com/tyemirov/llm-proxy",
+  );
+  await expectCompactFooterGeometry(footer);
 
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
 
   await page.setViewportSize({ width: 390, height: 780 });
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open workspace" }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Log In" }).first()).toBeVisible();
   await expect(page.getByRole("region", { name: "Provider and model capability matrix" })).toBeVisible();
+  await expectCenteredValueStrip(page);
+  await expectCompactFooterGeometry(footer);
 });
 
 test("site publishes the exact canonical OpenAPI artifact and its derived reference", async ({ request }) => {
@@ -603,7 +636,8 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
   expect(sitemapXML).not.toContain("generated-secret-rotation-and-revocation");
   expect(sitemapXML).not.toContain("config-ui.yaml");
   expect(sitemapXML).not.toContain("llm-proxy-config.json");
-  expect(sitemapXML).not.toContain("/manage/");
+  expect(sitemapXML).not.toContain(applicationPath);
+  expect(sitemapXML).not.toContain(removedApplicationPath);
 
   const robotsResponse = await request.get(`${baseURL}${robotsPath}`);
   expect(robotsResponse.status()).toBe(httpOK);
@@ -617,7 +651,7 @@ test("usage defaults to all tenants while tenant management lives in Settings", 
   await installAssetRoutes(page);
   await installMultiTenantRoutes(page);
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   const usageTenantSelector = page.getByRole("combobox", { name: "Usage tenant" });
   await expect(usageTenantSelector).toHaveValue("");
@@ -640,7 +674,7 @@ test("the Tenant control in Settings and Usage tenant selection remain independe
   await installAssetRoutes(page);
   await installMultiTenantRoutes(page);
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
@@ -659,14 +693,14 @@ test("the Tenant control in Settings and Usage tenant selection remain independe
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_2");
-  await expect(page).toHaveURL(`${baseURL}${managementPath}`);
+  await expect(page).toHaveURL(`${baseURL}${applicationPath}`);
 });
 
 test("obsolete tenant query parameters do not choose Settings or Usage state", async ({ page }) => {
   await installAssetRoutes(page);
   await installMultiTenantRoutes(page);
 
-  await page.goto(`${baseURL}${managementPath}?tenant=tenant_2`);
+  await page.goto(`${baseURL}${applicationPath}?tenant=tenant_2`);
 
   await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("44");
@@ -683,7 +717,7 @@ test("tenant lifecycle is keyboard accessible, responsive, and guards the final 
     profiles: [managementTenantProfile("tenant_1", "Default")],
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
@@ -719,7 +753,7 @@ test("tenant lifecycle is keyboard accessible, responsive, and guards the final 
   await createName.fill("Research");
   await createDialog.getByRole("button", { name: "Create", exact: true }).click();
 
-  await expect(page).toHaveURL(`${baseURL}${managementPath}`);
+  await expect(page).toHaveURL(`${baseURL}${applicationPath}`);
   await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_2");
   await expect(settingsDialog).toBeVisible();
   await renameTenantButton.click();
@@ -744,7 +778,7 @@ test("tenant lifecycle is keyboard accessible, responsive, and guards the final 
   await deleteTenantButton.click();
   await deleteDialog.getByRole("button", { name: "Delete", exact: true }).click();
 
-  await expect(page).toHaveURL(`${baseURL}${managementPath}`);
+  await expect(page).toHaveURL(`${baseURL}${applicationPath}`);
   await expect(settingsDialog.getByRole("combobox", { name: "Tenant" })).toHaveValue("tenant_1");
   await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("");
   expect(managementState.order).toEqual(["tenant_1"]);
@@ -777,7 +811,7 @@ test("tenant switching requires discard and clears one-time and revealed credent
     await route.fallback();
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
@@ -823,8 +857,8 @@ test("concurrent tabs keep independent Settings and Usage tenant state", async (
   await installMultiTenantRoutes(secondPage);
 
   await Promise.all([
-    page.goto(`${baseURL}${managementPath}`),
-    secondPage.goto(`${baseURL}${managementPath}`),
+    page.goto(`${baseURL}${applicationPath}`),
+    secondPage.goto(`${baseURL}${applicationPath}`),
   ]);
 
   await page.getByRole("combobox", { name: "Usage tenant" }).selectOption("tenant_1");
@@ -859,7 +893,7 @@ test("late tenant usage cannot overwrite a newer Usage tenant selection", async 
     await route.fallback();
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
     const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
     const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
@@ -879,7 +913,7 @@ test("late tenant usage cannot overwrite a newer Usage tenant selection", async 
   });
   releaseFirstUsage();
 
-  await expect(page).toHaveURL(`${baseURL}${managementPath}`);
+  await expect(page).toHaveURL(`${baseURL}${applicationPath}`);
   await expect(page.getByRole("combobox", { name: "Usage tenant" })).toHaveValue("tenant_2");
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("7");
   await page.waitForTimeout(50);
@@ -904,7 +938,7 @@ test("late tenant lifecycle responses cannot select or overwrite another tenant"
     await route.fulfill({ status: 201, json: delayedCreateProfile }).catch(() => {});
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
@@ -972,7 +1006,7 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await installAssetRoutes(page);
   await installManagementRoutes(page);
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
@@ -1102,7 +1136,7 @@ test("system prompt editors stay hidden until their labels expand them and reset
   await installAssetRoutes(page);
   await installMultiTenantRoutes(page);
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").getByText("Settings").click();
 
@@ -1165,7 +1199,7 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
   await installAssetRoutes(page);
   await installManagementRoutes(page);
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   const intervalGroup = page.getByRole("group", { name: "Usage interval" });
   const intervalButtons = intervalGroup.getByRole("button");
@@ -1245,7 +1279,7 @@ test("usage intervals load every dashboard surface, remain active on refresh, an
 test("usage interval loading blocks controls, ignores stale responses, and clears failed selections", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page);
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.unroute(usageRequestPattern());
   /** @type {() => void} */
   let releaseSevenDayResponse = () => {};
@@ -1318,7 +1352,7 @@ test("failed-request details expose 10 of 22 requests as safe, focus-managed met
   await installUsageResponse(page, httpOK, usage);
   await installUsageFailuresResponse(page, managementUsageFailures("30d", 10));
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   const successRateCard = page.locator("usage-card").filter({ hasText: "Success rate" });
   await expect(successRateCard.locator("strong")).toHaveText("55%");
@@ -1417,7 +1451,7 @@ test("failed-request pagination preserves metrics across loading and retryable e
     await route.fulfill({ json: managementUsageFailures("30d", 1, "", 25) });
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByRole("button", { name: "26 failed requests" }).click();
   const dialog = page.getByRole("dialog", { name: "Failed request details" });
   await expect(dialog).toHaveAttribute("aria-busy", "true");
@@ -1460,7 +1494,7 @@ test("failed-request responses cannot cross interval or Usage tenant boundaries"
     await route.fulfill({ json: managementUsageFailures("30d", 10) });
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByRole("button", { name: "2 failed requests" }).click();
   await expect(page.getByRole("dialog", { name: "Failed request details" })).toHaveAttribute("aria-busy", "true");
 
@@ -1511,7 +1545,7 @@ test("pasting a provider key verifies before blur, locks conflicts, and masks th
     await route.fallback();
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   const providerEditor = settingsDialog.locator("provider-editor");
   await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
@@ -1554,7 +1588,7 @@ test("rejected pasted keys remain editable and retry through the same operation"
     await route.fallback();
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   const providerEditor = settingsDialog.locator("provider-editor");
   await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
@@ -1582,7 +1616,7 @@ test("a rejected pasted replacement keeps the previous verified key active", asy
     await route.fulfill({ status: 422, body: "provider_key_rejected" });
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
   const providerEditor = page.getByRole("dialog", { name: "Settings" }).locator("provider-editor");
@@ -1624,7 +1658,7 @@ test("a newer pasted key cancels the stale verification and applies only the new
     await route.fallback();
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   const providerEditor = page.getByRole("dialog", { name: "Settings" }).locator("provider-editor");
   await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
   const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
@@ -1670,7 +1704,7 @@ for (const verificationContextChange of [
       await route.fallback().catch(() => {});
     });
 
-    await page.goto(`${baseURL}${managementPath}`);
+    await page.goto(`${baseURL}${applicationPath}`);
     if (verificationContextChange.multiTenant) {
       await page.getByTestId("avatar-menu").click();
       await page.getByTestId("avatar-menu-item").nth(0).click();
@@ -1754,7 +1788,7 @@ test("provider selection autosaves its exact editor while transient removal stay
   await installAssetRoutes(page);
   await installManagementRoutes(page, { providerKeys: { deepseek: deepSeekProviderKey } });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
@@ -1866,7 +1900,7 @@ test("Settings close waits for the current provider autosave", async ({ page }) 
     await route.fallback();
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   const providerEditor = settingsDialog.locator("provider-editor");
   await providerEditor.getByRole("combobox", { name: "Provider", exact: true }).selectOption("openai");
@@ -1892,7 +1926,7 @@ test("failed provider autosave preserves its editor and blocks provider switchin
     await route.fulfill({ status: httpInternalServerError, body: "request_failed" });
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
@@ -1934,7 +1968,7 @@ test("session cleanup cancels provider autosaves before they can repopulate stat
     await route.fulfill({ status: httpOK, json: managementProfile() }).catch(() => {});
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
@@ -1980,7 +2014,7 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
   await installAssetRoutes(page);
   await installManagementRoutes(page, { providerKeys: { openai: revealedProviderKey } });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
@@ -2119,7 +2153,7 @@ test("removing a revealed provider key clears the selected editor", async ({ pag
     savedProviderIDs: ["openai"],
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
@@ -2171,7 +2205,7 @@ test("late provider-key reveals cannot populate a reopened editor", async ({ pag
     await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: { api_key: delayedProviderKey } });
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
@@ -2205,7 +2239,7 @@ test("short saved provider keys use a generic mask", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page, { maskedKeys: { meta: "saved" } });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
@@ -2227,7 +2261,7 @@ test("routing defaults autosave complete provider and model pairs without a manu
   await installAssetRoutes(page);
   await installManagementRoutes(page, { savedProviderIDs: ["openai", "deepseek", "meta", "grok"] });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
@@ -2309,7 +2343,7 @@ test("routing defaults expose only keyed providers and disable unavailable dicta
   await installAssetRoutes(page);
   await installManagementRoutes(page, { savedProviderIDs: ["deepseek"] });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
@@ -2370,7 +2404,7 @@ test("routing-default autosave queues newer edits without resetting the provider
     await route.fallback();
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
@@ -2445,7 +2479,7 @@ test("provider and routing autosaves serialize whole-profile mutations in both d
     await route.fallback();
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
@@ -2509,7 +2543,7 @@ test("Settings close waits for the current routing-default autosave", async ({ p
     await route.fallback();
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
@@ -2532,7 +2566,7 @@ test("failed routing-default autosave retains edits and blocks Settings close", 
     await route.fulfill({ status: httpInternalServerError, body: "request_failed" });
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
@@ -2569,7 +2603,7 @@ test("session cleanup cancels routing-default autosaves before they can repopula
     await route.fallback();
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
   await page.getByRole("dialog", { name: "Settings" }).getByRole("combobox", { name: "Text provider" }).selectOption("deepseek");
@@ -2595,7 +2629,7 @@ test("reasoning effort is exact to the selected text route and the controls rema
   await installAssetRoutes(page);
   await installManagementRoutes(page);
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
@@ -2683,7 +2717,7 @@ test("malformed routing-default profiles become workspace integrity errors", asy
   await installAssetRoutes(page);
   await installManagementRoutes(page, { malformedRoutingDefaults: true });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toBeVisible();
   await expect(page.getByText("Workspace integrity error")).toBeVisible();
@@ -2694,7 +2728,7 @@ test("invalid persisted routing-default profiles become workspace integrity erro
   await installAssetRoutes(page);
   await installManagementRoutes(page, { profileStatus: 500, profileError: "managed_routing_defaults_invalid" });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toBeVisible();
   await expect(page.getByText("Workspace integrity error")).toBeVisible();
@@ -2710,7 +2744,7 @@ test("dashboard loads only after MPR UI authenticates the user", async ({ page }
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await installManagementRoutes(page);
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
   expect(profileRequests).toHaveLength(0);
@@ -2731,7 +2765,7 @@ test("startup reconciles MPR UI authentication after the lifecycle event has pas
   await installAssetRoutes(page, { emitInitialAuthEvent: false });
   await installManagementRoutes(page);
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "authenticated");
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
@@ -2760,7 +2794,7 @@ test("blocked Alpine startup becomes an actionable application error", async ({ 
   await installAssetRoutes(page, { alpineModuleFailure: true });
   await installManagementRoutes(page);
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   const failureSurface = page.getByRole("alert");
   await expect(failureSurface).toBeVisible();
@@ -2793,7 +2827,7 @@ test("incompatible cached application module becomes an actionable application e
   await installAssetRoutes(page, { backendModuleMismatch: true });
   await installManagementRoutes(page);
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   const failureSurface = page.getByRole("alert");
   await expect(failureSurface).toBeVisible();
@@ -2813,7 +2847,7 @@ test("authenticated profile failures replace loading and signed-out states", asy
   await installAssetRoutes(page);
   await installManagementRoutes(page, { profileStatus: 409 });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   await expect(page.getByRole("heading", { name: "Unable to load key workspace" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Loading key workspace" })).toBeHidden();
@@ -2829,7 +2863,7 @@ test("signed-out panel presents a direct sign-in prompt without auth instruction
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await installManagementRoutes(page);
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   const signedOutPanel = page.locator("section.llm-panel").filter({
     has: page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" }),
@@ -2858,7 +2892,7 @@ test("fresh authenticated users receive one client key and must add a provider k
   await installAssetRoutes(page);
   await installManagementRoutes(page, { hasSecret: false, generatedSecret, savedProviderIDs: [] });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await expect(settingsDialog).toBeVisible();
@@ -2939,7 +2973,7 @@ test("configured users reach the dashboard without reopening Settings or generat
   await installAssetRoutes(page);
   await installManagementRoutes(page);
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Settings" })).toBeHidden();
@@ -2955,7 +2989,7 @@ test("automatically generated client keys never enter request examples", async (
   await installAssetRoutes(page);
   await installManagementRoutes(page, { hasSecret: false, generatedSecret });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await settingsDialog.locator(".usage-examples-section summary").click();
@@ -2997,7 +3031,7 @@ test("failed automatic client-key creation stays locked and retries through Crea
     });
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await expect(settingsDialog).toBeVisible();
@@ -3041,7 +3075,7 @@ test("Settings remains locked while automatic client-key creation is pending", a
     });
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await secretRequestStarted;
   await settingsDialog.getByRole("button", { name: "Close" }).click();
@@ -3077,7 +3111,7 @@ test("Settings stays inert and keeps a replacement client key available during r
     await route.fallback();
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
@@ -3139,7 +3173,7 @@ test("pending last-provider removal enforces mandatory Settings before close", a
     await route.fallback();
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
@@ -3192,7 +3226,7 @@ test("session cleanup cancels generated client keys before they can restore stat
     });
   });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await secretRequestStarted;
   await page.evaluate(() => {
@@ -3221,7 +3255,7 @@ test("tenant access stays compact while one-time client keys support confirmed r
   for (const viewport of settingsLayerViewports) {
     await installManagementRoutes(page, { hasSecret: false, generatedSecret });
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await page.goto(`${baseURL}${managementPath}`);
+    await page.goto(`${baseURL}${applicationPath}`);
 
     const settingsDialog = page.getByRole("dialog", { name: "Settings" });
     await expect(settingsDialog).toBeVisible();
@@ -3442,7 +3476,7 @@ test("settings modal remains usable on narrow screens", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page);
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
@@ -3459,7 +3493,7 @@ test("settings modal overlays MPR header and footer layers", async ({ page }) =>
 
   for (const viewport of settingsLayerViewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await page.goto(`${baseURL}${managementPath}`);
+    await page.goto(`${baseURL}${applicationPath}`);
     const usageTenantSelector = page.getByRole("combobox", { name: "Usage tenant" });
     const usageTenantSelectorBox = await usageTenantSelector.boundingBox();
     const allIntervalButtonBox = await page.getByRole("button", { name: "ALL", exact: true }).boundingBox();
@@ -3529,7 +3563,7 @@ test("management notices occupy the header aux slot immediately before the avata
 
   for (const viewport of settingsLayerViewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await page.goto(`${baseURL}${managementPath}`);
+    await page.goto(`${baseURL}${applicationPath}`);
 
     const notificationRegion = page.locator("#llm-proxy-header notification-region");
     const notice = notificationRegion.locator(".notice");
@@ -3576,7 +3610,7 @@ test("signed-out management notices occupy the header immediately before Sign in
 
   for (const viewport of settingsLayerViewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await page.goto(`${baseURL}${managementPath}`);
+    await page.goto(`${baseURL}${applicationPath}`);
 
     const notificationRegion = page.locator("#llm-proxy-header notification-region");
     const notice = notificationRegion.locator(".notice");
@@ -3594,7 +3628,7 @@ test("management notices auto-dismiss after ten seconds and replacement notices 
   await page.clock.install({ time: new Date("2026-07-21T12:00:00Z") });
   await installAssetRoutes(page);
   await installManagementRoutes(page);
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   const notificationRegion = page.locator("#llm-proxy-header notification-region");
   const notice = notificationRegion.locator(".notice");
@@ -3639,7 +3673,7 @@ test("informational notices auto-dismiss without impairing the signed-out Sign i
   await page.clock.install({ time: new Date("2026-07-21T12:00:00Z") });
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await installManagementRoutes(page);
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   const notificationRegion = page.locator("#llm-proxy-header notification-region");
   await expect(notificationRegion.locator(".notice")).toHaveText("Authentication required");
@@ -3662,7 +3696,7 @@ test("header brand uses the local logo before its title without crowding the not
 
   for (const viewport of settingsLayerViewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await page.goto(`${baseURL}${managementPath}`);
+    await page.goto(`${baseURL}${applicationPath}`);
 
     const brand = page.locator("#llm-proxy-header .llm-proxy-header-brand");
     const logo = brand.locator(".llm-proxy-header-brand__logo");
@@ -3702,7 +3736,7 @@ test("settings stays reachable when usage summary fails", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page, { usageStatus: httpInternalServerError });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
@@ -3717,7 +3751,7 @@ test("usage refresh clears stale metrics when summary reload fails", async ({ pa
   await installAssetRoutes(page);
   await installManagementRoutes(page);
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
   await page.unroute(usageRequestPattern());
@@ -3735,7 +3769,7 @@ test("admin menu opens all users dashboard", async ({ page }) => {
   await installAssetRoutes(page);
   await installManagementRoutes(page, { admin: true });
 
-  await page.goto(`${baseURL}${managementPath}`);
+  await page.goto(`${baseURL}${applicationPath}`);
 
   await page.getByTestId("avatar-menu").click();
   await expect(page.getByTestId("avatar-menu-item").nth(0)).toHaveText("Admin");
@@ -3798,6 +3832,51 @@ async function installAssetRoutes(page, options = {}) {
       contentType: "application/javascript",
     }),
   );
+}
+
+/**
+ * @param {import("@playwright/test").Locator} footer
+ * @returns {Promise<void>}
+ */
+async function expectCompactFooterGeometry(footer) {
+  const geometry = await footer.evaluate((footerElement) => ({
+    clientWidth: footerElement.clientWidth,
+    height: footerElement.getBoundingClientRect().height,
+    scrollWidth: footerElement.scrollWidth,
+  }));
+  expect(geometry.height).toBeLessThanOrEqual(compactLandingFooterMaxHeight);
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @returns {Promise<void>}
+ */
+async function expectCenteredValueStrip(page) {
+  const facts = await page.locator(".value-strip").evaluate((stripElement) => {
+    const gridElement = stripElement.querySelector(".value-strip__grid");
+    if (!gridElement) {
+      throw new Error("landing_value_strip_grid_missing");
+    }
+    const stripStyle = getComputedStyle(stripElement);
+    const gridStyle = getComputedStyle(gridElement);
+    const gridRect = gridElement.getBoundingClientRect();
+    return {
+      gridBackground: gridStyle.backgroundColor,
+      gridBorderTopWidth: gridStyle.borderTopWidth,
+      itemCount: gridElement.querySelectorAll(":scope > p").length,
+      leftGap: gridRect.left,
+      rightGap: document.documentElement.clientWidth - gridRect.right,
+      stripBackground: stripStyle.backgroundColor,
+      stripBorderTopWidth: stripStyle.borderTopWidth,
+    };
+  });
+  expect(facts.itemCount).toBe(3);
+  expect(facts.stripBorderTopWidth).toBe("0px");
+  expect(facts.gridBorderTopWidth).toBe("1px");
+  expect(facts.stripBackground).not.toBe(facts.gridBackground);
+  expect(facts.leftGap).toBeGreaterThan(0);
+  expect(facts.rightGap).toBeGreaterThan(0);
 }
 
 /**
@@ -4575,12 +4654,6 @@ async function staticSiteHandler(request, response) {
     response.end(`llmProxy:\n  managementApiOrigin: ${baseURL}\n  proxyOrigin: ${baseURL}\n`);
     return;
   }
-  if (requestURL.pathname === openAPIPath) {
-    response.writeHead(200, { "Content-Type": mimeTypes[".yaml"] });
-    createReadStream(canonicalOpenAPIFile).pipe(response);
-    return;
-  }
-
   const routePath =
     requestURL.pathname === "/" || requestURL.pathname.endsWith("/")
       ? path.join(requestURL.pathname, "index.html")
@@ -5088,7 +5161,25 @@ class MprHeader extends HTMLElement {
     }
   }
 }
-class MprFooter extends HTMLElement {}
+class MprFooter extends HTMLElement {
+  connectedCallback() {
+    const horizontalLinks = JSON.parse(this.getAttribute("horizontal-links") || '{"links":[]}');
+    const footer = document.createElement("footer");
+    footer.setAttribute("role", "contentinfo");
+    const navigation = document.createElement("nav");
+    navigation.setAttribute("aria-label", "Utility links");
+    horizontalLinks.links.forEach((item) => {
+      const anchor = document.createElement("a");
+      anchor.textContent = item.label;
+      anchor.setAttribute("href", item.href || item.url);
+      navigation.append(anchor);
+    });
+    const prefix = document.createElement("span");
+    prefix.textContent = this.getAttribute("prefix-text") || "";
+    footer.append(navigation, prefix);
+    this.replaceChildren(footer);
+  }
+}
 class MprUser extends HTMLElement {
   static get observedAttributes() {
     return ["menu-items"];
@@ -5225,6 +5316,41 @@ mpr-footer {
   display: block;
   min-height: 64px;
   background: rgba(3, 23, 32, 0.95);
+}
+
+mpr-footer[sticky="false"] {
+  position: relative;
+}
+
+mpr-footer[size="small"] {
+  min-height: 48px;
+}
+
+mpr-footer footer {
+  display: flex;
+  min-height: inherit;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+mpr-footer nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+mpr-footer footer > span {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 `;
 }

@@ -29,7 +29,7 @@ const redLuminanceWeight = 0.2126;
 const greenLuminanceWeight = 0.7152;
 const blueLuminanceWeight = 0.0722;
 const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
-const managementPath = "/manage/";
+const applicationPath = "/app/";
 
 let stack;
 
@@ -74,7 +74,7 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   });
   expect(anonymousAccountResponse.status()).toBe(httpUnauthorized);
 
-  await page.goto(`${stack.frontendOrigin}${managementPath}`);
+  await page.goto(`${stack.frontendOrigin}${applicationPath}`);
   await expect(page.locator("#mpr-ui-bundle")).toHaveAttribute("data-mpr-ui-bundle-src", mprUIBundleURL);
   await expect.poll(() => page.evaluate(() => Boolean(customElements.get("mpr-legal-document")))).toBe(true);
   await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
