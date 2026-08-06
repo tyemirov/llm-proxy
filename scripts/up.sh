@@ -14,7 +14,7 @@ local_stack_started="0"
 local_stack_ready="0"
 local_frontend_origin="http://localhost:4179"
 local_api_origin="http://localhost:8080"
-expected_running_services=$'api\nfrontend\ntauth'
+expected_running_services=$'api\nfrontend\nschema\ntauth'
 
 fail() {
   echo "error: $*" >&2
@@ -194,7 +194,7 @@ handle_operator_interrupt() {
 ensure_compose_services_running() {
   local running_services
   running_services="$(compose ps --status running --services | LC_ALL=C sort)"
-  [[ "${running_services}" == "${expected_running_services}" ]] || fail "local orchestration services are not running; expected api, frontend, tauth; got ${running_services:-none}"
+  [[ "${running_services}" == "${expected_running_services}" ]] || fail "local orchestration services are not running; expected api, frontend, schema, tauth; got ${running_services:-none}"
 }
 
 wait_for_http_status() {
@@ -240,6 +240,7 @@ else
 fi
 
 wait_for_http_status "ghttp static frontend" "200" "${local_frontend_origin}/"
+wait_for_http_status "ghttp canonical OpenAPI schema" "200" "${local_frontend_origin}/openapi.yaml"
 wait_for_http_status "ghttp runtime configuration" "200" "${local_frontend_origin}/config-ui.yaml"
 wait_for_http_status "LLM Proxy API boundary" "403" "${local_api_origin}/?prompt=ready"
 wait_for_http_status "TAuth session through ghttp" "204" "${local_frontend_origin}/auth/session" --header "Origin: ${local_frontend_origin}" --header "X-Requested-With: XMLHttpRequest"
@@ -250,9 +251,10 @@ local_stack_ready="1"
 echo
 echo "LLM Proxy local orchestration is ready."
 echo "Static UI: ${local_frontend_origin}/"
+echo "OpenAPI schema: ${local_frontend_origin}/openapi.yaml (canonical read-only source)"
 echo "API: ${local_api_origin}/"
 echo "TAuth: ${local_frontend_origin}/auth/ (ghttp to TAuth)"
 echo "Runtime config: ${local_frontend_origin}/config-ui.yaml (ghttp to API)"
-echo "Readiness contracts: static=200, config=200, API=403 without a key, same-origin TAuth session=204 and nonce=200, management API=401 without a session."
+echo "Readiness contracts: static=200, OpenAPI schema=200, config=200, API=403 without a key, same-origin TAuth session=204 and nonce=200, management API=401 without a session."
 
 compose logs --follow --no-color

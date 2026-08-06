@@ -10,7 +10,7 @@ const OUTPUT_PATH = "site/docs/index.html";
 const PUBLIC_ORIGIN = "https://llm-proxy.mprlab.com";
 const API_ORIGIN = "https://llm-proxy-api.mprlab.com";
 const SOURCE_URL = "https://github.com/tyemirov/llm-proxy/blob/master/docs/openapi.yaml";
-const MANAGEMENT_PATH = "/manage/";
+const APPLICATION_PATH = "/app/";
 const HTTP_METHODS = new Set(["get", "post", "put", "delete", "patch", "head", "options", "trace"]);
 const CHECK_ARGUMENT = "--check";
 
@@ -99,7 +99,7 @@ function renderDocument(document, sourceDigest) {
         <a href="/docs/" aria-current="page">API reference</a>
         <a href="/openapi.yaml">OpenAPI schema</a>
         <a href="/resources/">Resources</a>
-        <a href="${MANAGEMENT_PATH}">Workspace</a>
+        <a href="${APPLICATION_PATH}">Workspace</a>
         <a href="${SOURCE_URL}">Source</a>
       </nav>
     </header>
@@ -135,7 +135,7 @@ function renderDocument(document, sourceDigest) {
       <a href="/">LLM Proxy main page</a>
       <a href="/openapi.yaml">Canonical OpenAPI schema</a>
       <a href="/resources/">Resource hub</a>
-      <a href="${MANAGEMENT_PATH}">Workspace</a>
+      <a href="${APPLICATION_PATH}">Workspace</a>
       <a href="/sitemap.xml">Sitemap</a>
     </footer>
   </body>
