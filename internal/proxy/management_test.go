@@ -133,7 +133,7 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 	landingHTML := string(landingBytes)
 	for _, requiredFragment := range []string{
 		`One stable interface for the models your products depend on.`,
-		`href="/manage/"`,
+		`href="/app/"`,
 		`<!-- llm-proxy-capability-catalog -->`,
 	} {
 		if !strings.Contains(landingHTML, requiredFragment) {
@@ -141,7 +141,7 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		}
 	}
 
-	staticIndexResponse, indexError := http.Get(staticServer.URL + "/manage/")
+	staticIndexResponse, indexError := http.Get(staticServer.URL + "/app/")
 	if indexError != nil {
 		t.Fatalf("static index request: %v", indexError)
 	}
@@ -174,6 +174,15 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		if strings.Contains(indexHTML, forbiddenFragment) {
 			t.Fatalf("static index must not include %q", forbiddenFragment)
 		}
+	}
+
+	removedIndexResponse, removedIndexError := http.Get(staticServer.URL + "/manage/")
+	if removedIndexError != nil {
+		t.Fatalf("removed static index request: %v", removedIndexError)
+	}
+	defer removedIndexResponse.Body.Close()
+	if removedIndexResponse.StatusCode != http.StatusNotFound {
+		t.Fatalf("removed static index status=%d want=%d", removedIndexResponse.StatusCode, http.StatusNotFound)
 	}
 
 	router := newManagementRouter(t, proxy.Configuration{})
