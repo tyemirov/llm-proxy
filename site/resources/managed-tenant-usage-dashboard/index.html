@@ -15,27 +15,32 @@
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script defer src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"></script>
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Account-wide managed tenant usage dashboard for LLMs","description":"See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.","url":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","datePublished":"2026-07-06","dateModified":"2026-07-26","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","about":["LLM Proxy","Usage","managed tenant usage dashboard"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Account-wide managed tenant usage dashboard for LLMs","description":"See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.","url":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","datePublished":"2026-07-06","dateModified":"2026-07-26","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/","about":["LLM Proxy","Usage","managed tenant usage dashboard"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Account-wide managed tenant usage dashboard for LLMs","item":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Does selecting a tenant activate or deactivate it?","acceptedAnswer":{"@type":"Answer","text":"No. Every owned tenant remains independently routable through its own generated secret; the Settings and Usage selectors only choose an editor or report scope."}},{"@type":"Question","name":"What does Usage Overview show by default?","acceptedAnswer":{"@type":"Answer","text":"It selects All tenants and the 30-day interval, then aggregates the owned tenants at the server's database boundary."}},{"@type":"Question","name":"Does changing the Tenant control in Settings change Usage Overview?","acceptedAnswer":{"@type":"Answer","text":"No. The Tenant control in Settings and the Usage tenant control are independent; changing one does not change the other."}},{"@type":"Question","name":"What tenant data appears in account-wide failure rows?","acceptedAnswer":{"@type":"Answer","text":"Only the safe opaque tenant ID and current display name are added. Credentials, prompts, responses, provider bodies, and free-form errors remain excluded."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Normalized token usage metadata across providers, which covers normalized token usage metadata."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="resource-page">
 
-      <header class="resource-shell resource-topbar">
-        <a class="resource-brand" href="/">LLM Proxy</a>
-        <nav aria-label="Resource navigation">
-          <a href="/docs/">API reference</a>
-          <a href="/openapi.yaml">OpenAPI</a>
-          <a href="/resources/">Resources</a>
-          <a href="/app/">Workspace</a>
-          <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
-          <a href="/">Main page</a>
-        </nav>
-      </header>
+    <mpr-header
+      class="public-site-header"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      settings="false"
+      size="small"
+      sticky="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"},{"label":"Log In","href":"/app/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
       <main class="resource-shell resource-article">
         <nav class="breadcrumbs" aria-label="Breadcrumb">
           <a href="/">Home</a>
@@ -50,6 +55,7 @@
             <h1>Account-wide managed tenant usage dashboard for LLMs</h1>
             <p class="resource-deck">See all owned tenants by default, filter one tenant when needed, and inspect safe failed-request details without exposing secrets.</p>
             <p class="resource-audience">Teams giving users self-service AI access while keeping usage visible.</p>
+            <p class="resource-byline">Reviewed 2026-07-26 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <aside class="resource-verdict" aria-label="Quick verdict">
               <strong>Quick verdict</strong>
               <p>Every tenant remains independently routable. Usage opens on All tenants and 30 days, while Settings has its own editor-only tenant selector.</p>
@@ -228,15 +234,14 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d</code></pre>
           </section>
         </article>
       </main>
-      <footer class="resource-shell resource-footer">
-        <a href="/">LLM Proxy main page</a>
-        <a href="/docs/">API reference</a>
-        <a href="/openapi.yaml">OpenAPI schema</a>
-        <a href="/resources/">Resource hub</a>
-        <a href="/app/">Workspace</a>
-        <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
-        <a href="/sitemap.xml">Sitemap</a>
-      </footer>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="false"
+      prefix-text="LLM Proxy"
+      privacy-link-hidden="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Log In","href":"/app/"},{"label":"API","href":"/docs/"},{"label":"OpenAPI","href":"/docs/#openapi-schema"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+    ></mpr-footer>
 
   </body>
 </html>

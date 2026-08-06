@@ -49,8 +49,7 @@
  */
 
 /**
- * @typedef {
- *   "provider_key_rejected" |
+ * @typedef {"provider_key_rejected" |
  *   "provider_key_verification_rate_limited" |
  *   "provider_key_verification_timed_out" |
  *   "provider_key_verification_unavailable"
@@ -145,8 +144,7 @@
  */
 
 /**
- * @typedef {
- *   "success" |
+ * @typedef {"success" |
  *   "invalid_request" |
  *   "payload_too_large" |
  *   "rate_limited" |

@@ -8,22 +8,29 @@
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
     <meta name="openapi-source-sha256" content="2183f2da7bed37d1f3f77ae539f0973af828f4b95d52c13bf88c7e29ee56ebc4">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script defer src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"></script>
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
   <body class="resource-page api-reference-page" data-openapi-source-sha256="2183f2da7bed37d1f3f77ae539f0973af828f4b95d52c13bf88c7e29ee56ebc4">
-    <header class="resource-shell resource-topbar">
-      <a class="resource-brand" href="/">LLM Proxy</a>
-      <nav aria-label="API reference navigation">
-        <a href="/docs/" aria-current="page">API reference</a>
-        <a href="/openapi.yaml">OpenAPI schema</a>
-        <a href="/resources/">Resources</a>
-        <a href="/app/">Workspace</a>
-        <a href="https://github.com/tyemirov/llm-proxy/blob/master/docs/openapi.yaml">Source</a>
-      </nav>
-    </header>
+    <mpr-header
+      class="public-site-header"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      settings="false"
+      size="small"
+      sticky="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"},{"label":"Log In","href":"/app/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
     <main class="resource-shell resource-article api-reference">
-      <section class="resource-hero">
+      <section id="openapi-schema" class="resource-hero">
         <p class="eyebrow">Canonical API contract</p>
         <h1>LLM Proxy HTTP API</h1>
         <p class="resource-deck">The sole canonical wire contract for llm-proxy-owned proxy, browser configuration, and management endpoints. Each configured text model owns one explicit upstream wire contract and execution lifecycle. OpenAI Responses and Gemini 3.x Interactions use stored pollable resources; Gemini 2.5 Interactions, OpenAI-compatible Chat Completions, and Anthropic Messages complete synchronously. Public proxy operations remain blocking and never expose an upstream resource id. OpenAI resource ids remain in memory only, but the current adapter does not cancel or delete stored Responses, so OpenAI account retention policy applies. Background Gemini interaction ids are also request-local; the adapter cancels active resources and deletes every stored interaction on exit. Synchronous Gemini interactions are non-stored. TAuth-owned endpoints are outside this contract. Contributors must update this document in the same change as any owned handler or bundled-client wire change.</p>
@@ -32,10 +39,2068 @@
           <span>API server https://llm-proxy-api.mprlab.com</span>
           <span>Source SHA-256 <code>2183f2da7bed37d1f3f77ae539f0973af828f4b95d52c13bf88c7e29ee56ebc4</code></span>
         </div>
-        <div class="resource-actions">
-          <a class="resource-button" href="/openapi.yaml">Download exact schema</a>
+        <div class="resource-actions" aria-label="OpenAPI schema actions">
+          <a class="resource-button" href="#openapi-yaml">View YAML</a>
+          <a class="resource-button" href="/openapi.yaml" download="llm-proxy-openapi.yaml">Download YAML</a>
           <a class="resource-link" href="https://github.com/tyemirov/llm-proxy/blob/master/docs/openapi.yaml">View committed source</a>
         </div>
+      </section>
+      <section id="openapi-yaml" aria-labelledby="openapi-yaml-title">
+        <h2 id="openapi-yaml-title">OpenAPI YAML</h2>
+        <p>The complete canonical manifest is shown below. The download action publishes these exact source bytes.</p>
+        <pre class="api-schema-source" tabindex="0"><code>openapi: 3.1.0
+info:
+  title: LLM Proxy HTTP API
+  version: 1.0.0
+  description: &gt;-
+    The sole canonical wire contract for llm-proxy-owned proxy, browser
+    configuration, and management endpoints. Each configured text model owns
+    one explicit upstream wire contract and execution lifecycle. OpenAI
+    Responses and Gemini 3.x Interactions use stored pollable resources;
+    Gemini 2.5 Interactions, OpenAI-compatible Chat Completions, and Anthropic
+    Messages complete synchronously. Public proxy operations remain blocking and never expose an
+    upstream resource id. OpenAI resource ids remain in memory only, but the
+    current adapter does not cancel or delete stored Responses, so OpenAI
+    account retention policy applies. Background Gemini interaction ids are
+    also request-local; the adapter cancels active resources and deletes every
+    stored interaction on exit. Synchronous Gemini interactions are non-stored.
+    TAuth-owned endpoints are outside this contract.
+    Contributors must update this document in the same change as any owned
+    handler or bundled-client wire change.
+servers:
+  - url: https://llm-proxy-api.mprlab.com
+    description: Production API origin
+x-llm-proxy-protocol-methods:
+  - OPTIONS
+tags:
+  - name: Proxy
+    description: Tenant-key-authenticated text and dictation operations.
+  - name: Configuration
+    description: Public browser runtime configuration owned by llm-proxy.
+  - name: Management
+    description: TAuth-session-authenticated tenant management operations.
+paths:
+  /:
+    get:
+      operationId: getText
+      summary: Generate text from a query prompt
+      tags:
+        - Proxy
+      security:
+        - TenantClientKey: []
+      x-llm-proxy-allow-undeclared-query: true
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantClientKey&#39;
+        - $ref: &#39;#/components/parameters/Prompt&#39;
+        - $ref: &#39;#/components/parameters/Provider&#39;
+        - $ref: &#39;#/components/parameters/Model&#39;
+        - $ref: &#39;#/components/parameters/WebSearch&#39;
+        - $ref: &#39;#/components/parameters/SystemPrompt&#39;
+        - $ref: &#39;#/components/parameters/MaxTokens&#39;
+        - $ref: &#39;#/components/parameters/ReasoningEffort&#39;
+        - $ref: &#39;#/components/parameters/ResponseFormat&#39;
+        - $ref: &#39;#/components/parameters/Accept&#39;
+        - $ref: &#39;#/components/parameters/RequestTimeout&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/TextSuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ProxyBadRequest&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;429&#39;:
+          $ref: &#39;#/components/responses/ProxyRateLimited&#39;
+        &#39;499&#39;:
+          $ref: &#39;#/components/responses/CallerClosed&#39;
+        &#39;502&#39;:
+          $ref: &#39;#/components/responses/ProxyBadGateway&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/ProxyUnavailable&#39;
+        &#39;504&#39;:
+          $ref: &#39;#/components/responses/ProxyTimeout&#39;
+    post:
+      operationId: postText
+      summary: Generate text from a prompt or messages JSON body
+      tags:
+        - Proxy
+      security:
+        - TenantClientKey: []
+      x-llm-proxy-allow-undeclared-query: true
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantClientKey&#39;
+        - $ref: &#39;#/components/parameters/Provider&#39;
+        - $ref: &#39;#/components/parameters/Model&#39;
+        - $ref: &#39;#/components/parameters/ResponseFormat&#39;
+        - $ref: &#39;#/components/parameters/Accept&#39;
+        - $ref: &#39;#/components/parameters/RequestTimeout&#39;
+      requestBody:
+        $ref: &#39;#/components/requestBodies/TextRequest&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/TextSuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ProxyBadRequest&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;413&#39;:
+          $ref: &#39;#/components/responses/ProxyPayloadTooLarge&#39;
+        &#39;429&#39;:
+          $ref: &#39;#/components/responses/ProxyRateLimited&#39;
+        &#39;499&#39;:
+          $ref: &#39;#/components/responses/CallerClosed&#39;
+        &#39;502&#39;:
+          $ref: &#39;#/components/responses/ProxyBadGateway&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/ProxyUnavailable&#39;
+        &#39;504&#39;:
+          $ref: &#39;#/components/responses/ProxyTimeout&#39;
+  /v2:
+    post:
+      operationId: postV2Messages
+      summary: Generate text from canonical messages
+      description: The current messages-only operation. `messages` is required. User messages may include provider-neutral ordered image or audio attachments with canonical base64 bytes and matching SHA-256 digests. `model`, `web_search`, `max_tokens`, and `reasoning_effort` are optional. Omitting `reasoning_effort` selects the tenant or route default; an explicitly supplied value must be non-blank and supported by the resolved provider/model route. Unsupported media or route capabilities return the canonical plain-text 400 error response before an upstream call.
+      tags:
+        - Proxy
+      security:
+        - TenantClientKey: []
+      x-llm-proxy-allow-undeclared-query: true
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantClientKey&#39;
+        - $ref: &#39;#/components/parameters/Provider&#39;
+        - $ref: &#39;#/components/parameters/ResponseFormat&#39;
+        - $ref: &#39;#/components/parameters/Accept&#39;
+        - $ref: &#39;#/components/parameters/RequestTimeout&#39;
+      requestBody:
+        $ref: &#39;#/components/requestBodies/V2Request&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/TextSuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ProxyBadRequest&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;413&#39;:
+          $ref: &#39;#/components/responses/ProxyPayloadTooLarge&#39;
+        &#39;429&#39;:
+          $ref: &#39;#/components/responses/ProxyRateLimited&#39;
+        &#39;499&#39;:
+          $ref: &#39;#/components/responses/CallerClosed&#39;
+        &#39;502&#39;:
+          $ref: &#39;#/components/responses/ProxyBadGateway&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/ProxyUnavailable&#39;
+        &#39;504&#39;:
+          $ref: &#39;#/components/responses/ProxyTimeout&#39;
+  /dictate:
+    post:
+      operationId: postDictation
+      summary: Transcribe an audio upload
+      tags:
+        - Proxy
+      security:
+        - TenantClientKey: []
+      x-llm-proxy-allow-undeclared-query: true
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantClientKey&#39;
+        - $ref: &#39;#/components/parameters/Provider&#39;
+        - $ref: &#39;#/components/parameters/Model&#39;
+        - $ref: &#39;#/components/parameters/RequestTimeout&#39;
+      requestBody:
+        $ref: &#39;#/components/requestBodies/DictationRequest&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/DictationSuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ProxyBadRequest&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;413&#39;:
+          $ref: &#39;#/components/responses/ProxyPayloadTooLarge&#39;
+        &#39;429&#39;:
+          $ref: &#39;#/components/responses/ProxyRateLimited&#39;
+        &#39;499&#39;:
+          $ref: &#39;#/components/responses/CallerClosed&#39;
+        &#39;502&#39;:
+          $ref: &#39;#/components/responses/ProxyBadGateway&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/ProxyUnavailable&#39;
+        &#39;504&#39;:
+          $ref: &#39;#/components/responses/ProxyTimeout&#39;
+  /config-ui.yaml:
+    get:
+      operationId: getBrowserConfiguration
+      summary: Read the browser runtime configuration
+      tags:
+        - Configuration
+      security: []
+      parameters:
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      responses:
+        &#39;200&#39;:
+          description: Current browser runtime configuration.
+          headers:
+            Cache-Control:
+              description: Prevents persistence of environment-specific browser configuration.
+              schema:
+                type: string
+                const: no-store
+              x-required: true
+          content:
+            application/yaml:
+              schema:
+                type: string
+  /api/management/account:
+    get:
+      operationId: getManagementAccount
+      summary: Read the authenticated user and owned tenant summaries
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/AccountSuccess&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+  /api/management/usage:
+    get:
+      operationId: getManagementAccountUsage
+      summary: Read interval-scoped usage across every owned tenant
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/UsageInterval&#39;
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/UsageSuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ManagementBadRequest&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+  /api/management/usage/failures:
+    get:
+      operationId: getManagementAccountUsageFailures
+      summary: Read safe failure details across every owned tenant and interval
+      description: Returns a newest-first snapshot page of failed managed proxy events across every tenant owned by the authenticated user. Each row identifies its tenant by opaque ID and current name while exposing only bounded diagnostic metadata and canonical outcome codes. Rows never include prompts, responses, provider bodies, free-form errors, credentials, or another user&#39;s ownership data.
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/UsageInterval&#39;
+        - $ref: &#39;#/components/parameters/UsageFailureLimit&#39;
+        - $ref: &#39;#/components/parameters/UsageFailureCursor&#39;
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/AccountUsageFailuresSuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ManagementBadRequest&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+  /api/management/tenants:
+    post:
+      operationId: createManagementTenant
+      summary: Create an owned tenant
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      requestBody:
+        $ref: &#39;#/components/requestBodies/TenantNameRequest&#39;
+      responses:
+        &#39;201&#39;:
+          $ref: &#39;#/components/responses/TenantProfileCreated&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ManagementBadRequest&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/ManagementConflict&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+  /api/management/admin/users:
+    get:
+      operationId: getManagementAdminUsers
+      summary: Read the administrative user and tenant usage summary
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/AdminUsersSuccess&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+  /api/management/tenants/{tenant_id}:
+    get:
+      operationId: getManagementTenant
+      summary: Read an owned tenant profile
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantID&#39;
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/TenantProfileSuccess&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/ManagementNotFound&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+    put:
+      operationId: renameManagementTenant
+      summary: Rename an owned tenant
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantID&#39;
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      requestBody:
+        $ref: &#39;#/components/requestBodies/TenantNameRequest&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/TenantProfileSuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ManagementBadRequest&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/ManagementNotFound&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/ManagementConflict&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+    delete:
+      operationId: deleteManagementTenant
+      summary: Delete an owned non-final tenant
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantID&#39;
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      responses:
+        &#39;204&#39;:
+          description: Tenant deleted.
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/ManagementNotFound&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/ManagementConflict&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+  /api/management/tenants/{tenant_id}/usage:
+    get:
+      operationId: getManagementTenantUsage
+      summary: Read interval-scoped usage for an owned tenant
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantID&#39;
+        - $ref: &#39;#/components/parameters/UsageInterval&#39;
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/UsageSuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ManagementBadRequest&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/ManagementNotFound&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+  /api/management/tenants/{tenant_id}/usage/failures:
+    get:
+      operationId: getManagementTenantUsageFailures
+      summary: Read safe failure details for an owned tenant and interval
+      description: Returns a newest-first snapshot page of failed managed proxy events. Rows expose only bounded diagnostic metadata and canonical outcome codes; they never include prompts, responses, provider bodies, free-form errors, credentials, or ownership identifiers. Historical rows use status-derived normalized outcome codes rather than reconstructed error messages.
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantID&#39;
+        - $ref: &#39;#/components/parameters/UsageInterval&#39;
+        - $ref: &#39;#/components/parameters/UsageFailureLimit&#39;
+        - $ref: &#39;#/components/parameters/UsageFailureCursor&#39;
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/UsageFailuresSuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ManagementBadRequest&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/ManagementNotFound&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+  /api/management/tenants/{tenant_id}/provider-keys/{provider}:
+    put:
+      operationId: putManagementProviderKey
+      summary: Verify and save provider settings and a provider credential
+      description: A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider and text model under the management request context and shared upstream admission/rate-limit boundary. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential while updating settings without reverification.
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantID&#39;
+        - $ref: &#39;#/components/parameters/ProviderPath&#39;
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      requestBody:
+        $ref: &#39;#/components/requestBodies/ProviderKeyRequest&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/TenantProfileSuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ManagementBadRequest&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/ManagementNotFound&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;422&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyRejected&#39;
+        &#39;429&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyVerificationRateLimited&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+        &#39;503&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyVerificationUnavailable&#39;
+        &#39;504&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyVerificationTimedOut&#39;
+    delete:
+      operationId: deleteManagementProviderKey
+      summary: Remove provider settings and a provider credential
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantID&#39;
+        - $ref: &#39;#/components/parameters/ProviderPath&#39;
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/TenantProfileSuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ManagementBadRequest&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/ManagementNotFound&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+  /api/management/tenants/{tenant_id}/provider-keys/{provider}/reveal:
+    post:
+      operationId: revealManagementProviderKey
+      summary: Reveal one saved provider credential
+      description: This credentialed action requires the exact configured public Origin in addition to the TAuth session.
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantID&#39;
+        - $ref: &#39;#/components/parameters/ProviderPath&#39;
+        - $ref: &#39;#/components/parameters/RequiredOrigin&#39;
+      requestBody:
+        $ref: &#39;#/components/requestBodies/EmptyJSONRequest&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/ProviderKeyRevealSuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ManagementBadRequest&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/ManagementNotFound&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+  /api/management/tenants/{tenant_id}/defaults:
+    put:
+      operationId: putManagementTenantDefaults
+      summary: Replace the tenant routing defaults
+      description: Every nonempty provider/model pair must use a provider for which this tenant has a saved API key. The text pair is empty only when no provider key exists. The dictation pair is empty when no keyed provider supports dictation.
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantID&#39;
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      requestBody:
+        $ref: &#39;#/components/requestBodies/DefaultsRequest&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/TenantProfileSuccess&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/ManagementBadRequest&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/ManagementNotFound&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+  /api/management/tenants/{tenant_id}/secrets:
+    post:
+      operationId: postManagementTenantSecret
+      summary: Generate and replace the tenant client secret
+      tags:
+        - Management
+      security:
+        - TAuthSession: []
+      x-llm-proxy-required-request-content-type: application/json
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantID&#39;
+        - $ref: &#39;#/components/parameters/OptionalOrigin&#39;
+      requestBody:
+        $ref: &#39;#/components/requestBodies/EmptyJSONRequest&#39;
+      responses:
+        &#39;200&#39;:
+          $ref: &#39;#/components/responses/TenantSecretSuccess&#39;
+        &#39;401&#39;:
+          $ref: &#39;#/components/responses/ManagementUnauthorized&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ManagementForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/ManagementNotFound&#39;
+        &#39;415&#39;:
+          $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/ManagementInternalError&#39;
+components:
+  securitySchemes:
+    TenantClientKey:
+      type: apiKey
+      in: query
+      name: key
+      description: The tenant client secret generated by the management API.
+    TAuthSession:
+      type: apiKey
+      in: cookie
+      name: app_session_llm_proxy
+      description: The exact deployment-configured TAuth session cookie. The production cookie name is configured through management.session_cookie_name.
+  parameters:
+    TenantClientKey:
+      name: key
+      in: query
+      required: true
+      description: Tenant client secret.
+      schema:
+        type: string
+        minLength: 1
+    Prompt:
+      name: prompt
+      in: query
+      required: true
+      description: User prompt.
+      schema:
+        type: string
+        minLength: 1
+    Provider:
+      name: provider
+      in: query
+      required: false
+      description: Canonical provider identifier. Omission uses the tenant default.
+      schema:
+        type: string
+        minLength: 1
+    Model:
+      name: model
+      in: query
+      required: false
+      description: Model identifier. Omission uses the resolved provider default.
+      schema:
+        type: string
+        minLength: 1
+    WebSearch:
+      name: web_search
+      in: query
+      required: false
+      description: Exact boolean query parameter. Use true or false; omission disables web search. Any other supplied spelling is invalid and returns HTTP 400.
+      schema:
+        type: boolean
+    SystemPrompt:
+      name: system_prompt
+      in: query
+      required: false
+      schema:
+        type: string
+    MaxTokens:
+      name: max_tokens
+      in: query
+      required: false
+      description: Initial per-attempt output budget. The same budget is reused when the proxy requests a missing suffix; after a zero-text output-budget stop, a configured model output limit bounds any generic increase.
+      schema:
+        type: integer
+        minimum: 1
+    ReasoningEffort:
+      name: reasoning_effort
+      in: query
+      required: false
+      description: Non-blank effort supported by the resolved route. Omission selects the tenant or route default.
+      schema:
+        type: string
+        minLength: 1
+    ResponseFormat:
+      name: format
+      in: query
+      required: false
+      description: Preferred response media type. Unknown values select text/plain.
+      schema:
+        type: string
+        enum:
+          - text/plain
+          - application/json
+          - application/xml
+          - text/xml
+          - text/csv
+    Accept:
+      name: Accept
+      in: header
+      required: false
+      description: Response media preference used when format is omitted.
+      schema:
+        type: string
+    RequestTimeout:
+      name: X-LLM-Proxy-Request-Timeout-Seconds
+      in: header
+      required: false
+      description: A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.
+      schema:
+        type: integer
+        minimum: 1
+    TenantID:
+      name: tenant_id
+      in: path
+      required: true
+      description: Opaque tenant identifier from the authenticated account response.
+      schema:
+        type: string
+        minLength: 1
+    ProviderPath:
+      name: provider
+      in: path
+      required: true
+      description: Canonical provider identifier.
+      schema:
+        type: string
+        minLength: 1
+    UsageInterval:
+      name: interval
+      in: query
+      required: true
+      schema:
+        type: string
+        enum:
+          - 1d
+          - 7d
+          - 30d
+          - all
+    UsageFailureLimit:
+      name: limit
+      in: query
+      required: false
+      description: Maximum failure rows in this page. Omission selects 25.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+    UsageFailureCursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque continuation cursor returned by the preceding page for the same interval and reporting scope.
+      schema:
+        type: string
+        minLength: 1
+    OptionalOrigin:
+      name: Origin
+      in: header
+      required: false
+      description: When supplied, must exactly match the configured public origin for mutations. Matching origins receive credentialed CORS headers.
+      schema:
+        type: string
+        format: uri
+    RequiredOrigin:
+      name: Origin
+      in: header
+      required: true
+      description: Must exactly match the configured public origin.
+      schema:
+        type: string
+        format: uri
+  requestBodies:
+    TextRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/TextRequest&#39;
+    V2Request:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/V2Request&#39;
+    DictationRequest:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            $ref: &#39;#/components/schemas/DictationRequest&#39;
+          encoding:
+            audio:
+              contentType: audio/*,application/octet-stream
+    TenantNameRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/TenantNameRequest&#39;
+    ProviderKeyRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/ProviderKeyRequest&#39;
+    DefaultsRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/DefaultsRequest&#39;
+    EmptyJSONRequest:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/EmptyObject&#39;
+  responses:
+    TextSuccess:
+      description: &#39;Complete generated text in the selected representation. The selected model has one validated wire contract and one execution lifecycle; no lifecycle is inferred from an endpoint or upstream id. The proxy internally observes queued and in_progress states for OpenAI Responses and background-capable Gemini Interactions while keeping every public operation blocking; synchronous Gemini Interactions must return an immediate terminal state. Separately, it continues exact output-budget stops through new provider calls: OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, Gemini Interactions incomplete, and Anthropic max_tokens. HTTP 200 is returned only after the adapter reports its complete signal: OpenAI or Gemini completed, Chat stop, or Anthropic end_turn|stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states never return text as success.&#39;
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
+        X-LLM-Proxy-Request-Tokens:
+          $ref: &#39;#/components/headers/OptionalTokenCount&#39;
+        X-LLM-Proxy-Response-Tokens:
+          $ref: &#39;#/components/headers/OptionalTokenCount&#39;
+        X-LLM-Proxy-Total-Tokens:
+          $ref: &#39;#/components/headers/OptionalTokenCount&#39;
+      content:
+        text/plain:
+          schema:
+            type: string
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/TextJSONResponse&#39;
+        application/xml:
+          schema:
+            type: string
+        text/csv:
+          schema:
+            type: string
+    DictationSuccess:
+      description: Transcription result.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/DictationResponse&#39;
+    ProxyBadRequest:
+      description: The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: &#39;#/components/headers/OptionalResolvedRequestTimeout&#39;
+      content:
+        text/plain:
+          schema:
+            type: string
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/ProxyErrorEnvelope&#39;
+    ProxyForbidden:
+      description: The tenant client key is absent or unknown.
+      content:
+        text/plain:
+          schema:
+            type: string
+            const: unknown client key
+    ProxyPayloadTooLarge:
+      description: The configured JSON request or dictation audio payload limit was exceeded.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
+      content:
+        text/plain:
+          schema:
+            type: string
+    ProxyRateLimited:
+      description: The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
+        X-LLM-Proxy-Request-ID:
+          $ref: &#39;#/components/headers/ProxyRequestID&#39;
+        Retry-After:
+          $ref: &#39;#/components/headers/SafeRetryAfter&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/ProviderErrorEnvelope&#39;
+    CallerClosed:
+      description: The caller canceled or closed the request.
+    ProxyBadGateway:
+      description: The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The response contains only sanitized provider metadata and never exposes partial generated text, token-count headers, a raw provider body, or a provider error message; provider-reported usage can still be retained in managed failure accounting.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
+        X-LLM-Proxy-Request-ID:
+          $ref: &#39;#/components/headers/ProxyRequestID&#39;
+        Retry-After:
+          $ref: &#39;#/components/headers/SafeRetryAfter&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/ProviderErrorEnvelope&#39;
+    ProxyUnavailable:
+      description: The selected provider is not configured or the bounded request queue is full.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
+      content:
+        text/plain:
+          schema:
+            type: string
+    ProxyTimeout:
+      description: The proxy request budget or upstream operation timed out.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
+      content:
+        text/plain:
+          schema:
+            type: string
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/ProxyErrorEnvelope&#39;
+    AccountSuccess:
+      description: Authenticated account snapshot.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/ManagementAccount&#39;
+    TenantProfileSuccess:
+      description: Current tenant profile.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/TenantProfile&#39;
+    TenantProfileCreated:
+      description: Created tenant profile.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/TenantProfile&#39;
+    UsageSuccess:
+      description: Usage summary for the exact requested interval and authenticated reporting scope.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/UsageSummary&#39;
+    UsageFailuresSuccess:
+      description: Snapshot page of safe tenant failure details for the exact requested interval.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/UsageFailurePage&#39;
+    AccountUsageFailuresSuccess:
+      description: Snapshot page of safe failure details across every owned tenant for the exact requested interval.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/AccountUsageFailurePage&#39;
+    AdminUsersSuccess:
+      description: Administrative user and tenant usage summary.
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/AdminUsersSummary&#39;
+    ProviderKeyRevealSuccess:
+      description: The saved provider credential. Never persist or log this response.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/ProviderKeyReveal&#39;
+    TenantSecretSuccess:
+      description: The newly generated tenant client secret and current profile. The secret is returned only by this response.
+      headers:
+        Cache-Control:
+          $ref: &#39;#/components/headers/NoStore&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/TenantSecret&#39;
+    ManagementBadRequest:
+      description: Malformed or invalid management input.
+      content:
+        text/plain:
+          schema:
+            type: string
+    ManagementUnauthorized:
+      description: The TAuth session is absent or invalid.
+    ManagementForbidden:
+      description: The user lacks the required role or the supplied Origin is not allowed.
+    ManagementNotFound:
+      description: The tenant or provider credential does not exist within the authenticated ownership boundary.
+    ManagementConflict:
+      description: The requested tenant name conflicts or the final owned tenant cannot be deleted.
+      content:
+        text/plain:
+          schema:
+            type: string
+    ManagementUnsupportedMediaType:
+      description: A management mutation did not supply application/json.
+    ProviderKeyRejected:
+      description: The candidate credential was rejected or cannot access the selected text model. Nothing was saved.
+      content:
+        text/plain:
+          schema:
+            type: string
+            const: provider_key_rejected
+    ProviderKeyVerificationRateLimited:
+      description: The provider rate-limited the single verification operation. The credential remains unconfirmed and nothing was saved.
+      content:
+        text/plain:
+          schema:
+            type: string
+            const: provider_key_verification_rate_limited
+    ProviderKeyVerificationUnavailable:
+      description: The provider was unavailable or returned a malformed success envelope. The credential remains unconfirmed and nothing was saved.
+      content:
+        text/plain:
+          schema:
+            type: string
+            const: provider_key_verification_unavailable
+    ProviderKeyVerificationTimedOut:
+      description: The single verification operation timed out or was canceled. The credential remains unconfirmed and nothing was saved.
+      content:
+        text/plain:
+          schema:
+            type: string
+            const: provider_key_verification_timed_out
+    ManagementInternalError:
+      description: The management operation failed internally.
+      content:
+        text/plain:
+          schema:
+            type: string
+  headers:
+    ResolvedRequestTimeout:
+      description: The resolved whole-second budget used for the request.
+      schema:
+        type: integer
+        minimum: 1
+      x-required: true
+    OptionalResolvedRequestTimeout:
+      description: Present after the supplied timeout header passes validation.
+      schema:
+        type: integer
+        minimum: 1
+    ProxyRequestID:
+      description: Proxy-owned identifier matching error.request_id and the request_id field in structured proxy logs.
+      schema:
+        type: string
+        minLength: 1
+      x-required: true
+    SafeRetryAfter:
+      description: Present only when the provider supplied a syntactically valid Retry-After value. Delta seconds are normalized to unsigned decimal form and HTTP dates are normalized to IMF-fixdate.
+      schema:
+        type: string
+        minLength: 1
+    OptionalTokenCount:
+      description: Provider-reported token count when available.
+      schema:
+        type: integer
+        minimum: 0
+    NoStore:
+      description: Prevents persistence of authenticated or secret-bearing management responses.
+      schema:
+        type: string
+        const: no-store
+      x-required: true
+  schemas:
+    ChatMessage:
+      type: object
+      additionalProperties: false
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum:
+            - system
+            - user
+            - assistant
+        content:
+          type: string
+          minLength: 1
+        order:
+          type: integer
+          minimum: 0
+    MessageAttachment:
+      description: One provider-neutral image or audio input with a MIME type that matches its declared media type.
+      oneOf:
+        - $ref: &#39;#/components/schemas/ImageMessageAttachment&#39;
+        - $ref: &#39;#/components/schemas/AudioMessageAttachment&#39;
+    ImageMessageAttachment:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - mime_type
+        - data
+        - sha256
+      properties:
+        type:
+          type: string
+          const: image
+        mime_type:
+          type: string
+          enum:
+            - image/jpeg
+            - image/png
+            - image/webp
+        data:
+          type: string
+          minLength: 4
+          description: Exact nonempty media bytes encoded as canonical padded RFC 4648 base64.
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          description: Lowercase hexadecimal SHA-256 of the decoded media bytes.
+    AudioMessageAttachment:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - mime_type
+        - data
+        - sha256
+      properties:
+        type:
+          type: string
+          const: audio
+        mime_type:
+          type: string
+          enum:
+            - audio/m4a
+            - audio/mpeg
+            - audio/wav
+        data:
+          type: string
+          minLength: 4
+          description: Exact nonempty media bytes encoded as canonical padded RFC 4648 base64.
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          description: Lowercase hexadecimal SHA-256 of the decoded media bytes.
+    V2ChatMessage:
+      description: A user message that may carry attachments, or a text-only system or assistant message.
+      oneOf:
+        - $ref: &#39;#/components/schemas/V2UserChatMessage&#39;
+        - $ref: &#39;#/components/schemas/V2SystemOrAssistantChatMessage&#39;
+    V2UserChatMessage:
+      type: object
+      additionalProperties: false
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          const: user
+        content:
+          type: string
+          minLength: 1
+        attachments:
+          type: array
+          minItems: 1
+          description: Ordered exact media inputs accepted only when the resolved model declares each media type.
+          items:
+            $ref: &#39;#/components/schemas/MessageAttachment&#39;
+        order:
+          type: integer
+          minimum: 0
+    V2SystemOrAssistantChatMessage:
+      type: object
+      additionalProperties: false
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum:
+            - system
+            - assistant
+        content:
+          type: string
+          minLength: 1
+        order:
+          type: integer
+          minimum: 0
+    TextRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        prompt:
+          type: string
+          minLength: 1
+        messages:
+          type: array
+          minItems: 1
+          items:
+            $ref: &#39;#/components/schemas/ChatMessage&#39;
+        model:
+          type: string
+          minLength: 1
+        web_search:
+          type: boolean
+        system_prompt:
+          type: string
+        max_tokens:
+          type: integer
+          minimum: 1
+          description: Initial per-attempt output budget. Reused for missing-suffix attempts, with any zero-progress increase bounded by the configured model output limit.
+        reasoning_effort:
+          type: string
+          minLength: 1
+    V2Request:
+      type: object
+      additionalProperties: false
+      required:
+        - messages
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          description: All messages must have an allowed role and non-blank content, include at least one user message, and either all omit order or all provide unique non-negative order values. Only user messages may carry attachments; message order and attachment order are preserved.
+          items:
+            $ref: &#39;#/components/schemas/V2ChatMessage&#39;
+        model:
+          type: string
+          minLength: 1
+          description: Omission selects the resolved provider default.
+        web_search:
+          type: boolean
+          description: The resolved route must declare web-search capability when true.
+        max_tokens:
+          type: integer
+          minimum: 1
+          description: Initial per-attempt output budget. Reused for missing-suffix attempts, with any zero-progress increase bounded by the configured model output limit.
+        reasoning_effort:
+          type: string
+          minLength: 1
+          description: Omission selects the tenant or route default. An explicit value must be non-blank and supported by the resolved provider/model route.
+    DictationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - audio
+      properties:
+        audio:
+          type: string
+          format: binary
+          description: The canonical incoming audio file part.
+    DictationResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - text
+      properties:
+        text:
+          type: string
+    TokenUsage:
+      type: object
+      additionalProperties: false
+      required:
+        - request_tokens
+        - response_tokens
+        - total_tokens
+      properties:
+        request_tokens:
+          type: integer
+          minimum: 0
+        response_tokens:
+          type: integer
+          minimum: 0
+        total_tokens:
+          type: integer
+          minimum: 0
+    TextJSONResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - request
+        - response
+        - object
+        - model
+        - choices
+        - messages
+      properties:
+        request:
+          type: string
+        response:
+          type: string
+        object:
+          type: string
+          const: chat.completion
+        model:
+          type: string
+        choices:
+          type: array
+          minItems: 1
+          items:
+            $ref: &#39;#/components/schemas/Choice&#39;
+        messages:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/ResponseMessage&#39;
+        usage:
+          $ref: &#39;#/components/schemas/TokenUsage&#39;
+    Choice:
+      type: object
+      additionalProperties: false
+      required:
+        - index
+        - finish_reason
+        - message
+      properties:
+        index:
+          type: integer
+          minimum: 0
+        finish_reason:
+          type: string
+          const: stop
+        message:
+          $ref: &#39;#/components/schemas/ResponseMessage&#39;
+    ResponseMessage:
+      type: object
+      additionalProperties: false
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum:
+            - system
+            - user
+            - assistant
+        content:
+          type: string
+        order:
+          type: integer
+          minimum: 0
+    ProxyErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+          properties:
+            code:
+              type: string
+              enum:
+                - invalid_request_timeout
+                - request_timeout
+            max_request_timeout_seconds:
+              type: integer
+              minimum: 1
+            request_timeout_seconds:
+              type: integer
+              minimum: 1
+    ProviderErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+            - provider
+            - upstream_status
+            - retryable
+            - request_id
+            - retry_after
+          properties:
+            code:
+              type: string
+              enum:
+                - provider_error
+                - provider_rate_limited
+            provider:
+              type: string
+              minLength: 1
+              description: Canonical provider selector resolved for the request.
+            upstream_status:
+              oneOf:
+                - type: integer
+                  minimum: 100
+                  maximum: 599
+                - type: &#39;null&#39;
+              description: Exact provider HTTP status when an upstream response was received; null for transport, request-construction, and response-protocol failures without a usable unsuccessful HTTP response.
+            retryable:
+              type: boolean
+              description: True only for upstream HTTP 408, 425, 429, 500, 502, 503, or 504. This classifies the provider condition; clients remain responsible for duplicate-work and billing consequences before retrying.
+            request_id:
+              type: string
+              minLength: 1
+              description: Proxy-owned correlation identifier also returned in X-LLM-Proxy-Request-ID and recorded in structured proxy logs.
+            retry_after:
+              oneOf:
+                - type: string
+                  minLength: 1
+                - type: &#39;null&#39;
+              description: Validated and normalized provider Retry-After value, or null when the provider omitted it or supplied an invalid value. A non-null value is also returned in the Retry-After response header.
+    TenantNameRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+    ProviderKeyRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - api_key
+        - text_model
+        - system_prompt
+      properties:
+        api_key:
+          type: string
+          description: An unverified new or replacement provider key. A nonempty value is verified against the exact path provider and selected text_model before any persistence. Send an empty string to retain the tenant&#39;s existing verified credential while updating its provider model or system prompt; an empty value is rejected when no credential exists.
+        text_model:
+          type: string
+          minLength: 1
+        system_prompt:
+          type: string
+    DefaultsRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - provider
+        - model
+        - dictation_provider
+        - dictation_model
+        - system_prompt
+        - reasoning_effort
+      properties:
+        provider:
+          type: string
+          description: Canonical keyed text-provider id, or empty together with model when the tenant has no saved provider key.
+        model:
+          type: string
+          description: Canonical model for provider, or empty together with provider when the tenant has no saved provider key.
+        dictation_provider:
+          type: string
+          description: Canonical keyed dictation-capable provider id, or empty together with dictation_model when no keyed provider supports dictation.
+        dictation_model:
+          type: string
+          description: Canonical model for dictation_provider, or empty together with dictation_provider when no keyed provider supports dictation.
+        system_prompt:
+          type: string
+        reasoning_effort:
+          type: string
+    EmptyObject:
+      type: object
+      additionalProperties: false
+      properties: {}
+    ManagementAccount:
+      type: object
+      additionalProperties: false
+      required:
+        - user
+        - tenants
+      properties:
+        user:
+          $ref: &#39;#/components/schemas/ManagementUser&#39;
+        tenants:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/TenantSummary&#39;
+    ManagementUser:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - is_admin
+      properties:
+        id:
+          type: string
+          minLength: 1
+        email:
+          type: string
+        display_name:
+          type: string
+        avatar_url:
+          type: string
+        is_admin:
+          type: boolean
+    TenantSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - has_secret
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        has_secret:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    TenantProfile:
+      type: object
+      additionalProperties: false
+      required:
+        - tenant
+        - providers
+        - proxy
+      properties:
+        tenant:
+          $ref: &#39;#/components/schemas/Tenant&#39;
+        providers:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/ProviderProfile&#39;
+        proxy:
+          $ref: &#39;#/components/schemas/ProxyPaths&#39;
+    Tenant:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - has_secret
+        - defaults
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        has_secret:
+          type: boolean
+        defaults:
+          $ref: &#39;#/components/schemas/TenantDefaults&#39;
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    TenantDefaults:
+      type: object
+      additionalProperties: false
+      required:
+        - provider
+        - model
+        - dictation_provider
+        - dictation_model
+        - system_prompt
+        - reasoning_effort
+      properties:
+        provider:
+          type: string
+          description: Canonical keyed text-provider id, or empty when the tenant has no saved provider key.
+        model:
+          type: string
+          description: Canonical text model paired with provider, or empty when provider is empty.
+        dictation_provider:
+          type: string
+          description: Canonical keyed dictation-capable provider id, or empty when no keyed provider supports dictation.
+        dictation_model:
+          type: string
+          description: Canonical dictation model paired with dictation_provider, or empty when dictation_provider is empty.
+        system_prompt:
+          type: string
+        reasoning_effort:
+          type: string
+    ProviderProfile:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - label
+        - aliases
+        - has_key
+        - text_model
+        - system_prompt
+        - text_default_model
+        - text_models
+        - supports_dictation
+        - dictation_models
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        aliases:
+          type: array
+          items:
+            type: string
+        has_key:
+          type: boolean
+        masked_key:
+          type: string
+        text_model:
+          type: string
+        system_prompt:
+          type: string
+        text_default_model:
+          type: string
+        text_models:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/TextModel&#39;
+        supports_dictation:
+          type: boolean
+        dictation_default_model:
+          type: string
+        dictation_models:
+          type: array
+          items:
+            type: string
+    TextModel:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+      properties:
+        id:
+          type: string
+        reasoning_effort:
+          $ref: &#39;#/components/schemas/ReasoningEffortCapability&#39;
+    ReasoningEffortCapability:
+      type: object
+      additionalProperties: false
+      required:
+        - adapter
+        - efforts
+      properties:
+        adapter:
+          type: string
+        efforts:
+          type: array
+          items:
+            type: string
+    ProxyPaths:
+      type: object
+      additionalProperties: false
+      required:
+        - text_path
+        - v2_path
+        - dictation_path
+      properties:
+        text_path:
+          type: string
+          const: /
+        v2_path:
+          type: string
+          const: /v2
+        dictation_path:
+          type: string
+          const: /dictate
+    TenantSecret:
+      type: object
+      additionalProperties: false
+      required:
+        - secret
+        - profile
+      properties:
+        secret:
+          type: string
+          minLength: 1
+        profile:
+          $ref: &#39;#/components/schemas/TenantProfile&#39;
+    ProviderKeyReveal:
+      type: object
+      additionalProperties: false
+      required:
+        - api_key
+      properties:
+        api_key:
+          type: string
+          minLength: 1
+    UsageAggregate:
+      type: object
+      additionalProperties: false
+      required:
+        - requests
+        - successful_requests
+        - failed_requests
+        - text_requests
+        - dictation_requests
+        - request_tokens
+        - response_tokens
+        - total_tokens
+        - average_latency_ms
+      properties:
+        requests:
+          type: integer
+          minimum: 0
+        successful_requests:
+          type: integer
+          minimum: 0
+        failed_requests:
+          type: integer
+          minimum: 0
+        text_requests:
+          type: integer
+          minimum: 0
+        dictation_requests:
+          type: integer
+          minimum: 0
+        request_tokens:
+          type: integer
+          minimum: 0
+        response_tokens:
+          type: integer
+          minimum: 0
+        total_tokens:
+          type: integer
+          minimum: 0
+        average_latency_ms:
+          type: integer
+          minimum: 0
+    UsageBucket:
+      type: object
+      additionalProperties: false
+      required:
+        - start
+        - data
+      properties:
+        start:
+          type: string
+          format: date-time
+        data:
+          $ref: &#39;#/components/schemas/UsageAggregate&#39;
+    UsageProvider:
+      type: object
+      additionalProperties: false
+      required:
+        - provider
+        - data
+      properties:
+        provider:
+          type: string
+        data:
+          $ref: &#39;#/components/schemas/UsageAggregate&#39;
+    UsageModel:
+      type: object
+      additionalProperties: false
+      required:
+        - provider
+        - model
+        - data
+      properties:
+        provider:
+          type: string
+        model:
+          type: string
+        data:
+          $ref: &#39;#/components/schemas/UsageAggregate&#39;
+    UsageStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - status_code
+        - requests
+      properties:
+        status_code:
+          type: integer
+          minimum: 100
+        requests:
+          type: integer
+          minimum: 0
+    UsageSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - interval
+        - bucket_unit
+        - totals
+        - buckets
+        - providers
+        - models
+        - status_codes
+      properties:
+        interval:
+          type: string
+          enum:
+            - 1d
+            - 7d
+            - 30d
+            - all
+        bucket_unit:
+          type: string
+          enum:
+            - hour
+            - day
+            - month
+        totals:
+          $ref: &#39;#/components/schemas/UsageAggregate&#39;
+        buckets:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/UsageBucket&#39;
+        providers:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/UsageProvider&#39;
+        models:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/UsageModel&#39;
+        status_codes:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/UsageStatus&#39;
+    UsageOutcomeCode:
+      type: string
+      enum:
+        - success
+        - invalid_request
+        - payload_too_large
+        - rate_limited
+        - service_unavailable
+        - request_timeout
+        - upstream_error
+    UsageFailure:
+      type: object
+      additionalProperties: false
+      required:
+        - occurred_at
+        - endpoint
+        - provider
+        - model
+        - status_code
+        - outcome_code
+        - latency_ms
+      properties:
+        occurred_at:
+          type: string
+          format: date-time
+        endpoint:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        status_code:
+          type: integer
+          minimum: 100
+          maximum: 599
+        outcome_code:
+          $ref: &#39;#/components/schemas/UsageOutcomeCode&#39;
+        latency_ms:
+          type: integer
+          minimum: 0
+    UsageFailurePage:
+      type: object
+      additionalProperties: false
+      required:
+        - interval
+        - failures
+      properties:
+        interval:
+          type: string
+          enum:
+            - 1d
+            - 7d
+            - 30d
+            - all
+        failures:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/UsageFailure&#39;
+        next_cursor:
+          type: string
+          minLength: 1
+    AccountUsageFailure:
+      type: object
+      additionalProperties: false
+      required:
+        - tenant_id
+        - tenant_name
+        - occurred_at
+        - endpoint
+        - provider
+        - model
+        - status_code
+        - outcome_code
+        - latency_ms
+      properties:
+        tenant_id:
+          type: string
+          minLength: 1
+        tenant_name:
+          type: string
+          minLength: 1
+        occurred_at:
+          type: string
+          format: date-time
+        endpoint:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        status_code:
+          type: integer
+          minimum: 100
+          maximum: 599
+        outcome_code:
+          $ref: &#39;#/components/schemas/UsageOutcomeCode&#39;
+        latency_ms:
+          type: integer
+          minimum: 0
+    AccountUsageFailurePage:
+      type: object
+      additionalProperties: false
+      required:
+        - interval
+        - failures
+      properties:
+        interval:
+          type: string
+          enum:
+            - 1d
+            - 7d
+            - 30d
+            - all
+        failures:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/AccountUsageFailure&#39;
+        next_cursor:
+          type: string
+          minLength: 1
+    AdminUsageSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - period_days
+        - totals
+        - daily
+        - providers
+        - models
+        - status_codes
+      properties:
+        period_days:
+          type: integer
+          minimum: 1
+        totals:
+          $ref: &#39;#/components/schemas/UsageAggregate&#39;
+        daily:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - date
+              - data
+            properties:
+              date:
+                type: string
+                format: date
+              data:
+                $ref: &#39;#/components/schemas/UsageAggregate&#39;
+        providers:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/UsageProvider&#39;
+        models:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/UsageModel&#39;
+        status_codes:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/UsageStatus&#39;
+    AdminTenant:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - has_secret
+        - created_at
+        - updated_at
+        - usage
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        has_secret:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        usage:
+          $ref: &#39;#/components/schemas/AdminUsageSummary&#39;
+    AdminUser:
+      type: object
+      additionalProperties: false
+      required:
+        - user
+        - tenant_count
+        - tenants
+      properties:
+        user:
+          $ref: &#39;#/components/schemas/ManagementUser&#39;
+        tenant_count:
+          type: integer
+          minimum: 0
+        tenants:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/AdminTenant&#39;
+    AdminUsersSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - period_days
+        - users
+      properties:
+        period_days:
+          type: integer
+          minimum: 1
+        users:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/AdminUser&#39;
+</code></pre>
       </section>
       <section aria-labelledby="operation-index-title">
         <h2 id="operation-index-title">Operations</h2>
@@ -952,12 +3017,13 @@
         </div>
       </section>
     </main>
-    <footer class="resource-shell resource-footer">
-      <a href="/">LLM Proxy main page</a>
-      <a href="/openapi.yaml">Canonical OpenAPI schema</a>
-      <a href="/resources/">Resource hub</a>
-      <a href="/app/">Workspace</a>
-      <a href="/sitemap.xml">Sitemap</a>
-    </footer>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="false"
+      prefix-text="LLM Proxy"
+      privacy-link-hidden="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Log In","href":"/app/"},{"label":"API","href":"/docs/"},{"label":"OpenAPI","href":"/docs/#openapi-schema"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+    ></mpr-footer>
   </body>
 </html>

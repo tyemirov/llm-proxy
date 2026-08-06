@@ -16,8 +16,8 @@ import {
   USAGE_INTERVALS,
   USAGE_OUTCOME_LABELS,
   USAGE_STATUS_LABELS,
-  WORKSPACE_INTEGRITY_ERROR,
-} from "../constants.js?v=20260727i036";
+  APP_INTEGRITY_ERROR,
+} from "../constants.js?v=20260806b109";
 import {
   createTenant as requestCreateTenant,
   deleteTenant as requestDeleteTenant,
@@ -35,7 +35,7 @@ import {
   revealProviderKey as requestRevealProviderKey,
   saveProviderKey as requestSaveProviderKey,
   updateDefaults as requestUpdateDefaults,
-} from "../core/backendClient.js?v=20260727i036";
+} from "../core/backendClient.js?v=20260806b109";
 import {
   emptyUsageSummary,
   modelRows,
@@ -44,13 +44,13 @@ import {
   usagePolyline,
   USAGE_CHART,
   USAGE_METRICS,
-} from "./usagePresentation.js?v=20260727i036";
+} from "./usagePresentation.js?v=20260806b109";
 import {
   applyUserMenuItems,
   readMprUIAuthStatus,
   waitForMprUIAutoOrchestrationReady,
-} from "../core/mprShell.js?v=20260727i036";
-import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260727i036";
+} from "../core/mprShell.js?v=20260806b109";
+import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260806b109";
 
 const EMPTY_SECRET_PLACEHOLDER = "<generated-secret>";
 const EMPTY_STRING = "";
@@ -141,8 +141,8 @@ export function createKeyManagement() {
     /** @type {import("../types.d.js").ManagementAdminUser[]} */
     adminUsers: [],
     /** @type {Promise<void> | null} */
-    workspaceLoadPromise: null,
-    workspaceVersion: 0,
+    appLoadPromise: null,
+    appVersion: 0,
     /** @type {AbortController | null} */
     accountRequestController: null,
     /** @type {AbortController | null} */
@@ -185,7 +185,7 @@ export function createKeyManagement() {
 
     init() {
       document.addEventListener(EVENTS.AUTHENTICATED, () => {
-        void this.loadAuthenticatedWorkspace();
+        void this.loadAuthenticatedApp();
       });
       document.addEventListener(EVENTS.UNAUTHENTICATED, () => {
         this.setUnauthenticated();
@@ -614,7 +614,7 @@ export function createKeyManagement() {
         await waitForMprUIAutoOrchestrationReady();
         const authStatus = readMprUIAuthStatus();
         if (authStatus === AUTH_STATES.AUTHENTICATED) {
-          await this.loadAuthenticatedWorkspace();
+          await this.loadAuthenticatedApp();
         } else if (authStatus === AUTH_STATES.UNAUTHENTICATED) {
           this.setUnauthenticated();
         }
@@ -626,31 +626,31 @@ export function createKeyManagement() {
       }
     },
 
-    async loadWorkspace() {
-      if (this.workspaceLoadPromise) {
-        return this.workspaceLoadPromise;
+    async loadApp() {
+      if (this.appLoadPromise) {
+        return this.appLoadPromise;
       }
-      this.workspaceLoadPromise = this.loadWorkspaceOnce();
+      this.appLoadPromise = this.loadAppOnce();
       try {
-        await this.workspaceLoadPromise;
+        await this.appLoadPromise;
       } finally {
-        this.workspaceLoadPromise = null;
+        this.appLoadPromise = null;
       }
     },
 
-    async loadAuthenticatedWorkspace() {
+    async loadAuthenticatedApp() {
       if (this.authState === AUTH_STATES.AUTHENTICATED || this.authState === AUTH_STATES.ERROR) {
         return;
       }
       this.authState = AUTH_STATES.LOADING;
-      await this.loadWorkspace();
+      await this.loadApp();
       if (this.authState === AUTH_STATES.LOADING && readMprUIAuthStatus() === AUTH_STATES.AUTHENTICATED) {
-        await this.loadWorkspace();
+        await this.loadApp();
       }
     },
 
-    async loadWorkspaceOnce() {
-      const workspaceVersion = this.workspaceVersion;
+    async loadAppOnce() {
+      const appVersion = this.appVersion;
       if (this.accountRequestController) {
         this.accountRequestController.abort();
       }
@@ -659,7 +659,7 @@ export function createKeyManagement() {
       this.busy = true;
       try {
         const loadedAccount = await fetchAccount(accountRequestController.signal);
-        if (!this.canApplyAuthenticatedWorkspace(workspaceVersion)) {
+        if (!this.canApplyAuthenticatedApp(appVersion)) {
           return;
         }
         assertManagementAccount(loadedAccount);
@@ -668,12 +668,12 @@ export function createKeyManagement() {
         applyUserMenuItems(Boolean(loadedAccount.user.is_admin));
         this.settingsTenantID = this.tenants[0].id;
         this.replaceTenantLifetimeController();
-        await this.hydrateSettingsTenant(null, workspaceVersion);
+        await this.hydrateSettingsTenant(null, appVersion);
         if (this.authState === AUTH_STATES.AUTHENTICATED) {
           await this.loadUsageSummary(false);
         }
       } catch (requestError) {
-        if (!isAbortError(requestError) && this.canApplyAuthenticatedWorkspace(workspaceVersion)) {
+        if (!isAbortError(requestError) && this.canApplyAuthenticatedApp(appVersion)) {
           this.clearAuthenticatedState();
           this.authState = AUTH_STATES.ERROR;
           this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
@@ -689,9 +689,9 @@ export function createKeyManagement() {
 
     /**
      * @param {import("../types.d.js").ManagementTenantProfile | null} prefetchedProfile
-     * @param {number} workspaceVersion
+     * @param {number} appVersion
      */
-    async hydrateSettingsTenant(prefetchedProfile, workspaceVersion) {
+    async hydrateSettingsTenant(prefetchedProfile, appVersion) {
       const tenantID = this.settingsTenantID;
       if (this.tenantRequestController) {
         this.tenantRequestController.abort();
@@ -701,7 +701,7 @@ export function createKeyManagement() {
       this.clearSettingsTenantState();
       try {
         const loadedProfile = prefetchedProfile || await fetchTenant(tenantID, tenantRequestController.signal);
-        if (!this.canApplySettingsTenant(workspaceVersion, tenantID)) {
+        if (!this.canApplySettingsTenant(appVersion, tenantID)) {
           return;
         }
         assertManagementTenantProfile(loadedProfile, tenantID);
@@ -715,7 +715,7 @@ export function createKeyManagement() {
           await this.requestAndApplyGeneratedSecret();
         }
       } catch (requestError) {
-        if (!isAbortError(requestError) && this.canApplySettingsTenant(workspaceVersion, tenantID)) {
+        if (!isAbortError(requestError) && this.canApplySettingsTenant(appVersion, tenantID)) {
           this.clearSettingsTenantState();
           if (this.authState !== AUTH_STATES.AUTHENTICATED) {
             this.authState = AUTH_STATES.ERROR;
@@ -730,23 +730,23 @@ export function createKeyManagement() {
     },
 
     /**
-     * @param {number} workspaceVersion
+     * @param {number} appVersion
      * @returns {boolean}
      */
-    canApplyAuthenticatedWorkspace(workspaceVersion) {
+    canApplyAuthenticatedApp(appVersion) {
       return (
-        this.workspaceVersion === workspaceVersion &&
+        this.appVersion === appVersion &&
         readMprUIAuthStatus() === AUTH_STATES.AUTHENTICATED
       );
     },
 
     /**
-     * @param {number} workspaceVersion
+     * @param {number} appVersion
      * @param {string} tenantID
      * @returns {boolean}
      */
-    canApplySettingsTenant(workspaceVersion, tenantID) {
-      return this.canApplyAuthenticatedWorkspace(workspaceVersion) && this.settingsTenantID === tenantID;
+    canApplySettingsTenant(appVersion, tenantID) {
+      return this.canApplyAuthenticatedApp(appVersion) && this.settingsTenantID === tenantID;
     },
 
     replaceTenantLifetimeController() {
@@ -813,8 +813,8 @@ export function createKeyManagement() {
      * @param {import("../types.d.js").ManagementTenantProfile | null} [prefetchedProfile]
      */
     async switchSettingsTenant(tenantID, prefetchedProfile = null) {
-      this.workspaceVersion += 1;
-      const workspaceVersion = this.workspaceVersion;
+      this.appVersion += 1;
+      const appVersion = this.appVersion;
       if (this.tenantRequestController) {
         this.tenantRequestController.abort();
       }
@@ -833,9 +833,9 @@ export function createKeyManagement() {
       this.settingsTenantID = tenantID;
       this.busy = true;
       try {
-        await this.hydrateSettingsTenant(prefetchedProfile, workspaceVersion);
+        await this.hydrateSettingsTenant(prefetchedProfile, appVersion);
       } finally {
-        if (this.workspaceVersion === workspaceVersion) {
+        if (this.appVersion === appVersion) {
           this.busy = false;
         }
         dispatchManagementReady();
@@ -932,7 +932,7 @@ export function createKeyManagement() {
         this.createTenantError = COPY.tenantNameInvalid;
         return;
       }
-      const workspaceVersion = this.workspaceVersion;
+      const appVersion = this.appVersion;
       const lifetimeController = this.tenantLifetimeController;
       if (!lifetimeController) {
         return;
@@ -941,7 +941,7 @@ export function createKeyManagement() {
       try {
         const createdProfile = await requestCreateTenant(name, lifetimeController.signal);
         if (
-          !this.canApplyAuthenticatedWorkspace(workspaceVersion) ||
+          !this.canApplyAuthenticatedApp(appVersion) ||
           this.tenantLifetimeController !== lifetimeController ||
           !this.createTenantDialogOpen
         ) {
@@ -1011,7 +1011,7 @@ export function createKeyManagement() {
         return;
       }
       const tenantID = this.settingsTenantID;
-      const workspaceVersion = this.workspaceVersion;
+      const appVersion = this.appVersion;
       const lifetimeController = this.tenantLifetimeController;
       if (!lifetimeController || !this.tenantNameDirty) {
         return;
@@ -1019,9 +1019,9 @@ export function createKeyManagement() {
       let tenantRenamed = false;
       this.busy = true;
       try {
-        tenantRenamed = Boolean(await this.enqueueProfileMutation(workspaceVersion, async () => {
+        tenantRenamed = Boolean(await this.enqueueProfileMutation(appVersion, async () => {
           const updatedProfile = await requestRenameTenant(tenantID, name, lifetimeController.signal);
-          if (!this.canApplySettingsTenant(workspaceVersion, tenantID)) {
+          if (!this.canApplySettingsTenant(appVersion, tenantID)) {
             return false;
           }
           assertManagementTenantProfile(updatedProfile, tenantID);
@@ -1041,7 +1041,7 @@ export function createKeyManagement() {
           return true;
         }));
       } catch (requestError) {
-        if (!isAbortError(requestError) && this.canApplySettingsTenant(workspaceVersion, tenantID)) {
+        if (!isAbortError(requestError) && this.canApplySettingsTenant(appVersion, tenantID)) {
           this.tenantNameError = requestError && requestError.status === 409
             ? COPY.tenantNameConflict
             : profileFailureMessage(requestError);
@@ -1331,7 +1331,7 @@ export function createKeyManagement() {
           return;
         }
         if (usage.interval !== interval) {
-          throw new Error(WORKSPACE_INTEGRITY_ERROR);
+          throw new Error(APP_INTEGRITY_ERROR);
         }
         this.usage = usage;
         if (!this.hasUsageFailures) {
@@ -1633,7 +1633,7 @@ export function createKeyManagement() {
       const revealProviderID = provider.id;
       const revealVersion = this.providerEditorSession.revealVersion + 1;
       const tenantID = this.settingsTenantID;
-      const workspaceVersion = this.workspaceVersion;
+      const appVersion = this.appVersion;
       const lifetimeController = this.tenantLifetimeController;
       if (!lifetimeController) {
         return;
@@ -1642,7 +1642,7 @@ export function createKeyManagement() {
       this.providerEditorSession.revealPending = true;
       try {
         const revealResponse = await requestRevealProviderKey(tenantID, revealProviderID, lifetimeController.signal);
-        if (!this.canApplyProviderKeyReveal(tenantID, workspaceVersion, revealProviderID, revealVersion)) {
+        if (!this.canApplyProviderKeyReveal(tenantID, appVersion, revealProviderID, revealVersion)) {
           return;
         }
         this.providerEditorSession.keyInput = revealResponse.api_key;
@@ -1650,7 +1650,7 @@ export function createKeyManagement() {
       } catch (requestError) {
         if (
           !isAbortError(requestError) &&
-          this.canApplyProviderKeyReveal(tenantID, workspaceVersion, revealProviderID, revealVersion)
+          this.canApplyProviderKeyReveal(tenantID, appVersion, revealProviderID, revealVersion)
         ) {
           this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
         }
@@ -1663,15 +1663,15 @@ export function createKeyManagement() {
 
     /**
      * @param {string} tenantID
-     * @param {number} workspaceVersion
+     * @param {number} appVersion
      * @param {string} providerID
      * @param {number} revealVersion
      */
-    canApplyProviderKeyReveal(tenantID, workspaceVersion, providerID, revealVersion) {
+    canApplyProviderKeyReveal(tenantID, appVersion, providerID, revealVersion) {
       return (
         this.settingsOpen &&
         this.settingsTenantID === tenantID &&
-        this.workspaceVersion === workspaceVersion &&
+        this.appVersion === appVersion &&
         this.selectedProviderID === providerID &&
         this.providerEditorSession.revealVersion === revealVersion
       );
@@ -1820,7 +1820,7 @@ export function createKeyManagement() {
         const providerID = provider.id;
         const revealVersion = editorSession.revealVersion;
         const editVersion = editorSession.editVersion;
-        const workspaceVersion = this.workspaceVersion;
+        const appVersion = this.appVersion;
         const tenantID = this.settingsTenantID;
         const lifetimeController = this.tenantLifetimeController;
         if (!lifetimeController) {
@@ -1854,7 +1854,7 @@ export function createKeyManagement() {
         }
         editorSession.dirty = false;
         try {
-          const profileApplied = await this.enqueueProfileMutation(workspaceVersion, async () => {
+          const profileApplied = await this.enqueueProfileMutation(appVersion, async () => {
             const updatedProfile = await requestSaveProviderKey(
               tenantID,
               providerID,
@@ -1863,7 +1863,7 @@ export function createKeyManagement() {
               editorSession.systemPrompt,
               requestSignal,
             );
-            if (!this.canApplyProviderAutosave(providerID, revealVersion, workspaceVersion)) {
+            if (!this.canApplyProviderAutosave(providerID, revealVersion, appVersion)) {
               return false;
             }
             const preserveProviderEditor = this.providerEditorSession.editVersion !== editVersion;
@@ -1884,7 +1884,7 @@ export function createKeyManagement() {
             return false;
           }
         } catch (requestError) {
-          if (this.canApplyProviderAutosave(providerID, revealVersion, workspaceVersion)) {
+          if (this.canApplyProviderAutosave(providerID, revealVersion, appVersion)) {
             this.providerEditorSession.dirty = true;
             if (!isAbortError(requestError)) {
               const verificationError = verifiesCandidate
@@ -1915,14 +1915,14 @@ export function createKeyManagement() {
     /**
      * @param {string} providerID
      * @param {number} revealVersion
-     * @param {number} workspaceVersion
+     * @param {number} appVersion
      * @returns {boolean}
      */
-    canApplyProviderAutosave(providerID, revealVersion, workspaceVersion) {
+    canApplyProviderAutosave(providerID, revealVersion, appVersion) {
       return (
         this.settingsOpen &&
         this.authState === AUTH_STATES.AUTHENTICATED &&
-        this.workspaceVersion === workspaceVersion &&
+        this.appVersion === appVersion &&
         this.selectedProviderID === providerID &&
         this.providerEditorSession.revealVersion === revealVersion
       );
@@ -1971,7 +1971,7 @@ export function createKeyManagement() {
       while (this.routingDefaultsDirty) {
         const defaults = { ...this.defaults };
         const editVersion = this.routingDefaultsEditVersion;
-        const workspaceVersion = this.workspaceVersion;
+        const appVersion = this.appVersion;
         const tenantID = this.settingsTenantID;
         const lifetimeController = this.tenantLifetimeController;
         if (!lifetimeController) {
@@ -1979,9 +1979,9 @@ export function createKeyManagement() {
         }
         this.routingDefaultsDirty = false;
         try {
-          const profileApplied = await this.enqueueProfileMutation(workspaceVersion, async () => {
+          const profileApplied = await this.enqueueProfileMutation(appVersion, async () => {
             const updatedProfile = await requestUpdateDefaults(tenantID, defaults, lifetimeController.signal);
-            if (!this.canApplyRoutingDefaultsAutosave(workspaceVersion)) {
+            if (!this.canApplyRoutingDefaultsAutosave(appVersion)) {
               return false;
             }
             if (this.routingDefaultsEditVersion !== editVersion) {
@@ -1995,7 +1995,7 @@ export function createKeyManagement() {
             return false;
           }
         } catch (requestError) {
-          if (this.canApplyRoutingDefaultsAutosave(workspaceVersion)) {
+          if (this.canApplyRoutingDefaultsAutosave(appVersion)) {
             this.routingDefaultsDirty = true;
             this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
           }
@@ -2006,14 +2006,14 @@ export function createKeyManagement() {
     },
 
     /**
-     * @param {number} workspaceVersion
+     * @param {number} appVersion
      * @returns {boolean}
      */
-    canApplyRoutingDefaultsAutosave(workspaceVersion) {
+    canApplyRoutingDefaultsAutosave(appVersion) {
       return (
         this.settingsOpen &&
         this.authState === AUTH_STATES.AUTHENTICATED &&
-        this.workspaceVersion === workspaceVersion
+        this.appVersion === appVersion
       );
     },
 
@@ -2031,14 +2031,14 @@ export function createKeyManagement() {
      */
     async generateAndApplySecret(successMessage) {
       const generatedSecretVersion = this.generatedSecretVersion;
-      const workspaceVersion = this.workspaceVersion;
+      const appVersion = this.appVersion;
       const tenantID = this.settingsTenantID;
       const lifetimeController = this.tenantLifetimeController;
       if (!lifetimeController) {
         return false;
       }
       try {
-        const profileApplied = await this.enqueueProfileMutation(workspaceVersion, async () => {
+        const profileApplied = await this.enqueueProfileMutation(appVersion, async () => {
           const secretResponse = await requestGeneratedSecret(tenantID, lifetimeController.signal);
           if (!this.canApplyGeneratedSecret(generatedSecretVersion)) {
             return false;
@@ -2211,7 +2211,7 @@ export function createKeyManagement() {
       this.defaults.dictation_provider = providerSelect.value;
       const provider = profileProvider(this.providers, providerSelect.value);
       if (!provider.supports_dictation || !provider.dictation_default_model) {
-        throw new Error(WORKSPACE_INTEGRITY_ERROR);
+        throw new Error(APP_INTEGRITY_ERROR);
       }
       this.defaults.dictation_model = provider.dictation_default_model;
       this.markRoutingDefaultsDirty();
@@ -2244,12 +2244,12 @@ export function createKeyManagement() {
      * @returns {Promise<boolean>}
      */
     async runProfileMutation(mutation, successMessage) {
-      const workspaceVersion = this.workspaceVersion;
+      const appVersion = this.appVersion;
       this.busy = true;
       try {
-        const profileApplied = await this.enqueueProfileMutation(workspaceVersion, async () => {
+        const profileApplied = await this.enqueueProfileMutation(appVersion, async () => {
           const updatedProfile = await mutation();
-          if (!this.canApplyProfileMutation(workspaceVersion)) {
+          if (!this.canApplyProfileMutation(appVersion)) {
             return false;
           }
           this.applyProfile(
@@ -2262,7 +2262,7 @@ export function createKeyManagement() {
         });
         return Boolean(profileApplied);
       } catch (requestError) {
-        if (this.canApplyProfileMutation(workspaceVersion)) {
+        if (this.canApplyProfileMutation(appVersion)) {
           this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
         }
         return false;
@@ -2273,11 +2273,11 @@ export function createKeyManagement() {
 
     /**
      * @template MutationResult
-     * @param {number} workspaceVersion
+     * @param {number} appVersion
      * @param {() => Promise<MutationResult>} mutation
      * @returns {Promise<MutationResult | null>}
      */
-    async enqueueProfileMutation(workspaceVersion, mutation) {
+    async enqueueProfileMutation(appVersion, mutation) {
       const previousMutation = this.profileMutationTail;
       /** @type {() => void} */
       let releaseMutation = () => {};
@@ -2287,12 +2287,12 @@ export function createKeyManagement() {
       this.profileMutationTail = previousMutation.then(() => mutationCompleted);
       await previousMutation;
       try {
-        if (!this.canApplyProfileMutation(workspaceVersion)) {
+        if (!this.canApplyProfileMutation(appVersion)) {
           return null;
         }
         return await mutation();
       } catch (requestError) {
-        if (this.canApplyProfileMutation(workspaceVersion)) {
+        if (this.canApplyProfileMutation(appVersion)) {
           this.profileMutationFailureVersion += 1;
         }
         throw requestError;
@@ -2312,14 +2312,14 @@ export function createKeyManagement() {
     },
 
     /**
-     * @param {number} workspaceVersion
+     * @param {number} appVersion
      * @returns {boolean}
      */
-    canApplyProfileMutation(workspaceVersion) {
+    canApplyProfileMutation(appVersion) {
       return (
         this.settingsOpen &&
         this.authState === AUTH_STATES.AUTHENTICATED &&
-        this.workspaceVersion === workspaceVersion
+        this.appVersion === appVersion
       );
     },
 
@@ -2330,7 +2330,7 @@ export function createKeyManagement() {
      */
     applyProfile(nextProfile, preserveProviderEditor = false, preserveRoutingDefaults = false) {
       assertManagementTenantProfile(nextProfile, this.settingsTenantID);
-      const defaults = createWorkspaceRoutingDefaults(nextProfile);
+      const defaults = createAppRoutingDefaults(nextProfile);
       const profileApplicationVersion = this.profileApplicationVersion + 1;
       this.profileApplicationVersion = profileApplicationVersion;
       const selectedProviderID = this.selectedProviderID;
@@ -2358,11 +2358,11 @@ export function createKeyManagement() {
         this.replaceProviderEditorSession(nextProviderID);
       }
       if (!preserveRoutingDefaults) {
-        const workspaceVersion = this.workspaceVersion;
+        const appVersion = this.appVersion;
         const routingDefaultsEditVersion = this.routingDefaultsEditVersion;
         this.$nextTick(() => {
           if (
-            this.workspaceVersion === workspaceVersion &&
+            this.appVersion === appVersion &&
             this.profileApplicationVersion === profileApplicationVersion &&
             this.routingDefaultsEditVersion === routingDefaultsEditVersion
           ) {
@@ -2408,7 +2408,7 @@ export function createKeyManagement() {
     },
 
     clearAuthenticatedState() {
-      this.workspaceVersion += 1;
+      this.appVersion += 1;
       if (this.accountRequestController) {
         this.accountRequestController.abort();
         this.accountRequestController = null;
@@ -2543,10 +2543,10 @@ function trapDialogFocus(event, dialog) {
  */
 function normalizedUsageFailurePage(response, interval, accountScope) {
   if (!response || response.interval !== interval || !Array.isArray(response.failures)) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    throw new Error(APP_INTEGRITY_ERROR);
   }
   if (response.next_cursor !== undefined && (typeof response.next_cursor !== "string" || !response.next_cursor)) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    throw new Error(APP_INTEGRITY_ERROR);
   }
   return {
     interval,
@@ -2578,7 +2578,7 @@ function normalizedUsageFailure(failure, accountScope) {
     !Number.isInteger(failure.latency_ms) ||
     failure.latency_ms < 0
   ) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    throw new Error(APP_INTEGRITY_ERROR);
   }
   const commonFailure = {
     occurred_at: failure.occurred_at,
@@ -2596,7 +2596,7 @@ function normalizedUsageFailure(failure, accountScope) {
       typeof failure.tenant_name !== "string" ||
       !failure.tenant_name
     ) {
-      throw new Error(WORKSPACE_INTEGRITY_ERROR);
+      throw new Error(APP_INTEGRITY_ERROR);
     }
     return {
       tenant_id: failure.tenant_id,
@@ -2605,7 +2605,7 @@ function normalizedUsageFailure(failure, accountScope) {
     };
   }
   if (Object.hasOwn(failure, "tenant_id") || Object.hasOwn(failure, "tenant_name")) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    throw new Error(APP_INTEGRITY_ERROR);
   }
   return commonFailure;
 }
@@ -2664,7 +2664,7 @@ function hasLabel(labels, value) {
  */
 function usageLabel(labels, value) {
   if (!hasLabel(labels, value)) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    throw new Error(APP_INTEGRITY_ERROR);
   }
   return labels[value];
 }
@@ -2709,12 +2709,12 @@ function emptyDefaults() {
  * @param {import("../types.d.js").ManagementTenantProfile} profile
  * @returns {import("../types.d.js").TenantDefaults}
  */
-function createWorkspaceRoutingDefaults(profile) {
+function createAppRoutingDefaults(profile) {
   const tenant = profile && typeof profile.tenant === "object" ? profile.tenant : null;
   const defaults = tenant && typeof tenant.defaults === "object" ? tenant.defaults : null;
   const providers = Array.isArray(profile && profile.providers) ? profile.providers : null;
   if (!defaults || !providers || !routingDefaultsAreStrings(defaults) || Object.hasOwn(profile, "reasoning_effort_options")) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    throw new Error(APP_INTEGRITY_ERROR);
   }
   for (const provider of providers) {
     assertProviderCatalog(provider);
@@ -2723,31 +2723,31 @@ function createWorkspaceRoutingDefaults(profile) {
   let textModel = null;
   if (keyedTextProviders.length === 0) {
     if (defaults.provider !== EMPTY_STRING || defaults.model !== EMPTY_STRING || defaults.reasoning_effort !== EMPTY_STRING) {
-      throw new Error(WORKSPACE_INTEGRITY_ERROR);
+      throw new Error(APP_INTEGRITY_ERROR);
     }
   } else {
     const textProvider = profileProvider(keyedTextProviders, defaults.provider);
     textModel = textProvider.text_models.find((model) => model.id === defaults.model) || null;
     if (!textModel) {
-      throw new Error(WORKSPACE_INTEGRITY_ERROR);
+      throw new Error(APP_INTEGRITY_ERROR);
     }
   }
   const dictationProviders = keyedTextProviders.filter((provider) => provider.supports_dictation);
   if (dictationProviders.length === 0) {
     if (defaults.dictation_provider !== EMPTY_STRING || defaults.dictation_model !== EMPTY_STRING) {
-      throw new Error(WORKSPACE_INTEGRITY_ERROR);
+      throw new Error(APP_INTEGRITY_ERROR);
     }
   } else {
     const dictationProvider = profileProvider(dictationProviders, defaults.dictation_provider);
     if (!dictationProvider.dictation_models.includes(defaults.dictation_model)) {
-      throw new Error(WORKSPACE_INTEGRITY_ERROR);
+      throw new Error(APP_INTEGRITY_ERROR);
     }
   }
   if (
     defaults.reasoning_effort !== EMPTY_STRING &&
     (!textModel || !reasoningEffortOptionsForTextModel(textModel).includes(defaults.reasoning_effort))
   ) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    throw new Error(APP_INTEGRITY_ERROR);
   }
   return {
     provider: defaults.provider,
@@ -2787,14 +2787,14 @@ function assertProviderCatalog(provider) {
     !Array.isArray(provider.text_models) ||
     !provider.text_models.some((model) => model && model.id === provider.text_default_model)
   ) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    throw new Error(APP_INTEGRITY_ERROR);
   }
   if (Object.hasOwn(provider, "reasoning_effort")) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    throw new Error(APP_INTEGRITY_ERROR);
   }
   for (const model of provider.text_models) {
     if (!model || typeof model.id !== "string" || !model.id) {
-      throw new Error(WORKSPACE_INTEGRITY_ERROR);
+      throw new Error(APP_INTEGRITY_ERROR);
     }
     assertReasoningEffortCapability(model.reasoning_effort);
   }
@@ -2804,7 +2804,7 @@ function assertProviderCatalog(provider) {
       typeof provider.dictation_default_model !== "string" ||
       !provider.dictation_models.includes(provider.dictation_default_model))
   ) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    throw new Error(APP_INTEGRITY_ERROR);
   }
 }
 
@@ -2834,7 +2834,7 @@ function assertReasoningEffortCapability(capability) {
     new Set(capability.efforts).size !== capability.efforts.length ||
     !capability.efforts.every((effort) => typeof effort === "string" && effort !== EMPTY_STRING && effort === effort.trim())
   ) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    throw new Error(APP_INTEGRITY_ERROR);
   }
 }
 
@@ -2846,7 +2846,7 @@ function assertReasoningEffortCapability(capability) {
 function profileProvider(providers, providerID) {
   const provider = providers.find((candidateProvider) => candidateProvider.id === providerID);
   if (!provider) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    throw new Error(APP_INTEGRITY_ERROR);
   }
   return provider;
 }
@@ -2864,7 +2864,7 @@ function assertManagementAccount(account) {
     !Array.isArray(account.tenants) ||
     account.tenants.length === 0
   ) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    throw new Error(APP_INTEGRITY_ERROR);
   }
   const tenantIDs = new Set();
   const tenantNames = new Set();
@@ -2881,7 +2881,7 @@ function assertManagementAccount(account) {
       tenantIDs.has(tenant.id) ||
       tenantNames.has(tenant.name.toLocaleLowerCase("en-US"))
     ) {
-      throw new Error(WORKSPACE_INTEGRITY_ERROR);
+      throw new Error(APP_INTEGRITY_ERROR);
     }
     tenantIDs.add(tenant.id);
     tenantNames.add(tenant.name.toLocaleLowerCase("en-US"));
@@ -2908,7 +2908,7 @@ function assertManagementTenantProfile(profile, tenantID) {
     typeof profile.proxy.v2_path !== "string" ||
     typeof profile.proxy.dictation_path !== "string"
   ) {
-    throw new Error(WORKSPACE_INTEGRITY_ERROR);
+    throw new Error(APP_INTEGRITY_ERROR);
   }
 }
 
@@ -2957,9 +2957,9 @@ function isAbortError(requestError) {
 function profileFailureMessage(requestError) {
   if (
     requestError instanceof Error &&
-    (requestError.message === WORKSPACE_INTEGRITY_ERROR || requestError.message.includes(ROUTING_DEFAULTS_INVALID_ERROR))
+    (requestError.message === APP_INTEGRITY_ERROR || requestError.message.includes(ROUTING_DEFAULTS_INVALID_ERROR))
   ) {
-    return COPY.workspaceIntegrityError;
+    return COPY.appIntegrityError;
   }
   return COPY.requestFailed;
 }

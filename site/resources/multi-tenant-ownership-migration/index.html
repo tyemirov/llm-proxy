@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Transactional multi-tenant account ownership migration</title>
+    <meta name="description" content="Upgrade one-tenant-per-user state into explicit TAuth accounts and isolated personal tenants without changing opaque tenant ids.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/">
+    <meta property="og:title" content="Transactional multi-tenant account ownership migration">
+    <meta property="og:description" content="Upgrade one-tenant-per-user state into explicit TAuth accounts and isolated personal tenants without changing opaque tenant ids.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0076c3">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script defer src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"></script>
+    <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Transactional multi-tenant account ownership migration","description":"Upgrade one-tenant-per-user state into explicit TAuth accounts and isolated personal tenants without changing opaque tenant ids.","url":"https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/","datePublished":"2026-07-06","dateModified":"2026-08-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/","about":["LLM Proxy","Configuration","multi-tenant ownership migration"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Transactional multi-tenant account ownership migration","item":"https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What happens before the ownership migration writes data?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy preflights the complete legacy dataset and rejects missing, duplicate, orphaned, plaintext, corrupt, or non-canonical records before opening the mutation transaction."}},{"@type":"Question","name":"Which values remain stable through the migration?","acceptedAnswer":{"@type":"Answer","text":"The transaction preserves opaque tenant ids, secret digests, routing defaults, timestamps, and usage events while moving ownership into explicit account and tenant records."}},{"@type":"Question","name":"What makes the ownership update atomic?","acceptedAnswer":{"@type":"Answer","text":"Schema renames, current-table creation, record copies, verification, versioning, and legacy-table removal run in one database transaction. A failed stage rolls back and prevents startup."}},{"@type":"Question","name":"Can old and new service versions run concurrently?","acceptedAnswer":{"@type":"Answer","text":"No. Drain old instances, take a database backup, exercise the repository migration scenario, and start one new instance before adding capacity."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is LLM model catalog configuration in config.yml, which covers LLM model catalog configuration."}}]}</script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
+  </head>
+  <body class="resource-page">
+
+    <mpr-header
+      class="public-site-header"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      settings="false"
+      size="small"
+      sticky="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"},{"label":"Log In","href":"/app/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
+      <main class="resource-shell resource-article">
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span>/</span>
+          <a href="/resources/">Resources</a>
+          <span>/</span>
+          <span>Transactional multi-tenant account ownership migration</span>
+        </nav>
+        <article>
+          <header class="resource-hero">
+            <p class="eyebrow">Configuration</p>
+            <h1>Transactional multi-tenant account ownership migration</h1>
+            <p class="resource-deck">Upgrade one-tenant-per-user state into explicit TAuth accounts and isolated personal tenants without changing opaque tenant ids.</p>
+            <p class="resource-audience">Operators upgrading an existing management database to the multi-tenant ownership schema.</p>
+            <p class="resource-byline">Reviewed 2026-08-06 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <aside class="resource-verdict" aria-label="Quick verdict">
+              <strong>Quick verdict</strong>
+              <p>Use this bounded startup migration when an existing one-tenant-per-user database must become explicit account and tenant ownership without changing tenant identities or usage history.</p>
+            </aside>
+            <div class="resource-actions">
+              <a class="resource-button" href="/docs/">Open API reference</a>
+              <a class="resource-link" href="/resources/">Browse all resources</a>
+            </div>
+          </header>
+
+          <section>
+            <h2>The problem</h2>
+            <p>The earlier persistence shape coupled one tenant row to one user, so one TAuth subject could not own multiple isolated tenants.</p>
+          </section>
+
+          <section>
+            <h2>How LLM Proxy helps</h2>
+            <p>LLM Proxy preflights the complete legacy dataset, then atomically creates explicit user and tenant records, preserves tenant ids and usage, and rebinds encrypted provider keys to tenant ownership.</p>
+          </section>
+
+          <section>
+            <h2>How it works</h2>
+            <ol class="resource-steps">
+              <li>Drain old service instances and take an operator-owned database backup.</li>
+<li>Exercise the SQLite migration scenario through the repository test targets.</li>
+<li>Start one new instance so preflight and the bounded schema-version transaction run once.</li>
+<li>Verify account, tenant, secret, provider, routing, and usage isolation before adding capacity.</li>
+            </ol>
+          </section>
+
+          <section>
+            <h2>Feature-to-benefit table</h2>
+            <div class="resource-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Why it matters here</th>
+                    <th>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+
+                        <tr>
+                          <td>Fail-closed preflight</td>
+                          <td>Missing tables, static owners, duplicates, malformed secrets, orphan rows, plaintext keys, corrupt ciphertext, and invalid routing data stop startup before mutation.</td>
+                          <td>Invalid data never becomes a partial migration.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>SQLite index continuity</td>
+                          <td>Colliding legacy GORM index names move inside the same transaction before current tables are created.</td>
+                          <td>Preserved volumes migrate without deleting tenant or usage data.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Tenant and usage continuity</td>
+                          <td>Opaque tenant ids, secret digests, routing defaults, timestamps, and every usage event are preserved.</td>
+                          <td>Existing client secrets continue to identify the same tenant.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Provider key re-encryption</td>
+                          <td>Provider ciphertext is decrypted under the prior user binding and re-encrypted with the preserved tenant id as AES-GCM associated data.</td>
+                          <td>Each key becomes tenant-bound.</td>
+                        </tr>
+
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <h2>Use-case examples</h2>
+            <div class="resource-card-grid">
+
+                    <section class="resource-card">
+                      <h3>SQLite verification</h3>
+                      <p>A disposable legacy database migrates and reopens with explicit user and tenant tables.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Configured path verification</h3>
+                      <p>The real startup path opens and migrates a disposable SQLite database at the supplied location.</p>
+                    </section>
+
+
+                    <section class="resource-card">
+                      <h3>Rollback</h3>
+                      <p>An injected failure at any rename, create, verify, version, or drop stage leaves the legacy schema untouched.</p>
+                    </section>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Objections and limitations</h2>
+            <ul class="resource-list">
+              <li>Unclaimed static-config owners must be resolved before this migration.</li>
+<li>Plaintext or corrupt provider keys are rejected rather than repaired.</li>
+<li>Old and new service versions must not run concurrently against the migration database.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2>Repository evidence</h2>
+            <pre class="usage-snippet"><code>dataset, preflightError := preflightLegacyManagedTenantSchema(database, providerKeyCipher, providers)
+if preflightError != nil {
+	return preflightError
+}
+return database.Transaction(func(transaction *gorm.DB) error {</code></pre>
+            <p>Verified 2026-08-06 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>internal/proxy/management_store.go</code>.</p>
+          </section>
+
+          <section>
+            <h2>FAQ</h2>
+            <div class="resource-faq">
+
+                    <details>
+                      <summary>What happens before the ownership migration writes data?</summary>
+                      <p>LLM Proxy preflights the complete legacy dataset and rejects missing, duplicate, orphaned, plaintext, corrupt, or non-canonical records before opening the mutation transaction.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Which values remain stable through the migration?</summary>
+                      <p>The transaction preserves opaque tenant ids, secret digests, routing defaults, timestamps, and usage events while moving ownership into explicit account and tenant records.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What makes the ownership update atomic?</summary>
+                      <p>Schema renames, current-table creation, record copies, verification, versioning, and legacy-table removal run in one database transaction. A failed stage rolls back and prevents startup.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>Can old and new service versions run concurrently?</summary>
+                      <p>No. Drain old instances, take a database backup, exercise the repository migration scenario, and start one new instance before adding capacity.</p>
+                    </details>
+
+
+                    <details>
+                      <summary>What should I read next?</summary>
+                      <p>A closely related resource is LLM model catalog configuration in config.yml, which covers LLM model catalog configuration.</p>
+                    </details>
+
+            </div>
+          </section>
+
+          <section>
+            <h2>Related resources</h2>
+            <div class="resource-related-grid">
+
+                    <a class="resource-related" href="/resources/model-catalog-configuration/">
+                      <span>Configuration</span>
+                      <strong>LLM model catalog configuration in config.yml</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/provider-default-model-selection/">
+                      <span>Configuration</span>
+                      <strong>Provider default model selection for omitted models</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/gorm-managed-tenant-persistence/">
+                      <span>Configuration</span>
+                      <strong>GORM-managed tenant persistence for LLM Proxy</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/strict-yaml-config-placeholders/">
+                      <span>Configuration</span>
+                      <strong>Strict YAML config placeholders for LLM Proxy</strong>
+                    </a>
+
+            </div>
+          </section>
+
+          <section class="resource-final-cta">
+            <h2>Run the bounded ownership migration</h2>
+            <p>Follow the repository runbook to back up the database, exercise the exact SQLite scenario, start one new instance, and verify tenant isolation before adding capacity.</p>
+            <a class="resource-button" href="https://github.com/tyemirov/llm-proxy#self-service-management-ui">Read the migration runbook</a>
+          </section>
+        </article>
+      </main>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="false"
+      prefix-text="LLM Proxy"
+      privacy-link-hidden="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Log In","href":"/app/"},{"label":"API","href":"/docs/"},{"label":"OpenAPI","href":"/docs/#openapi-schema"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+    ></mpr-footer>
+
+  </body>
+</html>

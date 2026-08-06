@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>LLM Proxy — One API for the models your products depend on</title>
-    <meta name="description" content="Connect applications to OpenAI, Anthropic, Gemini, and other LLM providers through one authenticated API, with official Go, Python, and CLI clients.">
+    <title>LLM Proxy — Integrate once. Use the model that fits.</title>
+    <meta name="description" content="Integrate applications once through one authenticated API or official Go, Python, and CLI clients, then route across supported providers and models.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/">
-    <meta property="og:title" content="LLM Proxy — One API for multiple AI providers">
-    <meta property="og:description" content="A stable, authenticated integration layer for text, multimodal messages, dictation, provider routing, and usage visibility.">
+    <meta property="og:title" content="LLM Proxy — Integrate once. Use the model that fits.">
+    <meta property="og:description" content="One stable integration for the supported providers and models your product needs, available through HTTP, Go, Python, and the command line.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/">
     <meta name="twitter:card" content="summary">
@@ -15,6 +15,7 @@
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
     <link rel="stylesheet" href="/assets/llm-proxy/landing.css">
     <script type="application/ld+json">
       {
@@ -24,76 +25,76 @@
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Web",
         "url": "https://llm-proxy.mprlab.com/",
-        "description": "An authenticated multi-provider API for text generation, multimodal messages, dictation, provider routing, key management, and usage visibility.",
+        "description": "One authenticated integration for routing applications across supported AI providers and models through HTTP, Go, Python, or the command line.",
         "featureList": [
           "Canonical v2 messages API",
+          "Official Go, Python, and command-line clients",
           "Multi-provider model routing",
           "Image and audio message attachments on supported models",
           "Audio dictation",
-          "Encrypted provider key management",
-          "Go, Python, and command-line clients"
+          "Encrypted provider key management"
         ]
       }
     </script>
     <script defer src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"></script>
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script type="module" src="/assets/llm-proxy/js/ui/capabilityCatalog.js?v=20260806i209"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
 
-    <header class="landing-header">
-      <nav class="landing-nav" aria-label="Primary navigation">
-        <a class="landing-brand" href="/" aria-label="LLM Proxy home">
-          <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="32" height="32">
-          <span>LLM Proxy</span>
-        </a>
-        <div class="landing-nav__links">
-          <a href="#capabilities">Capabilities</a>
-          <a href="#models">Models</a>
-          <a href="/docs/">API</a>
-          <a href="/resources/">Resources</a>
-          <a class="button button--compact" href="/app/">Log In</a>
-        </div>
-      </nav>
-    </header>
+    <!-- llm-proxy-public-header:start -->
+    <mpr-header
+      class="public-site-header"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      settings="false"
+      size="small"
+      sticky="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"},{"label":"Log In","href":"/app/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
+    <!-- llm-proxy-public-header:end -->
 
     <main id="main-content">
       <section class="hero landing-shell" aria-labelledby="hero-title">
         <div class="hero__copy">
-          <p class="eyebrow"><span class="signal-dot" aria-hidden="true"></span> Multi-provider AI infrastructure</p>
-          <h1 id="hero-title">One stable interface for the models your products depend on.</h1>
+          <p class="eyebrow"><span class="signal-dot" aria-hidden="true"></span> One integration. Many supported models.</p>
+          <h1 id="hero-title">Integrate once. Use the model that fits.</h1>
           <p class="hero__lede">
-            LLM Proxy gives your applications one authenticated API for text, multimodal messages, and dictation—while provider credentials, routing policy, and model changes stay behind the proxy.
+            Connect through one authenticated API—or start with the official Go, Python, and command-line clients. Then route canonical messages to any supported text provider and model without adding another provider SDK, credential flow, or request contract to your product.
           </p>
           <div class="hero__actions" aria-label="Get started">
-            <a class="button button--primary" href="/app/">Configure your proxy <span aria-hidden="true">→</span></a>
-            <a class="button" href="#integrate">See how to integrate</a>
+            <a class="button button--primary" href="#integrate">Start integrating <span aria-hidden="true">→</span></a>
+            <a class="button" href="#models">Explore supported models</a>
           </div>
           <ul class="hero__proof" aria-label="Key benefits">
-            <li><span aria-hidden="true">✓</span> Change models without rewriting product integrations</li>
+            <li><span aria-hidden="true">✓</span> Keep one canonical request contract as models change</li>
+            <li><span aria-hidden="true">✓</span> Start with HTTP, Go, Python, or the command line</li>
             <li><span aria-hidden="true">✓</span> Keep upstream credentials out of client requests</li>
-            <li><span aria-hidden="true">✓</span> Use the API directly or start with an official client</li>
           </ul>
         </div>
 
         <aside class="request-panel" aria-label="Canonical API example">
           <header class="request-panel__header">
             <span>POST /v2</span>
-            <span class="status-chip"><i aria-hidden="true"></i> Canonical</span>
+            <span class="status-chip"><i aria-hidden="true"></i> Same request</span>
           </header>
-          <pre><code><span class="code-muted">curl</span> https://llm-proxy-api.mprlab.com/v2 \
-  -H <span class="code-value">"Authorization: Bearer $LLM_PROXY_SECRET"</span> \
+          <pre><code><span class="code-muted">curl</span> <span class="code-value">"https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_SECRET&amp;provider=gemini"</span> \
   -H <span class="code-value">"Content-Type: application/json"</span> \
   -d <span class="code-value">'{
-    "provider": "gemini",
     "messages": [
       {"role": "user", "content": "Ship it."}
     ]
   }'</span></code></pre>
           <div class="request-panel__result">
-            <span class="result-code">200</span>
-            <span>Normalized response + token usage</span>
+            <span class="result-code">SWITCH</span>
+            <span>Change provider or model. Keep the integration.</span>
           </div>
         </aside>
       </section>
@@ -106,22 +107,96 @@
         </div>
       </section>
 
-      <section id="capabilities" class="section landing-shell" aria-labelledby="capabilities-title">
+      <section id="integrate" class="section section--raised" aria-labelledby="integrate-title">
+        <div class="landing-shell integration-layout">
+          <div class="integration-copy">
+            <p class="eyebrow">Integrate once</p>
+            <h2 id="integrate-title">Use the API directly or start with a client.</h2>
+            <p>Every integration surface targets the same canonical <code>POST /v2</code> messages contract. Provider selection changes the route, not the shape your application owns.</p>
+            <ol class="integration-steps">
+              <li><span>1</span><div><strong>Choose an integration</strong><p>Use ordinary HTTP or an official Go, Python, or command-line client.</p></div></li>
+              <li><span>2</span><div><strong>Authenticate once</strong><p>Give the application one client key while provider credentials remain behind the proxy.</p></div></li>
+              <li><span>3</span><div><strong>Select the model</strong><p>Use centrally managed defaults or choose a supported provider and model for one request.</p></div></li>
+            </ol>
+          </div>
+
+          <div class="integration-options" aria-label="Integration options">
+            <article>
+              <span class="integration-options__label">HTTP API</span>
+              <h3>Any language. No client dependency.</h3>
+              <p>Send canonical JSON over HTTPS and keep provider-specific wire formats out of application code.</p>
+              <a href="/docs/#operation-postV2Messages">Read the v2 reference <span aria-hidden="true">→</span></a>
+            </article>
+            <article>
+              <span class="integration-options__label">Official Go client</span>
+              <h3>Typed requests and media attachments.</h3>
+              <p>Construct validated messages, attach supported media, and preserve typed transport and HTTP failures.</p>
+              <a href="/resources/go-client-v2-only-llm-proxy/">Use the Go client <span aria-hidden="true">→</span></a>
+            </article>
+            <article>
+              <span class="integration-options__label">Official Python client</span>
+              <h3>A small synchronous client.</h3>
+              <p>Send the same canonical messages with explicit configuration and provider/model selection.</p>
+              <a href="/resources/python-client-v2-only-llm-proxy/">Use the Python client <span aria-hidden="true">→</span></a>
+            </article>
+            <article>
+              <span class="integration-options__label">Official CLI</span>
+              <h3>Pipe prompts from scripts and tools.</h3>
+              <p>Install the reusable command for stdin workflows, output limits, and request-level time budgets.</p>
+              <a href="/resources/installable-llm-proxy-cli/">Install the CLI <span aria-hidden="true">→</span></a>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section landing-shell audience-section" aria-labelledby="audience-title">
         <header class="section-heading">
           <div>
-            <p class="eyebrow">Built for changing model stacks</p>
-            <h2 id="capabilities-title">Provider flexibility without integration churn.</h2>
+            <p class="eyebrow">Built for the way teams ship</p>
+            <h2 id="audience-title">One boundary. Three ways to benefit.</h2>
+          </div>
+          <p>Start with the path closest to your work. Each path reaches the same API, client-key boundary, and supported model catalog.</p>
+        </header>
+
+        <div class="audience-grid">
+          <article class="audience-card">
+            <span>AI-assisted builders</span>
+            <h3>Turn generated code into a durable integration.</h3>
+            <p>Give coding agents and rapid prototypes one documented request shape instead of accumulating provider SDKs and raw keys.</p>
+            <a class="text-link" href="/resources/copyable-llm-curl-examples/">Start with a copyable request <span aria-hidden="true">→</span></a>
+          </article>
+          <article class="audience-card">
+            <span>Startups and product teams</span>
+            <h3>Test model fit without multiplying integrations.</h3>
+            <p>Compare supported providers behind the same product boundary, then change the route as quality, capability, or product needs evolve.</p>
+            <a class="text-link" href="/resources/openai-claude-gemini-one-endpoint/">Compare native providers <span aria-hidden="true">→</span></a>
+          </article>
+          <article class="audience-card">
+            <span>Platform and engineering teams</span>
+            <h3>Standardize access across applications.</h3>
+            <p>Centralize provider credentials, routing validation, usage signals, and client access while product teams keep one contract.</p>
+            <a class="text-link" href="/resources/internal-ai-gateway-for-product-tools/">Design an internal gateway <span aria-hidden="true">→</span></a>
+          </article>
+        </div>
+      </section>
+
+      <section id="capabilities" class="section section--raised" aria-labelledby="capabilities-title">
+        <div class="landing-shell">
+        <header class="section-heading">
+          <div>
+            <p class="eyebrow">What stays stable</p>
+            <h2 id="capabilities-title">Change providers without rebuilding the product boundary.</h2>
           </div>
           <p>
-            Keep product code focused on the job it needs to do. LLM Proxy owns the provider-specific wire contracts, credential boundary, routing validation, and observable failure behavior.
+            LLM Proxy owns provider-specific wire contracts, credential handling, route validation, and observable failure behavior so application code can stay focused on the job it performs.
           </p>
         </header>
 
         <div class="capability-grid">
           <article class="capability-card capability-card--primary">
             <span class="capability-card__index">01</span>
-            <h3>Connect once. Route deliberately.</h3>
-            <p>Select a provider and model per request, use tenant defaults, or update a user-owned model profile without redeploying the calling application.</p>
+            <h3>Switch routes, not integrations.</h3>
+            <p>Select a supported provider and model per request, use managed defaults, or update an application-owned model profile without replacing the client contract.</p>
             <ul class="tag-list" aria-label="Routing capabilities">
               <li>Provider selection</li>
               <li>Model defaults</li>
@@ -136,58 +211,17 @@
           </article>
           <article class="capability-card">
             <span class="capability-card__index">03</span>
-            <h3>Go beyond plain prompts.</h3>
-            <p>Send ordered chat messages, attach images or audio to supported models, request constrained OpenAI web search, or transcribe audio through the dictation endpoint.</p>
+            <h3>Keep one request and error contract.</h3>
+            <p>Send canonical messages while the proxy maps provider payloads, output limits, timeouts, usage metadata, and provider failures into one documented boundary.</p>
             <a class="text-link" href="/docs/">Inspect the API contract <span aria-hidden="true">→</span></a>
           </article>
           <article class="capability-card">
             <span class="capability-card__index">04</span>
-            <h3>See what the proxy did.</h3>
-            <p>Choose plain text, JSON, XML, or CSV responses and receive normalized token metadata with clear provider-neutral errors. The management workspace adds request, success, provider, model, and status-code visibility without storing prompt bodies.</p>
-            <a class="text-link" href="/resources/managed-tenant-usage-dashboard/">Review usage visibility <span aria-hidden="true">→</span></a>
+            <h3>Use capabilities the route declares.</h3>
+            <p>Send images or audio, request reasoning or constrained web search, or transcribe audio only when the selected model explicitly publishes that capability.</p>
+            <a class="text-link" href="#models">Inspect model capabilities <span aria-hidden="true">→</span></a>
           </article>
         </div>
-      </section>
-
-      <section id="integrate" class="section section--raised" aria-labelledby="integrate-title">
-        <div class="landing-shell integration-layout">
-          <div class="integration-copy">
-            <p class="eyebrow">Choose your integration surface</p>
-            <h2 id="integrate-title">Start at the level that fits your stack.</h2>
-            <p>Every option targets the same canonical <code>POST /v2</code> contract. There is no client-only behavior and no second API to reconcile later.</p>
-            <ol class="integration-steps">
-              <li><span>1</span><div><strong>Configure providers</strong><p>Add and verify provider credentials in your private workspace.</p></div></li>
-              <li><span>2</span><div><strong>Create client access</strong><p>Generate a tenant secret and choose route defaults.</p></div></li>
-              <li><span>3</span><div><strong>Send messages</strong><p>Call the HTTP API directly or use the Go, Python, or CLI client.</p></div></li>
-            </ol>
-          </div>
-
-          <div class="integration-options" aria-label="Integration options">
-            <article>
-              <span class="integration-options__label">HTTP API</span>
-              <h3>Any language, no dependency.</h3>
-              <p>Use ordinary JSON over HTTPS with bearer authentication and explicit request budgets.</p>
-              <a href="/docs/#operation-postV2Messages">Read the v2 reference <span aria-hidden="true">→</span></a>
-            </article>
-            <article>
-              <span class="integration-options__label">Go package</span>
-              <h3>Typed requests and media attachments.</h3>
-              <p>Construct validated message requests, attach supported media, and preserve typed transport and HTTP failures.</p>
-              <a href="/resources/go-client-v2-only-llm-proxy/">Use the Go client <span aria-hidden="true">→</span></a>
-            </article>
-            <article>
-              <span class="integration-options__label">Python package</span>
-              <h3>A small synchronous client.</h3>
-              <p>Send canonical messages with explicit configuration and the same provider/model profile contract.</p>
-              <a href="/resources/python-client-v2-only-llm-proxy/">Use the Python client <span aria-hidden="true">→</span></a>
-            </article>
-            <article>
-              <span class="integration-options__label">Command line</span>
-              <h3>Pipe prompts from scripts and tools.</h3>
-              <p>Install the reusable CLI for stdin workflows, explicit output limits, and request-level time budgets.</p>
-              <a href="/resources/installable-llm-proxy-cli/">Install the CLI <span aria-hidden="true">→</span></a>
-            </article>
-          </div>
         </div>
       </section>
 
@@ -198,26 +232,26 @@
             <h2 id="models-title">Providers and model capabilities.</h2>
           </div>
           <p>
-            This matrix is generated from the same validated provider registry used by request routing. It describes proxy support—not whether a specific workspace has configured a provider key.
+            This matrix is generated from the same validated provider registry used by request routing. It describes proxy support—not whether a specific account has configured a provider key.
           </p>
         </header>
 
         <!-- llm-proxy-capability-catalog -->
       </section>
 
-      <section class="section section--raised limitations" aria-labelledby="limitations-title">
-        <div class="landing-shell limitations__layout">
+      <section class="section section--raised support-contract" aria-labelledby="support-contract-title">
+        <div class="landing-shell support-contract__layout">
           <div>
-            <p class="eyebrow">Clear boundaries</p>
-            <h2 id="limitations-title">Capability is route-specific.</h2>
+            <p class="eyebrow">Current support contract</p>
+            <h2 id="support-contract-title">The catalog is the source of truth.</h2>
           </div>
-          <div class="limitations__content">
-            <p>LLM Proxy does not pretend every provider behaves the same. The selected provider and model must explicitly support each requested capability.</p>
+          <div class="support-contract__content">
+            <p>The public matrix is generated from the same validated provider registry used by request routing. It states exactly which providers, models, and capabilities the current proxy release supports.</p>
             <ul>
-              <li>Web search is available only on the OpenAI models marked in the catalog.</li>
-              <li>Image and audio message attachments are accepted only on models that declare those media inputs.</li>
-              <li>Reasoning effort values are validated for the exact route; unsupported values fail before provider dispatch.</li>
-              <li>Known output limits are enforced by the proxy. Otherwise, the upstream provider remains authoritative.</li>
+              <li>Provider and model routes are explicit, validated runtime contracts.</li>
+              <li>Unsupported models and capabilities fail before provider dispatch.</li>
+              <li>The canonical client contract stays stable while provider adapters own upstream API differences.</li>
+              <li>Provider lifecycle, model-onboarding, and hosted uptime commitments are outside the current catalog contract pending an approved support and SLA policy.</li>
             </ul>
           </div>
         </div>
@@ -225,23 +259,26 @@
 
       <section class="final-cta landing-shell" aria-labelledby="cta-title">
         <div>
-          <p class="eyebrow">Ready when your stack changes</p>
-          <h2 id="cta-title">Give your products one durable way to use AI.</h2>
-          <p>Configure a workspace, generate client access, and connect through the API or an official integration client.</p>
+          <p class="eyebrow">One integration, ongoing choice</p>
+          <h2 id="cta-title">Start once. Keep choosing the model that fits.</h2>
+          <p>Choose HTTP, Go, Python, or the command line, then use the current model catalog to select the route your product needs.</p>
         </div>
         <div class="final-cta__actions">
-          <a class="button button--primary" href="/app/">Log In <span aria-hidden="true">→</span></a>
-          <a class="button" href="/resources/llm-proxy-client-authentication/">Read the authentication guide</a>
+          <a class="button button--primary" href="#integrate">Choose an integration <span aria-hidden="true">→</span></a>
+          <a class="button" href="/app/">Log In</a>
         </div>
       </section>
     </main>
 
+    <!-- llm-proxy-public-footer:start -->
     <mpr-footer
+      class="public-site-footer"
       size="small"
       sticky="false"
       prefix-text="LLM Proxy"
       privacy-link-hidden="true"
-      horizontal-links='{"alignment":"right","links":[{"label":"Log In","href":"/app/"},{"label":"API","href":"/docs/"},{"label":"OpenAPI","href":"/openapi.yaml"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Log In","href":"/app/"},{"label":"API","href":"/docs/"},{"label":"OpenAPI","href":"/docs/#openapi-schema"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
     ></mpr-footer>
+    <!-- llm-proxy-public-footer:end -->
   </body>
 </html>

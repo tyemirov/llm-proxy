@@ -1,6 +1,6 @@
 // @ts-check
 
-import { MPR_UI } from "../constants.js?v=20260727i036";
+import { MPR_UI } from "../constants.js?v=20260806b109";
 
 const MANAGEMENT_BASE_PATH = "/api/management";
 const HEADER_CONTENT_TYPE = "Content-Type";

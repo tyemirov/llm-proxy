@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Manage LLM Proxy</title>
-    <meta name="description" content="Private LLM Proxy workspace for provider credentials, client access, routing defaults, and usage visibility.">
+    <meta name="description" content="Private LLM Proxy app for provider credentials, client access, routing defaults, and usage visibility.">
     <meta name="robots" content="noindex, nofollow">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/app/">
     <meta property="og:title" content="LLM Proxy">
@@ -27,15 +27,15 @@
       type="application/json"
       data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
     ></script>
-    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260727i036"></script>
-    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260727i036"></script>
+    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260806b109"></script>
+    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260806b109"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body x-data="llmProxyKeyManagement" x-init="init()">
     <mpr-header
       id="llm-proxy-header"
       data-config-url="/config-ui.yaml"
-      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your key workspace.","completionEvent":"llm-proxy:management-ready"}'
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app.","completionEvent":"llm-proxy:management-ready"}'
     >
       <a slot="brand" class="llm-proxy-header-brand" href="/" aria-label="LLM Proxy home">
         <img class="llm-proxy-header-brand__logo" src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" aria-hidden="true">
@@ -88,7 +88,7 @@
         </section>
 
         <template x-if="authState === states.authenticated">
-          <workspace-surface>
+          <app-surface>
             <section class="dashboard-hero">
               <header class="section-header">
                 <div>
@@ -853,7 +853,7 @@
               </tenant-delete-overlay>
             </settings-overlay>
 
-          </workspace-surface>
+          </app-surface>
         </template>
         <tenant-dialog-overlay
           x-cloak

@@ -43,6 +43,24 @@ export const USAGE_INTERVALS = Object.freeze([
 export const DEFAULT_USAGE_INTERVAL = "30d";
 export const USAGE_FAILURE_PAGE_LIMIT = 25;
 
+export const CAPABILITY_CATALOG_SORTS = Object.freeze({
+  PROVIDER: "provider",
+  MODEL: "model",
+  CAPABILITIES: "capabilities",
+});
+
+export const CAPABILITY_CATALOG_SORT_DIRECTIONS = Object.freeze({
+  ASCENDING: "ascending",
+  DESCENDING: "descending",
+});
+
+export const CAPABILITY_CATALOG_COPY = Object.freeze({
+  RESULT_SEPARATOR: "of",
+  MODEL: "model",
+  MODELS: "models",
+  SORT_BY: "Sort by",
+});
+
 export const USAGE_ENDPOINT_LABELS = Object.freeze({
   text: "Text",
   v2: "V2",
@@ -69,7 +87,7 @@ export const USAGE_STATUS_LABELS = Object.freeze({
   504: "Request timeout",
 });
 
-export const WORKSPACE_INTEGRITY_ERROR = "workspace_integrity_error";
+export const APP_INTEGRITY_ERROR = "app_integrity_error";
 export const ROUTING_DEFAULTS_INVALID_ERROR = "managed_routing_defaults_invalid";
 export const PROVIDER_KEY_VERIFICATION_ERRORS = Object.freeze({
   REJECTED: "provider_key_rejected",
@@ -106,7 +124,7 @@ export const MPR_UI = Object.freeze({
 });
 
 export const RUNTIME_UI = Object.freeze({
-  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260727i036",
+  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260806b109",
   APPLICATION_MODULE_ID: "llm-proxy-application-module",
   APPLICATION_MODULE_MISSING: "llm_proxy_application_module_missing",
   APPLICATION_READY_ATTRIBUTE: "data-llm-proxy-application",
@@ -127,11 +145,11 @@ export const COPY = Object.freeze({
   runtimeFailureDescription: "Your browser could not load the current application files. Allow this site and cdn.jsdelivr.net in browser controls, then reload.",
   runtimeFailureReload: "Reload LLM Proxy",
   loadingEyebrow: "Session",
-  loadingTitle: "Loading key workspace",
+  loadingTitle: "Loading LLM Proxy",
   signedOutEyebrow: "Authentication",
   signedOutTitle: "Sign in to manage LLM Proxy keys",
-  profileErrorEyebrow: "Workspace",
-  profileErrorTitle: "Unable to load key workspace",
+  profileErrorEyebrow: "App",
+  profileErrorTitle: "Unable to load LLM Proxy",
   usageTenant: "Usage tenant",
   allTenants: "All tenants",
   tenantAccess: "Tenant access",
@@ -254,7 +272,7 @@ export const COPY = Object.freeze({
   removeProviderKeyConfirmationMessage: "This removes the selected provider key and its settings. This action cannot be undone.",
   cancelProviderKeyRemoval: "Cancel",
   confirmProviderKeyRemoval: "Remove key",
-  profileLoaded: "Workspace loaded",
+  profileLoaded: "App ready",
   usageRefreshed: "Usage refreshed",
   providerSettingsSaved: "Provider settings saved",
   providerKeyVerifying: "Verifying key",
@@ -277,5 +295,5 @@ export const COPY = Object.freeze({
   copyUnavailable: "Copy unavailable",
   authenticationRequired: "Authentication required",
   requestFailed: "Request failed",
-  workspaceIntegrityError: "Workspace integrity error",
+  appIntegrityError: "App data integrity error",
 });
