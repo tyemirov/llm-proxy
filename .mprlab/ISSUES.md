@@ -40,6 +40,247 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B109] (P1) {F019,I209} Resolve the public-site review validation findings.
+  Goal:
+  Keep cached authenticated-app module graphs coherent, enforce JSDoc
+  type-checking in the frontend lint gate, and publish current documentation
+  freshness metadata.
+  Requirements:
+  - Bump one revision across both authenticated-app entrypoints and the complete
+    first-party ES-module graph after the renamed integrity-error export.
+  - Run `tsc --noEmit` from the binding frontend lint command for edited browser
+    JavaScript and add `// @ts-check` to the edited syntax checker.
+  - Set the generated `/docs/` sitemap `lastmod` to the current significant
+    update date and regenerate the sitemap.
+  Validation:
+  - Static browser coverage rejects stale or inconsistent authenticated-app
+    module revisions.
+  - The frontend lint gate passes TypeScript checking and generated-resource
+    drift checks.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - Both authenticated-app entrypoints and every first-party runtime import now
+    use revision `20260806b109`; static browser coverage rejects an unversioned
+    or stale module-graph edge.
+  - Frontend lint now runs TypeScript 7 `tsc --noEmit` against the edited
+    production browser and generator modules. The syntax checker has
+    `// @ts-check`, JSDoc sort unions are explicit, and generator data is
+    narrowed before use.
+  - The canonical contract-documentation date is `2026-08-06`; regenerated
+    resource metadata and `site/sitemap.xml` publish that date for `/docs/`.
+  - The required baseline passed all 11 gates in 97 seconds. After correcting
+    two stale date assertions found by the first post-edit run, the final run
+    passed all 11 gates in 95 seconds with 82 browser tests, 36 Python tests,
+    the TAuth black-box scenario, live-provider preflight, and exact 100% Go
+    statement coverage.
+- [x] [B108] (P1) {F019,I209} Toggle capability filters from the catalog search control.
+  Goal:
+  Match Kamu's reversible search disclosure so the magnifying-glass control can
+  both reveal and collapse the advanced capability filters.
+  Requirements:
+  - Make consecutive magnifying-glass activations alternate the filter panel
+    between visible and hidden states with matching `aria-expanded` state.
+  - Preserve automatic disclosure when search input begins or receives focus,
+    Escape collapse, Enter disclosure, capability-badge activation, selected
+    filters, search results, and sorting state.
+  - Keep the complete no-JavaScript catalog and compact responsive layout.
+  Validation:
+  - Playwright exercises repeated pointer activation, keyboard disclosure and
+    collapse, accessibility state, filtering, and narrow-screen containment
+    through the rendered public site.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - The magnifying-glass control now alternates the advanced capability panel
+    between visible and hidden states and keeps `aria-expanded` synchronized.
+  - Search focus, typing, and Enter still disclose filters; Escape collapses
+    them. Selected capabilities, filtered results, and table sorting survive a
+    collapse-and-reopen cycle, and the full catalog remains available without
+    JavaScript.
+  - Playwright covers pointer toggling, keyboard behavior, accessibility state,
+    preserved filter state, and mobile containment. A headed Chromium check
+    confirmed the rendered panel and accessibility state on both clicks.
+  - The required baseline passed all 11 gates in 95 seconds. The final
+    post-edit run passed all 11 gates in 96 seconds with 82 browser tests, 36
+    Python tests, the TAuth black-box scenario, live-provider preflight, and
+    exact 100% Go statement coverage.
+- [x] [B107] (P1) Add the standard `make down` local service command.
+  Goal:
+  Provide a symmetric public shutdown command for every local Compose resource
+  started by `make up`.
+  Requirements:
+  - Declare `down` as a phony Make target and route it through the exact local
+    Compose project and file owned by `make up`.
+  - Stop the local containers, project network, and orphaned services through
+    `docker compose down --remove-orphans` while retaining the named local data
+    volumes.
+  - Keep the Compose identity in one canonical declaration shared by startup
+    and shutdown, and fail visibly when Docker Compose or shutdown fails.
+  - Let shutdown run independently from private local-environment preparation.
+  Validation:
+  - Exercise the real `make down` boundary with a fake Docker edge and prove the
+    target remains phony, selects the exact local project and Compose file,
+    removes orphans, and does not delete named volumes.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - `make down` is a phony public target that stops the exact
+    `llm-proxy-local` Compose project with orphan cleanup and retains its named
+    TAuth and management data volumes.
+  - Startup and shutdown consume one shared Compose project and file identity.
+    Shutdown validates Docker Compose, runs independently from private local
+    environment preparation, propagates failures, and prints a terminal
+    shutdown receipt on success.
+  - Black-box Make coverage proves the target runs even when a `down` file is
+    present and invokes the exact project/file command without a volume-removal
+    option. The required baseline and final `make ci` runs each passed all 11
+    gates in 95 seconds with 82 browser tests, 36 Python tests, and exact 100%
+    Go statement coverage.
+- [x] [B106] (P1) {F019} Remove workspace terminology from the web site.
+  Goal:
+  Present one public product site and one authenticated LLM Proxy app without
+  exposing a separate workspace concept anywhere in browser-served content.
+  Evidence:
+  - The shared public shell already links to `/app/` as `Log In`, but landing,
+    app lifecycle, metadata, and generated resource copy still say workspace.
+  - One generated resource URL and several frontend identifiers also publish
+    the obsolete term in static site bytes.
+  Requirements:
+  - Use `Log In` for public navigation to `/app/`, `App` for application
+    lifecycle copy, `account` for signed-in ownership, and `tenant` for exact
+    technical isolation or persistence contracts.
+  - Remove the obsolete term from every browser-served HTML, JavaScript, CSS,
+    XML, metadata, structured-data, and URL artifact under `site/`.
+  - Update canonical generators and product documentation, regenerate the
+    resource cluster, and delete the obsolete resource URL without an alias.
+  Validation:
+  - Add a static publication guard and browser coverage that fail on any
+    case-insensitive occurrence in the served site.
+  - Verify the public shell and authenticated app copy in Chromium.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - Every browser-served artifact now uses `Log In` for `/app/`, `App` for
+    lifecycle copy, `account` for signed-in ownership, and `tenant` for exact
+    isolation and persistence contracts. The obsolete term has zero
+    case-insensitive occurrences under `site/`.
+  - Canonical generators and product documentation were updated. The resource
+    URL is now `/resources/multi-tenant-ownership-migration/` without an alias;
+    its evidence, metadata, sitemap date, publication brief, and migration
+    runbook CTA passed the independent SEO evaluation.
+  - Static publication validation and the 80-test Playwright suite reject any
+    recurrence. Chromium verified the landing `Log In` navigation and the
+    authenticated app sign-in state.
+  - The required baseline passed all 11 gates in 91 seconds. The final run
+    passed all 11 gates in 90 seconds with 80 browser tests, 36 Python tests,
+    the TAuth black-box scenario, exact OpenAPI Pages publication,
+    live-provider preflight, and exact 100% Go coverage.
+- [x] [B105] (P1) {F019} Populate the local landing capability matrix.
+  Goal:
+  Make the localhost landing page publish the current validated provider and
+  model capability catalog instead of an empty section.
+  Evidence:
+  - Release rendering replaces `<!-- llm-proxy-capability-catalog -->` with the
+    sanitized catalog projected from `configs/config.yml`.
+  - `make up` mounts the unrendered `site/` source directly into ghttp, so the
+    local `/` page retains only the marker and displays no matrix.
+  Requirements:
+  - Keep `proxy.NewPublicCapabilityCatalog` and the Go site renderer as the
+    single validated catalog path.
+  - Render a temporary local site artifact from the active configuration before
+    ghttp starts, and serve that artifact through `http://localhost:4179/`.
+  - Remove the temporary artifact when local orchestration stops.
+  Validation:
+  - Exercise the local orchestration contract and prove its served landing page
+    contains the generated provider/model matrix without private provider data.
+  - Verify the populated matrix in Chromium.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - `make up` now renders an isolated temporary public-site artifact from the
+    active `configs/config.yml` through the existing validated Go catalog
+    renderer. The API health gate rejects a missing or unrendered matrix before
+    ghttp serves the artifact read-only, and shutdown removes the artifact.
+  - The orchestration contract verifies generated matrix content, rejects
+    private provider configuration, and proves cleanup after interruption.
+    Chromium verified the live localhost catalog with 12 text providers, 53
+    text routes, 4 dictation providers, and 5 dictation routes.
+  - The required baseline passed all 11 gates in 93 seconds. The final run after
+    the last code edit passed all 11 gates in 97 seconds with 79 browser tests,
+    36 Python tests, the TAuth black-box scenario, exact OpenAPI Pages
+    publication, live-provider preflight, and exact 100% Go coverage.
+- [x] [B104] (P1) {F019} Expose explicit OpenAPI view and download actions.
+  Goal:
+  Let a visitor inspect the canonical OpenAPI manifest in the browser or
+  download its exact YAML bytes from the existing human-readable reference.
+  Evidence:
+  - `/docs/` is already generated from `docs/openapi.yaml`, but its
+    `Download exact schema` link has no `download` contract and opens the raw
+    YAML instead.
+  - The shared footer links directly to `/openapi.yaml`, bypassing the
+    human-readable reference and leaving no explicit view-versus-download
+    choice.
+  Requirements:
+  - Keep `docs/openapi.yaml` as the only hand-maintained schema source.
+  - Use `/docs/` as the schema viewer and expose separate raw-view and YAML
+    download actions backed by `/openapi.yaml`.
+  - Route the shared public OpenAPI navigation to the viewer actions.
+  Validation:
+  - Prove the generated viewer and downloaded file equal the canonical source
+    byte for byte and use an explicit download filename.
+  - Keep the generated documentation provenance and drift checks current.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - `/docs/#openapi-schema` is the public schema action surface. Its generated
+    reference offers `View YAML`, a bounded inline viewer containing the full
+    canonical manifest, and `Download YAML`, which downloads `/openapi.yaml`
+    as `llm-proxy-openapi.yaml`.
+  - The viewer content, human-readable operations, source digest, and download
+    all derive from `docs/openapi.yaml`; no second editable schema or external
+    viewer was introduced. The shared public footer now opens these actions.
+  - Playwright verifies the inline viewer text and downloaded bytes equal the
+    canonical source exactly, including the explicit filename. The required
+    baseline passed all 11 gates in 92 seconds, and the final run after the
+    last code edit passed all 11 gates in 96 seconds with 79 browser scenarios,
+    the TAuth black-box scenario, exact OpenAPI Pages publication,
+    live-provider preflight, and exact 100% Go coverage.
+- [x] [B103] (P1) {F019} Use the shared MPR header and footer on every public page.
+  Goal:
+  Give `/docs/` and every public page the same declarative MPR shell.
+  Evidence:
+  - `/docs/` and generated resource pages use custom native header and footer
+    wrappers instead of `mpr-header` and `mpr-footer`.
+  - The landing page uses `mpr-footer` but still owns a separate native header.
+  Requirements:
+  - Define one canonical public `mpr-header` and compact `mpr-footer` contract.
+  - Apply it to `/`, `/docs/`, `/resources/`, and every generated resource page.
+  - Load the MPR UI stylesheet and bundle on every public route family.
+  - Preserve exactly one header, one main region, and one footer in document
+    order without changing the authenticated `/app/` shell.
+  Validation:
+  - Prove the generated HTML contains only the shared components and no custom
+    public shell wrappers.
+  - Exercise component hydration, navigation, document order, and compact
+    responsive geometry through Playwright.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - One shared renderer now publishes the exact same compact `mpr-header` and
+    `mpr-footer` on the landing page, `/docs/`, `/resources/`, and all 46
+    generated resource articles. Every public route loads the MPR UI assets,
+    and the page-specific native shell wrappers and their CSS are removed.
+  - The landing-shell and OpenAPI generators reject drift from the canonical
+    renderer. Playwright verifies byte-identical shell markup across all 49
+    sitemap HTML pages and hydrated desktop and mobile behavior for every
+    public route family, including header-main-footer order and compact footer
+    geometry. The authenticated `/app/` shell remains unchanged.
+  - The required baseline and post-change `make ci` runs pass. The final run
+    followed the last code edit and passed all 11 gates in 90 seconds: exact
+    100% Go coverage, 36 Python tests, 78 browser scenarios, the TAuth
+    black-box scenario, exact OpenAPI Pages publication, and live-provider
+    preflight.
 - [x] [B102] (P1) {F019} Publish the authenticated web application only at `/app/`.
   Goal:
   Make `/app/` the single canonical route for the authenticated web application.
@@ -1853,6 +2094,244 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Improvements
 
+- [x] [I213] (P1) {F019} Clarify default-route badges in the public model catalog.
+  Goal:
+  Keep model identifiers and their default-route metadata visually distinct and
+  make the default behavior understandable without repository knowledge.
+  Requirements:
+  - Give the model identifier and every default-route badge an explicit,
+    responsive gap in generated catalog rows.
+  - Replace "Default text" and "Default dictation" with plain labels and
+    tooltips that distinguish provider-catalog defaults from account routing
+    settings.
+  Validation:
+  - Site-render and browser scenarios prove the exact labels, explanations, and
+    model-to-badge separation at desktop and mobile widths.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - Generated catalog rows now use responsive flex spacing between model ids and
+    default-route badges. Desktop keeps an explicit horizontal gap, while narrow
+    layouts wrap the badge onto a separately spaced line.
+  - Badges now read "Default for text" or "Default for dictation" and explain
+    that the marked model is the provider-catalog default while account routing
+    settings can select another model. Site-render and Playwright assertions
+    cover both labels, tooltips, and desktop/mobile spacing.
+  - The required baseline passed all 11 gates in 92 seconds; the final post-edit
+    run passed all 11 gates in 96 seconds with 82 browser tests, 36 Python tests,
+    the TAuth black-box scenario, live-provider preflight, and exact 100% Go
+    statement coverage.
+- [x] [I212] (P1) {F019} Center the public site on one integration across supported models.
+  Goal:
+  Make "Integrate once. Use the model that fits." the primary public promise,
+  with official clients and direct HTTP presented before the capability matrix.
+  Requirements:
+  - Reorder and rewrite the landing page so the stable integration contract is
+    primary, the Go, Python, CLI, and direct HTTP surfaces are prominent, and
+    the generated capability matrix remains the current proof of supported
+    routes.
+  - Give AI-assisted builders, startups and product teams, and institutional
+    platform or engineering teams distinct crawlable paths into existing
+    high-value resources without generating thin audience-swap pages.
+  - Revamp the resource hub and the multi-provider, native-provider comparison,
+    and internal-gateway cornerstone pages from current repository evidence.
+    Keep generation, canonical metadata, dated significant updates, author
+    attribution, sitemap integration, and source-backed examples deterministic.
+  - Describe only the current validated support contract. Do not publish an
+    uptime guarantee, provider-longevity term, or model-onboarding target before
+    the separate SLA policy defines those commitments.
+  Validation:
+  - Browser scenarios prove the new message hierarchy, integration and audience
+    paths, current model catalog, responsive layout, and crawlable resource
+    navigation.
+  - Generator and SEO evaluation prove factual integrity, differentiated page
+    intent, repository evidence, author attribution, metadata, and indexing
+    readiness.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - The landing page now leads with one stable integration across supported text
+    routes, presents direct HTTP and the official Go, Python, and CLI clients
+    before the generated capability matrix, and gives each target audience a
+    distinct path into substantive resources.
+  - The generated resource hub and three cornerstone guides now carry current,
+    source-backed examples, visible author attribution, canonical metadata,
+    significant-update dates, and sitemap discovery. The independent SEO
+    evaluation passed every binding threshold with factual integrity at 5/5.
+  - Future provider-lifecycle, model-onboarding, and hosted uptime commitments
+    remain in P006 pending an approved measurable policy. The required baseline
+    and final CI runs passed all 11 gates; the final run completed in 90 seconds
+    with 82 browser tests, 36 Python tests, the TAuth black-box scenario,
+    live-provider preflight, and exact 100% Go statement coverage.
+- [x] [I211] (P1) {F019} Keep execution lifecycle internal to the public capability catalog.
+  Goal:
+  Present the model matrix as a catalog of abilities that callers can select or
+  use, while llm-proxy owns how each provider request reaches its final response.
+  Requirements:
+  - Remove synchronous and background execution from public model capability
+    badges, filter pills, search metadata, capability counts, and capability-sort
+    counts.
+  - Keep the internal `execution_lifecycle` model contract, validation, provider
+    routing, polling coordinator, timeout behavior, and blocking client response
+    contract unchanged.
+  - Retain the complete generated provider/model matrix and its user-actionable
+    text, dictation, image input, audio input, web search, and reasoning
+    capabilities with no-JavaScript access.
+  Validation:
+  - Public catalog projection tests prove lifecycle identifiers are absent while
+    internal routing tests retain their lifecycle assertions.
+  - Site-render and Playwright scenarios prove six filterable capabilities,
+    lifecycle-free rows and search metadata, and unchanged catalog interaction.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - The public catalog now projects only text generation, dictation, image
+    input, audio input, web search, and reasoning. Synchronous and background
+    execution no longer appear in badges, filters, row metadata, search, or
+    capability-sort counts.
+  - Internal execution-lifecycle configuration, validation, upstream polling,
+    routing, timeouts, and the blocking client response contract remain intact.
+  - Catalog projection, CLI rendering, and Playwright coverage reject public
+    lifecycle capabilities and prove the complete six-filter production
+    matrix. The required baseline passed all 11 gates in 90 seconds; the final
+    post-edit run passed all 11 gates in 109 seconds with 82 browser tests, 36
+    Python tests, the TAuth black-box scenario, live-provider preflight, and
+    exact 100% Go statement coverage.
+- [ ] [I210] (P1) Add Meta Muse Spark 1.2 as a selectable Standard-tier model.
+  Goal:
+  Add Meta's current Muse Spark 1.2 checkpoint to the existing `meta` text
+  offering through the repository's exact model-owned routing contract.
+  Evidence:
+  - Meta announced Muse Spark 1.2 on 2026-08-05 and states that it is available
+    in Meta Model API with expanded global access:
+    https://research.meta.ai/blog/introducing-muse-code-and-muse-spark-1-2
+  - Meta's current model catalog publishes exact Standard-tier model id
+    `muse-spark-1.2` alongside `muse-spark-1.1`, with text, image, video, audio,
+    and PDF input, text output, and a 1,048,576-token context window:
+    https://dev.meta.ai/docs/models
+  - Meta's Chat Completions guide uses `muse-spark-1.2` directly through the
+    OpenAI-compatible `https://api.meta.ai/v1` API. It documents
+    `max_completion_tokens` as the current output-budget field and synchronous
+    non-streaming completion responses:
+    https://dev.meta.ai/docs/protocols/chat-completions
+  - Standard-tier Muse Spark 1.1 and 1.2 share the same pricing, data-use, and
+    team rate-limit contract. The separate `muse-spark-1.2-contributor` tier
+    permits Meta to use prompts and completions for training and has distinct
+    pricing and rate limits:
+    https://developer.meta.com/ai/models/muse-spark/
+    https://dev.meta.ai/docs/pricing-rate-limits
+  Requirements:
+  - Register exact model id `muse-spark-1.2` under provider `meta` with
+    `openai_chat_completions` and `synchronous_completion`, reusing
+    `https://api.meta.ai/v1`, the existing Meta credential, and the shared
+    Chat Completions adapter.
+  - Keep `muse-spark-1.1` as the configured Meta default and current selectable
+    Standard-tier model. This issue adds 1.2 selection without rewriting saved
+    tenant routing or provider settings.
+  - Scope the addition to Standard-tier `muse-spark-1.2`. Treat Contributor as
+    a separate explicit opt-in data-use, billing, and rate-limit contract.
+  - Preserve the current Meta text surface and upstream-default reasoning:
+    send the selected model, ordered text messages, and optional
+    `max_completion_tokens`; keep Meta media, tools, search grounding,
+    streaming, configurable reasoning effort, and Responses API work in their
+    own route-capability issues.
+  - Expose 1.2 through the management profile, provider-model selectors,
+    provider-key verification, public capability catalog, and explicit public
+    request routing. Update the canonical constant, checked-in configuration,
+    README model tables/examples, provider-routing documentation, generated
+    public artifacts, and affected black-box fixtures together.
+  Validation:
+  - Startup and public-boundary scenarios prove the 1.2 catalog entry, exact
+    upstream model id, `max_completion_tokens` mapping, synchronous completion
+    and output-length continuation through `GET /`, compatibility `POST /`,
+    and canonical `POST /v2`.
+  - Management and browser scenarios prove 1.2 appears under Meta, can be
+    verified and saved with an existing Meta key, can become a tenant routing
+    default, and leaves existing 1.1 selections valid.
+  - Public-site rendering proves the generated capability matrix publishes
+    both exact Standard-tier Meta model ids without Contributor or unsupported
+    proxy capabilities.
+  - Authenticated branch acceptance confirms `GET /v1/models` contains
+    `muse-spark-1.2`, then runs one small paid Meta verification and text
+    request with `LLM_PROXY_LIVE_META_MODEL=muse-spark-1.2`. Run the required
+    baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair; deployment
+    and production acceptance remain operator-owned.
+- [x] [I209] (P1) {F019} Streamline capability catalog search and table sorting.
+  Goal:
+  Replace the multi-control capability toolbar with the compact search-first
+  interaction established by Kamu while keeping the generated model matrix
+  accessible and complete.
+  Requirements:
+  - Keep one unified search field that matches every published model
+    characteristic: provider, model, defaults, capability labels and
+    identifiers, wire contract, reasoning efforts, lifecycle, and output limit.
+  - Remove the provider and sort dropdowns. Expand the capability-filter pill
+    row when search starts or the search icon is activated.
+  - Move sorting into accessible Provider, Model, and Capabilities table-header
+    controls with visible direction state and deterministic tie-breaking.
+  - Preserve match-all capability filtering, live result count, reset,
+    capability-badge activation, the complete no-JavaScript matrix, and compact
+    responsive MPR styling.
+  Validation:
+  - Add site-render CLI and Playwright coverage for the search-first disclosure,
+    all-characteristics matching, pill filters, sortable headers, keyboard
+    behavior, reset, no-JavaScript rendering, and mobile containment.
+  - Verify the rendered landing in Chromium at desktop and mobile widths.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - The matrix now has one all-characteristics search field. Starting a search
+    or activating its magnifying-glass control discloses the compact match-all
+    capability-pill row, live count, and reset action.
+  - Provider, Model, and Capabilities headers own accessible ascending and
+    descending sorting with visible direction state and deterministic ties;
+    the standalone provider and sort dropdowns are removed.
+  - CLI rendering and Playwright cover no-JavaScript completeness, provider,
+    model, default, capability identifier and label, contract, reasoning,
+    lifecycle, output-limit searches, pill activation, reset, keyboard use,
+    sorting, and mobile containment. Chromium verification passed at 1280 by
+    800 and 390 by 780 without document overflow.
+  - The required baseline passed all 11 gates in 96 seconds. The final
+    post-edit run passed all 11 gates in 92 seconds with 82 browser tests, 36
+    Python tests, the TAuth black-box scenario, live-provider preflight, and
+    exact 100% Go statement coverage.
+- [x] [I208] (P1) {F019} Make the public capability catalog model-centric and filterable.
+  Goal:
+  Replace the split text/dictation presentation with one compact model matrix
+  that lets visitors compare the exact capabilities of every supported route.
+  Requirements:
+  - Project text and dictation models into one deterministic, secret-free public
+    model capability contract derived only from the validated provider registry.
+  - Render exactly Provider, Model, and Capabilities columns. Represent text,
+    dictation, media input, web search, reasoning, lifecycle, wire contract,
+    defaults, and output limits as clear model metadata instead of publishing a
+    dedicated dictation column.
+  - Add accessible search, provider, capability, and sort controls. Capability
+    filters use match-all semantics, update a live result count, expose a reset
+    action, and retain the complete crawlable matrix without JavaScript.
+  - Use the compact MPR public-site language: thin controls, dense bordered
+    rows, restrained semantic badges, and responsive behavior.
+  - Replace the obsolete split public projection and presentation rather than
+    retaining aliases, dual shapes, or compatibility markup.
+  Validation:
+  - Add Go integration coverage through the site-render CLI for the unified
+    catalog and browser coverage for sorting, filtering, reset, accessibility,
+    responsive layout, and the no-JavaScript matrix.
+  - Verify the rendered local landing in Chromium at desktop and mobile widths.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution 2026-08-06:
+  - The secret-free public registry projection now unifies text and dictation
+    routes into one deterministic provider/model contract with exact
+    capabilities, defaults, wire contract, reasoning efforts, and output limit.
+  - The landing renders all 12 providers, 58 models, and 8 filterable
+    capabilities in exactly Provider, Model, and Capabilities columns. Search,
+    provider selection, match-all capability filters, sorting, live count, and
+    reset progressively enhance the complete no-JavaScript table.
+  - Chromium verification passed at 1440 by 1000 and 390 by 844, including a
+    live Gemini plus Image input filter. The baseline `make ci` passed in 90
+    seconds; the final post-edit run passed all 11 gates in 95 seconds with 82
+    browser tests and 100 percent Go statement coverage.
 - [x] [I204] (P0) Adopt the app-owned resource and sibling-gateway lifecycle.
   Goal:
   Make llm-proxy independently releasable and deployable through the shared
@@ -3857,6 +4336,26 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 ## Planning
 *do not implement yet*
 
+- [ ] [P006] (P1) {F019,I212} Define provider lifecycle, model onboarding, and hosted service SLA terms.
+  Goal:
+  Turn the proposed long-term provider support, model-addition timing, and
+  hosted availability promises into measurable service commitments before they
+  appear in public marketing copy.
+  Requirements:
+  - Define separate provider lifecycle, model-onboarding SLO, and hosted uptime
+    SLA scopes, including eligibility, measurement windows, exclusions,
+    deprecation notice, incident communication, and remedies where applicable.
+  - Decide which commitments apply to the open-source integration contract,
+    managed provider onboarding, and a hosted service; do not collapse them into
+    one ambiguous guarantee.
+  - Identify the operational evidence, ownership, monitoring, support channel,
+    and approval needed to publish each commitment.
+  Deliverables:
+  - An approved support-policy and SLA contract suitable for public-site copy,
+    with implementation issues for any missing operational controls.
+  Validation:
+  - Legal, product, and service owners approve each published metric and the
+    production evidence path can calculate it without manual interpretation.
 - [ ] [P001] (P1) {B076} Design a tenant-scoped provider, model, and key-acquisition onboarding flow.
   Goal:
   Let a signed-in managed user complete one clear text-routing setup: select a
