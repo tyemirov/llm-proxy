@@ -118,3 +118,79 @@ func TestIntegration_OmitsDisallowedParameters(testingInstance *testing.T) {
 		})
 	}
 }
+
+func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance *testing.T) {
+	catalog, catalogError := proxy.NewPublicCapabilityCatalog(proxy.Configuration{
+		ProviderModels: testfixtures.ProviderModelCatalogs(testingInstance),
+	})
+	if catalogError != nil {
+		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
+	}
+	if len(catalog.Providers) != 12 || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
+		testingInstance.Fatalf("catalog summary=%+v", catalog)
+	}
+	for _, provider := range catalog.Providers {
+		if provider.Identifier != proxy.ProviderNameGemini {
+			continue
+		}
+		for _, model := range provider.TextModels {
+			if model.Identifier == proxy.ModelNameGemini35Flash {
+				if strings.Join(model.MediaInputs, ",") != "audio,image" {
+					testingInstance.Fatalf("Gemini media inputs=%v", model.MediaInputs)
+				}
+				return
+			}
+		}
+	}
+	testingInstance.Fatal("Gemini 3.5 Flash public capability missing")
+}
+
+func TestPublicCapabilityCatalogRejectsNoncanonicalRuntimeRegistries(testingInstance *testing.T) {
+	testCases := []struct {
+		name          string
+		mutate        func(proxy.ProviderModelCatalogs)
+		expectedError string
+	}{
+		{
+			name: "noncanonical provider identifier",
+			mutate: func(catalogs proxy.ProviderModelCatalogs) {
+				catalogs["OpenAI"] = catalogs[proxy.ProviderNameOpenAI]
+			},
+			expectedError: "reason=not_canonical",
+		},
+		{
+			name: "unknown provider identifier",
+			mutate: func(catalogs proxy.ProviderModelCatalogs) {
+				catalogs["future"] = catalogs[proxy.ProviderNameOpenAI]
+			},
+			expectedError: "reason=unknown",
+		},
+		{
+			name: "incomplete provider registry",
+			mutate: func(catalogs proxy.ProviderModelCatalogs) {
+				delete(catalogs, proxy.ProviderNameMeta)
+			},
+			expectedError: "configured_provider_count=11",
+		},
+		{
+			name: "invalid model catalog",
+			mutate: func(catalogs proxy.ProviderModelCatalogs) {
+				openAICatalog := catalogs[proxy.ProviderNameOpenAI]
+				openAICatalog.Text.DefaultModel = "missing-model"
+				catalogs[proxy.ProviderNameOpenAI] = openAICatalog
+			},
+			expectedError: "invalid_model_catalog",
+		},
+	}
+
+	for _, testCase := range testCases {
+		testingInstance.Run(testCase.name, func(subTestInstance *testing.T) {
+			catalogs := testfixtures.ProviderModelCatalogs(subTestInstance)
+			testCase.mutate(catalogs)
+			_, catalogError := proxy.NewPublicCapabilityCatalog(proxy.Configuration{ProviderModels: catalogs})
+			if catalogError == nil || !strings.Contains(catalogError.Error(), testCase.expectedError) {
+				subTestInstance.Fatalf("error=%v want contains %q", catalogError, testCase.expectedError)
+			}
+		})
+	}
+}
