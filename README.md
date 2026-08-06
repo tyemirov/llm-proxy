@@ -13,7 +13,7 @@ The public [LLM Proxy landing page](https://llm-proxy.mprlab.com/) explains the
 current provider, model, dictation, web-search, request-limit, and integration
 surface. Its capability matrix is generated from the same validated runtime
 catalog used by request routing. The authenticated management workspace lives
-only at [`/manage/`](https://llm-proxy.mprlab.com/manage/).
+only at [`/app/`](https://llm-proxy.mprlab.com/app/).
 
 ## Features
 
@@ -902,7 +902,7 @@ Unknown YAML keys fail startup.
 
 Set `management.enabled: true` to enable TAuth-protected management APIs under
 `/api/management`. The browser site is static and lives in `site/`: `/` is the
-public product landing page and `/manage/` is the only authenticated management
+public product landing page and `/app/` is the only authenticated management
 workspace route. The site is declared as a `github_pages` resource in
 `.mprlab/deploy/resources.yml`.
 `make release`, `make publish`, and `make deploy` delegate that resource to the
@@ -913,7 +913,7 @@ does serve public `/config-ui.yaml` from the loaded management config so the
 GitHub Pages frontend can consume the current llm-proxy runtime, MPR UI, and
 TAuth bootstrap values from `llm-proxy-api`.
 
-The `/manage/` UI uses the shared MPR shell through API-served `config-ui.yaml`,
+The `/app/` UI uses the shared MPR shell through API-served `config-ui.yaml`,
 literal `mpr-ui@latest` assets, `mpr-ui-config.js`,
 `<mpr-header data-config-url="...">`, the `@latest` bundle marker, `<mpr-user>`,
 and `<mpr-footer>`. It does not load `tauth.js` directly or apply MPR UI config
@@ -1304,7 +1304,7 @@ Production is split-origin:
 
 | Hostname | Owner | Purpose |
 |----------|-------|---------|
-| `llm-proxy.mprlab.com` | GitHub Pages | Public landing at `/`; noindex self-service workspace at `/manage/`. |
+| `llm-proxy.mprlab.com` | GitHub Pages | Public landing at `/`; noindex self-service workspace at `/app/`. |
 | `llm-proxy-api.mprlab.com` | MPR gateway/backend | llm-proxy API, management API, `/`, `/v2`, and `/dictate`. |
 | `tauth-api.mprlab.com` | TAuth backend | Google login, nonce, logout, `/auth/session`, and session-cookie issuance. |
 
@@ -1442,7 +1442,9 @@ canonical `configs/config.yml` configuration. The stack has two explicit
 browser-facing endpoints:
 
 - Public landing: `http://localhost:4179/`, served from `site/` by ghttp.
-- Management UI: `http://localhost:4179/manage/`, served from the same static artifact.
+- Management UI: `http://localhost:4179/app/`, served from the same static artifact.
+- OpenAPI schema: `http://localhost:4179/openapi.yaml`, served through the
+  frontend from the canonical read-only `docs/openapi.yaml` mount.
 - Backend API: `http://localhost:8080/`, including the proxy and
   `/api/management/*` endpoints.
 
@@ -1458,15 +1460,16 @@ insecure local HTTP cookie profile is intentionally scoped to the single
 an ordinary reload reads one current set of mounted HTML, CSS, and ES modules
 instead of combining files cached from different working-tree states.
 
-Compose first completes image pulls/builds and reports all three services
+Compose first completes image pulls/builds and reports all four services
 running through `docker compose up --wait`; only then does the bounded HTTP
-readiness budget begin. Readiness proves static content (`200`), the
-ghttp-served runtime config (`200`), the unauthenticated API boundary (`403`),
-the same-origin TAuth session (`204`) and nonce (`200`) boundaries, and the
-unauthenticated management API boundary (`401`). It does not call a paid
-provider. After readiness, Compose logs remain attached in the foreground. Use
-`Ctrl-C` to stop the containers and network; the named local data volumes keep
-local TAuth and management state for the next run.
+readiness budget begin. Readiness proves static content (`200`), the canonical
+OpenAPI mount (`200`), the ghttp-served runtime config (`200`), the
+unauthenticated API boundary (`403`), the same-origin TAuth session (`204`) and
+nonce (`200`) boundaries, and the unauthenticated management API boundary
+(`401`). It does not call a paid provider. After readiness, Compose logs remain
+attached in the foreground. Use `Ctrl-C` to stop the containers and network;
+the named local data volumes keep local TAuth and management state for the next
+run.
 
 Browser startup additionally loads the pinned Alpine 3.13.5 module from
 `https://cdn.jsdelivr.net`. `make up` cannot override a Chrome extension,
@@ -1712,7 +1715,7 @@ The Pages declaration uses `docker/pages/Dockerfile`, whose renderer is the Go
 CLI built from committed source. The renderer reads the provider/model and
 request-limit subtrees of `configs/config.yml`, validates the canonical runtime
 catalog, emits only public capability fields at `/`, and injects the browser
-configuration URL only into `/manage/`. Node remains a developer dependency for
+configuration URL only into `/app/`. Node remains a developer dependency for
 frontend lint and browser tests only; llm-proxy declares no production Node or
 npm resource. Application runtime code has no Caddy deployment knowledge, and
 its TAuth knowledge remains limited to the published client/session
