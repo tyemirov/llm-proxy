@@ -8,7 +8,7 @@ Generated: 2026-07-26
 
 | File | Type | Why reviewed | Key findings | Confidence |
 |---|---|---|---|---|
-| README.md | Required product docs | Primary product description, REST contract, config, management UI, clients, deployment, and security wording | LLM Proxy is a lightweight HTTP proxy for text and dictation providers with tenant-secret auth, server-side credentials, optional TAuth management UI, usage dashboards, provider routing, and strict config loading. | High |
+| README.md | Required product docs | Primary product description, REST contract, config, public landing, management UI, clients, deployment, and security wording | LLM Proxy is a lightweight HTTP proxy for text and dictation providers with tenant-secret auth, server-side credentials, a public capability landing page, a TAuth management workspace at /manage/, usage dashboards, provider routing, and strict config loading. | High |
 | docs/implementation/provider-routing-plan.md | Implementation notes | Provider routing, config ownership, management mode, error contract, and adapter notes | Multi-provider routing, model catalogs, omitted-model behavior, split-origin management, usage storage, and provider-key security are implemented contracts. | High |
 | docs/implementation/dictation-endpoint-plan.md | Implementation notes | Dictation endpoint contract | /dictate accepts multipart audio with key auth and returns JSON text; dictation routing is implemented for supported providers in the current README. | High |
 | docs/marketing/social-media-60-day-campaign.md | Marketing copy | Existing audience and claim framing | Existing public claims emphasize server-side provider keys, multi-provider routing, dictation, usage dashboards, API-served config, and careful encrypted-at-rest wording. | Medium |
@@ -16,12 +16,12 @@ Generated: 2026-07-26
 ### Product Summary
 
 - Product name: LLM Proxy
-- Product category: Multi-provider LLM and dictation HTTP proxy with optional self-service management UI.
+- Product category: Multi-provider LLM and dictation HTTP proxy with a public capability catalog and self-service management workspace.
 - One-sentence description: LLM Proxy forwards authenticated text and audio requests to configured upstream providers while keeping provider credentials server-side and giving callers one tenant-secret HTTP contract.
 - Primary users: Developers, platform engineers, technical founders, AI platform operators, and internal-tool teams.
 - Secondary users: Managed end users who sign in, receive a client key, save provider keys, copy request examples, and inspect usage.
 - Primary job-to-be-done: Centralize provider routing, credentials, request validation, response formatting, dictation, usage metadata, and management workflows behind one service boundary.
-- Installation or usage model: Run the Go backend from config.yml; publish the static management UI from site/ to GitHub Pages; call GET /, POST /, POST /v2, or POST /dictate with key=<tenant secret>.
+- Installation or usage model: Run the Go backend from config.yml; publish the static landing and /manage/ workspace from site/ to GitHub Pages; call GET /, POST /, POST /v2, or POST /dictate with key=<tenant secret>.
 - Current maturity: Implemented repo contract with Go/Python/frontend validation and documented release/deploy workflows.
 
 ### Product Capabilities
@@ -32,7 +32,7 @@ Generated: 2026-07-26
 | Dictation endpoint | Routes multipart audio through /dictate for supported dictation providers. | README dictation section, dictation plan | High | Current | Yes |
 | Tenant-secret auth | Public proxy endpoints require key=<tenant secret>. | README REST and security sections | High | Current | Yes |
 | Server-side provider credentials | Public requests must not send upstream provider keys; credentials stay server-side. | README security, provider routing notes | High | Current | Yes |
-| TAuth management UI | Optional static Pages UI with authenticated profile, provider key, generated secret, settings, usage, and admin views. | README management UI section | High | Current | Yes |
+| TAuth management UI | Static noindex Pages workspace at /manage/ with authenticated profile, provider key, generated secret, settings, usage, and admin views. | README management UI section | High | Current | Yes |
 | Encrypted-at-rest managed provider keys | AES-GCM storage with base64 32-byte key and honest non-zero-knowledge wording. | README management UI section | High | Current | Yes, with caution wording |
 | Usage dashboard | Selectable all-time, 30-day, 7-day, and 1-day usage summaries by request, token, provider, model, status, and time bucket. | README management UI section | High | Current | Yes |
 | API-served runtime config | Browser config comes from backend /config-ui.yaml, not a static Pages config artifact. | README hosted split-origin section | High | Current | Yes |
@@ -154,7 +154,7 @@ Generated: 2026-07-26
 | Factual integrity | 5 | Unsupported proof, customer, compliance, benchmark, pricing, and competitor claims are excluded. |
 | Conversion clarity | 4 | CTAs route to the main management surface and resource hub. |
 | Duplicate-content risk | 4 | Repeated template structure is balanced by distinct problem, workflow, feature, examples, and limitations. |
-| Site integration and discoverability | 5 | Main page, hub, related links, breadcrumbs, sitemap, and robots all align. |
+| Site integration and discoverability | 5 | Public landing, /manage/ separation, hub, related links, breadcrumbs, sitemap, and robots all align. |
 | Google indexing readiness | 4 | Static pages use canonical trailing-slash URLs, visible FAQ, JSON-LD, and crawlable links. |
 | Subagent handoff quality | 4 | This report preserves evidence, opportunity list, integration plan, and evaluation notes. |
 
