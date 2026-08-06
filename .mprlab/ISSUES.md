@@ -40,6 +40,78 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B102] (P1) {F019} Publish the authenticated web application only at `/app/`.
+  Goal:
+  Make `/app/` the single canonical route for the authenticated web application.
+  Evidence:
+  - The authenticated site source currently lives under a management-named
+    directory, and generated landing, API, and resource links use that route.
+  Requirements:
+  - Move the authenticated site source and release renderer to `/app/`.
+  - Update canonical metadata, generators, documentation, and public links to
+    use `/app/`.
+  - Do not retain a second application route, redirect, alias, or compatibility
+    path.
+  - Keep the authenticated application out of the public sitemap and retain its
+    `noindex` metadata.
+  Validation:
+  - Prove `/app/` renders the authenticated application and the removed route
+    returns `404`.
+  - Prove generated OpenAPI and resource pages link only to `/app/`.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - The authenticated source and rendered release artifact now live only at
+    `site/app/index.html` and `/app/`; the removed route has no source,
+    redirect, alias, or compatibility handler and returns `404`.
+  - Landing, OpenAPI, resource, README, canonical metadata, and generated SEO
+    references now point to `/app/`. The application remains `noindex` and is
+    excluded from the public sitemap.
+  - Renderer, static-site, Playwright, and TAuth black-box coverage exercise
+    `/app/` and explicitly reject the removed route where applicable.
+  - The required baseline and post-change `make ci` runs pass. After formatting
+    was applied, the final run followed the last code edit and passed all 11
+    gates in 90 seconds: exact 100% Go coverage, 36 Python tests, 76 browser
+    scenarios, the TAuth black-box scenario, exact OpenAPI Pages publication,
+    and live-provider preflight.
+- [x] [B101] (P1) {I029,F019} Serve the canonical OpenAPI schema from local ghttp.
+  Goal:
+  Make `http://localhost:4179/openapi.yaml` serve the same current OpenAPI file
+  used by release publication without introducing a second schema source.
+  Evidence:
+  - Local ghttp mounts only `site/`, where `openapi.yaml` is intentionally
+    absent, so the landing-page OpenAPI links return `404` under `make up`.
+  - Release rendering already stages exact `docs/openapi.yaml` bytes and CI
+    rejects both publication drift and a tracked `site/openapi.yaml` duplicate.
+  Requirements:
+  - Mount `docs/` read-only in a schema-only ghttp service and proxy the exact
+    `/openapi.yaml` path through the local frontend.
+  - Keep `site/openapi.yaml` forbidden and retain `docs/openapi.yaml` as the
+    only hand-maintained schema.
+  - Make local startup verify the schema route and make browser coverage
+    exercise the rendered artifact rather than a test-only schema handler.
+  Validation:
+  - Prove the local Compose mount and startup probe through the operational
+    black-box test.
+  - Prove the rendered public schema remains byte-equivalent to the canonical
+    source through Playwright and the Pages artifact gate.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - Local Compose now mounts `docs/` read-only in a schema-only ghttp service
+    and proxies only `/openapi.yaml` through the public local frontend, keeping
+    `docs/openapi.yaml` as the sole editable contract.
+  - `make up` now requires the schema service and a successful public schema
+    probe before reporting ready. A real-stack acceptance returned `200`, and
+    the response matched `docs/openapi.yaml` byte-for-byte.
+  - Operational coverage proves the mount, proxy, service, and readiness
+    contracts. Playwright stages the real Pages artifact and serves its schema
+    from disk, while the existing publication gate continues to reject drift
+    and any tracked `site/openapi.yaml` duplicate.
+  - The required baseline and post-change `make ci` runs pass. The final run
+    followed the last code edit and passed all 11 gates in 89 seconds: exact
+    100% Go coverage, 36 Python tests, 76 browser scenarios, the TAuth black-box
+    scenario, exact OpenAPI Pages publication, and live-provider preflight.
 - [x] [B100] (P0) Make declared frontend validation self-contained in a clean checkout.
   Goal:
   Make the public `make test` and `make ci` contracts install their exact pinned
@@ -3700,7 +3772,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   Make the Pages root an indexable, useful LLM Proxy landing page that accurately
   explains what the service does, who it is for, how it is used, and every
   currently supported provider/model capability. Move the existing authenticated
-  management workspace to the one canonical `/manage/` route so public product
+  management workspace to the one canonical `/app/` route so public product
   discovery and key-management workspaces are not competing root pages.
   Requirements:
   - Serve a public, useful `https://llm-proxy.mprlab.com/` landing page without
@@ -3709,7 +3781,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     information architecture changes.
   - Move the current MPR UI/TAuth management shell, its rendered
     `data-config-url`, header navigation, logout destination, browser tests,
-    and release renderer to `/manage/`. `/manage/` is a private workspace
+    and release renderer to `/app/`. `/app/` is a private workspace
     entry, uses `noindex`, and is absent from the public sitemap; do not leave
     a duplicate root workspace, JavaScript/meta-refresh redirect, or legacy
     management route.
@@ -3730,7 +3802,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     behavior, self-service encrypted provider-key management, generated-secret
     rotation, usage visibility, and Go/Python/CLI integration options. State
     model/provider limitations rather than implying universal feature parity.
-  - Provide clear crawlable calls to action for `/manage/`, the resource hub,
+  - Provide clear crawlable calls to action for `/app/`, the resource hub,
     and current integration documentation. Use semantic HTML, visible focus,
     accessible tables/filters, concise unique metadata, canonical root URLs,
     and structured data that describes only visible landing-page content.
@@ -3738,11 +3810,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Add the canonical catalog projection/build contract and a static public
     landing page with capability sections, provider/model matrix, limitations,
     and conversion paths.
-  - Relocate and render the management application at `/manage/`, update all
+  - Relocate and render the management application at `/app/`, update all
     root/resource/header/footer links, and document the new public-vs-private
     Pages route contract in README and deployment/site-render guidance.
   - Update the resource hub and shared site shell so public navigation points to
-    the landing page while management calls to action point only to `/manage/`.
+    the landing page while management calls to action point only to `/app/`.
   - Do not duplicate catalogs in HTML/JavaScript/docs, make availability claims
     based on whether a particular user has a key, expose secrets, or preserve a
     second root management implementation.
@@ -3751,16 +3823,16 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     reflects the validated catalog, has no secret-bearing fields, and rejects
     catalog/render drift.
   - Add Playwright coverage for an anonymous public landing, its accessible
-    provider/model matrix and CTAs, navigation to `/manage/`, and the full
+    provider/model matrix and CTAs, navigation to `/app/`, and the full
     existing authenticated management lifecycle at that new route.
   - Verify root canonical, Open Graph, JSON-LD, sitemap, and resource links use
-    the final public URL form, while `/manage/` is noindex and excluded from
+    the final public URL form, while `/app/` is noindex and excluded from
     sitemap output.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
   Resolved 2026-08-06:
   - Replaced the Pages root management shell with an accessible public product
-    landing and moved the only authenticated workspace to noindex `/manage/`.
+    landing and moved the only authenticated workspace to noindex `/app/`.
   - Added a deterministic, secret-free provider/model capability projection
     from the validated runtime registry and made invalid config, catalog, or
     landing markers fail the Pages render.
@@ -3770,6 +3842,16 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     followed the last code edit and passed all 11 gates: exact 100% Go coverage,
     36 Python tests, 76 browser scenarios, the real TAuth black-box scenario,
     Pages artifact checks, and live-provider harness preflight.
+  - Follow-up 2026-08-06: replaced the 130px hand-built landing footer with the
+    shared in-flow `<mpr-footer size="small">`, retained all five public
+    destinations with compact labels, and added desktop/mobile browser checks
+    for a maximum 56px rendered height and no horizontal overflow. The required
+    baseline and final `make ci` runs pass; the final run passed all 11 gates.
+  - Follow-up 2026-08-06: moved the value strip's border and raised background
+    from the full-width section to the centered three-item grid, removing the
+    empty side rectangles without changing the One endpoint, One credential,
+    or One contract panels. Desktop/mobile browser geometry and all 11 `make ci`
+    gates pass.
 
 
 ## Planning
@@ -3849,7 +3931,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   Requirements:
   - Produce a new repo-grounded SEO report before changing public copy. It must
     inventory current capabilities, limits, public routes, existing resource
-    pages, claim evidence, unsupported claims, the final landing/`/manage/`
+    pages, claim evidence, unsupported claims, the final landing/`/app/`
     separation, and every current provider/model capability from F019's
     generated catalog.
   - Audit and cover distinct user jobs including: self-service bring-your-own
@@ -3874,7 +3956,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     Keep every model/provider assertion tied to the generated public catalog.
   - Enforce the complete indexing contract: canonical, sitemap, Open Graph,
     JSON-LD, and crawlable internal links use one final trailing-slash URL;
-    root and the resource hub link to all public content; `/manage/`, private
+    root and the resource hub link to all public content; `/app/`, private
     API pages, token pages, redirects, and noindex pages stay out of the
     sitemap. Schema must match visible content, and article-like pages need
     visible maintainer attribution and a verifiable publication/modification
@@ -3904,7 +3986,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     sitemap entries that are not public `200` pages, invalid JSON-LD, or a page
     that does not meet the documented specificity/doorway thresholds.
   - Add black-box static-site/browser coverage for the public root, hub,
-    representative pages from every use-case family, `/manage/` exclusion, and
+    representative pages from every use-case family, `/app/` exclusion, and
     crawlable navigation from landing page to hub to resource page.
   - Require an evaluation result of at least 4/5 for repo grounding, use-case
     specificity, doorway safety, metadata, conversion clarity, duplicate-risk,
@@ -3922,7 +4004,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     footer on the landing page, the resource hub, and every generated public
     resource page. It must contain a descriptive, crawlable anchor to the
     canonical `/resources/` hub; it must not depend on JavaScript interaction,
-    a sitemap, or an authenticated `/manage/` page to discover the resources.
+    a sitemap, or an authenticated `/app/` page to discover the resources.
   - Treat the footer as an always-rendered part of the public document shell,
     rather than an optional resource-hub-only fragment. The Resources entry
     must remain available in normal document flow at every supported viewport
@@ -3936,7 +4018,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     same deterministic site manifest/template contract as the hub, pages,
     canonical URLs, and sitemap. Do not hand-maintain duplicate footer links,
     retain the current hub-only footer, or create a legacy layout path.
-  - Preserve F019's public-root versus private-`/manage/` separation and
+  - Preserve F019's public-root versus private-`/app/` separation and
     P003's canonical trailing-slash, accessibility, and indexing contracts.
     The footer must never expose tenant data, secrets, private API routes, or
     noindex management URLs as public resource navigation.
@@ -3958,7 +4040,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     out of order; when resource content escapes `main`; or when the footer link
     is not the canonical public hub URL.
   - Extend the public-site link/canonical audit to prove footer discovery uses
-    a normal crawlable anchor and keeps `/manage/`, APIs, secrets, redirects,
+    a normal crawlable anchor and keeps `/app/`, APIs, secrets, redirects,
     and noindex pages out of resource navigation.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
@@ -3980,7 +4062,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Render each legal page through the canonical public shell established by
     F019 and P004: one shared header, one `main` element containing the legal
     document, and the shared footer. The footer must expose descriptive,
-    crawlable `Privacy` and `Terms` links on the landing page, `/manage/`, the
+    crawlable `Privacy` and `Terms` links on the landing page, `/app/`, the
     resource hub, every resource page, and both legal pages themselves.
   - Follow the PoodleScanner pattern of a semantic `mpr-legal-document` for
     `privacy` and `terms`, with a fully readable static fallback inside the
