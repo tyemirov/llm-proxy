@@ -40,6 +40,41 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B110] (P1) {F019,B105,B109} Resolve the remaining public-site review correctness findings.
+  Goal:
+  Make the public-site validation and local cleanup contracts fail visibly when
+  their authoritative inputs or lifecycle state are invalid.
+  Requirements:
+  - Type-check every production browser module in the binding frontend lint
+    gate and resolve the complete module graph without weakening diagnostics.
+  - Reject capability catalogs containing an identifier that has no public
+    presentation definition.
+  - Remove the temporary local-site artifact only after Compose shutdown
+    succeeds, and return a failure when automatic shutdown fails.
+  Validation:
+  - Static frontend validation covers every production browser JavaScript file.
+  - Go integration coverage proves unknown capability identifiers fail the site
+    render contract.
+  - Operational coverage proves failed shutdown retains the mounted artifact
+    and exits unsuccessfully.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - Frontend lint now discovers every generator and production browser module,
+    normalizes browser-only cache query specifiers in a temporary mirror, and
+    runs `tsc --noEmit` across the complete tree. The resulting JSDoc fixes are
+    published with coherent application revision `20260806b110`.
+  - Site rendering now rejects every capability identifier without exactly one
+    public presentation definition and reports the provider and model context
+    through `site_render_failed`.
+  - Automatic local shutdown now retains the mounted site artifact and exits
+    unsuccessfully when Compose shutdown fails; black-box operational coverage
+    proves both the retained directory and visible failure receipt.
+  - The required baseline passed all 11 gates in 104 seconds. The first
+    post-edit run found one stale `b109` cache assertion; after correcting that
+    assertion, the final run passed all 11 gates in 101 seconds with 82 browser
+    tests, 36 Python tests, the TAuth black-box scenario, live-provider
+    preflight, and exact 100% Go statement coverage.
 - [x] [B109] (P1) {F019,I209} Resolve the public-site review validation findings.
   Goal:
   Keep cached authenticated-app module graphs coherent, enforce JSDoc
