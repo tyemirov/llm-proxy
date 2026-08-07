@@ -32,7 +32,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20260806b109";
+const applicationModuleRevision = "20260806b110";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",

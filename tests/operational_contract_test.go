@@ -733,6 +733,119 @@ exec "${REAL_AWK_PATH:?}" "$@"
 	}
 }
 
+func TestOperationalMakeUpRetainsSiteArtifactWhenAutomaticShutdownFails(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	for _, relativePath := range []string{
+		"Makefile",
+		"docker-compose.local.yml",
+		filepath.Join(operationalScriptsDirectory, "up.sh"),
+		filepath.Join(operationalScriptsDirectory, "local_orchestration.sh"),
+	} {
+		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
+	}
+	writeOperationalLocalEnvironment(testingInstance, fixtureRoot)
+
+	toolDirectory := filepath.Join(fixtureRoot, "tools")
+	temporaryDirectory := filepath.Join(fixtureRoot, "temporary")
+	if createTemporaryDirectoryError := os.MkdirAll(temporaryDirectory, 0o700); createTemporaryDirectoryError != nil {
+		testingInstance.Fatalf("create failed-shutdown temporary directory: %v", createTemporaryDirectoryError)
+	}
+	localSiteArtifactPath := filepath.Join(fixtureRoot, "local-site-artifact-path")
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "docker"), `#!/usr/bin/env bash
+set -euo pipefail
+
+[[ "${1:?}" == "compose" ]]
+shift
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --project-name|--file)
+      shift 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+case "${1:?}" in
+  version|logs)
+    exit 0
+    ;;
+  up)
+    [[ -d "${LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY:?}" ]]
+    builtin printf '%s\n' "${LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY}" >"${LOCAL_SITE_ARTIFACT_CAPTURE:?}"
+    ;;
+  ps)
+    builtin printf '%s\n' api frontend schema tauth
+    ;;
+  down)
+    exit 41
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+`, 0o755)
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env bash
+set -euo pipefail
+
+arguments="$*"
+if [[ "${arguments}" != *"--write-out"* ]]; then
+  builtin printf '%s' '<table class="catalog-table"><tr><td>validated public route</td></tr></table>'
+  exit 0
+fi
+case "${arguments}" in
+  *"http://localhost:4179/auth/session"*)
+    status=204
+    ;;
+  *"http://localhost:4179/auth/nonce"*|*"http://localhost:4179/"*)
+    status=200
+    ;;
+  *"http://localhost:8080/?prompt=ready"*)
+    status=403
+    ;;
+  *"http://localhost:8080/api/management/account"*)
+    status=401
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+builtin printf '%s' "${status}"
+`, 0o755)
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "openssl"), `#!/usr/bin/env bash
+set -euo pipefail
+
+[[ "${1:?}" == "rand" ]]
+[[ "${2:?}" == "-base64" ]]
+builtin printf '%s' generated-local-value
+`, 0o755)
+
+	command := exec.Command("make", "up")
+	command.Dir = fixtureRoot
+	command.Env = append(
+		os.Environ(),
+		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"TMPDIR="+temporaryDirectory,
+		"LOCAL_SITE_ARTIFACT_CAPTURE="+localSiteArtifactPath,
+	)
+	output, commandError := command.CombinedOutput()
+	if _, isExitError := commandError.(*exec.ExitError); !isExitError {
+		testingInstance.Fatalf("failed automatic shutdown exit=%v, want nonzero\n%s", commandError, output)
+	}
+	if !strings.Contains(string(output), "error: local orchestration cleanup failed") {
+		testingInstance.Fatalf("failed automatic shutdown omitted cleanup error: %s", output)
+	}
+	localSiteArtifactBytes, readLocalSiteArtifactError := os.ReadFile(localSiteArtifactPath)
+	if readLocalSiteArtifactError != nil {
+		testingInstance.Fatalf("read retained local site artifact path: %v", readLocalSiteArtifactError)
+	}
+	localSiteArtifactDirectory := strings.TrimSpace(string(localSiteArtifactBytes))
+	if _, statError := os.Stat(localSiteArtifactDirectory); statError != nil {
+		testingInstance.Fatalf("failed automatic shutdown removed mounted artifact %s: %v", localSiteArtifactDirectory, statError)
+	}
+}
+
 func TestOperationalMakeUpRejectsAnotherProcessReadinessResponse(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixtureRoot := testingInstance.TempDir()
