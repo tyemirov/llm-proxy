@@ -17,8 +17,9 @@ import {
   USAGE_OUTCOME_LABELS,
   USAGE_STATUS_LABELS,
   APP_INTEGRITY_ERROR,
-} from "../constants.js?v=20260806b109";
+} from "../constants.js?v=20260806b110";
 import {
+  BackendClientError,
   createTenant as requestCreateTenant,
   deleteTenant as requestDeleteTenant,
   fetchAccountUsageFailures,
@@ -35,7 +36,7 @@ import {
   revealProviderKey as requestRevealProviderKey,
   saveProviderKey as requestSaveProviderKey,
   updateDefaults as requestUpdateDefaults,
-} from "../core/backendClient.js?v=20260806b109";
+} from "../core/backendClient.js?v=20260806b110";
 import {
   emptyUsageSummary,
   modelRows,
@@ -44,13 +45,13 @@ import {
   usagePolyline,
   USAGE_CHART,
   USAGE_METRICS,
-} from "./usagePresentation.js?v=20260806b109";
+} from "./usagePresentation.js?v=20260806b110";
 import {
   applyUserMenuItems,
   readMprUIAuthStatus,
   waitForMprUIAutoOrchestrationReady,
-} from "../core/mprShell.js?v=20260806b109";
-import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260806b109";
+} from "../core/mprShell.js?v=20260806b110";
+import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260806b110";
 
 const EMPTY_SECRET_PLACEHOLDER = "<generated-secret>";
 const EMPTY_STRING = "";
@@ -70,6 +71,25 @@ const SAVED_PROVIDER_KEY_MASK = "saved";
 const TENANT_NAME_MAXIMUM_CHARACTERS = 80;
 
 /**
+ * @typedef {{
+ *   $nextTick: (callback: () => void) => void,
+ *   $refs: Record<string, HTMLElement> & {
+ *     providerSelector: HTMLSelectElement,
+ *     settingsTenantSelector: HTMLSelectElement
+ *   }
+ * }} AlpineMagic
+ */
+
+/**
+ * @template {object} Component
+ * @param {Component & ThisType<Component & AlpineMagic>} component
+ * @returns {Component & AlpineMagic}
+ */
+function alpineComponent(component) {
+  return /** @type {Component & AlpineMagic} */ (component);
+}
+
+/**
  * @param {string} keyValue
  * @returns {string}
  */
@@ -78,7 +98,7 @@ function maskedProviderKey(keyValue) {
 }
 
 export function createKeyManagement() {
-  return {
+  return alpineComponent({
     states: {
       loading: AUTH_STATES.LOADING,
       authenticated: AUTH_STATES.AUTHENTICATED,
@@ -87,8 +107,10 @@ export function createKeyManagement() {
     },
     dashboardViews: DASHBOARD_VIEWS,
     copy: COPY,
+    /** @type {import("../types.d.js").AuthState} */
     authState: AUTH_STATES.LOADING,
     busy: false,
+    /** @type {import("../types.d.js").DashboardView} */
     dashboardView: DASHBOARD_VIEWS.USAGE,
     usageIntervals: USAGE_INTERVALS,
     /** @type {import("../types.d.js").UsageInterval} */
@@ -175,6 +197,7 @@ export function createKeyManagement() {
     deleteTenantPending: false,
     discardTenantChangesOpen: false,
     pendingTenantID: EMPTY_STRING,
+    /** @type {{ kind: string, message: string }} */
     notice: {
       kind: NOTICE_KINDS.INFO,
       message: EMPTY_STRING,
@@ -204,7 +227,7 @@ export function createKeyManagement() {
     },
 
     get settingsTenant() {
-      return this.tenants.find((tenant) => tenant.id === this.settingsTenantID) || null;
+      return this.tenants.find((/** @type {import("../types.d.js").ManagementTenantSummary} */ tenant) => tenant.id === this.settingsTenantID) || null;
     },
 
     get settingsTenantName() {
@@ -242,7 +265,7 @@ export function createKeyManagement() {
     },
 
     get hasSavedProviderKey() {
-      return this.providers.some((provider) => provider.has_key);
+      return this.providers.some((/** @type {import("../types.d.js").ProviderProfile} */ provider) => provider.has_key);
     },
 
     get settingsRequired() {
@@ -308,12 +331,12 @@ export function createKeyManagement() {
     },
 
     get selectedTextModels() {
-      const provider = this.providers.find((candidateProvider) => candidateProvider.id === this.defaults.provider);
-      return provider ? provider.text_models.map((model) => model.id) : [];
+      const provider = this.providers.find((/** @type {import("../types.d.js").ProviderProfile} */ candidateProvider) => candidateProvider.id === this.defaults.provider);
+      return provider ? provider.text_models.map((/** @type {import("../types.d.js").TextModelProfile} */ model) => model.id) : [];
     },
 
     get keyedTextProviders() {
-      return this.providers.filter((provider) => provider.has_key);
+      return this.providers.filter((/** @type {import("../types.d.js").ProviderProfile} */ provider) => provider.has_key);
     },
 
     get hasKeyedTextProviders() {
@@ -342,7 +365,7 @@ export function createKeyManagement() {
     },
 
     get dictationProviders() {
-      return this.keyedTextProviders.filter((provider) => provider.supports_dictation);
+      return this.keyedTextProviders.filter((/** @type {import("../types.d.js").ProviderProfile} */ provider) => provider.supports_dictation);
     },
 
     get hasDictationProviders() {
@@ -350,7 +373,7 @@ export function createKeyManagement() {
     },
 
     get selectedDictationModels() {
-      const provider = this.providers.find((candidateProvider) => candidateProvider.id === this.defaults.dictation_provider);
+      const provider = this.providers.find((/** @type {import("../types.d.js").ProviderProfile} */ candidateProvider) => candidateProvider.id === this.defaults.dictation_provider);
       return provider ? provider.dictation_models : [];
     },
 
@@ -450,7 +473,7 @@ export function createKeyManagement() {
     },
 
     get usageFailuresIntervalLabel() {
-      const interval = this.usageIntervals.find((candidate) => candidate.id === this.selectedUsageInterval);
+      const interval = this.usageIntervals.find((/** @type {{ id: import("../types.d.js").UsageInterval }} */ candidate) => candidate.id === this.selectedUsageInterval);
       if (!interval) {
         throw new Error(`usage_interval_invalid:${this.selectedUsageInterval}`);
       }
@@ -459,8 +482,8 @@ export function createKeyManagement() {
 
     get usageFailureStatusRows() {
       return this.usage.status_codes
-        .filter((status) => status.status_code >= 400)
-        .map((status) => ({
+        .filter((/** @type {{ status_code: number, requests: number }} */ status) => status.status_code >= 400)
+        .map((/** @type {{ status_code: number, requests: number }} */ status) => ({
           statusCode: status.status_code,
           label: usageStatusLabel(status.status_code),
           requests: formatNumber(status.requests),
@@ -468,7 +491,7 @@ export function createKeyManagement() {
     },
 
     get usageFailureRows() {
-      return this.usageFailures.map((failure) => usageFailurePresentation(failure));
+      return this.usageFailures.map((/** @type {import("../types.d.js").ManagementUsageFailure | import("../types.d.js").ManagementAccountUsageFailure} */ failure) => usageFailurePresentation(failure));
     },
 
     get hasLoadedUsageFailures() {
@@ -950,7 +973,7 @@ export function createKeyManagement() {
         assertManagementTenantProfile(createdProfile, createdProfile.tenant.id);
         const createdSummary = tenantSummaryFromProfile(createdProfile);
         this.tenants = [...this.tenants, createdSummary];
-        this.account = { ...this.account, tenants: this.tenants };
+        this.account = managementAccountWithTenants(this.account, this.tenants);
         this.createTenantDialogOpen = false;
         this.createTenantName = EMPTY_STRING;
         await this.switchSettingsTenant(createdSummary.id, createdProfile);
@@ -959,7 +982,7 @@ export function createKeyManagement() {
         }
       } catch (requestError) {
         if (!isAbortError(requestError) && this.tenantLifetimeController === lifetimeController) {
-          this.createTenantError = requestError && requestError.status === 409
+          this.createTenantError = requestError instanceof BackendClientError && requestError.status === 409
             ? COPY.tenantNameConflict
             : profileFailureMessage(requestError);
         }
@@ -1028,7 +1051,7 @@ export function createKeyManagement() {
           this.tenants = this.tenants.map((tenant) => (
             tenant.id === tenantID ? tenantSummaryFromProfile(updatedProfile) : tenant
           ));
-          this.account = { ...this.account, tenants: this.tenants };
+          this.account = managementAccountWithTenants(this.account, this.tenants);
           this.tenantNameDraft = updatedProfile.tenant.name;
           this.tenantRenameDialogOpen = false;
           this.tenantNameDirty = false;
@@ -1042,7 +1065,7 @@ export function createKeyManagement() {
         }));
       } catch (requestError) {
         if (!isAbortError(requestError) && this.canApplySettingsTenant(appVersion, tenantID)) {
-          this.tenantNameError = requestError && requestError.status === 409
+          this.tenantNameError = requestError instanceof BackendClientError && requestError.status === 409
             ? COPY.tenantNameConflict
             : profileFailureMessage(requestError);
         }
@@ -1094,7 +1117,7 @@ export function createKeyManagement() {
           return;
         }
         this.tenants = this.tenants.filter((tenant) => tenant.id !== deletedTenantID);
-        this.account = { ...this.account, tenants: this.tenants };
+        this.account = managementAccountWithTenants(this.account, this.tenants);
         this.deleteTenantConfirmationOpen = false;
         const usageNeedsRefresh = this.usageScopeIsAllTenants || this.selectedUsageTenantID === deletedTenantID;
         if (this.selectedUsageTenantID === deletedTenantID) {
@@ -1113,7 +1136,7 @@ export function createKeyManagement() {
         if (!isAbortError(requestError) && this.settingsTenantID === deletedTenantID) {
           this.setNotice(
             NOTICE_KINDS.ERROR,
-            requestError && requestError.status === 409 ? COPY.finalTenantDeletion : profileFailureMessage(requestError),
+            requestError instanceof BackendClientError && requestError.status === 409 ? COPY.finalTenantDeletion : profileFailureMessage(requestError),
           );
         }
       } finally {
@@ -1500,9 +1523,9 @@ export function createKeyManagement() {
       if (!this.settingsRequired) {
         return;
       }
-      const focusableControls = [...this.$refs.settingsModal.querySelectorAll(
+      const focusableControls = [.../** @type {NodeListOf<HTMLElement>} */ (this.$refs.settingsModal.querySelectorAll(
         'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
-      )].filter((control) => control.getClientRects().length > 0);
+      ))].filter((control) => control.getClientRects().length > 0);
       const firstControl = focusableControls[0];
       const lastControl = focusableControls[focusableControls.length - 1];
       if (event.shiftKey && document.activeElement === firstControl) {
@@ -2281,6 +2304,7 @@ export function createKeyManagement() {
       const previousMutation = this.profileMutationTail;
       /** @type {() => void} */
       let releaseMutation = () => {};
+      /** @type {Promise<void>} */
       const mutationCompleted = new Promise((resolve) => {
         releaseMutation = resolve;
       });
@@ -2511,7 +2535,7 @@ export function createKeyManagement() {
       }
       this.notice = { kind: NOTICE_KINDS.INFO, message: EMPTY_STRING };
     },
-  };
+  });
 }
 
 /**
@@ -2519,9 +2543,9 @@ export function createKeyManagement() {
  * @param {HTMLElement} dialog
  */
 function trapDialogFocus(event, dialog) {
-  const focusableControls = [...dialog.querySelectorAll(
+  const focusableControls = [.../** @type {NodeListOf<HTMLElement>} */ (dialog.querySelectorAll(
     'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-  )].filter((control) => control.getClientRects().length > 0);
+  ))].filter((control) => control.getClientRects().length > 0);
   const firstControl = focusableControls[0];
   const lastControl = focusableControls[focusableControls.length - 1];
   if (event.shiftKey && document.activeElement === firstControl) {
@@ -2590,6 +2614,9 @@ function normalizedUsageFailure(failure, accountScope) {
     latency_ms: failure.latency_ms,
   };
   if (accountScope) {
+    if (!("tenant_id" in failure) || !("tenant_name" in failure)) {
+      throw new Error(APP_INTEGRITY_ERROR);
+    }
     if (
       typeof failure.tenant_id !== "string" ||
       !failure.tenant_id ||
@@ -2824,15 +2851,19 @@ function assertReasoningEffortCapability(capability) {
   if (capability === undefined) {
     return;
   }
+  if (!capability || typeof capability !== "object") {
+    throw new Error(APP_INTEGRITY_ERROR);
+  }
+  const candidate = /** @type {Record<string, unknown>} */ (capability);
+  const efforts = candidate.efforts;
   if (
-    !capability ||
-    typeof capability.adapter !== "string" ||
-    capability.adapter === EMPTY_STRING ||
-    capability.adapter !== capability.adapter.trim() ||
-    !Array.isArray(capability.efforts) ||
-    capability.efforts.length === 0 ||
-    new Set(capability.efforts).size !== capability.efforts.length ||
-    !capability.efforts.every((effort) => typeof effort === "string" && effort !== EMPTY_STRING && effort === effort.trim())
+    typeof candidate.adapter !== "string" ||
+    candidate.adapter === EMPTY_STRING ||
+    candidate.adapter !== candidate.adapter.trim() ||
+    !Array.isArray(efforts) ||
+    efforts.length === 0 ||
+    new Set(efforts).size !== efforts.length ||
+    !efforts.every((/** @type {unknown} */ effort) => typeof effort === "string" && effort !== EMPTY_STRING && effort === effort.trim())
   ) {
     throw new Error(APP_INTEGRITY_ERROR);
   }
@@ -2849,6 +2880,18 @@ function profileProvider(providers, providerID) {
     throw new Error(APP_INTEGRITY_ERROR);
   }
   return provider;
+}
+
+/**
+ * @param {import("../types.d.js").ManagementAccount | null} account
+ * @param {import("../types.d.js").ManagementTenantSummary[]} tenants
+ * @returns {import("../types.d.js").ManagementAccount}
+ */
+function managementAccountWithTenants(account, tenants) {
+  if (!account) {
+    throw new Error(APP_INTEGRITY_ERROR);
+  }
+  return { ...account, tenants };
 }
 
 /**
@@ -2973,7 +3016,7 @@ function providerKeyVerificationError(requestError) {
     return null;
   }
   const errorCode = requestError.message.trim();
-  if (!Object.values(PROVIDER_KEY_VERIFICATION_ERRORS).includes(errorCode)) {
+  if (!Object.values(PROVIDER_KEY_VERIFICATION_ERRORS).some((knownError) => knownError === errorCode)) {
     return null;
   }
   return /** @type {import("../types.d.js").ProviderKeyVerificationError} */ (errorCode);

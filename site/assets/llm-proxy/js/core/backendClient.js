@@ -1,6 +1,6 @@
 // @ts-check
 
-import { MPR_UI } from "../constants.js?v=20260806b109";
+import { MPR_UI } from "../constants.js?v=20260806b110";
 
 const MANAGEMENT_BASE_PATH = "/api/management";
 const HEADER_CONTENT_TYPE = "Content-Type";
@@ -244,6 +244,7 @@ export function loadFrontendRuntimeConfig() {
  */
 async function requestJSON(path, options) {
   const runtimeConfig = await loadFrontendRuntimeConfig();
+  /** @type {RequestInit} */
   const requestInit = {
     method: options.method,
     credentials: "include",

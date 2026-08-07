@@ -140,6 +140,14 @@
  */
 
 /**
+ * @typedef {"loading" | "authenticated" | "unauthenticated" | "error"} AuthState
+ */
+
+/**
+ * @typedef {"usage" | "admin"} DashboardView
+ */
+
+/**
  * @typedef {"all" | "30d" | "7d" | "1d"} UsageInterval
  */
 
