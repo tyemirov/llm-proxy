@@ -9,14 +9,8 @@
     "target": "ES2022",
     "types": ["node"]
   },
-  "files": [
-    "scripts/check_frontend_syntax.mjs",
-    "scripts/generate_openapi_docs.mjs",
-    "scripts/generate_public_site_shell.mjs",
-    "scripts/generate_seo_resources.mjs",
-    "scripts/public_site_shell.mjs",
-    "site/assets/llm-proxy/js/constants.js",
-    "site/assets/llm-proxy/js/types.d.js",
-    "site/assets/llm-proxy/js/ui/capabilityCatalog.js"
+  "include": [
+    "scripts/**/*.mjs",
+    "site/assets/llm-proxy/js/**/*.js"
   ]
 }
