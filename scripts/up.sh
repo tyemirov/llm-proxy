@@ -190,7 +190,10 @@ remove_local_site_artifact_directory() {
 cleanup() {
   local exit_status=$?
   trap - EXIT HUP INT TERM
-  stop_local_stack || true
+  if ! stop_local_stack; then
+    echo "error: local orchestration cleanup failed" >&2
+    exit 1
+  fi
   remove_local_site_artifact_directory
   exit "${exit_status}"
 }
