@@ -337,7 +337,10 @@ func writeRenderedCapabilityCatalog(outputDirectory string, capabilityCatalog pr
 }
 
 func renderSiteCapabilityCatalog(capabilityCatalog proxy.PublicCapabilityCatalog) (string, error) {
-	catalogView := newSiteCapabilityCatalogView(capabilityCatalog)
+	catalogView, viewError := newSiteCapabilityCatalogView(capabilityCatalog)
+	if viewError != nil {
+		return constants.EmptyString, fmt.Errorf("%w: capability catalog: %v", errSiteRenderFailed, viewError)
+	}
 	catalogTemplate, parseError := template.New("capability-catalog").Parse(siteCapabilityCatalogTemplateSource)
 	if parseError != nil {
 		return constants.EmptyString, fmt.Errorf("%w: capability catalog template: %v", errSiteRenderFailed, parseError)
@@ -349,12 +352,15 @@ func renderSiteCapabilityCatalog(capabilityCatalog proxy.PublicCapabilityCatalog
 	return renderedCatalog.String(), nil
 }
 
-func newSiteCapabilityCatalogView(capabilityCatalog proxy.PublicCapabilityCatalog) siteCapabilityCatalogView {
+func newSiteCapabilityCatalogView(capabilityCatalog proxy.PublicCapabilityCatalog) (siteCapabilityCatalogView, error) {
 	modelViews := make([]siteCapabilityModelView, 0)
 	availableCapabilities := make(map[string]struct{})
 	for _, provider := range capabilityCatalog.Providers {
 		for _, model := range provider.Models {
-			capabilities := siteCapabilities(model.Capabilities)
+			capabilities, capabilitiesError := siteCapabilities(model.Capabilities)
+			if capabilitiesError != nil {
+				return siteCapabilityCatalogView{}, fmt.Errorf("provider=%s model=%s: %w", provider.Identifier, model.Identifier, capabilitiesError)
+			}
 			for _, capability := range capabilities {
 				availableCapabilities[capability.Identifier] = struct{}{}
 			}
@@ -388,7 +394,7 @@ func newSiteCapabilityCatalogView(capabilityCatalog proxy.PublicCapabilityCatalo
 		MaxPromptSize:     publicBinarySize(capabilityCatalog.MaxPromptBytes),
 		MaxAudioSize:      publicBinarySize(capabilityCatalog.MaxInputAudioBytes),
 		MaxRequestTimeout: strconv.Itoa(capabilityCatalog.MaxRequestTimeoutSeconds) + " seconds",
-	}
+	}, nil
 }
 
 func siteModelSearchText(providerIdentifier string, providerLabel string, model proxy.PublicModelCapability, capabilities []siteCapabilityDefinition) string {
@@ -421,14 +427,25 @@ var siteCapabilityDefinitions = []siteCapabilityDefinition{
 	{Identifier: proxy.PublicModelCapabilityReasoning, Label: "Reasoning", ClassName: "capability-badge--success"},
 }
 
-func siteCapabilities(capabilityIdentifiers []string) []siteCapabilityDefinition {
+func siteCapabilities(capabilityIdentifiers []string) ([]siteCapabilityDefinition, error) {
+	for _, capabilityIdentifier := range capabilityIdentifiers {
+		presentationCount := 0
+		for _, definition := range siteCapabilityDefinitions {
+			if definition.Identifier == capabilityIdentifier {
+				presentationCount++
+			}
+		}
+		if presentationCount != 1 {
+			return nil, fmt.Errorf("capability_presentation_invalid: capability=%s presentations=%d", capabilityIdentifier, presentationCount)
+		}
+	}
 	capabilities := make([]siteCapabilityDefinition, 0, len(capabilityIdentifiers))
 	for _, definition := range siteCapabilityDefinitions {
 		if containsString(capabilityIdentifiers, definition.Identifier) {
 			capabilities = append(capabilities, definition)
 		}
 	}
-	return capabilities
+	return capabilities, nil
 }
 
 func siteDefaults(defaultEndpoints []string) []siteDefaultDefinition {

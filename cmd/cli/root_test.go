@@ -913,7 +913,7 @@ func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
 	}
 }
 
-func TestRootCommandRejectsSiteRenderInjectedFilesystemFailures(t *testing.T) {
+func TestRootCommandRejectsSiteRenderInjectedFailures(t *testing.T) {
 	testCases := []struct {
 		name          string
 		setup         func(*testing.T, string, string)
@@ -1050,6 +1050,13 @@ func TestRootCommandRejectsSiteRenderInjectedFilesystemFailures(t *testing.T) {
 				}
 			},
 			expectedError: "catalog execution failed",
+		},
+		{
+			name: "catalog capability presentation missing",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				siteCapabilityDefinitions = siteCapabilityDefinitions[1:]
+			},
+			expectedError: "capability_presentation_invalid: capability=text presentations=0",
 		},
 		{
 			name: "stale config removal failure",
@@ -2085,6 +2092,7 @@ func failingServeProxy(t *testing.T) func(proxy.Configuration, *zap.SugaredLogge
 func withSiteRendererDependencies(t *testing.T) {
 	t.Helper()
 	originalSiteCapabilityCatalogTemplateSource := siteCapabilityCatalogTemplateSource
+	originalSiteCapabilityDefinitions := siteCapabilityDefinitions
 	originalSiteCopyFS := siteCopyFS
 	originalSiteExecuteCapabilityCatalog := siteExecuteCapabilityCatalog
 	originalSitePathAbs := sitePathAbs
@@ -2096,6 +2104,7 @@ func withSiteRendererDependencies(t *testing.T) {
 	originalSiteWriteFile := siteWriteFile
 	t.Cleanup(func() {
 		siteCapabilityCatalogTemplateSource = originalSiteCapabilityCatalogTemplateSource
+		siteCapabilityDefinitions = originalSiteCapabilityDefinitions
 		siteCopyFS = originalSiteCopyFS
 		siteExecuteCapabilityCatalog = originalSiteExecuteCapabilityCatalog
 		sitePathAbs = originalSitePathAbs
