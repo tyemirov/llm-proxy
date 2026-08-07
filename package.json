@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "frontend:lint": "tsc --noEmit --project jsconfig.json && node scripts/check_frontend_syntax.mjs && node scripts/generate_public_site_shell.mjs --check && node scripts/generate_openapi_docs.mjs --check",
+    "frontend:lint": "node scripts/check_frontend_types.mjs && node scripts/check_frontend_syntax.mjs && node scripts/generate_public_site_shell.mjs --check && node scripts/generate_openapi_docs.mjs --check",
     "frontend:test": "playwright test",
     "frontend:test:blackbox": "playwright test --config=playwright.blackbox.config.js"
   },
