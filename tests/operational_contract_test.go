@@ -279,6 +279,7 @@ func TestOperationalMakeUpRequiresPrivateLocalEnvironment(testingInstance *testi
 	for _, relativePath := range []string{
 		"Makefile",
 		filepath.Join(operationalScriptsDirectory, "up.sh"),
+		filepath.Join(operationalScriptsDirectory, "local_orchestration.sh"),
 	} {
 		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
 	}
@@ -304,6 +305,71 @@ func TestOperationalMakeUpRequiresPrivateLocalEnvironment(testingInstance *testi
 	}
 }
 
+func TestOperationalMakeDownStopsLocalWebOrchestration(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	for _, relativePath := range []string{
+		"Makefile",
+		"docker-compose.local.yml",
+		filepath.Join(operationalScriptsDirectory, "down.sh"),
+		filepath.Join(operationalScriptsDirectory, "local_orchestration.sh"),
+	} {
+		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
+	}
+	writeOperationalFile(testingInstance, filepath.Join(fixtureRoot, "down"), "phony target guard\n", 0o600)
+
+	toolDirectory := filepath.Join(fixtureRoot, "tools")
+	temporaryDirectory := filepath.Join(fixtureRoot, "temporary")
+	if createTemporaryDirectoryError := os.MkdirAll(temporaryDirectory, 0o700); createTemporaryDirectoryError != nil {
+		testingInstance.Fatalf("create make down temporary directory: %v", createTemporaryDirectoryError)
+	}
+	composeArgumentsPath := filepath.Join(fixtureRoot, "compose-arguments")
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "docker"), `#!/usr/bin/env bash
+set -euo pipefail
+
+builtin printf '%s\n' "$*" >>"${DOCKER_ARGUMENT_CAPTURE:?}"
+[[ "${1:?}" == "compose" ]]
+if [[ "${2:?}" == "version" ]]; then
+  [[ "$#" -eq 2 ]]
+  exit 0
+fi
+[[ "${LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY:?}" == "${EXPECTED_SITE_ARTIFACT_DIRECTORY:?}" ]]
+`, 0o755)
+
+	command := exec.Command("make", "down")
+	command.Dir = fixtureRoot
+	command.Env = append(
+		os.Environ(),
+		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"TMPDIR="+temporaryDirectory,
+		"DOCKER_ARGUMENT_CAPTURE="+composeArgumentsPath,
+		"EXPECTED_SITE_ARTIFACT_DIRECTORY="+temporaryDirectory,
+	)
+	output, commandError := command.CombinedOutput()
+	if commandError != nil {
+		testingInstance.Fatalf("make down failed: %v\n%s", commandError, output)
+	}
+	if !strings.Contains(string(output), "LLM Proxy local orchestration stopped.") {
+		testingInstance.Fatalf("make down omitted its shutdown receipt: %s", output)
+	}
+
+	composeArguments, readComposeArgumentsError := os.ReadFile(composeArgumentsPath)
+	if readComposeArgumentsError != nil {
+		testingInstance.Fatalf("read make down Compose arguments: %v", readComposeArgumentsError)
+	}
+	expectedComposeFilePath, resolveComposeFileError := filepath.EvalSymlinks(filepath.Join(fixtureRoot, "docker-compose.local.yml"))
+	if resolveComposeFileError != nil {
+		testingInstance.Fatalf("resolve make down Compose file: %v", resolveComposeFileError)
+	}
+	expectedComposeArguments := strings.Join([]string{
+		"compose version",
+		"compose --project-name llm-proxy-local --file " + expectedComposeFilePath + " down --remove-orphans",
+	}, "\n") + "\n"
+	if string(composeArguments) != expectedComposeArguments {
+		testingInstance.Fatalf("make down used unexpected Compose arguments:\n%s", composeArguments)
+	}
+}
+
 func TestOperationalMakeUpStartsLocalWebOrchestration(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixtureRoot := testingInstance.TempDir()
@@ -312,6 +378,7 @@ func TestOperationalMakeUpStartsLocalWebOrchestration(testingInstance *testing.T
 		".dockerignore",
 		"docker-compose.local.yml",
 		filepath.Join(operationalScriptsDirectory, "up.sh"),
+		filepath.Join(operationalScriptsDirectory, "local_orchestration.sh"),
 		filepath.Join("configs", "config.yml"),
 		filepath.Join("configs", "tauth.local.yml"),
 	} {
@@ -329,6 +396,7 @@ func TestOperationalMakeUpStartsLocalWebOrchestration(testingInstance *testing.T
 	composeArgumentsPath := filepath.Join(fixtureRoot, "compose-arguments")
 	composeDownPath := filepath.Join(fixtureRoot, "compose-down")
 	composeStartedPath := filepath.Join(fixtureRoot, "compose-started")
+	localSiteArtifactPath := filepath.Join(fixtureRoot, "local-site-artifact-path")
 	curlArgumentsPath := filepath.Join(fixtureRoot, "curl-arguments")
 	curlEarlyPath := filepath.Join(fixtureRoot, "curl-early")
 	curlReadyPath := filepath.Join(fixtureRoot, "curl-ready")
@@ -353,12 +421,14 @@ case "${1:?}" in
     exit 0
     ;;
   up)
+    [[ -d "${LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY:?}" ]]
+    builtin printf '%s\n' "${LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY}" >"${LOCAL_SITE_ARTIFACT_CAPTURE:?}"
     sleep 0.1
     builtin printf '%s\n' started >"${COMPOSE_STARTED_CAPTURE:?}"
     exit 0
     ;;
   ps)
-    builtin printf '%s\n' api frontend tauth
+    builtin printf '%s\n' api frontend schema tauth
     ;;
   logs)
     builtin printf '%s\n' "$$" >"${COMPOSE_PID_CAPTURE:?}"
@@ -384,6 +454,11 @@ if [[ ! -f "${COMPOSE_STARTED_CAPTURE:?}" ]]; then
   exit 1
 fi
 [[ ! -f "${CURL_EARLY_CAPTURE:?}" ]]
+if [[ "${arguments}" != *"--write-out"* ]]; then
+  [[ "${arguments}" == *"http://localhost:4179/"* ]]
+  builtin printf '%s' '<table class="catalog-table"><tr><td>validated public route</td></tr></table>'
+  exit 0
+fi
 case "${arguments}" in
   *"http://localhost:4179/config-ui.yaml"*)
     status=200
@@ -436,6 +511,7 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		"COMPOSE_PID_CAPTURE="+composePIDPath,
 		"COMPOSE_DOWN_CAPTURE="+composeDownPath,
 		"COMPOSE_STARTED_CAPTURE="+composeStartedPath,
+		"LOCAL_SITE_ARTIFACT_CAPTURE="+localSiteArtifactPath,
 		"CURL_ARGUMENT_CAPTURE="+curlArgumentsPath,
 		"CURL_EARLY_CAPTURE="+curlEarlyPath,
 		"CURL_READY_CAPTURE="+curlReadyPath,
@@ -454,6 +530,15 @@ exec "${REAL_AWK_PATH:?}" "$@"
 	}
 	waitForOperationalCommand(testingInstance, command, operationalOrchestrationTimeout)
 	assertOperationalProxyChildStopped(testingInstance, composePIDPath)
+
+	localSiteArtifactBytes, readLocalSiteArtifactError := os.ReadFile(localSiteArtifactPath)
+	if readLocalSiteArtifactError != nil {
+		testingInstance.Fatalf("read local site artifact path: %v", readLocalSiteArtifactError)
+	}
+	localSiteArtifactDirectory := strings.TrimSpace(string(localSiteArtifactBytes))
+	if _, statError := os.Stat(localSiteArtifactDirectory); !os.IsNotExist(statError) {
+		testingInstance.Fatalf("make up retained temporary local site artifact %s: %v", localSiteArtifactDirectory, statError)
+	}
 
 	composeArguments, readComposeArgumentsError := os.ReadFile(composeArgumentsPath)
 	if readComposeArgumentsError != nil {
@@ -500,6 +585,7 @@ exec "${REAL_AWK_PATH:?}" "$@"
 	}
 	for _, expectedURL := range []string{
 		"http://localhost:4179/",
+		"http://localhost:4179/openapi.yaml",
 		"http://localhost:4179/config-ui.yaml",
 		"http://localhost:4179/auth/session",
 		"http://localhost:4179/auth/nonce",
@@ -587,12 +673,19 @@ exec "${REAL_AWK_PATH:?}" "$@"
 				"./configs/.env.frontend.local",
 				"./configs/.env.api.local",
 				"./configs/.env.tauth.local",
-				"GHTTP_SERVE_PROXIES: \"/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080\"",
+				"GHTTP_SERVE_PROXIES: \"/openapi.yaml=http://schema:4179,/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080\"",
 				"GHTTP_SERVE_RESPONSE_HEADERS: \"/=Cache-Control:no-store\"",
+				"GHTTP_SERVE_DIRECTORY: \"/app/render/site\"",
 				"LLM_PROXY_MANAGEMENT_TAUTH_URL: \"http://localhost:4179\"",
 				"127.0.0.1:4179:4179",
 				"127.0.0.1:8080:8080",
-				"./site:/app/site:ro",
+				"--render-site-output /app/render/site",
+				"./site:/app/site-source:ro",
+				"LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY",
+				"condition: service_healthy",
+				"class=\\\"catalog-table\\\"",
+				"GHTTP_SERVE_DIRECTORY: \"/app/docs\"",
+				"./docs:/app/docs:ro",
 			},
 		},
 		{
@@ -640,6 +733,119 @@ exec "${REAL_AWK_PATH:?}" "$@"
 	}
 }
 
+func TestOperationalMakeUpRetainsSiteArtifactWhenAutomaticShutdownFails(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	for _, relativePath := range []string{
+		"Makefile",
+		"docker-compose.local.yml",
+		filepath.Join(operationalScriptsDirectory, "up.sh"),
+		filepath.Join(operationalScriptsDirectory, "local_orchestration.sh"),
+	} {
+		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
+	}
+	writeOperationalLocalEnvironment(testingInstance, fixtureRoot)
+
+	toolDirectory := filepath.Join(fixtureRoot, "tools")
+	temporaryDirectory := filepath.Join(fixtureRoot, "temporary")
+	if createTemporaryDirectoryError := os.MkdirAll(temporaryDirectory, 0o700); createTemporaryDirectoryError != nil {
+		testingInstance.Fatalf("create failed-shutdown temporary directory: %v", createTemporaryDirectoryError)
+	}
+	localSiteArtifactPath := filepath.Join(fixtureRoot, "local-site-artifact-path")
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "docker"), `#!/usr/bin/env bash
+set -euo pipefail
+
+[[ "${1:?}" == "compose" ]]
+shift
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --project-name|--file)
+      shift 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+case "${1:?}" in
+  version|logs)
+    exit 0
+    ;;
+  up)
+    [[ -d "${LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY:?}" ]]
+    builtin printf '%s\n' "${LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY}" >"${LOCAL_SITE_ARTIFACT_CAPTURE:?}"
+    ;;
+  ps)
+    builtin printf '%s\n' api frontend schema tauth
+    ;;
+  down)
+    exit 41
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+`, 0o755)
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env bash
+set -euo pipefail
+
+arguments="$*"
+if [[ "${arguments}" != *"--write-out"* ]]; then
+  builtin printf '%s' '<table class="catalog-table"><tr><td>validated public route</td></tr></table>'
+  exit 0
+fi
+case "${arguments}" in
+  *"http://localhost:4179/auth/session"*)
+    status=204
+    ;;
+  *"http://localhost:4179/auth/nonce"*|*"http://localhost:4179/"*)
+    status=200
+    ;;
+  *"http://localhost:8080/?prompt=ready"*)
+    status=403
+    ;;
+  *"http://localhost:8080/api/management/account"*)
+    status=401
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+builtin printf '%s' "${status}"
+`, 0o755)
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "openssl"), `#!/usr/bin/env bash
+set -euo pipefail
+
+[[ "${1:?}" == "rand" ]]
+[[ "${2:?}" == "-base64" ]]
+builtin printf '%s' generated-local-value
+`, 0o755)
+
+	command := exec.Command("make", "up")
+	command.Dir = fixtureRoot
+	command.Env = append(
+		os.Environ(),
+		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"TMPDIR="+temporaryDirectory,
+		"LOCAL_SITE_ARTIFACT_CAPTURE="+localSiteArtifactPath,
+	)
+	output, commandError := command.CombinedOutput()
+	if _, isExitError := commandError.(*exec.ExitError); !isExitError {
+		testingInstance.Fatalf("failed automatic shutdown exit=%v, want nonzero\n%s", commandError, output)
+	}
+	if !strings.Contains(string(output), "error: local orchestration cleanup failed") {
+		testingInstance.Fatalf("failed automatic shutdown omitted cleanup error: %s", output)
+	}
+	localSiteArtifactBytes, readLocalSiteArtifactError := os.ReadFile(localSiteArtifactPath)
+	if readLocalSiteArtifactError != nil {
+		testingInstance.Fatalf("read retained local site artifact path: %v", readLocalSiteArtifactError)
+	}
+	localSiteArtifactDirectory := strings.TrimSpace(string(localSiteArtifactBytes))
+	if _, statError := os.Stat(localSiteArtifactDirectory); statError != nil {
+		testingInstance.Fatalf("failed automatic shutdown removed mounted artifact %s: %v", localSiteArtifactDirectory, statError)
+	}
+}
+
 func TestOperationalMakeUpRejectsAnotherProcessReadinessResponse(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	fixtureRoot := testingInstance.TempDir()
@@ -647,6 +853,7 @@ func TestOperationalMakeUpRejectsAnotherProcessReadinessResponse(testingInstance
 		"Makefile",
 		"docker-compose.local.yml",
 		filepath.Join(operationalScriptsDirectory, "up.sh"),
+		filepath.Join(operationalScriptsDirectory, "local_orchestration.sh"),
 	} {
 		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
 	}

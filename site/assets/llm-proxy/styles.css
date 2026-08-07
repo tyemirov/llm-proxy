@@ -42,7 +42,7 @@ llm-proxy-key-management textarea {
 }
 
 llm-proxy-key-management,
-workspace-surface,
+app-surface,
 tenant-access-row,
 client-access-key,
 client-key-row,
@@ -249,7 +249,7 @@ settings-section {
   cursor: pointer;
 }
 
-workspace-surface {
+app-surface {
   display: grid;
   gap: 0.5rem;
 }

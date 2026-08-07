@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>OpenAI, Claude, and Gemini through one endpoint</title>
-    <meta name="description" content="Use one proxy contract while LLM Proxy maps requests into OpenAI, Anthropic, and Gemini APIs.">
+    <title>Switch OpenAI, Claude, and Gemini behind one endpoint</title>
+    <meta name="description" content="Send one canonical messages request to supported OpenAI, Anthropic, or Gemini models while LLM Proxy owns each provider's native API contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/">
-    <meta property="og:title" content="OpenAI, Claude, and Gemini through one endpoint">
-    <meta property="og:description" content="Use one proxy contract while LLM Proxy maps requests into OpenAI, Anthropic, and Gemini APIs.">
+    <meta property="og:title" content="Switch OpenAI, Claude, and Gemini behind one endpoint">
+    <meta property="og:description" content="Send one canonical messages request to supported OpenAI, Anthropic, or Gemini models while LLM Proxy owns each provider's native API contract.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/">
     <meta name="twitter:card" content="summary">
@@ -15,40 +15,51 @@
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script defer src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"></script>
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"OpenAI, Claude, and Gemini through one endpoint","description":"Use one proxy contract while LLM Proxy maps requests into OpenAI, Anthropic, and Gemini APIs.","url":"https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/","about":["LLM Proxy","Provider routing","OpenAI Claude Gemini one endpoint"]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"OpenAI, Claude, and Gemini through one endpoint","item":"https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of OpenAI Claude Gemini one endpoint?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy keeps a shared caller contract and routes native providers server-side with provider-specific adapters."}},{"@type":"Question","name":"Who should read this provider routing resource?","acceptedAnswer":{"@type":"Answer","text":"Product teams comparing native model providers without adding three client integrations."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Multi-provider LLM proxy for internal tools, which covers multi-provider LLM proxy."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Switch OpenAI, Claude, and Gemini behind one endpoint","description":"Send one canonical messages request to supported OpenAI, Anthropic, or Gemini models while LLM Proxy owns each provider's native API contract.","url":"https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/","datePublished":"2026-07-06","dateModified":"2026-08-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/","about":["LLM Proxy","Provider routing","OpenAI Claude Gemini one endpoint"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Switch OpenAI, Claude, and Gemini behind one endpoint","item":"https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Does the request body change between OpenAI, Claude, and Gemini?","acceptedAnswer":{"@type":"Answer","text":"The canonical POST /v2 messages body stays the same. LLM Proxy maps it into OpenAI Responses, Anthropic Messages, or Gemini Interactions according to the selected provider and model route."}},{"@type":"Question","name":"Can the application omit the model?","acceptedAnswer":{"@type":"Answer","text":"Yes. An omitted model uses the tenant default when provider is omitted or the selected provider's configured default when provider is explicit."}},{"@type":"Question","name":"Are capabilities identical across these providers?","acceptedAnswer":{"@type":"Answer","text":"No. Image input, audio input, web search, reasoning, output limits, and other capabilities remain exact to the selected catalog route."}},{"@type":"Question","name":"Where can a team compare the supported models?","acceptedAnswer":{"@type":"Answer","text":"The public landing page renders the complete current matrix from the same validated provider registry used by request routing."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Integrate once through one multi-provider LLM proxy, which covers multi-provider LLM proxy."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="resource-page">
 
-      <header class="resource-shell resource-topbar">
-        <a class="resource-brand" href="/">LLM Proxy</a>
-        <nav aria-label="Resource navigation">
-          <a href="/docs/">API reference</a>
-          <a href="/openapi.yaml">OpenAPI</a>
-          <a href="/resources/">Resources</a>
-          <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
-          <a href="/">Main page</a>
-        </nav>
-      </header>
+    <mpr-header
+      class="public-site-header"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      settings="false"
+      size="small"
+      sticky="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"},{"label":"Log In","href":"/app/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
       <main class="resource-shell resource-article">
         <nav class="breadcrumbs" aria-label="Breadcrumb">
           <a href="/">Home</a>
           <span>/</span>
           <a href="/resources/">Resources</a>
           <span>/</span>
-          <span>OpenAI, Claude, and Gemini through one endpoint</span>
+          <span>Switch OpenAI, Claude, and Gemini behind one endpoint</span>
         </nav>
         <article>
           <header class="resource-hero">
             <p class="eyebrow">Provider routing</p>
-            <h1>OpenAI, Claude, and Gemini through one endpoint</h1>
-            <p class="resource-deck">Use one proxy contract while LLM Proxy maps requests into OpenAI, Anthropic, and Gemini APIs.</p>
-            <p class="resource-audience">Product teams comparing native model providers without adding three client integrations.</p>
+            <h1>Switch OpenAI, Claude, and Gemini behind one endpoint</h1>
+            <p class="resource-deck">Send one canonical messages request to supported OpenAI, Anthropic, or Gemini models while LLM Proxy owns each provider's native API contract.</p>
+            <p class="resource-audience">Startups and product teams comparing native model families without maintaining three product integrations.</p>
+            <p class="resource-byline">Reviewed 2026-08-06 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <aside class="resource-verdict" aria-label="Quick verdict">
+              <strong>Quick verdict</strong>
+              <p>Use one endpoint when model evaluation should change provider routing without introducing OpenAI, Anthropic, and Gemini contracts into product code.</p>
+            </aside>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
@@ -57,21 +68,21 @@
 
           <section>
             <h2>The problem</h2>
-            <p>OpenAI Responses, Anthropic Messages, and Gemini Interactions have different payloads, model limits, auth headers, and response shapes.</p>
+            <p>OpenAI Responses, Anthropic Messages, and Gemini Interactions use different authentication, payload, model-limit, lifecycle, and response contracts.</p>
           </section>
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy keeps a shared caller contract and routes native providers server-side with provider-specific adapters.</p>
+            <p>LLM Proxy maps the same authenticated POST /v2 messages request into the selected native provider adapter and returns provider-neutral status and usage behavior to the caller.</p>
           </section>
 
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Configure native provider base URLs, keys, and model catalogs.</li>
-<li>Send the same GET, POST, or /v2 request shape to llm-proxy.</li>
-<li>Select provider=openai, provider=anthropic, or provider=gemini when needed.</li>
-<li>Read the formatted proxy response and normalized usage metadata when available.</li>
+              <li>Configure and verify the required provider credentials behind LLM Proxy.</li>
+<li>Integrate the application once through POST /v2 or one of the official clients.</li>
+<li>Select provider=openai, provider=anthropic, or provider=gemini while keeping the messages body unchanged.</li>
+<li>Use the capability matrix to choose an exact supported model and any route-specific options.</li>
             </ol>
           </section>
 
@@ -92,6 +103,13 @@
                           <td>Native provider adapters</td>
                           <td>The backend handles OpenAI Responses, Anthropic Messages, and Gemini Interactions differences.</td>
                           <td>Gemini messages become interaction steps; Claude system messages use Anthropic's system field.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>One blocking caller contract</td>
+                          <td>Provider resource lifecycles remain internal while the caller waits for one final response.</td>
+                          <td>The product does not add OpenAI or Gemini polling code.</td>
                         </tr>
 
 
@@ -141,9 +159,17 @@
             <h2>Objections and limitations</h2>
             <ul class="resource-list">
               <li>Provider-specific capabilities remain provider-specific; web search is currently exposed only for configured OpenAI models.</li>
-<li>Native provider model catalogs must be kept current in config.</li>
+<li>The generated catalog is authoritative for the currently supported model routes and capabilities.</li>
 <li>The endpoint is shared, but the selected provider still controls upstream behavior and availability.</li>
             </ul>
+          </section>
+
+          <section>
+            <h2>Repository evidence</h2>
+            <pre class="usage-snippet"><code>for provider in openai anthropic gemini; do
+  curl -X POST     &quot;https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_SECRET&amp;provider=$provider&quot;     -H &quot;Content-Type: application/json&quot;     -d '{&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Summarize this&quot;}]}'
+done</code></pre>
+            <p>Verified 2026-08-06 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
           </section>
 
           <section>
@@ -151,32 +177,32 @@
             <div class="resource-faq">
 
                     <details>
-                      <summary>What is the main job of OpenAI Claude Gemini one endpoint?</summary>
-                      <p>LLM Proxy keeps a shared caller contract and routes native providers server-side with provider-specific adapters.</p>
+                      <summary>Does the request body change between OpenAI, Claude, and Gemini?</summary>
+                      <p>The canonical POST /v2 messages body stays the same. LLM Proxy maps it into OpenAI Responses, Anthropic Messages, or Gemini Interactions according to the selected provider and model route.</p>
                     </details>
 
 
                     <details>
-                      <summary>Who should read this provider routing resource?</summary>
-                      <p>Product teams comparing native model providers without adding three client integrations.</p>
+                      <summary>Can the application omit the model?</summary>
+                      <p>Yes. An omitted model uses the tenant default when provider is omitted or the selected provider's configured default when provider is explicit.</p>
                     </details>
 
 
                     <details>
-                      <summary>Does this page claim provider performance or pricing advantages?</summary>
-                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                      <summary>Are capabilities identical across these providers?</summary>
+                      <p>No. Image input, audio input, web search, reasoning, output limits, and other capabilities remain exact to the selected catalog route.</p>
                     </details>
 
 
                     <details>
-                      <summary>Where should setup details come from?</summary>
-                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                      <summary>Where can a team compare the supported models?</summary>
+                      <p>The public landing page renders the complete current matrix from the same validated provider registry used by request routing.</p>
                     </details>
 
 
                     <details>
                       <summary>What should I read next?</summary>
-                      <p>A closely related resource is Multi-provider LLM proxy for internal tools, which covers multi-provider LLM proxy.</p>
+                      <p>A closely related resource is Integrate once through one multi-provider LLM proxy, which covers multi-provider LLM proxy.</p>
                     </details>
 
             </div>
@@ -188,7 +214,19 @@
 
                     <a class="resource-related" href="/resources/multi-provider-llm-proxy/">
                       <span>Provider routing</span>
-                      <strong>Multi-provider LLM proxy for internal tools</strong>
+                      <strong>Integrate once through one multi-provider LLM proxy</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/per-request-provider-model-selection/">
+                      <span>API contract</span>
+                      <strong>Per-request provider and model selection</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/model-catalog-configuration/">
+                      <span>Configuration</span>
+                      <strong>LLM model catalog configuration in config.yml</strong>
                     </a>
 
 
@@ -197,36 +235,24 @@
                       <strong>OpenAI-compatible provider gateway</strong>
                     </a>
 
-
-                    <a class="resource-related" href="/resources/openai-background-response-polling/">
-                      <span>Reliability</span>
-                      <strong>OpenAI background response polling without client loops</strong>
-                    </a>
-
-
-                    <a class="resource-related" href="/resources/audio-transcription-proxy-api/">
-                      <span>Dictation</span>
-                      <strong>Audio transcription proxy API behind tenant secrets</strong>
-                    </a>
-
             </div>
           </section>
 
           <section class="resource-final-cta">
-            <h2>Use this pattern in LLM Proxy</h2>
-            <p>Start from the canonical API reference, then use the management surface when the workflow needs tenant or provider configuration.</p>
-            <a class="resource-button" href="/docs/">Open API reference</a>
+            <h2>Compare the current native-provider routes</h2>
+            <p>Search the generated model matrix by provider, model, capability, contract, reasoning level, default, or output limit.</p>
+            <a class="resource-button" href="/#models">Explore supported models</a>
           </section>
         </article>
       </main>
-      <footer class="resource-shell resource-footer">
-        <a href="/">LLM Proxy main page</a>
-        <a href="/docs/">API reference</a>
-        <a href="/openapi.yaml">OpenAPI schema</a>
-        <a href="/resources/">Resource hub</a>
-        <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
-        <a href="/sitemap.xml">Sitemap</a>
-      </footer>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="false"
+      prefix-text="LLM Proxy"
+      privacy-link-hidden="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Log In","href":"/app/"},{"label":"API","href":"/docs/"},{"label":"OpenAPI","href":"/docs/#openapi-schema"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+    ></mpr-footer>
 
   </body>
 </html>

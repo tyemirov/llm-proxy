@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>LLM Proxy Resources</title>
-    <meta name="description" content="Use-case resources for routing LLM, dictation, provider keys, usage, and management workflows through LLM Proxy.">
+    <title>LLM Proxy Resources — One integration across supported models</title>
+    <meta name="description" content="Choose an LLM Proxy integration, find the path for your team, and use source-backed guides for supported providers, clients, security, and operations.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/">
-    <meta property="og:title" content="LLM Proxy Resources">
-    <meta property="og:description" content="Use-case resources for routing LLM, dictation, provider keys, usage, and management workflows through LLM Proxy.">
+    <meta property="og:title" content="LLM Proxy Resources — One integration across supported models">
+    <meta property="og:description" content="Choose an LLM Proxy integration, find the path for your team, and use source-backed guides for supported providers, clients, security, and operations.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/">
     <meta name="twitter:card" content="summary">
@@ -15,35 +15,113 @@
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script defer src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"></script>
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage","name":"LLM Proxy Resources","description":"Repo-grounded resources for using LLM Proxy as a multi-provider AI gateway.","url":"https://llm-proxy.mprlab.com/resources/","mainEntity":[{"@type":"Article","headline":"Multi-provider LLM proxy for internal tools","url":"https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/"},{"@type":"Article","headline":"Keep provider API keys server-side for LLM apps","url":"https://llm-proxy.mprlab.com/resources/server-side-provider-api-keys/"},{"@type":"Article","headline":"Tenant-secret AI gateway for internal applications","url":"https://llm-proxy.mprlab.com/resources/tenant-secret-ai-gateway/"},{"@type":"Article","headline":"Self-service LLM key management for internal teams","url":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/"},{"@type":"Article","headline":"Bring-your-own provider key portal for AI access","url":"https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/"},{"@type":"Article","headline":"Canonical /v2 chat messages API for LLM calls","url":"https://llm-proxy.mprlab.com/resources/canonical-v2-chat-messages-api/"},{"@type":"Article","headline":"Large prompt JSON POST for LLM requests","url":"https://llm-proxy.mprlab.com/resources/large-prompt-json-post/"},{"@type":"Article","headline":"Audio transcription proxy API behind tenant secrets","url":"https://llm-proxy.mprlab.com/resources/audio-transcription-proxy-api/"},{"@type":"Article","headline":"OpenAI, Claude, and Gemini through one endpoint","url":"https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/"},{"@type":"Article","headline":"OpenAI background response polling without client loops","url":"https://llm-proxy.mprlab.com/resources/openai-background-response-polling/"},{"@type":"Article","headline":"Upstream worker and queue limits for LLM traffic","url":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/"},{"@type":"Article","headline":"LLM model catalog configuration in config.yml","url":"https://llm-proxy.mprlab.com/resources/model-catalog-configuration/"},{"@type":"Article","headline":"Provider default model selection for omitted models","url":"https://llm-proxy.mprlab.com/resources/provider-default-model-selection/"},{"@type":"Article","headline":"OpenAI web search guardrails in an LLM proxy","url":"https://llm-proxy.mprlab.com/resources/openai-web-search-guardrails/"},{"@type":"Article","headline":"Normalized token usage metadata across providers","url":"https://llm-proxy.mprlab.com/resources/normalized-token-usage-metadata/"},{"@type":"Article","headline":"Account-wide managed tenant usage dashboard for LLMs","url":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/"},{"@type":"Article","headline":"Admin usage visibility without exposing secrets","url":"https://llm-proxy.mprlab.com/resources/admin-usage-visibility-without-secrets/"},{"@type":"Article","headline":"API-served runtime config for a static LLM UI","url":"https://llm-proxy.mprlab.com/resources/api-served-runtime-config-for-static-ui/"},{"@type":"Article","headline":"TAuth-protected management API for LLM Proxy","url":"https://llm-proxy.mprlab.com/resources/tauth-protected-management-api/"},{"@type":"Article","headline":"Rotate generated LLM Proxy client keys with confidence","url":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation/"},{"@type":"Article","headline":"Encrypted provider key storage for managed tenants","url":"https://llm-proxy.mprlab.com/resources/encrypted-provider-key-storage/"},{"@type":"Article","headline":"Reject client-supplied provider key leaks","url":"https://llm-proxy.mprlab.com/resources/reject-client-provider-key-leaks/"},{"@type":"Article","headline":"Strict YAML config placeholders for LLM Proxy","url":"https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/"},{"@type":"Article","headline":"Transactional multi-workspace ownership migration","url":"https://llm-proxy.mprlab.com/resources/multi-workspace-ownership-migration/"},{"@type":"Article","headline":"GORM-managed workspace persistence for LLM Proxy","url":"https://llm-proxy.mprlab.com/resources/gorm-managed-tenant-persistence/"},{"@type":"Article","headline":"Authenticate an LLM Proxy client with a tenant secret","url":"https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/"},{"@type":"Article","headline":"Go LLM Proxy client with a v2-only transport","url":"https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/"},{"@type":"Article","headline":"Python LLM Proxy client with v2 messages","url":"https://llm-proxy.mprlab.com/resources/python-client-v2-only-llm-proxy/"},{"@type":"Article","headline":"Installable LLM Proxy CLI for prompt workflows","url":"https://llm-proxy.mprlab.com/resources/installable-llm-proxy-cli/"},{"@type":"Article","headline":"LLM response formats: JSON, XML, CSV, and text","url":"https://llm-proxy.mprlab.com/resources/llm-response-formats-json-xml-csv-text/"},{"@type":"Article","headline":"LLM Proxy status code map for callers","url":"https://llm-proxy.mprlab.com/resources/llm-proxy-status-code-map/"},{"@type":"Article","headline":"Dictation provider routing for OpenAI, Zhipu, Grok, and SiliconFlow","url":"https://llm-proxy.mprlab.com/resources/dictation-provider-routing/"},{"@type":"Article","headline":"OpenAI-compatible provider gateway","url":"https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/"},{"@type":"Article","headline":"Gemini Interactions proxy for shared LLM calls","url":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/"},{"@type":"Article","headline":"Anthropic Claude Messages proxy for /v2 callers","url":"https://llm-proxy.mprlab.com/resources/anthropic-claude-messages-proxy/"},{"@type":"Article","headline":"Per-request provider and model selection","url":"https://llm-proxy.mprlab.com/resources/per-request-provider-model-selection/"},{"@type":"Article","headline":"System prompt handling without ambiguous inputs","url":"https://llm-proxy.mprlab.com/resources/system-prompt-handling/"},{"@type":"Article","headline":"max_tokens validation across LLM providers","url":"https://llm-proxy.mprlab.com/resources/max-tokens-provider-limit-validation/"},{"@type":"Article","headline":"Usage metadata without storing prompts or responses","url":"https://llm-proxy.mprlab.com/resources/usage-metadata-without-prompts/"},{"@type":"Article","headline":"Copyable LLM curl examples from current profile data","url":"https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/"},{"@type":"Article","headline":"Provider-specific system prompts in LLM Proxy Settings","url":"https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/"},{"@type":"Article","headline":"Local and hosted LLM Proxy config profiles","url":"https://llm-proxy.mprlab.com/resources/local-and-hosted-llm-proxy-config-profiles/"},{"@type":"Article","headline":"GitHub Pages management UI for LLM Proxy","url":"https://llm-proxy.mprlab.com/resources/github-pages-llm-management-ui/"},{"@type":"Article","headline":"Live provider smoke tests for LLM Proxy","url":"https://llm-proxy.mprlab.com/resources/live-provider-smoke-tests/"},{"@type":"Article","headline":"Internal AI gateway for product tools","url":"https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/"},{"@type":"Article","headline":"Provider overload and timeout handling for LLM calls","url":"https://llm-proxy.mprlab.com/resources/provider-overload-timeout-handling/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage","name":"LLM Proxy Resources","description":"Repo-grounded resources for integrating once with LLM Proxy and routing across supported AI providers and models.","url":"https://llm-proxy.mprlab.com/resources/","mainEntity":[{"@type":"Article","headline":"Integrate once through one multi-provider LLM proxy","url":"https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/"},{"@type":"Article","headline":"Keep provider API keys server-side for LLM apps","url":"https://llm-proxy.mprlab.com/resources/server-side-provider-api-keys/"},{"@type":"Article","headline":"Tenant-secret AI gateway for internal applications","url":"https://llm-proxy.mprlab.com/resources/tenant-secret-ai-gateway/"},{"@type":"Article","headline":"Self-service LLM key management for internal teams","url":"https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/"},{"@type":"Article","headline":"Bring-your-own provider key portal for AI access","url":"https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/"},{"@type":"Article","headline":"Canonical /v2 chat messages API for LLM calls","url":"https://llm-proxy.mprlab.com/resources/canonical-v2-chat-messages-api/"},{"@type":"Article","headline":"Large prompt JSON POST for LLM requests","url":"https://llm-proxy.mprlab.com/resources/large-prompt-json-post/"},{"@type":"Article","headline":"Audio transcription proxy API behind tenant secrets","url":"https://llm-proxy.mprlab.com/resources/audio-transcription-proxy-api/"},{"@type":"Article","headline":"Switch OpenAI, Claude, and Gemini behind one endpoint","url":"https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/"},{"@type":"Article","headline":"OpenAI background response polling without client loops","url":"https://llm-proxy.mprlab.com/resources/openai-background-response-polling/"},{"@type":"Article","headline":"Upstream worker and queue limits for LLM traffic","url":"https://llm-proxy.mprlab.com/resources/upstream-worker-queue-limits/"},{"@type":"Article","headline":"LLM model catalog configuration in config.yml","url":"https://llm-proxy.mprlab.com/resources/model-catalog-configuration/"},{"@type":"Article","headline":"Provider default model selection for omitted models","url":"https://llm-proxy.mprlab.com/resources/provider-default-model-selection/"},{"@type":"Article","headline":"OpenAI web search guardrails in an LLM proxy","url":"https://llm-proxy.mprlab.com/resources/openai-web-search-guardrails/"},{"@type":"Article","headline":"Normalized token usage metadata across providers","url":"https://llm-proxy.mprlab.com/resources/normalized-token-usage-metadata/"},{"@type":"Article","headline":"Account-wide managed tenant usage dashboard for LLMs","url":"https://llm-proxy.mprlab.com/resources/managed-tenant-usage-dashboard/"},{"@type":"Article","headline":"Admin usage visibility without exposing secrets","url":"https://llm-proxy.mprlab.com/resources/admin-usage-visibility-without-secrets/"},{"@type":"Article","headline":"API-served runtime config for a static LLM UI","url":"https://llm-proxy.mprlab.com/resources/api-served-runtime-config-for-static-ui/"},{"@type":"Article","headline":"TAuth-protected management API for LLM Proxy","url":"https://llm-proxy.mprlab.com/resources/tauth-protected-management-api/"},{"@type":"Article","headline":"Rotate generated LLM Proxy client keys with confidence","url":"https://llm-proxy.mprlab.com/resources/generated-secret-rotation/"},{"@type":"Article","headline":"Encrypted provider key storage for managed tenants","url":"https://llm-proxy.mprlab.com/resources/encrypted-provider-key-storage/"},{"@type":"Article","headline":"Reject client-supplied provider key leaks","url":"https://llm-proxy.mprlab.com/resources/reject-client-provider-key-leaks/"},{"@type":"Article","headline":"Strict YAML config placeholders for LLM Proxy","url":"https://llm-proxy.mprlab.com/resources/strict-yaml-config-placeholders/"},{"@type":"Article","headline":"Transactional multi-tenant account ownership migration","url":"https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/"},{"@type":"Article","headline":"GORM-managed tenant persistence for LLM Proxy","url":"https://llm-proxy.mprlab.com/resources/gorm-managed-tenant-persistence/"},{"@type":"Article","headline":"Authenticate an LLM Proxy client with a tenant secret","url":"https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/"},{"@type":"Article","headline":"Go LLM Proxy client with a v2-only transport","url":"https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/"},{"@type":"Article","headline":"Python LLM Proxy client with v2 messages","url":"https://llm-proxy.mprlab.com/resources/python-client-v2-only-llm-proxy/"},{"@type":"Article","headline":"Installable LLM Proxy CLI for prompt workflows","url":"https://llm-proxy.mprlab.com/resources/installable-llm-proxy-cli/"},{"@type":"Article","headline":"LLM response formats: JSON, XML, CSV, and text","url":"https://llm-proxy.mprlab.com/resources/llm-response-formats-json-xml-csv-text/"},{"@type":"Article","headline":"LLM Proxy status code map for callers","url":"https://llm-proxy.mprlab.com/resources/llm-proxy-status-code-map/"},{"@type":"Article","headline":"Dictation provider routing for OpenAI, Zhipu, Grok, and SiliconFlow","url":"https://llm-proxy.mprlab.com/resources/dictation-provider-routing/"},{"@type":"Article","headline":"OpenAI-compatible provider gateway","url":"https://llm-proxy.mprlab.com/resources/openai-compatible-provider-gateway/"},{"@type":"Article","headline":"Gemini Interactions proxy for shared LLM calls","url":"https://llm-proxy.mprlab.com/resources/gemini-interactions-proxy/"},{"@type":"Article","headline":"Anthropic Claude Messages proxy for /v2 callers","url":"https://llm-proxy.mprlab.com/resources/anthropic-claude-messages-proxy/"},{"@type":"Article","headline":"Per-request provider and model selection","url":"https://llm-proxy.mprlab.com/resources/per-request-provider-model-selection/"},{"@type":"Article","headline":"System prompt handling without ambiguous inputs","url":"https://llm-proxy.mprlab.com/resources/system-prompt-handling/"},{"@type":"Article","headline":"max_tokens validation across LLM providers","url":"https://llm-proxy.mprlab.com/resources/max-tokens-provider-limit-validation/"},{"@type":"Article","headline":"Usage metadata without storing prompts or responses","url":"https://llm-proxy.mprlab.com/resources/usage-metadata-without-prompts/"},{"@type":"Article","headline":"Copyable LLM curl examples from current profile data","url":"https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/"},{"@type":"Article","headline":"Provider-specific system prompts in LLM Proxy Settings","url":"https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/"},{"@type":"Article","headline":"Local and hosted LLM Proxy config profiles","url":"https://llm-proxy.mprlab.com/resources/local-and-hosted-llm-proxy-config-profiles/"},{"@type":"Article","headline":"GitHub Pages management UI for LLM Proxy","url":"https://llm-proxy.mprlab.com/resources/github-pages-llm-management-ui/"},{"@type":"Article","headline":"Live provider smoke tests for LLM Proxy","url":"https://llm-proxy.mprlab.com/resources/live-provider-smoke-tests/"},{"@type":"Article","headline":"Internal AI gateway for durable product integrations","url":"https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/"},{"@type":"Article","headline":"Provider overload and timeout handling for LLM calls","url":"https://llm-proxy.mprlab.com/resources/provider-overload-timeout-handling/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="resource-page resource-hub-page">
 
-      <header class="resource-shell resource-topbar">
-        <a class="resource-brand" href="/">LLM Proxy</a>
-        <nav aria-label="Resource navigation">
-          <a href="/docs/">API reference</a>
-          <a href="/openapi.yaml">OpenAPI</a>
-          <a href="/resources/">Resources</a>
-          <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
-          <a href="/">Main page</a>
-        </nav>
-      </header>
+    <mpr-header
+      class="public-site-header"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      settings="false"
+      size="small"
+      sticky="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"},{"label":"Log In","href":"/app/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
       <main class="resource-shell resource-hub">
         <section class="resource-hero">
-          <p class="eyebrow">Resources</p>
-          <h1>LLM Proxy resource hub</h1>
-          <p class="resource-deck">Use-case pages for teams routing text generation, dictation, provider credentials, runtime config, and usage visibility through LLM Proxy.</p>
+          <p class="eyebrow">Integrate once</p>
+          <h1>Keep your model options open.</h1>
+          <p class="resource-deck">Choose direct HTTP or an official client once, then use these source-backed guides to route across supported providers and models without rebuilding the application boundary.</p>
           <div class="resource-actions">
-            <a class="resource-button" href="/docs/">Open API reference</a>
-            <a class="resource-link" href="/openapi.yaml">Download OpenAPI</a>
-            <a class="resource-link" href="/sitemap.xml">View sitemap</a>
+            <a class="resource-button" href="/#integrate">Choose an integration</a>
+            <a class="resource-link" href="/#models">Explore supported models</a>
+            <a class="resource-link" href="/docs/">Open API reference</a>
+            <a class="resource-link" href="/app/">Log In</a>
           </div>
+        </section>
+
+        <section class="resource-guide" aria-labelledby="resource-integrations-title">
+          <header class="section-header compact">
+            <div>
+              <p class="eyebrow">Integration surfaces</p>
+              <h2 id="resource-integrations-title">Start with the interface your stack already speaks.</h2>
+            </div>
+          </header>
+          <div class="resource-guide-grid resource-guide-grid--integrations">
+            <a class="resource-guide-card" href="/docs/#operation-postV2Messages">
+              <span>HTTP API</span>
+              <strong>Canonical JSON from any language</strong>
+              <p>Use POST /v2 directly with one tenant client key.</p>
+            </a>
+            <a class="resource-guide-card" href="/resources/go-client-v2-only-llm-proxy/">
+              <span>Official Go client</span>
+              <strong>Typed messages and media</strong>
+              <p>Construct validated requests and preserve typed failures.</p>
+            </a>
+            <a class="resource-guide-card" href="/resources/python-client-v2-only-llm-proxy/">
+              <span>Official Python client</span>
+              <strong>Small synchronous transport</strong>
+              <p>Send canonical messages from scripts and services.</p>
+            </a>
+            <a class="resource-guide-card" href="/resources/installable-llm-proxy-cli/">
+              <span>Official CLI</span>
+              <strong>Prompt workflows from the shell</strong>
+              <p>Pipe text from scripts without a provider SDK.</p>
+            </a>
+          </div>
+        </section>
+
+        <section class="resource-guide" aria-labelledby="resource-audiences-title">
+          <header class="section-header compact">
+            <div>
+              <p class="eyebrow">Choose your path</p>
+              <h2 id="resource-audiences-title">Use the guide closest to the way your team ships.</h2>
+            </div>
+          </header>
+          <div class="resource-guide-grid">
+            <a class="resource-guide-card" href="/resources/copyable-llm-curl-examples/">
+              <span>AI-assisted builders</span>
+              <strong>Start from one copyable request</strong>
+              <p>Give prototypes and coding agents a durable API boundary.</p>
+            </a>
+            <a class="resource-guide-card" href="/resources/openai-claude-gemini-one-endpoint/">
+              <span>Startups and product teams</span>
+              <strong>Compare model fit behind one endpoint</strong>
+              <p>Change provider routing without multiplying product integrations.</p>
+            </a>
+            <a class="resource-guide-card" href="/resources/internal-ai-gateway-for-product-tools/">
+              <span>Platform and engineering teams</span>
+              <strong>Standardize access across applications</strong>
+              <p>Centralize credentials, supported routes, and usage signals.</p>
+            </a>
+          </div>
+        </section>
+
+        <section class="resource-guide resource-guide--cornerstone" aria-labelledby="resource-cornerstone-title">
+          <header class="section-header compact">
+            <div>
+              <p class="eyebrow">Start here</p>
+              <h2 id="resource-cornerstone-title">Understand the integrate-once contract.</h2>
+            </div>
+          </header>
+          <a class="resource-cornerstone" href="/resources/multi-provider-llm-proxy/">
+            <span>Multi-provider LLM proxy</span>
+            <strong>Integrate once through one multi-provider LLM proxy</strong>
+            <p>See what stays stable, what changes per route, which clients are available, and where the current support boundary lives.</p>
+          </a>
         </section>
 
               <section class="resource-category">
@@ -57,15 +135,15 @@
 
                         <a class="resource-index-card" href="/resources/multi-provider-llm-proxy/">
                           <span>multi-provider LLM proxy</span>
-                          <strong>Multi-provider LLM proxy for internal tools</strong>
-                          <p>Route OpenAI, Meta Muse, Claude, Gemini, Grok, and compatible providers through one tenant-secret HTTP boundary.</p>
+                          <strong>Integrate once through one multi-provider LLM proxy</strong>
+                          <p>Connect through one canonical API or official client, then select any supported text provider and model route without rebuilding the application integration.</p>
                         </a>
 
 
                         <a class="resource-index-card" href="/resources/openai-claude-gemini-one-endpoint/">
                           <span>OpenAI Claude Gemini one endpoint</span>
-                          <strong>OpenAI, Claude, and Gemini through one endpoint</strong>
-                          <p>Use one proxy contract while LLM Proxy maps requests into OpenAI, Anthropic, and Gemini APIs.</p>
+                          <strong>Switch OpenAI, Claude, and Gemini behind one endpoint</strong>
+                          <p>Send one canonical messages request to supported OpenAI, Anthropic, or Gemini models while LLM Proxy owns each provider's native API contract.</p>
                         </a>
 
 
@@ -152,7 +230,7 @@
                         <a class="resource-index-card" href="/resources/self-service-llm-key-management/">
                           <span>self-service LLM key management</span>
                           <strong>Self-service LLM key management for internal teams</strong>
-                          <p>Select a signed-in user's workspace, create its LLM Proxy client key, and autosave one provider API key before they leave Settings.</p>
+                          <p>Log in to the LLM Proxy app, create a client key for the selected tenant, and autosave one provider API key before leaving Settings.</p>
                         </a>
 
 
@@ -166,7 +244,7 @@
                         <a class="resource-index-card" href="/resources/tauth-protected-management-api/">
                           <span>TAuth protected management API</span>
                           <strong>TAuth-protected management API for LLM Proxy</strong>
-                          <p>Gate account, workspace, provider key, defaults, usage, and admin APIs behind validated TAuth sessions.</p>
+                          <p>Gate account, tenant, provider key, defaults, usage, and admin APIs behind validated TAuth sessions.</p>
                         </a>
 
 
@@ -344,17 +422,17 @@
                         </a>
 
 
-                        <a class="resource-index-card" href="/resources/multi-workspace-ownership-migration/">
-                          <span>multi workspace tenant migration</span>
-                          <strong>Transactional multi-workspace ownership migration</strong>
-                          <p>Upgrade one-workspace-per-user state into explicit TAuth accounts and isolated personal workspaces without changing opaque tenant ids.</p>
+                        <a class="resource-index-card" href="/resources/multi-tenant-ownership-migration/">
+                          <span>multi-tenant ownership migration</span>
+                          <strong>Transactional multi-tenant account ownership migration</strong>
+                          <p>Upgrade one-tenant-per-user state into explicit TAuth accounts and isolated personal tenants without changing opaque tenant ids.</p>
                         </a>
 
 
                         <a class="resource-index-card" href="/resources/gorm-managed-tenant-persistence/">
                           <span>GORM managed tenant persistence</span>
-                          <strong>GORM-managed workspace persistence for LLM Proxy</strong>
-                          <p>Persist TAuth accounts, isolated workspaces, provider settings, generated secret digests, defaults, and usage through GORM.</p>
+                          <strong>GORM-managed tenant persistence for LLM Proxy</strong>
+                          <p>Persist TAuth accounts, isolated tenants, provider settings, generated secret digests, defaults, and usage through GORM.</p>
                         </a>
 
                 </div>
@@ -504,21 +582,22 @@
 
                         <a class="resource-index-card" href="/resources/internal-ai-gateway-for-product-tools/">
                           <span>internal AI gateway</span>
-                          <strong>Internal AI gateway for product tools</strong>
-                          <p>Centralize provider routing, tenant secrets, request validation, and usage signals for internal AI tools.</p>
+                          <strong>Internal AI gateway for durable product integrations</strong>
+                          <p>Give institutional teams one AI integration while platform engineering centralizes provider credentials, routing, validation, and usage signals.</p>
                         </a>
 
                 </div>
               </section>
 
       </main>
-      <footer class="resource-shell resource-footer">
-        <a href="/">LLM Proxy main page</a>
-        <a href="/docs/">API reference</a>
-        <a href="/openapi.yaml">OpenAPI schema</a>
-        <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
-        <a href="/sitemap.xml">Sitemap</a>
-      </footer>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="false"
+      prefix-text="LLM Proxy"
+      privacy-link-hidden="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Log In","href":"/app/"},{"label":"API","href":"/docs/"},{"label":"OpenAPI","href":"/docs/#openapi-schema"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+    ></mpr-footer>
 
   </body>
 </html>

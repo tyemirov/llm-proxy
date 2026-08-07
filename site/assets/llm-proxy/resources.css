@@ -7,34 +7,6 @@
   margin: 0 auto;
 }
 
-.resource-topbar,
-.resource-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.resource-topbar {
-  padding: 0.8rem 0;
-}
-
-.resource-brand {
-  color: var(--llm-text);
-  font-size: 0.92rem;
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.resource-topbar nav,
-.resource-footer {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-}
-
-.resource-topbar a,
-.resource-footer a,
 .breadcrumbs a,
 .resource-link {
   color: var(--llm-subtle);
@@ -43,8 +15,6 @@
   text-decoration: none;
 }
 
-.resource-topbar a:hover,
-.resource-footer a:hover,
 .breadcrumbs a:hover,
 .resource-link:hover {
   color: var(--llm-text);
@@ -66,6 +36,7 @@
 }
 
 .resource-hero,
+.resource-guide,
 .resource-category,
 .resource-article article > section,
 .resource-final-cta {
@@ -105,6 +76,22 @@
   font-size: 0.82rem;
 }
 
+.resource-byline {
+  margin: 0.35rem 0 0;
+  color: var(--llm-muted);
+  font-size: 0.72rem;
+}
+
+.resource-byline a {
+  color: var(--llm-subtle);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.resource-byline a:hover {
+  color: var(--llm-text);
+}
+
 .resource-verdict {
   display: grid;
   max-width: 780px;
@@ -135,7 +122,13 @@
   margin-top: 0.75rem;
 }
 
+.api-schema-source {
+  max-height: min(70vh, 46rem);
+  overflow: auto;
+}
+
 .resource-article h2,
+.resource-guide h2,
 .resource-category h2 {
   margin-bottom: 0.45rem;
   font-size: 1rem;
@@ -182,15 +175,22 @@
 }
 
 .resource-card-grid,
-.resource-related-grid {
+.resource-related-grid,
+.resource-guide-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.55rem;
 }
 
+.resource-guide-grid--integrations {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .resource-card,
 .resource-index-card,
-.resource-related {
+.resource-related,
+.resource-guide-card,
+.resource-cornerstone {
   display: grid;
   gap: 0.3rem;
   min-width: 0;
@@ -201,18 +201,24 @@
 }
 
 .resource-index-card,
-.resource-related {
+.resource-related,
+.resource-guide-card,
+.resource-cornerstone {
   color: var(--llm-text);
   text-decoration: none;
 }
 
 .resource-index-card:hover,
-.resource-related:hover {
+.resource-related:hover,
+.resource-guide-card:hover,
+.resource-cornerstone:hover {
   border-color: var(--llm-accent);
 }
 
 .resource-index-card span,
-.resource-related span {
+.resource-related span,
+.resource-guide-card span,
+.resource-cornerstone span {
   overflow: hidden;
   color: var(--llm-accent);
   font-size: 0.65rem;
@@ -223,10 +229,23 @@
 }
 
 .resource-index-card strong,
-.resource-related strong {
+.resource-related strong,
+.resource-guide-card strong,
+.resource-cornerstone strong {
   color: var(--llm-text);
   font-size: 0.88rem;
   line-height: 1.25;
+}
+
+.resource-guide-card p,
+.resource-cornerstone p {
+  margin: 0;
+  color: var(--llm-subtle);
+  font-size: 0.78rem;
+}
+
+.resource-cornerstone {
+  max-width: 780px;
 }
 
 .resource-faq {
@@ -361,20 +380,9 @@
   margin-bottom: 0;
 }
 
-.resource-footer {
-  border-top: 1px solid var(--llm-border);
-  padding: 1rem 0 1.25rem;
-}
-
 @media (max-width: 780px) {
   .resource-shell {
     width: min(100% - 18px, 1040px);
-  }
-
-  .resource-topbar,
-  .resource-footer {
-    align-items: stretch;
-    flex-direction: column;
   }
 
   .resource-hero h1 {
@@ -383,6 +391,8 @@
 
   .resource-card-grid,
   .resource-related-grid,
+  .resource-guide-grid,
+  .resource-guide-grid--integrations,
   .api-operation-index {
     grid-template-columns: 1fr;
   }

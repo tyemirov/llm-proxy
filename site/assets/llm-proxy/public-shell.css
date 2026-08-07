@@ -1,0 +1,20 @@
+.public-site-brand {
+  display: inline-flex;
+  margin-right: auto;
+  align-items: center;
+  gap: 0.45rem;
+  color: inherit;
+  font-size: 0.88rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+.public-site-brand img {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.public-site-footer {
+  width: 100%;
+}

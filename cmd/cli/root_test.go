@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"html/template"
 	"io/fs"
 	"net/url"
 	"os"
@@ -419,6 +420,10 @@ tenants:
 func TestRootCommandRejectsPlaceholderDefaultSyntax(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir, `
+server:
+  max_request_timeout_seconds: 3600
+  max_prompt_bytes: 4194304
+  max_input_audio_bytes: 26214400
 management:
   enabled: false
   database_path: "${P411_MISSING_MANAGEMENT_DATABASE_PATH:-management.sqlite}"
@@ -528,9 +533,9 @@ LLM_PROXY_MANAGEMENT_PROXY_ORIGIN=https://llm-proxy-api.mprlab.com
 	}
 }
 
-func TestRootCommandRendersStaticSiteWithoutBackendConfig(t *testing.T) {
+func TestRootCommandRendersStaticSiteFromPublicCatalogConfig(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "missing-backend-config.yml")
+	configPath := writeSiteRenderTestConfig(t, tempDir)
 	outputDirectory := filepath.Join(tempDir, "rendered-site")
 	withServeProxy(t, failingServeProxy(t))
 
@@ -552,14 +557,63 @@ func TestRootCommandRendersStaticSiteWithoutBackendConfig(t *testing.T) {
 	if _, statError := os.Stat(filepath.Join(outputDirectory, siteLegacyRuntimeConfig)); !os.IsNotExist(statError) {
 		t.Fatalf("rendered %s stat error=%v want absent", siteLegacyRuntimeConfig, statError)
 	}
-	indexBytes, readIndexError := os.ReadFile(filepath.Join(outputDirectory, "index.html"))
+	indexBytes, readIndexError := os.ReadFile(filepath.Join(outputDirectory, "app", "index.html"))
 	if readIndexError != nil {
-		t.Fatalf("rendered index.html: %v", readIndexError)
+		t.Fatalf("rendered app/index.html: %v", readIndexError)
 	}
 	indexHTML := string(indexBytes)
 	if !strings.Contains(indexHTML, `data-config-url="https://llm-proxy-api.example/config-ui.yaml"`) ||
 		!strings.Contains(indexHTML, "data-mpr-ui-bundle-src=") {
-		t.Fatalf("rendered index.html=%s", indexHTML)
+		t.Fatalf("rendered app/index.html=%s", indexHTML)
+	}
+	if _, statError := os.Stat(filepath.Join(outputDirectory, "manage")); !os.IsNotExist(statError) {
+		t.Fatalf("rendered manage directory stat error=%v want absent", statError)
+	}
+	landingBytes, readLandingError := os.ReadFile(filepath.Join(outputDirectory, "index.html"))
+	if readLandingError != nil {
+		t.Fatalf("read rendered landing page: %v", readLandingError)
+	}
+	landingHTML := string(landingBytes)
+	for _, expectedCatalogFragment := range []string{
+		`class="catalog-table"`,
+		`<strong>12</strong><span>Providers</span>`,
+		`</strong><span>Models</span>`,
+		`<strong>4</strong><span>Filterable capabilities</span>`,
+		`data-catalog-sort-header="provider"`,
+		`data-catalog-sort-header="model"`,
+		`data-catalog-sort-header="capabilities"`,
+		`<code data-catalog-model-id>gpt-4.1</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span>`,
+		`<code data-catalog-model-id>gpt-4o-mini-transcribe</code><span class="catalog-model__default" title="This is the provider catalog default for dictation routing; account settings can select another model.">Default for dictation</span>`,
+		`data-model="gpt-4o-mini-transcribe" data-capabilities="dictation"`,
+		`aria-label="Search all model characteristics"`,
+		`data-catalog-search-submit`,
+		`data-catalog-filter-panel`,
+		`data-catalog-search-text=`,
+		`data-capability-count=`,
+		`data-catalog-capability`,
+		`data-catalog-sort`,
+		`<strong>4 MiB</strong>Maximum JSON request body`,
+		`<strong>25 MiB</strong>Maximum input audio`,
+		`<strong>3600 seconds</strong>Maximum request work budget`,
+	} {
+		if !strings.Contains(landingHTML, expectedCatalogFragment) {
+			t.Fatalf("rendered landing page omitted %q", expectedCatalogFragment)
+		}
+	}
+	if strings.Contains(landingHTML, `<th scope="col">Dictation models</th>`) {
+		t.Fatal("rendered landing page retained the split dictation column")
+	}
+	if strings.Contains(landingHTML, `data-catalog-provider`) || strings.Contains(landingHTML, `<select`) {
+		t.Fatal("rendered landing page retained a standalone catalog dropdown")
+	}
+	for _, lifecycleIdentifier := range []string{"background", "synchronous"} {
+		if strings.Contains(landingHTML, `data-catalog-capability-action="`+lifecycleIdentifier+`"`) ||
+			strings.Contains(landingHTML, `value="`+lifecycleIdentifier+`"`) {
+			t.Fatalf("rendered landing page exposed execution lifecycle %q as a capability", lifecycleIdentifier)
+		}
+	}
+	if strings.Contains(landingHTML, siteCapabilityCatalogMarker) || strings.Contains(landingHTML, "api_key") || strings.Contains(landingHTML, "base_url") {
+		t.Fatalf("rendered landing page retained source marker or private provider fields")
 	}
 	if _, statError := os.Stat(filepath.Join(outputDirectory, "assets", "llm-proxy", "js", "app.js")); statError != nil {
 		t.Fatalf("rendered app.js: %v", statError)
@@ -576,7 +630,7 @@ func TestRootCommandRendersStaticSiteWithoutBackendConfig(t *testing.T) {
 
 func TestRootCommandRendersSiteFromDefaultSourceDirectory(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "missing-backend-config.yml")
+	configPath := writeSiteRenderTestConfig(t, tempDir)
 	outputDirectory := filepath.Join(tempDir, "rendered-site")
 	t.Chdir(filepath.Join("..", ".."))
 	withServeProxy(t, failingServeProxy(t))
@@ -592,7 +646,7 @@ func TestRootCommandRendersSiteFromDefaultSourceDirectory(t *testing.T) {
 
 func TestRootCommandRenderSiteRemovesSourceConfigUI(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "missing-backend-config.yml")
+	configPath := writeSiteRenderTestConfig(t, tempDir)
 	sourceDirectory := filepath.Join(tempDir, "site-source")
 	outputDirectory := filepath.Join(tempDir, "rendered-site")
 	writeTestSiteSource(t, sourceDirectory)
@@ -616,9 +670,11 @@ func TestRootCommandRenderSiteRemovesSourceConfigUI(t *testing.T) {
 	}
 }
 
-func TestRootCommandRenderSiteDoesNotLoadBackendConfig(t *testing.T) {
+func TestRootCommandRenderSiteIgnoresPrivateConfigurationPlaceholders(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := writeTestConfig(t, tempDir, `
+server:
+  max_request_timeout_seconds: 3600
 management:
   enabled: true
   public_origin: "https://llm-proxy.example"
@@ -651,6 +707,122 @@ tenants:
 	}
 }
 
+func TestRootCommandRejectsInvalidSiteCapabilityCatalogConfig(t *testing.T) {
+	testCases := []struct {
+		name          string
+		config        func(*testing.T, string) string
+		expectedError string
+	}{
+		{
+			name: "missing file",
+			config: func(subTest *testing.T, tempDir string) string {
+				return filepath.Join(tempDir, "missing.yml")
+			},
+			expectedError: "missing.yml",
+		},
+		{
+			name: "malformed yaml",
+			config: func(subTest *testing.T, tempDir string) string {
+				return writeTestConfig(subTest, tempDir, `server: [`)
+			},
+			expectedError: "did not find expected node content",
+		},
+		{
+			name: "missing server",
+			config: func(subTest *testing.T, tempDir string) string {
+				return writeTestConfig(subTest, tempDir, `providers:
+  openai: {}`)
+			},
+			expectedError: "field=server",
+		},
+		{
+			name: "missing providers",
+			config: func(subTest *testing.T, tempDir string) string {
+				return writeTestConfig(subTest, tempDir, `server:
+  max_request_timeout_seconds: 3600`)
+			},
+			expectedError: "field=providers",
+		},
+		{
+			name: "unknown server field",
+			config: func(subTest *testing.T, tempDir string) string {
+				return writeTestConfig(subTest, tempDir, `server:
+  max_request_timeout_seconds: 3600
+  future_option: true
+providers:
+  openai: {}`)
+			},
+			expectedError: "field=server",
+		},
+		{
+			name: "unknown provider field",
+			config: func(subTest *testing.T, tempDir string) string {
+				return writeTestConfig(subTest, tempDir, `server:
+  max_request_timeout_seconds: 3600
+providers:
+  openai:
+    future_option: true`)
+			},
+			expectedError: "field=providers",
+		},
+		{
+			name: "nonpositive timeout",
+			config: func(subTest *testing.T, tempDir string) string {
+				return writeTestConfig(subTest, tempDir, `server:
+  max_request_timeout_seconds: 0
+`+completeLiteralProvidersYAML())
+			},
+			expectedError: "server.max_request_timeout_seconds must be positive",
+		},
+		{
+			name: "invalid provider catalog",
+			config: func(subTest *testing.T, tempDir string) string {
+				providerYAML := strings.Replace(completeLiteralProvidersYAML(), `default_model: "gpt-4.1"`, `default_model: "missing-model"`, 1)
+				return writeTestConfig(subTest, tempDir, `server:
+  max_request_timeout_seconds: 3600
+`+providerYAML)
+			},
+			expectedError: "invalid_model_catalog",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(subTest *testing.T) {
+			tempDir := subTest.TempDir()
+			configPath := testCase.config(subTest, tempDir)
+			withServeProxy(subTest, failingServeProxy(subTest))
+
+			executeError := executeRootCommand(subTest, "--config", configPath, "--site-source", filepath.Join("..", "..", "site"), "--render-site-output", filepath.Join(tempDir, "rendered-site"))
+			if executeError == nil || !strings.Contains(executeError.Error(), testCase.expectedError) {
+				subTest.Fatalf("error=%v want contains %q", executeError, testCase.expectedError)
+			}
+		})
+	}
+}
+
+func TestRootCommandRendersNonBinarySiteRequestLimit(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeTestConfig(t, tempDir, `server:
+  max_request_timeout_seconds: 3600
+  max_prompt_bytes: 3
+  max_input_audio_bytes: 26214400
+`+completeLiteralProvidersYAML())
+	outputDirectory := filepath.Join(tempDir, "rendered-site")
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath, "--site-source", filepath.Join("..", "..", "site"), "--render-site-output", outputDirectory)
+	if executeError != nil {
+		t.Fatalf("ExecuteC error: %v", executeError)
+	}
+	landingBytes, readError := os.ReadFile(filepath.Join(outputDirectory, siteIndexFileName))
+	if readError != nil {
+		t.Fatalf("read rendered landing page: %v", readError)
+	}
+	if !strings.Contains(string(landingBytes), `<strong>3 bytes</strong>Maximum JSON request body`) {
+		t.Fatalf("rendered landing page omitted non-binary request limit")
+	}
+}
+
 func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
 	testCases := []struct {
 		name          string
@@ -660,7 +832,7 @@ func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
 		{
 			name: "blank output",
 			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
-				configPath := filepath.Join(tempDir, "missing-backend-config.yml")
+				configPath := writeSiteRenderTestConfig(subTest, tempDir)
 				sourceDirectory := filepath.Join(tempDir, "site-source")
 				writeTestSiteSource(subTest, sourceDirectory)
 				return configPath, sourceDirectory, ""
@@ -670,7 +842,7 @@ func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
 		{
 			name: "missing source",
 			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
-				configPath := filepath.Join(tempDir, "missing-backend-config.yml")
+				configPath := writeSiteRenderTestConfig(subTest, tempDir)
 				return configPath, filepath.Join(tempDir, "missing-site-source"), filepath.Join(tempDir, "rendered-site")
 			},
 			expectedError: "source=",
@@ -678,7 +850,7 @@ func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
 		{
 			name: "source file",
 			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
-				configPath := filepath.Join(tempDir, "missing-backend-config.yml")
+				configPath := writeSiteRenderTestConfig(subTest, tempDir)
 				sourcePath := filepath.Join(tempDir, "site-source-file")
 				if writeError := os.WriteFile(sourcePath, []byte("not a directory"), 0600); writeError != nil {
 					subTest.Fatalf("write source file: %v", writeError)
@@ -690,7 +862,7 @@ func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
 		{
 			name: "existing output",
 			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
-				configPath := filepath.Join(tempDir, "missing-backend-config.yml")
+				configPath := writeSiteRenderTestConfig(subTest, tempDir)
 				sourceDirectory := filepath.Join(tempDir, "site-source")
 				outputDirectory := filepath.Join(tempDir, "rendered-site")
 				writeTestSiteSource(subTest, sourceDirectory)
@@ -704,7 +876,7 @@ func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
 		{
 			name: "output stat failure",
 			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
-				configPath := filepath.Join(tempDir, "missing-backend-config.yml")
+				configPath := writeSiteRenderTestConfig(subTest, tempDir)
 				sourceDirectory := filepath.Join(tempDir, "site-source")
 				outputParentFile := filepath.Join(tempDir, "output-parent-file")
 				writeTestSiteSource(subTest, sourceDirectory)
@@ -718,7 +890,7 @@ func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
 		{
 			name: "output inside source",
 			setup: func(subTest *testing.T, tempDir string) (string, string, string) {
-				configPath := filepath.Join(tempDir, "missing-backend-config.yml")
+				configPath := writeSiteRenderTestConfig(subTest, tempDir)
 				sourceDirectory := filepath.Join(tempDir, "site-source")
 				writeTestSiteSource(subTest, sourceDirectory)
 				return configPath, sourceDirectory, filepath.Join(sourceDirectory, "rendered-site")
@@ -741,7 +913,7 @@ func TestRootCommandRejectsInvalidSiteRenderInputs(t *testing.T) {
 	}
 }
 
-func TestRootCommandRejectsSiteRenderInjectedFilesystemFailures(t *testing.T) {
+func TestRootCommandRejectsSiteRenderInjectedFailures(t *testing.T) {
 	testCases := []struct {
 		name          string
 		setup         func(*testing.T, string, string)
@@ -829,6 +1001,64 @@ func TestRootCommandRejectsSiteRenderInjectedFilesystemFailures(t *testing.T) {
 			expectedError: "write failed",
 		},
 		{
+			name: "landing read failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				originalSiteReadFile := siteReadFile
+				siteReadFile = func(rawPath string) ([]byte, error) {
+					if rawPath == filepath.Join(outputDirectory, siteIndexFileName) {
+						return nil, errors.New("landing read failed")
+					}
+					return originalSiteReadFile(rawPath)
+				}
+			},
+			expectedError: "landing read failed",
+		},
+		{
+			name: "landing marker missing",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				if writeError := os.WriteFile(filepath.Join(sourceDirectory, siteIndexFileName), []byte("<!doctype html>\n"), 0600); writeError != nil {
+					subTest.Fatalf("write landing without marker: %v", writeError)
+				}
+			},
+			expectedError: "must contain exactly one",
+		},
+		{
+			name: "landing write failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				originalSiteWriteFile := siteWriteFile
+				siteWriteFile = func(rawPath string, content []byte, fileMode os.FileMode) error {
+					if rawPath == filepath.Join(outputDirectory, siteIndexFileName) {
+						return errors.New("landing write failed")
+					}
+					return originalSiteWriteFile(rawPath, content, fileMode)
+				}
+			},
+			expectedError: "landing write failed",
+		},
+		{
+			name: "catalog template parse failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				siteCapabilityCatalogTemplateSource = `{{`
+			},
+			expectedError: "capability catalog template",
+		},
+		{
+			name: "catalog template execution failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				siteExecuteCapabilityCatalog = func(catalogTemplate *template.Template, renderedCatalog *strings.Builder, catalogView siteCapabilityCatalogView) error {
+					return errors.New("catalog execution failed")
+				}
+			},
+			expectedError: "catalog execution failed",
+		},
+		{
+			name: "catalog capability presentation missing",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				siteCapabilityDefinitions = siteCapabilityDefinitions[1:]
+			},
+			expectedError: "capability_presentation_invalid: capability=text presentations=0",
+		},
+		{
 			name: "stale config removal failure",
 			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
 				siteRemove = func(rawPath string) error {
@@ -854,7 +1084,7 @@ func TestRootCommandRejectsSiteRenderInjectedFilesystemFailures(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
 			tempDir := subTest.TempDir()
-			configPath := filepath.Join(tempDir, "missing-backend-config.yml")
+			configPath := writeSiteRenderTestConfig(subTest, tempDir)
 			sourceDirectory := filepath.Join(tempDir, "site-source")
 			outputDirectory := filepath.Join(tempDir, "rendered-site")
 			writeTestSiteSource(subTest, sourceDirectory)
@@ -870,7 +1100,7 @@ func TestRootCommandRejectsSiteRenderInjectedFilesystemFailures(t *testing.T) {
 	}
 }
 
-func TestRootCommandRejectsSiteRenderIndexWithoutCanonicalConfigURL(t *testing.T) {
+func TestRootCommandRejectsSiteRenderManagementIndexWithoutCanonicalConfigURL(t *testing.T) {
 	testCases := []struct {
 		name          string
 		indexHTML     string
@@ -895,12 +1125,12 @@ func TestRootCommandRejectsSiteRenderIndexWithoutCanonicalConfigURL(t *testing.T
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
 			tempDir := subTest.TempDir()
-			configPath := filepath.Join(tempDir, "missing-backend-config.yml")
+			configPath := writeSiteRenderTestConfig(subTest, tempDir)
 			sourceDirectory := filepath.Join(tempDir, "site-source")
 			outputDirectory := filepath.Join(tempDir, "rendered-site")
 			writeTestSiteSource(subTest, sourceDirectory)
-			if writeError := os.WriteFile(filepath.Join(sourceDirectory, "index.html"), []byte(testCase.indexHTML+"\n"), 0600); writeError != nil {
-				subTest.Fatalf("write index.html: %v", writeError)
+			if writeError := os.WriteFile(filepath.Join(sourceDirectory, siteApplicationDirectory, "index.html"), []byte(testCase.indexHTML+"\n"), 0600); writeError != nil {
+				subTest.Fatalf("write app/index.html: %v", writeError)
 			}
 			withServeProxy(subTest, failingServeProxy(subTest))
 
@@ -924,10 +1154,11 @@ func TestRootCommandRejectsInvalidSiteConfigURL(t *testing.T) {
 	for _, rawConfigURL := range testCases {
 		t.Run(rawConfigURL, func(subTest *testing.T) {
 			tempDir := subTest.TempDir()
+			configPath := writeSiteRenderTestConfig(subTest, tempDir)
 			outputDirectory := filepath.Join(tempDir, "rendered-site")
 			withServeProxy(subTest, failingServeProxy(subTest))
 
-			executeError := executeRootCommand(subTest, "--site-source", filepath.Join("..", "..", "site"), "--site-config-url", rawConfigURL, "--render-site-output", outputDirectory)
+			executeError := executeRootCommand(subTest, "--config", configPath, "--site-source", filepath.Join("..", "..", "site"), "--site-config-url", rawConfigURL, "--render-site-output", outputDirectory)
 			if executeError == nil || !strings.Contains(executeError.Error(), "site config URL") {
 				subTest.Fatalf("error=%v want invalid site config URL", executeError)
 			}
@@ -936,13 +1167,15 @@ func TestRootCommandRejectsInvalidSiteConfigURL(t *testing.T) {
 }
 
 func TestRootCommandReportsSiteConfigURLParseFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writeSiteRenderTestConfig(t, tempDir)
 	withSiteRendererDependencies(t)
 	siteURLParse = func(rawURL string) (*url.URL, error) {
 		return nil, errors.New("config URL parse failed")
 	}
 	withServeProxy(t, failingServeProxy(t))
 
-	executeError := executeRootCommand(t, "--site-config-url", defaultSiteConfigURL, "--render-site-output", t.TempDir())
+	executeError := executeRootCommand(t, "--config", configPath, "--site-config-url", defaultSiteConfigURL, "--render-site-output", filepath.Join(tempDir, "rendered-site"))
 	if executeError == nil || !strings.Contains(executeError.Error(), "config URL parse failed") {
 		t.Fatalf("error=%v want config URL parse failure", executeError)
 	}
@@ -1814,6 +2047,7 @@ func executeRootCommand(t *testing.T, arguments ...string) error {
 	rootCmd.SetArgs(nil)
 	resetConfigFlag(t)
 	runtimeConfiguration = proxy.Configuration{}
+	siteCapabilityCatalog = proxy.PublicCapabilityCatalog{}
 	return executeError
 }
 
@@ -1842,6 +2076,7 @@ func withServeProxy(t *testing.T, replacement func(proxy.Configuration, *zap.Sug
 		rootCmd.SetArgs(nil)
 		resetConfigFlag(t)
 		runtimeConfiguration = proxy.Configuration{}
+		siteCapabilityCatalog = proxy.PublicCapabilityCatalog{}
 	})
 	serveProxy = replacement
 }
@@ -1856,7 +2091,10 @@ func failingServeProxy(t *testing.T) func(proxy.Configuration, *zap.SugaredLogge
 
 func withSiteRendererDependencies(t *testing.T) {
 	t.Helper()
+	originalSiteCapabilityCatalogTemplateSource := siteCapabilityCatalogTemplateSource
+	originalSiteCapabilityDefinitions := siteCapabilityDefinitions
 	originalSiteCopyFS := siteCopyFS
+	originalSiteExecuteCapabilityCatalog := siteExecuteCapabilityCatalog
 	originalSitePathAbs := sitePathAbs
 	originalSitePathRel := sitePathRel
 	originalSiteReadFile := siteReadFile
@@ -1865,7 +2103,10 @@ func withSiteRendererDependencies(t *testing.T) {
 	originalSiteURLParse := siteURLParse
 	originalSiteWriteFile := siteWriteFile
 	t.Cleanup(func() {
+		siteCapabilityCatalogTemplateSource = originalSiteCapabilityCatalogTemplateSource
+		siteCapabilityDefinitions = originalSiteCapabilityDefinitions
 		siteCopyFS = originalSiteCopyFS
+		siteExecuteCapabilityCatalog = originalSiteExecuteCapabilityCatalog
 		sitePathAbs = originalSitePathAbs
 		sitePathRel = originalSitePathRel
 		siteReadFile = originalSiteReadFile
@@ -1895,13 +2136,21 @@ func writeTestDotEnv(t *testing.T, tempDir string, dotEnvContent string) {
 
 func writeTestSiteSource(t *testing.T, sourceDirectory string) {
 	t.Helper()
-	if mkdirError := os.MkdirAll(filepath.Join(sourceDirectory, "assets"), 0700); mkdirError != nil {
+	if mkdirError := os.MkdirAll(filepath.Join(sourceDirectory, siteApplicationDirectory), 0700); mkdirError != nil {
 		t.Fatalf("create test site source: %v", mkdirError)
 	}
-	if writeError := os.WriteFile(filepath.Join(sourceDirectory, "index.html"), []byte(`<!doctype html>
+	if mkdirError := os.MkdirAll(filepath.Join(sourceDirectory, "assets"), 0700); mkdirError != nil {
+		t.Fatalf("create test site assets: %v", mkdirError)
+	}
+	if writeError := os.WriteFile(filepath.Join(sourceDirectory, siteApplicationDirectory, "index.html"), []byte(`<!doctype html>
 	<mpr-header data-config-url="/config-ui.yaml"></mpr-header>
 `), 0600); writeError != nil {
-		t.Fatalf("write index.html: %v", writeError)
+		t.Fatalf("write app/index.html: %v", writeError)
+	}
+	if writeError := os.WriteFile(filepath.Join(sourceDirectory, "index.html"), []byte(`<!doctype html>
+	`+siteCapabilityCatalogMarker+`
+`), 0600); writeError != nil {
+		t.Fatalf("write landing index.html: %v", writeError)
 	}
 	if writeError := os.WriteFile(filepath.Join(sourceDirectory, siteCNAMEFileName), []byte("llm-proxy.mprlab.com\n"), 0600); writeError != nil {
 		t.Fatalf("write CNAME: %v", writeError)
@@ -1909,6 +2158,16 @@ func writeTestSiteSource(t *testing.T, sourceDirectory string) {
 	if writeError := os.WriteFile(filepath.Join(sourceDirectory, "assets", "app.js"), []byte("export {};\n"), 0600); writeError != nil {
 		t.Fatalf("write app.js: %v", writeError)
 	}
+}
+
+func writeSiteRenderTestConfig(t *testing.T, tempDir string) string {
+	t.Helper()
+	return writeTestConfig(t, tempDir, `
+server:
+  max_request_timeout_seconds: 3600
+  max_prompt_bytes: 4194304
+  max_input_audio_bytes: 26214400
+`+completeLiteralProvidersYAML())
 }
 
 func completeLiteralProvidersYAML() string {

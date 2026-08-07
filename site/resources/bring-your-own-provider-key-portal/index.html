@@ -15,26 +15,32 @@
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script defer src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"></script>
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Bring-your-own provider key portal for AI access","description":"Use LLM Proxy Settings to let users save provider keys and keep public proxy calls key-free.","url":"https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/","about":["LLM Proxy","Management UI","bring your own provider key portal"]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Bring-your-own provider key portal for AI access","description":"Use LLM Proxy Settings to let users save provider keys and keep public proxy calls key-free.","url":"https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/","about":["LLM Proxy","Management UI","bring your own provider key portal"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Bring-your-own provider key portal for AI access","item":"https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of bring your own provider key portal?","acceptedAnswer":{"@type":"Answer","text":"The management UI accepts provider API keys only through authenticated management endpoints and keeps public proxy requests on the tenant-secret contract."}},{"@type":"Question","name":"Who should read this management ui resource?","acceptedAnswer":{"@type":"Answer","text":"Organizations where users or teams own their upstream provider accounts."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Self-service LLM key management for internal teams, which covers self-service LLM key management."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="resource-page">
 
-      <header class="resource-shell resource-topbar">
-        <a class="resource-brand" href="/">LLM Proxy</a>
-        <nav aria-label="Resource navigation">
-          <a href="/docs/">API reference</a>
-          <a href="/openapi.yaml">OpenAPI</a>
-          <a href="/resources/">Resources</a>
-          <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
-          <a href="/">Main page</a>
-        </nav>
-      </header>
+    <mpr-header
+      class="public-site-header"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      settings="false"
+      size="small"
+      sticky="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"},{"label":"Log In","href":"/app/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
       <main class="resource-shell resource-article">
         <nav class="breadcrumbs" aria-label="Breadcrumb">
           <a href="/">Home</a>
@@ -49,6 +55,7 @@
             <h1>Bring-your-own provider key portal for AI access</h1>
             <p class="resource-deck">Use LLM Proxy Settings to let users save provider keys and keep public proxy calls key-free.</p>
             <p class="resource-audience">Organizations where users or teams own their upstream provider accounts.</p>
+            <p class="resource-byline">Reviewed 2026-07-11 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
@@ -213,14 +220,14 @@
           </section>
         </article>
       </main>
-      <footer class="resource-shell resource-footer">
-        <a href="/">LLM Proxy main page</a>
-        <a href="/docs/">API reference</a>
-        <a href="/openapi.yaml">OpenAPI schema</a>
-        <a href="/resources/">Resource hub</a>
-        <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
-        <a href="/sitemap.xml">Sitemap</a>
-      </footer>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="false"
+      prefix-text="LLM Proxy"
+      privacy-link-hidden="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Log In","href":"/app/"},{"label":"API","href":"/docs/"},{"label":"OpenAPI","href":"/docs/#openapi-schema"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+    ></mpr-footer>
 
   </body>
 </html>

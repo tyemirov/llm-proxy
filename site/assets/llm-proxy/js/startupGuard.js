@@ -1,7 +1,7 @@
 // @ts-check
 
-import { RUNTIME_UI } from "./constants.js?v=20260727i036";
-import { failApplicationStartup } from "./ui/applicationStartup.js?v=20260727i036";
+import { RUNTIME_UI } from "./constants.js?v=20260806b110";
+import { failApplicationStartup } from "./ui/applicationStartup.js?v=20260806b110";
 
 const applicationModule = document.getElementById(RUNTIME_UI.APPLICATION_MODULE_ID);
 if (!applicationModule) {

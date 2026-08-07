@@ -4,18 +4,34 @@ services:
     pull_policy: always
     depends_on:
       api:
+        condition: service_healthy
+      schema:
         condition: service_started
       tauth:
         condition: service_started
     env_file:
       - ./configs/.env.frontend.local
     environment:
-      GHTTP_SERVE_PROXIES: "/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080"
+      GHTTP_SERVE_DIRECTORY: "/app/render/site"
+      GHTTP_SERVE_PROXIES: "/openapi.yaml=http://schema:4179,/config-ui.yaml=http://api:8080,/auth=http://tauth:8080,/me=http://tauth:8080"
       GHTTP_SERVE_RESPONSE_HEADERS: "/=Cache-Control:no-store"
     ports:
       - "127.0.0.1:4179:4179"
     volumes:
-      - ./site:/app/site:ro
+      - type: bind
+        source: ${LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY:?LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY is required}
+        target: /app/render
+        read_only: true
+
+  schema:
+    image: ghcr.io/tyemirov/ghttp:latest
+    pull_policy: always
+    environment:
+      GHTTP_SERVE_PORT: "4179"
+      GHTTP_SERVE_DIRECTORY: "/app/docs"
+      GHTTP_SERVE_NO_MARKDOWN: "true"
+    volumes:
+      - ./docs:/app/docs:ro
 
   api:
     build:
@@ -23,17 +39,29 @@ services:
       dockerfile: Dockerfile
     image: llm-proxy-local:latest
     command:
-      - /usr/local/bin/llm-proxy
-      - --config
-      - /app/configs/config.yml
+      - /bin/sh
+      - -ec
+      - |
+        /usr/local/bin/llm-proxy --config /app/configs/config.yml --site-source /app/site-source --render-site-output /app/render/site
+        exec /usr/local/bin/llm-proxy --config /app/configs/config.yml
     env_file:
       - ./configs/.env.api.local
     environment:
       LLM_PROXY_MANAGEMENT_TAUTH_URL: "http://localhost:4179"
     ports:
       - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /app/render/site/index.html && grep -q 'class=\"catalog-table\"' /app/render/site/index.html && ! grep -q 'llm-proxy-capability-catalog' /app/render/site/index.html"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+      start_period: 1s
     volumes:
       - ./configs/config.yml:/app/configs/config.yml:ro
+      - ./site:/app/site-source:ro
+      - type: bind
+        source: ${LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY:?LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY is required}
+        target: /app/render
       - llm_proxy_local_data:/data
 
   tauth:

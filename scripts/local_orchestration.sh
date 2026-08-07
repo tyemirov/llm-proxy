@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+LOCAL_ORCHESTRATION_SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOCAL_ORCHESTRATION_REPOSITORY_ROOT="$(cd "${LOCAL_ORCHESTRATION_SCRIPT_DIRECTORY}/.." && pwd)"
+LOCAL_ORCHESTRATION_COMPOSE_FILE="${LOCAL_ORCHESTRATION_REPOSITORY_ROOT}/docker-compose.local.yml"
+LOCAL_ORCHESTRATION_COMPOSE_PROJECT="llm-proxy-local"
+
+readonly LOCAL_ORCHESTRATION_SCRIPT_DIRECTORY
+readonly LOCAL_ORCHESTRATION_REPOSITORY_ROOT
+readonly LOCAL_ORCHESTRATION_COMPOSE_FILE
+readonly LOCAL_ORCHESTRATION_COMPOSE_PROJECT
+
+local_orchestration_compose() {
+  local site_artifact_directory
+
+  site_artifact_directory="${LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY:-${TMPDIR:-/tmp}}"
+  LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY="${site_artifact_directory}" \
+    docker compose \
+      --project-name "${LOCAL_ORCHESTRATION_COMPOSE_PROJECT}" \
+      --file "${LOCAL_ORCHESTRATION_COMPOSE_FILE}" \
+      "$@"
+}

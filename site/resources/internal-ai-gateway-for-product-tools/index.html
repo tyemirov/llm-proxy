@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Internal AI gateway for product tools</title>
-    <meta name="description" content="Centralize provider routing, tenant secrets, request validation, and usage signals for internal AI tools.">
+    <title>Internal AI gateway for durable product integrations</title>
+    <meta name="description" content="Give institutional teams one AI integration while platform engineering centralizes provider credentials, routing, validation, and usage signals.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/">
-    <meta property="og:title" content="Internal AI gateway for product tools">
-    <meta property="og:description" content="Centralize provider routing, tenant secrets, request validation, and usage signals for internal AI tools.">
+    <meta property="og:title" content="Internal AI gateway for durable product integrations">
+    <meta property="og:description" content="Give institutional teams one AI integration while platform engineering centralizes provider credentials, routing, validation, and usage signals.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/">
     <meta name="twitter:card" content="summary">
@@ -15,40 +15,51 @@
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script defer src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"></script>
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Internal AI gateway for product tools","description":"Centralize provider routing, tenant secrets, request validation, and usage signals for internal AI tools.","url":"https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/","about":["LLM Proxy","Use cases","internal AI gateway"]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Internal AI gateway for product tools","item":"https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of internal AI gateway?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy gives internal tools one tenant-secret HTTP boundary while centralizing provider credentials, routing, request validation, and managed usage dashboards."}},{"@type":"Question","name":"Who should read this use cases resource?","acceptedAnswer":{"@type":"Answer","text":"Product and platform teams with several internal tools calling LLMs or dictation providers."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Provider overload and timeout handling for LLM calls, which covers LLM provider overload timeout handling."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Internal AI gateway for durable product integrations","description":"Give institutional teams one AI integration while platform engineering centralizes provider credentials, routing, validation, and usage signals.","url":"https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/","datePublished":"2026-07-06","dateModified":"2026-08-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/","about":["LLM Proxy","Use cases","internal AI gateway"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Internal AI gateway for durable product integrations","item":"https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/"}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What credential does an internal application receive?","acceptedAnswer":{"@type":"Answer","text":"The application receives an LLM Proxy tenant client key. Upstream provider API keys remain in server-side configuration or authenticated management storage."}},{"@type":"Question","name":"Can platform teams change a tenant's default model centrally?","acceptedAnswer":{"@type":"Answer","text":"Yes. When an official client omits provider and model, the next request follows that tenant's saved routing default without an application code or deployment change."}},{"@type":"Question","name":"What usage data does the management app expose?","acceptedAnswer":{"@type":"Answer","text":"It summarizes request counts, token usage, provider, model, status, and time buckets. The documented managed-usage contract excludes prompt, audio, transcript, and response bodies."}},{"@type":"Question","name":"Does the gateway replace every governance control?","acceptedAnswer":{"@type":"Answer","text":"No. It provides the documented integration, credential, routing, validation, failure, and usage boundary. Organizations still own their wider network, identity, procurement, data, and policy controls."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Integrate once through one multi-provider LLM proxy, which covers multi-provider LLM proxy."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="resource-page">
 
-      <header class="resource-shell resource-topbar">
-        <a class="resource-brand" href="/">LLM Proxy</a>
-        <nav aria-label="Resource navigation">
-          <a href="/docs/">API reference</a>
-          <a href="/openapi.yaml">OpenAPI</a>
-          <a href="/resources/">Resources</a>
-          <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
-          <a href="/">Main page</a>
-        </nav>
-      </header>
+    <mpr-header
+      class="public-site-header"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      settings="false"
+      size="small"
+      sticky="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"},{"label":"Log In","href":"/app/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
       <main class="resource-shell resource-article">
         <nav class="breadcrumbs" aria-label="Breadcrumb">
           <a href="/">Home</a>
           <span>/</span>
           <a href="/resources/">Resources</a>
           <span>/</span>
-          <span>Internal AI gateway for product tools</span>
+          <span>Internal AI gateway for durable product integrations</span>
         </nav>
         <article>
           <header class="resource-hero">
             <p class="eyebrow">Use cases</p>
-            <h1>Internal AI gateway for product tools</h1>
-            <p class="resource-deck">Centralize provider routing, tenant secrets, request validation, and usage signals for internal AI tools.</p>
-            <p class="resource-audience">Product and platform teams with several internal tools calling LLMs or dictation providers.</p>
+            <h1>Internal AI gateway for durable product integrations</h1>
+            <p class="resource-deck">Give institutional teams one AI integration while platform engineering centralizes provider credentials, routing, validation, and usage signals.</p>
+            <p class="resource-audience">Institutional engineering and platform teams standardizing AI access across multiple applications and product groups.</p>
+            <p class="resource-byline">Reviewed 2026-08-06 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <aside class="resource-verdict" aria-label="Quick verdict">
+              <strong>Quick verdict</strong>
+              <p>Use LLM Proxy as an internal AI gateway when platform engineering should own provider complexity and product teams should own only one supported application contract.</p>
+            </aside>
             <div class="resource-actions">
               <a class="resource-button" href="/docs/">Open API reference</a>
               <a class="resource-link" href="/resources/">Browse all resources</a>
@@ -57,21 +68,21 @@
 
           <section>
             <h2>The problem</h2>
-            <p>Internal tools can quietly accumulate provider SDKs, raw keys, inconsistent defaults, and untracked usage as teams add AI features one by one.</p>
+            <p>Applications that adopt provider SDKs independently create duplicated credential handling, inconsistent route validation, provider-specific failures, and fragmented usage visibility.</p>
           </section>
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy gives internal tools one tenant-secret HTTP boundary while centralizing provider credentials, routing, request validation, and managed usage dashboards.</p>
+            <p>LLM Proxy becomes one tenant-client-key boundary for applications while platform engineering owns upstream credentials, supported routes, managed defaults, request validation, and usage metadata centrally.</p>
           </section>
 
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Run llm-proxy as the shared service boundary.</li>
-<li>Configure tenant defaults and provider catalogs centrally.</li>
-<li>Give each internal app a tenant secret or generated managed secret.</li>
-<li>Review usage metadata in the dashboard without storing prompts or responses.</li>
+              <li>Run LLM Proxy as the shared API boundary and configure the supported provider registry centrally.</li>
+<li>Give each application its own tenant client key instead of upstream provider credentials.</li>
+<li>Standardize new product integrations on POST /v2 or an official client and use managed route defaults where appropriate.</li>
+<li>Review requests, tokens, provider, model, and status metadata without persisting prompt or response bodies.</li>
             </ol>
           </section>
 
@@ -89,23 +100,30 @@
                 <tbody>
 
                         <tr>
-                          <td>Central routing</td>
-                          <td>Provider and model selection happen at the proxy boundary.</td>
-                          <td>Apps do not need provider-specific SDKs.</td>
+                          <td>Shared integration contract</td>
+                          <td>Applications use canonical messages instead of provider SDKs.</td>
+                          <td>A product team can change an approved route without rebuilding its AI boundary.</td>
                         </tr>
 
 
                         <tr>
                           <td>Credential separation</td>
-                          <td>Client apps receive tenant secrets, not upstream provider keys.</td>
-                          <td>Provider keys stay server-side.</td>
+                          <td>Client applications receive tenant keys while upstream provider credentials stay server-side.</td>
+                          <td>Provider-key rotation does not require distributing a replacement key to every application.</td>
+                        </tr>
+
+
+                        <tr>
+                          <td>Central route policy</td>
+                          <td>Validated provider catalogs and managed defaults define the available routes.</td>
+                          <td>Unsupported model and capability combinations fail before upstream dispatch.</td>
                         </tr>
 
 
                         <tr>
                           <td>Usage visibility</td>
-                          <td>Managed tenant dashboards summarize requests, tokens, provider, model, and status.</td>
-                          <td>Teams can see operational patterns.</td>
+                          <td>Managed dashboards summarize requests, tokens, provider, model, and status without storing content.</td>
+                          <td>Platform teams can inspect operational patterns across account or tenant scopes.</td>
                         </tr>
 
                 </tbody>
@@ -118,20 +136,20 @@
             <div class="resource-card-grid">
 
                     <section class="resource-card">
-                      <h3>Support console</h3>
-                      <p>A support tool routes summaries through the shared proxy with a tenant secret.</p>
+                      <h3>Product portfolio</h3>
+                      <p>Several product backends use separate client keys and one canonical messages contract while platform engineering maintains supported provider routes.</p>
                     </section>
 
 
                     <section class="resource-card">
-                      <h3>Admin automation</h3>
-                      <p>An internal script uses the CLI client for repeated analysis tasks.</p>
+                      <h3>Engineering automation</h3>
+                      <p>Internal scripts use the official CLI instead of distributing provider keys to developer machines.</p>
                     </section>
 
 
                     <section class="resource-card">
-                      <h3>Voice input</h3>
-                      <p>A tool adds /dictate without creating a second credential path.</p>
+                      <h3>Managed model change</h3>
+                      <p>A tenant owner changes the default route in the app and model-omitting client requests follow that route without an application deployment.</p>
                     </section>
 
             </div>
@@ -147,36 +165,42 @@
           </section>
 
           <section>
+            <h2>Repository evidence</h2>
+            <pre class="usage-snippet"><code>curl -X POST   &quot;https://llm-proxy-api.mprlab.com/v2?key=$PRODUCT_TOOL_CLIENT_KEY&quot;   -H &quot;Content-Type: application/json&quot;   -d '{&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Summarize this&quot;}]}'</code></pre>
+            <p>Verified 2026-08-06 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
+          </section>
+
+          <section>
             <h2>FAQ</h2>
             <div class="resource-faq">
 
                     <details>
-                      <summary>What is the main job of internal AI gateway?</summary>
-                      <p>LLM Proxy gives internal tools one tenant-secret HTTP boundary while centralizing provider credentials, routing, request validation, and managed usage dashboards.</p>
+                      <summary>What credential does an internal application receive?</summary>
+                      <p>The application receives an LLM Proxy tenant client key. Upstream provider API keys remain in server-side configuration or authenticated management storage.</p>
                     </details>
 
 
                     <details>
-                      <summary>Who should read this use cases resource?</summary>
-                      <p>Product and platform teams with several internal tools calling LLMs or dictation providers.</p>
+                      <summary>Can platform teams change a tenant's default model centrally?</summary>
+                      <p>Yes. When an official client omits provider and model, the next request follows that tenant's saved routing default without an application code or deployment change.</p>
                     </details>
 
 
                     <details>
-                      <summary>Does this page claim provider performance or pricing advantages?</summary>
-                      <p>No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here.</p>
+                      <summary>What usage data does the management app expose?</summary>
+                      <p>It summarizes request counts, token usage, provider, model, status, and time buckets. The documented managed-usage contract excludes prompt, audio, transcript, and response bodies.</p>
                     </details>
 
 
                     <details>
-                      <summary>Where should setup details come from?</summary>
-                      <p>Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation.</p>
+                      <summary>Does the gateway replace every governance control?</summary>
+                      <p>No. It provides the documented integration, credential, routing, validation, failure, and usage boundary. Organizations still own their wider network, identity, procurement, data, and policy controls.</p>
                     </details>
 
 
                     <details>
                       <summary>What should I read next?</summary>
-                      <p>A closely related resource is Provider overload and timeout handling for LLM calls, which covers LLM provider overload timeout handling.</p>
+                      <p>A closely related resource is Integrate once through one multi-provider LLM proxy, which covers multi-provider LLM proxy.</p>
                     </details>
 
             </div>
@@ -186,35 +210,47 @@
             <h2>Related resources</h2>
             <div class="resource-related-grid">
 
-                    <a class="resource-related" href="/resources/provider-overload-timeout-handling/">
-                      <span>Reliability</span>
-                      <strong>Provider overload and timeout handling for LLM calls</strong>
+                    <a class="resource-related" href="/resources/multi-provider-llm-proxy/">
+                      <span>Provider routing</span>
+                      <strong>Integrate once through one multi-provider LLM proxy</strong>
                     </a>
 
 
-                    <a class="resource-related" href="/resources/live-provider-smoke-tests/">
-                      <span>Validation</span>
-                      <strong>Live provider smoke tests for LLM Proxy</strong>
+                    <a class="resource-related" href="/resources/server-side-provider-api-keys/">
+                      <span>Security</span>
+                      <strong>Keep provider API keys server-side for LLM apps</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/managed-tenant-usage-dashboard/">
+                      <span>Usage</span>
+                      <strong>Account-wide managed tenant usage dashboard for LLMs</strong>
+                    </a>
+
+
+                    <a class="resource-related" href="/resources/llm-proxy-client-authentication/">
+                      <span>Clients</span>
+                      <strong>Authenticate an LLM Proxy client with a tenant secret</strong>
                     </a>
 
             </div>
           </section>
 
           <section class="resource-final-cta">
-            <h2>Use this pattern in LLM Proxy</h2>
-            <p>Start from the canonical API reference, then use the management surface when the workflow needs tenant or provider configuration.</p>
-            <a class="resource-button" href="/docs/">Open API reference</a>
+            <h2>Standardize the first application request</h2>
+            <p>Use the authentication guide to separate the application client key, management session, and upstream provider credentials.</p>
+            <a class="resource-button" href="/resources/llm-proxy-client-authentication/">Read the authentication guide</a>
           </section>
         </article>
       </main>
-      <footer class="resource-shell resource-footer">
-        <a href="/">LLM Proxy main page</a>
-        <a href="/docs/">API reference</a>
-        <a href="/openapi.yaml">OpenAPI schema</a>
-        <a href="/resources/">Resource hub</a>
-        <a href="https://github.com/tyemirov/llm-proxy#usage">README</a>
-        <a href="/sitemap.xml">Sitemap</a>
-      </footer>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="false"
+      prefix-text="LLM Proxy"
+      privacy-link-hidden="true"
+      horizontal-links='{"alignment":"right","links":[{"label":"Log In","href":"/app/"},{"label":"API","href":"/docs/"},{"label":"OpenAPI","href":"/docs/#openapi-schema"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+    ></mpr-footer>
 
   </body>
 </html>

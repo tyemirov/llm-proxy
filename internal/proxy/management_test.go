@@ -118,7 +118,32 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 	staticServer := httptest.NewServer(http.FileServer(http.Dir("../../site")))
 	defer staticServer.Close()
 
-	staticIndexResponse, indexError := http.Get(staticServer.URL + "/")
+	landingResponse, landingError := http.Get(staticServer.URL + "/")
+	if landingError != nil {
+		t.Fatalf("static landing request: %v", landingError)
+	}
+	defer landingResponse.Body.Close()
+	if landingResponse.StatusCode != http.StatusOK {
+		t.Fatalf("static landing status=%d want=%d", landingResponse.StatusCode, http.StatusOK)
+	}
+	landingBytes, readLandingError := io.ReadAll(landingResponse.Body)
+	if readLandingError != nil {
+		t.Fatalf("read static landing: %v", readLandingError)
+	}
+	landingHTML := string(landingBytes)
+	for _, requiredFragment := range []string{
+		`Integrate once. Use the model that fits.`,
+		`href="/app/"`,
+		`<!-- llm-proxy-capability-catalog -->`,
+		`<mpr-header`,
+		`<mpr-footer`,
+	} {
+		if !strings.Contains(landingHTML, requiredFragment) {
+			t.Fatalf("static landing missing %q", requiredFragment)
+		}
+	}
+
+	staticIndexResponse, indexError := http.Get(staticServer.URL + "/app/")
 	if indexError != nil {
 		t.Fatalf("static index request: %v", indexError)
 	}
@@ -135,8 +160,8 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		`href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css"`,
 		`src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"`,
 		`data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"`,
-		`src="/assets/llm-proxy/js/startupGuard.js?v=20260727i036"`,
-		`src="/assets/llm-proxy/js/app.js?v=20260727i036"`,
+		`src="/assets/llm-proxy/js/startupGuard.js?v=20260806b110"`,
+		`src="/assets/llm-proxy/js/app.js?v=20260806b110"`,
 		`data-config-url="/config-ui.yaml"`,
 		`<mpr-user`,
 		`<mpr-footer`,
@@ -151,6 +176,15 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		if strings.Contains(indexHTML, forbiddenFragment) {
 			t.Fatalf("static index must not include %q", forbiddenFragment)
 		}
+	}
+
+	removedIndexResponse, removedIndexError := http.Get(staticServer.URL + "/manage/")
+	if removedIndexError != nil {
+		t.Fatalf("removed static index request: %v", removedIndexError)
+	}
+	defer removedIndexResponse.Body.Close()
+	if removedIndexResponse.StatusCode != http.StatusNotFound {
+		t.Fatalf("removed static index status=%d want=%d", removedIndexResponse.StatusCode, http.StatusNotFound)
 	}
 
 	router := newManagementRouter(t, proxy.Configuration{})
