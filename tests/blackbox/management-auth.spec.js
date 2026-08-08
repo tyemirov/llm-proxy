@@ -33,7 +33,6 @@ const redLuminanceWeight = 0.2126;
 const greenLuminanceWeight = 0.7152;
 const blueLuminanceWeight = 0.0722;
 const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
-const tAuthBrowserClientURL = "https://tauth.mprlab.com/tauth.js";
 const applicationPath = APPLICATION_PATH;
 
 let stack;
@@ -67,6 +66,7 @@ test("public Log In opens the authenticated app and the TAuth session survives u
     }
   });
   await installLocalAssetRoutes(page);
+  const googleCredentialExchange = await installGoogleCredentialExchangeFixture(context, page);
   await installAuthStateHistory(page);
 
   const browserConfigResponse = await context.request.get(`${stack.frontendOrigin}/config-ui.yaml`);
@@ -85,8 +85,6 @@ test("public Log In opens the authenticated app and the TAuth session survives u
 
   await page.goto(`${stack.frontendOrigin}/`);
   await expect(page.locator("#mpr-ui-bundle")).toHaveAttribute("data-mpr-ui-bundle-src", mprUIBundleURL);
-  await expect(page.locator(`script[src="${tAuthBrowserClientURL}"]`)).toHaveCount(1);
-  await expect.poll(() => page.evaluate(() => typeof window.exchangePasswordCredential)).toBe("function");
   await expect.poll(() => page.evaluate(() => Boolean(customElements.get("mpr-legal-document")))).toBe(true);
   await expect(page.getByRole("heading", { name: "Integrate once. Use the model that fits." })).toBeVisible();
   await expect(page.locator("llm-proxy-key-management")).toHaveCount(0);
@@ -120,7 +118,7 @@ test("public Log In opens the authenticated app and the TAuth session survives u
 
   const loginResponsePromise = page.waitForResponse(
     (response) =>
-      response.url() === `${stack.tAuthOrigin}/auth/password/login` && response.request().method() === "POST",
+      response.url() === `${stack.tAuthOrigin}/auth/google` && response.request().method() === "POST",
   );
   const restoredSessionResponsePromise = waitForSessionRestore(page);
   const authenticatedAccountResponsePromise = waitForManagementAccount(page);
@@ -129,23 +127,17 @@ test("public Log In opens the authenticated app and the TAuth session survives u
       new URL(response.url()).pathname.match(/^\/api\/management\/tenants\/[^/]+\/secrets$/) &&
       response.request().method() === "POST",
   );
-  await page.evaluate(({ email, password }) => {
-    const header = document.querySelector("mpr-header");
-    header.dispatchEvent(new CustomEvent("mpr-ui:auth:status-change", {
-      detail: {
-        source: "credential",
-        status: "authenticating",
-      },
-    }));
-    Reflect.set(window, "__llmProxyPasswordExchange", window.exchangePasswordCredential({ email, password }));
-  }, {
-    email: localManagementProfile.operatorEmail,
-    password: localManagementProfile.operatorPassword,
-  });
+  await signInButton.click();
   const loginResponse = await loginResponsePromise;
   expect(loginResponse.status()).toBe(httpOK);
-  expect(loginResponse.headers()["access-control-allow-origin"]).toBe(stack.frontendOrigin);
-  expect(loginResponse.headers()["access-control-allow-credentials"]).toBe("true");
+  const credentialExchangeResult = await googleCredentialExchange.result;
+  expect(credentialExchangeResult.googlePayload).toEqual({
+    google_id_token: "local-blackbox-google-credential",
+    nonce_token: expect.any(String),
+  });
+  expect(credentialExchangeResult.tAuthStatus).toBe(httpOK);
+  expect(credentialExchangeResult.tAuthHeaders["access-control-allow-origin"]).toBe(stack.frontendOrigin);
+  expect(credentialExchangeResult.tAuthHeaders["access-control-allow-credentials"]).toBe("true");
 
   await expect(page).toHaveURL(`${stack.frontendOrigin}${applicationPath}`);
   const restoredSessionResponse = await restoredSessionResponsePromise;
@@ -156,7 +148,7 @@ test("public Log In opens the authenticated app and the TAuth session survives u
     }),
   ]));
   expect(restoredSessionResponse.request().headers()).not.toHaveProperty("origin");
-  expect(restoredSessionResponse.request().headers()).not.toHaveProperty("x-requested-with");
+  expect(restoredSessionResponse.request().headers()["x-requested-with"]).toBe("XMLHttpRequest");
 
   const sessionCookies = await context.cookies();
   expect(sessionCookies).toEqual(
@@ -439,12 +431,15 @@ test("public Log In opens the authenticated app and the TAuth session survives u
   const portfolioToggle = page.getByRole("button", { name: "Built by Marco Polo Research Lab" });
   await portfolioToggle.click();
   await expect(portfolioToggle).toHaveAttribute("aria-expanded", "true");
-  const portfolioMenuBox = await page.locator(".mpr-footer__menu").boundingBox();
-  if (!portfolioMenuBox) {
-    throw new Error("portfolio_menu_geometry_missing");
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  for (const projectLinkName of ["Marco Polo Research Lab", "Wallpapers"]) {
+    const projectLinkBox = await page.getByRole("link", { name: projectLinkName, exact: true }).boundingBox();
+    if (!projectLinkBox) {
+      throw new Error(`portfolio_link_geometry_missing: ${projectLinkName}`);
+    }
+    expect(projectLinkBox.x).toBeGreaterThanOrEqual(0);
+    expect(projectLinkBox.x + projectLinkBox.width).toBeLessThanOrEqual(390);
   }
-  expect(portfolioMenuBox.x).toBeGreaterThanOrEqual(0);
-  expect(portfolioMenuBox.x + portfolioMenuBox.width).toBeLessThanOrEqual(390);
   await page.keyboard.press("Escape");
   await expect(portfolioToggle).toHaveAttribute("aria-expanded", "false");
 });
@@ -554,13 +549,84 @@ async function installLocalAssetRoutes(page) {
   await page.route("https://loopaware.mprlab.com/**", async (route) =>
     route.fulfill({ body: "", contentType: "application/javascript" }),
   );
-  await page.route("https://accounts.google.com/**", async (route) => route.abort());
+  await page.route("https://accounts.google.com/gsi/client", async (route) =>
+    route.fulfill({
+      body: `(() => {
+        if (window.google?.accounts?.id?.__llmProxyFixture) {
+          return;
+        }
+        let initializeConfig = null;
+        window.google = {
+          accounts: {
+            id: {
+              __llmProxyFixture: true,
+              initialize(config) {
+                initializeConfig = config;
+              },
+              renderButton() {},
+              prompt() {
+                if (!initializeConfig || typeof initializeConfig.callback !== "function") {
+                  throw new Error("google_identity_fixture_not_initialized");
+                }
+                queueMicrotask(() => initializeConfig.callback({
+                  credential: "local-blackbox-google-credential",
+                }));
+              },
+            },
+          },
+        };
+      })();`,
+      contentType: "application/javascript",
+    }),
+  );
   await page.route("**/alpinejs@3.13.5/dist/module.esm.js", async (route) =>
     fulfillLocalFile(route, "node_modules/alpinejs/dist/module.esm.js", "application/javascript"),
   );
   await page.route("**/js-yaml@4.3.0/dist/js-yaml.min.js", async (route) =>
     fulfillLocalFile(route, "node_modules/js-yaml/dist/js-yaml.min.js", "application/javascript"),
   );
+}
+
+async function installGoogleCredentialExchangeFixture(context, page) {
+  /** @type {(value: { googlePayload: Record<string, unknown>, tAuthStatus: number, tAuthHeaders: Record<string, string> }) => void} */
+  let resolveResult = () => {};
+  /** @type {(reason?: unknown) => void} */
+  let rejectResult = () => {};
+  /** @type {Promise<{ googlePayload: Record<string, unknown>, tAuthStatus: number, tAuthHeaders: Record<string, string> }>} */
+  const result = new Promise((resolve, reject) => {
+    resolveResult = resolve;
+    rejectResult = reject;
+  });
+  await page.route(`${stack.tAuthOrigin}/auth/google`, async (route) => {
+    try {
+      const googlePayload = route.request().postDataJSON();
+      const tAuthResponse = await context.request.post(`${stack.tAuthOrigin}/auth/password/login`, {
+        headers: {
+          Origin: stack.frontendOrigin,
+          "X-TAuth-Tenant": localManagementProfile.tenantID,
+        },
+        data: {
+          email: localManagementProfile.operatorEmail,
+          password: localManagementProfile.operatorPassword,
+        },
+      });
+      const tAuthHeaders = tAuthResponse.headers();
+      await route.fulfill({
+        status: tAuthResponse.status(),
+        contentType: tAuthHeaders["content-type"] || "application/json",
+        body: await tAuthResponse.body(),
+      });
+      resolveResult({
+        googlePayload,
+        tAuthStatus: tAuthResponse.status(),
+        tAuthHeaders,
+      });
+    } catch (error) {
+      rejectResult(error);
+      await route.abort("failed");
+    }
+  });
+  return { result };
 }
 
 async function fulfillLocalFile(route, relativePath, contentType) {

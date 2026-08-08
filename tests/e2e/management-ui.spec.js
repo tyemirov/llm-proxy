@@ -70,7 +70,7 @@ const repositoryURL = "https://github.com/tyemirov/llm-proxy";
 const mprUICSSURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css";
 const mprUIConfigURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js";
 const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
-const tAuthBrowserClientURL = "https://tauth.mprlab.com/tauth.js";
+const forbiddenTAuthBrowserClientURL = "https://tauth.mprlab.com/tauth.js";
 const compactLandingFooterMaxHeight = 56;
 const b020ScreenshotDirectory = path.join(repoRoot, "output/playwright");
 const httpOK = 200;
@@ -227,11 +227,8 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).not.toContain("base_url");
   expect(html).toContain(`data-config-url="${configPath}"`);
   expect(html).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
-  expect(html).toContain(`<script src="${tAuthBrowserClientURL}"></script>`);
+  expect(html).not.toContain(`<script src="${forbiddenTAuthBrowserClientURL}"></script>`);
   expect(html).toContain(`<script src="${mprUIConfigURL}"></script>`);
-  expect(html.indexOf(`<script src="${tAuthBrowserClientURL}"></script>`)).toBeLessThan(
-    html.indexOf(`<script src="${mprUIConfigURL}"></script>`),
-  );
   expect(html).toContain(`data-mpr-ui-bundle-src="${mprUIBundleURL}"`);
   expect(html).toContain(
     `<script type="module" src="/assets/llm-proxy/js/ui/landingAuthRoute.js?v=${landingAuthRouteModuleRevision}"></script>`,
@@ -248,6 +245,13 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('links-collection=');
   expect(html).toContain("Built by Marco Polo Research Lab");
   expect(html).toContain('<meta name="theme-color" content="#0f1114">');
+  const publicShellCSS = await readFile(
+    path.join(siteSourceRoot, "assets/llm-proxy/public-shell.css"),
+    "utf8",
+  );
+  expect(publicShellCSS).toContain(".public-site-footer-layout");
+  expect(publicShellCSS).not.toContain(".mpr-footer__");
+  expect(publicShellCSS).not.toContain("[data-mpr-footer");
 
   const page = await request.get(`${baseURL}${applicationPath}`);
   expect(page.status()).toBe(httpOK);
@@ -256,11 +260,8 @@ test("public landing explains the product and exposes the generated capability c
   expect(managementHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/app/">');
   expect(managementHTML).toContain(`data-config-url="${configPath}"`);
   expect(managementHTML).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
-  expect(managementHTML).toContain(`<script src="${tAuthBrowserClientURL}"></script>`);
+  expect(managementHTML).not.toContain(`<script src="${forbiddenTAuthBrowserClientURL}"></script>`);
   expect(managementHTML).toContain(`<script src="${mprUIConfigURL}"></script>`);
-  expect(managementHTML.indexOf(`<script src="${tAuthBrowserClientURL}"></script>`)).toBeLessThan(
-    managementHTML.indexOf(`<script src="${mprUIConfigURL}"></script>`),
-  );
   expect(managementHTML).toContain(`data-mpr-ui-bundle-src="${mprUIBundleURL}"`);
   expect(managementHTML).toContain(`<script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=${applicationModuleRevision}"></script>`);
   expect(managementHTML).toContain(
@@ -275,7 +276,7 @@ test("public landing explains the product and exposes the generated capability c
       expect(revision[1], `${moduleFile} must not reference a stale application module revision`).toBe(applicationModuleRevision);
     }
     for (const forbiddenFragment of applicationForbiddenTAuthFragments) {
-      expect(moduleSource, `${moduleFile} must delegate browser authentication to the exposed TAuth client`).not.toContain(
+      expect(moduleSource, `${moduleFile} must delegate browser authentication to MPR UI`).not.toContain(
         forbiddenFragment,
       );
     }
@@ -320,7 +321,7 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain(`<link rel="apple-touch-icon" href="${appIconPath}">`);
   expect(html).toContain(`data-config-url="${configPath}"`);
   expect(html).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
-  expect(html).toContain(`<script src="${tAuthBrowserClientURL}"></script>`);
+  expect(html).not.toContain(`<script src="${forbiddenTAuthBrowserClientURL}"></script>`);
   expect(html).toContain(`<script src="${mprUIConfigURL}"></script>`);
   expect(html).toContain(`data-mpr-ui-bundle-src="${mprUIBundleURL}"`);
   expect(html).toContain(`<script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=${applicationModuleRevision}"></script>`);
@@ -748,6 +749,10 @@ test("the public resource generator rejects incomplete or unsafe shell documents
     source.replace("</mpr-header>", "</mpr-header><p>Escaped resource content</p>"),
     source.replace("</main>", '<a href="/app/">Bypass authentication</a></main>'),
     source.replace('<a href="/resources/">Resources</a>', '<a href="/resource/">Resources</a>'),
+    source.replace(
+      `<script src="${mprUIConfigURL}"></script>`,
+      `<script src="${forbiddenTAuthBrowserClientURL}"></script><script src="${mprUIConfigURL}"></script>`,
+    ),
   ];
   for (const invalidDocument of invalidDocuments) {
     expect(() => assertPublicDocumentShell(invalidDocument, sourcePath)).toThrow();
@@ -4371,9 +4376,6 @@ async function installAssetRoutes(page, options = {}) {
     route.fulfill({ body: "", contentType: "application/javascript" }),
   );
   await page.route("https://accounts.google.com/**", async (route) => route.abort());
-  await page.route(tAuthBrowserClientURL, async (route) =>
-    route.fulfill({ body: "", contentType: "application/javascript" }),
-  );
   await page.route("**/alpinejs@3.13.5/dist/module.esm.js", async (route) => {
     if (options.alpineModuleFailure) {
       await route.abort("blockedbyclient");
