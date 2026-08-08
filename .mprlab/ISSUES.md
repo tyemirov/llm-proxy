@@ -40,6 +40,65 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B114] (P1) {B111,B112,B113} Restore the single MPR UI authentication path and correct the shared public contract.
+  Goal:
+  Keep browser authentication fully owned by MPR UI while preserving the
+  authenticated landing redirect, shared responsive footer, and accurate
+  privacy disclosure.
+  Evidence:
+  - The generated shell loads `tauth.js` directly before `mpr-ui-config.js`,
+    creating an application-owned authentication bootstrap outside the
+    canonical `/config-ui.yaml` contract.
+  - The real browser test invokes the exposed TAuth credential-exchange global
+    instead of exercising the shared MPR UI login control.
+  - Narrow-screen footer CSS targets private `.mpr-footer__*` markup and
+    `data-mpr-footer` internals that are not part of the MPR UI DSL.
+  - The Privacy page says LLM Proxy cannot read HttpOnly authentication
+    cookies, although the backend receives and validates the configured session
+    cookie through TAuth's published `sessionvalidator`.
+  Requirements:
+  - Remove the direct TAuth browser script and every generated/static assertion
+    that requires or invokes its global API. Keep `/config-ui.yaml`,
+    `mpr-ui-config.js`, declarative MPR UI markup, and documented auth lifecycle
+    events as the only browser authentication path.
+  - Exercise interactive authentication through the visible MPR UI login
+    surface and retain real session restoration, refresh-cookie recovery,
+    authenticated landing replacement, and explicit logout coverage.
+  - Remove host styling and test selectors that depend on private MPR UI footer
+    markup. Configure the shared footer only through supported component
+    attributes and verify observable accessibility and geometry.
+  - State accurately that browser JavaScript cannot read HttpOnly cookies while
+    the backend receives and validates the session cookie only to authorize
+    protected LLM Proxy resources.
+  Validation:
+  - Static generation rejects direct `tauth.js` loading and private MPR UI
+    footer selectors across every generated page.
+  - Browser black-box coverage authenticates through the visible shared control
+    and proves the existing login, restore, refresh, route, and logout outcomes.
+  - Regenerated legal pages contain the corrected cookie boundary.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - All public and application pages now load only the canonical MPR UI
+    configuration and runtime. Shared-shell generation and Go/browser static
+    coverage reject any application-authored `tauth.js` bootstrap.
+  - The real browser black box activates the visible MPR UI login control,
+    receives real TAuth HttpOnly cookies through the seeded provider adapter,
+    opens `/app/`, restores and refreshes the session across navigation, and
+    signs out through the visible shared control without manual auth events or
+    application-owned TAuth calls.
+  - The footer uses MPR UI's supported `wrapper-class` attribute. Host CSS and
+    geometry assertions no longer depend on private MPR UI markup or data
+    attributes.
+  - The generated Privacy page now distinguishes the browser JavaScript cookie
+    boundary from backend authorization through TAuth's published validator,
+    and integration documentation describes MPR UI as the sole browser-auth
+    owner.
+  - The required baseline passed before implementation. The final CI run passed
+    all 11 gates in 99 seconds with 85 browser tests, 36 Python tests, the real
+    TAuth management black box, live-provider preflight, and exact 100% Go
+    statement coverage.
+
 - [x] [B113] (P1) {B111,B112,F019} Prevent authenticated sessions from rendering the anonymous landing page.
   Goal:
   Make `/` an anonymous-only route and `/app/` the only authenticated
@@ -56,7 +115,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     emit its authenticated lifecycle and replace `/` with `/app/` for every
     documented `mpr-ui:auth:authenticated` event.
   - Keep login, session restoration, refresh, cookies, and logout fully owned by
-    MPR UI and the exposed TAuth client. Do not add TAuth requests, cookie or
+    MPR UI and its internal TAuth integration. Do not add TAuth requests, cookie or
     storage inspection, protected-API probes, or an application authentication
     state machine.
   - Keep interactive login from documentation, resource, privacy, and terms
@@ -98,28 +157,29 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   Goal:
   Make successful public authentication open `/app/` and keep the user
   authenticated across ordinary page refreshes while all browser-side TAuth
-  communication remains delegated to the exposed TAuth client.
+  communication remains delegated to MPR UI.
   Evidence:
   - A real Google credential exchange returns `200` and the shared header shows
     the authenticated profile, but the page remains on `/`.
   - Browser `GET /auth/session` requests return `403`; the same endpoint returns
     `204` only when a synthetic `Origin` header is added.
-  - Browser same-origin `GET` requests do not send `Origin`. The exposed TAuth
-    client sends the configured `X-TAuth-Tenant` header, but the local TAuth
+  - Browser same-origin `GET` requests do not send `Origin`. MPR UI's TAuth
+    integration sends the configured `X-TAuth-Tenant` header, but the local TAuth
     tenant-header override is disabled, so session restore cannot resolve the
     tenant.
   Requirements:
-  - Load the canonical TAuth browser client before MPR UI configuration on
-    every auth-aware public and application page. LLM Proxy must not implement
-    auth endpoint requests, credential exchange, cookie handling, session
-    restoration, refresh, logout, or auth redirect recovery.
+  - Load the canonical MPR UI configuration and runtime on every auth-aware
+    public and application page. LLM Proxy must not load a separate TAuth
+    browser client or implement auth endpoint requests, credential exchange,
+    cookie handling, session restoration, refresh, logout, or auth redirect
+    recovery.
   - Keep `/auth` and `/me` behind the local same-origin frontend proxy and make
     the local TAuth profile resolve the explicit TAuth client tenant header.
-  - Verify startup with the exact TAuth client session request headers,
+  - Verify startup with the exact MPR UI session request headers,
     without a synthetic `Origin`, and keep nonce verification aligned with the
-    TAuth client request contract.
+    MPR UI request contract.
   - Exercise the black-box browser flow through the same-origin auth proxy,
-    invoke credential exchange through the exposed TAuth client, prove the
+    invoke credential exchange through the visible MPR UI control, prove the
     shared-component post-auth redirect to `/app/`, and prove ordinary reload
     plus refresh-cookie recovery remain authenticated.
   - Keep backend request authorization on TAuth's published Go
@@ -129,8 +189,8 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Operational coverage rejects a local TAuth profile without explicit
     tenant-header resolution and rejects readiness probes that hide the
     browser request shape.
-  - The real MPR UI/TAuth black-box test uses the exposed TAuth client for
-    login, session restoration, refresh, and logout through the frontend
+  - The real MPR UI/TAuth black-box test uses MPR UI for login, session
+    restoration, refresh, and logout through the frontend
     origin, verifies the session request headers, opens `/app/` after the
     authenticated lifecycle, and survives refresh.
   - Backend coverage exercises the published TAuth validator through the
@@ -138,14 +198,15 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
   Resolution:
-  - Every auth-aware page now loads the canonical TAuth client before MPR UI.
-    LLM Proxy application modules contain no TAuth endpoint, cookie, storage,
-    credential-exchange, restore, refresh, logout, or redirect implementation.
-  - Local TAuth resolves the client's explicit tenant header for same-origin
+  - Every auth-aware page now loads the canonical MPR UI configuration and
+    runtime. LLM Proxy application modules contain no separate TAuth client,
+    TAuth endpoint, cookie, storage, credential-exchange, restore, refresh,
+    logout, or redirect implementation.
+  - Local TAuth resolves MPR UI's explicit tenant header for same-origin
     session requests, and startup verifies the exact client session and nonce
     request shapes through the frontend proxy.
   - The real browser black box now exchanges a seeded credential through the
-    exposed TAuth client, follows MPR UI's authenticated redirect to `/app/`,
+    visible MPR UI control, follows MPR UI's authenticated redirect to `/app/`,
     restores the session after reload, recovers with the refresh cookie, and
     signs out through the visible shared control.
   - Backend authorization remains on TAuth's published Go `sessionvalidator`;
