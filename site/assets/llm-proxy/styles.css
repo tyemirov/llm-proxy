@@ -34,6 +34,12 @@ body {
   letter-spacing: 0;
 }
 
+body {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
 llm-proxy-key-management button,
 llm-proxy-key-management input,
 llm-proxy-key-management select,
@@ -159,6 +165,7 @@ settings-section {
   width: min(960px, calc(100vw - 24px));
   margin: 0 auto;
   padding: 0.75rem 0 2rem;
+  flex: 1 0 auto;
 }
 
 .public-resource-link {

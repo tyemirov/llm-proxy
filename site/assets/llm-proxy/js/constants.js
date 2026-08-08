@@ -7,6 +7,10 @@ export const AUTH_STATES = Object.freeze({
   ERROR: "error",
 });
 
+export const PUBLIC_SITE_PATH = "/";
+export const APPLICATION_PATH = "/app/";
+export const LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE = "data-llm-proxy-authenticated-redirect-url";
+
 export const NOTICE_KINDS = Object.freeze({
   INFO: "info",
   SUCCESS: "success",
@@ -124,7 +128,7 @@ export const MPR_UI = Object.freeze({
 });
 
 export const RUNTIME_UI = Object.freeze({
-  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260806b110",
+  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260808b111",
   APPLICATION_MODULE_ID: "llm-proxy-application-module",
   APPLICATION_MODULE_MISSING: "llm_proxy_application_module_missing",
   APPLICATION_READY_ATTRIBUTE: "data-llm-proxy-application",
@@ -146,8 +150,6 @@ export const COPY = Object.freeze({
   runtimeFailureReload: "Reload LLM Proxy",
   loadingEyebrow: "Session",
   loadingTitle: "Loading LLM Proxy",
-  signedOutEyebrow: "Authentication",
-  signedOutTitle: "Sign in to manage LLM Proxy keys",
   profileErrorEyebrow: "App",
   profileErrorTitle: "Unable to load LLM Proxy",
   usageTenant: "Usage tenant",

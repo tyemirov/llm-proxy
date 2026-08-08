@@ -18,3 +18,99 @@
 .public-site-footer {
   width: 100%;
 }
+
+.public-site-footer-fallback {
+  display: flex;
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.75rem 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--mpr-color-border, rgba(148, 163, 184, 0.25));
+  background: var(--mpr-color-surface-primary, #071a23);
+  color: var(--mpr-color-text-muted, #cbd5e1);
+  font-size: 0.75rem;
+}
+
+.public-site-footer-fallback a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.public-site-footer-fallback a:hover,
+.public-site-footer-fallback a:focus-visible {
+  text-decoration: underline;
+}
+
+.public-site-footer-fallback__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.public-site-footer-fallback__projects {
+  position: relative;
+  color: var(--mpr-color-accent, #38bdf8);
+}
+
+.public-site-footer-fallback__projects summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.public-site-footer-fallback__projects ul {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.5rem);
+  width: max-content;
+  min-width: 13rem;
+  margin: 0;
+  padding: 0.5rem;
+  border: 1px solid var(--mpr-color-border, rgba(148, 163, 184, 0.25));
+  border-radius: 0.5rem;
+  background: var(--mpr-color-surface-elevated, #111827);
+  color: var(--mpr-color-text-primary, #e2e8f0);
+  list-style: none;
+}
+
+.public-site-footer-fallback__projects li + li {
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 520px) {
+  .public-site-footer-fallback {
+    padding: 0.75rem;
+    align-items: flex-start;
+  }
+
+  .public-site-footer-fallback__projects {
+    text-align: right;
+  }
+
+  mpr-footer.public-site-footer footer.mpr-footer [data-mpr-footer="layout"] {
+    display: grid;
+    grid-template-columns: auto auto;
+    justify-content: center;
+    gap: 0.55rem 0.8rem;
+    white-space: normal;
+  }
+
+  mpr-footer.public-site-footer footer.mpr-footer .mpr-footer__horizontal-links {
+    flex: 0 1 auto;
+    justify-content: center;
+  }
+
+  mpr-footer.public-site-footer footer.mpr-footer .mpr-footer__spacer {
+    display: none;
+  }
+
+  mpr-footer.public-site-footer footer.mpr-footer [data-mpr-footer="theme-toggle"] {
+    justify-self: end;
+  }
+
+  mpr-footer.public-site-footer footer.mpr-footer [data-mpr-footer="brand"] {
+    margin-left: 0;
+    justify-self: start;
+  }
+}

@@ -17,18 +17,20 @@
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,key,visibility,visibility_off&amp;display=block">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
+    <script src="https://tauth.mprlab.com/tauth.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
     <script
       id="mpr-ui-bundle"
       type="application/json"
       data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
     ></script>
-    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260806b110"></script>
-    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260806b110"></script>
+    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260808b111"></script>
+    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260808b111"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body x-data="llmProxyKeyManagement" x-init="init()">
@@ -75,11 +77,6 @@
         <section class="llm-panel" x-cloak x-show="authState === states.loading">
           <p class="eyebrow" x-text="copy.loadingEyebrow"></p>
           <h1 x-text="copy.loadingTitle"></h1>
-        </section>
-
-        <section class="llm-panel" x-cloak x-show="authState === states.unauthenticated">
-          <p class="eyebrow" x-text="copy.signedOutEyebrow"></p>
-          <h1 x-text="copy.signedOutTitle"></h1>
         </section>
 
         <section class="llm-panel" x-cloak x-show="authState === states.error">
@@ -932,6 +929,41 @@
       </section>
     </main>
 
-    <mpr-footer theme-switcher="square"></mpr-footer>
+    <!-- llm-proxy-public-footer:start -->
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="false"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
+    <!-- llm-proxy-public-footer:end -->
   </body>
 </html>
