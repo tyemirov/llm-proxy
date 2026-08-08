@@ -574,6 +574,9 @@ func TestRootCommandRendersStaticSiteFromPublicCatalogConfig(t *testing.T) {
 		t.Fatalf("read rendered landing page: %v", readLandingError)
 	}
 	landingHTML := string(landingBytes)
+	if !strings.Contains(landingHTML, `data-config-url="https://llm-proxy-api.example/config-ui.yaml"`) {
+		t.Fatalf("rendered landing config URL missing: %s", landingHTML)
+	}
 	for _, expectedCatalogFragment := range []string{
 		`class="catalog-table"`,
 		`<strong>12</strong><span>Providers</span>`,
@@ -983,6 +986,15 @@ func TestRootCommandRejectsSiteRenderInjectedFailures(t *testing.T) {
 			expectedError: "CNAME",
 		},
 		{
+			name: "auth-aware HTML walk failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				siteWalkDir = func(root string, walkFunction fs.WalkDirFunc) error {
+					return walkFunction(root, nil, errors.New("auth HTML walk failed"))
+				}
+			},
+			expectedError: "auth HTML walk failed",
+		},
+		{
 			name: "index read failure",
 			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
 				siteReadFile = func(rawPath string) ([]byte, error) {
@@ -1004,9 +1016,13 @@ func TestRootCommandRejectsSiteRenderInjectedFailures(t *testing.T) {
 			name: "landing read failure",
 			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
 				originalSiteReadFile := siteReadFile
+				landingReadCount := 0
 				siteReadFile = func(rawPath string) ([]byte, error) {
 					if rawPath == filepath.Join(outputDirectory, siteIndexFileName) {
-						return nil, errors.New("landing read failed")
+						landingReadCount++
+						if landingReadCount == 2 {
+							return nil, errors.New("landing read failed")
+						}
 					}
 					return originalSiteReadFile(rawPath)
 				}
@@ -1016,7 +1032,8 @@ func TestRootCommandRejectsSiteRenderInjectedFailures(t *testing.T) {
 		{
 			name: "landing marker missing",
 			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
-				if writeError := os.WriteFile(filepath.Join(sourceDirectory, siteIndexFileName), []byte("<!doctype html>\n"), 0600); writeError != nil {
+				landingHTML := `<!doctype html><mpr-header data-config-url="/config-ui.yaml"></mpr-header>`
+				if writeError := os.WriteFile(filepath.Join(sourceDirectory, siteIndexFileName), []byte(landingHTML+"\n"), 0600); writeError != nil {
 					subTest.Fatalf("write landing without marker: %v", writeError)
 				}
 			},
@@ -1026,9 +1043,13 @@ func TestRootCommandRejectsSiteRenderInjectedFailures(t *testing.T) {
 			name: "landing write failure",
 			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
 				originalSiteWriteFile := siteWriteFile
+				landingWriteCount := 0
 				siteWriteFile = func(rawPath string, content []byte, fileMode os.FileMode) error {
 					if rawPath == filepath.Join(outputDirectory, siteIndexFileName) {
-						return errors.New("landing write failed")
+						landingWriteCount++
+						if landingWriteCount == 2 {
+							return errors.New("landing write failed")
+						}
 					}
 					return originalSiteWriteFile(rawPath, content, fileMode)
 				}
@@ -1100,7 +1121,7 @@ func TestRootCommandRejectsSiteRenderInjectedFailures(t *testing.T) {
 	}
 }
 
-func TestRootCommandRejectsSiteRenderManagementIndexWithoutCanonicalConfigURL(t *testing.T) {
+func TestRootCommandRejectsSiteRenderHTMLWithoutCanonicalConfigURL(t *testing.T) {
 	testCases := []struct {
 		name          string
 		indexHTML     string
@@ -2101,6 +2122,7 @@ func withSiteRendererDependencies(t *testing.T) {
 	originalSiteRemove := siteRemove
 	originalSiteStat := siteStat
 	originalSiteURLParse := siteURLParse
+	originalSiteWalkDir := siteWalkDir
 	originalSiteWriteFile := siteWriteFile
 	t.Cleanup(func() {
 		siteCapabilityCatalogTemplateSource = originalSiteCapabilityCatalogTemplateSource
@@ -2113,6 +2135,7 @@ func withSiteRendererDependencies(t *testing.T) {
 		siteRemove = originalSiteRemove
 		siteStat = originalSiteStat
 		siteURLParse = originalSiteURLParse
+		siteWalkDir = originalSiteWalkDir
 		siteWriteFile = originalSiteWriteFile
 	})
 }
@@ -2148,6 +2171,7 @@ func writeTestSiteSource(t *testing.T, sourceDirectory string) {
 		t.Fatalf("write app/index.html: %v", writeError)
 	}
 	if writeError := os.WriteFile(filepath.Join(sourceDirectory, "index.html"), []byte(`<!doctype html>
+	<mpr-header data-config-url="/config-ui.yaml"></mpr-header>
 	`+siteCapabilityCatalogMarker+`
 `), 0600); writeError != nil {
 		t.Fatalf("write landing index.html: %v", writeError)
