@@ -1,7 +1,11 @@
 // @ts-check
 
 import { readFile, writeFile } from "node:fs/promises";
-import { renderLandingHeader, renderPublicFooter } from "./public_site_shell.mjs";
+import {
+  assertMPRUIAuthAssets,
+  renderLandingHeader,
+  renderPublicFooter,
+} from "./public_site_shell.mjs";
 
 const SHELL_TARGETS = Object.freeze([
   Object.freeze({ path: "site/index.html", header: true, footer: true }),
@@ -27,6 +31,7 @@ for (const target of SHELL_TARGETS) {
   if (target.footer) {
     rendered = replaceFragment(rendered, FOOTER_START, FOOTER_END, renderPublicFooter());
   }
+  assertMPRUIAuthAssets(rendered, target.path);
 
   if (process.argv.includes(CHECK_ARGUMENT)) {
     if (source !== rendered) {

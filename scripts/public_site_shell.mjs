@@ -10,7 +10,6 @@ export const MPR_UI_CONFIG_URL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchL
 export const MPR_UI_BUNDLE_URL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
 export const GOOGLE_IDENTITY_URL = "https://accounts.google.com/gsi/client";
 export const JS_YAML_URL = "https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js";
-export const TAUTH_BROWSER_CLIENT_URL = "https://tauth.mprlab.com/tauth.js";
 
 const PUBLIC_HEADER_LINKS = Object.freeze({
   alignment: "right",
@@ -96,6 +95,7 @@ export function renderPublicFooter() {
       class="public-site-footer"
       size="small"
       sticky="false"
+      wrapper-class="public-site-footer-layout"
       privacy-link-label="Privacy"
       privacy-link-href="/privacy/"
       theme-switcher="square"
@@ -169,14 +169,20 @@ export function assertPublicDocumentShell(document, context) {
   if (/<a\b[^>]*\bhref=["']\/app\/["'][^>]*>/i.test(document)) {
     throw new Error(`public_document_direct_app_link_invalid: context=${context}`);
   }
-  const tAuthClientScript = `<script src="${TAUTH_BROWSER_CLIENT_URL}"></script>`;
-  const tAuthClientStart = document.indexOf(tAuthClientScript);
-  const mprUIConfigStart = document.indexOf(`<script src="${MPR_UI_CONFIG_URL}"></script>`);
-  if (occurrenceCount(document, tAuthClientScript) !== 1 || tAuthClientStart === -1) {
+  assertMPRUIAuthAssets(document, context);
+}
+
+/**
+ * @param {string} document
+ * @param {string} context
+ */
+export function assertMPRUIAuthAssets(document, context) {
+  if (/<script\b[^>]*\bsrc=["'][^"']*\/tauth\.js["'][^>]*><\/script>/i.test(document)) {
     throw new Error(`public_document_tauth_client_invalid: context=${context}`);
   }
-  if (mprUIConfigStart === -1 || tAuthClientStart >= mprUIConfigStart) {
-    throw new Error(`public_document_auth_asset_order_invalid: context=${context}`);
+  const mprUIConfigScript = `<script src="${MPR_UI_CONFIG_URL}"></script>`;
+  if (occurrenceCount(document, mprUIConfigScript) !== 1) {
+    throw new Error(`public_document_mpr_ui_config_invalid: context=${context}`);
   }
 }
 
@@ -197,7 +203,6 @@ export function renderPublicShellHeadAssets() {
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
     <script src="${GOOGLE_IDENTITY_URL}" async defer></script>
     <script src="${JS_YAML_URL}"></script>
-    <script src="${TAUTH_BROWSER_CLIENT_URL}"></script>
     <script src="${MPR_UI_CONFIG_URL}"></script>
     <script
       id="mpr-ui-bundle"

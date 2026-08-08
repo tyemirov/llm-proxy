@@ -55,7 +55,7 @@ const LEGAL_PAGES = Object.freeze([
         "The public site uses GitHub Pages. Google Analytics and LoopAware receive website interaction and technical telemetry used to understand aggregate traffic and service quality.",
       ]),
       legalSection("browser-storage", "6. Cookies and Browser Storage", [
-        "TAuth uses secure session and refresh cookies for authentication. LLM Proxy cannot read the HTTP-only authentication cookies. Browser storage may retain interface preferences such as the selected theme; raw provider credentials and generated client secrets are not persisted in browser storage by the app.",
+        "TAuth uses secure HttpOnly session and refresh cookies for authentication. Browser JavaScript cannot read those cookies. The LLM Proxy backend receives and validates the configured session cookie through TAuth's published validator only to authorize protected LLM Proxy resources. Browser storage may retain interface preferences such as the selected theme; raw provider credentials and generated client secrets are not persisted in browser storage by the app.",
       ]),
       legalSection("sharing", "7. Sharing", [
         "We do not sell personal information. We disclose information to authentication, hosting, analytics, support, and selected model providers only as needed to provide and secure LLM Proxy, or when required by law or needed to protect rights and safety.",

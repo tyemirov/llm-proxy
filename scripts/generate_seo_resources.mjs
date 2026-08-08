@@ -779,7 +779,7 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d`,
     limitations: [
       "TAuth tenant and cookie settings must match the deployment profile.",
       "The public proxy endpoints still use tenant-secret authentication, not TAuth sessions.",
-      "Load the canonical tauth.js client before MPR UI so the shared client owns every browser authentication request and session transition.",
+      "Serve /config-ui.yaml and load mpr-ui-config.js so MPR UI owns every browser authentication request and session transition.",
     ],
   }),
   evidencedPage({
