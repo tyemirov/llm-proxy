@@ -949,11 +949,13 @@ Browser-facing values are projected from the already-loaded backend
 
 Every public HTML route also uses the MPR component shell. `/`, `/docs/`,
 `/resources/`, every generated resource article, `/privacy/`, and `/terms/`
-render the same canonical `mpr-header` and compact non-sticky `mpr-footer` from
+render the same canonical `mpr-header` and compact sticky `mpr-footer` from
 `scripts/public_site_shell.mjs`, in that exact order around one `main` region.
-The authenticated app uses the same footer. It contains crawlable Resources,
-Privacy, Terms, and GitHub links plus the active **Built by Marco Polo Research
-Lab** project-catalog drop-up. A semantic fallback inside the component keeps
+The authenticated app uses the same footer. The MPR footer keeps its host in
+flow while its hydrated surface stays fixed, so the end of `main` remains
+accessible. It contains crawlable Resources, Privacy, Terms, and GitHub links
+plus the active **Built by Marco Polo Research Lab** project-catalog drop-up. A
+semantic fallback inside the component keeps
 those anchors and the native project drop-up usable when JavaScript is
 unavailable; MPR UI replaces that fallback when the component hydrates. The
 shell validator and every public-page generator reject a missing, duplicated,
