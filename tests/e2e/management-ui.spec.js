@@ -71,6 +71,7 @@ const mprUICSSURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@lat
 const mprUIConfigURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js";
 const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
 const forbiddenTAuthBrowserClientURL = "https://tauth.mprlab.com/tauth.js";
+const catalogColumnCount = 3;
 const compactLandingFooterMaxHeight = 56;
 const b020ScreenshotDirectory = path.join(repoRoot, "output/playwright");
 const httpOK = 200;
@@ -202,10 +203,10 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('data-catalog-sort-header="capabilities"');
   expect(html).not.toContain('<th scope="col">Dictation models</th>');
   expect(html).toContain(
-    '<code data-catalog-model-id>gpt-4.1</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span>',
+    '<span class="catalog-model__content"><code data-catalog-model-id>gpt-4.1</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span>',
   );
   expect(html).toContain(
-    '<code data-catalog-model-id>gpt-4o-mini-transcribe</code><span class="catalog-model__default" title="This is the provider catalog default for dictation routing; account settings can select another model.">Default for dictation</span>',
+    '<span class="catalog-model__content"><code data-catalog-model-id>gpt-4o-mini-transcribe</code><span class="catalog-model__default" title="This is the provider catalog default for dictation routing; account settings can select another model.">Default for dictation</span></span>',
   );
   expect(html).toContain('data-model="gpt-4o-mini-transcribe" data-capabilities="dictation"');
   expect(html).toContain('aria-label="Search all model characteristics"');
@@ -240,7 +241,7 @@ test("public landing explains the product and exposes the generated capability c
   ).toBeLessThan(html.indexOf(`<script src="${mprUIConfigURL}"></script>`));
   expect(html).toContain('<link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">');
   expect(html).toContain('<mpr-header\n      class="public-site-header"');
-  expect(html).toContain('<mpr-footer\n      class="public-site-footer"\n      size="small"\n      sticky="false"');
+  expect(html).toContain('<mpr-footer\n      class="public-site-footer"\n      size="small"\n      sticky="true"');
   expect(html).toContain(`privacy-link-href="${privacyPath}"`);
   expect(html).toContain('links-collection=');
   expect(html).toContain("Built by Marco Polo Research Lab");
@@ -267,6 +268,7 @@ test("public landing explains the product and exposes the generated capability c
   expect(managementHTML).toContain(
     `<script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=${applicationModuleRevision}"></script>`,
   );
+  expect(managementHTML).toContain('<mpr-footer\n      class="public-site-footer"\n      size="small"\n      sticky="true"');
   for (const moduleFile of applicationModuleFiles) {
     const moduleSource = await readFile(path.join(siteSourceRoot, "assets/llm-proxy/js", moduleFile), "utf8");
     for (const specifier of runtimeJavaScriptSpecifiers(moduleSource)) {
@@ -732,6 +734,7 @@ test("every public HTML page publishes its canonical MPR header and the identica
     expect(shell.footer, publicPath).toContain('<a href="/resources/">Resources</a>');
     expect(shell.footer, publicPath).toContain('<a href="/privacy/">Privacy</a>');
     expect(shell.footer, publicPath).toContain('<a href="/terms/">Terms</a>');
+    expect(shell.footer, publicPath).toContain('sticky="true"');
     expect(shell.headerOffset, publicPath).toBeLessThan(shell.mainOffset);
     expect(shell.mainOffset, publicPath).toBeLessThan(shell.footerOffset);
   }
@@ -822,6 +825,7 @@ test("public route families hydrate the shared MPR shell at desktop and mobile w
       await expect(header, publicPath).toHaveCount(1);
       await expect(main, publicPath).toHaveCount(1);
       await expect(footer, publicPath).toHaveCount(1);
+      await expect(footer, publicPath).toHaveAttribute("sticky", "true");
       await expect(header.getByRole("link", { name: "LLM Proxy home" }), publicPath).toBeVisible();
       await expect(header.getByRole("link", { name: "API", exact: true }), publicPath).toHaveAttribute(
         "href",
@@ -845,8 +849,7 @@ test("public route families hydrate the shared MPR shell at desktop and mobile w
         );
       });
       expect(documentOrderIsCanonical, publicPath).toBe(true);
-      await footer.scrollIntoViewIfNeeded();
-      await expectCompactFooterGeometry(footer);
+      await expectStickyFooterGeometry(page, footer);
     }
   }
 });
@@ -875,12 +878,13 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
     "This is the provider catalog default for dictation routing; account settings can select another model.",
   );
   await expect
-    .poll(() => dictationDefaultRow.locator(".catalog-model").evaluate((element) => parseFloat(getComputedStyle(element).columnGap)))
+    .poll(() => dictationDefaultRow.locator(".catalog-model__content").evaluate((element) => parseFloat(getComputedStyle(element).columnGap)))
     .toBeGreaterThanOrEqual(8);
+  await expectAlignedCatalogRows(page);
   await expectCenteredValueStrip(page);
   const footer = page.locator("mpr-footer");
   await expect(footer).toHaveAttribute("size", "small");
-  await expect(footer).toHaveAttribute("sticky", "false");
+  await expect(footer).toHaveAttribute("sticky", "true");
   await expect(footer.getByRole("contentinfo")).toBeVisible();
   await expect(footer.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", privacyPath);
   await expect(footer.getByRole("link", { name: "Terms" })).toHaveAttribute("href", termsPath);
@@ -889,7 +893,7 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
     "href",
     "https://github.com/tyemirov/llm-proxy",
   );
-  await expectCompactFooterGeometry(footer);
+  await expectStickyFooterGeometry(page, footer);
 
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
@@ -899,10 +903,11 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
   await expect(page.getByRole("button", { name: "Log In" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Provider and model capability matrix" })).toBeVisible();
   await expect
-    .poll(() => dictationDefaultRow.locator(".catalog-model").evaluate((element) => parseFloat(getComputedStyle(element).columnGap)))
+    .poll(() => dictationDefaultRow.locator(".catalog-model__content").evaluate((element) => parseFloat(getComputedStyle(element).columnGap)))
     .toBeGreaterThanOrEqual(8);
+  await expectAlignedCatalogRows(page);
   await expectCenteredValueStrip(page);
-  await expectCompactFooterGeometry(footer);
+  await expectStickyFooterGeometry(page, footer);
 });
 
 test("site publishes the exact canonical OpenAPI artifact and its derived reference", async ({ request }) => {
@@ -4409,14 +4414,51 @@ async function installAssetRoutes(page, options = {}) {
 }
 
 /**
+ * @param {import("@playwright/test").Page} page
+ * @param {import("@playwright/test").Locator} footer
+ * @returns {Promise<void>}
+ */
+async function expectStickyFooterGeometry(page, footer) {
+  await page.evaluate(async () => {
+    const rootElement = document.documentElement;
+    const previousScrollBehavior = rootElement.style.scrollBehavior;
+    rootElement.style.scrollBehavior = "auto";
+    window.scrollTo(0, rootElement.scrollHeight);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    rootElement.style.scrollBehavior = previousScrollBehavior;
+  });
+  const geometry = await footer.getByRole("contentinfo").evaluate((footerSurfaceElement) => {
+    const footerBounds = footerSurfaceElement.getBoundingClientRect();
+    const mainElement = document.querySelector("body > main");
+    if (!mainElement) {
+      throw new Error("public_site_main_missing");
+    }
+    const mainBounds = mainElement.getBoundingClientRect();
+    return {
+      anchoredBottom: Math.abs(footerBounds.bottom - window.innerHeight) <= 0.5,
+      anchoredLeft: Math.abs(footerBounds.left) <= 0.5,
+      anchoredRight: Math.abs(footerBounds.right - document.documentElement.clientWidth) <= 0.5,
+      mainFooterOverlap: mainBounds.bottom - footerBounds.top,
+      position: getComputedStyle(footerSurfaceElement).position,
+    };
+  });
+  expect(geometry.position).toBe("fixed");
+  expect(geometry.anchoredBottom).toBe(true);
+  expect(geometry.anchoredLeft).toBe(true);
+  expect(geometry.anchoredRight).toBe(true);
+  expect(geometry.mainFooterOverlap).toBeLessThanOrEqual(0.5);
+  await expectCompactFooterGeometry(footer);
+}
+
+/**
  * @param {import("@playwright/test").Locator} footer
  * @returns {Promise<void>}
  */
 async function expectCompactFooterGeometry(footer) {
-  const geometry = await footer.evaluate((footerElement) => ({
-    clientWidth: footerElement.clientWidth,
-    height: footerElement.getBoundingClientRect().height,
-    scrollWidth: footerElement.scrollWidth,
+  const geometry = await footer.getByRole("contentinfo").evaluate((footerSurfaceElement) => ({
+    clientWidth: footerSurfaceElement.clientWidth,
+    height: footerSurfaceElement.getBoundingClientRect().height,
+    scrollWidth: footerSurfaceElement.scrollWidth,
   }));
   expect(geometry.height).toBeLessThanOrEqual(compactLandingFooterMaxHeight);
   expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
@@ -4473,6 +4515,25 @@ async function expectCenteredValueStrip(page) {
  * @param {import("@playwright/test").Page} page
  * @returns {Promise<void>}
  */
+async function expectAlignedCatalogRows(page) {
+  const rowsAreAligned = await page.locator("[data-catalog-row]").evaluateAll((rowElements, expectedColumnCount) =>
+    rowElements.every((rowElement) => {
+      const rowBounds = rowElement.getBoundingClientRect();
+      const cellElements = Array.from(rowElement.querySelectorAll(":scope > td"));
+      return cellElements.length === expectedColumnCount && cellElements.every((cellElement) => {
+        const cellBounds = cellElement.getBoundingClientRect();
+        return getComputedStyle(cellElement).display === "table-cell" &&
+          cellBounds.top === rowBounds.top &&
+          cellBounds.bottom === rowBounds.bottom;
+      });
+    }), catalogColumnCount);
+  expect(rowsAreAligned).toBe(true);
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @returns {Promise<void>}
+ */
 async function installClipboardMock(page) {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "clipboard", {
@@ -4514,16 +4575,17 @@ async function settingsLayerFacts(page) {
     const closeButton = modalElement?.querySelector(".settings-header button");
     const headerElement = document.querySelector("mpr-header");
     const footerElement = document.querySelector("mpr-footer");
+    const footerSurfaceElement = footerElement?.querySelector("footer");
     const notificationRegion = document.querySelector("notification-region");
     const noticeElement = document.querySelector(".notice");
-    if (!overlayElement || !modalElement || !closeButton || !headerElement || !footerElement || !notificationRegion || !noticeElement) {
+    if (!overlayElement || !modalElement || !closeButton || !headerElement || !footerElement || !footerSurfaceElement || !notificationRegion || !noticeElement) {
       throw new Error("settings_layer_elements_missing");
     }
 
     const modalRect = modalElement.getBoundingClientRect();
     const closeButtonRect = closeButton.getBoundingClientRect();
     const headerRect = headerElement.getBoundingClientRect();
-    const footerRect = footerElement.getBoundingClientRect();
+    const footerRect = footerSurfaceElement.getBoundingClientRect();
     const noticeRect = noticeElement.getBoundingClientRect();
     const viewportWidth = document.documentElement.clientWidth;
     const hitAt = (xCoordinate, yCoordinate) => {
@@ -4541,7 +4603,7 @@ async function settingsLayerFacts(page) {
     return {
       overlayZIndex: Number.parseInt(getComputedStyle(overlayElement).zIndex, 10),
       headerZIndex: Number.parseInt(getComputedStyle(headerElement).zIndex, 10),
-      footerZIndex: Number.parseInt(getComputedStyle(footerElement).zIndex, 10),
+      footerZIndex: Number.parseInt(getComputedStyle(footerSurfaceElement).zIndex, 10),
       closeButtonHit: hitAt(
         closeButtonRect.left + closeButtonRect.width / 2,
         closeButtonRect.top + closeButtonRect.height / 2,
@@ -5981,18 +6043,10 @@ mpr-header > nav {
 }
 
 mpr-footer {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 1200;
+  position: relative;
   display: block;
   min-height: 64px;
   background: rgba(3, 23, 32, 0.95);
-}
-
-mpr-footer[sticky="false"] {
-  position: relative;
 }
 
 mpr-footer[size="small"] {
@@ -6000,6 +6054,11 @@ mpr-footer[size="small"] {
 }
 
 mpr-footer footer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1200;
   display: flex;
   min-height: inherit;
   box-sizing: border-box;
@@ -6008,6 +6067,10 @@ mpr-footer footer {
   justify-content: space-between;
   gap: 12px;
   border-top: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+mpr-footer[sticky="false"] footer {
+  position: relative;
 }
 
 mpr-footer footer > div {
