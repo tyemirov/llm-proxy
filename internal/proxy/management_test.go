@@ -133,7 +133,11 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 	landingHTML := string(landingBytes)
 	for _, requiredFragment := range []string{
 		`Integrate once. Use the model that fits.`,
-		`href="/app/"`,
+		`data-config-url="/config-ui.yaml"`,
+		`sign-in-label="Log In"`,
+		`data-llm-proxy-authenticated-redirect-url="/app/"`,
+		`src="/assets/llm-proxy/js/ui/landingAuthRoute.js?v=20260808b113"`,
+		`src="https://tauth.mprlab.com/tauth.js"`,
 		`<!-- llm-proxy-capability-catalog -->`,
 		`<mpr-header`,
 		`<mpr-footer`,
@@ -141,6 +145,9 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		if !strings.Contains(landingHTML, requiredFragment) {
 			t.Fatalf("static landing missing %q", requiredFragment)
 		}
+	}
+	if strings.Contains(landingHTML, `sign-in-redirect-url=`) {
+		t.Fatal("static landing must use the authenticated route guard as its single redirect owner")
 	}
 
 	staticIndexResponse, indexError := http.Get(staticServer.URL + "/app/")
@@ -158,10 +165,11 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 	indexHTML := string(indexBytes)
 	requiredFragments := []string{
 		`href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css"`,
+		`src="https://tauth.mprlab.com/tauth.js"`,
 		`src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"`,
 		`data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"`,
-		`src="/assets/llm-proxy/js/startupGuard.js?v=20260806b110"`,
-		`src="/assets/llm-proxy/js/app.js?v=20260806b110"`,
+		`src="/assets/llm-proxy/js/startupGuard.js?v=20260808b111"`,
+		`src="/assets/llm-proxy/js/app.js?v=20260808b111"`,
 		`data-config-url="/config-ui.yaml"`,
 		`<mpr-user`,
 		`<mpr-footer`,
@@ -171,7 +179,7 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 			t.Fatalf("static index missing %q", requiredFragment)
 		}
 	}
-	forbiddenFragments := []string{"MarcoPoloResearchLab/mpr-ui@v", "tauth.js", "tauth-login-path", "tauth-logout-path", "tauth-nonce-path", "{{MPR_UI_VERSION}}"}
+	forbiddenFragments := []string{"Sign in to manage LLM Proxy keys", "MarcoPoloResearchLab/mpr-ui@v", "tauth-login-path", "tauth-logout-path", "tauth-nonce-path", "{{MPR_UI_VERSION}}"}
 	for _, forbiddenFragment := range forbiddenFragments {
 		if strings.Contains(indexHTML, forbiddenFragment) {
 			t.Fatalf("static index must not include %q", forbiddenFragment)
