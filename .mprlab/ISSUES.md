@@ -40,6 +40,41 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B115] (P1) {F019,I213} Align public capability-catalog table rows.
+  Goal:
+  Keep every provider, model, and capabilities cell on the same visual row
+  boundary in the generated public catalog.
+  Evidence:
+  - At the canonical local landing page, catalog rows are about 67 pixels tall
+    while the Model cell computes as a 42-pixel `display: flex` box, so its
+    bottom border ends above the Provider and Capabilities cell borders.
+  Requirements:
+  - Preserve the semantic table and server-rendered no-JavaScript catalog.
+  - Keep each `td` in the table formatting context and move model identifier
+    and default-badge wrapping and spacing into an inner content wrapper.
+  - Preserve the responsive model-to-default-badge gap at desktop and mobile
+    widths.
+  Validation:
+  - Browser black-box coverage proves that all three cells retain table-cell
+    display and share their row's top and bottom boundaries at desktop and
+    mobile widths.
+  - Rebuild and inspect the catalog through `http://localhost:4179/`.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - The generated Model cell remains a semantic table cell, while the new
+    inner `catalog-model__content` wrapper owns badge wrapping and spacing.
+  - Browser coverage now checks every catalog cell at desktop and mobile
+    widths for table-cell display and exact row-boundary alignment while
+    retaining the eight-pixel default-badge gap.
+  - The rebuilt canonical local page at `http://localhost:4179/` rendered all
+    58 rows and 174 cells with zero top or bottom boundary deviation at 1210
+    and 390 pixels wide; the desktop visual inspection showed continuous rules.
+  - The required baseline passed all 11 gates in 112 seconds. The final run
+    passed all 11 gates in 101 seconds with 85 browser tests, 36 Python tests,
+    the TAuth black-box scenario, live-provider preflight, and exact 100% Go
+    statement coverage.
+
 - [x] [B114] (P1) {B111,B112,B113} Restore the single MPR UI authentication path and correct the shared public contract.
   Goal:
   Keep browser authentication fully owned by MPR UI while preserving the
@@ -2365,6 +2400,46 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 
 ## Improvements
+
+- [x] [I214] (P1) {B111,B114} Keep the shared footer sticky on every page.
+  Goal:
+  Pin the canonical compact MPR footer to the viewport bottom across the
+  landing, app, documentation, legal, resource-hub, and resource-article
+  routes.
+  Requirements:
+  - Set the canonical generated footer to the supported sticky state and
+    regenerate every HTML route from its maintained source.
+  - Retain the component's in-flow host footprint so the final main content
+    remains reachable above its fixed hydrated surface.
+  - Preserve the identical footer links, semantic no-JavaScript fallback,
+    compact responsive geometry, and exact header -> main -> footer order.
+  Validation:
+  - Static browser coverage proves every public route and `/app/` carries the
+    same sticky footer contract.
+  - Hydrated browser coverage proves the footer remains fixed to every viewport
+    edge, does not cause horizontal overflow, and does not cover the end of
+    `main` at desktop and mobile widths.
+  - Rebuild and inspect representative routes through
+    `http://localhost:4179/`.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - The canonical shell now renders `sticky="true"`, and all 52 landing, app,
+    documentation, legal, hub, and resource-article HTML pages were regenerated
+    from their maintained sources.
+  - Browser coverage now verifies the identical sticky contract across every
+    public route and `/app/`, then checks the hydrated footer surface against
+    all viewport edges, its in-flow main-content clearance, responsive width,
+    and settings-overlay layer at desktop and mobile widths.
+  - The rebuilt local stack at `http://localhost:4179/` kept the desktop landing
+    footer fixed from 0 to 1280 pixels and the 390-pixel documentation footer
+    fixed without internal overflow; both cleared the end of `main` within the
+    browser's subpixel tolerance. Mobile visual inspection confirmed the
+    wrapped controls remained readable. The local stack was then stopped.
+  - The required baseline passed all 11 gates in 101 seconds. The final run
+    passed all 11 gates in 109 seconds with 85 browser tests, 36 Python tests,
+    the TAuth black-box scenario, live-provider preflight, and exact 100% Go
+    statement coverage.
 
 - [x] [I213] (P1) {F019} Clarify default-route badges in the public model catalog.
   Goal:
