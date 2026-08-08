@@ -14,7 +14,8 @@ current provider, model, dictation, web-search, request-limit, and integration
 surface. Its filterable model matrix projects text, dictation, media, search,
 reasoning, default, contract, and output-limit metadata from the
 same validated runtime catalog used by request routing. The authenticated
-management app lives only at [`/app/`](https://llm-proxy.mprlab.com/app/).
+management app opens at [`/app/`](https://llm-proxy.mprlab.com/app/) only after
+the public **Log In** action authenticates the user through MPR UI and TAuth.
 
 ## Features
 
@@ -905,7 +906,14 @@ Unknown YAML keys fail startup.
 
 Set `management.enabled: true` to enable TAuth-protected management APIs under
 `/api/management`. The browser site is static and lives in `site/`: `/` is the
-public product landing page and `/app/` is the only authenticated app route.
+anonymous-only product landing page and `/app/` is the only authenticated app
+route. The landing page replaces itself with `/app/` whenever MPR UI reports
+its documented authenticated lifecycle, including restored and refreshed TAuth
+sessions. Every other public header owns the same declarative **Log In** action,
+and successful interactive authentication redirects to `/app/`. An anonymous
+direct visit to `/app/` returns to `/` after MPR UI reports its unauthenticated
+lifecycle state.
+There is no second signed-out application screen.
 The site is declared as a `github_pages` resource in
 `.mprlab/deploy/resources.yml`.
 `make release`, `make publish`, and `make deploy` delegate that resource to the
@@ -919,10 +927,12 @@ TAuth bootstrap values from `llm-proxy-api`.
 The `/app/` UI uses the shared MPR shell through API-served `config-ui.yaml`,
 literal `mpr-ui@latest` assets, `mpr-ui-config.js`,
 `<mpr-header data-config-url="...">`, the `@latest` bundle marker, `<mpr-user>`,
-and `<mpr-footer>`. It does not load `tauth.js` directly or apply MPR UI config
-from application JavaScript. The Pages artifact contains no static
+the canonical `https://tauth.mprlab.com/tauth.js` client loaded before MPR UI,
+and the shared compact `<mpr-footer>`. MPR UI delegates browser authentication,
+session restoration, refresh, and logout to that client; application JavaScript
+does not implement those operations or apply MPR UI config. The Pages artifact contains no static
 `config-ui.yaml` or `llm-proxy-config.json`. The declared Go-only Pages
-container renders the static site with
+container renders every auth-aware HTML page with
 `https://llm-proxy-api.mprlab.com/config-ui.yaml` in the declarative header
 attribute and replaces the public landing's capability marker with a sanitized
 model-centric projection of `configs/config.yml`. Every model remains present
@@ -938,24 +948,43 @@ Browser-facing values are projected from the already-loaded backend
 `config.yml`.
 
 Every public HTML route also uses the MPR component shell. `/`, `/docs/`,
-`/resources/`, and every generated resource article render the same canonical
-`mpr-header` and compact `mpr-footer` from `scripts/public_site_shell.mjs`, in
-that exact order around one `main` region. The landing shell check and both
-public-page generators consume that contract, so public navigation cannot
-drift into page-specific native header or footer variants.
+`/resources/`, every generated resource article, `/privacy/`, and `/terms/`
+render the same canonical `mpr-header` and compact non-sticky `mpr-footer` from
+`scripts/public_site_shell.mjs`, in that exact order around one `main` region.
+The authenticated app uses the same footer. It contains crawlable Resources,
+Privacy, Terms, and GitHub links plus the active **Built by Marco Polo Research
+Lab** project-catalog drop-up. A semantic fallback inside the component keeps
+those anchors and the native project drop-up usable when JavaScript is
+unavailable; MPR UI replaces that fallback when the component hydrates. The
+shell validator and every public-page generator reject a missing, duplicated,
+misordered, or divergent header/main/footer contract, content outside `main`,
+and any public anchor that bypasses authentication by linking directly to
+`/app/`.
 
 Release rendering also copies the exact committed `docs/openapi.yaml` bytes to
 the Pages artifact root and verifies the SHA-256 provenance embedded in the
 derived `site/docs/index.html`. `site/openapi.yaml` is intentionally forbidden:
 there is no independently editable or generated schema copy in site source.
 
-The consumed shared bundle registers `mpr-legal-document`; legal-page routes
-and document rendering remain owned by P005 and are not duplicated here.
+`scripts/generate_legal_pages.mjs` is the single maintained source for the
+canonical `/privacy/` and `/terms/` pages. It owns their route metadata,
+indexable sitemap entries, effective and updated dates, exact
+`mpr-legal-document` section data, and semantic no-JavaScript fallback. The
+current policy source dates both documents `2026-08-08`. Privacy statements are
+grounded in the repository's MPR UI/TAuth session boundary, encrypted provider
+credentials, digest-only client secrets, content-free usage records, and
+Google Analytics plus LoopAware public-page telemetry. Terms describe the
+current proxy/provider and user-responsibility boundaries without introducing
+an unsupported payment or availability contract.
 
-MPR UI is the sole browser authentication authority. LLM Proxy registers the
-documented `mpr-ui:auth:authenticated` and `mpr-ui:auth:unauthenticated`
-lifecycle listeners, uses the header's documented `data-mpr-auth-status` only
-to reconcile the current state after startup, and does not request
+MPR UI owns the browser authentication presentation and lifecycle, and the
+canonical TAuth client owns all browser communication with TAuth. Public
+headers use MPR UI's documented sign-in label and successful-authentication
+redirect attributes.
+The app registers the documented `mpr-ui:auth:authenticated` and
+`mpr-ui:auth:unauthenticated` lifecycle listeners, uses the header's documented
+`data-mpr-auth-status` only to reconcile the current state after startup, and
+does not request
 `/api/management/account` until MPR UI reports `authenticated`. LLM Proxy does
 not inspect TAuth cookies, storage, tokens, or claims and does not call TAuth
 authentication endpoints. After MPR UI reports authentication, a management
@@ -1372,15 +1401,18 @@ make test-management-auth-blackbox
 
 The target builds the TAuth version pinned in `go.mod` and the current
 llm-proxy binary, starts both on disposable local ports, and opens the real
-static management app in Playwright. The page signs in through TAuth's seeded
-password-login endpoint with a credentialed cross-origin browser request, so
-the test enforces TAuth login CORS and receives the configured HttpOnly access
-and refresh cookies. It then drives the mounted header through the documented
-`MPRUI.testing.authenticate` adapter, which emits the normal authenticated
-lifecycle event and persists MPR UI's session-restore hint. The test proves the
-anonymous/authorized behavior of `/api/management/account`, proves the browser
-makes no protected account or tenant request before MPR UI authentication, then
-hydrates the initial tenant selected in Settings and account-wide Usage view afterward. It
+static management app in Playwright. The exposed TAuth client signs in through
+TAuth's seeded password-login endpoint via the same-origin frontend proxy and
+receives the configured HttpOnly access and refresh cookies. The real TAuth
+callback then drives MPR UI's authenticated lifecycle and documented redirect;
+the test does not call an auth endpoint or force an authenticated profile from
+application JavaScript. The test proves the
+public **Log In** control is owned by MPR UI, proves an anonymous direct
+`/app/` visit returns to `/`, and proves the anonymous/authorized behavior of
+`/api/management/account`. The browser makes no protected account or tenant
+request before MPR UI authentication, restores the real TAuth session on
+`/app/`, then hydrates the initial tenant selected in Settings and account-wide
+Usage view. It
 creates two tenants for one real TAuth subject, proves both secrets remain
 independently routable, proves the default account-wide usage and safe
 tenant-attributed failure page include both, and signs in a second real subject
@@ -1388,17 +1420,19 @@ to prove foreign tenant ids return `404` without disclosure. It waits for the
 `mpr-ui@latest` shell plus the
 dashboard to report the authenticated state, then proves an ordinary reload
 stays authenticated, removes only the access cookie and proves `/auth/session`
-recovers it from the refresh cookie without rendering the signed-out panel, and
+recovers it from the refresh cookie without returning to the public page, and
 uses the visible **Sign out** action to prove `/auth/logout` clears both cookies
 and returns TAuth plus the management API to anonymous responses. The MPR UI
 application assets are loaded through their literal `@latest` CDN contract;
-TAuth and management API routes are never mocked.
+the canonical TAuth client, TAuth routes, and management API routes are never
+mocked.
 
 Normal navigation, page refreshes, and access-cookie expiration do not sign the
-user out. The `mpr-ui@latest` shell silently restores the TAuth session while its
-rotating refresh cookie remains valid. Only the explicit **Sign out** action
-calls TAuth logout and clears the browser session; LLM Proxy does not own a
-second session store or an automatic logout path.
+user out. The canonical TAuth client silently restores the session while its
+rotating refresh cookie remains valid and reports the resulting lifecycle to
+MPR UI. Only the explicit **Sign out** action asks that client to clear the
+browser session; LLM Proxy does not own a second session store or an automatic
+logout path.
 
 Configure the gateway/backend route for `llm-proxy-api.mprlab.com` to the
 llm-proxy service, and remove any backend route that still claims
@@ -1746,7 +1780,7 @@ The Pages declaration uses `docker/pages/Dockerfile`, whose renderer is the Go
 CLI built from committed source. The renderer reads the provider/model and
 request-limit subtrees of `configs/config.yml`, validates the canonical runtime
 catalog, emits only public capability fields at `/`, and injects the browser
-configuration URL only into `/app/`. Node remains a developer dependency for
+configuration URL into every generated auth-aware HTML page. Node remains a developer dependency for
 frontend lint and browser tests only; llm-proxy declares no production Node or
 npm resource. Application runtime code has no Caddy deployment knowledge, and
 its TAuth knowledge remains limited to the published client/session
@@ -2482,7 +2516,7 @@ error message.
 * Client requests must not include upstream provider API keys; public proxy endpoints reject provider-key-like query, JSON, and multipart form fields.
 * Request logs record only the query-free path plus method, status, latency, client IP, proxy request ID, and tenant metadata; they do not record query strings, request bodies, cookies, or authorization headers.
 * Self-service provider API keys are accepted only through TAuth-protected management endpoints. Autosave responses return masked status; raw retrieval requires the explicit owner-authenticated reveal action.
-* Public static pages load Google Analytics and LoopAware page-view scripts. This repository makes no claim about their collection, retention, consent, or opt-out behavior; the public Privacy page must use approved legal and provider content. Do not put tenant secrets or other sensitive values in public-page URLs.
+* Public static pages load Google Analytics and LoopAware page-view scripts. The canonical `/privacy/` policy discloses those integrations without making unsupported collection, retention, consent, or opt-out claims. Do not put tenant secrets or other sensitive values in public-page URLs.
 * Do not expose this service to the public internet without appropriate network controls.
 
 ## Implementation Plans
