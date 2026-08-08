@@ -921,6 +921,10 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
 }
 
 .catalog-model {
+  min-width: 0;
+}
+
+.catalog-model__content {
   display: flex;
   min-width: 0;
   align-items: baseline;
