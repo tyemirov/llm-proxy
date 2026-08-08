@@ -927,10 +927,10 @@ TAuth bootstrap values from `llm-proxy-api`.
 The `/app/` UI uses the shared MPR shell through API-served `config-ui.yaml`,
 literal `mpr-ui@latest` assets, `mpr-ui-config.js`,
 `<mpr-header data-config-url="...">`, the `@latest` bundle marker, `<mpr-user>`,
-the canonical `https://tauth.mprlab.com/tauth.js` client loaded before MPR UI,
-and the shared compact `<mpr-footer>`. MPR UI delegates browser authentication,
-session restoration, refresh, and logout to that client; application JavaScript
-does not implement those operations or apply MPR UI config. The Pages artifact contains no static
+and the shared compact `<mpr-footer>`. MPR UI owns browser authentication,
+session restoration, refresh, logout, and all communication with TAuth;
+application JavaScript does not load a second TAuth client, implement those
+operations, or apply MPR UI config. The Pages artifact contains no static
 `config-ui.yaml` or `llm-proxy-config.json`. The declared Go-only Pages
 container renders every auth-aware HTML page with
 `https://llm-proxy-api.mprlab.com/config-ui.yaml` in the declarative header
@@ -977,10 +977,9 @@ Google Analytics plus LoopAware public-page telemetry. Terms describe the
 current proxy/provider and user-responsibility boundaries without introducing
 an unsupported payment or availability contract.
 
-MPR UI owns the browser authentication presentation and lifecycle, and the
-canonical TAuth client owns all browser communication with TAuth. Public
-headers use MPR UI's documented sign-in label and successful-authentication
-redirect attributes.
+MPR UI owns the browser authentication presentation, lifecycle, and all browser
+communication with TAuth. Public headers use MPR UI's documented sign-in label
+and successful-authentication redirect attributes.
 The app registers the documented `mpr-ui:auth:authenticated` and
 `mpr-ui:auth:unauthenticated` lifecycle listeners, uses the header's documented
 `data-mpr-auth-status` only to reconcile the current state after startup, and
@@ -1401,12 +1400,12 @@ make test-management-auth-blackbox
 
 The target builds the TAuth version pinned in `go.mod` and the current
 llm-proxy binary, starts both on disposable local ports, and opens the real
-static management app in Playwright. The exposed TAuth client signs in through
-TAuth's seeded password-login endpoint via the same-origin frontend proxy and
-receives the configured HttpOnly access and refresh cookies. The real TAuth
-callback then drives MPR UI's authenticated lifecycle and documented redirect;
-the test does not call an auth endpoint or force an authenticated profile from
-application JavaScript. The test proves the
+static management app in Playwright. A Google Identity test adapter activates
+the visible MPR UI control and maps its provider exchange to TAuth's seeded
+password fixture via the same-origin frontend proxy. TAuth issues the configured
+HttpOnly access and refresh cookies, and MPR UI drives the authenticated
+lifecycle and documented redirect without an application-owned auth script or
+manual auth event. The test proves the
 public **Log In** control is owned by MPR UI, proves an anonymous direct
 `/app/` visit returns to `/`, and proves the anonymous/authorized behavior of
 `/api/management/account`. The browser makes no protected account or tenant
@@ -1424,15 +1423,15 @@ recovers it from the refresh cookie without returning to the public page, and
 uses the visible **Sign out** action to prove `/auth/logout` clears both cookies
 and returns TAuth plus the management API to anonymous responses. The MPR UI
 application assets are loaded through their literal `@latest` CDN contract;
-the canonical TAuth client, TAuth routes, and management API routes are never
-mocked.
+MPR UI's shell and lifecycle, TAuth's session/refresh/logout routes, and the
+management API routes are exercised as real boundaries. Only the external
+Google provider exchange is replaced by the local seeded-credential adapter.
 
 Normal navigation, page refreshes, and access-cookie expiration do not sign the
-user out. The canonical TAuth client silently restores the session while its
-rotating refresh cookie remains valid and reports the resulting lifecycle to
-MPR UI. Only the explicit **Sign out** action asks that client to clear the
-browser session; LLM Proxy does not own a second session store or an automatic
-logout path.
+user out. MPR UI silently restores the TAuth session while its rotating refresh
+cookie remains valid and reports the resulting lifecycle. Only the explicit
+**Sign out** action asks MPR UI to clear the browser session; LLM Proxy does not
+own a second session store or an automatic logout path.
 
 Configure the gateway/backend route for `llm-proxy-api.mprlab.com` to the
 llm-proxy service, and remove any backend route that still claims
