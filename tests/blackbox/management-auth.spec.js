@@ -8,6 +8,10 @@ import {
   localManagementProfile,
   startLocalManagementStack,
 } from "./localManagementStack.mjs";
+import {
+  APPLICATION_PATH,
+  LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE,
+} from "../../site/assets/llm-proxy/js/constants.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const httpOK = 200;
@@ -29,7 +33,8 @@ const redLuminanceWeight = 0.2126;
 const greenLuminanceWeight = 0.7152;
 const blueLuminanceWeight = 0.0722;
 const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
-const applicationPath = "/app/";
+const tAuthBrowserClientURL = "https://tauth.mprlab.com/tauth.js";
+const applicationPath = APPLICATION_PATH;
 
 let stack;
 
@@ -43,9 +48,10 @@ test.afterAll(async () => {
   }
 });
 
-test("TAuth sign-in stays legible and the session survives until explicit sign out", async ({ browser, context, page }) => {
+test("public Log In opens the authenticated app and the TAuth session survives until explicit sign out", async ({ browser, context, page }) => {
   let browserAccountRequestCount = 0;
   let browserSecretRequestCount = 0;
+  const browserSessionRequestHeaders = [];
   page.on("request", (request) => {
     if (request.url() === `${stack.llmProxyOrigin}/api/management/account`) {
       browserAccountRequestCount += 1;
@@ -55,6 +61,9 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
       request.method() === "POST"
     ) {
       browserSecretRequestCount += 1;
+    }
+    if (request.url() === `${stack.tAuthOrigin}/auth/session` && request.method() === "GET") {
+      browserSessionRequestHeaders.push(request.headers());
     }
   });
   await installLocalAssetRoutes(page);
@@ -74,12 +83,20 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   });
   expect(anonymousAccountResponse.status()).toBe(httpUnauthorized);
 
-  await page.goto(`${stack.frontendOrigin}${applicationPath}`);
+  await page.goto(`${stack.frontendOrigin}/`);
   await expect(page.locator("#mpr-ui-bundle")).toHaveAttribute("data-mpr-ui-bundle-src", mprUIBundleURL);
+  await expect(page.locator(`script[src="${tAuthBrowserClientURL}"]`)).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => typeof window.exchangePasswordCredential)).toBe("function");
   await expect.poll(() => page.evaluate(() => Boolean(customElements.get("mpr-legal-document")))).toBe(true);
-  await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
-  await expect(page.locator("llm-proxy-key-management")).toHaveAttribute("data-auth-state", "unauthenticated");
+  await expect(page.getByRole("heading", { name: "Integrate once. Use the model that fits." })).toBeVisible();
+  await expect(page.locator("llm-proxy-key-management")).toHaveCount(0);
   await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "unauthenticated");
+  await expect(page.locator("mpr-header")).toHaveAttribute("sign-in-label", "Log In");
+  await expect(page.locator("mpr-header")).toHaveAttribute(
+    LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE,
+    applicationPath,
+  );
+  await expect(page.locator("mpr-header")).not.toHaveAttribute("sign-in-redirect-url", applicationPath);
   expect(browserAccountRequestCount).toBe(0);
   const signInButton = page.locator('[data-mpr-header="google-signin-button"]');
   await expect(signInButton).toBeVisible();
@@ -95,28 +112,33 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
     minimumReadableTextContrastRatio,
   );
 
+  await page.goto(`${stack.frontendOrigin}${applicationPath}`);
+  await expect(page).toHaveURL(`${stack.frontendOrigin}/`);
+  await expect(page.getByRole("heading", { name: "Integrate once. Use the model that fits." })).toBeVisible();
+  await expect(page.locator("llm-proxy-key-management")).toHaveCount(0);
+  expect(browserAccountRequestCount).toBe(0);
+
   const loginResponsePromise = page.waitForResponse(
     (response) =>
       response.url() === `${stack.tAuthOrigin}/auth/password/login` && response.request().method() === "POST",
   );
-  const loginResult = await page.evaluate(async ({ tAuthOrigin, tenantID, email, password }) => {
-    const response = await fetch(`${tAuthOrigin}/auth/password/login`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Requested-With": "XMLHttpRequest",
-        "X-TAuth-Tenant": tenantID,
+  const restoredSessionResponsePromise = waitForSessionRestore(page);
+  const authenticatedAccountResponsePromise = waitForManagementAccount(page);
+  const generatedSecretResponsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.match(/^\/api\/management\/tenants\/[^/]+\/secrets$/) &&
+      response.request().method() === "POST",
+  );
+  await page.evaluate(({ email, password }) => {
+    const header = document.querySelector("mpr-header");
+    header.dispatchEvent(new CustomEvent("mpr-ui:auth:status-change", {
+      detail: {
+        source: "credential",
+        status: "authenticating",
       },
-      body: JSON.stringify({ email, password }),
-    });
-    return {
-      status: response.status,
-      profile: await response.json(),
-    };
+    }));
+    Reflect.set(window, "__llmProxyPasswordExchange", window.exchangePasswordCredential({ email, password }));
   }, {
-    tAuthOrigin: stack.tAuthOrigin,
-    tenantID: localManagementProfile.tenantID,
     email: localManagementProfile.operatorEmail,
     password: localManagementProfile.operatorPassword,
   });
@@ -124,13 +146,17 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   expect(loginResponse.status()).toBe(httpOK);
   expect(loginResponse.headers()["access-control-allow-origin"]).toBe(stack.frontendOrigin);
   expect(loginResponse.headers()["access-control-allow-credentials"]).toBe("true");
-  expect(loginResult).toMatchObject({
-    status: httpOK,
-    profile: {
-      user_email: localManagementProfile.operatorEmail,
-      display: "Local Operator",
-    },
-  });
+
+  await expect(page).toHaveURL(`${stack.frontendOrigin}${applicationPath}`);
+  const restoredSessionResponse = await restoredSessionResponsePromise;
+  expect(restoredSessionResponse.status()).toBe(httpOK);
+  expect(browserSessionRequestHeaders).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      "x-tauth-tenant": localManagementProfile.tenantID,
+    }),
+  ]));
+  expect(restoredSessionResponse.request().headers()).not.toHaveProperty("origin");
+  expect(restoredSessionResponse.request().headers()).not.toHaveProperty("x-requested-with");
 
   const sessionCookies = await context.cookies();
   expect(sessionCookies).toEqual(
@@ -152,15 +178,7 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
     ]),
   );
 
-  const authenticatedAccountResponsePromise = waitForManagementAccount(page);
-  const generatedSecretResponsePromise = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname.match(/^\/api\/management\/tenants\/[^/]+\/secrets$/) &&
-      response.request().method() === "POST",
-  );
-  await page.evaluate((profile) => {
-    window.MPRUI.testing.authenticate(document.querySelector("mpr-header"), profile);
-  }, loginResult.profile);
+  await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "authenticated");
   const authenticatedAccountResponse = await authenticatedAccountResponsePromise;
   expect(authenticatedAccountResponse.status()).toBe(httpOK);
   const authenticatedAccount = await authenticatedAccountResponse.json();
@@ -213,6 +231,13 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
 
   await expectAuthenticatedDashboard(page);
   await expectNoSignedOutStateAfterAuthentication(page);
+
+  const restoredLandingSessionResponsePromise = waitForSessionRestore(page);
+  await page.goto(`${stack.frontendOrigin}/`);
+  expect((await restoredLandingSessionResponsePromise).status()).toBe(httpOK);
+  await expect(page).toHaveURL(`${stack.frontendOrigin}${applicationPath}`);
+  await expectAuthenticatedDashboard(page);
+  await expectNoSignedOutState(page);
 
   const createSecondTenantResponse = await context.request.post(
     `${stack.llmProxyOrigin}/api/management/tenants`,
@@ -367,7 +392,7 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
   });
 
   const recoveredSessionResponsePromise = waitForSessionRestore(page);
-  await page.reload();
+  await page.goto(`${stack.frontendOrigin}/`);
   expect((await recoveredSessionResponsePromise).status()).toBe(httpOK);
   await expectAuthenticatedDashboard(page);
   await expect(settingsDialog).toBeHidden();
@@ -399,8 +424,6 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
 
   const signedOutTAuthResponse = await context.request.get(`${stack.tAuthOrigin}/auth/session`, {
     headers: {
-      Origin: stack.frontendOrigin,
-      "X-Requested-With": "XMLHttpRequest",
       "X-TAuth-Tenant": localManagementProfile.tenantID,
     },
   });
@@ -410,6 +433,20 @@ test("TAuth sign-in stays legible and the session survives until explicit sign o
     headers: { Origin: stack.frontendOrigin },
   });
   expect(signedOutAccountResponse.status()).toBe(httpUnauthorized);
+
+  await page.setViewportSize({ width: 390, height: 780 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const portfolioToggle = page.getByRole("button", { name: "Built by Marco Polo Research Lab" });
+  await portfolioToggle.click();
+  await expect(portfolioToggle).toHaveAttribute("aria-expanded", "true");
+  const portfolioMenuBox = await page.locator(".mpr-footer__menu").boundingBox();
+  if (!portfolioMenuBox) {
+    throw new Error("portfolio_menu_geometry_missing");
+  }
+  expect(portfolioMenuBox.x).toBeGreaterThanOrEqual(0);
+  expect(portfolioMenuBox.x + portfolioMenuBox.width).toBeLessThanOrEqual(390);
+  await page.keyboard.press("Escape");
+  await expect(portfolioToggle).toHaveAttribute("aria-expanded", "false");
 });
 
 async function expectAuthenticatedDashboard(page) {

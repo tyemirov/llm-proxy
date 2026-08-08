@@ -596,11 +596,14 @@ exec "${REAL_AWK_PATH:?}" "$@"
 			testingInstance.Fatalf("make up did not verify %s: %s", expectedURL, curlArguments)
 		}
 	}
-	if !strings.Contains(string(curlArguments), "Origin: http://localhost:4179") {
-		testingInstance.Fatalf("make up did not verify browser-origin authentication boundaries: %s", curlArguments)
+	if !strings.Contains(string(curlArguments), "--header X-TAuth-Tenant: llm-proxy-test http://localhost:4179/auth/session") {
+		testingInstance.Fatalf("make up did not verify TAuth client session restoration through the same-origin frontend: %s", curlArguments)
 	}
-	if !strings.Contains(string(curlArguments), "--request POST --header Origin: http://localhost:4179 --header X-Requested-With: XMLHttpRequest http://localhost:4179/auth/nonce") {
-		testingInstance.Fatalf("make up did not verify browser nonce issuance through the same-origin frontend: %s", curlArguments)
+	if strings.Contains(string(curlArguments), "Origin: http://localhost:4179 --header X-TAuth-Tenant: llm-proxy-test http://localhost:4179/auth/session") {
+		testingInstance.Fatalf("make up hid the same-origin TAuth session request shape behind a synthetic Origin: %s", curlArguments)
+	}
+	if !strings.Contains(string(curlArguments), "--request POST --header Origin: http://localhost:4179 --header Content-Type: application/json --header X-Requested-With: XMLHttpRequest --header X-TAuth-Tenant: llm-proxy-test http://localhost:4179/auth/nonce") {
+		testingInstance.Fatalf("make up did not verify TAuth client nonce issuance through the same-origin frontend: %s", curlArguments)
 	}
 
 	localEnvironment, readLocalEnvironmentError := os.ReadFile(filepath.Join(fixtureRoot, "configs", ".env.local"))
@@ -691,6 +694,7 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		{
 			path: filepath.Join(fixtureRoot, "configs", "tauth.local.yml"),
 			expectedFragments: []string{
+				"enable_tenant_header_override: true",
 				"id: \"${LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID}\"",
 				"jwt_signing_key: \"${LLM_PROXY_MANAGEMENT_JWT_SIGNING_KEY}\"",
 				"session_cookie_name: \"${LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME}\"",

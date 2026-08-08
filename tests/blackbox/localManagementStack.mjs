@@ -62,6 +62,7 @@ export async function startLocalManagementStack() {
     const tAuthOrigin = `http://${localHost}:${tAuthPort}`;
     const llmProxyOrigin = `http://${localHost}:${llmProxyPort}`;
     frontend.setManagementAPIOrigin(llmProxyOrigin);
+    frontend.setTAuthOrigin(tAuthOrigin);
 
     const tAuthConfigPath = path.join(temporaryDirectory, "tauth-config.yaml");
     await writeFile(tAuthConfigPath, tAuthConfig(tAuthPort, frontendOrigin), { mode: 0o600 });
@@ -94,14 +95,14 @@ export async function startLocalManagementStack() {
       "llm-proxy",
       llmProxyBinaryPath,
       ["--config", llmProxyConfigPath],
-      llmProxyEnvironment(frontendOrigin, tAuthOrigin, llmProxyOrigin, temporaryDirectory),
+      llmProxyEnvironment(frontendOrigin, frontendOrigin, llmProxyOrigin, temporaryDirectory),
     );
     serviceProcesses.push(llmProxyProcess);
     await waitForHTTP(`${llmProxyOrigin}/config-ui.yaml`, {}, llmProxyProcess, 200);
 
     return {
       frontendOrigin,
-      tAuthOrigin,
+      tAuthOrigin: frontendOrigin,
       llmProxyOrigin,
       async stop() {
         await stopStack(frontendServer, serviceProcesses, temporaryDirectory);
@@ -217,8 +218,9 @@ async function reserveLocalPort() {
 
 async function startFrontendServer() {
   let managementAPIOrigin = "";
+  let tAuthOrigin = "";
   const server = http.createServer((request, response) => {
-    void handleFrontendRequest(request, response, managementAPIOrigin);
+    void handleFrontendRequest(request, response, managementAPIOrigin, tAuthOrigin);
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -234,10 +236,13 @@ async function startFrontendServer() {
     setManagementAPIOrigin(origin) {
       managementAPIOrigin = origin;
     },
+    setTAuthOrigin(origin) {
+      tAuthOrigin = origin;
+    },
   };
 }
 
-async function handleFrontendRequest(request, response, managementAPIOrigin) {
+async function handleFrontendRequest(request, response, managementAPIOrigin, tAuthOrigin) {
   try {
     const requestURL = new URL(request.url || "/", "http://localhost");
     if (requestURL.pathname === "/config-ui.yaml") {
@@ -249,6 +254,13 @@ async function handleFrontendRequest(request, response, managementAPIOrigin) {
         "content-type": upstreamResponse.headers.get("content-type") || mimeTypes[".yaml"],
       });
       response.end(Buffer.from(await upstreamResponse.arrayBuffer()));
+      return;
+    }
+    if (requestURL.pathname === "/auth" || requestURL.pathname.startsWith("/auth/") || requestURL.pathname === "/me") {
+      if (!tAuthOrigin) {
+        throw new Error("tauth_origin_not_ready");
+      }
+      await proxyFrontendRequest(request, response, tAuthOrigin);
       return;
     }
     if (request.method === "POST" && requestURL.pathname === "/v1/responses") {
@@ -277,6 +289,25 @@ async function handleFrontendRequest(request, response, managementAPIOrigin) {
     response.writeHead(statusCode);
     response.end(statusCode === 404 ? "Not Found" : "Bad Gateway");
   }
+}
+
+async function proxyFrontendRequest(request, response, upstreamOrigin) {
+  const upstreamURL = new URL(request.url || "/", upstreamOrigin);
+  await new Promise((resolve, reject) => {
+    const upstreamRequest = http.request(upstreamURL, {
+      method: request.method,
+      headers: {
+        ...request.headers,
+        host: upstreamURL.host,
+      },
+    }, (upstreamResponse) => {
+      response.writeHead(upstreamResponse.statusCode || 502, upstreamResponse.headers);
+      upstreamResponse.pipe(response);
+      upstreamResponse.once("end", resolve);
+    });
+    upstreamRequest.once("error", reject);
+    request.pipe(upstreamRequest);
+  });
 }
 
 function tAuthConfig(port, frontendOrigin) {

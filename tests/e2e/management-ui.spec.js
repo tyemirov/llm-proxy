@@ -10,13 +10,23 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import {
+  assertPublicDocumentShell,
+  renderLandingHeader,
+  renderPublicHeader,
+} from "../../scripts/public_site_shell.mjs";
+import {
+  APPLICATION_PATH,
+  LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE,
+} from "../../site/assets/llm-proxy/js/constants.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const siteSourceRoot = path.join(repoRoot, "site");
 const executeFile = promisify(execFile);
 const canonicalOpenAPIFile = path.join(repoRoot, "docs/openapi.yaml");
 const configPath = "/config-ui.yaml";
-const applicationPath = "/app/";
+const applicationPath = APPLICATION_PATH;
+const landingAuthRouteModuleRevision = "20260808b113";
 const removedApplicationPath = "/manage/";
 const defaultTenantID = "tenant_1";
 const managementDefaultTenantPath = `/api/management/tenants/${defaultTenantID}`;
@@ -24,6 +34,8 @@ const managementProviderKeysPath = `${managementDefaultTenantPath}/provider-keys
 const faviconPath = "/assets/llm-proxy/img/favicon.svg";
 const appIconPath = "/assets/llm-proxy/img/llm-proxy-icon.svg";
 const resourcesPath = "/resources/";
+const privacyPath = "/privacy/";
+const termsPath = "/terms/";
 const representativeResourcePath = "/resources/multi-provider-llm-proxy/";
 const clientAuthenticationResourcePath = "/resources/llm-proxy-client-authentication/";
 const sitemapPath = "/sitemap.xml";
@@ -32,7 +44,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20260806b110";
+const applicationModuleRevision = "20260808b111";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
@@ -46,17 +58,24 @@ const applicationModuleFiles = Object.freeze([
   "ui/runtimeFailure.js",
   "ui/usagePresentation.js",
 ]);
+const applicationForbiddenTAuthFragments = Object.freeze([
+  "/auth/google",
+  "/auth/logout",
+  "/auth/nonce",
+  "/auth/session",
+  "document.cookie",
+  "localStorage",
+]);
 const repositoryURL = "https://github.com/tyemirov/llm-proxy";
 const mprUICSSURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css";
 const mprUIConfigURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js";
 const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
+const tAuthBrowserClientURL = "https://tauth.mprlab.com/tauth.js";
 const compactLandingFooterMaxHeight = 56;
 const b020ScreenshotDirectory = path.join(repoRoot, "output/playwright");
 const httpOK = 200;
 const httpNotFound = 404;
 const httpInternalServerError = 500;
-const noticeClockPauseLeadMilliseconds = 5_000;
-const noticeClockPreDeadlineAdvanceMilliseconds = 4_000;
 
 /**
  * @param {string} moduleSource
@@ -67,7 +86,6 @@ function runtimeJavaScriptSpecifiers(moduleSource) {
     .map((match) => match[1])
     .filter((specifier) => specifier.startsWith("."));
 }
-const noticeClockPostDeadlineAdvanceMilliseconds = 2_000;
 const tenantAccessDesktopMaxHeight = 64;
 const usageIntervals = Object.freeze([
   { id: "all", label: "ALL", requests: 91, totalTokens: 91_000, providerCount: 1 },
@@ -85,7 +103,7 @@ const mimeTypes = Object.freeze({
   ".yaml": "application/yaml",
 });
 const generatedResourcePageCount = 46;
-const landingModifiedDate = "2026-08-06";
+const landingModifiedDate = "2026-08-08";
 const seoContentModifiedDate = "2026-07-11";
 const seoCurrentContentModifiedDate = "2026-07-22";
 const seoUsageContentModifiedDate = "2026-07-26";
@@ -171,10 +189,10 @@ test("public landing explains the product and exposes the generated capability c
   expect(integrationOffset).toBeLessThan(audienceOffset);
   expect(audienceOffset).toBeLessThan(capabilitiesOffset);
   expect(capabilitiesOffset).toBeLessThan(modelsOffset);
-  expect(html).toContain(`href="${applicationPath}"`);
+  expect(html).toContain(`${LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE}="${applicationPath}"`);
+  expect(html).not.toContain("sign-in-redirect-url=");
   expect(html).toContain(`"href":"${resourcesPath}"`);
   expect(html).toContain(`href="${apiDocumentationPath}"`);
-  expect(html).toContain(`"href":"${openAPISchemaViewerPath}"`);
   expect(html).toContain('<table class="catalog-table">');
   expect(html).toContain('<strong>12</strong><span>Providers</span>');
   expect(html).toContain('<strong>58</strong><span>Models</span>');
@@ -207,15 +225,28 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain("grok-4.3");
   expect(html).not.toContain("api_key");
   expect(html).not.toContain("base_url");
-  expect(html).not.toContain("data-config-url");
+  expect(html).toContain(`data-config-url="${configPath}"`);
   expect(html).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
-  expect(html).toContain(`<script defer src="${mprUIBundleURL}"></script>`);
+  expect(html).toContain(`<script src="${tAuthBrowserClientURL}"></script>`);
+  expect(html).toContain(`<script src="${mprUIConfigURL}"></script>`);
+  expect(html.indexOf(`<script src="${tAuthBrowserClientURL}"></script>`)).toBeLessThan(
+    html.indexOf(`<script src="${mprUIConfigURL}"></script>`),
+  );
+  expect(html).toContain(`data-mpr-ui-bundle-src="${mprUIBundleURL}"`);
+  expect(html).toContain(
+    `<script type="module" src="/assets/llm-proxy/js/ui/landingAuthRoute.js?v=${landingAuthRouteModuleRevision}"></script>`,
+  );
+  expect(
+    html.indexOf(
+      `<script type="module" src="/assets/llm-proxy/js/ui/landingAuthRoute.js?v=${landingAuthRouteModuleRevision}"></script>`,
+    ),
+  ).toBeLessThan(html.indexOf(`<script src="${mprUIConfigURL}"></script>`));
   expect(html).toContain('<link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">');
-  expect(html).not.toContain(mprUIConfigURL);
   expect(html).toContain('<mpr-header\n      class="public-site-header"');
   expect(html).toContain('<mpr-footer\n      class="public-site-footer"\n      size="small"\n      sticky="false"');
-  expect(html).toContain('prefix-text="LLM Proxy"');
-  expect(html).toContain('privacy-link-hidden="true"');
+  expect(html).toContain(`privacy-link-href="${privacyPath}"`);
+  expect(html).toContain('links-collection=');
+  expect(html).toContain("Built by Marco Polo Research Lab");
   expect(html).toContain('<meta name="theme-color" content="#0f1114">');
 
   const page = await request.get(`${baseURL}${applicationPath}`);
@@ -225,7 +256,11 @@ test("public landing explains the product and exposes the generated capability c
   expect(managementHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/app/">');
   expect(managementHTML).toContain(`data-config-url="${configPath}"`);
   expect(managementHTML).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
+  expect(managementHTML).toContain(`<script src="${tAuthBrowserClientURL}"></script>`);
   expect(managementHTML).toContain(`<script src="${mprUIConfigURL}"></script>`);
+  expect(managementHTML.indexOf(`<script src="${tAuthBrowserClientURL}"></script>`)).toBeLessThan(
+    managementHTML.indexOf(`<script src="${mprUIConfigURL}"></script>`),
+  );
   expect(managementHTML).toContain(`data-mpr-ui-bundle-src="${mprUIBundleURL}"`);
   expect(managementHTML).toContain(`<script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=${applicationModuleRevision}"></script>`);
   expect(managementHTML).toContain(
@@ -239,9 +274,25 @@ test("public landing explains the product and exposes the generated capability c
     for (const revision of moduleSource.matchAll(/\?v=([a-z0-9]+)/gu)) {
       expect(revision[1], `${moduleFile} must not reference a stale application module revision`).toBe(applicationModuleRevision);
     }
+    for (const forbiddenFragment of applicationForbiddenTAuthFragments) {
+      expect(moduleSource, `${moduleFile} must delegate browser authentication to the exposed TAuth client`).not.toContain(
+        forbiddenFragment,
+      );
+    }
+  }
+  const landingAuthRouteSource = await readFile(
+    path.join(siteSourceRoot, "assets/llm-proxy/js/ui/landingAuthRoute.js"),
+    "utf8",
+  );
+  for (const forbiddenFragment of applicationForbiddenTAuthFragments) {
+    expect(
+      landingAuthRouteSource,
+      "the landing route policy must not implement or inspect TAuth state",
+    ).not.toContain(forbiddenFragment);
   }
   expect(managementHTML).not.toContain("MarcoPoloResearchLab/mpr-ui@v");
-  expect(managementHTML).not.toContain("tauth.js");
+  expect(managementHTML).not.toContain("Sign in to manage LLM Proxy keys");
+  expect(managementHTML).toContain(`privacy-link-href="${privacyPath}"`);
   expect(managementHTML).toMatch(/<notification-region\s+slot="aux"[\s\S]*?<mpr-user\s+slot="aux"/);
   expect(managementHTML).toContain('<body x-data="llmProxyKeyManagement" x-init="init()">');
   expect(managementHTML).not.toContain('x-init="bindNotificationRegion($el)"');
@@ -269,6 +320,7 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain(`<link rel="apple-touch-icon" href="${appIconPath}">`);
   expect(html).toContain(`data-config-url="${configPath}"`);
   expect(html).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
+  expect(html).toContain(`<script src="${tAuthBrowserClientURL}"></script>`);
   expect(html).toContain(`<script src="${mprUIConfigURL}"></script>`);
   expect(html).toContain(`data-mpr-ui-bundle-src="${mprUIBundleURL}"`);
   expect(html).toContain(`<script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=${applicationModuleRevision}"></script>`);
@@ -276,7 +328,6 @@ test("public landing explains the product and exposes the generated capability c
     `<script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=${applicationModuleRevision}"></script>`,
   );
   expect(html).not.toContain("MarcoPoloResearchLab/mpr-ui@v");
-  expect(html).not.toContain("tauth.js");
   expect(html).toMatch(/<notification-region\s+slot="aux"[\s\S]*?<mpr-user\s+slot="aux"/);
   expect(html).toContain('<body x-data="llmProxyKeyManagement" x-init="init()">');
   expect(html).not.toContain('x-init="bindNotificationRegion($el)"');
@@ -477,11 +528,21 @@ test("the capability catalog remains complete without JavaScript", async ({ brow
   await expect(catalog.locator("[data-catalog-row]")).toHaveCount(58);
   await expect(catalog.locator('[data-model="gpt-4o-mini-transcribe"]')).toContainText("Dictation");
 
+  const footer = page.locator(".public-site-footer-fallback");
+  await expect(footer).toBeVisible();
+  await expect(footer.getByRole("link", { name: "Resources" })).toHaveAttribute("href", resourcesPath);
+  await expect(footer.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", privacyPath);
+  await expect(footer.getByRole("link", { name: "Terms" })).toHaveAttribute("href", termsPath);
+  const projects = footer.locator("details");
+  await projects.locator("summary").click();
+  await expect(projects).toHaveAttribute("open", "");
+  await expect(projects.getByRole("link")).toHaveCount(10);
+
   await browserContext.close();
 });
 
 test("visitors can disclose filters, search every characteristic, and sort through table headers", async ({ page }) => {
-  await installAssetRoutes(page);
+  await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(`${baseURL}/#models`);
 
@@ -629,32 +690,96 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   ).toBe(true);
 });
 
-test("every public HTML page publishes the identical MPR header and footer", async ({ request }) => {
+test("every public HTML page publishes its canonical MPR header and the identical footer", async ({ request }) => {
   const sitemapResponse = await request.get(`${baseURL}${sitemapPath}`);
   expect(sitemapResponse.status()).toBe(httpOK);
   const sitemapXML = await sitemapResponse.text();
   const publicPaths = [...sitemapXML.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => new URL(match[1]).pathname);
-  expect(publicPaths).toHaveLength(generatedResourcePageCount + 3);
+  expect(publicPaths).toHaveLength(generatedResourcePageCount + 5);
 
-  let canonicalHeader = "";
   let canonicalFooter = "";
   for (const publicPath of publicPaths) {
     const response = await request.get(`${baseURL}${publicPath}`);
     expect(response.status(), publicPath).toBe(httpOK);
     const html = await response.text();
     const shell = publicShellMarkup(html);
-    canonicalHeader ||= shell.header;
     canonicalFooter ||= shell.footer;
-    expect(shell.header, publicPath).toBe(canonicalHeader);
+    expect(shell.header, publicPath).toBe(publicPath === "/" ? renderLandingHeader() : renderPublicHeader());
     expect(shell.footer, publicPath).toBe(canonicalFooter);
     expect(html, publicPath).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
     expect(html, publicPath).toContain('<link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">');
-    expect(html, publicPath).toContain(`<script defer src="${mprUIBundleURL}"></script>`);
+    expect(html, publicPath).toContain(`<script src="${mprUIConfigURL}"></script>`);
+    expect(html, publicPath).toContain(`data-mpr-ui-bundle-src="${mprUIBundleURL}"`);
+    expect(html, publicPath).toContain(`data-config-url="${configPath}"`);
+    if (publicPath === "/") {
+      expect(shell.header, publicPath).toContain(
+        `${LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE}="${applicationPath}"`,
+      );
+      expect(shell.header, publicPath).not.toContain("sign-in-redirect-url=");
+      expect(html, publicPath).toContain(
+        `<script type="module" src="/assets/llm-proxy/js/ui/landingAuthRoute.js?v=${landingAuthRouteModuleRevision}"></script>`,
+      );
+    } else {
+      expect(shell.header, publicPath).toContain(`sign-in-redirect-url="${applicationPath}"`);
+      expect(shell.header, publicPath).not.toContain(LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE);
+      expect(html, publicPath).not.toContain("/assets/llm-proxy/js/ui/landingAuthRoute.js");
+    }
     expect(html, publicPath).not.toContain('class="resource-shell resource-topbar"');
     expect(html, publicPath).not.toContain('class="resource-shell resource-footer"');
     expect(html, publicPath).not.toContain('class="landing-header"');
+    expect(html, publicPath).not.toMatch(/<a\b[^>]*\bhref=["']\/app\/["'][^>]*>/i);
+    expect(shell.footer, publicPath).toContain('<a href="/resources/">Resources</a>');
+    expect(shell.footer, publicPath).toContain('<a href="/privacy/">Privacy</a>');
+    expect(shell.footer, publicPath).toContain('<a href="/terms/">Terms</a>');
     expect(shell.headerOffset, publicPath).toBeLessThan(shell.mainOffset);
     expect(shell.mainOffset, publicPath).toBeLessThan(shell.footerOffset);
+  }
+});
+
+test("the public resource generator rejects incomplete or unsafe shell documents", async () => {
+  const sourcePath = path.join(siteSourceRoot, "resources", "index.html");
+  const source = await readFile(sourcePath, "utf8");
+  expect(() => assertPublicDocumentShell(source, sourcePath)).not.toThrow();
+
+  const invalidDocuments = [
+    source.replace("<mpr-header", "<invalid-header"),
+    source.replace("<main", "<invalid-main"),
+    source.replace("<mpr-footer", "<invalid-footer"),
+    source.replace("</mpr-header>", "</mpr-header><p>Escaped resource content</p>"),
+    source.replace("</main>", '<a href="/app/">Bypass authentication</a></main>'),
+    source.replace('<a href="/resources/">Resources</a>', '<a href="/resource/">Resources</a>'),
+  ];
+  for (const invalidDocument of invalidDocuments) {
+    expect(() => assertPublicDocumentShell(invalidDocument, sourcePath)).toThrow();
+  }
+});
+
+test("legal pages publish one repo-grounded source with static and MPR-rendered semantics", async ({ request }) => {
+  const legalPages = [
+    {
+      path: privacyPath,
+      type: "privacy",
+      title: "Privacy Policy - LLM Proxy",
+      requiredCopy: "usage records do not store prompts",
+    },
+    {
+      path: termsPath,
+      type: "terms",
+      title: "Terms of Service - LLM Proxy",
+      requiredCopy: "Model outputs may be incomplete",
+    },
+  ];
+
+  for (const legalPage of legalPages) {
+    const response = await request.get(`${baseURL}${legalPage.path}`);
+    expect(response.status(), legalPage.path).toBe(httpOK);
+    const html = await response.text();
+    expect(html, legalPage.path).toContain(`<link rel="canonical" href="https://llm-proxy.mprlab.com${legalPage.path}">`);
+    expect(html, legalPage.path).toContain(`<mpr-legal-document\n        type="${legalPage.type}"`);
+    expect(html, legalPage.path).toContain(`<h1 class="mpr-legal-document__title">${legalPage.title}</h1>`);
+    expect(html, legalPage.path).toContain(legalPage.requiredCopy);
+    expect(html, legalPage.path).toContain('effective-date="2026-08-08"');
+    expect(html, legalPage.path).toContain('last-updated-date="2026-08-08"');
   }
 });
 
@@ -676,8 +801,8 @@ test("the published site uses only app, login, account, and tenant terminology",
 });
 
 test("public route families hydrate the shared MPR shell at desktop and mobile widths", async ({ page }) => {
-  await installAssetRoutes(page);
-  const representativePublicPaths = ["/", apiDocumentationPath, resourcesPath, representativeResourcePath];
+  await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
+  const representativePublicPaths = ["/", apiDocumentationPath, resourcesPath, representativeResourcePath, privacyPath, termsPath];
 
   for (const viewport of [
     { width: 1280, height: 800 },
@@ -697,9 +822,11 @@ test("public route families hydrate the shared MPR shell at desktop and mobile w
         "href",
         apiDocumentationPath,
       );
-      await expect(header.getByRole("link", { name: "Log In" }), publicPath).toHaveAttribute("href", applicationPath);
+      await expect(header.getByRole("button", { name: "Log In" }), publicPath).toBeVisible();
       await expect(footer.getByRole("contentinfo"), publicPath).toBeVisible();
       await expect(footer.getByRole("link", { name: "Resources" }), publicPath).toHaveAttribute("href", resourcesPath);
+      await expect(footer.getByRole("link", { name: "Privacy" }), publicPath).toHaveAttribute("href", privacyPath);
+      await expect(footer.getByRole("link", { name: "Terms" }), publicPath).toHaveAttribute("href", termsPath);
       const documentOrderIsCanonical = await page.evaluate(() => {
         const headerElement = document.querySelector("body > mpr-header");
         const mainElement = document.querySelector("body > main");
@@ -720,7 +847,7 @@ test("public route families hydrate the shared MPR shell at desktop and mobile w
 });
 
 test("public landing is keyboard navigable and responsive in Chromium", async ({ page }) => {
-  await installAssetRoutes(page);
+  await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(baseURL);
 
@@ -732,7 +859,7 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
   await expect(page.getByRole("link", { name: "Use the Python client" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Install the CLI" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "One boundary. Three ways to benefit." })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Log In" }).first()).toHaveAttribute("href", applicationPath);
+  await expect(page.getByRole("button", { name: "Log In" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Provider and model capability matrix" })).toBeVisible();
   await expect(page.getByRole("table")).toBeVisible();
   const dictationDefaultRow = page.locator('[data-provider="openai"][data-model="gpt-4o-mini-transcribe"]');
@@ -750,12 +877,8 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
   await expect(footer).toHaveAttribute("size", "small");
   await expect(footer).toHaveAttribute("sticky", "false");
   await expect(footer.getByRole("contentinfo")).toBeVisible();
-  await expect(footer.getByRole("link", { name: "Log In" })).toHaveAttribute("href", applicationPath);
-  await expect(footer.getByRole("link", { name: "API", exact: true })).toHaveAttribute("href", apiDocumentationPath);
-  await expect(footer.getByRole("link", { name: "OpenAPI", exact: true })).toHaveAttribute(
-    "href",
-    openAPISchemaViewerPath,
-  );
+  await expect(footer.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", privacyPath);
+  await expect(footer.getByRole("link", { name: "Terms" })).toHaveAttribute("href", termsPath);
   await expect(footer.getByRole("link", { name: "Resources" })).toHaveAttribute("href", resourcesPath);
   await expect(footer.getByRole("link", { name: "GitHub" })).toHaveAttribute(
     "href",
@@ -768,7 +891,7 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
 
   await page.setViewportSize({ width: 390, height: 780 });
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Log In" }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Log In" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Provider and model capability matrix" })).toBeVisible();
   await expect
     .poll(() => dictationDefaultRow.locator(".catalog-model").evaluate((element) => parseFloat(getComputedStyle(element).columnGap)))
@@ -847,7 +970,6 @@ test("SEO resource pages are crawlable from the public site", async ({ request }
   expect(hubHTML).toContain('<link rel="canonical" href="https://llm-proxy.mprlab.com/resources/">');
   expect(hubHTML).toContain('"@type":"CollectionPage"');
   expect(hubHTML).toContain(`href="${apiDocumentationPath}"`);
-  expect(hubHTML).toContain(`"href":"${openAPISchemaViewerPath}"`);
   expect(hubHTML).toContain(`href="${representativeResourcePath}"`);
   expect(hubHTML).toContain(`href="${clientAuthenticationResourcePath}"`);
   const resourceLinks = hubHTML.match(/href="\/resources\/[^"]+\/"/g) || [];
@@ -1018,10 +1140,12 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
   expect(sitemapResponse.headers()["content-type"]).toContain(mimeTypes[".xml"]);
   const sitemapXML = await sitemapResponse.text();
   const sitemapLocations = sitemapXML.match(/<loc>/g) || [];
-  expect(sitemapLocations).toHaveLength(generatedResourcePageCount + 3);
+  expect(sitemapLocations).toHaveLength(generatedResourcePageCount + 5);
   expect(sitemapXML).toContain("<loc>https://llm-proxy.mprlab.com/</loc>");
   expect(sitemapXML).toContain("<loc>https://llm-proxy.mprlab.com/resources/</loc>");
   expect(sitemapXML).toContain(`<loc>https://llm-proxy.mprlab.com${apiDocumentationPath}</loc>`);
+  expect(sitemapXML).toContain(`<loc>https://llm-proxy.mprlab.com${privacyPath}</loc>`);
+  expect(sitemapXML).toContain(`<loc>https://llm-proxy.mprlab.com${termsPath}</loc>`);
   expect(sitemapXML).toContain(
     `<loc>https://llm-proxy.mprlab.com${apiDocumentationPath}</loc>\n    <lastmod>${landingModifiedDate}</lastmod>`,
   );
@@ -1029,7 +1153,7 @@ test("SEO sitemap and robots expose canonical resource URLs", async ({ request }
     "<loc>https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/</loc>",
   );
   const sitemapModificationDates = sitemapXML.match(/<lastmod>[^<]+<\/lastmod>/g) || [];
-  expect(sitemapModificationDates).toHaveLength(generatedResourcePageCount + 3);
+  expect(sitemapModificationDates).toHaveLength(generatedResourcePageCount + 5);
   expect(new Set(sitemapModificationDates)).toEqual(
     new Set([
       `<lastmod>${seoContentModifiedDate}</lastmod>`,
@@ -2401,16 +2525,18 @@ test("session cleanup cancels provider autosaves before they can repopulate stat
   await expect(providerEditor.getByRole("status")).toHaveText("Verifying key");
 
   await page.evaluate(() => {
+    sessionStorage.setItem("llm-proxy-test-auth-status", "unauthenticated");
     document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
   });
-  await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
+  await expect(page).toHaveURL(`${baseURL}/`);
   releaseProviderSave();
   await page.waitForTimeout(50);
-  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Authentication required");
   await expect(page.locator("body")).not.toContainText(lateProviderKey);
   expect(await browserStorageContains(page, lateProviderKey)).toBe(false);
 
+  await page.getByRole("button", { name: "Log In" }).click();
   await page.evaluate(() => window.__llmProxyMprAuthenticate());
+  await expect(page).toHaveURL(`${baseURL}${applicationPath}`);
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
@@ -2554,9 +2680,10 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
   await providerEditor.getByRole("button", { name: "Show key" }).click();
   await expect(providerKeyInput).toHaveValue(editedProviderKey);
   await page.evaluate(() => {
+    sessionStorage.setItem("llm-proxy-test-auth-status", "unauthenticated");
     document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
   });
-  await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
+  await expect(page).toHaveURL(`${baseURL}/`);
   expect(await browserStorageContains(page, editedProviderKey)).toBe(false);
 });
 
@@ -3031,12 +3158,12 @@ test("session cleanup cancels routing-default autosaves before they can repopula
   await defaultsSaveRequested;
 
   await page.evaluate(() => {
+    sessionStorage.setItem("llm-proxy-test-auth-status", "unauthenticated");
     document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
   });
-  await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
+  await expect(page).toHaveURL(`${baseURL}/`);
   releaseDefaultsSave();
   await page.waitForTimeout(50);
-  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Authentication required");
   await expect(page.locator('option[value="deepseek"]')).toHaveCount(0);
 });
 
@@ -3155,7 +3282,7 @@ test("invalid persisted routing-default profiles become app data integrity error
   await expect(page.getByText("App data integrity error")).toBeVisible();
 });
 
-test("dashboard loads only after MPR UI authenticates the user", async ({ page }) => {
+test("public Log In authenticates through MPR UI before opening the app", async ({ page }) => {
   const profileRequests = [];
   page.on("request", (request) => {
     if (request.url() === `${baseURL}${managementDefaultTenantPath}`) {
@@ -3165,15 +3292,31 @@ test("dashboard loads only after MPR UI authenticates the user", async ({ page }
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await installManagementRoutes(page);
 
-  await page.goto(`${baseURL}${applicationPath}`);
+  await page.goto(baseURL);
 
-  await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
+  const logIn = page.getByRole("button", { name: "Log In" });
+  await expect(logIn).toBeVisible();
   expect(profileRequests).toHaveLength(0);
+  const landingHistoryLength = await page.evaluate(() => history.length);
+  await logIn.click();
   await page.evaluate(() => window.__llmProxyMprAuthenticate());
 
+  await expect(page).toHaveURL(`${baseURL}${applicationPath}`);
+  expect(await page.evaluate(() => history.length)).toBe(landingHistoryLength);
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("37");
   expect(profileRequests).toHaveLength(1);
+});
+
+test("a restored authenticated session replaces the anonymous landing with the app", async ({ page }) => {
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+
+  await page.goto(baseURL);
+
+  await expect(page).toHaveURL(`${baseURL}${applicationPath}`);
+  await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Integrate once. Use the model that fits." })).toHaveCount(0);
 });
 
 test("startup reconciles MPR UI authentication after the lifecycle event has passed", async ({ page }) => {
@@ -3279,18 +3422,22 @@ test("authenticated profile failures replace loading and signed-out states", asy
   await expect(page.getByRole("heading", { name: "Loading LLM Proxy" })).toBeHidden();
 });
 
-test("signed-out panel presents a direct sign-in prompt without auth instructions", async ({ page }) => {
-  await page.setViewportSize({ width: 1121, height: 253 });
+test("a direct anonymous app visit returns to the public page", async ({ page }) => {
+  const accountRequests = [];
+  page.on("request", (request) => {
+    if (request.url() === `${baseURL}/api/management/account`) {
+      accountRequests.push(request);
+    }
+  });
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await installManagementRoutes(page);
 
   await page.goto(`${baseURL}${applicationPath}`);
 
-  const signedOutPanel = page.locator("section.llm-panel").filter({
-    has: page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" }),
-  });
-  await expect(signedOutPanel).toBeVisible();
-  await expect(signedOutPanel.locator("p:not(.eyebrow)")).toHaveCount(0);
+  await expect(page).toHaveURL(`${baseURL}/`);
+  await expect(page.getByRole("heading", { name: "Integrate once. Use the model that fits." })).toBeVisible();
+  await expect(page.locator("llm-proxy-key-management")).toHaveCount(0);
+  expect(accountRequests).toHaveLength(0);
 });
 
 test("fresh authenticated users receive one client key and must add a provider key before closing Settings", async ({ page }) => {
@@ -3651,15 +3798,18 @@ test("session cleanup cancels generated client keys before they can restore stat
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await secretRequestStarted;
   await page.evaluate(() => {
+    sessionStorage.setItem("llm-proxy-test-auth-status", "unauthenticated");
     document.dispatchEvent(new CustomEvent("mpr-ui:auth:unauthenticated"));
   });
-  await expect(page.getByRole("heading", { name: "Sign in to manage LLM Proxy keys" })).toBeVisible();
+  await expect(page).toHaveURL(`${baseURL}/`);
   fulfillSecretResponse();
   await page.waitForTimeout(50);
   await expect(page.locator("body")).not.toContainText(lateGeneratedSecret);
   expect(await browserStorageContains(page, lateGeneratedSecret)).toBe(false);
 
+  await page.getByRole("button", { name: "Log In" }).click();
   await page.evaluate(() => window.__llmProxyMprAuthenticate());
+  await expect(page).toHaveURL(`${baseURL}${applicationPath}`);
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   await expect(settingsDialog).toBeVisible();
   expect(secretRequestCount).toBe(2);
@@ -3929,6 +4079,9 @@ test("settings modal overlays MPR header and footer layers", async ({ page }) =>
     } else {
       expect(usageTenantSelectorBox.y).toBeLessThanOrEqual(allIntervalButtonBox.y);
     }
+    const sharedFooter = page.locator("mpr-footer");
+    await sharedFooter.scrollIntoViewIfNeeded();
+    await expect(sharedFooter).toBeInViewport();
     await page.getByTestId("avatar-menu").click();
     await page.getByTestId("avatar-menu-item").nth(0).click();
 
@@ -4025,23 +4178,17 @@ test("management notices occupy the header aux slot immediately before the avata
   }
 });
 
-test("signed-out management notices occupy the header immediately before Sign in", async ({ page }) => {
+test("public Log In stays keyboard accessible at every supported width", async ({ page }) => {
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
-  await installManagementRoutes(page);
 
   for (const viewport of settingsLayerViewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await page.goto(`${baseURL}${applicationPath}`);
+    await page.goto(baseURL);
 
-    const notificationRegion = page.locator("#llm-proxy-header notification-region");
-    const notice = notificationRegion.locator(".notice");
-    const signIn = page.getByRole("button", { name: "Sign in" });
-    await expect(notice).toHaveText("Authentication required");
-    await expect(signIn).toBeVisible();
-    await expectHeaderNoticeSignInGeometry(page);
-
-    await signIn.focus();
-    await expect(signIn).toBeFocused();
+    const logIn = page.getByRole("button", { name: "Log In" });
+    await expect(logIn).toBeVisible();
+    await logIn.focus();
+    await expect(logIn).toBeFocused();
   }
 });
 
@@ -4090,25 +4237,26 @@ test("management notices auto-dismiss after ten seconds and replacement notices 
   await expect(notificationRegion).toBeHidden();
 });
 
-test("informational notices auto-dismiss without impairing the signed-out Sign in control", async ({ page }) => {
-  await page.clock.install({ time: new Date("2026-07-21T12:00:00Z") });
+test("the shared footer project catalog opens as a keyboard-dismissible drop-up", async ({ page }) => {
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
-  await installManagementRoutes(page);
-  await page.goto(`${baseURL}${applicationPath}`);
+  await page.setViewportSize({ width: 390, height: 780 });
+  await page.goto(baseURL);
 
-  const notificationRegion = page.locator("#llm-proxy-header notification-region");
-  await expect(notificationRegion.locator(".notice")).toHaveText("Authentication required");
-  await expectHeaderNoticeSignInGeometry(page);
-  const noticeClockPauseTime = await page.evaluate(
-    (pauseLeadMilliseconds) => Date.now() + pauseLeadMilliseconds,
-    noticeClockPauseLeadMilliseconds,
+  const footer = page.locator("mpr-footer");
+  const projectCatalog = footer.getByRole("button", { name: "Built by Marco Polo Research Lab" });
+  await footer.scrollIntoViewIfNeeded();
+  await projectCatalog.focus();
+  await expect(projectCatalog).toBeFocused();
+  await projectCatalog.click();
+  await expect(projectCatalog).toHaveAttribute("aria-expanded", "true");
+  await expect(footer.locator("ul a")).toHaveCount(10);
+  await expect(footer.getByRole("link", { name: "Marco Polo Research Lab" })).toHaveAttribute(
+    "href",
+    "https://mprlab.com",
   );
-  await page.clock.pauseAt(noticeClockPauseTime);
-  await page.clock.runFor(noticeClockPreDeadlineAdvanceMilliseconds);
-  await expect(notificationRegion).toBeVisible();
-  await page.clock.runFor(noticeClockPostDeadlineAdvanceMilliseconds);
-  await expect(notificationRegion).toBeHidden();
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(projectCatalog).toHaveAttribute("aria-expanded", "false");
+  await expectCompactFooterGeometry(footer);
 });
 
 test("header brand uses the local logo before its title without crowding the notice or avatar", async ({ page }) => {
@@ -4223,6 +4371,9 @@ async function installAssetRoutes(page, options = {}) {
     route.fulfill({ body: "", contentType: "application/javascript" }),
   );
   await page.route("https://accounts.google.com/**", async (route) => route.abort());
+  await page.route(tAuthBrowserClientURL, async (route) =>
+    route.fulfill({ body: "", contentType: "application/javascript" }),
+  );
   await page.route("**/alpinejs@3.13.5/dist/module.esm.js", async (route) => {
     if (options.alpineModuleFailure) {
       await route.abort("blockedbyclient");
@@ -4275,7 +4426,7 @@ async function expectCompactFooterGeometry(footer) {
  */
 function publicShellMarkup(html) {
   const header = html.match(/    <mpr-header[\s\S]*?    <\/mpr-header>/)?.[0] || "";
-  const footer = html.match(/    <mpr-footer[\s\S]*?    ><\/mpr-footer>/)?.[0] || "";
+  const footer = html.match(/    <mpr-footer[\s\S]*?    <\/mpr-footer>/)?.[0] || "";
   const headerOffset = html.indexOf(header);
   const mainOffset = html.indexOf("<main");
   const footerOffset = html.indexOf(footer);
@@ -5563,13 +5714,14 @@ class MprHeader extends HTMLElement {
     if (!this.hasAttribute("data-config-url")) {
       return;
     }
-    this.setAuthStatus(${JSON.stringify(initialAuthStatus)});
+    const restoredStatus = sessionStorage.getItem("llm-proxy-test-auth-status") || ${JSON.stringify(initialAuthStatus)};
+    this.setAuthStatus(restoredStatus);
     queueMicrotask(() => {
       this.dispatchEvent(new CustomEvent("mpr-ui:auth:status-change", {
         bubbles: true,
-        detail: { status: ${JSON.stringify(initialAuthStatus)} }
+        detail: { status: restoredStatus }
       }));
-      if (${JSON.stringify(initialAuthStatus)} === "authenticated" && ${JSON.stringify(emitInitialAuthEvent)}) {
+      if (restoredStatus === "authenticated" && ${JSON.stringify(emitInitialAuthEvent)}) {
         this.dispatchEvent(new CustomEvent("mpr-ui:auth:authenticated", {
           bubbles: true,
           detail: { profile: { user_id: "user-1", user_email: "user@example.com" } }
@@ -5597,7 +5749,10 @@ class MprHeader extends HTMLElement {
       const signIn = document.createElement("button");
       signIn.type = "button";
       signIn.dataset.testid = "sign-in";
-      signIn.textContent = "Sign in";
+      signIn.textContent = this.getAttribute("sign-in-label") || "Sign in";
+      signIn.addEventListener("click", () => {
+        this.__signInIntent = true;
+      });
       actions.append(signIn);
     }
     actions.append(...this.querySelectorAll('[slot="aux"]'));
@@ -5621,6 +5776,7 @@ class MprHeader extends HTMLElement {
 class MprFooter extends HTMLElement {
   connectedCallback() {
     const horizontalLinks = JSON.parse(this.getAttribute("horizontal-links") || '{"links":[]}');
+    const linksCollection = JSON.parse(this.getAttribute("links-collection") || '{"links":[]}');
     const footer = document.createElement("footer");
     footer.setAttribute("role", "contentinfo");
     const navigation = document.createElement("nav");
@@ -5631,10 +5787,53 @@ class MprFooter extends HTMLElement {
       anchor.setAttribute("href", item.href || item.url);
       navigation.append(anchor);
     });
-    const prefix = document.createElement("span");
-    prefix.textContent = this.getAttribute("prefix-text") || "";
-    footer.append(navigation, prefix);
+    const privacy = document.createElement("a");
+    privacy.textContent = this.getAttribute("privacy-link-label") || "Privacy";
+    privacy.setAttribute("href", this.getAttribute("privacy-link-href") || "/privacy/");
+    const theme = document.createElement("button");
+    theme.type = "button";
+    theme.setAttribute("aria-label", "Toggle theme");
+    theme.textContent = "◩";
+    const menuWrapper = document.createElement("div");
+    const menuToggle = document.createElement("button");
+    menuToggle.type = "button";
+    menuToggle.textContent = linksCollection.text || "Built by Marco Polo Research Lab";
+    menuToggle.setAttribute("aria-haspopup", "true");
+    menuToggle.setAttribute("aria-expanded", "false");
+    const menu = document.createElement("ul");
+    menu.hidden = true;
+    linksCollection.links.forEach((item) => {
+      const menuItem = document.createElement("li");
+      const anchor = document.createElement("a");
+      anchor.textContent = item.label;
+      anchor.setAttribute("href", item.url || item.href);
+      menuItem.append(anchor);
+      menu.append(menuItem);
+    });
+    const closeMenu = () => {
+      menu.hidden = true;
+      menuToggle.setAttribute("aria-expanded", "false");
+    };
+    menuToggle.addEventListener("click", () => {
+      const opening = menu.hidden;
+      menu.hidden = !opening;
+      menuToggle.setAttribute("aria-expanded", opening ? "true" : "false");
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeMenu();
+      }
+    });
+    menuWrapper.append(theme, menuToggle, menu);
+    footer.append(privacy, navigation, menuWrapper);
     this.replaceChildren(footer);
+  }
+}
+class MprLegalDocument extends HTMLElement {
+  connectedCallback() {
+    this.setAttribute("data-mpr-legal-document-type", this.getAttribute("type") || "terms");
+    const sections = JSON.parse(this.getAttribute("sections") || "[]");
+    this.setAttribute("data-mpr-legal-document-section-count", String(sections.length));
   }
 }
 class MprUser extends HTMLElement {
@@ -5677,11 +5876,13 @@ class MprUser extends HTMLElement {
 customElements.define("mpr-header", MprHeader);
 customElements.define("mpr-footer", MprFooter);
 customElements.define("mpr-user", MprUser);
+customElements.define("mpr-legal-document", MprLegalDocument);
 window.__llmProxyMprAuthenticate = () => {
   const header = document.querySelector("mpr-header");
   if (!header) {
     throw new Error("mpr_header_missing");
   }
+  sessionStorage.setItem("llm-proxy-test-auth-status", "authenticated");
   header.setAuthStatus("authenticated");
   header.dispatchEvent(new CustomEvent("mpr-ui:auth:status-change", {
     bubbles: true,
@@ -5691,6 +5892,10 @@ window.__llmProxyMprAuthenticate = () => {
     bubbles: true,
     detail: { profile: { user_id: "user-1", user_email: "user@example.com" } }
   }));
+  const redirectURL = header.getAttribute("sign-in-redirect-url");
+  if (header.__signInIntent && redirectURL) {
+    location.assign(redirectURL);
+  }
 };
 `;
 }
@@ -5803,6 +6008,30 @@ mpr-footer footer {
   border-top: 1px solid rgba(148, 163, 184, 0.25);
 }
 
+mpr-footer footer > div {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+mpr-footer footer > div ul {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  width: 180px;
+  margin: 0;
+  padding: 8px;
+  background: rgba(3, 23, 32, 0.98);
+}
+
+mpr-footer footer > div ul[hidden] {
+  display: none;
+}
+
 mpr-footer nav {
   display: flex;
   min-width: 0;
@@ -5812,7 +6041,7 @@ mpr-footer nav {
   white-space: nowrap;
 }
 
-mpr-footer footer > span {
+mpr-footer footer > a {
   flex: 0 0 auto;
   font-size: 10px;
   font-weight: 600;
