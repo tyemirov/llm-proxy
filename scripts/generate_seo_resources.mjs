@@ -4,6 +4,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { load } from "js-yaml";
 import {
+  assertPublicDocumentShell,
   renderPublicFooter,
   renderPublicHeader,
   renderPublicShellHeadAssets,
@@ -14,7 +15,7 @@ const RESOURCE_ROOT = "site/resources";
 const REPORT_PATH = "docs/marketing/seo-resource-cluster-report.md";
 const RESOURCE_PUBLISHED_DATE = "2026-07-06";
 const RESOURCE_DEFAULT_MODIFIED_DATE = "2026-07-11";
-const CURRENT_PUBLIC_CONTENT_MODIFIED_DATE = "2026-08-06";
+const CURRENT_PUBLIC_CONTENT_MODIFIED_DATE = "2026-08-08";
 const LANDING_MODIFIED_DATE = CURRENT_PUBLIC_CONTENT_MODIFIED_DATE;
 const PRODUCT_NAME = "LLM Proxy";
 const API_DOCUMENTATION_PATH = "/docs/";
@@ -778,7 +779,7 @@ GET /api/management/tenants/:tenant_id/usage?interval=30d`,
     limitations: [
       "TAuth tenant and cookie settings must match the deployment profile.",
       "The public proxy endpoints still use tenant-secret authentication, not TAuth sessions.",
-      "The static UI should not load tauth.js directly; it uses the MPR shell contract.",
+      "Load the canonical tauth.js client before MPR UI so the shared client owns every browser authentication request and session transition.",
     ],
   }),
   evidencedPage({
@@ -2213,7 +2214,6 @@ ${renderPublicHeader()}
             <a class="resource-button" href="/#integrate">Choose an integration</a>
             <a class="resource-link" href="/#models">Explore supported models</a>
             <a class="resource-link" href="${API_DOCUMENTATION_PATH}">Open API reference</a>
-            <a class="resource-link" href="/app/">Log In</a>
           </div>
         </section>
 
@@ -2362,7 +2362,9 @@ ${input.body}
   </body>
 </html>
 `;
-  return document.replace(/[ \t]+$/gm, "");
+  const normalizedDocument = document.replace(/[ \t]+$/gm, "");
+  assertPublicDocumentShell(normalizedDocument, input.canonical);
+  return normalizedDocument;
 }
 
 /**
@@ -2453,6 +2455,8 @@ function renderSitemap() {
     { loc: `${PUBLIC_ORIGIN}/`, lastmod: LANDING_MODIFIED_DATE },
     { loc: `${PUBLIC_ORIGIN}/resources/`, lastmod: currentResourceModifiedDate },
     { loc: `${PUBLIC_ORIGIN}${API_DOCUMENTATION_PATH}`, lastmod: CURRENT_CONTRACT_DOCUMENTATION_MODIFIED_DATE },
+    { loc: `${PUBLIC_ORIGIN}/privacy/`, lastmod: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE },
+    { loc: `${PUBLIC_ORIGIN}/terms/`, lastmod: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE },
     ...pages.map((resourcePage) => ({ loc: resourcePage.canonical, lastmod: resourcePage.modifiedDate })),
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -2611,10 +2615,10 @@ ${publicationBriefRows}
 
 ## Site Integration And Discoverability
 
-- The main page links to integration guides, audience resources, /docs/, the generated model matrix, /app/, and /resources/ through crawlable anchors in public HTML.
+- The main page links to integration guides, audience resources, /docs/, the generated model matrix, and /resources/ through crawlable anchors; the shared MPR header owns authenticated entry to /app/.
 - The /resources/ hub leads with HTTP, Go, Python, and CLI integration paths, routes three audience needs into differentiated existing guides, and links every generated page by category.
 - Every resource page carries author attribution and links to the derived API reference, /resources/, the shared public shell, and related resources; /docs/ exposes view and download actions for the exact OpenAPI schema.
-- sitemap.xml lists /, /docs/, /resources/, and all ${pages.length} page URLs with the same trailing-slash canonical form used in internal links.
+- sitemap.xml lists /, /docs/, /resources/, /privacy/, /terms/, and all ${pages.length} resource URLs with the same trailing-slash canonical form used in internal links.
 - robots.txt allows crawling and references the sitemap.
 
 ## Evaluation Report

@@ -8,6 +8,7 @@ const files = [
   "playwright.config.js",
   "playwright.blackbox.config.js",
   "scripts/generate_openapi_docs.mjs",
+  "scripts/generate_legal_pages.mjs",
   "scripts/generate_public_site_shell.mjs",
   "scripts/generate_seo_resources.mjs",
   "scripts/public_site_shell.mjs",

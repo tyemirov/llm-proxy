@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { load } from "js-yaml";
 import {
+  assertPublicDocumentShell,
   renderPublicFooter,
   renderPublicHeader,
   renderPublicShellHeadAssets,
@@ -86,7 +87,7 @@ function renderDocument(document, sourceDigest, contractSource) {
   const info = objectValue(document.info, "info");
   const operations = documentOperations(document);
   const operationMarkup = operations.map((operation) => renderOperation(document, operation)).join("\n");
-  return `<!doctype html>
+  const renderedDocument = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -140,6 +141,8 @@ ${renderPublicFooter()}
   </body>
 </html>
 `;
+  assertPublicDocumentShell(renderedDocument, `${PUBLIC_ORIGIN}/docs/`);
+  return renderedDocument;
 }
 
 /**
