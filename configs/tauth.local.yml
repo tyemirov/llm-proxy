@@ -7,7 +7,7 @@ server:
     - "${TAUTH_CORS_EXCEPTION_1}"
   cors_allowed_origin_exceptions:
     - "${TAUTH_CORS_EXCEPTION_1}"
-  enable_tenant_header_override: false
+  enable_tenant_header_override: true
 
 tenants:
   - id: "${LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID}"
