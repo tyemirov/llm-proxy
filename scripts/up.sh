@@ -14,6 +14,7 @@ local_stack_ready="0"
 local_site_artifact_directory=""
 local_frontend_origin="http://localhost:4179"
 local_api_origin="http://localhost:8080"
+local_tauth_tenant_id=""
 expected_running_services=$'api\nfrontend\nschema\ntauth'
 
 fail() {
@@ -264,6 +265,13 @@ command -v openssl >/dev/null 2>&1 || fail "openssl is required to generate loca
 [[ -f "${LOCAL_ORCHESTRATION_COMPOSE_FILE}" ]] || fail "missing local orchestration: ${LOCAL_ORCHESTRATION_COMPOSE_FILE}"
 
 prepare_local_environment
+while IFS='=' read -r scoped_variable_name scoped_variable_value; do
+  if [[ "${scoped_variable_name}" == "LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID" ]]; then
+    local_tauth_tenant_id="${scoped_variable_value}"
+    break
+  fi
+done <"${api_environment_path}"
+[[ -n "${local_tauth_tenant_id}" ]] || fail "${local_environment_path} must define LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID"
 prepare_local_site_artifact_directory
 
 cd "${repository_root}"
@@ -280,8 +288,8 @@ verify_local_capability_catalog
 wait_for_http_status "ghttp canonical OpenAPI schema" "200" "${local_frontend_origin}/openapi.yaml"
 wait_for_http_status "ghttp runtime configuration" "200" "${local_frontend_origin}/config-ui.yaml"
 wait_for_http_status "LLM Proxy API boundary" "403" "${local_api_origin}/?prompt=ready"
-wait_for_http_status "TAuth session through ghttp" "204" "${local_frontend_origin}/auth/session" --header "Origin: ${local_frontend_origin}" --header "X-Requested-With: XMLHttpRequest"
-wait_for_http_status "TAuth nonce through ghttp" "200" "${local_frontend_origin}/auth/nonce" --request POST --header "Origin: ${local_frontend_origin}" --header "X-Requested-With: XMLHttpRequest"
+wait_for_http_status "TAuth session through ghttp" "204" "${local_frontend_origin}/auth/session" --header "X-TAuth-Tenant: ${local_tauth_tenant_id}"
+wait_for_http_status "TAuth nonce through ghttp" "200" "${local_frontend_origin}/auth/nonce" --request POST --header "Origin: ${local_frontend_origin}" --header "Content-Type: application/json" --header "X-Requested-With: XMLHttpRequest" --header "X-TAuth-Tenant: ${local_tauth_tenant_id}"
 wait_for_http_status "LLM Proxy management API boundary" "401" "${local_api_origin}/api/management/account" --header "Origin: ${local_frontend_origin}"
 local_stack_ready="1"
 

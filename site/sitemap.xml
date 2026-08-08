@@ -2,19 +2,27 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://llm-proxy.mprlab.com/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/docs/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
+  </url>
+  <url>
+    <loc>https://llm-proxy.mprlab.com/privacy/</loc>
+    <lastmod>2026-08-08</lastmod>
+  </url>
+  <url>
+    <loc>https://llm-proxy.mprlab.com/terms/</loc>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/server-side-provider-api-keys/</loc>
@@ -26,7 +34,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/self-service-llm-key-management/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/bring-your-own-provider-key-portal/</loc>
@@ -34,7 +42,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/canonical-v2-chat-messages-api/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/large-prompt-json-post/</loc>
@@ -46,7 +54,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/openai-background-response-polling/</loc>
@@ -86,7 +94,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/tauth-protected-management-api/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/generated-secret-rotation/</loc>
@@ -106,27 +114,27 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/gorm-managed-tenant-persistence/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/llm-proxy-client-authentication/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/go-client-v2-only-llm-proxy/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/python-client-v2-only-llm-proxy/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/installable-llm-proxy-cli/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/llm-response-formats-json-xml-csv-text/</loc>
@@ -166,7 +174,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/usage-metadata-without-prompts/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/copyable-llm-curl-examples/</loc>
@@ -174,7 +182,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/provider-specific-system-prompts/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/local-and-hosted-llm-proxy-config-profiles/</loc>
@@ -190,7 +198,7 @@
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/internal-ai-gateway-for-product-tools/</loc>
-    <lastmod>2026-08-06</lastmod>
+    <lastmod>2026-08-08</lastmod>
   </url>
   <url>
     <loc>https://llm-proxy.mprlab.com/resources/provider-overload-timeout-handling/</loc>

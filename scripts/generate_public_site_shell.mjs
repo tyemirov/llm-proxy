@@ -1,9 +1,16 @@
 // @ts-check
 
 import { readFile, writeFile } from "node:fs/promises";
-import { renderPublicFooter, renderPublicHeader } from "./public_site_shell.mjs";
+import {
+  assertMPRUIAuthAssets,
+  renderLandingHeader,
+  renderPublicFooter,
+} from "./public_site_shell.mjs";
 
-const LANDING_PATH = "site/index.html";
+const SHELL_TARGETS = Object.freeze([
+  Object.freeze({ path: "site/index.html", header: true, footer: true }),
+  Object.freeze({ path: "site/app/index.html", header: false, footer: true }),
+]);
 const CHECK_ARGUMENT = "--check";
 const HEADER_START = "    <!-- llm-proxy-public-header:start -->";
 const HEADER_END = "    <!-- llm-proxy-public-header:end -->";
@@ -15,22 +22,26 @@ if (unexpectedArguments.length > 0) {
   throw new Error(`public_site_shell_unknown_argument: ${unexpectedArguments.join(",")}`);
 }
 
-const source = await readFile(LANDING_PATH, "utf8");
-const rendered = replaceFragment(
-  replaceFragment(source, HEADER_START, HEADER_END, renderPublicHeader()),
-  FOOTER_START,
-  FOOTER_END,
-  renderPublicFooter(),
-);
-
-if (process.argv.includes(CHECK_ARGUMENT)) {
-  if (source !== rendered) {
-    throw new Error(`public_site_shell_out_of_date: run node scripts/generate_public_site_shell.mjs`);
+for (const target of SHELL_TARGETS) {
+  const source = await readFile(target.path, "utf8");
+  let rendered = source;
+  if (target.header) {
+    rendered = replaceFragment(rendered, HEADER_START, HEADER_END, renderLandingHeader());
   }
-  console.log(`verified shared public shell in ${LANDING_PATH}`);
-} else {
-  await writeFile(LANDING_PATH, rendered, "utf8");
-  console.log(`generated shared public shell in ${LANDING_PATH}`);
+  if (target.footer) {
+    rendered = replaceFragment(rendered, FOOTER_START, FOOTER_END, renderPublicFooter());
+  }
+  assertMPRUIAuthAssets(rendered, target.path);
+
+  if (process.argv.includes(CHECK_ARGUMENT)) {
+    if (source !== rendered) {
+      throw new Error(`public_site_shell_out_of_date: run node scripts/generate_public_site_shell.mjs`);
+    }
+    console.log(`verified shared public shell in ${target.path}`);
+  } else {
+    await writeFile(target.path, rendered, "utf8");
+    console.log(`generated shared public shell in ${target.path}`);
+  }
 }
 
 /**

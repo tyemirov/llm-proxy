@@ -16,11 +16,18 @@
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
-    <script defer src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Integrate once through one multi-provider LLM proxy","description":"Connect through one canonical API or official client, then select any supported text provider and model route without rebuilding the application integration.","url":"https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/","datePublished":"2026-07-06","dateModified":"2026-08-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/","about":["LLM Proxy","Provider routing","multi-provider LLM proxy"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Integrate once through one multi-provider LLM proxy","description":"Connect through one canonical API or official client, then select any supported text provider and model route without rebuilding the application integration.","url":"https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/","datePublished":"2026-07-06","dateModified":"2026-08-08","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/","about":["LLM Proxy","Provider routing","multi-provider LLM proxy"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Integrate once through one multi-provider LLM proxy","item":"https://llm-proxy.mprlab.com/resources/multi-provider-llm-proxy/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What changes when an application switches providers?","acceptedAnswer":{"@type":"Answer","text":"The caller changes the provider selector and optionally the model. POST /v2, tenant client-key authentication, messages, response formatting, and proxy status behavior remain on the same contract."}},{"@type":"Question","name":"Which official LLM Proxy clients are available?","acceptedAnswer":{"@type":"Answer","text":"The repository supplies a typed Go package, a synchronous Python package, and an installable Go command-line client. Direct HTTP callers use the same canonical POST /v2 operation."}},{"@type":"Question","name":"Can every model use every capability?","acceptedAnswer":{"@type":"Answer","text":"No. The generated model matrix publishes the exact capabilities declared for each supported route, and the proxy rejects unsupported route-capability combinations before provider dispatch."}},{"@type":"Question","name":"Does the supported catalog include an uptime or model-addition SLA?","acceptedAnswer":{"@type":"Answer","text":"The catalog states the current implemented routing contract. Provider lifecycle, model-onboarding time, and hosted availability are outside that contract pending a separately approved support and SLA policy."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Switch OpenAI, Claude, and Gemini behind one endpoint, which covers OpenAI Claude Gemini one endpoint."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
@@ -29,12 +36,17 @@
 
     <mpr-header
       class="public-site-header"
+      data-config-url="/config-ui.yaml"
       brand-label="LLM Proxy"
       brand-href="/"
+      logout-url="/"
       settings="false"
+      sign-in-label="Log In"
+      sign-in-redirect-url="/app/"
       size="small"
       sticky="true"
-      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"},{"label":"Log In","href":"/app/"}]}'
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
     >
       <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
         <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
@@ -55,7 +67,7 @@
             <h1>Integrate once through one multi-provider LLM proxy</h1>
             <p class="resource-deck">Connect through one canonical API or official client, then select any supported text provider and model route without rebuilding the application integration.</p>
             <p class="resource-audience">AI-assisted builders, startups, product teams, and platform groups that need model choice without repeated provider integrations.</p>
-            <p class="resource-byline">Reviewed 2026-08-06 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <aside class="resource-verdict" aria-label="Quick verdict">
               <strong>Quick verdict</strong>
               <p>Use one canonical messages integration when provider and model choice should remain a routing decision instead of becoming application architecture.</p>
@@ -168,7 +180,7 @@
           <section>
             <h2>Repository evidence</h2>
             <pre class="usage-snippet"><code>curl -X POST   &quot;https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_SECRET&amp;provider=gemini&quot;   -H &quot;Content-Type: application/json&quot;   -d '{&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Summarize this&quot;}]}'</code></pre>
-            <p>Verified 2026-08-06 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
+            <p>Verified 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
           </section>
 
           <section>
@@ -248,10 +260,37 @@
       class="public-site-footer"
       size="small"
       sticky="false"
-      prefix-text="LLM Proxy"
-      privacy-link-hidden="true"
-      horizontal-links='{"alignment":"right","links":[{"label":"Log In","href":"/app/"},{"label":"API","href":"/docs/"},{"label":"OpenAPI","href":"/docs/#openapi-schema"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
-    ></mpr-footer>
+      wrapper-class="public-site-footer-layout"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
 
   </body>
 </html>

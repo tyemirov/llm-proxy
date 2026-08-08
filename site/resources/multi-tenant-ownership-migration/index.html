@@ -16,11 +16,18 @@
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
-    <script defer src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Transactional multi-tenant account ownership migration","description":"Upgrade one-tenant-per-user state into explicit TAuth accounts and isolated personal tenants without changing opaque tenant ids.","url":"https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/","datePublished":"2026-07-06","dateModified":"2026-08-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/","about":["LLM Proxy","Configuration","multi-tenant ownership migration"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Transactional multi-tenant account ownership migration","description":"Upgrade one-tenant-per-user state into explicit TAuth accounts and isolated personal tenants without changing opaque tenant ids.","url":"https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/","datePublished":"2026-07-06","dateModified":"2026-08-08","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/","about":["LLM Proxy","Configuration","multi-tenant ownership migration"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Transactional multi-tenant account ownership migration","item":"https://llm-proxy.mprlab.com/resources/multi-tenant-ownership-migration/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What happens before the ownership migration writes data?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy preflights the complete legacy dataset and rejects missing, duplicate, orphaned, plaintext, corrupt, or non-canonical records before opening the mutation transaction."}},{"@type":"Question","name":"Which values remain stable through the migration?","acceptedAnswer":{"@type":"Answer","text":"The transaction preserves opaque tenant ids, secret digests, routing defaults, timestamps, and usage events while moving ownership into explicit account and tenant records."}},{"@type":"Question","name":"What makes the ownership update atomic?","acceptedAnswer":{"@type":"Answer","text":"Schema renames, current-table creation, record copies, verification, versioning, and legacy-table removal run in one database transaction. A failed stage rolls back and prevents startup."}},{"@type":"Question","name":"Can old and new service versions run concurrently?","acceptedAnswer":{"@type":"Answer","text":"No. Drain old instances, take a database backup, exercise the repository migration scenario, and start one new instance before adding capacity."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is LLM model catalog configuration in config.yml, which covers LLM model catalog configuration."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
@@ -29,12 +36,17 @@
 
     <mpr-header
       class="public-site-header"
+      data-config-url="/config-ui.yaml"
       brand-label="LLM Proxy"
       brand-href="/"
+      logout-url="/"
       settings="false"
+      sign-in-label="Log In"
+      sign-in-redirect-url="/app/"
       size="small"
       sticky="true"
-      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"},{"label":"Log In","href":"/app/"}]}'
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
     >
       <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
         <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
@@ -55,7 +67,7 @@
             <h1>Transactional multi-tenant account ownership migration</h1>
             <p class="resource-deck">Upgrade one-tenant-per-user state into explicit TAuth accounts and isolated personal tenants without changing opaque tenant ids.</p>
             <p class="resource-audience">Operators upgrading an existing management database to the multi-tenant ownership schema.</p>
-            <p class="resource-byline">Reviewed 2026-08-06 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <aside class="resource-verdict" aria-label="Quick verdict">
               <strong>Quick verdict</strong>
               <p>Use this bounded startup migration when an existing one-tenant-per-user database must become explicit account and tenant ownership without changing tenant identities or usage history.</p>
@@ -171,7 +183,7 @@ if preflightError != nil {
 	return preflightError
 }
 return database.Transaction(func(transaction *gorm.DB) error {</code></pre>
-            <p>Verified 2026-08-06 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>internal/proxy/management_store.go</code>.</p>
+            <p>Verified 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>internal/proxy/management_store.go</code>.</p>
           </section>
 
           <section>
@@ -251,10 +263,37 @@ return database.Transaction(func(transaction *gorm.DB) error {</code></pre>
       class="public-site-footer"
       size="small"
       sticky="false"
-      prefix-text="LLM Proxy"
-      privacy-link-hidden="true"
-      horizontal-links='{"alignment":"right","links":[{"label":"Log In","href":"/app/"},{"label":"API","href":"/docs/"},{"label":"OpenAPI","href":"/docs/#openapi-schema"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
-    ></mpr-footer>
+      wrapper-class="public-site-footer-layout"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
 
   </body>
 </html>

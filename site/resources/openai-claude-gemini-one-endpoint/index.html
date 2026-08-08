@@ -16,11 +16,18 @@
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
-    <script defer src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Switch OpenAI, Claude, and Gemini behind one endpoint","description":"Send one canonical messages request to supported OpenAI, Anthropic, or Gemini models while LLM Proxy owns each provider's native API contract.","url":"https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/","datePublished":"2026-07-06","dateModified":"2026-08-06","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/","about":["LLM Proxy","Provider routing","OpenAI Claude Gemini one endpoint"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Switch OpenAI, Claude, and Gemini behind one endpoint","description":"Send one canonical messages request to supported OpenAI, Anthropic, or Gemini models while LLM Proxy owns each provider's native API contract.","url":"https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/","datePublished":"2026-07-06","dateModified":"2026-08-08","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/","about":["LLM Proxy","Provider routing","OpenAI Claude Gemini one endpoint"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"Switch OpenAI, Claude, and Gemini behind one endpoint","item":"https://llm-proxy.mprlab.com/resources/openai-claude-gemini-one-endpoint/"}]}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Does the request body change between OpenAI, Claude, and Gemini?","acceptedAnswer":{"@type":"Answer","text":"The canonical POST /v2 messages body stays the same. LLM Proxy maps it into OpenAI Responses, Anthropic Messages, or Gemini Interactions according to the selected provider and model route."}},{"@type":"Question","name":"Can the application omit the model?","acceptedAnswer":{"@type":"Answer","text":"Yes. An omitted model uses the tenant default when provider is omitted or the selected provider's configured default when provider is explicit."}},{"@type":"Question","name":"Are capabilities identical across these providers?","acceptedAnswer":{"@type":"Answer","text":"No. Image input, audio input, web search, reasoning, output limits, and other capabilities remain exact to the selected catalog route."}},{"@type":"Question","name":"Where can a team compare the supported models?","acceptedAnswer":{"@type":"Answer","text":"The public landing page renders the complete current matrix from the same validated provider registry used by request routing."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Integrate once through one multi-provider LLM proxy, which covers multi-provider LLM proxy."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
@@ -29,12 +36,17 @@
 
     <mpr-header
       class="public-site-header"
+      data-config-url="/config-ui.yaml"
       brand-label="LLM Proxy"
       brand-href="/"
+      logout-url="/"
       settings="false"
+      sign-in-label="Log In"
+      sign-in-redirect-url="/app/"
       size="small"
       sticky="true"
-      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"},{"label":"Log In","href":"/app/"}]}'
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
     >
       <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
         <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
@@ -55,7 +67,7 @@
             <h1>Switch OpenAI, Claude, and Gemini behind one endpoint</h1>
             <p class="resource-deck">Send one canonical messages request to supported OpenAI, Anthropic, or Gemini models while LLM Proxy owns each provider's native API contract.</p>
             <p class="resource-audience">Startups and product teams comparing native model families without maintaining three product integrations.</p>
-            <p class="resource-byline">Reviewed 2026-08-06 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
+            <p class="resource-byline">Reviewed 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <aside class="resource-verdict" aria-label="Quick verdict">
               <strong>Quick verdict</strong>
               <p>Use one endpoint when model evaluation should change provider routing without introducing OpenAI, Anthropic, and Gemini contracts into product code.</p>
@@ -169,7 +181,7 @@
             <pre class="usage-snippet"><code>for provider in openai anthropic gemini; do
   curl -X POST     &quot;https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_SECRET&amp;provider=$provider&quot;     -H &quot;Content-Type: application/json&quot;     -d '{&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;Summarize this&quot;}]}'
 done</code></pre>
-            <p>Verified 2026-08-06 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
+            <p>Verified 2026-08-08 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a> against <code>README.md</code>.</p>
           </section>
 
           <section>
@@ -249,10 +261,37 @@ done</code></pre>
       class="public-site-footer"
       size="small"
       sticky="false"
-      prefix-text="LLM Proxy"
-      privacy-link-hidden="true"
-      horizontal-links='{"alignment":"right","links":[{"label":"Log In","href":"/app/"},{"label":"API","href":"/docs/"},{"label":"OpenAPI","href":"/docs/#openapi-schema"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
-    ></mpr-footer>
+      wrapper-class="public-site-footer-layout"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
 
   </body>
 </html>

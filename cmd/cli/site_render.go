@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -143,6 +144,7 @@ var (
 	siteRemove    = os.Remove
 	siteStat      = os.Stat
 	siteURLParse  = url.Parse
+	siteWalkDir   = filepath.WalkDir
 	siteWriteFile = os.WriteFile
 )
 
@@ -277,7 +279,7 @@ func writeRenderedSiteShell(outputDirectory string, configURL siteConfigURL, cap
 			return removeError
 		}
 	}
-	if indexError := writeRenderedManagementIndex(outputDirectory, configURL); indexError != nil {
+	if indexError := writeRenderedAuthConfigURLs(outputDirectory, configURL); indexError != nil {
 		return indexError
 	}
 	if catalogError := writeRenderedCapabilityCatalog(outputDirectory, capabilityCatalog); catalogError != nil {
@@ -297,20 +299,31 @@ func removeCopiedStaticConfig(outputDirectory string, fileName string) error {
 	return nil
 }
 
-func writeRenderedManagementIndex(outputDirectory string, configURL siteConfigURL) error {
-	outputPath := filepath.Join(outputDirectory, siteApplicationDirectory, siteIndexFileName)
-	indexBytes, readError := siteReadFile(outputPath)
-	if readError != nil {
-		return fmt.Errorf("%w: output=%s: %v", errSiteRenderFailed, outputPath, readError)
-	}
-	indexHTML := string(indexBytes)
-	if strings.Count(indexHTML, siteConfigURLSourceAttribute) != 1 {
-		return fmt.Errorf("%w: output=%s must contain exactly one %s", errSiteRenderFailed, outputPath, siteConfigURLSourceAttribute)
-	}
+func writeRenderedAuthConfigURLs(outputDirectory string, configURL siteConfigURL) error {
 	renderedAttribute := siteConfigURLAttribute + `="` + string(configURL) + `"`
-	renderedHTML := strings.Replace(indexHTML, siteConfigURLSourceAttribute, renderedAttribute, 1)
-	if writeError := siteWriteFile(outputPath, []byte(renderedHTML), renderedSiteFilePerm); writeError != nil {
-		return fmt.Errorf("%w: output=%s: %v", errSiteRenderFailed, outputPath, writeError)
+	walkError := siteWalkDir(outputDirectory, func(outputPath string, entry fs.DirEntry, entryError error) error {
+		if entryError != nil {
+			return entryError
+		}
+		if entry.IsDir() || filepath.Ext(outputPath) != ".html" {
+			return nil
+		}
+		indexBytes, readError := siteReadFile(outputPath)
+		if readError != nil {
+			return fmt.Errorf("output=%s: %v", outputPath, readError)
+		}
+		indexHTML := string(indexBytes)
+		if strings.Count(indexHTML, siteConfigURLSourceAttribute) != 1 {
+			return fmt.Errorf("output=%s must contain exactly one %s", outputPath, siteConfigURLSourceAttribute)
+		}
+		renderedHTML := strings.Replace(indexHTML, siteConfigURLSourceAttribute, renderedAttribute, 1)
+		if writeError := siteWriteFile(outputPath, []byte(renderedHTML), renderedSiteFilePerm); writeError != nil {
+			return fmt.Errorf("output=%s: %v", outputPath, writeError)
+		}
+		return nil
+	})
+	if walkError != nil {
+		return fmt.Errorf("%w: %v", errSiteRenderFailed, walkError)
 	}
 	return nil
 }

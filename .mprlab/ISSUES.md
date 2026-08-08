@@ -40,6 +40,243 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B114] (P1) {B111,B112,B113} Restore the single MPR UI authentication path and correct the shared public contract.
+  Goal:
+  Keep browser authentication fully owned by MPR UI while preserving the
+  authenticated landing redirect, shared responsive footer, and accurate
+  privacy disclosure.
+  Evidence:
+  - The generated shell loads `tauth.js` directly before `mpr-ui-config.js`,
+    creating an application-owned authentication bootstrap outside the
+    canonical `/config-ui.yaml` contract.
+  - The real browser test invokes the exposed TAuth credential-exchange global
+    instead of exercising the shared MPR UI login control.
+  - Narrow-screen footer CSS targets private `.mpr-footer__*` markup and
+    `data-mpr-footer` internals that are not part of the MPR UI DSL.
+  - The Privacy page says LLM Proxy cannot read HttpOnly authentication
+    cookies, although the backend receives and validates the configured session
+    cookie through TAuth's published `sessionvalidator`.
+  Requirements:
+  - Remove the direct TAuth browser script and every generated/static assertion
+    that requires or invokes its global API. Keep `/config-ui.yaml`,
+    `mpr-ui-config.js`, declarative MPR UI markup, and documented auth lifecycle
+    events as the only browser authentication path.
+  - Exercise interactive authentication through the visible MPR UI login
+    surface and retain real session restoration, refresh-cookie recovery,
+    authenticated landing replacement, and explicit logout coverage.
+  - Remove host styling and test selectors that depend on private MPR UI footer
+    markup. Configure the shared footer only through supported component
+    attributes and verify observable accessibility and geometry.
+  - State accurately that browser JavaScript cannot read HttpOnly cookies while
+    the backend receives and validates the session cookie only to authorize
+    protected LLM Proxy resources.
+  Validation:
+  - Static generation rejects direct `tauth.js` loading and private MPR UI
+    footer selectors across every generated page.
+  - Browser black-box coverage authenticates through the visible shared control
+    and proves the existing login, restore, refresh, route, and logout outcomes.
+  - Regenerated legal pages contain the corrected cookie boundary.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - All public and application pages now load only the canonical MPR UI
+    configuration and runtime. Shared-shell generation and Go/browser static
+    coverage reject any application-authored `tauth.js` bootstrap.
+  - The real browser black box activates the visible MPR UI login control,
+    receives real TAuth HttpOnly cookies through the seeded provider adapter,
+    opens `/app/`, restores and refreshes the session across navigation, and
+    signs out through the visible shared control without manual auth events or
+    application-owned TAuth calls.
+  - The footer uses MPR UI's supported `wrapper-class` attribute. Host CSS and
+    geometry assertions no longer depend on private MPR UI markup or data
+    attributes.
+  - The generated Privacy page now distinguishes the browser JavaScript cookie
+    boundary from backend authorization through TAuth's published validator,
+    and integration documentation describes MPR UI as the sole browser-auth
+    owner.
+  - The required baseline passed before implementation. The final CI run passed
+    all 11 gates in 99 seconds with 85 browser tests, 36 Python tests, the real
+    TAuth management black box, live-provider preflight, and exact 100% Go
+    statement coverage.
+
+- [x] [B113] (P1) {B111,B112,F019} Prevent authenticated sessions from rendering the anonymous landing page.
+  Goal:
+  Make `/` an anonymous-only route and `/app/` the only authenticated
+  application route, including when MPR UI restores an existing TAuth session.
+  Evidence:
+  - MPR UI restores the session and renders the authenticated user profile on
+    `/`, but `sign-in-redirect-url` intentionally runs only after an interactive
+    sign-in, so the public landing remains visible.
+  - Existing browser coverage proves interactive login and authenticated reload
+    only after the browser is already on `/app/`; it never opens `/` with an
+    authenticated or refresh-cookie-backed session.
+  Requirements:
+  - Register the landing route policy before the shared MPR UI bootstrap can
+    emit its authenticated lifecycle and replace `/` with `/app/` for every
+    documented `mpr-ui:auth:authenticated` event.
+  - Keep login, session restoration, refresh, cookies, and logout fully owned by
+    MPR UI and its internal TAuth integration. Do not add TAuth requests, cookie or
+    storage inspection, protected-API probes, or an application authentication
+    state machine.
+  - Keep interactive login from documentation, resource, privacy, and terms
+    pages on MPR UI's documented `sign-in-redirect-url` contract; authenticated
+    users may continue to read those public routes.
+  - Use history replacement for the authenticated landing transition so browser
+    Back and the authenticated brand link cannot reintroduce `/`.
+  Validation:
+  - Browser integration coverage proves anonymous `/` remains public,
+    interactive login replaces it with `/app/`, and a restored authenticated
+    visit to `/` cannot render or remain on the landing page.
+  - The real MPR UI/TAuth black box proves both access-cookie restoration and
+    refresh-cookie recovery from `/` replace the route with `/app/`, while
+    explicit sign out remains on anonymous `/`.
+  - Static coverage proves only the landing route owns the authenticated route
+    guard and all other public routes preserve the canonical interactive login.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - The generated landing header now registers one route-specific guard before
+    MPR UI bootstrap. It consumes the documented authenticated lifecycle and
+    replaces `/` with `/app/`; it performs no TAuth request, cookie inspection,
+    storage inspection, or session management.
+  - Documentation, resource, privacy, and terms routes retain MPR UI's
+    canonical `sign-in-redirect-url` for interactive login, while the landing
+    route has one authenticated redirect owner.
+  - Browser coverage proves anonymous landing access, history-replacing
+    interactive login, restored authenticated landing replacement, anonymous
+    application rejection, and shared-shell route ownership. The real
+    MPR UI/TAuth black box proves access-cookie restoration, refresh-cookie
+    recovery from `/`, and explicit logout back to the anonymous landing.
+  - Backend authorization remains on TAuth's published Go `sessionvalidator`;
+    no TAuth communication or validator was added to the LLM Proxy contract.
+  - The required baseline and final CI runs passed all 11 gates with 85 browser
+    tests, 36 Python tests, the real TAuth management black box, live-provider
+    preflight, and exact 100% Go statement coverage.
+
+- [x] [B112] (P1) {B111,F019} Restore the authenticated dashboard through the canonical MPR UI and TAuth session.
+  Goal:
+  Make successful public authentication open `/app/` and keep the user
+  authenticated across ordinary page refreshes while all browser-side TAuth
+  communication remains delegated to MPR UI.
+  Evidence:
+  - A real Google credential exchange returns `200` and the shared header shows
+    the authenticated profile, but the page remains on `/`.
+  - Browser `GET /auth/session` requests return `403`; the same endpoint returns
+    `204` only when a synthetic `Origin` header is added.
+  - Browser same-origin `GET` requests do not send `Origin`. MPR UI's TAuth
+    integration sends the configured `X-TAuth-Tenant` header, but the local TAuth
+    tenant-header override is disabled, so session restore cannot resolve the
+    tenant.
+  Requirements:
+  - Load the canonical MPR UI configuration and runtime on every auth-aware
+    public and application page. LLM Proxy must not load a separate TAuth
+    browser client or implement auth endpoint requests, credential exchange,
+    cookie handling, session restoration, refresh, logout, or auth redirect
+    recovery.
+  - Keep `/auth` and `/me` behind the local same-origin frontend proxy and make
+    the local TAuth profile resolve the explicit TAuth client tenant header.
+  - Verify startup with the exact MPR UI session request headers,
+    without a synthetic `Origin`, and keep nonce verification aligned with the
+    MPR UI request contract.
+  - Exercise the black-box browser flow through the same-origin auth proxy,
+    invoke credential exchange through the visible MPR UI control, prove the
+    shared-component post-auth redirect to `/app/`, and prove ordinary reload
+    plus refresh-cookie recovery remain authenticated.
+  - Keep backend request authorization on TAuth's published Go
+    `sessionvalidator`; LLM Proxy may enforce only its resource-specific
+    management invariants after validation.
+  Validation:
+  - Operational coverage rejects a local TAuth profile without explicit
+    tenant-header resolution and rejects readiness probes that hide the
+    browser request shape.
+  - The real MPR UI/TAuth black-box test uses MPR UI for login, session
+    restoration, refresh, and logout through the frontend
+    origin, verifies the session request headers, opens `/app/` after the
+    authenticated lifecycle, and survives refresh.
+  - Backend coverage exercises the published TAuth validator through the
+    protected management API boundary.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - Every auth-aware page now loads the canonical MPR UI configuration and
+    runtime. LLM Proxy application modules contain no separate TAuth client,
+    TAuth endpoint, cookie, storage, credential-exchange, restore, refresh,
+    logout, or redirect implementation.
+  - Local TAuth resolves MPR UI's explicit tenant header for same-origin
+    session requests, and startup verifies the exact client session and nonce
+    request shapes through the frontend proxy.
+  - The real browser black box now exchanges a seeded credential through the
+    visible MPR UI control, follows MPR UI's authenticated redirect to `/app/`,
+    restores the session after reload, recovers with the refresh cookie, and
+    signs out through the visible shared control.
+  - Backend authorization remains on TAuth's published Go `sessionvalidator`;
+    no second token parser or TAuth protocol was added to LLM Proxy.
+  - The required baseline and final CI runs passed. The final run passed all
+    11 gates in 97 seconds with 84 browser tests, 36 Python tests, the real
+    TAuth management black box, live-provider preflight, and exact 100% Go
+    statement coverage.
+
+- [x] [B111] (P1) {F019,P004,P005} Make public Log In authenticate directly and unify the site footer.
+  Goal:
+  Present LLM Proxy as one application by starting the canonical MPR UI/TAuth
+  login from every public page, opening `/app/` only after authentication, and
+  publishing one compact site footer across public, legal, and app surfaces.
+  Evidence:
+  - Public `Log In` controls are plain links to `/app/`, so an anonymous user
+    reaches a second screen that asks them to sign in again.
+  - The anonymous `/app/` panel duplicates the header authentication control
+    and makes the public site and authenticated workspace appear unrelated.
+  - Public pages hide the legal link while `/app/` renders a different footer;
+    `/privacy/` and `/terms/` are not published.
+  Requirements:
+  - Make the shared public MPR header the declarative `/config-ui.yaml` owner,
+    label its authentication action `Log In`, and redirect successful
+    interactive authentication to `/app/` through the documented MPR UI
+    contract.
+  - Redirect an anonymous direct `/app/` visit to `/` after the documented MPR
+    UI unauthenticated lifecycle event. Remove the anonymous app panel and do
+    not add application-owned session, token, cookie, or TAuth requests.
+  - Render one compact non-sticky footer on public pages, `/app/`, `/privacy/`,
+    and `/terms/`. Include Resources, Privacy, Terms, GitHub, and an active
+    `Built by Marco Polo Research Lab` drop-up with the maintained MPR project
+    catalog.
+  - Publish deterministic `/privacy/` and `/terms/` documents from one
+    repository-owned legal-page source with semantic static content and the
+    MPR legal-document component.
+  - Rewrite every generated auth-aware header to the absolute production API
+    config URL while preserving the local same-origin `/config-ui.yaml`
+    contract.
+  Validation:
+  - Browser integration coverage proves public `Log In` owns the interactive
+    authentication flow and redirects to `/app/` only after success.
+  - Browser coverage proves an anonymous direct `/app/` visit returns to `/`,
+    the obsolete anonymous panel is absent, and authenticated app startup still
+    waits for the documented MPR UI lifecycle.
+  - Static and hydrated coverage proves all published HTML surfaces use the
+    canonical header/footer, legal routes are present in the sitemap, and the
+    portfolio drop-up is keyboard accessible at desktop and mobile widths.
+  - The site-render contract proves every auth-aware generated page uses the
+    production API config URL.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - The canonical MPR header now owns public authentication and redirects to
+    `/app/` only after success. Anonymous direct app visits return to `/`, so
+    the duplicate sign-in screen and app-owned authentication path are gone;
+    static coverage rejects direct public `/app/` anchors.
+  - One generated non-sticky footer now publishes Resources, Privacy, Terms,
+    GitHub, the theme control, and the keyboard-accessible MPR project drop-up
+    across public, legal, resource, and authenticated app surfaces, with a
+    crawlable native fallback when JavaScript is unavailable.
+  - Deterministic Privacy and Terms pages now provide semantic fallback copy,
+    the MPR legal-document component, canonical metadata, and sitemap entries;
+    rendered auth config URLs are rewritten across every generated HTML page.
+  - The required baseline passed all 11 gates immediately before the final
+    correction. The final run passed all 11 gates in 100 seconds with 84
+    browser tests, 36 Python tests, the TAuth
+    black-box scenario, live-provider preflight, and exact 100% Go statement
+    coverage.
+
 - [x] [B110] (P1) {F019,B105,B109} Resolve the remaining public-site review correctness findings.
   Goal:
   Make the public-site validation and local cleanup contracts fail visibly when
@@ -3944,6 +4181,47 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Features
 
+- [ ] [F020] (P1) Design and implement low-level sampling controls in a new v3 API contract and provider adapters.
+  Goal:
+  Expose low-level LLM sampling parameters (temperature, top_p, presence_penalty, frequency_penalty) in a new v3 API contract, leaving the v2 schema frozen, and update llm-proxy-client CLI and Python SDK to support v3 request capabilities with native provider translation.
+
+  Requirements:
+  - Introduce a new v3 API endpoint contract (`/v3`) accepting an optional `sampling` block or top-level advanced fields without mutating the existing v2 schema:
+    ```json
+    {
+      "messages": [{"role": "user", "content": "..."}],
+      "model": "gpt-4o",
+      "web_search": false,
+      "max_tokens": 4096,
+      "reasoning_effort": "high",
+      "sampling": {
+        "temperature": 0.8,
+        "top_p": 0.95,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0
+      }
+    }
+    ```
+  - Translate sampling parameters across provider adapters:
+    - **OpenAI**: `temperature`, `top_p`, `presence_penalty`, `frequency_penalty`.
+    - **Anthropic**: `temperature`, `top_p` (omit unsupported penalties).
+    - **Google Gemini**: `generationConfig.temperature`, `generationConfig.topP`, `generationConfig.presencePenalty`, `generationConfig.frequencyPenalty`.
+    - **DeepSeek / OpenAI-compatible**: `temperature`, `top_p`, `presence_penalty`, `frequency_penalty`.
+  - Handle reasoning models (`o1`, `o3-mini`, `gpt-5-reasoning`, `kimi-k3`) by omitting unsupported sampling fields automatically server-side while preserving `reasoning_effort`.
+  - Expose CLI flags in llm-proxy-client (`--temperature`, `--top-p`, `--presence-penalty`, `--frequency-penalty`) targeting `/v3`, and update Python/Node.js client SDKs.
+
+  Deliverables:
+  - New v3 endpoint route (`/v3`) and request schemas in `router.go`, `chat_messages.go`, and `pkg/llmproxyclient`.
+  - Updated provider adapters (`openai.go`, `anthropic.go`, `gemini.go`, `openai_compatible_chat.go`) translating sampling parameters.
+  - Added CLI flags to `llm-proxy-client/main.go` and Python client package supporting v3 requests.
+  - Comprehensive unit, contract, and end-to-end integration tests verifying v3 parameter translation and fallback behavior.
+
+  Validation:
+  - Unit tests prove JSON serialization/deserialization and range validation (`0.0 <= temperature <= 2.0`, `0.0 <= top_p <= 1.0`, etc.).
+  - Provider routing tests verify exact JSON transformation into OpenAI, Anthropic, Gemini, and DeepSeek request bodies.
+  - CLI tests confirm `--temperature`, `--top-p`, `--presence-penalty`, and `--frequency-penalty` flags correctly send v3 payloads while v2 regression tests pass cleanly.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
 - [ ] [F018] (P1) Redesign dashboard around unified graphs and provider cards.
   Goal:
   Simplify the app UI by making the dashboard the primary place for unified graphs and provider configuration, reducing or eliminating the need for a separate settings area.
@@ -4528,7 +4806,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     integrity before publication.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
-- [ ] [P004] (P1) {F019,P003} Make Resources an always-available footer surface and enforce the resource-page shell.
+- [x] [P004] (P1) {F019,P003} Make Resources an always-available footer surface and enforce the resource-page shell.
   Goal:
   Make the public Resources entry point continuously discoverable from the
   shared footer, and make every public resource page use one unambiguous
@@ -4578,7 +4856,16 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     and noindex pages out of resource navigation.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
-- [ ] [P005] (P1) {F019,P004} Normalize public Privacy and Terms pages using PoodleScanner's legal-page contract as the structural reference.
+  Resolution:
+  - The deterministic shared shell now gives every public route a crawlable
+    no-JavaScript `/resources/` footer link and canonical header-main-footer
+    ordering.
+  - Generator checks and browser coverage enforce the shared shell, canonical
+    resource target, safe public navigation, and responsive desktop/mobile
+    layout across the landing page, hub, and generated resource pages.
+  - B111's required baseline and final CI runs provide the implementation
+    validation; the final run passed all 11 gates in 100 seconds.
+- [x] [P005] (P1) {F019,P004} Normalize public Privacy and Terms pages using PoodleScanner's legal-page contract as the structural reference.
   Goal:
   Give LLM Proxy one coherent, public legal-page experience: canonical Privacy
   and Terms pages with LLM Proxy-specific, evidence-backed content, a readable
@@ -4652,3 +4939,12 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     are not tied to an approved source.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
+  Resolution:
+  - One repository-owned legal source now generates canonical `/privacy/` and
+    `/terms/` pages with route-specific metadata, effective/updated dates,
+    semantic static fallback content, and the current MPR legal component.
+  - The policies use verified LLM Proxy storage, usage, authentication,
+    provider, Google Analytics, and LoopAware boundaries plus the canonical MPR
+    legal profile; shared footer links and sitemap discovery stay synchronized.
+  - Static, hydrated, narrow-screen, link, generation, and TAuth browser
+    coverage passed in B111's final 11-gate CI run in 100 seconds.

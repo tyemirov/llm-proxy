@@ -1,6 +1,6 @@
 # LLM Proxy SEO Resource Cluster Report
 
-Generated: 2026-08-06
+Generated: 2026-08-08
 
 ## Repo Analysis Report
 
@@ -149,22 +149,22 @@ Generated: 2026-08-06
 
 | Page | Allowed claims | Forbidden claims | Differentiation | Repository evidence | CTA | Canonical path | Significant update |
 |---|---|---|---|---|---|---|---|
-| Integrate once through one multi-provider LLM proxy | One canonical POST /v2 contract, direct HTTP, official Go, Python, and CLI clients, explicit supported-route selection, server-side provider credentials, and a generated current capability matrix. | Universal upstream feature parity, automatic fallback, benchmark leadership, savings, provider longevity, model-onboarding time, or hosted uptime guarantees. | This is the integrate-once cornerstone: it explains how the client contract stays stable while provider and model routing change. | README.md, verified 2026-08-06 | Compare integration options | /resources/multi-provider-llm-proxy/ | 2026-08-06 |
-| Switch OpenAI, Claude, and Gemini behind one endpoint | One canonical messages body, native OpenAI Responses, Anthropic Messages, and Gemini Interactions adapters, explicit route selection, blocking caller behavior, and current catalog validation. | Identical upstream behavior, identical capabilities, provider performance rankings, automatic fallback, availability guarantees, or universal model access. | This page is a concrete three-provider comparison for product teams; it explains which contract stays shared and which behavior remains route-specific. | README.md, verified 2026-08-06 | Explore supported models | /resources/openai-claude-gemini-one-endpoint/ | 2026-08-06 |
-| Transactional multi-tenant account ownership migration | Bounded preflight, atomic migration, preserved tenant ids and usage, and tenant-bound provider-key re-encryption. | Performance, pricing, compliance, benchmark, and zero-downtime claims. | Operator runbook for the one-tenant-per-user ownership upgrade, distinct from general GORM persistence guidance. | internal/proxy/management_store.go, verified 2026-08-06 | Read the migration runbook | /resources/multi-tenant-ownership-migration/ | 2026-08-06 |
-| Internal AI gateway for durable product integrations | One tenant-client-key boundary, canonical messages integration, server-side provider keys, managed routing defaults, route validation, official clients, and content-free usage summaries. | Complete AI governance, compliance certification, data residency, procurement guarantees, hosted availability, or replacement of organizational security controls. | This page addresses institutional ownership and operating boundaries across many applications rather than provider comparison or individual developer setup. | README.md, verified 2026-08-06 | Read the authentication guide | /resources/internal-ai-gateway-for-product-tools/ | 2026-08-06 |
+| Integrate once through one multi-provider LLM proxy | One canonical POST /v2 contract, direct HTTP, official Go, Python, and CLI clients, explicit supported-route selection, server-side provider credentials, and a generated current capability matrix. | Universal upstream feature parity, automatic fallback, benchmark leadership, savings, provider longevity, model-onboarding time, or hosted uptime guarantees. | This is the integrate-once cornerstone: it explains how the client contract stays stable while provider and model routing change. | README.md, verified 2026-08-08 | Compare integration options | /resources/multi-provider-llm-proxy/ | 2026-08-08 |
+| Switch OpenAI, Claude, and Gemini behind one endpoint | One canonical messages body, native OpenAI Responses, Anthropic Messages, and Gemini Interactions adapters, explicit route selection, blocking caller behavior, and current catalog validation. | Identical upstream behavior, identical capabilities, provider performance rankings, automatic fallback, availability guarantees, or universal model access. | This page is a concrete three-provider comparison for product teams; it explains which contract stays shared and which behavior remains route-specific. | README.md, verified 2026-08-08 | Explore supported models | /resources/openai-claude-gemini-one-endpoint/ | 2026-08-08 |
+| Transactional multi-tenant account ownership migration | Bounded preflight, atomic migration, preserved tenant ids and usage, and tenant-bound provider-key re-encryption. | Performance, pricing, compliance, benchmark, and zero-downtime claims. | Operator runbook for the one-tenant-per-user ownership upgrade, distinct from general GORM persistence guidance. | internal/proxy/management_store.go, verified 2026-08-08 | Read the migration runbook | /resources/multi-tenant-ownership-migration/ | 2026-08-08 |
+| Internal AI gateway for durable product integrations | One tenant-client-key boundary, canonical messages integration, server-side provider keys, managed routing defaults, route validation, official clients, and content-free usage summaries. | Complete AI governance, compliance certification, data residency, procurement guarantees, hosted availability, or replacement of organizational security controls. | This page addresses institutional ownership and operating boundaries across many applications rather than provider comparison or individual developer setup. | README.md, verified 2026-08-08 | Read the authentication guide | /resources/internal-ai-gateway-for-product-tools/ | 2026-08-08 |
 
 ## Site Integration And Discoverability
 
-- The main page links to integration guides, audience resources, /docs/, the generated model matrix, /app/, and /resources/ through crawlable anchors in public HTML.
+- The main page links to integration guides, audience resources, /docs/, the generated model matrix, and /resources/ through crawlable anchors; the shared MPR header owns authenticated entry to /app/.
 - The /resources/ hub leads with HTTP, Go, Python, and CLI integration paths, routes three audience needs into differentiated existing guides, and links every generated page by category.
 - Every resource page carries author attribution and links to the derived API reference, /resources/, the shared public shell, and related resources; /docs/ exposes view and download actions for the exact OpenAPI schema.
-- sitemap.xml lists /, /docs/, /resources/, and all 46 page URLs with the same trailing-slash canonical form used in internal links.
+- sitemap.xml lists /, /docs/, /resources/, /privacy/, /terms/, and all 46 resource URLs with the same trailing-slash canonical form used in internal links.
 - robots.txt allows crawling and references the sitemap.
 
 ## Evaluation Report
 
-Independent quality and risk evaluation: 2026-08-06
+Independent quality and risk evaluation: 2026-08-08
 
 | Category | Score | Notes |
 |---|---:|---|

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Terms of Service - LLM Proxy</title>
+    <meta name="description" content="Terms governing account access, provider credentials, model requests, and use of LLM Proxy.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/terms/">
+    <meta property="og:title" content="Terms of Service - LLM Proxy">
+    <meta property="og:description" content="Terms governing account access, provider credentials, model requests, and use of LLM Proxy.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/terms/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0f1114">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
+    <link rel="stylesheet" href="/assets/llm-proxy/legal.css">
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
+  </head>
+  <body class="legal-page">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <mpr-header
+      class="public-site-header"
+      data-config-url="/config-ui.yaml"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      logout-url="/"
+      settings="false"
+      sign-in-label="Log In"
+      sign-in-redirect-url="/app/"
+      size="small"
+      sticky="true"
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
+    <main id="main-content" class="legal-main">
+      <mpr-legal-document
+        type="terms"
+        title="Terms of Service - LLM Proxy"
+        product-name="LLM Proxy"
+        service-description="LLM Proxy provides authenticated model routing, provider credential management, tenant configuration, and usage visibility."
+        service-data-description="account identity, tenant configuration, encrypted provider credentials, client-secret digests, routing settings, request content processed in transit, and content-free usage records"
+        effective-date="2026-08-08"
+        effective-date-text="August 8, 2026"
+        last-updated-date="2026-08-08"
+        privacy-path="/privacy/"
+        terms-path="/terms/"
+        sections='[{&quot;id&quot;:&quot;eligibility&quot;,&quot;heading&quot;:&quot;1. Eligibility and Account Use&quot;,&quot;paragraphs&quot;:[],&quot;list&quot;:[&quot;You must be legally able to enter into contracts to use LLM Proxy.&quot;,&quot;If you use LLM Proxy for an organization, you confirm that you have authority to bind that organization.&quot;,&quot;You are responsible for account access and activity performed through your account and generated client secrets.&quot;]},{&quot;id&quot;:&quot;service&quot;,&quot;heading&quot;:&quot;2. Service&quot;,&quot;paragraphs&quot;:[&quot;LLM Proxy provides authenticated model routing, provider credential management, tenant configuration, and usage visibility.&quot;,&quot;Provider availability, model behavior, response quality, limits, and latency depend in part on third-party services and the configuration selected for the tenant.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;credentials&quot;,&quot;heading&quot;:&quot;3. Credentials and Third-Party Services&quot;,&quot;paragraphs&quot;:[&quot;You are responsible for supplying authorized provider credentials, protecting generated client secrets, and complying with the terms of each selected model provider. LLM Proxy may transmit requests and credentials to those providers only as needed to perform the requested operation.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;acceptable-use&quot;,&quot;heading&quot;:&quot;4. Acceptable Use&quot;,&quot;paragraphs&quot;:[],&quot;list&quot;:[&quot;Use LLM Proxy only for lawful purposes.&quot;,&quot;Do not attempt unauthorized access, interfere with service availability or security, distribute malicious code, or evade provider or service limits.&quot;,&quot;Do not submit content or direct processing that violates applicable law, third-party rights, or provider terms.&quot;]},{&quot;id&quot;:&quot;content&quot;,&quot;heading&quot;:&quot;5. Request Content and Outputs&quot;,&quot;paragraphs&quot;:[&quot;You retain rights you hold in request content. You grant us the limited right to process that content to route the request, return the response, secure the service, and troubleshoot the requested operation.&quot;,&quot;Model outputs may be incomplete, inaccurate, or unsuitable for a particular purpose. You are responsible for reviewing outputs before relying on or publishing them.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;availability&quot;,&quot;heading&quot;:&quot;6. Availability and Changes&quot;,&quot;paragraphs&quot;:[&quot;We may update, suspend, limit, or discontinue features to maintain security, reliability, provider compatibility, or legal compliance. We do not guarantee uninterrupted availability of LLM Proxy or any third-party provider or model.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;intellectual-property&quot;,&quot;heading&quot;:&quot;7. Intellectual Property&quot;,&quot;paragraphs&quot;:[&quot;LLM Proxy software, design, documentation, and related materials are owned by Marco Polo Research Lab LLC or its licensors and are protected by applicable intellectual property laws.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;disclaimers&quot;,&quot;heading&quot;:&quot;8. Disclaimers&quot;,&quot;paragraphs&quot;:[&quot;LLM Proxy is provided as is and as available without warranties of any kind to the maximum extent permitted by law. Model responses are generated by third-party services and are not professional, legal, medical, or financial advice.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;liability&quot;,&quot;heading&quot;:&quot;9. Limitation of Liability&quot;,&quot;paragraphs&quot;:[&quot;To the maximum extent permitted by law, Marco Polo Research Lab LLC is not liable for indirect, incidental, special, consequential, exemplary, or punitive damages, or for lost profits, revenue, data, or goodwill arising from LLM Proxy.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;termination&quot;,&quot;heading&quot;:&quot;10. Suspension and Termination&quot;,&quot;paragraphs&quot;:[&quot;We may suspend or terminate access when use violates these Terms, creates legal or security risk, or threatens LLM Proxy or another user. You may stop using LLM Proxy at any time.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;changes&quot;,&quot;heading&quot;:&quot;11. Changes to These Terms&quot;,&quot;paragraphs&quot;:[&quot;We may update these Terms by publishing a revised version with a new effective date. Continued use after the effective date means you accept the revised Terms.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;governing-law&quot;,&quot;heading&quot;:&quot;12. Governing Law&quot;,&quot;paragraphs&quot;:[&quot;These Terms are governed by the laws of the State of California, without regard to conflict-of-law rules. Except where applicable law requires otherwise, disputes will be resolved in state or federal courts located in Los Angeles County, California.&quot;],&quot;list&quot;:[]},{&quot;id&quot;:&quot;contact&quot;,&quot;heading&quot;:&quot;13. Contact&quot;,&quot;paragraphs&quot;:[&quot;For support, email support@mprlab.com. For legal notices or questions about these Terms, email legal@mprlab.com. Marco Polo Research Lab LLC can also be reached through https://mprlab.com.&quot;],&quot;list&quot;:[]}]'
+      >
+        <article class="mpr-legal-document__card">
+          <h1 class="mpr-legal-document__title">Terms of Service - LLM Proxy</h1>
+          <p class="mpr-legal-document__meta"><strong>Effective Date:</strong> <time datetime="2026-08-08">August 8, 2026</time> · <strong>Last Updated:</strong> <time datetime="2026-08-08">August 8, 2026</time></p>
+        <p class="mpr-legal-document__intro">These Terms of Service form an agreement between you and Marco Polo Research Lab LLC for access to and use of LLM Proxy.</p>
+        <p class="mpr-legal-document__intro">By using LLM Proxy, you agree to these Terms and the current Privacy Policy.</p>
+          <section id="eligibility" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">1. Eligibility and Account Use</h2>
+
+            <ul class="mpr-legal-document__list">
+              <li class="mpr-legal-document__list-item">You must be legally able to enter into contracts to use LLM Proxy.</li>
+              <li class="mpr-legal-document__list-item">If you use LLM Proxy for an organization, you confirm that you have authority to bind that organization.</li>
+              <li class="mpr-legal-document__list-item">You are responsible for account access and activity performed through your account and generated client secrets.</li>
+            </ul>
+          </section>
+          <section id="service" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">2. Service</h2>
+            <p class="mpr-legal-document__paragraph">LLM Proxy provides authenticated model routing, provider credential management, tenant configuration, and usage visibility.</p>
+            <p class="mpr-legal-document__paragraph">Provider availability, model behavior, response quality, limits, and latency depend in part on third-party services and the configuration selected for the tenant.</p>
+          </section>
+          <section id="credentials" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">3. Credentials and Third-Party Services</h2>
+            <p class="mpr-legal-document__paragraph">You are responsible for supplying authorized provider credentials, protecting generated client secrets, and complying with the terms of each selected model provider. LLM Proxy may transmit requests and credentials to those providers only as needed to perform the requested operation.</p>
+          </section>
+          <section id="acceptable-use" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">4. Acceptable Use</h2>
+
+            <ul class="mpr-legal-document__list">
+              <li class="mpr-legal-document__list-item">Use LLM Proxy only for lawful purposes.</li>
+              <li class="mpr-legal-document__list-item">Do not attempt unauthorized access, interfere with service availability or security, distribute malicious code, or evade provider or service limits.</li>
+              <li class="mpr-legal-document__list-item">Do not submit content or direct processing that violates applicable law, third-party rights, or provider terms.</li>
+            </ul>
+          </section>
+          <section id="content" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">5. Request Content and Outputs</h2>
+            <p class="mpr-legal-document__paragraph">You retain rights you hold in request content. You grant us the limited right to process that content to route the request, return the response, secure the service, and troubleshoot the requested operation.</p>
+            <p class="mpr-legal-document__paragraph">Model outputs may be incomplete, inaccurate, or unsuitable for a particular purpose. You are responsible for reviewing outputs before relying on or publishing them.</p>
+          </section>
+          <section id="availability" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">6. Availability and Changes</h2>
+            <p class="mpr-legal-document__paragraph">We may update, suspend, limit, or discontinue features to maintain security, reliability, provider compatibility, or legal compliance. We do not guarantee uninterrupted availability of LLM Proxy or any third-party provider or model.</p>
+          </section>
+          <section id="intellectual-property" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">7. Intellectual Property</h2>
+            <p class="mpr-legal-document__paragraph">LLM Proxy software, design, documentation, and related materials are owned by Marco Polo Research Lab LLC or its licensors and are protected by applicable intellectual property laws.</p>
+          </section>
+          <section id="disclaimers" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">8. Disclaimers</h2>
+            <p class="mpr-legal-document__paragraph">LLM Proxy is provided as is and as available without warranties of any kind to the maximum extent permitted by law. Model responses are generated by third-party services and are not professional, legal, medical, or financial advice.</p>
+          </section>
+          <section id="liability" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">9. Limitation of Liability</h2>
+            <p class="mpr-legal-document__paragraph">To the maximum extent permitted by law, Marco Polo Research Lab LLC is not liable for indirect, incidental, special, consequential, exemplary, or punitive damages, or for lost profits, revenue, data, or goodwill arising from LLM Proxy.</p>
+          </section>
+          <section id="termination" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">10. Suspension and Termination</h2>
+            <p class="mpr-legal-document__paragraph">We may suspend or terminate access when use violates these Terms, creates legal or security risk, or threatens LLM Proxy or another user. You may stop using LLM Proxy at any time.</p>
+          </section>
+          <section id="changes" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">11. Changes to These Terms</h2>
+            <p class="mpr-legal-document__paragraph">We may update these Terms by publishing a revised version with a new effective date. Continued use after the effective date means you accept the revised Terms.</p>
+          </section>
+          <section id="governing-law" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">12. Governing Law</h2>
+            <p class="mpr-legal-document__paragraph">These Terms are governed by the laws of the State of California, without regard to conflict-of-law rules. Except where applicable law requires otherwise, disputes will be resolved in state or federal courts located in Los Angeles County, California.</p>
+          </section>
+          <section id="contact" class="mpr-legal-document__section">
+            <h2 class="mpr-legal-document__heading">13. Contact</h2>
+            <p class="mpr-legal-document__paragraph">For support, email support@mprlab.com. For legal notices or questions about these Terms, email legal@mprlab.com. Marco Polo Research Lab LLC can also be reached through https://mprlab.com.</p>
+          </section>
+        </article>
+      </mpr-legal-document>
+    </main>
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="false"
+      wrapper-class="public-site-footer-layout"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
+  </body>
+</html>

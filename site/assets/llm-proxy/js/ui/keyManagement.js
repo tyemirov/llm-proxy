@@ -10,6 +10,7 @@ import {
   NOTICE_AUTO_DISMISS_MILLISECONDS,
   NOTICE_KINDS,
   PROVIDER_KEY_VERIFICATION_ERRORS,
+  PUBLIC_SITE_PATH,
   ROUTING_DEFAULTS_INVALID_ERROR,
   USAGE_ENDPOINT_LABELS,
   USAGE_FAILURE_PAGE_LIMIT,
@@ -17,7 +18,7 @@ import {
   USAGE_OUTCOME_LABELS,
   USAGE_STATUS_LABELS,
   APP_INTEGRITY_ERROR,
-} from "../constants.js?v=20260806b110";
+} from "../constants.js?v=20260808b111";
 import {
   BackendClientError,
   createTenant as requestCreateTenant,
@@ -36,7 +37,7 @@ import {
   revealProviderKey as requestRevealProviderKey,
   saveProviderKey as requestSaveProviderKey,
   updateDefaults as requestUpdateDefaults,
-} from "../core/backendClient.js?v=20260806b110";
+} from "../core/backendClient.js?v=20260808b111";
 import {
   emptyUsageSummary,
   modelRows,
@@ -45,13 +46,13 @@ import {
   usagePolyline,
   USAGE_CHART,
   USAGE_METRICS,
-} from "./usagePresentation.js?v=20260806b110";
+} from "./usagePresentation.js?v=20260808b111";
 import {
   applyUserMenuItems,
   readMprUIAuthStatus,
   waitForMprUIAutoOrchestrationReady,
-} from "../core/mprShell.js?v=20260806b110";
-import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260806b110";
+} from "../core/mprShell.js?v=20260808b111";
+import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260808b111";
 
 const EMPTY_SECRET_PLACEHOLDER = "<generated-secret>";
 const EMPTY_STRING = "";
@@ -1156,8 +1157,7 @@ export function createKeyManagement() {
       }
       this.clearAuthenticatedState();
       this.authState = AUTH_STATES.UNAUTHENTICATED;
-      this.setNotice(NOTICE_KINDS.INFO, COPY.authenticationRequired);
-      dispatchManagementReady();
+      window.location.replace(PUBLIC_SITE_PATH);
     },
 
     async refreshDashboard() {
