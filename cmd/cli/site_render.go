@@ -71,7 +71,7 @@ const siteCapabilityCatalogTemplate = `<capability-catalog data-enhanced="false"
       <tbody data-catalog-body>
         {{range .Models}}<tr data-catalog-row data-provider="{{.ProviderIdentifier}}" data-model="{{.Identifier}}" data-capabilities="{{.CapabilityIdentifiers}}" data-capability-count="{{len .Capabilities}}" data-catalog-search-text="{{.SearchText}}">
           <td class="catalog-provider"><strong>{{.ProviderLabel}}</strong><code>{{.ProviderIdentifier}}</code></td>
-          <td class="catalog-model"><code data-catalog-model-id>{{.Identifier}}</code>{{range .Defaults}}<span class="catalog-model__default" title="{{.Description}}">{{.Label}}</span>{{end}}</td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>{{.Identifier}}</code>{{range .Defaults}}<span class="catalog-model__default" title="{{.Description}}">{{.Label}}</span>{{end}}</span></td>
           <td><div class="catalog-capabilities">
             {{range .Capabilities}}<button type="button" class="capability-badge {{.ClassName}}" aria-label="Filter by {{.Label}}" data-catalog-capability-action="{{.Identifier}}" disabled>{{.Label}}</button>{{end}}
           </div>
