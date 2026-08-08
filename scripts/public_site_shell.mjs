@@ -94,7 +94,7 @@ export function renderPublicFooter() {
   return `    <mpr-footer
       class="public-site-footer"
       size="small"
-      sticky="false"
+      sticky="true"
       wrapper-class="public-site-footer-layout"
       privacy-link-label="Privacy"
       privacy-link-href="/privacy/"
