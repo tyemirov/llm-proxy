@@ -223,7 +223,7 @@ routing-tree {
   display: block;
   position: relative;
   min-width: 0;
-  min-height: 630px;
+  min-height: 670px;
   overflow: hidden;
   border: 1px solid var(--border-strong);
   border-radius: 18px;
@@ -259,7 +259,7 @@ routing-tree {
 .routing-tree__map {
   position: relative;
   display: grid;
-  min-height: 570px;
+  min-height: 610px;
   padding: 0.75rem 1.25rem 0.95rem;
   grid-template-columns: minmax(355px, 400px) minmax(190px, 220px) minmax(0, 1fr);
   grid-template-areas:
@@ -427,7 +427,7 @@ routing-tree {
 }
 
 .routing-tree__model-group {
-  width: min(100%, 560px);
+  width: min(100%, 280px);
 }
 
 .routing-tree__model-group > p {
@@ -452,7 +452,7 @@ routing-tree {
 }
 
 .routing-tree__model-branches {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.42rem;
 }
 
