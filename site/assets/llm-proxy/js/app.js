@@ -1,9 +1,9 @@
 // @ts-check
 
-import { RUNTIME_UI } from "./constants.js?v=20260808b111";
-import { initializeMprShell } from "./core/mprShell.js?v=20260808b111";
-import { failApplicationStartup } from "./ui/applicationStartup.js?v=20260808b111";
-import { createKeyManagement } from "./ui/keyManagement.js?v=20260808b111";
+import { RUNTIME_UI } from "./constants.js?v=20260809i217";
+import { initializeMprShell } from "./core/mprShell.js?v=20260809i217";
+import { failApplicationStartup } from "./ui/applicationStartup.js?v=20260809i217";
+import { createManagementApplication } from "./ui/managementApplication.js?v=20260809i217";
 
 initializeMprShell();
 
@@ -27,7 +27,7 @@ function startApplication() {
     return;
   }
 
-  alpineRuntime.Alpine.data("llmProxyKeyManagement", createKeyManagement);
+  alpineRuntime.Alpine.data("llmProxyManagementApplication", createManagementApplication);
   alpineRuntime.Alpine.start();
   document.documentElement.setAttribute(RUNTIME_UI.APPLICATION_READY_ATTRIBUTE, "ready");
 }

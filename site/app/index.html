@@ -16,7 +16,7 @@
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,key,visibility,visibility_off&amp;display=block">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,help,key,visibility,visibility_off&amp;display=block">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
@@ -28,11 +28,11 @@
       type="application/json"
       data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
     ></script>
-    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260808b111"></script>
-    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260808b111"></script>
+    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260809i217"></script>
+    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260809i217"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
-  <body x-data="llmProxyKeyManagement" x-init="init()">
+  <body x-data="llmProxyManagementApplication" x-init="init()">
     <mpr-header
       id="llm-proxy-header"
       data-config-url="/config-ui.yaml"
@@ -45,7 +45,7 @@
       <notification-region
         slot="aux"
         x-cloak
-        x-show="notice.message"
+        x-show="notice.message && notice.surface === noticeSurfaces.HEADER"
         role="status"
         aria-live="polite"
         aria-atomic="true"
@@ -72,7 +72,7 @@
         <button id="llm-proxy-runtime-failure-reload" class="resource-button" type="button"></button>
       </section>
 
-      <llm-proxy-key-management x-bind:data-auth-state="authState">
+      <llm-proxy-management-application x-bind:data-auth-state="authState">
         <section class="llm-panel" x-cloak x-show="authState === states.loading">
           <p class="eyebrow" x-text="copy.loadingEyebrow"></p>
           <h1 x-text="copy.loadingTitle"></h1>
@@ -409,6 +409,16 @@
               >
                 <header class="settings-header">
                   <p id="settings-title" class="eyebrow" x-text="copy.settingsEyebrow"></p>
+                  <notification-region
+                    class="settings-notification"
+                    x-cloak
+                    x-show="notice.message && notice.surface === noticeSurfaces.SETTINGS"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                  >
+                    <p class="notice" x-bind:data-kind="notice.kind" x-text="notice.message"></p>
+                  </notification-region>
                   <button type="button" class="icon-only settings-close" x-ref="settingsClose" x-on:mousedown.prevent x-on:click="closeSettings()" x-bind:disabled="settingsClosePending || providerKeyVerificationPending" x-bind:title="copy.closeSettings" x-bind:aria-label="copy.closeSettings">
                     <svg class="utility-icon close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">
                       <path d="M6 6l12 12"></path>
@@ -530,10 +540,28 @@
                     <header class="section-header compact">
                       <div>
                         <p class="eyebrow" x-text="copy.defaultsEyebrow"></p>
-                        <h2 x-text="copy.defaultsTitle"></h2>
+                        <div class="settings-title-with-help">
+                          <h2 x-text="copy.defaultsTitle"></h2>
+                          <help-tooltip>
+                            <button
+                              type="button"
+                              class="help-tooltip-trigger"
+                              x-bind:aria-label="copy.routingDefaultsHelpLabel"
+                              aria-describedby="routing-defaults-help"
+                            >
+                              <span class="material-symbols-outlined" aria-hidden="true">help</span>
+                            </button>
+                            <span
+                              id="routing-defaults-help"
+                              class="help-tooltip-content"
+                              role="tooltip"
+                              x-text="copy.routingDefaultsHelp"
+                            ></span>
+                          </help-tooltip>
+                        </div>
                       </div>
                     </header>
-                    <form class="settings-grid-form" x-bind:aria-busy="routingDefaultsAutosavePending">
+                    <form class="settings-grid-form" x-bind:aria-busy="routingProviderSelectionPending || routingDefaultsAutosavePending">
                       <div class="text-routing-controls">
                         <label>
                           <span x-text="copy.textProvider"></span>
@@ -684,14 +712,32 @@
                               <button type="button" x-on:click="retrySelectedProviderKeyVerification()" x-bind:disabled="settingsControlsDisabled" x-text="copy.providerKeyRetry"></button>
                             </provider-key-verification-error>
                           </provider-key-field>
-                          <label>
-                            <span x-text="copy.providerTextModel"></span>
-                            <select x-bind:value="providerEditorSession.textModel" x-on:change="handleSelectedProviderTextModelChange($event)" x-bind:disabled="settingsControlsDisabled || providerKeyRevealPending">
+                          <provider-model-field>
+                            <div class="field-label-with-help">
+                              <label id="provider-default-model-label" for="provider-default-model-select" x-text="copy.providerTextModel"></label>
+                              <help-tooltip>
+                                <button
+                                  type="button"
+                                  class="help-tooltip-trigger"
+                                  x-bind:aria-label="copy.providerDefaultModelHelpLabel"
+                                  aria-describedby="provider-default-model-help"
+                                >
+                                  <span class="material-symbols-outlined" aria-hidden="true">help</span>
+                                </button>
+                                <span
+                                  id="provider-default-model-help"
+                                  class="help-tooltip-content"
+                                  role="tooltip"
+                                  x-text="copy.providerDefaultModelHelp"
+                                ></span>
+                              </help-tooltip>
+                            </div>
+                            <select id="provider-default-model-select" x-bind:value="providerEditorSession.textModel" x-on:change="handleSelectedProviderTextModelChange($event)" x-bind:disabled="settingsControlsDisabled || providerKeyRevealPending">
                               <template x-for="model in selectedProvider.text_models" x-bind:key="model.id">
                                 <option x-bind:value="model.id" x-bind:selected="model.id === providerEditorSession.textModel" x-text="model.id"></option>
                               </template>
                             </select>
-                          </label>
+                          </provider-model-field>
                           <details
                             class="provider-system-prompt system-prompt-disclosure"
                             x-bind:open="providerSystemPromptOpen"
@@ -912,7 +958,7 @@
             </footer>
           </tenant-dialog>
         </tenant-dialog-overlay>
-      </llm-proxy-key-management>
+      </llm-proxy-management-application>
       <section class="public-resource-link" aria-labelledby="public-resource-title">
         <div>
           <p class="eyebrow">Resources</p>

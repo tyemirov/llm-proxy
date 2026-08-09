@@ -40,6 +40,107 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B123] (P1) {B121} Initialize routing from a pending provider default.
+  Goal:
+  Preserve the newly selected provider default model when the same provider is
+  chosen for routing before its provider-settings autosave returns.
+  Evidence:
+  - Provider model edits update only the provider editor while their serialized
+    profile mutation is pending.
+  - Routing-provider selection reads `providers[].text_model` from the last
+    applied profile, so it can queue the previous model behind the provider save
+    and persist that stale model as an explicit routing override.
+  Requirements:
+  - Wait for a matching pending provider autosave before initializing the
+    routing provider/model pair from the returned current profile.
+  - Keep unrelated provider and routing mutations independently editable and
+    preserve the existing serialized whole-profile mutation contract.
+  - Reject a delayed initialization after the tenant, authentication, Settings,
+    or routing-selection context changes.
+  Validation:
+  - Browser coverage holds a provider-model save open, selects that provider as
+    the routing default, and proves the queued defaults mutation uses the saved
+    new model.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+  Resolution:
+  - Matching routing-provider selection now waits for the provider autosave,
+    rereads the current profile model, and rejects stale tenant,
+    authentication, Settings, and routing-selection completions.
+  - The new browser regression failed against the previous behavior with
+    `gpt-4.1` instead of `gpt-5-mini`, then passed after the fix.
+  - Final `make ci` passed all 11 gates in 117 seconds with 100.0% Go statement
+    coverage and 87 frontend browser scenarios.
+
+- [x] [B122] (P1) Show Settings activity notifications in the Settings title.
+  Goal:
+  Keep feedback from Settings actions visible while the modal obscures and
+  de-emphasizes the application header.
+  Evidence:
+  - The application has one notification region in the MPR header.
+  - The Settings overlay sits above that header, so Settings save and failure
+    notices are not visibly associated with the active window.
+  Requirements:
+  - Render notifications caused by Settings activities in the Settings title
+    row while Settings is open.
+  - Keep notifications caused by page activities in the MPR header.
+  - Preserve the existing live-region semantics and automatic dismissal.
+  - Keep both placements usable at supported desktop and narrow widths.
+  Validation:
+  - Browser coverage proves a Settings success and failure appear in the
+    Settings title rather than the MPR header.
+  - Browser coverage proves page activity continues to use the MPR header.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+  Resolution:
+  - Added an explicit page-versus-Settings notification surface contract and a
+    live notification region inside the Settings title row.
+  - Settings success and failure feedback now replaces the obscured header
+    notice while page activity continues to use the MPR header.
+  - Browser coverage verifies placement, live-region semantics, automatic
+    dismissal, and desktop and narrow-screen containment.
+  - `timeout -k 350s -s SIGKILL 350s make ci` passed all 11 gates with 100.0%
+    Go statement coverage and 86 passing frontend browser tests.
+
+- [x] [B121] (P1) Clarify and synchronize provider and routing defaults.
+  Goal:
+  Make a saved provider default-model change immediately update the tenant's
+  active text routing model when that tenant currently routes through the same
+  provider, while keeping the two default scopes explicit and independently
+  editable.
+  Evidence:
+  - Settings can show OpenAI provider default `gpt-5.6-terra` while Routing
+    defaults still shows OpenAI model `gpt-4.1`.
+  - The provider-settings transaction uses eligibility-only reconciliation,
+    so it preserves any model while the active provider still has a saved key.
+  Requirements:
+  - Add accessible help tooltips that explain when provider defaults and
+    routing defaults apply.
+  - Update the active same-provider routing model in the provider-settings
+    database transaction and return the synchronized profile.
+  - Preserve a routing default owned by another provider.
+  - Preserve a compatible reasoning effort and clear an incompatible effort
+    when the active route's model changes.
+  - Keep explicit routing-default edits as the canonical override operation;
+    do not add a second request, compatibility path, or read-time repair.
+  Validation:
+  - Black-box management API coverage proves same-provider synchronization,
+    other-provider preservation, and incompatible-effort clearing.
+  - Browser coverage proves the returned provider-save profile updates the
+    visible Routing defaults model, both help tooltips expose their canonical
+    explanations, and a user can then override the routing model independently.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+  Resolution:
+  - Added keyboard- and hover-accessible help tooltips for both default scopes,
+    including narrow-screen containment coverage.
+  - A changed provider default model now updates the active same-provider route
+    atomically, preserves compatible reasoning effort, clears incompatible
+    effort, and leaves inactive-provider routes and later route overrides
+    unchanged.
+  - `timeout -k 350s -s SIGKILL 350s make ci` passed all 11 gates with 100.0%
+    Go statement coverage and 86 passing frontend browser tests.
+
 - [x] [B120] (P0) {B114} Keep production browser authentication on the public TAuth origin.
   Goal:
   Make the hosted MPR UI login, nonce, session restore, refresh, and logout
@@ -2586,6 +2687,40 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 
 ## Improvements
+
+- [x] [I217] (P1) {B123} Split the management application by UI responsibility.
+  Goal:
+  Replace the misleading key-management controller name and isolate the
+  authenticated application's lifecycle, tenant, usage, provider, routing,
+  client-access, notification, and presentation responsibilities.
+  Requirements:
+  - Keep `app.js` as the browser composition root and register one accurately
+    named Alpine management-application factory.
+  - Move cohesive state and behavior into responsibility-named ES modules;
+    keep authentication lifecycle checks out of provider-key modules.
+  - Preserve the current tenant, usage, Settings, mutation serialization,
+    secret handling, and MPR UI authentication contracts without aliases or
+    compatibility exports for the obsolete names.
+  - Give the management-application module group a responsibility document and
+    update source-evidence references to the modules that own each example.
+  Validation:
+  - Browser coverage loads the complete renamed module graph through the real
+    application entry point and preserves all authenticated UI scenarios.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+  Resolution:
+  - `app.js` now composes `llmProxyManagementApplication` from documented
+    lifecycle, tenant, usage, provider-editor, provider-credential,
+    provider-settings, routing, client-access, notification, dialog, and
+    presentation responsibilities; the obsolete key-management module,
+    factory, element, and compatibility names are removed.
+  - Generated resource evidence points to `authenticationLifecycle.js` and
+    `requestExamples.js`, and the complete application module graph uses the
+    bounded `20260809i217` revision.
+  - The responsibility-graph browser contract failed first because the new
+    modules did not exist, then all 87 frontend scenarios passed after the
+    split. Final `make ci` passed all 11 gates in 112 seconds with 100.0% Go
+    statement coverage and the TAuth browser black box passing.
 
 - [ ] [I216] (P1) {I215,I029,I037} Make one model-operation capability and pricing catalog authoritative.
   Goal:

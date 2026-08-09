@@ -169,8 +169,8 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		`href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css"`,
 		`src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"`,
 		`data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"`,
-		`src="/assets/llm-proxy/js/startupGuard.js?v=20260808b111"`,
-		`src="/assets/llm-proxy/js/app.js?v=20260808b111"`,
+		`src="/assets/llm-proxy/js/startupGuard.js?v=20260809i217"`,
+		`src="/assets/llm-proxy/js/app.js?v=20260809i217"`,
 		`data-config-url="/config-ui.yaml"`,
 		`<mpr-user`,
 		`<mpr-footer`,
@@ -819,6 +819,15 @@ func TestManagementRoutingDefaultsFollowSavedProviderKeys(t *testing.T) {
 		DictationProvider: proxy.ProviderNameOpenAI,
 		DictationModel:    proxy.DefaultDictationModel,
 	})
+	if response := saveProviderKey(proxy.ProviderNameOpenAI, "", proxy.ModelNameGPT4oMini); response.Code != http.StatusOK {
+		t.Fatalf("update inactive provider model status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
+		Provider:          proxy.ProviderNameDeepSeek,
+		Model:             proxy.ModelNameDeepSeekV4Flash,
+		DictationProvider: proxy.ProviderNameOpenAI,
+		DictationModel:    proxy.DefaultDictationModel,
+	})
 
 	openAIDefaultsRequest := authenticatedJSONRequest(
 		http.MethodPut,
@@ -831,6 +840,73 @@ func TestManagementRoutingDefaultsFollowSavedProviderKeys(t *testing.T) {
 	if openAIDefaultsResponse.Code != http.StatusOK {
 		t.Fatalf("select OpenAI defaults status=%d body=%s", openAIDefaultsResponse.Code, openAIDefaultsResponse.Body.String())
 	}
+	if response := saveProviderKey(proxy.ProviderNameOpenAI, "", proxy.ModelNameGPT55); response.Code != http.StatusOK {
+		t.Fatalf("update active provider model status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
+		Provider:          proxy.ProviderNameOpenAI,
+		Model:             proxy.ModelNameGPT55,
+		DictationProvider: proxy.ProviderNameOpenAI,
+		DictationModel:    proxy.DefaultDictationModel,
+	})
+	reasoningDefaultsRequest := authenticatedJSONRequest(
+		http.MethodPut,
+		tenantPath+"/defaults",
+		managementDefaultsRequestBodyWithReasoningEffort(t, proxy.ProviderNameOpenAI, proxy.ModelNameGPT5, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel, "", "high"),
+		sessionCookie,
+	)
+	reasoningDefaultsResponse := httptest.NewRecorder()
+	router.ServeHTTP(reasoningDefaultsResponse, reasoningDefaultsRequest)
+	if reasoningDefaultsResponse.Code != http.StatusOK {
+		t.Fatalf("select reasoning defaults status=%d body=%s", reasoningDefaultsResponse.Code, reasoningDefaultsResponse.Body.String())
+	}
+	if response := saveProviderKey(proxy.ProviderNameOpenAI, "", proxy.ModelNameGPT5Mini); response.Code != http.StatusOK {
+		t.Fatalf("update active provider to reasoning-compatible model status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
+		Provider:          proxy.ProviderNameOpenAI,
+		Model:             proxy.ModelNameGPT5Mini,
+		DictationProvider: proxy.ProviderNameOpenAI,
+		DictationModel:    proxy.DefaultDictationModel,
+		ReasoningEffort:   "high",
+	})
+	if response := saveProviderKey(proxy.ProviderNameOpenAI, "", proxy.ModelNameGPT41); response.Code != http.StatusOK {
+		t.Fatalf("update active provider to model without reasoning status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
+		Provider:          proxy.ProviderNameOpenAI,
+		Model:             proxy.ModelNameGPT41,
+		DictationProvider: proxy.ProviderNameOpenAI,
+		DictationModel:    proxy.DefaultDictationModel,
+	})
+	overriddenDefaultsRequest := authenticatedJSONRequest(
+		http.MethodPut,
+		tenantPath+"/defaults",
+		managementDefaultsRequestBody(t, proxy.ProviderNameOpenAI, proxy.ModelNameGPT4oMini, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel, ""),
+		sessionCookie,
+	)
+	overriddenDefaultsResponse := httptest.NewRecorder()
+	router.ServeHTTP(overriddenDefaultsResponse, overriddenDefaultsRequest)
+	if overriddenDefaultsResponse.Code != http.StatusOK {
+		t.Fatalf("override synchronized routing model status=%d body=%s", overriddenDefaultsResponse.Code, overriddenDefaultsResponse.Body.String())
+	}
+	unchangedProviderModelRequest := authenticatedJSONRequest(
+		http.MethodPut,
+		tenantPath+"/provider-keys/openai",
+		managementProviderKeyRequestBody(t, "", proxy.ModelNameGPT41, "Use provider guidance."),
+		sessionCookie,
+	)
+	unchangedProviderModelResponse := httptest.NewRecorder()
+	router.ServeHTTP(unchangedProviderModelResponse, unchangedProviderModelRequest)
+	if unchangedProviderModelResponse.Code != http.StatusOK {
+		t.Fatalf("save provider prompt with unchanged model status=%d body=%s", unchangedProviderModelResponse.Code, unchangedProviderModelResponse.Body.String())
+	}
+	assertManagementProfileDefaults(t, router, sessionCookie, managementTenantDefaultsTestResponse{
+		Provider:          proxy.ProviderNameOpenAI,
+		Model:             proxy.ModelNameGPT4oMini,
+		DictationProvider: proxy.ProviderNameOpenAI,
+		DictationModel:    proxy.DefaultDictationModel,
+	})
 	removeOpenAIRequest := authenticatedJSONRequest(http.MethodDelete, tenantPath+"/provider-keys/openai", `{}`, sessionCookie)
 	removeOpenAIResponse := httptest.NewRecorder()
 	router.ServeHTTP(removeOpenAIResponse, removeOpenAIRequest)

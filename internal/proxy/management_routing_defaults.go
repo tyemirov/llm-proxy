@@ -159,6 +159,23 @@ func reconcileManagedRoutingDefaultsWithProviders(current managedRoutingDefaults
 	return managedRoutingDefaults{tenantDefaults: reconciled}
 }
 
+func reconcileManagedRoutingDefaultsAfterProviderTextModelChange(reconciled managedRoutingDefaults, routingProviders []managedRoutingProvider, changedProviderIdentifier providerID) managedRoutingDefaults {
+	if newProviderID(reconciled.tenantDefaults.Provider) != changedProviderIdentifier {
+		return reconciled
+	}
+	routingProvidersByIdentifier := make(map[providerID]managedRoutingProvider, len(routingProviders))
+	for _, routingProvider := range routingProviders {
+		routingProvidersByIdentifier[routingProvider.definition.identifier] = routingProvider
+	}
+	changedProvider := routingProvidersByIdentifier[changedProviderIdentifier]
+	updated := reconciled.value()
+	updated.Model = changedProvider.textModel.string()
+	if reasoningEffortError := validateReasoningEffortForResolvedTextRoute(changedProvider.definition, changedProvider.textModel, updated.ReasoningEffort); reasoningEffortError != nil {
+		updated.ReasoningEffort = constants.EmptyString
+	}
+	return managedRoutingDefaults{tenantDefaults: updated}
+}
+
 func managedKeyedProviderIdentifiers(providerSettings map[providerID]managedProviderSettings) []providerID {
 	identifiers := make([]providerID, 0, len(providerSettings))
 	for providerIdentifier, settings := range providerSettings {

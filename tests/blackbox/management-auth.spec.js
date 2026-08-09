@@ -88,7 +88,7 @@ test("public Log In opens the authenticated app and the TAuth session survives u
   await expect(page.locator("#mpr-ui-bundle")).toHaveAttribute("data-mpr-ui-bundle-src", mprUIBundleURL);
   await expect.poll(() => page.evaluate(() => Boolean(customElements.get("mpr-legal-document")))).toBe(true);
   await expect(page.getByRole("heading", { name: "Integrate once. Use the model that fits." })).toBeVisible();
-  await expect(page.locator("llm-proxy-key-management")).toHaveCount(0);
+  await expect(page.locator("llm-proxy-management-application")).toHaveCount(0);
   await expect(page.locator("mpr-header")).toHaveAttribute("data-mpr-auth-status", "unauthenticated");
   await expect(page.locator("mpr-header")).toHaveAttribute("sign-in-label", "Log In");
   await expect(page.locator("mpr-header")).toHaveAttribute(
@@ -114,7 +114,7 @@ test("public Log In opens the authenticated app and the TAuth session survives u
   await page.goto(`${stack.frontendOrigin}${applicationPath}`);
   await expect(page).toHaveURL(`${stack.frontendOrigin}/`);
   await expect(page.getByRole("heading", { name: "Integrate once. Use the model that fits." })).toBeVisible();
-  await expect(page.locator("llm-proxy-key-management")).toHaveCount(0);
+  await expect(page.locator("llm-proxy-management-application")).toHaveCount(0);
   expect(browserAccountRequestCount).toBe(0);
 
   const loginResponsePromise = page.waitForResponse(
@@ -409,7 +409,7 @@ test("public Log In opens the authenticated app and the TAuth session survives u
 
   await expect(page).toHaveURL(`${stack.frontendOrigin}/`);
   await expect(page.getByRole("heading", { name: "Integrate once. Use the model that fits." })).toBeVisible();
-  await expect(page.locator("llm-proxy-key-management")).toHaveCount(0);
+  await expect(page.locator("llm-proxy-management-application")).toHaveCount(0);
   await expectCookies(context, {
     session: false,
     refresh: false,
@@ -464,7 +464,7 @@ test("public Log In opens the authenticated app and the TAuth session survives u
 });
 
 async function expectAuthenticatedDashboard(page) {
-  await expect(page.locator("llm-proxy-key-management")).toHaveAttribute("data-auth-state", "authenticated");
+  await expect(page.locator("llm-proxy-management-application")).toHaveAttribute("data-auth-state", "authenticated");
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   const usageTenantSelector = page.getByRole("combobox", { name: "Usage tenant" });
   await expect(usageTenantSelector).toHaveValue("");
@@ -550,7 +550,7 @@ async function installAuthStateHistory(page) {
     const authStates = [];
     Reflect.set(window, "__llmProxyAuthStateHistory", authStates);
     const recordAuthState = () => {
-      const authState = document.querySelector("llm-proxy-key-management")?.getAttribute("data-auth-state");
+      const authState = document.querySelector("llm-proxy-management-application")?.getAttribute("data-auth-state");
       if (authState && authStates.at(-1) !== authState) {
         authStates.push(authState);
       }

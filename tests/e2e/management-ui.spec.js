@@ -45,18 +45,36 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20260808b111";
+const applicationModuleRevision = "20260809i217";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
   "constants.js",
   "startupGuard.js",
   "core/backendClient.js",
+  "core/managementProfile.js",
   "core/mprShell.js",
   "core/runtimeTransition.js",
+  "ui/adminDashboard.js",
   "ui/applicationStartup.js",
-  "ui/keyManagement.js",
+  "ui/authenticationLifecycle.js",
+  "ui/clientAccess.js",
+  "ui/dialogFocus.js",
+  "ui/managementApplication.js",
+  "ui/managementApplicationPresentation.js",
+  "ui/managementApplicationState.js",
+  "ui/notifications.js",
+  "ui/profileMutations.js",
+  "ui/providerCredentials.js",
+  "ui/providerEditor.js",
+  "ui/providerSettings.js",
+  "ui/requestExamples.js",
+  "ui/routingDefaults.js",
   "ui/runtimeFailure.js",
+  "ui/settingsDialog.js",
+  "ui/tenantSettings.js",
+  "ui/usageDashboard.js",
+  "ui/usageFailurePresentation.js",
   "ui/usagePresentation.js",
 ]);
 const applicationForbiddenTAuthFragments = Object.freeze([
@@ -403,7 +421,9 @@ test("public landing explains the product and exposes the generated capability c
   expect(managementHTML).not.toContain("Sign in to manage LLM Proxy keys");
   expect(managementHTML).toContain(`privacy-link-href="${privacyPath}"`);
   expect(managementHTML).toMatch(/<notification-region\s+slot="aux"[\s\S]*?<mpr-user\s+slot="aux"/);
-  expect(managementHTML).toContain('<body x-data="llmProxyKeyManagement" x-init="init()">');
+  expect(managementHTML).toContain('<body x-data="llmProxyManagementApplication" x-init="init()">');
+  expect(managementHTML).toContain("<llm-proxy-management-application");
+  expect(managementHTML).not.toContain("llm-proxy-key-management");
   expect(managementHTML).not.toContain('x-init="bindNotificationRegion($el)"');
   expect(managementHTML).toContain('<a slot="brand" class="llm-proxy-header-brand" href="/" aria-label="LLM Proxy home">');
   expect(managementHTML).toContain(`<img class="llm-proxy-header-brand__logo" src="${appIconPath}" alt="" aria-hidden="true">`);
@@ -411,7 +431,7 @@ test("public landing explains the product and exposes the generated capability c
   expect(managementHTML).not.toContain("brand-label=");
   expect(managementHTML).not.toContain("data:image");
   expect(managementHTML).toContain(
-    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,key,visibility,visibility_off&amp;display=block">',
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,help,key,visibility,visibility_off&amp;display=block">',
   );
   expect(managementHTML).toContain(
     '<span class="material-symbols-outlined" x-show="!providerKeyVisible" aria-hidden="true">visibility</span>',
@@ -438,7 +458,7 @@ test("public landing explains the product and exposes the generated capability c
   );
   expect(html).not.toContain("MarcoPoloResearchLab/mpr-ui@v");
   expect(html).toMatch(/<notification-region\s+slot="aux"[\s\S]*?<mpr-user\s+slot="aux"/);
-  expect(html).toContain('<body x-data="llmProxyKeyManagement" x-init="init()">');
+  expect(html).toContain('<body x-data="llmProxyManagementApplication" x-init="init()">');
   expect(html).not.toContain('x-init="bindNotificationRegion($el)"');
   expect(html).toContain('<a slot="brand" class="llm-proxy-header-brand" href="/" aria-label="LLM Proxy home">');
   expect(html).toContain(`<img class="llm-proxy-header-brand__logo" src="${appIconPath}" alt="" aria-hidden="true">`);
@@ -446,7 +466,7 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).not.toContain("brand-label=");
   expect(html).not.toContain("data:image");
   expect(html).toContain(
-    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,key,visibility,visibility_off&amp;display=block">',
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined&amp;icon_names=content_copy,delete,help,key,visibility,visibility_off&amp;display=block">',
   );
   expect(html).toContain(
     '<span class="material-symbols-outlined" x-show="!providerKeyVisible" aria-hidden="true">visibility</span>',
@@ -483,6 +503,8 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).not.toContain("saveSelectedProviderKey");
   expect(html).not.toContain('x-on:click="removeSelectedProviderKey()"');
   expect(html).toContain('<p id="settings-title" class="eyebrow" x-text="copy.settingsEyebrow"></p>');
+  expect(html).toContain('class="settings-notification"');
+  expect(html).toContain('x-show="notice.message && notice.surface === noticeSurfaces.SETTINGS"');
   expect(html).toContain('class="icon-only settings-close"');
   expect(html).toContain('x-ref="settingsModal"');
   expect(html).toContain("x-bind:aria-describedby=\"settingsRequired ? 'settings-requirement' : null\"");
@@ -561,32 +583,72 @@ test("public landing explains the product and exposes the generated capability c
   expect(mprShellJavaScript).not.toContain("MutationObserver");
   expect(mprShellJavaScript).not.toContain("applyYamlConfig");
 
-  const keyManagementResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/keyManagement.js`);
-  expect(keyManagementResponse.status()).toBe(httpOK);
-  const keyManagementJavaScript = await keyManagementResponse.text();
-  expect(keyManagementJavaScript).toContain("readMprUIAuthStatus");
-  expect(keyManagementJavaScript).not.toContain("authenticatedShellProfileRequested");
-  expect(keyManagementJavaScript).not.toContain("shellAuthenticationSettled");
-  expect(keyManagementJavaScript).not.toContain("document.cookie");
-  expect(keyManagementJavaScript).not.toContain("localStorage");
-  expect(keyManagementJavaScript).not.toContain("/auth/session");
-  expect(keyManagementJavaScript).not.toContain("ResizeObserver");
-  expect(keyManagementJavaScript).not.toContain("NOTIFICATION_HEADER_BOTTOM_PROPERTY");
-  expect(keyManagementJavaScript).not.toContain("bindNotificationRegion");
-  expect(keyManagementJavaScript).toContain("providerEditorSession");
-  expect(keyManagementJavaScript).toContain("autosaveSelectedProvider");
-  expect(keyManagementJavaScript).toContain("autosaveRoutingDefaults");
-  expect(keyManagementJavaScript).toContain("enqueueProfileMutation");
-  expect(keyManagementJavaScript).toContain("waitForProfileMutations");
-  expect(keyManagementJavaScript).not.toContain("saveSelectedProviderKey");
-  expect(keyManagementJavaScript).not.toContain("saveDefaults");
-  expect(keyManagementJavaScript).toContain("requestAndApplyGeneratedSecret");
-  expect(keyManagementJavaScript).toContain("settingsRequired");
-  expect(keyManagementJavaScript).toContain("hasSavedProviderKey");
-  expect(keyManagementJavaScript).not.toContain("providerInputs");
-  expect(keyManagementJavaScript).not.toContain("revealedProviderID");
-  expect(keyManagementJavaScript.match(/window\.setTimeout/g)).toHaveLength(1);
-  expect(keyManagementJavaScript).toContain("NOTICE_AUTO_DISMISS_MILLISECONDS");
+  const managementApplicationResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/managementApplication.js`);
+  expect(managementApplicationResponse.status()).toBe(httpOK);
+  const managementApplicationJavaScript = await managementApplicationResponse.text();
+  expect(managementApplicationJavaScript).toContain("createManagementApplication");
+  expect(managementApplicationJavaScript).not.toContain("readMprUIAuthStatus");
+  expect(managementApplicationJavaScript).not.toContain("autosaveSelectedProvider");
+
+  const authenticationLifecycleResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/authenticationLifecycle.js`);
+  expect(authenticationLifecycleResponse.status()).toBe(httpOK);
+  const authenticationLifecycleJavaScript = await authenticationLifecycleResponse.text();
+  expect(authenticationLifecycleJavaScript).toContain("readMprUIAuthStatus");
+  expect(authenticationLifecycleJavaScript).not.toContain("document.cookie");
+  expect(authenticationLifecycleJavaScript).not.toContain("localStorage");
+  expect(authenticationLifecycleJavaScript).not.toContain("/auth/session");
+
+  const providerSettingsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/providerSettings.js`);
+  expect(providerSettingsResponse.status()).toBe(httpOK);
+  const providerSettingsJavaScript = await providerSettingsResponse.text();
+  expect(providerSettingsJavaScript).toContain("providerEditorSession");
+  expect(providerSettingsJavaScript).toContain("autosaveSelectedProvider");
+  expect(providerSettingsJavaScript).not.toContain("saveSelectedProviderKey");
+  expect(providerSettingsJavaScript).not.toContain("providerInputs");
+  expect(providerSettingsJavaScript).not.toContain("revealedProviderID");
+
+  const providerEditorResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/providerEditor.js`);
+  expect(providerEditorResponse.status()).toBe(httpOK);
+  const providerEditorJavaScript = await providerEditorResponse.text();
+  expect(providerEditorJavaScript).toContain("createProviderEditorSession");
+  expect(providerEditorJavaScript).toContain("selectProvider");
+  expect(providerEditorJavaScript).not.toContain("requestSaveProviderKey");
+
+  const providerCredentialsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/providerCredentials.js`);
+  expect(providerCredentialsResponse.status()).toBe(httpOK);
+  const providerCredentialsJavaScript = await providerCredentialsResponse.text();
+  expect(providerCredentialsJavaScript).toContain("revealSelectedProviderKey");
+  expect(providerCredentialsJavaScript).toContain("removeProviderKey");
+  expect(providerCredentialsJavaScript).not.toContain("requestSaveProviderKey");
+
+  const routingDefaultsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/routingDefaults.js`);
+  expect(routingDefaultsResponse.status()).toBe(httpOK);
+  const routingDefaultsJavaScript = await routingDefaultsResponse.text();
+  expect(routingDefaultsJavaScript).toContain("autosaveRoutingDefaults");
+  expect(routingDefaultsJavaScript).not.toContain("saveDefaults");
+
+  const profileMutationsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/profileMutations.js`);
+  expect(profileMutationsResponse.status()).toBe(httpOK);
+  const profileMutationsJavaScript = await profileMutationsResponse.text();
+  expect(profileMutationsJavaScript).toContain("enqueueProfileMutation");
+  expect(profileMutationsJavaScript).toContain("waitForProfileMutations");
+
+  const clientAccessResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/clientAccess.js`);
+  expect(clientAccessResponse.status()).toBe(httpOK);
+  const clientAccessJavaScript = await clientAccessResponse.text();
+  expect(clientAccessJavaScript).toContain("requestAndApplyGeneratedSecret");
+
+  const applicationStateResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/managementApplicationState.js`);
+  expect(applicationStateResponse.status()).toBe(httpOK);
+  const applicationStateJavaScript = await applicationStateResponse.text();
+  expect(applicationStateJavaScript).toContain("providerEditorSession");
+  expect(applicationStateJavaScript).toContain("routingDefaultsAutosavePromise");
+
+  const notificationsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/notifications.js`);
+  expect(notificationsResponse.status()).toBe(httpOK);
+  const notificationsJavaScript = await notificationsResponse.text();
+  expect(notificationsJavaScript.match(/window\.setTimeout/g)).toHaveLength(1);
+  expect(notificationsJavaScript).toContain("NOTICE_AUTO_DISMISS_MILLISECONDS");
 
   const constantsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/constants.js`);
   expect(constantsResponse.status()).toBe(httpOK);
@@ -1707,7 +1769,7 @@ test("late tenant usage cannot overwrite a newer Usage tenant selection", async 
   });
 
   await page.goto(`${baseURL}${applicationPath}`);
-  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+  await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
     const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
     const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
     if (!applicationState) {
@@ -1716,7 +1778,7 @@ test("late tenant usage cannot overwrite a newer Usage tenant selection", async 
     void applicationState.handleUsageTenantSelection({ target: { value: "tenant_1" } });
   });
   await firstUsageRequested;
-  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+  await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
     const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
     const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
     if (!applicationState) {
@@ -1760,7 +1822,7 @@ test("late tenant lifecycle responses cannot select or overwrite another tenant"
   await page.getByRole("dialog", { name: "Create tenant" }).getByRole("textbox", { name: "Tenant name" }).fill("Late Create");
   await page.getByRole("dialog", { name: "Create tenant" }).getByRole("button", { name: "Create", exact: true }).click();
   await createRequested;
-  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+  await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
     const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
     const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
     if (!applicationState) {
@@ -1799,7 +1861,7 @@ test("late tenant lifecycle responses cannot select or overwrite another tenant"
   await renameRequested;
   await page.keyboard.press("Escape");
   await expect(tenantNameEditor).toBeVisible();
-  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+  await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
     const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
     const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
     if (!applicationState) {
@@ -1854,6 +1916,16 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(replaceKeyButton.locator("svg")).toHaveCount(0);
   await expect(tenantAccessRow.getByRole("button", { name: "Revoke key" })).toHaveCount(0);
   await expect(settingsDialog.getByRole("heading", { name: "Routing defaults" })).toBeVisible();
+  const routingDefaultsHelpButton = settingsDialog.getByRole("button", { name: "About routing defaults" });
+  const routingDefaultsHelp = settingsDialog.locator("#routing-defaults-help");
+  await expect(routingDefaultsHelp).toBeHidden();
+  await routingDefaultsHelpButton.hover();
+  await expect(routingDefaultsHelp).toBeVisible();
+  await expect(routingDefaultsHelp).toHaveText(
+    "Used when a request omits both provider and model. Selecting a text provider starts with its provider default model; you can then select another routing model.",
+  );
+  await page.mouse.move(0, 0);
+  await expect(routingDefaultsHelp).toBeHidden();
   await expect(settingsDialog.getByRole("heading", { name: "Request examples" })).toBeVisible();
   const requestExamplesSection = settingsDialog.locator(".usage-examples-section");
   await expect(requestExamplesSection).not.toHaveAttribute("open");
@@ -1891,6 +1963,17 @@ test("dashboard shows usage and settings opens from avatar menu before sign out"
   await expect(providerSelector).toHaveValue("openai");
   const providerKeyInput = providerEditor.getByRole("textbox", { name: "OpenAI API key" });
   const providerModelSelector = providerEditor.getByRole("combobox", { name: "Provider default model" });
+  const providerDefaultModelHelpButton = providerEditor.getByRole("button", { name: "About provider default model" });
+  const providerDefaultModelHelp = providerEditor.locator("#provider-default-model-help");
+  await expect(providerDefaultModelHelp).toBeHidden();
+  await providerDefaultModelHelpButton.focus();
+  await expect(providerDefaultModelHelpButton).toBeFocused();
+  await expect(providerDefaultModelHelp).toBeVisible();
+  await expect(providerDefaultModelHelp).toHaveText(
+    "Used when a request selects this provider but omits a model. If this provider is also the routing default, changing this model updates that route; you can then override the routing model.",
+  );
+  await providerModelSelector.focus();
+  await expect(providerDefaultModelHelp).toBeHidden();
   await expect(providerKeyInput).toHaveValue("****1234");
   await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
   const providerVisibilityButton = providerEditor.getByRole("button", { name: "Show key" });
@@ -2118,7 +2201,7 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
     await expect(sevenDayButton).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
     await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
-    await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+    await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
       const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
       const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
       if (!applicationState) {
@@ -2139,7 +2222,7 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
     await route.fulfill({ status: httpInternalServerError, json: { error: "usage_failed" } });
   });
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
-  await expect(page.getByText("Request failed")).toBeVisible();
+  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Request failed");
   await expect(intervalGroup.getByRole("button", { name: "1 day" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
   await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
@@ -2311,7 +2394,7 @@ test("failed-request responses cannot cross interval or Usage tenant boundaries"
   await page.getByRole("button", { name: "2 failed requests" }).click();
   await expect(page.getByRole("dialog", { name: "Failed request details" })).toHaveAttribute("aria-busy", "true");
 
-  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+  await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
     const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
     const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
     if (!applicationState) {
@@ -2322,7 +2405,7 @@ test("failed-request responses cannot cross interval or Usage tenant boundaries"
   await expect(page.getByRole("dialog", { name: "Failed request details" })).toBeHidden();
   await expect(page.getByRole("button", { name: /failed request/ })).toHaveCount(0);
 
-  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+  await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
     const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
     const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
     if (!applicationState) {
@@ -2379,7 +2462,7 @@ test("pasting a provider key verifies before blur, locks conflicts, and masks th
 
   releaseProviderSave();
   await expect(providerEditor.getByRole("status")).toBeHidden();
-  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Provider key verified and settings saved");
+  await expect(settingsDialog.locator(".settings-notification .notice")).toHaveText("Provider key verified and settings saved");
   await expect(providerKeyInput).toHaveValue("****aved");
   await expect(providerKeyInput).toHaveAttribute("readonly", "readonly");
   await expect(providerKeyInput).not.toHaveValue(pastedProviderKey);
@@ -2415,7 +2498,7 @@ test("rejected pasted keys remain editable and retry through the same operation"
   expect(providerSaveRequestCount).toBe(1);
 
   await verificationFailure.getByRole("button", { name: "Retry verification" }).click();
-  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Provider key verified and settings saved");
+  await expect(settingsDialog.locator(".settings-notification .notice")).toHaveText("Provider key verified and settings saved");
   await expect(verificationFailure).toBeHidden();
   await expect(providerKeyInput).toHaveValue("****aved");
   expect(providerSaveRequestCount).toBe(2);
@@ -2480,7 +2563,9 @@ test("a newer pasted key cancels the stale verification and applies only the new
   await pasteProviderKey(providerKeyInput, currentProviderKey);
 
   await expect.poll(() => submittedKeys).toEqual([staleProviderKey, currentProviderKey]);
-  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Provider key verified and settings saved");
+  await expect(page.getByRole("dialog", { name: "Settings" }).locator(".settings-notification .notice")).toHaveText(
+    "Provider key verified and settings saved",
+  );
   await expect(providerKeyInput).toHaveValue("****aved");
   releaseStaleVerification();
   await expect(providerEditor.getByRole("alert")).toBeHidden();
@@ -2536,7 +2621,7 @@ for (const verificationContextChange of [
     await verificationRequested;
     await expect(providerEditor.getByRole("status")).toHaveText("Verifying key");
 
-    await page.locator("llm-proxy-key-management").evaluate(
+    await page.locator("llm-proxy-management-application").evaluate(
       async (applicationElement, contextChange) => {
         const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
         const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
@@ -2566,7 +2651,7 @@ for (const verificationContextChange of [
 
     await expect(providerEditor.getByRole("status")).toBeHidden();
     await expect(providerEditor.getByRole("alert")).toBeHidden();
-    await expect(page.locator("#llm-proxy-header .notice")).not.toHaveText(
+    await expect(settingsDialog.locator(".settings-notification .notice")).not.toHaveText(
       "Provider key verified and settings saved",
     );
     if (verificationContextChange.id === "tenant") {
@@ -2721,7 +2806,7 @@ test("Settings close waits for the current provider autosave", async ({ page }) 
   await settingsDialog.getByRole("button", { name: "Close" }).click();
   await providerSaveRequested;
   await expect(settingsDialog).toBeVisible();
-  await expect(page.locator("#llm-proxy-header .notice")).not.toHaveText(
+  await expect(settingsDialog.locator(".settings-notification .notice")).not.toHaveText(
     "Add at least one provider API key before leaving Settings.",
   );
 
@@ -2751,7 +2836,7 @@ test("failed provider autosave preserves its editor and blocks provider switchin
   await page.keyboard.press("Tab");
 
   await expect.poll(() => providerSaveRequestCount).toBe(1);
-  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Request failed");
+  await expect(settingsDialog.locator(".settings-notification .notice")).toHaveText("Request failed");
   await expect(providerKeyInput).toHaveValue(editedProviderKey);
   await expect(settingsDialog).toBeVisible();
 
@@ -2818,12 +2903,16 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
   const editedProviderKey = "sk-owner-openai-edited";
   let revealRequestCount = 0;
   const savedProviderSettingsPayloads = [];
+  const savedRoutingDefaultsPayloads = [];
   page.on("request", (request) => {
     if (request.url() === providerKeyEndpointURL("openai", "reveal")) {
       revealRequestCount += 1;
     }
     if (request.url() === providerKeyEndpointURL("openai") && request.method() === "PUT") {
       savedProviderSettingsPayloads.push(JSON.parse(request.postData() || "{}"));
+    }
+    if (request.url() === `${baseURL}${managementDefaultTenantPath}/defaults` && request.method() === "PUT") {
+      savedRoutingDefaultsPayloads.push(request.postDataJSON());
     }
   });
   await installAssetRoutes(page);
@@ -2895,6 +2984,8 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
     system_prompt: "Use concise answers.",
   });
 
+  const routingModelSelector = settingsDialog.getByRole("combobox", { name: "Text model", exact: true });
+  await expect(routingModelSelector).toHaveValue("gpt-4.1");
   const providerModelSelector = providerEditor.getByRole("combobox", { name: "Provider default model" });
   await providerModelSelector.selectOption("gpt-4o-mini");
   await expect.poll(() => savedProviderSettingsPayloads.length).toBe(2);
@@ -2903,6 +2994,19 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
     text_model: "gpt-4o-mini",
     system_prompt: "Use concise answers.",
   });
+  await expect(routingModelSelector).toHaveValue("gpt-4o-mini");
+  const routingProviderSelector = settingsDialog.getByRole("combobox", { name: "Text provider", exact: true });
+  await routingProviderSelector.selectOption("deepseek");
+  await expect.poll(() => savedRoutingDefaultsPayloads.length).toBe(1);
+  await expect(routingModelSelector).toHaveValue("deepseek-chat");
+  await routingProviderSelector.selectOption("openai");
+  await expect.poll(() => savedRoutingDefaultsPayloads.length).toBe(2);
+  expect(savedRoutingDefaultsPayloads.at(-1)).toMatchObject({ provider: "openai", model: "gpt-4o-mini" });
+  await expect(routingModelSelector).toHaveValue("gpt-4o-mini");
+  await routingModelSelector.selectOption("gpt-4.1");
+  await expect.poll(() => savedRoutingDefaultsPayloads.length).toBe(3);
+  expect(savedRoutingDefaultsPayloads.at(-1)).toMatchObject({ provider: "openai", model: "gpt-4.1" });
+  await expect(routingModelSelector).toHaveValue("gpt-4.1");
   await providerEditor.locator("summary.system-prompt-summary").click();
   const providerSystemPrompt = providerEditor.getByRole("textbox", { name: "System prompt" });
   await providerSystemPrompt.fill("Use autosaved provider guidance.");
@@ -2913,6 +3017,7 @@ test("saved provider keys reveal, edit, and clear without browser persistence", 
     text_model: "gpt-4o-mini",
     system_prompt: "Use autosaved provider guidance.",
   });
+  await expect(routingModelSelector).toHaveValue("gpt-4.1");
   await expect(providerEditor.getByRole("button", { name: /^(Save|Update) key$/ })).toHaveCount(0);
   await expect(settingsDialog.locator("example-list")).not.toContainText(editedProviderKey);
   expect(await browserStorageContains(page, revealedProviderKey)).toBe(false);
@@ -3134,7 +3239,7 @@ test("routing defaults autosave complete provider and model pairs without a manu
     system_prompt: "Use tenant-wide autosaved guidance.",
     reasoning_effort: "",
   });
-  await expect(page.locator("notification-region")).toHaveText("Defaults saved");
+  await expect(settingsDialog.locator(".settings-notification")).toHaveText("Defaults saved");
   await expect(defaultsForm).not.toHaveAttribute("aria-busy", "true");
 
   const reloadedProfileResponse = page.waitForResponse(`${baseURL}${managementDefaultTenantPath}`);
@@ -3185,7 +3290,7 @@ test("routing defaults expose only keyed providers and disable unavailable dicta
   await providerEditor.getByRole("textbox", { name: "OpenAI API key" }).fill("sk-openai-new");
   await page.keyboard.press("Tab");
 
-  await expect(page.locator("notification-region")).toHaveText("Provider key verified and settings saved");
+  await expect(settingsDialog.locator(".settings-notification")).toHaveText("Provider key verified and settings saved");
   await expect(textProvider.locator("option")).toHaveText(["OpenAI", "DeepSeek"]);
   await expect(textProvider).toHaveValue("deepseek");
   await expect(dictationProvider).toBeEnabled();
@@ -3249,7 +3354,7 @@ test("routing-default autosave queues newer edits without resetting the provider
     reasoning_effort: "",
   });
   await expect(providerKeyInput).toHaveValue(revealedProviderKey);
-  await expect(page.locator("notification-region")).toHaveText("Defaults saved");
+  await expect(settingsDialog.locator(".settings-notification")).toHaveText("Defaults saved");
   await expect(defaultsForm).not.toHaveAttribute("aria-busy", "true");
 });
 
@@ -3330,16 +3435,68 @@ test("provider and routing autosaves serialize whole-profile mutations in both d
   await expect(providerModel).toHaveValue("gpt-5-mini");
   await expect(providerPrompt).toHaveValue("Keep both serialized changes.");
   await expect(defaultTextProvider).toHaveValue("openai");
-  await expect(page.locator("notification-region")).toHaveText("Provider settings saved");
+  await expect(settingsDialog.locator(".settings-notification")).toHaveText("Provider settings saved");
 
   const reloadedProfileResponse = page.waitForResponse(`${baseURL}${managementDefaultTenantPath}`);
   await page.reload();
   const reloadedProfile = await (await reloadedProfileResponse).json();
-  expect(reloadedProfile.tenant.defaults).toMatchObject({ provider: "openai", model: "gpt-4.1" });
+  expect(reloadedProfile.tenant.defaults).toMatchObject({ provider: "openai", model: "gpt-5-mini" });
   expect(reloadedProfile.providers.find((provider) => provider.id === "openai")).toMatchObject({
     text_model: "gpt-5-mini",
     system_prompt: "Keep both serialized changes.",
   });
+});
+
+test("routing-provider selection waits for its pending provider default", async ({ page }) => {
+  const defaultsMutations = [];
+  let releaseProviderSave;
+  const providerSaveReleased = new Promise((resolve) => {
+    releaseProviderSave = resolve;
+  });
+  let providerSaveStarted;
+  const providerSaveRequested = new Promise((resolve) => {
+    providerSaveStarted = resolve;
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await page.route(providerKeyEndpointURL("openai"), async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.fallback();
+      return;
+    }
+    providerSaveStarted();
+    await providerSaveReleased;
+    await route.fallback();
+  });
+  await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
+    defaultsMutations.push(route.request().postDataJSON());
+    await route.fallback();
+  });
+
+  await page.goto(`${baseURL}${applicationPath}`);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const routingProvider = settingsDialog.getByRole("combobox", { name: "Text provider" });
+  const routingModel = settingsDialog.getByRole("combobox", { name: "Text model", exact: true });
+  await routingProvider.selectOption("deepseek");
+  await expect.poll(() => defaultsMutations.length).toBe(1);
+
+  const providerModel = settingsDialog.locator("provider-editor").getByRole("combobox", {
+    name: "Provider default model",
+  });
+  await providerModel.selectOption("gpt-5-mini");
+  await providerSaveRequested;
+  await routingProvider.selectOption("openai");
+  await page.waitForTimeout(50);
+  expect(defaultsMutations).toHaveLength(1);
+
+  releaseProviderSave();
+  await expect.poll(() => defaultsMutations.length).toBe(2);
+  expect(defaultsMutations.at(-1)).toMatchObject({ provider: "openai", model: "gpt-5-mini" });
+  await expect(routingProvider).toHaveValue("openai");
+  await expect(routingModel).toHaveValue("gpt-5-mini");
 });
 
 test("Settings close waits for the current routing-default autosave", async ({ page }) => {
@@ -3391,7 +3548,10 @@ test("failed routing-default autosave retains edits and blocks Settings close", 
   const textModel = settingsDialog.getByRole("combobox", { name: "Text model" }).first();
   await textProvider.selectOption("deepseek");
   await expect.poll(() => defaultsSaveRequestCount).toBe(1);
-  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Request failed");
+  const settingsNotification = settingsDialog.locator(".settings-notification");
+  await expect(settingsNotification).toHaveText("Request failed");
+  await expect(settingsNotification.locator(".notice")).toHaveAttribute("data-kind", "error");
+  await expect(page.locator("#llm-proxy-header notification-region")).toBeHidden();
   await expect(textProvider).toHaveValue("deepseek");
   await expect(textModel).toHaveValue("deepseek-chat");
 
@@ -3704,7 +3864,7 @@ test("a direct anonymous app visit returns to the public page", async ({ page })
 
   await expect(page).toHaveURL(`${baseURL}/`);
   await expect(page.getByRole("heading", { name: "Integrate once. Use the model that fits." })).toBeVisible();
-  await expect(page.locator("llm-proxy-key-management")).toHaveCount(0);
+  await expect(page.locator("llm-proxy-management-application")).toHaveCount(0);
   expect(accountRequests).toHaveLength(0);
 });
 
@@ -3757,7 +3917,7 @@ test("fresh authenticated users receive one client key and must add a provider k
   await closeButton.click();
   await expect(settingsDialog).toBeVisible();
   await expect(setupRequirement).toBeFocused();
-  await expect(page.locator("#llm-proxy-header .notice")).toHaveText(
+  await expect(settingsDialog.locator(".settings-notification .notice")).toHaveText(
     "Add at least one provider API key before leaving Settings.",
   );
   await page.keyboard.press("Escape");
@@ -3872,7 +4032,7 @@ test("failed automatic client-key creation stays locked and retries through Crea
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await expect(settingsDialog).toBeVisible();
   await expect(settingsDialog.getByRole("alert")).toHaveText("Create a client key before leaving Settings.");
-  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Request failed");
+  await expect(settingsDialog.locator(".settings-notification .notice")).toHaveText("Request failed");
   const createKeyButton = settingsDialog.getByRole("button", { name: "Create key" });
   await expect(createKeyButton).toBeEnabled();
   await settingsDialog.getByRole("button", { name: "Close" }).click();
@@ -4283,7 +4443,7 @@ test("tenant access stays compact while one-time client keys support confirmed r
 
     await copyButton.click();
     expect(await copiedText(page)).toBe(generatedSecret);
-    await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Key copied");
+    await expect(settingsDialog.locator(".settings-notification .notice")).toHaveText("Key copied");
 
     await hideKeyButton.click();
     await expect(clientKeyInput).toHaveValue("••••••••••••");
@@ -4305,7 +4465,7 @@ test("tenant access stays compact while one-time client keys support confirmed r
     await expect(replacementDialog).toBeHidden();
     await expect(clientKeyInput).toBeVisible();
     await expect(clientKeyInput).toHaveValue("••••••••••••");
-    await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Key replaced");
+    await expect(settingsDialog.locator(".settings-notification .notice")).toHaveText("Key replaced");
     await expect(copyButton).toBeFocused();
   }
 });
@@ -4319,11 +4479,33 @@ test("settings modal remains usable on narrow screens", async ({ page }) => {
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
 
-  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await expect(settingsDialog).toBeVisible();
   const modalBox = await page.locator("settings-modal").boundingBox();
   expect(modalBox).not.toBeNull();
   expect(modalBox.width).toBeLessThanOrEqual(390);
-  await expect(page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: "Close" })).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Close" })).toBeVisible();
+
+  for (const helpTooltip of [
+    {
+      button: settingsDialog.getByRole("button", { name: "About routing defaults" }),
+      content: settingsDialog.locator("#routing-defaults-help"),
+    },
+    {
+      button: settingsDialog.getByRole("button", { name: "About provider default model" }),
+      content: settingsDialog.locator("#provider-default-model-help"),
+    },
+  ]) {
+    await helpTooltip.button.scrollIntoViewIfNeeded();
+    await helpTooltip.button.focus();
+    await expect(helpTooltip.content).toBeVisible();
+    const tooltipBox = await helpTooltip.content.boundingBox();
+    if (!tooltipBox) {
+      throw new Error("settings_help_tooltip_missing");
+    }
+    expect(tooltipBox.x).toBeGreaterThanOrEqual(0);
+    expect(tooltipBox.x + tooltipBox.width).toBeLessThanOrEqual(390);
+  }
 });
 
 test("settings modal overlays MPR header and footer layers", async ({ page }) => {
@@ -4433,9 +4615,28 @@ test("management notices occupy the header aux slot immediately before the avata
 
     const settingsDialog = page.getByRole("dialog", { name: "Settings" });
     await expect(settingsDialog).toBeVisible();
+    const settingsNotification = settingsDialog.locator(".settings-notification");
+    await expect(settingsNotification).toHaveAttribute("role", "status");
+    await expect(settingsNotification).toHaveAttribute("aria-live", "polite");
+    await expect(settingsNotification).toHaveAttribute("aria-atomic", "true");
+    await expect(settingsNotification).toBeHidden();
     const layerFacts = await settingsLayerFacts(page);
     expect(layerFacts.noticeHit.inSettingsModal || layerFacts.noticeHit.inSettingsOverlay).toBe(true);
     expect(layerFacts.noticeHit.inNotice).toBe(false);
+
+    await settingsDialog.getByRole("combobox", { name: "Text provider" }).selectOption("deepseek");
+    await expect(settingsNotification.locator(".notice")).toHaveText("Defaults saved");
+    await expect(settingsNotification.locator(".notice")).toHaveAttribute("data-kind", "success");
+    await expect(notificationRegion).toBeHidden();
+    const settingsHeaderBox = await settingsDialog.locator(".settings-header").boundingBox();
+    const settingsNotificationBox = await settingsNotification.boundingBox();
+    if (!settingsHeaderBox || !settingsNotificationBox) {
+      throw new Error(`settings_notification_geometry_missing:${viewport.name}`);
+    }
+    expect(settingsNotificationBox.x).toBeGreaterThanOrEqual(settingsHeaderBox.x);
+    expect(settingsNotificationBox.x + settingsNotificationBox.width).toBeLessThanOrEqual(
+      settingsHeaderBox.x + settingsHeaderBox.width,
+    );
 
     await settingsDialog.getByRole("button", { name: "Close" }).click();
     await expect(settingsDialog).toBeHidden();
@@ -4577,7 +4778,7 @@ test("settings stays reachable when usage summary fails", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "Usage overview" })).toBeVisible();
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
-  await expect(page.getByText("Request failed")).toBeVisible();
+  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Request failed");
 
   await page.getByTestId("avatar-menu").click();
   await page.getByTestId("avatar-menu-item").nth(0).click();
@@ -4597,7 +4798,7 @@ test("usage refresh clears stale metrics when summary reload fails", async ({ pa
   });
   await page.getByRole("button", { name: "Refresh" }).click();
 
-  await expect(page.getByText("Request failed")).toBeVisible();
+  await expect(page.locator("#llm-proxy-header .notice")).toHaveText("Request failed");
   await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
   await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
 });
@@ -5441,6 +5642,7 @@ async function installManagementRoutes(page, options = {}) {
     }
     if (request.method() === "PUT") {
       const providerSettings = request.postDataJSON();
+      const previousTextModel = provider.text_model;
       if (providerSettings.api_key) {
         providerKeys[providerID] = providerSettings.api_key;
       }
@@ -5449,6 +5651,9 @@ async function installManagementRoutes(page, options = {}) {
       provider.text_model = providerSettings.text_model;
       provider.system_prompt = providerSettings.system_prompt;
       reconcileManagementProfileRoutingDefaults(profile);
+      if (previousTextModel !== provider.text_model) {
+        reconcileManagementProfileAfterProviderTextModelChange(profile, provider);
+      }
       await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: profile });
       return;
     }
@@ -5487,6 +5692,25 @@ function reconcileManagementProfileRoutingDefaults(profile) {
     const nextDictationProvider = keyedDictationProviders[0];
     profile.tenant.defaults.dictation_provider = nextDictationProvider ? nextDictationProvider.id : "";
     profile.tenant.defaults.dictation_model = nextDictationProvider ? nextDictationProvider.dictation_default_model : "";
+  }
+}
+
+/**
+ * @param {ReturnType<typeof managementProfile>} profile
+ * @param {ReturnType<typeof managementProfile>["providers"][number]} provider
+ * @returns {void}
+ */
+function reconcileManagementProfileAfterProviderTextModelChange(profile, provider) {
+  if (profile.tenant.defaults.provider !== provider.id) {
+    return;
+  }
+  profile.tenant.defaults.model = provider.text_model;
+  const selectedModel = provider.text_models.find((model) => model.id === provider.text_model);
+  const supportedEfforts = selectedModel && selectedModel.reasoning_effort
+    ? selectedModel.reasoning_effort.efforts
+    : [];
+  if (profile.tenant.defaults.reasoning_effort && !supportedEfforts.includes(profile.tenant.defaults.reasoning_effort)) {
+    profile.tenant.defaults.reasoning_effort = "";
   }
 }
 

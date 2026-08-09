@@ -17,6 +17,11 @@ export const NOTICE_KINDS = Object.freeze({
   ERROR: "error",
 });
 
+export const NOTICE_SURFACES = Object.freeze({
+  HEADER: "header",
+  SETTINGS: "settings",
+});
+
 export const NOTICE_AUTO_DISMISS_MILLISECONDS = 10_000;
 
 export const EVENTS = Object.freeze({
@@ -128,7 +133,7 @@ export const MPR_UI = Object.freeze({
 });
 
 export const RUNTIME_UI = Object.freeze({
-  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260808b111",
+  ALPINE_RUNTIME_MODULE_URL: "/assets/llm-proxy/js/alpineRuntime.js?v=20260809i217",
   APPLICATION_MODULE_ID: "llm-proxy-application-module",
   APPLICATION_MODULE_MISSING: "llm_proxy_application_module_missing",
   APPLICATION_READY_ATTRIBUTE: "data-llm-proxy-application",
@@ -242,6 +247,8 @@ export const COPY = Object.freeze({
   copyClientKey: "Copy key",
   defaultsEyebrow: "Defaults",
   defaultsTitle: "Routing defaults",
+  routingDefaultsHelpLabel: "About routing defaults",
+  routingDefaultsHelp: "Used when a request omits both provider and model. Selecting a text provider starts with its provider default model; you can then select another routing model.",
   textProvider: "Text provider",
   textModel: "Text model",
   reasoningEffort: "Reasoning effort",
@@ -268,6 +275,8 @@ export const COPY = Object.freeze({
   showProviderKey: "Show key",
   hideProviderKey: "Hide key",
   providerTextModel: "Provider default model",
+  providerDefaultModelHelpLabel: "About provider default model",
+  providerDefaultModelHelp: "Used when a request selects this provider but omits a model. If this provider is also the routing default, changing this model updates that route; you can then override the routing model.",
   providerSystemPrompt: "System prompt",
   removeProviderKey: "Remove provider key and settings",
   removeProviderKeyConfirmationTitle: "Remove provider key?",
