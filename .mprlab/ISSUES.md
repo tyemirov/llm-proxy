@@ -40,6 +40,45 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B120] (P0) {B114} Keep production browser authentication on the public TAuth origin.
+  Goal:
+  Make the hosted MPR UI login, nonce, session restore, refresh, and logout
+  requests use the browser-reachable HTTPS TAuth API.
+  Evidence:
+  - Production `https://llm-proxy-api.mprlab.com/config-ui.yaml` currently
+    exposes `tauthUrl: "http://tauth-api:8080"`.
+  - The browser blocks `/auth/nonce` as mixed content, and `tauth-api` is a
+    Docker-only service alias that public clients cannot resolve.
+  - Gateway capability component `url` intentionally renders the provider's
+    runtime endpoint as `scheme://host:port`; `tauth.http` is therefore the
+    correct container-to-container capability and the wrong hosted browser
+    profile value.
+  Requirements:
+  - Bind `LLM_PROXY_MANAGEMENT_TAUTH_URL` to the canonical public TAuth origin
+    `https://tauth-api.mprlab.com` in the selected production manifest.
+  - Keep MPR UI and TAuth as the sole browser authentication owners; do not add
+    an application-side auth request, proxy fallback, alias, or compatibility
+    path.
+  - Preserve the internal `tauth.http` capability for runtime consumers that
+    actually need container-to-container traffic; do not change gateway
+    capability semantics.
+  Validation:
+  - Lifecycle black-box coverage rejects any non-public binding for the
+    browser-facing TAuth URL.
+  - Run focused lifecycle validation and the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+  - Recheck the hosted config and public TAuth TLS boundary without claiming
+    the source correction is deployed before the operator lifecycle completes.
+  Resolution:
+  - The production manifest now injects `https://tauth-api.mprlab.com` as the
+    browser-facing TAuth origin while leaving the internal `tauth.http`
+    capability unchanged for container consumers.
+  - The lifecycle regression failed first on the internal capability binding
+    and now locks the hosted profile to the canonical public HTTPS origin.
+  - Focused Go validation passes with exact 100% statement coverage. The live
+    v0.2.59 profile remains unchanged until the operator-owned release,
+    publication, and deployment lifecycle activates this source correction.
+
 - [x] [B119] (P1) {B118,I215} Keep selected models in one readable column.
   Goal:
   Make every selected provider's exact model versions read as one ordered
@@ -4309,7 +4348,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Maintenance
 
-- [ ] [M021] (P1) {F030} Remove the completed MediaOps operation-import bridge.
+- [ ] [M021] (P1) {F024,F025,F026,F027} Remove the completed MediaOps operation-import bridge.
   Goal:
   Leave only the canonical model-operation contract after every selected
   MediaOps provider record has been migrated.
@@ -4545,7 +4584,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Features
 
-- [ ] [F022] (P1) {I216} Add the durable provider-neutral model-operation contract.
+- [ ] [F022] (P1) {I216} Add the durable model-operation, asset, and official-client foundation.
   Goal:
   Extend LLM Proxy from blocking text and dictation into a shared model-provider
   data plane while keeping MediaOps and other callers responsible for their
@@ -4588,29 +4627,6 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     managed usage telemetry.
   - Return sanitized, correlated errors with provider, model, proxy request id,
     retryability, and exact pre-dispatch or post-dispatch classification.
-  Deliverables:
-  - Add the OpenAPI schemas, transport-neutral operation service, durable store
-    migrations, worker, idempotency index, typed credential profiles, and
-    operation-status handlers plus the temporary import framework.
-  - Document the ownership boundary, state machine, plan/execute flow,
-    retention policy, and restart behavior.
-  Validation:
-  - Prove persist-before-dispatch, duplicate-key convergence, intent conflict,
-    restart recovery, worker lease expiry, tenant isolation, and each terminal
-    state through public handlers and fake providers.
-  - Prove cancellation and transport loss after dispatch become `uncertain`
-    with reusable provider evidence.
-  - Prove logs, responses, and usage records exclude credentials, raw provider
-    bodies, prompts, generated media, and provider-native handles.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
-- [ ] [F023] (P1) {F022} Add tenant-scoped model assets and official operation clients.
-  Goal:
-  Carry large model inputs and outputs through opaque, integrity-bound assets
-  and expose the model-operation contract only through released official
-  clients.
-  Requirements:
   - Add `POST /model/v1/assets` for bounded streaming upload and
     `GET /model/v1/artifacts/{artifact_id}` for authenticated download through
     opaque tenant-scoped identifiers.
@@ -4631,9 +4647,21 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Release the official Go client before a downstream application begins its
     integration foundation.
   Deliverables:
-  - Add the asset OpenAPI schemas and handlers, object-store abstraction,
-    cleanup worker, official Go client surface, examples, and release notes.
+  - Add the OpenAPI schemas, transport-neutral operation service, durable store
+    migrations, worker, idempotency index, typed credential profiles, and
+    operation-status handlers plus the temporary import framework.
+  - Add the asset handlers, object-store abstraction, cleanup worker, official
+    Go client surface, examples, and release notes.
+  - Document the ownership boundary, state machine, plan/execute flow,
+    retention policy, and restart behavior.
   Validation:
+  - Prove persist-before-dispatch, duplicate-key convergence, intent conflict,
+    restart recovery, worker lease expiry, tenant isolation, and each terminal
+    state through public handlers and fake providers.
+  - Prove cancellation and transport loss after dispatch become `uncertain`
+    with reusable provider evidence.
+  - Prove logs, responses, and usage records exclude credentials, raw provider
+    bodies, prompts, generated media, and provider-native handles.
   - Use a local fake server to prove every official-client path, authentication
     shape, idempotency header, typed error, and streaming cancellation path.
   - Prove truncated uploads, digest mismatch, oversized media, cross-tenant
@@ -4642,13 +4670,12 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
-- [ ] [F024] (P1) {F022,F023,I216} Add image generation and editing to model operations.
+- [ ] [F024] (P1) {F022} Add image generation and editing to model operations.
   Goal:
   Make LLM Proxy the sole provider boundary for the current OpenAI, Vertex, and
   FAL image-generation and image-editing routes.
   Cross-repository sequence:
-  - Begin the provider slice after MediaOps I069 adopts the released operation
-    client and linked product/provider operation records.
+  - MediaOps I069 consumes this released image slice as its first cutover.
   Requirements:
   - Add typed `image.generate` and `image.edit` schemas covering the current
     prompts, image and mask roles, output counts, sizes, aspects, quality,
@@ -4677,13 +4704,13 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
-- [ ] [F025] (P1) {F024} Add durable video generation to model operations.
+- [ ] [F025] (P1) {F022} Add durable video generation to model operations.
   Goal:
   Make LLM Proxy the sole provider boundary for Vertex Veo, Vertex Gemini Omni,
   Runway, FAL, Kling, and xAI video generation.
   Cross-repository sequence:
-  - Begin this slice after MediaOps I070 completes the image cutover and proves
-    the production operation and artifact boundary.
+  - MediaOps I071 consumes this released video slice independently of the
+    image cutover.
   Requirements:
   - Add a typed `video.generate` contract for prompt, start/end frame, source
     video, ordered image/video/audio references, reusable provider assets,
@@ -4713,13 +4740,14 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
-- [ ] [F026] (P1) {F025} Add ElevenLabs speech, music, and alignment operations.
+- [ ] [F026] (P1) {F022} Add ElevenLabs speech, music, and alignment operations.
   Goal:
   Make LLM Proxy the sole external-provider boundary for the current
   ElevenLabs account while MediaOps retains narration planning and local audio
   assembly.
   Cross-repository sequence:
-  - Begin this slice after MediaOps I071 completes the video-generation cutover.
+  - MediaOps I072 consumes this released audio slice independently of the
+    image and video cutovers.
   Requirements:
   - Add typed operations for speech generation, speech conversion, voice
     discovery, history listing/download, prompt music, composition plans,
@@ -4748,12 +4776,13 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
-- [ ] [F027] (P1) {F026} Add provider account mutations, avatars, translation, and lip-sync.
+- [ ] [F027] (P1) {F022} Add provider account mutations, avatars, translation, and lip-sync.
   Goal:
   Complete gateway ownership of external media-provider credentials and
   provider-native task recovery for HeyGen and Kling account operations.
   Cross-repository sequence:
-  - Begin this slice after MediaOps I072 completes the ElevenLabs cutover.
+  - MediaOps I073 consumes this released account-operation slice independently
+    of the other current-provider cutovers.
   Requirements:
   - Add typed operations for HeyGen translation, existing-video lip-sync,
     photo-avatar creation, motion enhancement, avatar-video generation, quota
@@ -4786,7 +4815,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   Add the current Avatar V engine to the gateway HeyGen avatar contract before
   MediaOps exposes it through its product surfaces.
   Cross-repository sequence:
-  - Begin after MediaOps I073 completes the base HeyGen/Kling cutover.
+  - MediaOps I066 consumes this after its I073 base HeyGen/Kling cutover.
   Requirements:
   - Add exact engine values `avatar_iv` and `avatar_v` to the HeyGen avatar-video
     operation and capability catalog.
@@ -4806,12 +4835,12 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
-- [ ] [F029] (P1) {F028} Add MiniMax H3 V2 video generation to model operations.
+- [ ] [F029] (P1) {F025} Add MiniMax H3 V2 video generation to model operations.
   Goal:
   Add the provider-qualified MiniMax H3 V2 route to the gateway before MediaOps
   exposes the model through its video product contracts.
   Cross-repository sequence:
-  - Begin after MediaOps I066 completes the Avatar V product exposure.
+  - MediaOps I060 consumes this after its I071 base video cutover.
   Requirements:
   - Add canonical provider `minimax`, exact model `MiniMax-H3`, and only the
     documented V2 create/query and `video_generation_input` upload contracts.
@@ -4835,12 +4864,12 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
-- [ ] [F030] (P1) {F029} Add Speechify text-to-speech and voice discovery to model operations.
+- [ ] [F030] (P1) {F026} Add Speechify text-to-speech and voice discovery to model operations.
   Goal:
   Add the current Speechify complete-response speech and voice-discovery
   contracts to the gateway before MediaOps exposes them in narration flows.
   Cross-repository sequence:
-  - Begin after MediaOps I060 completes the MiniMax H3 product exposure.
+  - MediaOps I058 consumes this after its I072 base audio cutover.
   Requirements:
   - Add canonical provider `speechify`, live `GET /v1/audio/models` and
     `GET /v1/voices` discovery, and complete-response `POST /v1/audio/speech`.

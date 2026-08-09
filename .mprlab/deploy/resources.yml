@@ -78,8 +78,7 @@ mprlab_resources:
               resource: authentication
               output: tenant-id
             LLM_PROXY_MANAGEMENT_TAUTH_URL:
-              capability: tauth.http
-              component: url
+              value: https://tauth-api.mprlab.com
             LLM_PROXY_MANAGEMENT_UI_DESCRIPTION:
               value: LLM Proxy
           assets:
