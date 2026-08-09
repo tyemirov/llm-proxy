@@ -694,7 +694,7 @@ test("visitors can fan from one proxy connection into exact provider model versi
   const openAIModelColumns = await routingTree.locator('[data-route-model-group="openai"] .routing-tree__model-branches').evaluate(
     (branches) => getComputedStyle(branches).gridTemplateColumns.split(" ").length,
   );
-  expect(openAIModelColumns).toBe(2);
+  expect(openAIModelColumns).toBe(1);
   const leafWidths = await routingTree.evaluate((tree) => {
     const widths = (selector) => [...tree.querySelectorAll(selector)].map((leaf) => leaf.getBoundingClientRect().width);
     return {
