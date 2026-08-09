@@ -2688,6 +2688,40 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Improvements
 
+- [x] [I217] (P1) {B123} Split the management application by UI responsibility.
+  Goal:
+  Replace the misleading key-management controller name and isolate the
+  authenticated application's lifecycle, tenant, usage, provider, routing,
+  client-access, notification, and presentation responsibilities.
+  Requirements:
+  - Keep `app.js` as the browser composition root and register one accurately
+    named Alpine management-application factory.
+  - Move cohesive state and behavior into responsibility-named ES modules;
+    keep authentication lifecycle checks out of provider-key modules.
+  - Preserve the current tenant, usage, Settings, mutation serialization,
+    secret handling, and MPR UI authentication contracts without aliases or
+    compatibility exports for the obsolete names.
+  - Give the management-application module group a responsibility document and
+    update source-evidence references to the modules that own each example.
+  Validation:
+  - Browser coverage loads the complete renamed module graph through the real
+    application entry point and preserves all authenticated UI scenarios.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+  Resolution:
+  - `app.js` now composes `llmProxyManagementApplication` from documented
+    lifecycle, tenant, usage, provider-editor, provider-credential,
+    provider-settings, routing, client-access, notification, dialog, and
+    presentation responsibilities; the obsolete key-management module,
+    factory, element, and compatibility names are removed.
+  - Generated resource evidence points to `authenticationLifecycle.js` and
+    `requestExamples.js`, and the complete application module graph uses the
+    bounded `20260809i217` revision.
+  - The responsibility-graph browser contract failed first because the new
+    modules did not exist, then all 87 frontend scenarios passed after the
+    split. Final `make ci` passed all 11 gates in 112 seconds with 100.0% Go
+    statement coverage and the TAuth browser black box passing.
+
 - [ ] [I216] (P1) {I215,I029,I037} Make one model-operation capability and pricing catalog authoritative.
   Goal:
   Publish one tenant-safe catalog for every provider-backed model operation so
