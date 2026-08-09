@@ -89,6 +89,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}
 
 	providers := newProviderRegistry(configuration)
+	capabilityCatalog := newPublicCapabilityCatalog(configuration, providers)
 
 	if strings.ToLower(configuration.LogLevel) == LogLevelDebug {
 		gin.SetMode(gin.DebugMode)
@@ -122,6 +123,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	tenantAuthenticator := newTenantAuthenticator(runtimeStaticTenants, managedTenants)
 
 	router.Use(gin.Recovery())
+	registerPublicCapabilityRoutes(router, capabilityCatalog)
 	rootProxyHandler := tenantAuthenticatedHandler(
 		tenantAuthenticator,
 		structuredLogger,
