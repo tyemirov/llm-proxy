@@ -40,6 +40,36 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B119] (P1) {B118,I215} Keep selected models in one readable column.
+  Goal:
+  Make every selected provider's exact model versions read as one ordered
+  vertical branch on the routing diagram.
+  Requirements:
+  - Render the selected provider's model leaves in one column at desktop,
+    tablet, and mobile widths.
+  - Preserve the compact desktop ingress, narrow provider leaves, generated
+    catalog order, selected connector endpoints, and responsive containment.
+  Validation:
+  - Browser black-box coverage proves the OpenAI model group has exactly one
+    rendered grid column at the desktop acceptance width.
+  - Rebuild and visually inspect a provider with many models, then run the
+    applicable validation from `.mprlab/POLICY.md`.
+  Resolution:
+  - Model groups now render as one 280-pixel-wide column at every supported
+    width, preserving the compact provider stage and exact generated model
+    order.
+  - Increased the desktop diagram's reserved height by 40 pixels so OpenAI's
+    11-row list fits without changing provider positions when a shorter model
+    list is selected.
+  - The browser regression failed first with two rendered model columns. It
+    then exposed the 19.8-pixel provider-branch shift caused by the taller
+    OpenAI list; after reserving the complete list height, all 86 focused
+    browser scenarios passed with stable provider and connector endpoints.
+  - Headed browser inspection verified the generated OpenAI route with all 11
+    model versions in one narrow column. The final run passed all 11 CI gates
+    in 122 seconds with the real TAuth black-box scenario, live-provider
+    preflight, and exact 100% Go statement coverage.
+
 - [x] [B118] (P1) {B117,I215} Compact and center the desktop routing fork.
   Goal:
   Make the full-width desktop routing map read as one compact left-to-right
