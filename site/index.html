@@ -46,6 +46,7 @@
       data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
     ></script>
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script type="module" src="/assets/llm-proxy/js/ui/routingTree.js?v=20260808i215b"></script>
     <script type="module" src="/assets/llm-proxy/js/ui/capabilityCatalog.js?v=20260806i209"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
@@ -92,24 +93,6 @@
             <li><span aria-hidden="true">✓</span> Keep upstream credentials out of client requests</li>
           </ul>
         </div>
-
-        <aside class="request-panel" aria-label="Canonical API example">
-          <header class="request-panel__header">
-            <span>POST /v2</span>
-            <span class="status-chip"><i aria-hidden="true"></i> Same request</span>
-          </header>
-          <pre><code><span class="code-muted">curl</span> <span class="code-value">"https://llm-proxy-api.mprlab.com/v2?key=$LLM_PROXY_SECRET&amp;provider=gemini"</span> \
-  -H <span class="code-value">"Content-Type: application/json"</span> \
-  -d <span class="code-value">'{
-    "messages": [
-      {"role": "user", "content": "Ship it."}
-    ]
-  }'</span></code></pre>
-          <div class="request-panel__result">
-            <span class="result-code">SWITCH</span>
-            <span>Change provider or model. Keep the integration.</span>
-          </div>
-        </aside>
       </section>
 
       <section class="value-strip" aria-label="Product summary">
@@ -250,6 +233,8 @@
         </header>
 
         <!-- llm-proxy-capability-catalog -->
+
+        <!-- llm-proxy-routing-tree -->
       </section>
 
       <section class="section section--raised support-contract" aria-labelledby="support-contract-title">
