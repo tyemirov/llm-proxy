@@ -78,6 +78,7 @@ example-list,
 request-example,
 provider-editor,
 provider-settings-fields,
+provider-model-field,
 provider-key-field,
 provider-key-input,
 provider-key-verification-error,
@@ -542,6 +543,74 @@ admin-tenant-card header code {
   font-size: 0.86rem;
 }
 
+.settings-title-with-help,
+.field-label-with-help {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.settings-title-with-help h2,
+.field-label-with-help label {
+  margin: 0;
+}
+
+help-tooltip {
+  position: static;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+llm-proxy-key-management .help-tooltip-trigger {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--llm-muted);
+  padding: 0;
+}
+
+llm-proxy-key-management .help-tooltip-trigger:hover,
+llm-proxy-key-management .help-tooltip-trigger:focus-visible {
+  color: var(--llm-accent);
+}
+
+.help-tooltip-trigger .material-symbols-outlined {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.help-tooltip-content {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: -0.35rem;
+  z-index: 2;
+  visibility: hidden;
+  width: min(22rem, calc(100vw - 2.6rem));
+  border: 1px solid var(--llm-border-strong);
+  border-radius: 6px;
+  background: var(--llm-panel-strong);
+  color: var(--llm-subtle);
+  box-shadow: var(--llm-shadow);
+  opacity: 0;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.4;
+  pointer-events: none;
+  transition: opacity 0.12s ease, visibility 0.12s ease;
+}
+
+help-tooltip:hover .help-tooltip-content,
+help-tooltip:focus-within .help-tooltip-content {
+  visibility: visible;
+  opacity: 1;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -881,6 +950,19 @@ provider-settings-fields > label {
   min-width: 0;
 }
 
+provider-model-field {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+  color: var(--llm-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.field-label-with-help > label {
+  display: block;
+}
+
 provider-key-input {
   display: grid;
   grid-template-columns: minmax(0, 1fr) repeat(2, 30px);
@@ -924,6 +1006,7 @@ provider-key-verification-error button {
 .provider-selector select,
 provider-key-input input,
 provider-settings-fields > label select,
+provider-model-field > select,
 .provider-key-visibility-toggle,
 .provider-key-remove {
   min-height: 30px;
@@ -1208,9 +1291,9 @@ tenant-dialog footer {
 }
 
 .settings-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 0.75rem;
   border-bottom: 1px solid var(--llm-border);
   padding: 0.75rem 0.9rem;
@@ -1218,6 +1301,12 @@ tenant-dialog footer {
 
 .settings-header .eyebrow {
   margin: 0;
+}
+
+.settings-notification {
+  display: block;
+  min-inline-size: 0;
+  pointer-events: none;
 }
 
 .settings-requirement {
@@ -1372,7 +1461,8 @@ settings-section,
   grid-column: 1 / -1;
 }
 
-#llm-proxy-header notification-region[slot="aux"] .notice {
+#llm-proxy-header notification-region[slot="aux"] .notice,
+.settings-notification .notice {
   display: block;
   box-sizing: border-box;
   inline-size: 100%;
@@ -1389,11 +1479,13 @@ settings-section,
   pointer-events: none;
 }
 
-#llm-proxy-header notification-region[slot="aux"] .notice[data-kind="error"] {
+#llm-proxy-header notification-region[slot="aux"] .notice[data-kind="error"],
+.settings-notification .notice[data-kind="error"] {
   border-color: rgba(255, 129, 119, 0.75);
 }
 
-#llm-proxy-header notification-region[slot="aux"] .notice[data-kind="success"] {
+#llm-proxy-header notification-region[slot="aux"] .notice[data-kind="success"],
+.settings-notification .notice[data-kind="success"] {
   border-color: rgba(102, 209, 158, 0.75);
 }
 

@@ -9,6 +9,7 @@ import {
   MENU_ACTIONS,
   NOTICE_AUTO_DISMISS_MILLISECONDS,
   NOTICE_KINDS,
+  NOTICE_SURFACES,
   PROVIDER_KEY_VERIFICATION_ERRORS,
   PUBLIC_SITE_PATH,
   ROUTING_DEFAULTS_INVALID_ERROR,
@@ -18,7 +19,7 @@ import {
   USAGE_OUTCOME_LABELS,
   USAGE_STATUS_LABELS,
   APP_INTEGRITY_ERROR,
-} from "../constants.js?v=20260808b111";
+} from "../constants.js?v=20260809b122";
 import {
   BackendClientError,
   createTenant as requestCreateTenant,
@@ -37,7 +38,7 @@ import {
   revealProviderKey as requestRevealProviderKey,
   saveProviderKey as requestSaveProviderKey,
   updateDefaults as requestUpdateDefaults,
-} from "../core/backendClient.js?v=20260808b111";
+} from "../core/backendClient.js?v=20260809b122";
 import {
   emptyUsageSummary,
   modelRows,
@@ -46,13 +47,13 @@ import {
   usagePolyline,
   USAGE_CHART,
   USAGE_METRICS,
-} from "./usagePresentation.js?v=20260808b111";
+} from "./usagePresentation.js?v=20260809b122";
 import {
   applyUserMenuItems,
   readMprUIAuthStatus,
   waitForMprUIAutoOrchestrationReady,
-} from "../core/mprShell.js?v=20260808b111";
-import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260808b111";
+} from "../core/mprShell.js?v=20260809b122";
+import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260809b122";
 
 const EMPTY_SECRET_PLACEHOLDER = "<generated-secret>";
 const EMPTY_STRING = "";
@@ -198,10 +199,12 @@ export function createKeyManagement() {
     deleteTenantPending: false,
     discardTenantChangesOpen: false,
     pendingTenantID: EMPTY_STRING,
-    /** @type {{ kind: string, message: string }} */
+    noticeSurfaces: NOTICE_SURFACES,
+    /** @type {{ kind: string, message: string, surface: string }} */
     notice: {
       kind: NOTICE_KINDS.INFO,
       message: EMPTY_STRING,
+      surface: NOTICE_SURFACES.HEADER,
     },
     /** @type {number | null} */
     noticeDismissTimerID: null,
@@ -645,7 +648,7 @@ export function createKeyManagement() {
       } catch (requestError) {
         this.clearAuthenticatedState();
         this.authState = AUTH_STATES.ERROR;
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+        this.setPageNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
         dispatchManagementReady();
       }
     },
@@ -692,7 +695,7 @@ export function createKeyManagement() {
         applyUserMenuItems(Boolean(loadedAccount.user.is_admin));
         this.settingsTenantID = this.tenants[0].id;
         this.replaceTenantLifetimeController();
-        await this.hydrateSettingsTenant(null, appVersion);
+        await this.hydrateSettingsTenant(null, appVersion, NOTICE_SURFACES.HEADER);
         if (this.authState === AUTH_STATES.AUTHENTICATED) {
           await this.loadUsageSummary(false);
         }
@@ -700,7 +703,7 @@ export function createKeyManagement() {
         if (!isAbortError(requestError) && this.canApplyAuthenticatedApp(appVersion)) {
           this.clearAuthenticatedState();
           this.authState = AUTH_STATES.ERROR;
-          this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+          this.setPageNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
         }
       } finally {
         if (this.accountRequestController === accountRequestController) {
@@ -714,8 +717,9 @@ export function createKeyManagement() {
     /**
      * @param {import("../types.d.js").ManagementTenantProfile | null} prefetchedProfile
      * @param {number} appVersion
+     * @param {string} noticeSurface
      */
-    async hydrateSettingsTenant(prefetchedProfile, appVersion) {
+    async hydrateSettingsTenant(prefetchedProfile, appVersion, noticeSurface) {
       const tenantID = this.settingsTenantID;
       if (this.tenantRequestController) {
         this.tenantRequestController.abort();
@@ -731,7 +735,7 @@ export function createKeyManagement() {
         assertManagementTenantProfile(loadedProfile, tenantID);
         this.applyProfile(loadedProfile);
         this.authState = AUTH_STATES.AUTHENTICATED;
-        this.setNotice(NOTICE_KINDS.SUCCESS, COPY.profileLoaded);
+        this.setNotice(NOTICE_KINDS.SUCCESS, COPY.profileLoaded, noticeSurface);
         if (this.settingsRequired) {
           this.openSettings();
         }
@@ -744,7 +748,7 @@ export function createKeyManagement() {
           if (this.authState !== AUTH_STATES.AUTHENTICATED) {
             this.authState = AUTH_STATES.ERROR;
           }
-          this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+          this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError), noticeSurface);
         }
       } finally {
         if (this.tenantRequestController === tenantRequestController) {
@@ -792,7 +796,7 @@ export function createKeyManagement() {
     async requestSettingsTenantSwitch(tenantID) {
       if (!this.tenants.some((tenant) => tenant.id === tenantID)) {
         this.restoreSettingsTenantSelector();
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+        this.setSettingsNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
         return;
       }
       if (tenantID === this.settingsTenantID) {
@@ -857,7 +861,7 @@ export function createKeyManagement() {
       this.settingsTenantID = tenantID;
       this.busy = true;
       try {
-        await this.hydrateSettingsTenant(prefetchedProfile, appVersion);
+        await this.hydrateSettingsTenant(prefetchedProfile, appVersion, NOTICE_SURFACES.SETTINGS);
       } finally {
         if (this.appVersion === appVersion) {
           this.busy = false;
@@ -979,7 +983,7 @@ export function createKeyManagement() {
         this.createTenantName = EMPTY_STRING;
         await this.switchSettingsTenant(createdSummary.id, createdProfile);
         if (this.settingsTenantID === createdSummary.id && this.authState === AUTH_STATES.AUTHENTICATED) {
-          this.setNotice(NOTICE_KINDS.SUCCESS, COPY.tenantCreated);
+          this.setSettingsNotice(NOTICE_KINDS.SUCCESS, COPY.tenantCreated);
         }
       } catch (requestError) {
         if (!isAbortError(requestError) && this.tenantLifetimeController === lifetimeController) {
@@ -1061,7 +1065,7 @@ export function createKeyManagement() {
             this.providerEditorSession.dirty || this.providerAutosavePending,
             this.routingDefaultsDirty || this.routingDefaultsAutosavePending,
           );
-          this.setNotice(NOTICE_KINDS.SUCCESS, COPY.tenantRenamed);
+          this.setSettingsNotice(NOTICE_KINDS.SUCCESS, COPY.tenantRenamed);
           return true;
         }));
       } catch (requestError) {
@@ -1084,7 +1088,7 @@ export function createKeyManagement() {
 
     requestTenantDeletion() {
       if (!this.canDeleteSettingsTenant) {
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.finalTenantDeletion);
+        this.setSettingsNotice(NOTICE_KINDS.ERROR, COPY.finalTenantDeletion);
         return;
       }
       this.deleteTenantConfirmationOpen = true;
@@ -1131,11 +1135,11 @@ export function createKeyManagement() {
           await this.loadUsageSummary(false);
         }
         if (this.authState === AUTH_STATES.AUTHENTICATED) {
-          this.setNotice(NOTICE_KINDS.SUCCESS, COPY.tenantDeleted);
+          this.setSettingsNotice(NOTICE_KINDS.SUCCESS, COPY.tenantDeleted);
         }
       } catch (requestError) {
         if (!isAbortError(requestError) && this.settingsTenantID === deletedTenantID) {
-          this.setNotice(
+          this.setSettingsNotice(
             NOTICE_KINDS.ERROR,
             requestError instanceof BackendClientError && requestError.status === 409 ? COPY.finalTenantDeletion : profileFailureMessage(requestError),
           );
@@ -1191,7 +1195,7 @@ export function createKeyManagement() {
       const tenantID = tenantSelect.value;
       if (tenantID && !this.tenants.some((tenant) => tenant.id === tenantID)) {
         tenantSelect.value = this.selectedUsageTenantID;
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+        this.setPageNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
         return;
       }
       if (tenantID === this.selectedUsageTenantID) {
@@ -1361,13 +1365,13 @@ export function createKeyManagement() {
           this.clearUsageFailures(false);
         }
         if (showSuccessNotice) {
-          this.setNotice(NOTICE_KINDS.SUCCESS, COPY.usageRefreshed);
+          this.setPageNotice(NOTICE_KINDS.SUCCESS, COPY.usageRefreshed);
         }
       } catch (requestError) {
         if (!isAbortError(requestError) && this.canApplyUsageSummary(tenantID, loadVersion, interval)) {
           this.clearUsageFailures(false);
           this.usage = emptyUsageSummary(interval);
-          this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+          this.setPageNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
         }
       } finally {
         if (this.usageRequestController === usageRequestController) {
@@ -1405,10 +1409,10 @@ export function createKeyManagement() {
       try {
         const adminUsersResponse = await fetchAdminUsers();
         this.adminUsers = adminUsersResponse.users;
-        this.setNotice(NOTICE_KINDS.SUCCESS, COPY.usageRefreshed);
+        this.setPageNotice(NOTICE_KINDS.SUCCESS, COPY.usageRefreshed);
       } catch (requestError) {
         this.adminUsers = [];
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
+        this.setPageNotice(NOTICE_KINDS.ERROR, COPY.requestFailed);
       } finally {
         this.busy = false;
       }
@@ -1493,7 +1497,7 @@ export function createKeyManagement() {
           }
         }
         if (this.settingsRequired) {
-          this.setNotice(NOTICE_KINDS.ERROR, this.settingsRequirementCopy);
+          this.setSettingsNotice(NOTICE_KINDS.ERROR, this.settingsRequirementCopy);
           this.focusSettingsRequirement();
           return;
         }
@@ -1675,7 +1679,7 @@ export function createKeyManagement() {
           !isAbortError(requestError) &&
           this.canApplyProviderKeyReveal(tenantID, appVersion, revealProviderID, revealVersion)
         ) {
-          this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+          this.setSettingsNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
         }
       } finally {
         if (revealVersion === this.providerEditorSession.revealVersion) {
@@ -1896,7 +1900,7 @@ export function createKeyManagement() {
               this.routingDefaultsDirty || this.routingDefaultsAutosavePending,
             );
             if (!preserveProviderEditor) {
-              this.setNotice(
+              this.setSettingsNotice(
                 NOTICE_KINDS.SUCCESS,
                 verifiesCandidate ? COPY.providerKeyVerified : COPY.providerSettingsSaved,
               );
@@ -1917,7 +1921,7 @@ export function createKeyManagement() {
                 ? providerKeyVerificationFailureMessage(verificationError, provider.has_key)
                 : profileFailureMessage(requestError);
               this.providerKeyVerificationFailure = verificationError ? failureMessage : EMPTY_STRING;
-              this.setNotice(NOTICE_KINDS.ERROR, failureMessage);
+              this.setSettingsNotice(NOTICE_KINDS.ERROR, failureMessage);
             }
           }
           return false;
@@ -2011,7 +2015,7 @@ export function createKeyManagement() {
               return true;
             }
             this.applyProfile(updatedProfile, true);
-            this.setNotice(NOTICE_KINDS.SUCCESS, COPY.defaultsSaved);
+            this.setSettingsNotice(NOTICE_KINDS.SUCCESS, COPY.defaultsSaved);
             return true;
           });
           if (!profileApplied) {
@@ -2020,7 +2024,7 @@ export function createKeyManagement() {
         } catch (requestError) {
           if (this.canApplyRoutingDefaultsAutosave(appVersion)) {
             this.routingDefaultsDirty = true;
-            this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+            this.setSettingsNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
           }
           return false;
         }
@@ -2073,13 +2077,13 @@ export function createKeyManagement() {
             this.providerEditorSession.dirty || this.providerAutosavePending,
             this.routingDefaultsDirty || this.routingDefaultsAutosavePending,
           );
-          this.setNotice(NOTICE_KINDS.SUCCESS, successMessage);
+          this.setSettingsNotice(NOTICE_KINDS.SUCCESS, successMessage);
           return true;
         });
         return Boolean(profileApplied);
       } catch (requestError) {
         if (this.canApplyGeneratedSecret(generatedSecretVersion)) {
-          this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+          this.setSettingsNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
         }
         return false;
       }
@@ -2175,11 +2179,11 @@ export function createKeyManagement() {
 
     async copyGeneratedSecret() {
       if (!this.generatedSecret || !navigator.clipboard) {
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.copyUnavailable);
+        this.setSettingsNotice(NOTICE_KINDS.ERROR, COPY.copyUnavailable);
         return;
       }
       await navigator.clipboard.writeText(this.generatedSecret);
-      this.setNotice(NOTICE_KINDS.SUCCESS, COPY.keyCopied);
+      this.setSettingsNotice(NOTICE_KINDS.SUCCESS, COPY.keyCopied);
     },
 
     /**
@@ -2187,11 +2191,11 @@ export function createKeyManagement() {
      */
     async copyRequestExample(command) {
       if (!navigator.clipboard) {
-        this.setNotice(NOTICE_KINDS.ERROR, COPY.copyUnavailable);
+        this.setSettingsNotice(NOTICE_KINDS.ERROR, COPY.copyUnavailable);
         return;
       }
       await navigator.clipboard.writeText(command);
-      this.setNotice(NOTICE_KINDS.SUCCESS, COPY.exampleCopied);
+      this.setSettingsNotice(NOTICE_KINDS.SUCCESS, COPY.exampleCopied);
     },
 
     /** @param {Event} event */
@@ -2199,7 +2203,7 @@ export function createKeyManagement() {
       const providerSelect = /** @type {HTMLSelectElement} */ (event.target);
       this.defaults.provider = providerSelect.value;
       const provider = profileProvider(this.providers, providerSelect.value);
-      this.defaults.model = provider.text_default_model;
+      this.defaults.model = provider.text_model;
       this.normalizeReasoningEffortDefault();
       this.markRoutingDefaultsDirty();
       void this.autosaveRoutingDefaults();
@@ -2280,13 +2284,13 @@ export function createKeyManagement() {
             this.providerEditorSession.dirty || this.providerAutosavePending,
             this.routingDefaultsDirty || this.routingDefaultsAutosavePending,
           );
-          this.setNotice(NOTICE_KINDS.SUCCESS, successMessage);
+          this.setSettingsNotice(NOTICE_KINDS.SUCCESS, successMessage);
           return true;
         });
         return Boolean(profileApplied);
       } catch (requestError) {
         if (this.canApplyProfileMutation(appVersion)) {
-          this.setNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
+          this.setSettingsNotice(NOTICE_KINDS.ERROR, profileFailureMessage(requestError));
         }
         return false;
       } finally {
@@ -2511,9 +2515,26 @@ export function createKeyManagement() {
      * @param {string} kind
      * @param {string} message
      */
-    setNotice(kind, message) {
+    setPageNotice(kind, message) {
+      this.setNotice(kind, message, NOTICE_SURFACES.HEADER);
+    },
+
+    /**
+     * @param {string} kind
+     * @param {string} message
+     */
+    setSettingsNotice(kind, message) {
+      this.setNotice(kind, message, NOTICE_SURFACES.SETTINGS);
+    },
+
+    /**
+     * @param {string} kind
+     * @param {string} message
+     * @param {string} surface
+     */
+    setNotice(kind, message, surface) {
       this.clearNotice();
-      this.notice = { kind, message };
+      this.notice = { kind, message, surface };
       if (message === EMPTY_STRING) {
         return;
       }
@@ -2533,7 +2554,11 @@ export function createKeyManagement() {
         window.clearTimeout(this.noticeDismissTimerID);
         this.noticeDismissTimerID = null;
       }
-      this.notice = { kind: NOTICE_KINDS.INFO, message: EMPTY_STRING };
+      this.notice = {
+        kind: NOTICE_KINDS.INFO,
+        message: EMPTY_STRING,
+        surface: NOTICE_SURFACES.HEADER,
+      };
     },
   });
 }
@@ -2812,7 +2837,8 @@ function assertProviderCatalog(provider) {
     !provider.id ||
     typeof provider.has_key !== "boolean" ||
     !Array.isArray(provider.text_models) ||
-    !provider.text_models.some((model) => model && model.id === provider.text_default_model)
+    !provider.text_models.some((model) => model && model.id === provider.text_default_model) ||
+    !provider.text_models.some((model) => model && model.id === provider.text_model)
   ) {
     throw new Error(APP_INTEGRITY_ERROR);
   }
