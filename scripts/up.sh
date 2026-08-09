@@ -291,6 +291,7 @@ wait_for_http_status "ghttp static frontend" "200" "${local_frontend_origin}/"
 verify_local_capability_catalog
 wait_for_http_status "ghttp canonical OpenAPI schema" "200" "${local_frontend_origin}/openapi.yaml"
 wait_for_http_status "ghttp runtime configuration" "200" "${local_frontend_origin}/config-ui.yaml"
+wait_for_http_status "LLM Proxy public capabilities" "200" "${local_api_origin}/api/public/capabilities"
 wait_for_http_status "LLM Proxy API boundary" "403" "${local_api_origin}/?prompt=ready"
 wait_for_http_status "TAuth session through ghttp" "204" "${local_frontend_origin}/auth/session" --header "X-TAuth-Tenant: ${local_tauth_tenant_id}"
 wait_for_http_status "TAuth nonce through ghttp" "200" "${local_frontend_origin}/auth/nonce" --request POST --header "Origin: ${local_frontend_origin}" --header "Content-Type: application/json" --header "X-Requested-With: XMLHttpRequest" --header "X-TAuth-Tenant: ${local_tauth_tenant_id}"
@@ -303,8 +304,9 @@ echo "Static UI: ${local_frontend_origin}/"
 echo "Capability catalog: rendered from the current validated provider registry."
 echo "OpenAPI schema: ${local_frontend_origin}/openapi.yaml (canonical read-only source)"
 echo "API: ${local_api_origin}/"
+echo "Public capabilities: ${local_api_origin}/api/public/capabilities"
 echo "TAuth: ${local_frontend_origin}/auth/ (ghttp to TAuth)"
 echo "Runtime config: ${local_frontend_origin}/config-ui.yaml (ghttp to API)"
-echo "Readiness contracts: static=200, OpenAPI schema=200, config=200, API=403 without a key, same-origin TAuth session=204 and nonce=200, management API=401 without a session."
+echo "Readiness contracts: static=200, OpenAPI schema=200, config=200, public capabilities=200, API=403 without a key, same-origin TAuth session=204 and nonce=200, management API=401 without a session."
 
 local_orchestration_compose logs --follow --no-color

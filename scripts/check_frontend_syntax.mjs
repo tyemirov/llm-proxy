@@ -10,6 +10,7 @@ const files = [
   "scripts/generate_openapi_docs.mjs",
   "scripts/generate_legal_pages.mjs",
   "scripts/generate_public_site_shell.mjs",
+  "scripts/render_public_site.mjs",
   "scripts/generate_seo_resources.mjs",
   "scripts/public_site_shell.mjs",
   "tests/blackbox/localManagementStack.mjs",
