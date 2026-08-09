@@ -47,6 +47,41 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B124] (P1) Anchor the Settings close control in the title row.
+  Goal:
+  Keep the Settings close control at the right edge of the title row and
+  vertically centered with the title at every supported width.
+  Evidence:
+  - The title, conditional notification region, and close control rely on
+    automatic three-column grid placement.
+  - When the notification region is hidden, it leaves grid layout and the close
+    control moves into the middle column beside `Settings` instead of remaining
+    at the right edge.
+  Requirements:
+  - Give the title, notification region, and close control explicit positions
+    in the Settings header grid.
+  - Align the close control to the header's right content edge and center it on
+    the title's vertical center whether the notification is hidden or visible.
+  - Preserve notification containment, close behavior, pending-state locking,
+    focus behavior, and narrow-screen layout.
+  Validation:
+  - Browser coverage proves right-edge and title-center geometry with the
+    notification hidden and visible at desktop, compact, and mobile widths.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci` after the last code edit; reuse the
+    current exact-code passing result as the baseline.
+  Resolution:
+  - Named header grid areas now keep the title, conditional notification, and
+    close control in fixed columns. The close control is aligned to the right
+    content edge and centered on the title regardless of notification state.
+  - The browser geometry regression failed against the prior hidden-notification
+    layout with an 836.6875-pixel right-edge difference, then passed for hidden
+    and visible notifications at 1280x720, 480x780, and 390x780 viewports.
+  - Desktop, compact, and mobile screenshots confirm the close control remains
+    in the title row's upper-right corner without overlap or overflow.
+  - Final `make ci` passed all 11 gates in 121 seconds with 89 frontend browser
+    scenarios and 100.0% Go statement coverage.
+
 - [x] [B123] (P1) {B121} Initialize routing from a pending provider default.
   Goal:
   Preserve the newly selected provider default model when the same provider is
@@ -2694,6 +2729,46 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 
 ## Improvements
+
+- [x] [I220] (P1) {I215,I219} Distribute routing columns across the graph canvas.
+  Goal:
+  Use the routing tree's connector lanes to distribute its four node columns
+  across the available canvas, from the product at the left content edge to
+  the active model at the right content edge.
+  Evidence:
+  - The model group is left-aligned in a flexible final grid track, which
+    collects unused space after the model cards at the graph's right edge.
+  - Fixed narrow gaps pack the product, proxy, provider, and model columns near
+    the graph center instead of letting the measured Bezier connectors absorb
+    the available horizontal space.
+  Requirements:
+  - Align `Your product` to the map's left padded edge and the active model
+    group to its right padded edge in the desktop graph.
+  - Distribute the available horizontal space through the product-to-proxy,
+    proxy-to-provider, and provider-to-model connector lanes.
+  - Shorten desktop model cards to the compact provider-column width while
+    preserving complete labels and selected-default metadata.
+  - Preserve measured connector endpoints, provider/model interactions,
+    semantic no-JavaScript output, and responsive containment.
+  Validation:
+  - Browser geometry proves desktop edge alignment, three positive distributed
+    connector lanes, compact model-card width, and selected connector endpoints.
+  - Visually inspect the graph at 1280-, 900-, and 390-pixel widths.
+  - Run final `timeout -k 350s -s SIGKILL 350s make ci` after the last code
+    edit; reuse the current exact-code passing result as the baseline.
+  Resolution:
+  - Bounded desktop tracks now place the product and active model group on the
+    map's left and right padded edges. `space-between` assigns the remaining
+    width to the three measured connector lanes, and desktop model cards are
+    capped at the provider column's compact 220-pixel width.
+  - The browser regression first failed against the previous 280-pixel model
+    cards, then passed edge alignment within 1 pixel, connector lanes of at
+    least 90 pixels with no more than 16 pixels of spread, and selected Bezier
+    endpoint evidence after provider and model changes.
+  - Desktop, compact, and mobile captures at 1280, 900, and 390 pixels confirm
+    the edge-to-edge desktop distribution and responsive containment.
+  - Final `make ci` passed all 11 gates in 117 seconds with 89 frontend browser
+    scenarios and 100.0% Go statement coverage.
 
 - [x] [I219] (P1) {F019,I215,F031} Move public-site rendering out of Go.
   Goal:
