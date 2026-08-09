@@ -182,7 +182,7 @@ func TestOperationalRepositoryOwnsSchemaV3Lifecycle(testingInstance *testing.T) 
 		"LLM_PROXY_MANAGEMENT_PUBLIC_ORIGIN":               {"resource": "website", "output": "origin"},
 		"LLM_PROXY_MANAGEMENT_SESSION_COOKIE_NAME":         {"resource": "authentication", "output": "session-cookie-name"},
 		"LLM_PROXY_MANAGEMENT_TAUTH_TENANT_ID":             {"resource": "authentication", "output": "tenant-id"},
-		"LLM_PROXY_MANAGEMENT_TAUTH_URL":                   {"capability": "tauth.http", "component": "url"},
+		"LLM_PROXY_MANAGEMENT_TAUTH_URL":                   {"value": "https://tauth-api.mprlab.com"},
 	} {
 		if !reflect.DeepEqual(runtimeEnvironment[environmentName], expectedBinding) {
 			testingInstance.Errorf("unexpected %s binding: %#v", environmentName, runtimeEnvironment[environmentName])
