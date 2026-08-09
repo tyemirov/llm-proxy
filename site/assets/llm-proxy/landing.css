@@ -261,13 +261,14 @@ routing-tree {
   display: grid;
   min-height: 610px;
   padding: 0.75rem 1.25rem 0.95rem;
-  grid-template-columns: minmax(355px, 400px) minmax(190px, 220px) minmax(0, 1fr);
+  grid-template-columns: minmax(355px, 480px) minmax(190px, 220px) minmax(200px, 220px);
   grid-template-areas:
     "ingress providers models"
     "selection selection selection";
   grid-template-rows: 1fr auto;
   align-items: center;
-  column-gap: 1.75rem;
+  justify-content: space-between;
+  column-gap: 0;
   row-gap: 0.75rem;
 }
 
@@ -287,7 +288,8 @@ routing-tree {
   grid-area: ingress;
   grid-template-columns: minmax(160px, 180px) minmax(175px, 200px);
   align-items: center;
-  gap: 1.25rem;
+  justify-content: space-between;
+  gap: 0;
 }
 
 .routing-tree__node {
@@ -344,7 +346,9 @@ routing-tree {
 }
 
 .routing-tree__stage--models {
+  display: flex;
   grid-area: models;
+  justify-content: flex-end;
 }
 
 .routing-tree__stage-title {
@@ -427,7 +431,7 @@ routing-tree {
 }
 
 .routing-tree__model-group {
-  width: min(100%, 280px);
+  width: min(100%, 220px);
 }
 
 .routing-tree__model-group > p {
