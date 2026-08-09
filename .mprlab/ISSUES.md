@@ -2688,6 +2688,102 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Improvements
 
+- [x] [I219] (P1) {F019,I215,F031} Move public-site rendering out of Go.
+  Goal:
+  Restore the repository's frontend/backend ownership boundary so Go owns
+  validated capability data and REST delivery while frontend tooling owns all
+  public-site markup, copy, rendering, and interaction structure.
+  Evidence:
+  - `cmd/cli/site_render.go` currently embeds the routing-tree and capability-
+    catalog HTML templates, rewrites HTML attributes and source markers, and
+    exposes Pages-rendering flags from the backend CLI.
+  - `docker/pages/Dockerfile` builds and invokes that Go UI renderer to create
+    the published static artifact.
+  Requirements:
+  - Expose one sanitized public capability resource through the canonical REST
+    API, derived from the same validated provider registry used for request
+    routing, with no credentials, tenant state, configured base URLs, or UI
+    presentation logic in the backend.
+  - Make frontend-owned tooling consume that REST representation and own static
+    site copying, production config-URL injection, routing-tree markup,
+    capability-catalog markup, user-facing copy, and deterministic Pages output.
+  - Preserve the complete generated provider/model catalog, current defaults
+    and limits, semantic no-JavaScript output, SEO metadata, local/production
+    config-URL profiles, and browser interactions.
+  - Remove the Go HTML templates, marker replacement, site-rendering flags, and
+    renderer implementation after the frontend path is authoritative. Keep no
+    alias, compatibility command, dual renderer, or fallback artifact path.
+  - Keep Node and generation dependencies in build/test stages only; the
+    published Pages artifact remains static.
+  Deliverables:
+  - Add the public REST schema and handler, frontend site generator, updated
+    Pages Docker build, current documentation, and migrated black-box coverage.
+  - Delete the obsolete Go rendering surface and its implementation-specific
+    tests.
+  Validation:
+  - Prove the public REST response exactly reflects changed validated catalog
+    data and excludes private configuration through the real HTTP router.
+  - Prove frontend generation fails on missing or invalid REST data and emits
+    the complete static routing tree, capability catalog, request limits, and
+    production config URL without retaining source markers.
+  - Prove the generated site remains complete without JavaScript and preserves
+    current browser behavior and responsive containment.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved 2026-08-09:
+  - Go now exposes the unauthenticated, secret-free
+    `GET /api/public/capabilities` resource from the validated routing registry;
+    real-router coverage proves changed catalog data is returned without
+    provider credentials, configured base URLs, or tenant secrets.
+  - Frontend-owned `scripts/render_public_site.mjs` now fetches that REST
+    resource and exclusively owns static copying, config-URL injection,
+    routing-tree markup, capability-catalog markup, and public copy. The Go HTML
+    templates, marker replacement, renderer flags, and implementation were
+    deleted without aliases or a fallback path.
+  - The Pages build and local orchestration use the backend REST surface plus a
+    build-only Node renderer; both production container targets build, and the
+    final Pages image remains static.
+  - Frontend black-box coverage proves fail-fast missing/invalid REST behavior,
+    complete no-JavaScript output, current interactions, and responsive
+    containment. The rendered landing was visually inspected at desktop and
+    mobile widths.
+  - The 119-second baseline and 112-second post-correction final `make ci` runs
+    pass all 11 gates with 100.0% Go statement coverage.
+
+- [ ] [I218] (P1) {I219} Expand the product node into integration routes.
+  Goal:
+  Make the product-to-proxy side of the public routing tree as actionable as
+  its provider-to-model side by expanding `Your product` into exact supported
+  integration routes and route-specific instructions.
+  Requirements:
+  - Make the complete `Your product` box toggle the integration fan through
+    pointer activation. The plus/minus is a visual element inside that box, not
+    a separate control.
+  - Expand HTTP, Go, Python, and CLI nodes to the left of `Your product`, draw
+    measured Bezier connectors into the product node, and expose one selected
+    integration at a time.
+  - Show exactly one instruction panel for the selected integration and keep
+    integration labels, links, commands, and instruction copy in one
+    frontend-owned definition consumed by the graph and existing integration
+    surface.
+  - Extend the single routing graph positioned by F031 without duplicating the
+    graph or restoring a second landing-page copy.
+  - Preserve provider/model selection, catalog-derived provider and model
+    content, semantic no-JavaScript access, reduced-motion behavior, and
+    responsive containment without horizontal page overflow.
+  Deliverables:
+  - Add the product disclosure, four integration nodes, selected-route state,
+    instruction panel, connector drawing, and current module revision.
+  - Document the integration-fan interaction and accessibility contract.
+  Validation:
+  - Prove exactly four generated integration routes, whole-box pointer
+    disclosure including the visual plus/minus, one selected instruction panel,
+    and selected connector endpoints through the public entry point.
+  - Prove provider/model interactions remain unchanged and visually inspect
+    connector geometry and containment at 1280-, 900-, and 390-pixel widths.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
 - [x] [I217] (P1) {B123} Split the management application by UI responsibility.
   Goal:
   Replace the misleading key-management controller name and isolate the
@@ -4718,6 +4814,47 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 
 ## Features
+
+- [x] [F031] (P1) {I215} Surface the routing graph directly below the landing hero.
+  Goal:
+  Make the one-contract product boundary and the interactive provider/model
+  route understandable before visitors reach the longer integration and
+  capability sections.
+  Requirements:
+  - Add one second landing-page section immediately after the hero containing
+    the existing One endpoint, One credential, and One contract facts followed
+    by the complete generated routing graph.
+  - Keep the facts and graph aligned to one 1180-pixel responsive shell without
+    duplicating the facts or retaining the graph below the capability matrix.
+  - Give the routing overview its own full-width bordered surface and section
+    spacing so it is visibly distinct from both the hero and the following
+    integration section, not merely a new semantic wrapper on the page canvas.
+  - Preserve generated provider/model completeness, keyboard selection,
+    measured connector geometry, semantic no-JavaScript content, and narrow
+    viewport containment.
+  - Keep the later Providers and model capabilities section focused on the
+    generated capability catalog and request-limit contract.
+  Validation:
+  - Browser coverage proves the new hero -> routing overview -> integration ->
+    audience -> capabilities -> catalog order and exact facts/graph ownership.
+  - Playwright visually verifies the combined section at desktop and mobile
+    widths, including graph interaction and containment.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+  Resolved 2026-08-09:
+  - The post-hero routing overview is now a visibly distinct full-width page
+    section with its own bordered surface and responsive section padding. Its
+    1180-pixel inner shell owns the three product facts and the single generated
+    provider/model routing graph; the later Models section owns only the
+    capability catalog and request-limit content.
+  - Browser coverage proves the section class, boundary borders, background
+    separation from the page canvas and following section, desktop/mobile
+    spacing, unique graph ownership, interaction geometry, keyboard selection,
+    and semantic no-JavaScript content. Fresh 1280-pixel and 390-pixel captures
+    verified the corrected visual boundary and containment.
+  - All 87 frontend browser tests and the required final
+    `timeout -k 350s -s SIGKILL 350s make ci` passed; CI completed all 11 gates
+    in 119 seconds with 100.0% Go statement coverage.
 
 - [ ] [F022] (P1) {I216} Add the durable model-operation, asset, and official-client foundation.
   Goal:
