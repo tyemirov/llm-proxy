@@ -45,7 +45,7 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20260809b122";
+const applicationModuleRevision = "20260809b123";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
@@ -3385,6 +3385,58 @@ test("provider and routing autosaves serialize whole-profile mutations in both d
     text_model: "gpt-5-mini",
     system_prompt: "Keep both serialized changes.",
   });
+});
+
+test("routing-provider selection waits for its pending provider default", async ({ page }) => {
+  const defaultsMutations = [];
+  let releaseProviderSave;
+  const providerSaveReleased = new Promise((resolve) => {
+    releaseProviderSave = resolve;
+  });
+  let providerSaveStarted;
+  const providerSaveRequested = new Promise((resolve) => {
+    providerSaveStarted = resolve;
+  });
+  await installAssetRoutes(page);
+  await installManagementRoutes(page);
+  await page.route(providerKeyEndpointURL("openai"), async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.fallback();
+      return;
+    }
+    providerSaveStarted();
+    await providerSaveReleased;
+    await route.fallback();
+  });
+  await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
+    defaultsMutations.push(route.request().postDataJSON());
+    await route.fallback();
+  });
+
+  await page.goto(`${baseURL}${applicationPath}`);
+  await page.getByTestId("avatar-menu").click();
+  await page.getByTestId("avatar-menu-item").nth(0).click();
+
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  const routingProvider = settingsDialog.getByRole("combobox", { name: "Text provider" });
+  const routingModel = settingsDialog.getByRole("combobox", { name: "Text model", exact: true });
+  await routingProvider.selectOption("deepseek");
+  await expect.poll(() => defaultsMutations.length).toBe(1);
+
+  const providerModel = settingsDialog.locator("provider-editor").getByRole("combobox", {
+    name: "Provider default model",
+  });
+  await providerModel.selectOption("gpt-5-mini");
+  await providerSaveRequested;
+  await routingProvider.selectOption("openai");
+  await page.waitForTimeout(50);
+  expect(defaultsMutations).toHaveLength(1);
+
+  releaseProviderSave();
+  await expect.poll(() => defaultsMutations.length).toBe(2);
+  expect(defaultsMutations.at(-1)).toMatchObject({ provider: "openai", model: "gpt-5-mini" });
+  await expect(routingProvider).toHaveValue("openai");
+  await expect(routingModel).toHaveValue("gpt-5-mini");
 });
 
 test("Settings close waits for the current routing-default autosave", async ({ page }) => {
