@@ -1589,6 +1589,7 @@ func (store *managedTenantStore) saveProviderKey(requestContext context.Context,
 	if apiKey == constants.EmptyString && !hasExistingProviderKey {
 		return managedTenantSnapshot{}, fmt.Errorf("%w: provider=%s", errManagedProviderKeyInvalid, providerIdentifier.string())
 	}
+	providerTextModelChanged := hasExistingProviderKey && strings.TrimSpace(existingProviderKeyRecord.TextModel) != normalizedTextModel
 	timestamp := store.now()
 	encryptedAPIKey := existingProviderKeyRecord.EncryptedAPIKey
 	createdAt := existingProviderKeyRecord.CreatedAt
@@ -1628,9 +1629,13 @@ func (store *managedTenantStore) saveProviderKey(requestContext context.Context,
 	if defaultsError != nil {
 		return managedTenantSnapshot{}, managedRoutingDefaultsTenantError(record.TenantID, defaultsError)
 	}
-	reconciledDefaults, reconciliationError := reconcileManagedRoutingDefaults(store.routingDefaults, providerSettings, currentDefaults)
+	routingProviders, reconciliationError := newManagedRoutingProviders(store.routingDefaults, providerSettings)
 	if reconciliationError != nil {
 		return managedTenantSnapshot{}, managedRoutingDefaultsTenantError(record.TenantID, reconciliationError)
+	}
+	reconciledDefaults := reconcileManagedRoutingDefaultsWithProviders(currentDefaults, routingProviders)
+	if providerTextModelChanged {
+		reconciledDefaults = reconcileManagedRoutingDefaultsAfterProviderTextModelChange(reconciledDefaults, routingProviders, providerIdentifier)
 	}
 	if persistError := store.database.saveProviderKey(requestContext, principal.userID, providerRecord, reconciledDefaults, timestamp); persistError != nil {
 		return managedTenantSnapshot{}, managedTenantMutationError(principal.userID, tenantIdentifier.string(), persistError)
