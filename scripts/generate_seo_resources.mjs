@@ -207,7 +207,7 @@ const pages = Object.freeze([
       "Autosave responses return masked key status; raw retrieval requires the separate owner-authenticated reveal action.",
     ],
     repoExample: {
-      source: "site/assets/llm-proxy/js/ui/keyManagement.js",
+      source: "site/assets/llm-proxy/js/ui/authenticationLifecycle.js",
       verifiedOn: CURRENT_PUBLIC_CONTENT_MODIFIED_DATE,
       code: `if (this.settingsRequired) {
   this.openSettings();
@@ -1614,7 +1614,7 @@ text = client.post_messages(
       "Examples depend on the API-served profile and config payloads.",
     ],
     repoExample: {
-      source: "site/assets/llm-proxy/js/ui/keyManagement.js",
+      source: "site/assets/llm-proxy/js/ui/requestExamples.js",
       verifiedOn: "2026-07-22",
       code: `get exampleSecret() {
   return EMPTY_SECRET_PLACEHOLDER;
