@@ -40,6 +40,75 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B122] (P1) Show Settings activity notifications in the Settings title.
+  Goal:
+  Keep feedback from Settings actions visible while the modal obscures and
+  de-emphasizes the application header.
+  Evidence:
+  - The application has one notification region in the MPR header.
+  - The Settings overlay sits above that header, so Settings save and failure
+    notices are not visibly associated with the active window.
+  Requirements:
+  - Render notifications caused by Settings activities in the Settings title
+    row while Settings is open.
+  - Keep notifications caused by page activities in the MPR header.
+  - Preserve the existing live-region semantics and automatic dismissal.
+  - Keep both placements usable at supported desktop and narrow widths.
+  Validation:
+  - Browser coverage proves a Settings success and failure appear in the
+    Settings title rather than the MPR header.
+  - Browser coverage proves page activity continues to use the MPR header.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+  Resolution:
+  - Added an explicit page-versus-Settings notification surface contract and a
+    live notification region inside the Settings title row.
+  - Settings success and failure feedback now replaces the obscured header
+    notice while page activity continues to use the MPR header.
+  - Browser coverage verifies placement, live-region semantics, automatic
+    dismissal, and desktop and narrow-screen containment.
+  - `timeout -k 350s -s SIGKILL 350s make ci` passed all 11 gates with 100.0%
+    Go statement coverage and 86 passing frontend browser tests.
+
+- [x] [B121] (P1) Clarify and synchronize provider and routing defaults.
+  Goal:
+  Make a saved provider default-model change immediately update the tenant's
+  active text routing model when that tenant currently routes through the same
+  provider, while keeping the two default scopes explicit and independently
+  editable.
+  Evidence:
+  - Settings can show OpenAI provider default `gpt-5.6-terra` while Routing
+    defaults still shows OpenAI model `gpt-4.1`.
+  - The provider-settings transaction uses eligibility-only reconciliation,
+    so it preserves any model while the active provider still has a saved key.
+  Requirements:
+  - Add accessible help tooltips that explain when provider defaults and
+    routing defaults apply.
+  - Update the active same-provider routing model in the provider-settings
+    database transaction and return the synchronized profile.
+  - Preserve a routing default owned by another provider.
+  - Preserve a compatible reasoning effort and clear an incompatible effort
+    when the active route's model changes.
+  - Keep explicit routing-default edits as the canonical override operation;
+    do not add a second request, compatibility path, or read-time repair.
+  Validation:
+  - Black-box management API coverage proves same-provider synchronization,
+    other-provider preservation, and incompatible-effort clearing.
+  - Browser coverage proves the returned provider-save profile updates the
+    visible Routing defaults model, both help tooltips expose their canonical
+    explanations, and a user can then override the routing model independently.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+  Resolution:
+  - Added keyboard- and hover-accessible help tooltips for both default scopes,
+    including narrow-screen containment coverage.
+  - A changed provider default model now updates the active same-provider route
+    atomically, preserves compatible reasoning effort, clears incompatible
+    effort, and leaves inactive-provider routes and later route overrides
+    unchanged.
+  - `timeout -k 350s -s SIGKILL 350s make ci` passed all 11 gates with 100.0%
+    Go statement coverage and 86 passing frontend browser tests.
+
 - [x] [B120] (P0) {B114} Keep production browser authentication on the public TAuth origin.
   Goal:
   Make the hosted MPR UI login, nonce, session restore, refresh, and logout
