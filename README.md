@@ -1070,9 +1070,13 @@ queue, origin-rate-limit, and request-context boundaries. It does not retry,
 fall back, poll, continue in the background, or record managed usage. Only an
 accepted credential/model pair enters the provider-key transaction. That
 transaction encrypts the key, saves its submitted model and system prompt,
-reconciles routing defaults, and returns the complete keyed profile; the
-browser then clears the raw draft and returns to the masked presentation. A
-successful first key unlocks mandatory Settings.
+reconciles routing defaults, and returns the complete keyed profile. When the
+saved provider text model changes and the same provider owns the active text
+route, that transaction also updates the active routing model and clears a
+reasoning effort only when the new model does not support it. A different
+active provider remains unchanged. The browser then clears the raw draft and
+returns to the masked presentation. A successful first key unlocks mandatory
+Settings.
 
 Credential/model rejection returns `422 provider_key_rejected`; an unconfirmed
 provider rate limit, timeout/cancellation, or outage/malformed response returns
@@ -1092,7 +1096,9 @@ removal, and client-key creation or replacement. A close request
 locks the controls and waits for the mutations already in progress. If a client
 key is created or replaced during that wait, Settings stays open so the one-time
 value can be copied before a second explicit close. A failed save retains the
-edited values for retry. Removing the last managed provider key makes Settings
+edited values for retry. Feedback caused by Settings activity appears in the
+Settings title row; page-level activity feedback remains in the MPR header.
+Removing the last managed provider key makes Settings
 mandatory again, while a failed automatic client-key request remains retryable
 through Create key.
 
@@ -1152,15 +1158,24 @@ the tenant-owned state.
 
 Managed routing defaults contain complete canonical provider/model pairs plus a
 route-bound `reasoning_effort`. A provider is eligible only while that tenant
-has a saved API key for it. The text pair is both empty only when no provider
-key is saved. The dictation pair is both empty when none of the keyed providers
-supports dictation; in that state the Settings controls are disabled and no
-default dictation example is shown. Saving or removing a provider key preserves
-an eligible current default and otherwise selects the first eligible provider
-by canonical provider id, using that provider's saved text model or configured
-dictation default model. The key mutation and both reconciled routing pairs are
-one database transaction, so a profile never exposes a default whose key was
-removed.
+has a saved API key for it. A provider default text model applies when a request
+names that provider and omits a model. The tenant text routing pair applies when
+a request omits both provider and model. Settings explains both scopes through
+help tooltips. Choosing a text routing provider initializes its routing model
+from that provider's saved default, after which the routing model can be changed
+independently. The text pair is both empty only when no provider key is saved.
+The dictation pair is both empty when none of the keyed providers supports
+dictation; in that state the Settings controls are disabled and no default
+dictation example is shown. Saving provider settings preserves an
+eligible current provider, while a changed provider text model also updates the
+active same-provider text default and clears an incompatible reasoning effort.
+A different active provider remains unchanged. Removing a provider key
+preserves an eligible current default and otherwise selects the first eligible
+provider by canonical provider id, using that provider's saved text model or
+configured dictation default model. The provider mutation and both reconciled
+routing pairs are one database transaction, so a profile never exposes a
+default whose key was removed or an active provider-model change that was not
+applied.
 
 `PUT /api/management/tenants/:tenant_id/defaults` accepts only these eligible
 complete pairs and resolves the supplied text pair before validating the
