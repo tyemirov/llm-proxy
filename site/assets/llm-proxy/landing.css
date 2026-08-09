@@ -515,6 +515,22 @@ routing-tree {
   font-style: normal;
 }
 
+.section.route-overview {
+  --content: 1180px;
+  padding-block: clamp(3rem, 6vw, 5rem);
+  border-block: 1px solid var(--border);
+  background: #12151a;
+}
+
+.route-overview__layout {
+  display: grid;
+  gap: 2rem;
+}
+
+.route-overview__layout > routing-tree {
+  width: 100%;
+}
+
 .value-strip__grid {
   display: grid;
   border-block: 1px solid var(--border);
@@ -522,29 +538,29 @@ routing-tree {
   grid-template-columns: repeat(3, 1fr);
 }
 
-.value-strip p {
+.value-strip__grid p {
   min-height: 105px;
   margin: 0;
   padding: 1.4rem 1.8rem;
   border-left: 1px solid var(--border);
 }
 
-.value-strip p:last-child {
+.value-strip__grid p:last-child {
   border-right: 1px solid var(--border);
 }
 
-.value-strip strong,
-.value-strip span {
+.value-strip__grid strong,
+.value-strip__grid span {
   display: block;
 }
 
-.value-strip strong {
+.value-strip__grid strong {
   margin-bottom: 0.3rem;
   color: var(--text);
   font-size: 0.8rem;
 }
 
-.value-strip span {
+.value-strip__grid span {
   color: var(--text-muted);
   font-size: 0.72rem;
   line-height: 1.55;
@@ -764,11 +780,6 @@ routing-tree {
 
 .catalog-section {
   --content: 1180px;
-}
-
-.catalog-section > routing-tree {
-  width: 100%;
-  margin-top: 2rem;
 }
 
 capability-catalog {
@@ -1470,8 +1481,8 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
     min-width: 680px;
   }
 
-  .value-strip p,
-  .value-strip p:last-child {
+  .value-strip__grid p,
+  .value-strip__grid p:last-child {
     min-height: 0;
     padding: 1rem 0;
     border-right: 0;
@@ -1479,7 +1490,7 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
     border-left: 0;
   }
 
-  .value-strip p:last-child {
+  .value-strip__grid p:last-child {
     border-bottom: 0;
   }
 
