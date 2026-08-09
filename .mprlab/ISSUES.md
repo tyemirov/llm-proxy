@@ -9,6 +9,13 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 - `[ ]` open, `[-]` taken, `[!]` blocked, `[x]` closed.
 - Blocked issues (`[!]`) must include a `Blocked:` line in the body.
 
+Repository development is the default completion boundary for each issue.
+Unless an issue states another outcome, development completion requires the
+specified repository changes and repository validation.
+An Improvement or Feature uses production state only when the issue is an activation issue.
+An activation issue depends on its development issues. A development issue
+in Improvements or Features never depends on production state.
+
 Resolved history: `.mprlab/ISSUES-ARCHIVE.md`; the complete original issue
 bodies, resolution notes, and validation records remain in `v0.2.43`.
 
@@ -5253,8 +5260,8 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     acceptance. Record live-host acceptance as a separate deployment result.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-  Blocked: TAuth F001 must first provide a deployed OAuth 2.1 authorization
-  server.
+  Blocked: TAuth F001 must first complete the OAuth 2.1 authorization-server
+  contract.
   The server must support authorization code plus PKCE, discovery, JWKS,
   resource indicators, audience-bound tokens, rotating refresh tokens,
   consent, revocation, and MCP-compatible client metadata or registration.
