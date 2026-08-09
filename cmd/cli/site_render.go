@@ -24,6 +24,7 @@ const (
 	siteConfigURLAttribute       = "data-config-url"
 	siteConfigURLSourceAttribute = siteConfigURLAttribute + `="` + proxy.ManagementConfigUIPath + `"`
 	siteLegacyRuntimeConfig      = "llm-proxy-config.json"
+	siteRoutingTreeMarker        = "<!-- llm-proxy-routing-tree -->"
 	siteCapabilityCatalogMarker  = "<!-- llm-proxy-capability-catalog -->"
 	renderedSiteFilePerm         = 0o644
 	defaultSiteSourceDirectory   = "site"
@@ -31,6 +32,47 @@ const (
 	secureSiteConfigURLScheme    = "https"
 	binaryBytesPerMiB            = 1024 * 1024
 )
+
+const siteRoutingTreeTemplate = `<routing-tree class="routing-tree" data-enhanced="false" aria-label="Interactive LLM routing map">
+  <header class="routing-tree__header">
+    <h2>One integration. Choose the exact route.</h2>
+    <span>{{.ProviderCount}} providers · {{.ModelCount}} text models</span>
+  </header>
+  <div class="routing-tree__map" data-route-map>
+    <canvas class="routing-tree__connectors" data-route-canvas aria-hidden="true"></canvas>
+    <div class="routing-tree__ingress" aria-label="One connection into LLM Proxy">
+      <article class="routing-tree__node routing-tree__node--product" data-route-product>
+        <strong>Your product</strong>
+        <span>HTTP · Go · Python · CLI</span>
+      </article>
+      <article class="routing-tree__node routing-tree__node--proxy" data-route-proxy>
+        <strong>LLM Proxy</strong>
+        <span>Authenticate · validate · route</span>
+      </article>
+    </div>
+    <section class="routing-tree__stage routing-tree__stage--providers" aria-labelledby="routing-tree-provider-title">
+      <h3 id="routing-tree-provider-title" class="routing-tree__stage-title">Choose a provider</h3>
+      <div class="routing-tree__branches routing-tree__provider-branches" role="group" aria-label="Supported providers">
+        {{range .Providers}}<button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="{{.Identifier}}" aria-controls="routing-tree-models-{{.Identifier}}" aria-pressed="{{if .IsSelected}}true{{else}}false{{end}}" disabled>
+          <strong>{{.Label}}</strong><small>{{len .Models}} models</small>
+        </button>{{end}}
+      </div>
+    </section>
+    <section class="routing-tree__stage routing-tree__stage--models" aria-labelledby="routing-tree-model-title">
+      <h3 id="routing-tree-model-title" class="routing-tree__stage-title">Choose an exact model and version</h3>
+      {{range .Providers}}<section id="routing-tree-models-{{.Identifier}}" class="routing-tree__model-group" data-route-model-group="{{.Identifier}}" aria-label="{{.Label}} supported text models"{{if .IsSelected}}{{else}} hidden{{end}}>
+        <p><strong>{{.Label}}</strong><span>{{len .Models}} supported text models</span></p>
+        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose a {{.Label}} model">
+          {{range .Models}}<button type="button" class="routing-tree__branch routing-tree__model" data-route-model="{{.Identifier}}"{{if .IsDefault}} data-route-default-model="true"{{end}} aria-pressed="{{if .IsSelected}}true{{else}}false{{end}}" disabled><code>{{.Identifier}}</code>{{if .IsDefault}}<small>Provider default</small>{{end}}</button>{{end}}
+        </div>
+      </section>{{end}}
+    </section>
+    <footer class="routing-tree__selection">
+      <span>Selected route:</span>
+      <output aria-live="polite"><code data-route-selected-provider>{{.SelectedProviderIdentifier}}</code><i aria-hidden="true">/</i><code data-route-selected-model>{{.SelectedModelIdentifier}}</code></output>
+    </footer>
+  </div>
+</routing-tree>`
 
 const siteCapabilityCatalogTemplate = `<capability-catalog data-enhanced="false">
   <div class="catalog-summary" aria-label="Catalog summary">
@@ -71,7 +113,7 @@ const siteCapabilityCatalogTemplate = `<capability-catalog data-enhanced="false"
       <tbody data-catalog-body>
         {{range .Models}}<tr data-catalog-row data-provider="{{.ProviderIdentifier}}" data-model="{{.Identifier}}" data-capabilities="{{.CapabilityIdentifiers}}" data-capability-count="{{len .Capabilities}}" data-catalog-search-text="{{.SearchText}}">
           <td class="catalog-provider"><strong>{{.ProviderLabel}}</strong><code>{{.ProviderIdentifier}}</code></td>
-          <td class="catalog-model"><code data-catalog-model-id>{{.Identifier}}</code>{{range .Defaults}}<span class="catalog-model__default" title="{{.Description}}">{{.Label}}</span>{{end}}</td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>{{.Identifier}}</code>{{range .Defaults}}<span class="catalog-model__default" title="{{.Description}}">{{.Label}}</span>{{end}}</span></td>
           <td><div class="catalog-capabilities">
             {{range .Capabilities}}<button type="button" class="capability-badge {{.ClassName}}" aria-label="Filter by {{.Label}}" data-catalog-capability-action="{{.Identifier}}" disabled>{{.Label}}</button>{{end}}
           </div>
@@ -95,6 +137,27 @@ const siteCapabilityCatalogTemplate = `<capability-catalog data-enhanced="false"
 var errSiteRenderFailed = errors.New("site_render_failed")
 
 type siteConfigURL string
+
+type siteRoutingTreeView struct {
+	ProviderCount              int
+	ModelCount                 int
+	Providers                  []siteRoutingProviderView
+	SelectedProviderIdentifier string
+	SelectedModelIdentifier    string
+}
+
+type siteRoutingProviderView struct {
+	Identifier string
+	Label      string
+	Models     []siteRoutingModelView
+	IsSelected bool
+}
+
+type siteRoutingModelView struct {
+	Identifier string
+	IsDefault  bool
+	IsSelected bool
+}
 
 type siteCapabilityCatalogView struct {
 	ProviderCount     int
@@ -133,9 +196,13 @@ type siteDefaultDefinition struct {
 }
 
 var (
+	siteRoutingTreeTemplateSource       = siteRoutingTreeTemplate
 	siteCapabilityCatalogTemplateSource = siteCapabilityCatalogTemplate
 	siteCopyFS                          = os.CopyFS
-	siteExecuteCapabilityCatalog        = func(catalogTemplate *template.Template, renderedCatalog *strings.Builder, catalogView siteCapabilityCatalogView) error {
+	siteExecuteRoutingTree              = func(routingTemplate *template.Template, renderedRoutingTree *strings.Builder, routingTreeView siteRoutingTreeView) error {
+		return routingTemplate.Execute(renderedRoutingTree, routingTreeView)
+	}
+	siteExecuteCapabilityCatalog = func(catalogTemplate *template.Template, renderedCatalog *strings.Builder, catalogView siteCapabilityCatalogView) error {
 		return catalogTemplate.Execute(renderedCatalog, catalogView)
 	}
 	sitePathAbs   = filepath.Abs
@@ -282,8 +349,8 @@ func writeRenderedSiteShell(outputDirectory string, configURL siteConfigURL, cap
 	if indexError := writeRenderedAuthConfigURLs(outputDirectory, configURL); indexError != nil {
 		return indexError
 	}
-	if catalogError := writeRenderedCapabilityCatalog(outputDirectory, capabilityCatalog); catalogError != nil {
-		return catalogError
+	if landingContentError := writeRenderedLandingContent(outputDirectory, capabilityCatalog); landingContentError != nil {
+		return landingContentError
 	}
 	if _, statError := siteStat(filepath.Join(outputDirectory, siteCNAMEFileName)); statError != nil {
 		return fmt.Errorf("%w: output=%s: %v", errSiteRenderFailed, filepath.Join(outputDirectory, siteCNAMEFileName), statError)
@@ -328,25 +395,83 @@ func writeRenderedAuthConfigURLs(outputDirectory string, configURL siteConfigURL
 	return nil
 }
 
-func writeRenderedCapabilityCatalog(outputDirectory string, capabilityCatalog proxy.PublicCapabilityCatalog) error {
+func writeRenderedLandingContent(outputDirectory string, capabilityCatalog proxy.PublicCapabilityCatalog) error {
 	outputPath := filepath.Join(outputDirectory, siteIndexFileName)
 	indexBytes, readError := siteReadFile(outputPath)
 	if readError != nil {
 		return fmt.Errorf("%w: output=%s: %v", errSiteRenderFailed, outputPath, readError)
 	}
 	indexHTML := string(indexBytes)
-	if strings.Count(indexHTML, siteCapabilityCatalogMarker) != 1 {
-		return fmt.Errorf("%w: output=%s must contain exactly one %s", errSiteRenderFailed, outputPath, siteCapabilityCatalogMarker)
+	for _, marker := range []string{siteRoutingTreeMarker, siteCapabilityCatalogMarker} {
+		if strings.Count(indexHTML, marker) != 1 {
+			return fmt.Errorf("%w: output=%s must contain exactly one %s", errSiteRenderFailed, outputPath, marker)
+		}
+	}
+	routingTreeHTML, renderError := renderSiteRoutingTree(capabilityCatalog)
+	if renderError != nil {
+		return renderError
 	}
 	catalogHTML, renderError := renderSiteCapabilityCatalog(capabilityCatalog)
 	if renderError != nil {
 		return renderError
 	}
-	renderedHTML := strings.Replace(indexHTML, siteCapabilityCatalogMarker, catalogHTML, 1)
+	renderedHTML := strings.Replace(indexHTML, siteRoutingTreeMarker, routingTreeHTML, 1)
+	renderedHTML = strings.Replace(renderedHTML, siteCapabilityCatalogMarker, catalogHTML, 1)
 	if writeError := siteWriteFile(outputPath, []byte(renderedHTML), renderedSiteFilePerm); writeError != nil {
 		return fmt.Errorf("%w: output=%s: %v", errSiteRenderFailed, outputPath, writeError)
 	}
 	return nil
+}
+
+func renderSiteRoutingTree(capabilityCatalog proxy.PublicCapabilityCatalog) (string, error) {
+	routingTreeView := newSiteRoutingTreeView(capabilityCatalog)
+	routingTemplate, parseError := template.New("routing-tree").Parse(siteRoutingTreeTemplateSource)
+	if parseError != nil {
+		return constants.EmptyString, fmt.Errorf("%w: routing tree template: %v", errSiteRenderFailed, parseError)
+	}
+	var renderedRoutingTree strings.Builder
+	if executeError := siteExecuteRoutingTree(routingTemplate, &renderedRoutingTree, routingTreeView); executeError != nil {
+		return constants.EmptyString, fmt.Errorf("%w: routing tree template: %v", errSiteRenderFailed, executeError)
+	}
+	return renderedRoutingTree.String(), nil
+}
+
+func newSiteRoutingTreeView(capabilityCatalog proxy.PublicCapabilityCatalog) siteRoutingTreeView {
+	providerViews := make([]siteRoutingProviderView, 0, len(capabilityCatalog.Providers))
+	modelCount := 0
+	for _, provider := range capabilityCatalog.Providers {
+		modelViews := make([]siteRoutingModelView, 0, len(provider.Models))
+		for _, model := range provider.Models {
+			if !containsString(model.Capabilities, proxy.PublicModelCapabilityText) {
+				continue
+			}
+			modelViews = append(modelViews, siteRoutingModelView{
+				Identifier: model.Identifier,
+				IsDefault:  containsString(model.DefaultEndpoints, proxy.PublicModelCapabilityText),
+			})
+		}
+		modelCount += len(modelViews)
+		providerViews = append(providerViews, siteRoutingProviderView{
+			Identifier: provider.Identifier,
+			Label:      provider.Label,
+			Models:     modelViews,
+		})
+	}
+	providerViews[0].IsSelected = true
+	selectedModelIdentifier := constants.EmptyString
+	for modelIndex := range providerViews[0].Models {
+		if providerViews[0].Models[modelIndex].IsDefault {
+			providerViews[0].Models[modelIndex].IsSelected = true
+			selectedModelIdentifier = providerViews[0].Models[modelIndex].Identifier
+		}
+	}
+	return siteRoutingTreeView{
+		ProviderCount:              len(providerViews),
+		ModelCount:                 modelCount,
+		Providers:                  providerViews,
+		SelectedProviderIdentifier: providerViews[0].Identifier,
+		SelectedModelIdentifier:    selectedModelIdentifier,
+	}
 }
 
 func renderSiteCapabilityCatalog(capabilityCatalog proxy.PublicCapabilityCatalog) (string, error) {

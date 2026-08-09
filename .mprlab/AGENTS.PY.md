@@ -64,7 +64,8 @@ Backend guidance for Python code. Follow AGENTS.md for repo-wide policies, docum
 - Isolate side effects with fixtures.
 - Use `tmp_path` for filesystem operations (no pollution).
 - Black-box: test only public API contracts.
-- CI gate: `make lint` (mypy/pyright) and `make test` (pytest), or `make ci` when available.
+- Use `.mprlab/POLICY.md` for validation.
+- The `make ci` target must include the required type and test checks.
 
 ---
 
@@ -76,4 +77,4 @@ Backend guidance for Python code. Follow AGENTS.md for repo-wide policies, docum
 - [ ] Constants used for repeated strings.
 - [ ] Clear type hints, no single-letter identifiers.
 - [ ] Config validated at startup.
-- [ ] `make lint` and `make test` (or `make ci`) passing.
+- [ ] The applicable validation in `.mprlab/POLICY.md` passes.

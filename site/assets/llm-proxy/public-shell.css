@@ -90,10 +90,11 @@
 
   body mpr-footer.public-site-footer .public-site-footer-layout {
     display: flex;
-    width: 100%;
-    flex-wrap: wrap;
+    width: calc(100% + 1.4rem);
+    margin-inline: -0.7rem;
+    flex-wrap: nowrap;
     justify-content: center;
-    gap: 0.35rem 0.65rem;
-    white-space: normal;
+    gap: 0.25rem;
+    white-space: nowrap;
   }
 }

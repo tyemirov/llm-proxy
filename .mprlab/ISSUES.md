@@ -40,6 +40,188 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B119] (P1) {B118,I215} Keep selected models in one readable column.
+  Goal:
+  Make every selected provider's exact model versions read as one ordered
+  vertical branch on the routing diagram.
+  Requirements:
+  - Render the selected provider's model leaves in one column at desktop,
+    tablet, and mobile widths.
+  - Preserve the compact desktop ingress, narrow provider leaves, generated
+    catalog order, selected connector endpoints, and responsive containment.
+  Validation:
+  - Browser black-box coverage proves the OpenAI model group has exactly one
+    rendered grid column at the desktop acceptance width.
+  - Rebuild and visually inspect a provider with many models, then run the
+    applicable validation from `.mprlab/POLICY.md`.
+  Resolution:
+  - Model groups now render as one 280-pixel-wide column at every supported
+    width, preserving the compact provider stage and exact generated model
+    order.
+  - Increased the desktop diagram's reserved height by 40 pixels so OpenAI's
+    11-row list fits without changing provider positions when a shorter model
+    list is selected.
+  - The browser regression failed first with two rendered model columns. It
+    then exposed the 19.8-pixel provider-branch shift caused by the taller
+    OpenAI list; after reserving the complete list height, all 86 focused
+    browser scenarios passed with stable provider and connector endpoints.
+  - Headed browser inspection verified the generated OpenAI route with all 11
+    model versions in one narrow column. The final run passed all 11 CI gates
+    in 122 seconds with the real TAuth black-box scenario, live-provider
+    preflight, and exact 100% Go statement coverage.
+
+- [x] [B118] (P1) {B117,I215} Compact and center the desktop routing fork.
+  Goal:
+  Make the full-width desktop routing map read as one compact left-to-right
+  Product to Proxy to Providers to Models flow.
+  Requirements:
+  - Shorten the visible Product-to-Proxy connection to at most 24 pixels at the
+    desktop acceptance width.
+  - Reduce provider leaves from 300 pixels to at most 220 pixels so the desktop
+    map reserves more width for exact model leaves.
+  - Vertically center the Product and Proxy nodes against the complete provider
+    branch list while keeping the selected provider in its catalog position.
+  - Preserve the generated catalog, selected connector endpoints, tablet and
+    mobile stacking, keyboard interaction, and responsive containment.
+  Validation:
+  - Browser black-box coverage proves the four desktop stages are ordered left
+    to right, the Product-to-Proxy gap and provider width stay within their
+    limits, and the Product and Proxy centers align with the provider-list
+    center within one CSS pixel.
+  - Rebuild and visually inspect the desktop routing map, then run the
+    applicable validation from `.mprlab/POLICY.md`.
+  Resolution:
+  - Replaced the desktop two-row map with a compact left-to-right ingress,
+    provider, and model grid. The Product-to-Proxy gap is 20 pixels, provider
+    leaves are at most 220 pixels wide, and both ingress nodes align with the
+    full provider-list center within one CSS pixel.
+  - The connector canvas now selects horizontal proxy-to-provider Bézier curves
+    for the desktop stage order while retaining the stacked tablet curve path;
+    provider selection remains in catalog order and the highlighted
+    provider-to-model curve still touches both selected leaves.
+  - The browser regression failed first with 300-pixel provider leaves, a
+    208.8-pixel Product-to-Proxy gap, and 322.4-pixel center offsets. All 86
+    focused browser scenarios then passed after the layout change.
+  - Headed browser inspection selected DeepSeek and verified the compact
+    Product-to-Proxy ingress plus both highlighted Bézier stages. The
+    satisfactory 129-second CI result was reused as the unchanged-input
+    baseline; the final run passed all 11 gates in 117 seconds with 86 browser
+    tests, the real TAuth black-box scenario, live-provider preflight, and exact
+    100% Go statement coverage.
+
+- [x] [B117] (P1) {I215} Keep the selected provider in place and draw its model fan.
+  Goal:
+  Preserve the approved routing fork so selecting any provider visibly draws
+  that provider's outgoing Bézier fan to its supported model leaves.
+  Evidence:
+  - The selected provider receives `order: -1`, so every selection moves to the
+    top of the provider list instead of keeping the generated catalog order.
+  - Existing browser coverage proves only that the canvas is nonempty; it does
+    not prove the selected provider remains in place or that an accent curve
+    leaves its model-facing edge.
+  Requirements:
+  - Keep provider leaves in their generated catalog order across pointer and
+    keyboard selection.
+  - Draw the selected provider-to-model fan from the selected provider's
+    model-facing edge, matching the approved working visualization.
+  - Preserve dynamic catalog generation, exact model selection, responsive
+    behavior, and compact provider and model leaves.
+  Validation:
+  - Add browser black-box coverage that first fails with the current selected
+    provider reordering, then proves multiple provider selections retain their
+    positions and expose accent pixels at the selected provider and model
+    connector endpoints.
+  - Run the applicable validation from `.mprlab/POLICY.md`.
+  Resolution:
+  - Removed the selected-provider order override, so every generated provider
+    remains in its catalog position while selection changes only its visual
+    state and active model group.
+  - The browser regression failed first by proving Moonshot swapped positions
+    with OpenAI. It now proves keyboard and pointer selections keep all provider
+    positions fixed and samples the rendered canvas for accent pixels at both
+    the selected provider's outgoing edge and the selected model's incoming
+    edge.
+  - Headed browser inspection selected Zhipu in its original final position and
+    verified the highlighted proxy-to-provider curve plus the outgoing
+    provider-to-`glm-5.1` Bézier fan.
+  - The satisfactory 119-second CI result was reused as the unchanged-input
+    baseline. The final run after the last source and test edits passed all 11
+    gates in 129 seconds with 86 browser tests, 36 Python tests, the real TAuth
+    black-box scenario, live-provider preflight, and exact 100% Go statement
+    coverage.
+
+- [x] [B116] (P1) {I214,B114} Keep the real mobile sticky footer compact.
+  Goal:
+  Preserve the canonical sticky footer without letting its hydrated MPR UI
+  surface consume excess mobile viewport height.
+  Evidence:
+  - At 390 by 780 pixels, the real `mpr-ui@latest` footer is fixed and reserves
+    its in-flow footprint, but its controls wrap into a 78.6-pixel surface while
+    the canonical compact-footer contract allows at most 56 pixels.
+  - The application Playwright fixture renders a 48-pixel hand-built footer, so
+    its compact-height assertion does not exercise the deployed component path.
+  Requirements:
+  - Retain the supported MPR footer attributes, all canonical links, the exact
+    `Built by Marco Polo Research Lab` project-catalog label, theme control,
+    semantic no-JavaScript fallback, and sticky spacer behavior.
+  - Keep the hydrated footer at or below 56 pixels without horizontal overflow
+    at 390 pixels wide, and preserve desktop geometry.
+  - Verify compact geometry through the real MPR UI black-box browser path; do
+    not claim deployed footer correctness through the application-owned mock.
+  Validation:
+  - Rebuild and inspect representative routes through `http://localhost:4179/`
+    at desktop and 390-pixel widths.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - The supported public wrapper now keeps every footer control on one compact
+    row while retaining the full project label and existing MPR UI inputs.
+  - The real TAuth/MPR UI browser test waits for hydration, then asserts fixed
+    positioning, all viewport anchors, the shared 56-pixel limit, and no footer
+    overflow at 390 pixels wide.
+  - The canonical landing and docs routes at `http://localhost:4179/` rendered
+    54.2-pixel footers at 390 by 780 pixels; every visible control remained
+    inside the viewport, and the project drop-up opened with its full catalog.
+  - The required baseline passed all 11 gates in 110 seconds. The final run
+    passed all 11 gates in 113 seconds with 85 browser tests, 36 Python tests,
+    the real TAuth black-box scenario, live-provider preflight, and exact 100%
+    Go statement coverage.
+
+- [x] [B115] (P1) {F019,I213} Align public capability-catalog table rows.
+  Goal:
+  Keep every provider, model, and capabilities cell on the same visual row
+  boundary in the generated public catalog.
+  Evidence:
+  - At the canonical local landing page, catalog rows are about 67 pixels tall
+    while the Model cell computes as a 42-pixel `display: flex` box, so its
+    bottom border ends above the Provider and Capabilities cell borders.
+  Requirements:
+  - Preserve the semantic table and server-rendered no-JavaScript catalog.
+  - Keep each `td` in the table formatting context and move model identifier
+    and default-badge wrapping and spacing into an inner content wrapper.
+  - Preserve the responsive model-to-default-badge gap at desktop and mobile
+    widths.
+  Validation:
+  - Browser black-box coverage proves that all three cells retain table-cell
+    display and share their row's top and bottom boundaries at desktop and
+    mobile widths.
+  - Rebuild and inspect the catalog through `http://localhost:4179/`.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - The generated Model cell remains a semantic table cell, while the new
+    inner `catalog-model__content` wrapper owns badge wrapping and spacing.
+  - Browser coverage now checks every catalog cell at desktop and mobile
+    widths for table-cell display and exact row-boundary alignment while
+    retaining the eight-pixel default-badge gap.
+  - The rebuilt canonical local page at `http://localhost:4179/` rendered all
+    58 rows and 174 cells with zero top or bottom boundary deviation at 1210
+    and 390 pixels wide; the desktop visual inspection showed continuous rules.
+  - The required baseline passed all 11 gates in 112 seconds. The final run
+    passed all 11 gates in 101 seconds with 85 browser tests, 36 Python tests,
+    the TAuth black-box scenario, live-provider preflight, and exact 100% Go
+    statement coverage.
+
 - [x] [B114] (P1) {B111,B112,B113} Restore the single MPR UI authentication path and correct the shared public contract.
   Goal:
   Keep browser authentication fully owned by MPR UI while preserving the
@@ -2366,6 +2548,164 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Improvements
 
+- [ ] [I216] (P1) {I215,I029,I037} Make one model-operation capability and pricing catalog authoritative.
+  Goal:
+  Publish one tenant-safe catalog for every provider-backed model operation so
+  planning, routing, validation, pricing, public discovery, and official
+  clients use the same provider and model facts.
+  Cross-repository prerequisite:
+  - MediaOps I068 must finish exact condition matching and its reviewed pricing
+    records before those records are imported into LLM Proxy.
+  Requirements:
+  - Define one typed catalog schema for provider identifiers, credential kinds,
+    operation kinds, models, wire contracts, execution lifecycles, media roles,
+    controls, enums, bounds, account-dependent limits, and artifact types.
+  - Add typed prices with components, currency, units, exact conditions,
+    minimum charges, official source, verification date, and an explicit
+    unavailable reason.
+  - Require exact price-condition matches. Missing, incomplete, or conflicting
+    conditions must return a typed unavailable result.
+  - Keep observed provider usage as execution evidence separate from published
+    pricing and management usage telemetry.
+  - Use organization-level canonical provider identifiers at shared credential
+    boundaries. Keep `gemini` and `vertex` distinct because they use different
+    APIs and credentials. Make `xai` canonical for xAI text and video, migrate
+    persisted managed `grok` routes once, and remove the dual selector.
+  - Expose one catalog service consumed by the later
+    `GET /model/v1/capabilities` handler, planning validation, the public
+    catalog, and provider-management choices.
+  - Import the stabilized MediaOps pricing data in one bounded migration and
+    remove each migrated MediaOps provider record during its family cutover.
+  Deliverables:
+  - Add the catalog types, strict loader, deterministic public projection,
+    exact price selector, one-off xAI route migration, and generated docs.
+  - Add catalog revision identifiers that bind plans to the exact capability
+    and pricing snapshot used to create them.
+  Validation:
+  - Prove all accepted operation routes and prices are catalog-backed and that
+    unknown fields, duplicate identifiers, unsupported credential/lifecycle
+    pairs, and ambiguous prices fail startup.
+  - Prove the public projection excludes credentials, private account state,
+    provider handles, and tenant defaults.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [x] [I215] (P1) {F019,I212,I213} Show the generated provider-to-model routing tree.
+  Goal:
+  Make the single LLM Proxy connection and its fan-out across current providers
+  and exact model versions immediately understandable on the public landing
+  page.
+  Requirements:
+  - Generate every provider leaf, text-model leaf, model count, and
+    provider-catalog default from the same validated public capability catalog
+    used by routing and the model matrix.
+  - Keep providers and models as two distinct selectable levels. Selecting a
+    provider must reveal only that provider's exact supported text models and
+    select its catalog default; selecting a model must update the final route.
+  - Preserve semantic no-JavaScript content, keyboard operation, compact MPR
+    styling, responsive geometry, and the existing public catalog above the
+    visualization.
+  - Do not hardcode provider or model identifiers in landing-page JavaScript or
+    expose credentials, base URLs, tenant defaults, or private configuration.
+  Validation:
+  - Prove renderer output changes with catalog data and contains every current
+    provider and text model without retaining either source marker.
+  - Prove provider and model selection, default selection, no-JavaScript
+    content, and narrow-screen geometry through Playwright.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - Replaced the framed, scrollable selector with the approved open fork: one
+    visible product-to-proxy connection, a curved fan to every provider, and a
+    second curved fan from the selected provider to a two-column exact-model
+    leaf grid.
+  - The server renderer still emits all 12 current providers and all 53 current
+    text models from the validated public capability catalog. Browser
+    enhancement promotes the generated provider with the most model leaves,
+    selects its catalog default, and draws every curve from measured generated
+    DOM nodes without a provider or model inventory in JavaScript.
+  - Provider and model controls remain semantic and keyboard-operable. The
+    no-JavaScript artifact keeps the complete generated catalog, while the
+    390-pixel layout stacks the same leaves without horizontal overflow.
+  - Playwright visually verified the open desktop fork and compact mobile
+    composition. Its black-box contract proves all provider leaves remain
+    visible without internal scrolling, the selected model leaves use two
+    desktop columns, path drawing completes, provider and model selection
+    updates the route, and mobile containment holds.
+  - The required baseline passed all 11 gates in 114 seconds. The final run
+    followed the last code edit and passed all 11 gates in 122 seconds with 86
+    browser tests, 36 Python tests, the real TAuth black-box scenario,
+    live-provider preflight, and exact 100% Go statement coverage.
+  Follow-up resolution:
+  - Moved the routing tree directly below the Providers and model capabilities
+    heading and before the summary, search, and generated matrix. The hero is
+    focused on its primary integration message again.
+  - The tree and table now inherit the same 1180-pixel catalog shell. Browser
+    coverage proves their left edge, right edge, and width align within one CSS
+    pixel at desktop width.
+  - Kept the outer canvas full width while capping desktop provider leaves at
+    300 pixels and exact-model leaves at 280 pixels. Mobile leaves continue to
+    use the available responsive width.
+  - Playwright visually verified the full-width fork with compact leaves. The
+    correction baseline passed all 11 gates in 121 seconds; the final run after
+    the last code edit passed all 11 gates in 125 seconds with 86 browser tests,
+    36 Python tests, the real TAuth black-box scenario, live-provider preflight,
+    and exact 100% Go statement coverage.
+  Second follow-up resolution:
+  - Moved the generated routing tree after the complete capability catalog,
+    including its summary, search, matrix, and request limits.
+  - The tree and table retain the same 1180-pixel catalog shell. Browser
+    coverage proves the table precedes the tree and their left edge, right edge,
+    and width align within one CSS pixel at desktop width.
+  - Provider leaves remain capped at 300 pixels and exact-model leaves at 280
+    pixels on desktop. Mobile leaves continue to use the available responsive
+    width.
+  - Playwright visually verified the catalog-first desktop composition. The
+    correction baseline passed all 11 gates in 128 seconds; the final run after
+    the last code edit passed all 11 gates in 119 seconds with 86 browser tests,
+    36 Python tests, the real TAuth black-box scenario, live-provider preflight,
+    and exact 100% Go statement coverage.
+
+- [x] [I214] (P1) {B111,B114} Keep the shared footer sticky on every page.
+  Goal:
+  Pin the canonical compact MPR footer to the viewport bottom across the
+  landing, app, documentation, legal, resource-hub, and resource-article
+  routes.
+  Requirements:
+  - Set the canonical generated footer to the supported sticky state and
+    regenerate every HTML route from its maintained source.
+  - Retain the component's in-flow host footprint so the final main content
+    remains reachable above its fixed hydrated surface.
+  - Preserve the identical footer links, semantic no-JavaScript fallback,
+    compact responsive geometry, and exact header -> main -> footer order.
+  Validation:
+  - Static browser coverage proves every public route and `/app/` carries the
+    same sticky footer contract.
+  - Hydrated browser coverage proves the footer remains fixed to every viewport
+    edge, does not cause horizontal overflow, and does not cover the end of
+    `main` at desktop and mobile widths.
+  - Rebuild and inspect representative routes through
+    `http://localhost:4179/`.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - The canonical shell now renders `sticky="true"`, and all 52 landing, app,
+    documentation, legal, hub, and resource-article HTML pages were regenerated
+    from their maintained sources.
+  - Browser coverage now verifies the identical sticky contract across every
+    public route and `/app/`, then checks the hydrated footer surface against
+    all viewport edges, its in-flow main-content clearance, responsive width,
+    and settings-overlay layer at desktop and mobile widths.
+  - The rebuilt local stack at `http://localhost:4179/` kept the desktop landing
+    footer fixed from 0 to 1280 pixels and the 390-pixel documentation footer
+    fixed without internal overflow; both cleared the end of `main` within the
+    browser's subpixel tolerance. Mobile visual inspection confirmed the
+    wrapped controls remained readable. The local stack was then stopped.
+  - The required baseline passed all 11 gates in 101 seconds. The final run
+    passed all 11 gates in 109 seconds with 85 browser tests, 36 Python tests,
+    the TAuth black-box scenario, live-provider preflight, and exact 100% Go
+    statement coverage.
+
 - [x] [I213] (P1) {F019} Clarify default-route badges in the public model catalog.
   Goal:
   Keep model identifiers and their default-route metadata visually distinct and
@@ -3969,6 +4309,30 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Maintenance
 
+- [ ] [M021] (P1) {F030} Remove the completed MediaOps operation-import bridge.
+  Goal:
+  Leave only the canonical model-operation contract after every selected
+  MediaOps provider record has been migrated.
+  Cross-repository prerequisite:
+  - MediaOps M227 must produce the operator-held final per-tenant migration
+    receipt and prove that every eligible legacy record is migrated or
+    explicitly terminal and locally complete.
+  Requirements:
+  - Reconcile the MediaOps receipt with gateway operation IDs, source-record
+    digests, provider families, terminal classifications, and rejection counts.
+  - Remove the operator-only import command, manifest schemas, provider-family
+    import registrations, migration-only configuration, and bridge docs.
+  - Keep imported rows only in the current canonical operation schema; remove
+    legacy discriminators and source-record shapes after receipt verification.
+  - Prove the public service exposes no import endpoint and every new operation
+    enters through plan plus idempotent create.
+  Validation:
+  - Run static contract checks and public black-box tests proving no migration
+    entrypoint or legacy record shape remains and migrated operations retain
+    status, tenant isolation, recovery, and artifact behavior.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
 - [ ] [M001R] (P2) Backlog hygiene and archive.
   Goal:
   Keep the issue tracker reliable, readable, and focused on active work while preserving resolved history in the appropriate archive.
@@ -4180,6 +4544,419 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 
 ## Features
+
+- [ ] [F022] (P1) {I216} Add the durable provider-neutral model-operation contract.
+  Goal:
+  Extend LLM Proxy from blocking text and dictation into a shared model-provider
+  data plane while keeping MediaOps and other callers responsible for their
+  product operations.
+  Requirements:
+  - Keep `/v2` as the canonical blocking messages contract and `/v3` as the
+    planned sampling contract. Add a distinct `/model/v1` namespace to the
+    canonical OpenAPI document.
+  - Define `GET /model/v1/capabilities`, `POST /model/v1/plans`,
+    `POST /model/v1/operations`, and
+    `GET /model/v1/operations/{operation_id}` with strict request and response
+    schemas and the existing tenant-client-key security boundary.
+  - Make plans provider-call-free and immutable. A plan must contain its exact
+    normalized request, resolved provider/model, catalog revision, estimated
+    price result, expiry, and `plan_id`.
+  - Accept one required `Idempotency-Key` when creating an operation. Repeating
+    the same key and intent must return the existing operation; reusing the key
+    with a different intent digest must return a canonical conflict.
+  - Persist the operation and normalized intent before provider dispatch. Use
+    exactly `not_dispatched`, `dispatched`, `succeeded`, `failed`, and
+    `uncertain` as provider-execution states.
+  - Advance to `dispatched` immediately before the provider boundary. Resume a
+    `dispatched` or `uncertain` operation only through its stored provider
+    handle; automatic provider resubmission is outside the contract.
+  - Add a durable worker lease/recovery model that safely resumes
+    `not_dispatched` work after restart and preserves terminal records.
+  - Add a temporary operator-only, non-HTTP import command for strict
+    tenant-scoped migration manifests. It must create canonical operation rows
+    without provider dispatch, require a family-specific validator, converge by
+    source-record digest, and emit a deterministic source-to-operation receipt
+    with the manifest digest. M021 removes this bridge after all MediaOps family
+    cutovers complete.
+  - Store provider-native task, request, response, interaction, history, and
+    file handles only in the encrypted server-side operation record. Return one
+    proxy operation identifier to callers.
+  - Support typed tenant provider credential profiles, including API keys and
+    Google Cloud workload-identity/service-account references with exact
+    project and location metadata. Publish availability without secret values.
+  - Keep the durable operation ledger separate from the current at-most-once
+    managed usage telemetry.
+  - Return sanitized, correlated errors with provider, model, proxy request id,
+    retryability, and exact pre-dispatch or post-dispatch classification.
+  Deliverables:
+  - Add the OpenAPI schemas, transport-neutral operation service, durable store
+    migrations, worker, idempotency index, typed credential profiles, and
+    operation-status handlers plus the temporary import framework.
+  - Document the ownership boundary, state machine, plan/execute flow,
+    retention policy, and restart behavior.
+  Validation:
+  - Prove persist-before-dispatch, duplicate-key convergence, intent conflict,
+    restart recovery, worker lease expiry, tenant isolation, and each terminal
+    state through public handlers and fake providers.
+  - Prove cancellation and transport loss after dispatch become `uncertain`
+    with reusable provider evidence.
+  - Prove logs, responses, and usage records exclude credentials, raw provider
+    bodies, prompts, generated media, and provider-native handles.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [ ] [F023] (P1) {F022} Add tenant-scoped model assets and official operation clients.
+  Goal:
+  Carry large model inputs and outputs through opaque, integrity-bound assets
+  and expose the model-operation contract only through released official
+  clients.
+  Requirements:
+  - Add `POST /model/v1/assets` for bounded streaming upload and
+    `GET /model/v1/artifacts/{artifact_id}` for authenticated download through
+    opaque tenant-scoped identifiers.
+  - Record MIME type, byte size, SHA-256, ownership, creation time, retention
+    expiry, and provider-readable staging state for every asset.
+  - Add a strict object-store configuration with a filesystem fixture backend
+    and a GCS production backend for provider staging.
+  - Stream large bytes through the asset store and use asset identifiers in
+    operation payloads. Keep local filesystem paths at the caller boundary.
+  - Materialize provider outputs into gateway-owned artifacts before reporting
+    operation success unless the catalog declares a durable provider artifact
+    that the gateway can retrieve on demand.
+  - Enforce tenant isolation, bounded uploads/downloads, MIME and digest
+    verification, expiry, and deterministic cleanup.
+  - Extend `pkg/llmproxyclient` with validated constructors and typed
+    `PlanOperation`, `CreateOperation`, `GetOperation`, `UploadAsset`, and
+    `DownloadArtifact` APIs.
+  - Release the official Go client before a downstream application begins its
+    integration foundation.
+  Deliverables:
+  - Add the asset OpenAPI schemas and handlers, object-store abstraction,
+    cleanup worker, official Go client surface, examples, and release notes.
+  Validation:
+  - Use a local fake server to prove every official-client path, authentication
+    shape, idempotency header, typed error, and streaming cancellation path.
+  - Prove truncated uploads, digest mismatch, oversized media, cross-tenant
+    reads, expired assets, interrupted downloads, and cleanup races fail with
+    durable and sanitized evidence.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [ ] [F024] (P1) {F022,F023,I216} Add image generation and editing to model operations.
+  Goal:
+  Make LLM Proxy the sole provider boundary for the current OpenAI, Vertex, and
+  FAL image-generation and image-editing routes.
+  Cross-repository sequence:
+  - Begin the provider slice after MediaOps I069 adopts the released operation
+    client and linked product/provider operation records.
+  Requirements:
+  - Add typed `image.generate` and `image.edit` schemas covering the current
+    prompts, image and mask roles, output counts, sizes, aspects, quality,
+    background, formats, compression, OpenAI Images/Responses controls, and
+    supported multi-image inputs.
+  - Add `openai`, `vertex`, and `fal` provider adapters backed by tenant-owned
+    credential profiles and the authoritative model-operation catalog.
+  - Convert uploaded image asset identifiers into each provider's exact input
+    shape and materialize all terminal output bytes as gateway artifacts.
+  - Preserve FAL queue request/response handles in the durable operation and
+    resolve recovery through the proxy operation id.
+  - Register the exact recoverable FAL image record shapes with the temporary
+    import command, classify their current state without dispatch, and return a
+    canonical gateway operation mapping to the MediaOps cutover.
+  - Record normalized usage and exact price evidence without treating either
+    as billing settlement.
+  Deliverables:
+  - Add provider adapters, catalog entries, plan validation, recovery handlers,
+    fake upstream fixtures, official-client request types, and public docs.
+  Validation:
+  - Prove generate/edit parity for every current route, multi-output ordering,
+    asset integrity, provider error sanitization, restart recovery, and
+    idempotent duplicate submission through public black-box tests.
+  - Run one explicitly enabled minimal live request per provider after the fake
+    provider suite and repository CI pass.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [ ] [F025] (P1) {F024} Add durable video generation to model operations.
+  Goal:
+  Make LLM Proxy the sole provider boundary for Vertex Veo, Vertex Gemini Omni,
+  Runway, FAL, Kling, and xAI video generation.
+  Cross-repository sequence:
+  - Begin this slice after MediaOps I070 completes the image cutover and proves
+    the production operation and artifact boundary.
+  Requirements:
+  - Add a typed `video.generate` contract for prompt, start/end frame, source
+    video, ordered image/video/audio references, reusable provider assets,
+    duration, aspect, resolution, audio, extension, seed, moderation, and
+    provider-supported controls.
+  - Use gateway asset identifiers for every local input and typed external
+    references only where the selected provider accepts them directly.
+  - Implement Vertex Veo and Gemini Omni operations, Runway tasks, FAL queues,
+    Kling tasks, and xAI generation/private-file lifecycles as durable provider
+    operations with exact provider-handle recovery.
+  - Preserve GCS/object-store staging, xAI retained-file authentication and
+    cleanup evidence, observed usage, and every current recoverable artifact.
+  - Make `xai` the only xAI selector supplied by the canonical catalog after
+    the I216 persisted-route migration.
+  - Register exact import validators for selected recoverable Vertex, Gemini
+    Omni, Runway, FAL, Kling, and xAI video records. Imported records must enter
+    the canonical operation schema without submitting new provider work.
+  Deliverables:
+  - Add all video adapters, operation schemas, capability/price entries,
+    recovery paths, official-client types, fixture servers, and docs.
+  Validation:
+  - Prove every text, keyframe, reference, extension, and source-video mode,
+    long polling across restart, uncertain transport recovery, output hash and
+    MIME validation, and provider resource cleanup.
+  - Run the existing minimal opt-in live canaries through LLM Proxy after the
+    fake provider suite and repository CI pass.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [ ] [F026] (P1) {F025} Add ElevenLabs speech, music, and alignment operations.
+  Goal:
+  Make LLM Proxy the sole external-provider boundary for the current
+  ElevenLabs account while MediaOps retains narration planning and local audio
+  assembly.
+  Cross-repository sequence:
+  - Begin this slice after MediaOps I071 completes the video-generation cutover.
+  Requirements:
+  - Add typed operations for speech generation, speech conversion, voice
+    discovery, history listing/download, prompt music, composition plans,
+    detailed and streamed composition, composition upload, video-to-music,
+    stem separation, and forced alignment.
+  - Preserve exact voice/model settings, pronunciation dictionaries,
+    continuity context, timestamps, seed, normalization, pacing/speed
+    translation, formats, provider concurrency, and history identifiers.
+  - Keep MediaOps-owned render-plan chunking, narrative cadence, deterministic
+    chunk reuse, stitching, and final composite validation outside the gateway;
+    each provider request becomes one durable gateway operation.
+  - Materialize provider audio and JSON outputs as typed artifacts and retain
+    history or song identifiers as internal recovery evidence.
+  - Keep Dictator as a separately consumed MPR gRPC service.
+  - Register exact import validators for selected ElevenLabs history and
+    provider-operation records and return canonical operation mappings without
+    replaying generation or mutation.
+  Deliverables:
+  - Add the ElevenLabs credential profile, adapters, catalogs, prices,
+    official-client types, recovery handlers, fake upstream fixtures, and docs.
+  Validation:
+  - Prove all read-only, paid, upload, streaming, and recovery paths; bounded
+    concurrency; cancellation; exact output order; and artifact integrity.
+  - Run explicitly enabled minimal ElevenLabs live acceptance only after the
+    fake provider suite and repository CI pass.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [ ] [F027] (P1) {F026} Add provider account mutations, avatars, translation, and lip-sync.
+  Goal:
+  Complete gateway ownership of external media-provider credentials and
+  provider-native task recovery for HeyGen and Kling account operations.
+  Cross-repository sequence:
+  - Begin this slice after MediaOps I072 completes the ElevenLabs cutover.
+  Requirements:
+  - Add typed operations for HeyGen translation, existing-video lip-sync,
+    photo-avatar creation, motion enhancement, avatar-video generation, quota
+    reads, and Kling/HeyGen lip-sync where currently supported.
+  - Add typed Kling reusable-asset create/list/get/delete operations with exact
+    mutation and destructive classifications.
+  - Require immutable plans and idempotency for paid and mutating work. Preserve
+    provider task ids internally and expose only gateway operation or asset ids.
+  - Use gateway assets for all uploaded image, audio, video, and character
+    inputs and materialize terminal video outputs through the artifact contract.
+  - Preserve provider quota and observed-usage evidence separately from the
+    published price catalog.
+  - Register exact import validators for selected HeyGen and Kling task and
+    reusable-asset records. Import must preserve ownership and terminal state
+    without replaying paid, mutating, or destructive work.
+  Deliverables:
+  - Add HeyGen and Kling operation adapters, catalogs, prices, recovery,
+    official-client types, provider fixtures, and docs.
+  Validation:
+  - Prove read-only versus paid versus mutating versus destructive behavior,
+    duplicate idempotency, restart recovery, asset ownership, quota reporting,
+    and sanitized errors through public black-box tests.
+  - Run explicitly enabled minimal live acceptance only after the fake provider
+    suite and repository CI pass.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [ ] [F028] (P1) {F027} Add HeyGen Avatar V as a gateway-owned avatar engine.
+  Goal:
+  Add the current Avatar V engine to the gateway HeyGen avatar contract before
+  MediaOps exposes it through its product surfaces.
+  Cross-repository sequence:
+  - Begin after MediaOps I073 completes the base HeyGen/Kling cutover.
+  Requirements:
+  - Add exact engine values `avatar_iv` and `avatar_v` to the HeyGen avatar-video
+    operation and capability catalog.
+  - Resolve the selected look through `GET /v3/avatars/looks/{look_id}` and
+    require `supported_api_engines` to contain `avatar_v` before submitting an
+    Avatar V operation.
+  - Reject Avatar IV-only `motion_prompt` and `expressiveness` controls for an
+    Avatar V plan and preserve the selected engine in the immutable intent.
+  - Use the existing tenant-owned HeyGen credential profile, durable operation
+    state, gateway assets, price evidence, and artifact recovery.
+  Deliverables:
+  - Add the provider adapter fields, catalog metadata, official-client types,
+    HeyGen fixtures, docs, and an explicitly enabled paid live target.
+  Validation:
+  - Prove eligible success, ineligible pre-dispatch rejection, engine-specific
+    control rejection, terminal artifact download, and restart recovery.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [ ] [F029] (P1) {F028} Add MiniMax H3 V2 video generation to model operations.
+  Goal:
+  Add the provider-qualified MiniMax H3 V2 route to the gateway before MediaOps
+  exposes the model through its video product contracts.
+  Cross-repository sequence:
+  - Begin after MediaOps I066 completes the Avatar V product exposure.
+  Requirements:
+  - Add canonical provider `minimax`, exact model `MiniMax-H3`, and only the
+    documented V2 create/query and `video_generation_input` upload contracts.
+  - Support text, first/last frame, and reference image/video/audio roles with
+    the documented mutual exclusions, media limits, 768P/2K resolutions,
+    4..15-second duration, and exact aspect behavior.
+  - Store provider task and upload ids in the durable operation, poll only the
+    V2 task resource, materialize the terminal MP4 as a gateway artifact, and
+    recover through the gateway operation id.
+  - Publish the H3 price as unavailable until MiniMax publishes an exact rate;
+    preserve returned duration and media counts as observed usage.
+  - Use one tenant-owned MiniMax credential profile and catalog-owned account
+    concurrency.
+  Deliverables:
+  - Add the MiniMax adapter, catalog, official-client types, provider fixtures,
+    recovery, docs, and an explicitly enabled minimal live target.
+  Validation:
+  - Prove exact payload roles, upload URI mapping, polling states, restart and
+    uncertain recovery, input limits, artifact integrity, and absence of Hailuo
+    V1 behavior through public black-box tests.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [ ] [F030] (P1) {F029} Add Speechify text-to-speech and voice discovery to model operations.
+  Goal:
+  Add the current Speechify complete-response speech and voice-discovery
+  contracts to the gateway before MediaOps exposes them in narration flows.
+  Cross-repository sequence:
+  - Begin after MediaOps I060 completes the MiniMax H3 product exposure.
+  Requirements:
+  - Add canonical provider `speechify`, live `GET /v1/audio/models` and
+    `GET /v1/voices` discovery, and complete-response `POST /v1/audio/speech`.
+  - Admit only non-deprecated models that declare the speech endpoint and
+    preserve exact model, language, voice, output format, billable character,
+    request-id, and speech-mark metadata.
+  - Apply the documented input and pagination limits, account concurrency,
+    `Retry-After`, and provider error classification before returning a typed
+    result.
+  - Decode and validate returned audio into a gateway artifact and expose
+    provider-tagged speech marks as a JSON artifact. Mark provider recovery
+    unavailable when no durable retrieval handle exists.
+  - Use one tenant-owned Speechify credential profile. Publish price
+    unavailable until an exact official rate is cataloged.
+  Deliverables:
+  - Add Speechify adapters, live discovery projection, catalog entries,
+    official-client types, fixtures, docs, and an explicitly enabled live
+    discovery/minimal speech target.
+  Validation:
+  - Prove discovery, voice pagination, exact speech payload, audio decoding,
+    speech marks, rate/concurrency handling, transport uncertainty, secret
+    safety, and artifact integrity through public black-box tests.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [!] [F021] (P1) Add OAuth-authenticated tenant-scoped MCP access.
+  Goal:
+  An authenticated user can connect a remote MCP client to one owned tenant.
+  The server uses that tenant's saved provider credentials, routing defaults,
+  and standard text-generation lifecycle for each MCP request.
+  Current contract:
+  - Public proxy requests use a generated tenant secret in `key=...`.
+  - TAuth browser sessions authorize management operations.
+  - Provider credentials remain on the server and belong to one tenant.
+  - TAuth does not yet provide the OAuth authorization-server contract that a
+    remote MCP client requires.
+  Requirements:
+  - Serve MCP protocol version `2026-07-28` at the exact resource URL
+    `https://llm-proxy-api.mprlab.com/mcp/{tenant_id}`.
+  - Use the official Go MCP SDK in stateless Streamable HTTP mode. Return JSON
+    responses and reject every unsupported protocol version.
+  - Do not create an MCP session or implement an earlier MCP transport.
+  - Treat the exact MCP URL as the OAuth protected-resource identifier and
+    access-token audience.
+  - Publish path-specific OAuth Protected Resource Metadata at
+    `/.well-known/oauth-protected-resource/mcp/{tenant_id}`.
+  - Return an RFC-compliant Bearer challenge for an unauthenticated MCP
+    request. Include the protected-resource metadata URL in the challenge.
+  - Validate each JWT access token signature, issuer, subject, exact audience,
+    expiry, and required `llm-proxy:use` scope at the HTTP edge.
+  - Confirm that the token subject owns `{tenant_id}` before an MCP operation.
+    Return the same `404 Not Found` result for a missing tenant and a foreign
+    tenant after successful token validation.
+  - Keep provider credentials on the server. Never return provider credentials,
+    tenant secrets, access tokens, refresh tokens, or session data through MCP.
+  - Expose one tool named `llm_proxy.generate_text`. Require `messages` and
+    accept optional `provider`, `model`, `web_search`, `max_tokens`,
+    `reasoning_effort`, and `request_timeout_seconds` inputs.
+  - Use the canonical `/v2` message and attachment contract for the tool.
+    Preserve ordered image and audio attachments on user messages.
+  - Return generated text and structured `request_id`, `provider`, `model`,
+    `usage`, and `request_timeout_seconds` fields from a successful tool call.
+  - Mark the tool as not read-only, not destructive, not idempotent, and
+    open-world because one call can create provider charges.
+  - Return a sanitized MCP tool error with `isError: true` for an accepted tool
+    call that fails. Preserve the canonical proxy error classification without
+    exposing an upstream body, provider message, prompt, response, or secret.
+  - Expose `llm-proxy://routes` as a tenant-scoped resource. Return only the
+    tenant's configured text routes, defaults, and declared capabilities.
+  - Keep management and dictation outside this first MCP contract.
+  - Extract one transport-neutral text-generation service from the current
+    HTTP handlers. Make `/v2` and MCP use the same routing, admission, queue,
+    rate-limit, timeout, cancellation, continuation, error, and usage logic.
+  - Record MCP usage with endpoint value `mcp`. Record the logical proxy result
+    status when an MCP tool error uses a successful HTTP transport response.
+  - Add a `Copy MCP URL` action for each owned tenant. Show the action only
+    after the tenant has at least one configured text route.
+  - Document the MCP URL, OAuth flow, tool schema, resource schema, client
+    configuration, security boundary, and provider-key requirement.
+  - Add the MCP route and OAuth metadata to OpenAPI, runtime configuration, and
+    the repository deployment capability contract.
+  - Keep local acceptance separate from live deployment acceptance. Do not
+    contact or change production during implementation.
+  Deliverables:
+  - Add the stateless MCP transport and the path-specific protected-resource
+    metadata endpoint.
+  - Add strict OAuth bearer-token validation and tenant ownership checks.
+  - Add the shared text-generation service, `llm_proxy.generate_text` tool,
+    and `llm-proxy://routes` resource.
+  - Add tenant UI copy, configuration, OpenAPI, deployment, and user-guide
+    updates for the MCP connection contract.
+  - Add black-box integration and browser coverage through public entry points.
+  Validation:
+  - Run an official MCP client against the real local HTTP route, real local
+    TAuth OAuth flow, and a fake upstream provider.
+  - Verify successful authorization-code and PKCE login, token refresh, token
+    revocation, and consent behavior.
+  - Verify missing, malformed, expired, wrong-issuer, wrong-audience, and
+    wrong-scope tokens. Verify missing and foreign tenant identifiers.
+  - Verify exact tool discovery, input-schema validation, route selection,
+    defaults, media inputs, structured success output, and route-resource data.
+  - Verify queue rejection, provider rate limits, request timeouts, caller
+    cancellation, sanitized tool errors, and managed usage records.
+  - Verify that logs, MCP results, OAuth responses, and browser content contain
+    no provider credential, tenant secret, token, prompt, or generated response.
+  - Run `/v2` regression scenarios to prove one shared execution lifecycle and
+    unchanged tenant-secret authentication for the REST contract.
+  - Use MCP Inspector and one supported remote MCP client for manual local
+    acceptance. Record live-host acceptance as a separate deployment result.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Blocked: TAuth F001 must first provide a deployed OAuth 2.1 authorization
+  server.
+  The server must support authorization code plus PKCE, discovery, JWKS,
+  resource indicators, audience-bound tokens, rotating refresh tokens,
+  consent, revocation, and MCP-compatible client metadata or registration.
 
 - [ ] [F020] (P1) Design and implement low-level sampling controls in a new v3 API contract and provider adapters.
   Goal:

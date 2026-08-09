@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
   assertPublicDocumentShell,
+  PUBLIC_FOOTER_COMPACT_MAX_HEIGHT,
   renderLandingHeader,
   renderPublicHeader,
 } from "../../scripts/public_site_shell.mjs";
@@ -71,11 +72,103 @@ const mprUICSSURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@lat
 const mprUIConfigURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js";
 const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
 const forbiddenTAuthBrowserClientURL = "https://tauth.mprlab.com/tauth.js";
-const compactLandingFooterMaxHeight = 56;
+const catalogColumnCount = 3;
 const b020ScreenshotDirectory = path.join(repoRoot, "output/playwright");
 const httpOK = 200;
 const httpNotFound = 404;
 const httpInternalServerError = 500;
+const routingConnectorEndpointRadius = 4;
+const routingConnectorColorTolerance = 2;
+const routingDesktopCenterTolerance = 1;
+const routingDesktopProductProxyGapMaximum = 24;
+const routingDesktopProviderWidthMaximum = 220;
+
+/**
+ * @param {import("@playwright/test").Locator} routingTree
+ * @returns {Promise<Record<string, number>>}
+ */
+async function routingProviderTopPositions(routingTree) {
+  return routingTree.locator("[data-route-provider]").evaluateAll((providerButtons) => Object.fromEntries(
+    providerButtons.map((providerButton) => {
+      if (!(providerButton instanceof HTMLElement) || !providerButton.dataset.routeProvider) {
+        throw new Error("routing_tree_provider_position_invalid");
+      }
+      return [providerButton.dataset.routeProvider, providerButton.getBoundingClientRect().top + window.scrollY];
+    }),
+  ));
+}
+
+/**
+ * @param {import("@playwright/test").Locator} routingTree
+ */
+async function expectSelectedRoutingFanEndpoints(routingTree) {
+  const endpointEvidence = await routingTree.evaluate((tree, connectorContract) => {
+    const canvas = tree.querySelector("[data-route-canvas]");
+    const selectedProvider = tree.querySelector('[data-route-provider][aria-pressed="true"]');
+    const selectedModel = tree.querySelector('[data-route-model-group]:not([hidden]) [data-route-model][aria-pressed="true"]');
+    if (!(canvas instanceof HTMLCanvasElement) || !(selectedProvider instanceof HTMLElement) || !(selectedModel instanceof HTMLElement)) {
+      throw new Error("routing_tree_selected_connector_endpoint_missing");
+    }
+    const drawingContext = canvas.getContext("2d", { willReadFrequently: true });
+    if (!drawingContext) {
+      throw new Error("routing_tree_canvas_context_missing");
+    }
+    const canvasBounds = canvas.getBoundingClientRect();
+    const providerBounds = selectedProvider.getBoundingClientRect();
+    const modelBounds = selectedModel.getBoundingClientRect();
+    const accentColor = getComputedStyle(tree).getPropertyValue("--routing-tree-accent").trim();
+    const colorProbe = document.createElement("span");
+    colorProbe.style.color = accentColor;
+    tree.append(colorProbe);
+    const accentChannels = getComputedStyle(colorProbe).color.match(/\d+/gu)?.slice(0, 3).map(Number);
+    colorProbe.remove();
+    if (!accentChannels || accentChannels.length !== 3) {
+      throw new Error("routing_tree_accent_color_invalid");
+    }
+    const canvasScaleHorizontal = canvas.width / canvasBounds.width;
+    const canvasScaleVertical = canvas.height / canvasBounds.height;
+    const hasAccentPixel = (pageHorizontal, pageVertical) => {
+      const centerHorizontal = Math.round((pageHorizontal - canvasBounds.left) * canvasScaleHorizontal);
+      const centerVertical = Math.round((pageVertical - canvasBounds.top) * canvasScaleVertical);
+      const scaledRadius = Math.ceil(connectorContract.endpointRadius * Math.max(canvasScaleHorizontal, canvasScaleVertical));
+      const sampleLeft = Math.max(0, centerHorizontal - scaledRadius);
+      const sampleTop = Math.max(0, centerVertical - scaledRadius);
+      const sampleRight = Math.min(canvas.width, centerHorizontal + scaledRadius + 1);
+      const sampleBottom = Math.min(canvas.height, centerVertical + scaledRadius + 1);
+      const pixelChannels = drawingContext.getImageData(
+        sampleLeft,
+        sampleTop,
+        sampleRight - sampleLeft,
+        sampleBottom - sampleTop,
+      ).data;
+      for (let channelOffset = 0; channelOffset < pixelChannels.length; channelOffset += 4) {
+        const redDifference = Math.abs(pixelChannels[channelOffset] - accentChannels[0]);
+        const greenDifference = Math.abs(pixelChannels[channelOffset + 1] - accentChannels[1]);
+        const blueDifference = Math.abs(pixelChannels[channelOffset + 2] - accentChannels[2]);
+        if (
+          redDifference <= connectorContract.colorTolerance
+          && greenDifference <= connectorContract.colorTolerance
+          && blueDifference <= connectorContract.colorTolerance
+          && pixelChannels[channelOffset + 3] > 0
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
+    return {
+      modelEndpoint: hasAccentPixel(modelBounds.left, modelBounds.top + modelBounds.height / 2),
+      providerIncomingEndpoint: hasAccentPixel(providerBounds.left, providerBounds.top + providerBounds.height / 2),
+      providerEndpoint: hasAccentPixel(providerBounds.right, providerBounds.top + providerBounds.height / 2),
+    };
+  }, {
+    colorTolerance: routingConnectorColorTolerance,
+    endpointRadius: routingConnectorEndpointRadius,
+  });
+  expect(endpointEvidence.providerIncomingEndpoint).toBe(true);
+  expect(endpointEvidence.providerEndpoint).toBe(true);
+  expect(endpointEvidence.modelEndpoint).toBe(true);
+}
 
 /**
  * @param {string} moduleSource
@@ -185,14 +278,28 @@ test("public landing explains the product and exposes the generated capability c
   const audienceOffset = html.indexOf('id="audience-title"');
   const capabilitiesOffset = html.indexOf('id="capabilities"');
   const modelsOffset = html.indexOf('id="models"');
+  const routingTreeOffset = html.indexOf('<routing-tree class="routing-tree"');
+  const capabilityCatalogOffset = html.indexOf("<capability-catalog");
   expect(integrationOffset).toBeGreaterThan(-1);
   expect(integrationOffset).toBeLessThan(audienceOffset);
   expect(audienceOffset).toBeLessThan(capabilitiesOffset);
   expect(capabilitiesOffset).toBeLessThan(modelsOffset);
+  expect(modelsOffset).toBeLessThan(capabilityCatalogOffset);
+  expect(capabilityCatalogOffset).toBeLessThan(routingTreeOffset);
   expect(html).toContain(`${LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE}="${applicationPath}"`);
   expect(html).not.toContain("sign-in-redirect-url=");
   expect(html).toContain(`"href":"${resourcesPath}"`);
   expect(html).toContain(`href="${apiDocumentationPath}"`);
+  expect(html).toContain('<routing-tree class="routing-tree" data-enhanced="false" aria-label="Interactive LLM routing map">');
+  expect(html).toContain("One integration. Choose the exact route.");
+  expect(html).toContain('<canvas class="routing-tree__connectors" data-route-canvas aria-hidden="true"></canvas>');
+  expect(html).toContain('<span>12 providers · 53 text models</span>');
+  expect(html).toContain('data-route-provider="deepseek"');
+  expect(html).toContain('data-route-provider="qwencloud"');
+  expect(html).toContain('data-route-provider="moonshot"');
+  expect(html).toContain('data-route-model="kimi-k2.6" data-route-default-model="true"');
+  expect(html).toContain('data-route-model="qwen3.8-max-preview" data-route-default-model="true"');
+  expect(html).not.toContain("llm-proxy-routing-tree");
   expect(html).toContain('<table class="catalog-table">');
   expect(html).toContain('<strong>12</strong><span>Providers</span>');
   expect(html).toContain('<strong>58</strong><span>Models</span>');
@@ -202,10 +309,10 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('data-catalog-sort-header="capabilities"');
   expect(html).not.toContain('<th scope="col">Dictation models</th>');
   expect(html).toContain(
-    '<code data-catalog-model-id>gpt-4.1</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span>',
+    '<span class="catalog-model__content"><code data-catalog-model-id>gpt-4.1</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span>',
   );
   expect(html).toContain(
-    '<code data-catalog-model-id>gpt-4o-mini-transcribe</code><span class="catalog-model__default" title="This is the provider catalog default for dictation routing; account settings can select another model.">Default for dictation</span>',
+    '<span class="catalog-model__content"><code data-catalog-model-id>gpt-4o-mini-transcribe</code><span class="catalog-model__default" title="This is the provider catalog default for dictation routing; account settings can select another model.">Default for dictation</span></span>',
   );
   expect(html).toContain('data-model="gpt-4o-mini-transcribe" data-capabilities="dictation"');
   expect(html).toContain('aria-label="Search all model characteristics"');
@@ -240,7 +347,7 @@ test("public landing explains the product and exposes the generated capability c
   ).toBeLessThan(html.indexOf(`<script src="${mprUIConfigURL}"></script>`));
   expect(html).toContain('<link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">');
   expect(html).toContain('<mpr-header\n      class="public-site-header"');
-  expect(html).toContain('<mpr-footer\n      class="public-site-footer"\n      size="small"\n      sticky="false"');
+  expect(html).toContain('<mpr-footer\n      class="public-site-footer"\n      size="small"\n      sticky="true"');
   expect(html).toContain(`privacy-link-href="${privacyPath}"`);
   expect(html).toContain('links-collection=');
   expect(html).toContain("Built by Marco Polo Research Lab");
@@ -267,6 +374,7 @@ test("public landing explains the product and exposes the generated capability c
   expect(managementHTML).toContain(
     `<script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=${applicationModuleRevision}"></script>`,
   );
+  expect(managementHTML).toContain('<mpr-footer\n      class="public-site-footer"\n      size="small"\n      sticky="true"');
   for (const moduleFile of applicationModuleFiles) {
     const moduleSource = await readFile(path.join(siteSourceRoot, "assets/llm-proxy/js", moduleFile), "utf8");
     for (const specifier of runtimeJavaScriptSpecifiers(moduleSource)) {
@@ -517,10 +625,22 @@ test("public landing explains the product and exposes the generated capability c
   expect(appIconSVG).toContain("#4ad3d9");
 });
 
-test("the capability catalog remains complete without JavaScript", async ({ browser }) => {
+test("the routing tree and capability catalog remain complete without JavaScript", async ({ browser }) => {
   const browserContext = await browser.newContext({ javaScriptEnabled: false });
   const page = await browserContext.newPage();
   await page.goto(baseURL);
+
+  const routingTree = page.locator("routing-tree");
+  await expect(page.locator("#models > routing-tree")).toHaveCount(1);
+  await expect(routingTree).toHaveAttribute("data-enhanced", "false");
+  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(12);
+  await expect(routingTree.locator("[data-route-model]")).toHaveCount(53);
+  await expect(routingTree.locator('[data-route-provider="anthropic"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-model-group="anthropic"]')).toBeVisible();
+  await expect(routingTree.locator('[data-route-model-group="moonshot"]')).toBeHidden();
+  await expect(routingTree.locator('[data-route-selected-provider]')).toHaveText("anthropic");
+  await expect(routingTree.locator('[data-route-selected-model]')).toHaveText("claude-sonnet-4-6");
+  await expect(routingTree.locator("button:enabled")).toHaveCount(0);
 
   const catalog = page.locator("capability-catalog");
   await expect(catalog).toHaveAttribute("data-enhanced", "false");
@@ -540,6 +660,146 @@ test("the capability catalog remains complete without JavaScript", async ({ brow
   await expect(projects.getByRole("link")).toHaveCount(10);
 
   await browserContext.close();
+});
+
+test("visitors can fan from one proxy connection into exact provider model versions", async ({ page }) => {
+  await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(baseURL);
+
+  const routingTree = page.locator("routing-tree");
+  const selectedProvider = routingTree.locator("[data-route-selected-provider]");
+  const selectedModel = routingTree.locator("[data-route-selected-model]");
+  const moonshotProvider = routingTree.locator('[data-route-provider="moonshot"]');
+  await expect(routingTree).toHaveAttribute("data-enhanced", "true");
+  await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "true");
+  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(12);
+  await expect(routingTree.locator("[data-route-provider]:visible")).toHaveCount(12);
+  await expect(routingTree.locator("[data-route-model]")).toHaveCount(53);
+  await expect(selectedProvider).toHaveText("openai");
+  await expect(selectedModel).toHaveText("gpt-4.1");
+  const routeCanvasDimensions = await routingTree.locator("[data-route-canvas]").evaluate((canvas) => ({
+    height: canvas.height,
+    width: canvas.width,
+  }));
+  expect(routeCanvasDimensions.height).toBeGreaterThan(0);
+  expect(routeCanvasDimensions.width).toBeGreaterThan(0);
+  const providerBranchGeometry = await routingTree.locator(".routing-tree__provider-branches").evaluate((branches) => ({
+    clientHeight: branches.clientHeight,
+    overflowY: getComputedStyle(branches).overflowY,
+    scrollHeight: branches.scrollHeight,
+  }));
+  expect(providerBranchGeometry.overflowY).toBe("visible");
+  expect(providerBranchGeometry.scrollHeight).toBe(providerBranchGeometry.clientHeight);
+  const openAIModelColumns = await routingTree.locator('[data-route-model-group="openai"] .routing-tree__model-branches').evaluate(
+    (branches) => getComputedStyle(branches).gridTemplateColumns.split(" ").length,
+  );
+  expect(openAIModelColumns).toBe(1);
+  const leafWidths = await routingTree.evaluate((tree) => {
+    const widths = (selector) => [...tree.querySelectorAll(selector)].map((leaf) => leaf.getBoundingClientRect().width);
+    return {
+      widestModel: Math.max(...widths('[data-route-model-group="openai"] [data-route-model]')),
+      widestProvider: Math.max(...widths("[data-route-provider]")),
+    };
+  });
+  expect.soft(leafWidths.widestProvider).toBeLessThanOrEqual(routingDesktopProviderWidthMaximum);
+  expect(leafWidths.widestModel).toBeLessThanOrEqual(280);
+  const desktopForkGeometry = await routingTree.evaluate((tree) => {
+    const product = tree.querySelector("[data-route-product]");
+    const proxy = tree.querySelector("[data-route-proxy]");
+    const providerBranches = tree.querySelector(".routing-tree__provider-branches");
+    const modelStage = tree.querySelector(".routing-tree__stage--models");
+    if (
+      !(product instanceof HTMLElement)
+      || !(proxy instanceof HTMLElement)
+      || !(providerBranches instanceof HTMLElement)
+      || !(modelStage instanceof HTMLElement)
+    ) {
+      throw new Error("routing_tree_desktop_stage_missing");
+    }
+    const productBounds = product.getBoundingClientRect();
+    const proxyBounds = proxy.getBoundingClientRect();
+    const providerBounds = providerBranches.getBoundingClientRect();
+    const modelBounds = modelStage.getBoundingClientRect();
+    const providerCenter = providerBounds.top + providerBounds.height / 2;
+    return {
+      modelFollowsProviders: providerBounds.right < modelBounds.left,
+      productCenterDifference: Math.abs(productBounds.top + productBounds.height / 2 - providerCenter),
+      proxyFollowsProduct: productBounds.right < proxyBounds.left,
+      productProxyGap: proxyBounds.left - productBounds.right,
+      providerFollowsProxy: proxyBounds.right < providerBounds.left,
+      proxyCenterDifference: Math.abs(proxyBounds.top + proxyBounds.height / 2 - providerCenter),
+    };
+  });
+  expect.soft(desktopForkGeometry.proxyFollowsProduct).toBe(true);
+  expect.soft(desktopForkGeometry.providerFollowsProxy).toBe(true);
+  expect.soft(desktopForkGeometry.modelFollowsProviders).toBe(true);
+  expect.soft(desktopForkGeometry.productProxyGap).toBeLessThanOrEqual(routingDesktopProductProxyGapMaximum);
+  expect.soft(desktopForkGeometry.productCenterDifference).toBeLessThanOrEqual(routingDesktopCenterTolerance);
+  expect.soft(desktopForkGeometry.proxyCenterDifference).toBeLessThanOrEqual(routingDesktopCenterTolerance);
+  const catalogWidthAlignment = await page.locator("#models").evaluate((modelsSection) => {
+    const diagram = modelsSection.querySelector("routing-tree");
+    const table = modelsSection.querySelector(".catalog-table-wrap");
+    const limits = modelsSection.querySelector(".catalog-limits");
+    if (!diagram || !table || !limits) {
+      throw new Error("catalog_diagram_table_or_limits_missing");
+    }
+    const diagramBounds = diagram.getBoundingClientRect();
+    const tableBounds = table.getBoundingClientRect();
+    const limitsBounds = limits.getBoundingClientRect();
+    return {
+      diagramTop: diagramBounds.top,
+      leftDifference: Math.abs(diagramBounds.left - tableBounds.left),
+      limitsBottom: limitsBounds.bottom,
+      rightDifference: Math.abs(diagramBounds.right - tableBounds.right),
+      tableBottom: tableBounds.bottom,
+      widthDifference: Math.abs(diagramBounds.width - tableBounds.width),
+    };
+  });
+  expect(catalogWidthAlignment.diagramTop).toBeGreaterThan(catalogWidthAlignment.tableBottom);
+  expect(catalogWidthAlignment.diagramTop).toBeGreaterThan(catalogWidthAlignment.limitsBottom);
+  expect(catalogWidthAlignment.leftDifference).toBeLessThanOrEqual(1);
+  expect(catalogWidthAlignment.rightDifference).toBeLessThanOrEqual(1);
+  expect(catalogWidthAlignment.widthDifference).toBeLessThanOrEqual(1);
+  const providerTopPositions = await routingProviderTopPositions(routingTree);
+
+  await moonshotProvider.focus();
+  await page.keyboard.press("Enter");
+  await expect(moonshotProvider).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-model-group="openai"]')).toBeHidden();
+  const moonshotModels = routingTree.locator('[data-route-model-group="moonshot"]');
+  await expect(moonshotModels).toBeVisible();
+  await expect(moonshotModels.locator("[data-route-model]")).toHaveCount(4);
+  await expect(selectedProvider).toHaveText("moonshot");
+  await expect(selectedModel).toHaveText("kimi-k2.6");
+  await expect(moonshotModels.locator('[data-route-model="kimi-k2.6"]')).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => routingProviderTopPositions(routingTree)).toEqual(providerTopPositions);
+  await expectSelectedRoutingFanEndpoints(routingTree);
+
+  await moonshotModels.locator('[data-route-model="kimi-k3"]').click();
+  await expect(selectedModel).toHaveText("kimi-k3");
+  await expect(moonshotModels.locator('[data-route-model="kimi-k3"]')).toHaveAttribute("aria-pressed", "true");
+  await expectSelectedRoutingFanEndpoints(routingTree);
+
+  await routingTree.locator('[data-route-provider="qwencloud"]').click();
+  const qwenCloudModels = routingTree.locator('[data-route-model-group="qwencloud"]');
+  await expect(qwenCloudModels).toBeVisible();
+  await expect(qwenCloudModels.locator("[data-route-model]")).toHaveCount(1);
+  await expect(selectedProvider).toHaveText("qwencloud");
+  await expect(selectedModel).toHaveText("qwen3.8-max-preview");
+  await expect.poll(() => routingProviderTopPositions(routingTree)).toEqual(providerTopPositions);
+  await expectSelectedRoutingFanEndpoints(routingTree);
+
+  await page.setViewportSize({ width: 390, height: 780 });
+  await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "false");
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const routingTreeGeometry = await routingTree.evaluate((element) => ({
+    left: element.getBoundingClientRect().left,
+    right: element.getBoundingClientRect().right,
+    viewportWidth: document.documentElement.clientWidth,
+  }));
+  expect(routingTreeGeometry.left).toBeGreaterThanOrEqual(0);
+  expect(routingTreeGeometry.right).toBeLessThanOrEqual(routingTreeGeometry.viewportWidth);
 });
 
 test("visitors can disclose filters, search every characteristic, and sort through table headers", async ({ page }) => {
@@ -732,6 +992,7 @@ test("every public HTML page publishes its canonical MPR header and the identica
     expect(shell.footer, publicPath).toContain('<a href="/resources/">Resources</a>');
     expect(shell.footer, publicPath).toContain('<a href="/privacy/">Privacy</a>');
     expect(shell.footer, publicPath).toContain('<a href="/terms/">Terms</a>');
+    expect(shell.footer, publicPath).toContain('sticky="true"');
     expect(shell.headerOffset, publicPath).toBeLessThan(shell.mainOffset);
     expect(shell.mainOffset, publicPath).toBeLessThan(shell.footerOffset);
   }
@@ -822,6 +1083,7 @@ test("public route families hydrate the shared MPR shell at desktop and mobile w
       await expect(header, publicPath).toHaveCount(1);
       await expect(main, publicPath).toHaveCount(1);
       await expect(footer, publicPath).toHaveCount(1);
+      await expect(footer, publicPath).toHaveAttribute("sticky", "true");
       await expect(header.getByRole("link", { name: "LLM Proxy home" }), publicPath).toBeVisible();
       await expect(header.getByRole("link", { name: "API", exact: true }), publicPath).toHaveAttribute(
         "href",
@@ -845,8 +1107,7 @@ test("public route families hydrate the shared MPR shell at desktop and mobile w
         );
       });
       expect(documentOrderIsCanonical, publicPath).toBe(true);
-      await footer.scrollIntoViewIfNeeded();
-      await expectCompactFooterGeometry(footer);
+      await expectStickyFooterGeometry(page, footer);
     }
   }
 });
@@ -875,12 +1136,13 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
     "This is the provider catalog default for dictation routing; account settings can select another model.",
   );
   await expect
-    .poll(() => dictationDefaultRow.locator(".catalog-model").evaluate((element) => parseFloat(getComputedStyle(element).columnGap)))
+    .poll(() => dictationDefaultRow.locator(".catalog-model__content").evaluate((element) => parseFloat(getComputedStyle(element).columnGap)))
     .toBeGreaterThanOrEqual(8);
+  await expectAlignedCatalogRows(page);
   await expectCenteredValueStrip(page);
   const footer = page.locator("mpr-footer");
   await expect(footer).toHaveAttribute("size", "small");
-  await expect(footer).toHaveAttribute("sticky", "false");
+  await expect(footer).toHaveAttribute("sticky", "true");
   await expect(footer.getByRole("contentinfo")).toBeVisible();
   await expect(footer.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", privacyPath);
   await expect(footer.getByRole("link", { name: "Terms" })).toHaveAttribute("href", termsPath);
@@ -889,7 +1151,7 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
     "href",
     "https://github.com/tyemirov/llm-proxy",
   );
-  await expectCompactFooterGeometry(footer);
+  await expectStickyFooterGeometry(page, footer);
 
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
@@ -899,10 +1161,11 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
   await expect(page.getByRole("button", { name: "Log In" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Provider and model capability matrix" })).toBeVisible();
   await expect
-    .poll(() => dictationDefaultRow.locator(".catalog-model").evaluate((element) => parseFloat(getComputedStyle(element).columnGap)))
+    .poll(() => dictationDefaultRow.locator(".catalog-model__content").evaluate((element) => parseFloat(getComputedStyle(element).columnGap)))
     .toBeGreaterThanOrEqual(8);
+  await expectAlignedCatalogRows(page);
   await expectCenteredValueStrip(page);
-  await expectCompactFooterGeometry(footer);
+  await expectStickyFooterGeometry(page, footer);
 });
 
 test("site publishes the exact canonical OpenAPI artifact and its derived reference", async ({ request }) => {
@@ -4409,16 +4672,53 @@ async function installAssetRoutes(page, options = {}) {
 }
 
 /**
+ * @param {import("@playwright/test").Page} page
+ * @param {import("@playwright/test").Locator} footer
+ * @returns {Promise<void>}
+ */
+async function expectStickyFooterGeometry(page, footer) {
+  await page.evaluate(async () => {
+    const rootElement = document.documentElement;
+    const previousScrollBehavior = rootElement.style.scrollBehavior;
+    rootElement.style.scrollBehavior = "auto";
+    window.scrollTo(0, rootElement.scrollHeight);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    rootElement.style.scrollBehavior = previousScrollBehavior;
+  });
+  const geometry = await footer.getByRole("contentinfo").evaluate((footerSurfaceElement) => {
+    const footerBounds = footerSurfaceElement.getBoundingClientRect();
+    const mainElement = document.querySelector("body > main");
+    if (!mainElement) {
+      throw new Error("public_site_main_missing");
+    }
+    const mainBounds = mainElement.getBoundingClientRect();
+    return {
+      anchoredBottom: Math.abs(footerBounds.bottom - window.innerHeight) <= 0.5,
+      anchoredLeft: Math.abs(footerBounds.left) <= 0.5,
+      anchoredRight: Math.abs(footerBounds.right - document.documentElement.clientWidth) <= 0.5,
+      mainFooterOverlap: mainBounds.bottom - footerBounds.top,
+      position: getComputedStyle(footerSurfaceElement).position,
+    };
+  });
+  expect(geometry.position).toBe("fixed");
+  expect(geometry.anchoredBottom).toBe(true);
+  expect(geometry.anchoredLeft).toBe(true);
+  expect(geometry.anchoredRight).toBe(true);
+  expect(geometry.mainFooterOverlap).toBeLessThanOrEqual(0.5);
+  await expectCompactFooterGeometry(footer);
+}
+
+/**
  * @param {import("@playwright/test").Locator} footer
  * @returns {Promise<void>}
  */
 async function expectCompactFooterGeometry(footer) {
-  const geometry = await footer.evaluate((footerElement) => ({
-    clientWidth: footerElement.clientWidth,
-    height: footerElement.getBoundingClientRect().height,
-    scrollWidth: footerElement.scrollWidth,
+  const geometry = await footer.getByRole("contentinfo").evaluate((footerSurfaceElement) => ({
+    clientWidth: footerSurfaceElement.clientWidth,
+    height: footerSurfaceElement.getBoundingClientRect().height,
+    scrollWidth: footerSurfaceElement.scrollWidth,
   }));
-  expect(geometry.height).toBeLessThanOrEqual(compactLandingFooterMaxHeight);
+  expect(geometry.height).toBeLessThanOrEqual(PUBLIC_FOOTER_COMPACT_MAX_HEIGHT);
   expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
 }
 
@@ -4473,6 +4773,25 @@ async function expectCenteredValueStrip(page) {
  * @param {import("@playwright/test").Page} page
  * @returns {Promise<void>}
  */
+async function expectAlignedCatalogRows(page) {
+  const rowsAreAligned = await page.locator("[data-catalog-row]").evaluateAll((rowElements, expectedColumnCount) =>
+    rowElements.every((rowElement) => {
+      const rowBounds = rowElement.getBoundingClientRect();
+      const cellElements = Array.from(rowElement.querySelectorAll(":scope > td"));
+      return cellElements.length === expectedColumnCount && cellElements.every((cellElement) => {
+        const cellBounds = cellElement.getBoundingClientRect();
+        return getComputedStyle(cellElement).display === "table-cell" &&
+          cellBounds.top === rowBounds.top &&
+          cellBounds.bottom === rowBounds.bottom;
+      });
+    }), catalogColumnCount);
+  expect(rowsAreAligned).toBe(true);
+}
+
+/**
+ * @param {import("@playwright/test").Page} page
+ * @returns {Promise<void>}
+ */
 async function installClipboardMock(page) {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "clipboard", {
@@ -4514,16 +4833,17 @@ async function settingsLayerFacts(page) {
     const closeButton = modalElement?.querySelector(".settings-header button");
     const headerElement = document.querySelector("mpr-header");
     const footerElement = document.querySelector("mpr-footer");
+    const footerSurfaceElement = footerElement?.querySelector("footer");
     const notificationRegion = document.querySelector("notification-region");
     const noticeElement = document.querySelector(".notice");
-    if (!overlayElement || !modalElement || !closeButton || !headerElement || !footerElement || !notificationRegion || !noticeElement) {
+    if (!overlayElement || !modalElement || !closeButton || !headerElement || !footerElement || !footerSurfaceElement || !notificationRegion || !noticeElement) {
       throw new Error("settings_layer_elements_missing");
     }
 
     const modalRect = modalElement.getBoundingClientRect();
     const closeButtonRect = closeButton.getBoundingClientRect();
     const headerRect = headerElement.getBoundingClientRect();
-    const footerRect = footerElement.getBoundingClientRect();
+    const footerRect = footerSurfaceElement.getBoundingClientRect();
     const noticeRect = noticeElement.getBoundingClientRect();
     const viewportWidth = document.documentElement.clientWidth;
     const hitAt = (xCoordinate, yCoordinate) => {
@@ -4541,7 +4861,7 @@ async function settingsLayerFacts(page) {
     return {
       overlayZIndex: Number.parseInt(getComputedStyle(overlayElement).zIndex, 10),
       headerZIndex: Number.parseInt(getComputedStyle(headerElement).zIndex, 10),
-      footerZIndex: Number.parseInt(getComputedStyle(footerElement).zIndex, 10),
+      footerZIndex: Number.parseInt(getComputedStyle(footerSurfaceElement).zIndex, 10),
       closeButtonHit: hitAt(
         closeButtonRect.left + closeButtonRect.width / 2,
         closeButtonRect.top + closeButtonRect.height / 2,
@@ -5981,18 +6301,10 @@ mpr-header > nav {
 }
 
 mpr-footer {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 1200;
+  position: relative;
   display: block;
   min-height: 64px;
   background: rgba(3, 23, 32, 0.95);
-}
-
-mpr-footer[sticky="false"] {
-  position: relative;
 }
 
 mpr-footer[size="small"] {
@@ -6000,6 +6312,11 @@ mpr-footer[size="small"] {
 }
 
 mpr-footer footer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1200;
   display: flex;
   min-height: inherit;
   box-sizing: border-box;
@@ -6008,6 +6325,10 @@ mpr-footer footer {
   justify-content: space-between;
   gap: 12px;
   border-top: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+mpr-footer[sticky="false"] footer {
+  position: relative;
 }
 
 mpr-footer footer > div {

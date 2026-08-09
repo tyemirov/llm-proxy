@@ -29,7 +29,8 @@ Backend guidance for Go code. Follow AGENTS.md for repo-wide policies, documenta
 - Only changed files.
 - No diffs, snippets, or examples.
 - Must compile cleanly.
-- Must pass `make ci` (or, at minimum, `make fmt`, `make lint`, and `make test`).
+- Use `.mprlab/POLICY.md` for validation.
+- The `make ci` target must include the required formatting, lint, and test checks.
 - `make lint` MUST run `go vet`, `staticcheck`, and `ineffassign`.
 
 ---
@@ -155,4 +156,4 @@ Backend guidance for Go code. Follow AGENTS.md for repo-wide policies, documenta
 - [ ] zap logging; contextual errors.
 - [ ] Config via Viper; validated in `PreRunE`.
 - [ ] Black-box integration/end-to-end coverage through public entry points; no filesystem pollution.
-- [ ] `make fmt`, `make lint`, `make test` (or `make ci`) pass.
+- [ ] The applicable validation in `.mprlab/POLICY.md` passes.

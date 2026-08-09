@@ -11,9 +11,12 @@ that input capability.
 
 The public [LLM Proxy landing page](https://llm-proxy.mprlab.com/) explains the
 current provider, model, dictation, web-search, request-limit, and integration
-surface. Its filterable model matrix projects text, dictation, media, search,
-reasoning, default, contract, and output-limit metadata from the
-same validated runtime catalog used by request routing. The authenticated
+surface. Its interactive routing tree separates provider selection from exact
+model selection, while its filterable model matrix projects text, dictation,
+media, search, reasoning, default, contract, and output-limit metadata. Both
+are generated from the same validated runtime catalog used by request routing,
+so a catalog provider or model addition appears on the landing page without a
+second maintained inventory. The authenticated
 management app opens at [`/app/`](https://llm-proxy.mprlab.com/app/) only after
 the public **Log In** action authenticates the user through MPR UI and TAuth.
 
@@ -935,8 +938,11 @@ operations, or apply MPR UI config. The Pages artifact contains no static
 container renders every auth-aware HTML page with
 `https://llm-proxy-api.mprlab.com/config-ui.yaml` in the declarative header
 attribute and replaces the public landing's capability marker with a sanitized
-model-centric projection of `configs/config.yml`. Every model remains present
-in server-rendered HTML without JavaScript; browser enhancement supplies
+model-centric projection of `configs/config.yml`. It also replaces the landing
+routing marker with the provider-to-text-model tree from that same projection.
+Every provider and model remains present in server-rendered HTML without
+JavaScript; browser enhancement supplies selectable provider and model leaves,
+provider-default selection, and the final route display, plus
 one all-characteristics search surface, disclosed match-all capability filters,
 sortable table headers, a live result count, and reset. Production Pages
 rendering has no Node runtime or environment
@@ -949,11 +955,13 @@ Browser-facing values are projected from the already-loaded backend
 
 Every public HTML route also uses the MPR component shell. `/`, `/docs/`,
 `/resources/`, every generated resource article, `/privacy/`, and `/terms/`
-render the same canonical `mpr-header` and compact non-sticky `mpr-footer` from
+render the same canonical `mpr-header` and compact sticky `mpr-footer` from
 `scripts/public_site_shell.mjs`, in that exact order around one `main` region.
-The authenticated app uses the same footer. It contains crawlable Resources,
-Privacy, Terms, and GitHub links plus the active **Built by Marco Polo Research
-Lab** project-catalog drop-up. A semantic fallback inside the component keeps
+The authenticated app uses the same footer. The MPR footer keeps its host in
+flow while its hydrated surface stays fixed, so the end of `main` remains
+accessible. It contains crawlable Resources, Privacy, Terms, and GitHub links
+plus the active **Built by Marco Polo Research Lab** project-catalog drop-up. A
+semantic fallback inside the component keeps
 those anchors and the native project drop-up usable when JavaScript is
 unavailable; MPR UI replaces that fallback when the component hydrates. The
 shell validator and every public-page generator reject a missing, duplicated,
@@ -1506,9 +1514,9 @@ browser-facing endpoints:
 
 `make up` renders an isolated local site artifact from `configs/config.yml`
 before the API starts. The renderer projects the validated provider registry
-into the public capability matrix, and ghttp serves that rendered artifact
-read-only. Startup rejects an absent or unrendered matrix, and shutdown removes
-the temporary artifact.
+into the public routing tree and capability matrix, and ghttp serves that
+rendered artifact read-only. Startup rejects an absent or unrendered routing
+tree or matrix, and shutdown removes the temporary artifact.
 
 ghttp proxies `http://localhost:4179/config-ui.yaml` to the API and the
 same-origin `/auth/*` and `/me` routes to the internal TAuth service. The

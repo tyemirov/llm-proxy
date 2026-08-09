@@ -578,6 +578,15 @@ func TestRootCommandRendersStaticSiteFromPublicCatalogConfig(t *testing.T) {
 		t.Fatalf("rendered landing config URL missing: %s", landingHTML)
 	}
 	for _, expectedCatalogFragment := range []string{
+		`<routing-tree class="routing-tree" data-enhanced="false" aria-label="Interactive LLM routing map">`,
+		`<h2>One integration. Choose the exact route.</h2>`,
+		`<canvas class="routing-tree__connectors" data-route-canvas aria-hidden="true"></canvas>`,
+		`<span>12 providers · `,
+		`data-route-provider="moonshot"`,
+		`data-route-model-group="moonshot"`,
+		`data-route-model="kimi-k2.6" data-route-default-model="true"`,
+		`<code data-route-selected-provider>anthropic</code>`,
+		`<code data-route-selected-model>claude-sonnet-4-6</code>`,
 		`class="catalog-table"`,
 		`<strong>12</strong><span>Providers</span>`,
 		`</strong><span>Models</span>`,
@@ -585,8 +594,8 @@ func TestRootCommandRendersStaticSiteFromPublicCatalogConfig(t *testing.T) {
 		`data-catalog-sort-header="provider"`,
 		`data-catalog-sort-header="model"`,
 		`data-catalog-sort-header="capabilities"`,
-		`<code data-catalog-model-id>gpt-4.1</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span>`,
-		`<code data-catalog-model-id>gpt-4o-mini-transcribe</code><span class="catalog-model__default" title="This is the provider catalog default for dictation routing; account settings can select another model.">Default for dictation</span>`,
+		`<span class="catalog-model__content"><code data-catalog-model-id>gpt-4.1</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span>`,
+		`<span class="catalog-model__content"><code data-catalog-model-id>gpt-4o-mini-transcribe</code><span class="catalog-model__default" title="This is the provider catalog default for dictation routing; account settings can select another model.">Default for dictation</span></span>`,
 		`data-model="gpt-4o-mini-transcribe" data-capabilities="dictation"`,
 		`aria-label="Search all model characteristics"`,
 		`data-catalog-search-submit`,
@@ -615,7 +624,7 @@ func TestRootCommandRendersStaticSiteFromPublicCatalogConfig(t *testing.T) {
 			t.Fatalf("rendered landing page exposed execution lifecycle %q as a capability", lifecycleIdentifier)
 		}
 	}
-	if strings.Contains(landingHTML, siteCapabilityCatalogMarker) || strings.Contains(landingHTML, "api_key") || strings.Contains(landingHTML, "base_url") {
+	if strings.Contains(landingHTML, siteRoutingTreeMarker) || strings.Contains(landingHTML, siteCapabilityCatalogMarker) || strings.Contains(landingHTML, "api_key") || strings.Contains(landingHTML, "base_url") {
 		t.Fatalf("rendered landing page retained source marker or private provider fields")
 	}
 	if _, statError := os.Stat(filepath.Join(outputDirectory, "assets", "llm-proxy", "js", "app.js")); statError != nil {
@@ -628,6 +637,48 @@ func TestRootCommandRendersStaticSiteFromPublicCatalogConfig(t *testing.T) {
 	stylesheet := string(stylesheetBytes)
 	if !strings.Contains(stylesheet, `#llm-proxy-header notification-region[slot="aux"]`) || !strings.Contains(stylesheet, "order: -1;") {
 		t.Fatalf("rendered stylesheet omits notification ordering contract")
+	}
+}
+
+func TestRootCommandRendersAddedCatalogModelAcrossPublicRoutingSurfaces(t *testing.T) {
+	tempDir := t.TempDir()
+	providersYAML := strings.Replace(
+		completeLiteralProvidersYAML(),
+		`        - id: "kimi-k2.6"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"`,
+		`        - id: "kimi-k2.6"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"
+        - id: "kimi-next-version"
+          wire_contract: "openai_chat_completions"
+          execution_lifecycle: "synchronous_completion"`,
+		1,
+	)
+	configPath := writeTestConfig(t, tempDir, `server:
+  max_request_timeout_seconds: 3600
+  max_prompt_bytes: 4194304
+  max_input_audio_bytes: 26214400
+`+providersYAML)
+	outputDirectory := filepath.Join(tempDir, "rendered-site")
+	withServeProxy(t, failingServeProxy(t))
+
+	executeError := executeRootCommand(t, "--config", configPath, "--site-source", filepath.Join("..", "..", "site"), "--render-site-output", outputDirectory)
+	if executeError != nil {
+		t.Fatalf("ExecuteC error: %v", executeError)
+	}
+	landingBytes, readLandingError := os.ReadFile(filepath.Join(outputDirectory, siteIndexFileName))
+	if readLandingError != nil {
+		t.Fatalf("read rendered landing page: %v", readLandingError)
+	}
+	landingHTML := string(landingBytes)
+	for _, expectedFragment := range []string{
+		`data-route-model="kimi-next-version"`,
+		`data-model="kimi-next-version" data-capabilities="text"`,
+	} {
+		if !strings.Contains(landingHTML, expectedFragment) {
+			t.Fatalf("rendered landing page omitted added catalog model fragment %q", expectedFragment)
+		}
 	}
 }
 
@@ -1055,6 +1106,22 @@ func TestRootCommandRejectsSiteRenderInjectedFailures(t *testing.T) {
 				}
 			},
 			expectedError: "landing write failed",
+		},
+		{
+			name: "routing tree template parse failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				siteRoutingTreeTemplateSource = `{{`
+			},
+			expectedError: "routing tree template",
+		},
+		{
+			name: "routing tree template execution failure",
+			setup: func(subTest *testing.T, sourceDirectory string, outputDirectory string) {
+				siteExecuteRoutingTree = func(routingTemplate *template.Template, renderedRoutingTree *strings.Builder, routingTreeView siteRoutingTreeView) error {
+					return errors.New("routing tree execution failed")
+				}
+			},
+			expectedError: "routing tree execution failed",
 		},
 		{
 			name: "catalog template parse failure",
@@ -2112,9 +2179,11 @@ func failingServeProxy(t *testing.T) func(proxy.Configuration, *zap.SugaredLogge
 
 func withSiteRendererDependencies(t *testing.T) {
 	t.Helper()
+	originalSiteRoutingTreeTemplateSource := siteRoutingTreeTemplateSource
 	originalSiteCapabilityCatalogTemplateSource := siteCapabilityCatalogTemplateSource
 	originalSiteCapabilityDefinitions := siteCapabilityDefinitions
 	originalSiteCopyFS := siteCopyFS
+	originalSiteExecuteRoutingTree := siteExecuteRoutingTree
 	originalSiteExecuteCapabilityCatalog := siteExecuteCapabilityCatalog
 	originalSitePathAbs := sitePathAbs
 	originalSitePathRel := sitePathRel
@@ -2125,9 +2194,11 @@ func withSiteRendererDependencies(t *testing.T) {
 	originalSiteWalkDir := siteWalkDir
 	originalSiteWriteFile := siteWriteFile
 	t.Cleanup(func() {
+		siteRoutingTreeTemplateSource = originalSiteRoutingTreeTemplateSource
 		siteCapabilityCatalogTemplateSource = originalSiteCapabilityCatalogTemplateSource
 		siteCapabilityDefinitions = originalSiteCapabilityDefinitions
 		siteCopyFS = originalSiteCopyFS
+		siteExecuteRoutingTree = originalSiteExecuteRoutingTree
 		siteExecuteCapabilityCatalog = originalSiteExecuteCapabilityCatalog
 		sitePathAbs = originalSitePathAbs
 		sitePathRel = originalSitePathRel
@@ -2172,6 +2243,7 @@ func writeTestSiteSource(t *testing.T, sourceDirectory string) {
 	}
 	if writeError := os.WriteFile(filepath.Join(sourceDirectory, "index.html"), []byte(`<!doctype html>
 	<mpr-header data-config-url="/config-ui.yaml"></mpr-header>
+	`+siteRoutingTreeMarker+`
 	`+siteCapabilityCatalogMarker+`
 `), 0600); writeError != nil {
 		t.Fatalf("write landing index.html: %v", writeError)
