@@ -1,9 +1,9 @@
 // @ts-check
 
-import { RUNTIME_UI } from "./constants.js?v=20260809b122";
-import { initializeMprShell } from "./core/mprShell.js?v=20260809b122";
-import { failApplicationStartup } from "./ui/applicationStartup.js?v=20260809b122";
-import { createKeyManagement } from "./ui/keyManagement.js?v=20260809b122";
+import { RUNTIME_UI } from "./constants.js?v=20260809b123";
+import { initializeMprShell } from "./core/mprShell.js?v=20260809b123";
+import { failApplicationStartup } from "./ui/applicationStartup.js?v=20260809b123";
+import { createKeyManagement } from "./ui/keyManagement.js?v=20260809b123";
 
 initializeMprShell();
 

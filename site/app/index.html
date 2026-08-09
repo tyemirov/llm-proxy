@@ -28,8 +28,8 @@
       type="application/json"
       data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
     ></script>
-    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260809b122"></script>
-    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260809b122"></script>
+    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260809b123"></script>
+    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260809b123"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body x-data="llmProxyKeyManagement" x-init="init()">
@@ -561,7 +561,7 @@
                         </div>
                       </div>
                     </header>
-                    <form class="settings-grid-form" x-bind:aria-busy="routingDefaultsAutosavePending">
+                    <form class="settings-grid-form" x-bind:aria-busy="routingProviderSelectionPending || routingDefaultsAutosavePending">
                       <div class="text-routing-controls">
                         <label>
                           <span x-text="copy.textProvider"></span>

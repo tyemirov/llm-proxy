@@ -19,7 +19,7 @@ import {
   USAGE_OUTCOME_LABELS,
   USAGE_STATUS_LABELS,
   APP_INTEGRITY_ERROR,
-} from "../constants.js?v=20260809b122";
+} from "../constants.js?v=20260809b123";
 import {
   BackendClientError,
   createTenant as requestCreateTenant,
@@ -38,7 +38,7 @@ import {
   revealProviderKey as requestRevealProviderKey,
   saveProviderKey as requestSaveProviderKey,
   updateDefaults as requestUpdateDefaults,
-} from "../core/backendClient.js?v=20260809b122";
+} from "../core/backendClient.js?v=20260809b123";
 import {
   emptyUsageSummary,
   modelRows,
@@ -47,13 +47,13 @@ import {
   usagePolyline,
   USAGE_CHART,
   USAGE_METRICS,
-} from "./usagePresentation.js?v=20260809b122";
+} from "./usagePresentation.js?v=20260809b123";
 import {
   applyUserMenuItems,
   readMprUIAuthStatus,
   waitForMprUIAutoOrchestrationReady,
-} from "../core/mprShell.js?v=20260809b122";
-import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260809b122";
+} from "../core/mprShell.js?v=20260809b123";
+import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260809b123";
 
 const EMPTY_SECRET_PLACEHOLDER = "<generated-secret>";
 const EMPTY_STRING = "";
@@ -141,6 +141,8 @@ export function createKeyManagement() {
     providerKeyVerificationFailure: EMPTY_STRING,
     routingDefaultsDirty: false,
     routingDefaultsEditVersion: 0,
+    routingProviderSelectionPending: false,
+    routingProviderSelectionVersion: 0,
     routingDefaultsAutosavePending: false,
     /** @type {Promise<boolean> | null} */
     routingDefaultsAutosavePromise: null,
@@ -291,7 +293,12 @@ export function createKeyManagement() {
     },
 
     get settingsControlsDisabled() {
-      return this.busy || this.settingsClosePending || this.providerKeyVerificationPending;
+      return (
+        this.busy ||
+        this.settingsClosePending ||
+        this.providerKeyVerificationPending ||
+        this.routingProviderSelectionPending
+      );
     },
 
     get isAdmin() {
@@ -2199,10 +2206,41 @@ export function createKeyManagement() {
     },
 
     /** @param {Event} event */
-    handleTextProviderDefaultChange(event) {
+    async handleTextProviderDefaultChange(event) {
       const providerSelect = /** @type {HTMLSelectElement} */ (event.target);
-      this.defaults.provider = providerSelect.value;
-      const provider = profileProvider(this.providers, providerSelect.value);
+      const providerIdentifier = providerSelect.value;
+      const selectionVersion = this.routingProviderSelectionVersion + 1;
+      const appVersion = this.appVersion;
+      const tenantIdentifier = this.settingsTenantID;
+      this.routingProviderSelectionVersion = selectionVersion;
+      this.defaults.provider = providerIdentifier;
+      const initialProvider = profileProvider(this.providers, providerIdentifier);
+      this.defaults.model = initialProvider.text_model;
+      this.normalizeReasoningEffortDefault();
+      const matchingProviderAutosave = providerIdentifier === this.selectedProviderID
+        ? this.providerAutosavePromise
+        : null;
+      if (matchingProviderAutosave) {
+        this.routingProviderSelectionPending = true;
+        try {
+          await matchingProviderAutosave;
+        } finally {
+          if (this.routingProviderSelectionVersion === selectionVersion) {
+            this.routingProviderSelectionPending = false;
+          }
+        }
+      }
+      if (
+        !this.settingsOpen ||
+        this.authState !== AUTH_STATES.AUTHENTICATED ||
+        this.appVersion !== appVersion ||
+        this.settingsTenantID !== tenantIdentifier ||
+        this.routingProviderSelectionVersion !== selectionVersion
+      ) {
+        return;
+      }
+      this.defaults.provider = providerIdentifier;
+      const provider = profileProvider(this.providers, providerIdentifier);
       this.defaults.model = provider.text_model;
       this.normalizeReasoningEffortDefault();
       this.markRoutingDefaultsDirty();
@@ -2408,6 +2446,8 @@ export function createKeyManagement() {
       this.routingDefaultsAutosavePending = false;
       this.routingDefaultsDirty = false;
       this.routingDefaultsEditVersion += 1;
+      this.routingProviderSelectionPending = false;
+      this.routingProviderSelectionVersion += 1;
       this.clientKeyMutationPromise = null;
       this.profileMutationTail = Promise.resolve();
       this.profileMutationFailureVersion = 0;
