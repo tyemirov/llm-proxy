@@ -284,7 +284,7 @@ func TestOperationalProductionLifecycleDelegatesOnlyToSiblingGateway(testingInst
 	}
 }
 
-func TestOperationalPagesArtifactUsesGoWithoutNode(testingInstance *testing.T) {
+func TestOperationalPagesArtifactUsesFrontendRendererWithBackendRESTData(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	dockerfileBytes, readError := os.ReadFile(filepath.Join(repositoryRoot, "docker", "pages", "Dockerfile"))
 	if readError != nil {
@@ -292,8 +292,11 @@ func TestOperationalPagesArtifactUsesGoWithoutNode(testingInstance *testing.T) {
 	}
 	dockerfileText := string(dockerfileBytes)
 	for _, requiredContract := range []string{
-		"FROM golang:1.26.5-bookworm AS renderer",
-		"--render-site-output /pages",
+		"FROM golang:1.26.5-bookworm AS backend-builder",
+		"FROM node:22-bookworm-slim AS renderer",
+		"--public-capabilities-only",
+		"node scripts/render_public_site.mjs",
+		"--capabilities-url",
 		"rm /pages/CNAME",
 		"FROM scratch AS pages",
 		"COPY --from=renderer /pages/ /",
@@ -302,9 +305,9 @@ func TestOperationalPagesArtifactUsesGoWithoutNode(testingInstance *testing.T) {
 			testingInstance.Errorf("Pages Dockerfile is missing %q", requiredContract)
 		}
 	}
-	for _, forbiddenRuntime := range []string{"FROM node", "npm ", "npx ", "yarn ", "pnpm "} {
-		if strings.Contains(dockerfileText, forbiddenRuntime) {
-			testingInstance.Errorf("Pages Dockerfile introduces Node tooling %q", forbiddenRuntime)
+	for _, forbiddenRenderer := range []string{"--render-site-output", "--site-source", "--site-config-url"} {
+		if strings.Contains(dockerfileText, forbiddenRenderer) {
+			testingInstance.Errorf("Pages Dockerfile retains Go renderer contract %q", forbiddenRenderer)
 		}
 	}
 }
