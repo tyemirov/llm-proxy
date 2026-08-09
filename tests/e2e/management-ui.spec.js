@@ -92,14 +92,18 @@ const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@
 const forbiddenTAuthBrowserClientURL = "https://tauth.mprlab.com/tauth.js";
 const catalogColumnCount = 3;
 const b020ScreenshotDirectory = path.join(repoRoot, "output/playwright");
+const i220ScreenshotDirectory = path.join(repoRoot, "output/playwright");
 const httpOK = 200;
 const httpNotFound = 404;
 const httpInternalServerError = 500;
 const routingConnectorEndpointRadius = 4;
 const routingConnectorColorTolerance = 2;
 const routingDesktopCenterTolerance = 1;
-const routingDesktopProductProxyGapMaximum = 24;
+const routingDesktopEdgeAlignmentTolerance = 1;
+const routingDesktopConnectorLaneMinimum = 90;
+const routingDesktopConnectorLaneVarianceMaximum = 16;
 const routingDesktopProviderWidthMaximum = 220;
+const routingDesktopModelWidthMaximum = 220;
 const publicCapabilitiesPath = "/api/public/capabilities";
 
 /**
@@ -227,6 +231,13 @@ const settingsLayerViewports = Object.freeze([
   { name: "compact", width: 480, height: 780 },
   { name: "mobile", width: 390, height: 780 },
 ]);
+const routingTreeViewports = Object.freeze([
+  { name: "desktop", width: 1280, height: 800 },
+  { name: "compact", width: 900, height: 900 },
+  { name: "mobile", width: 390, height: 900 },
+]);
+const settingsHeaderAlignmentTolerance = 1;
+const geometryCenterDivisor = 2;
 
 let server;
 let baseURL = "";
@@ -845,30 +856,46 @@ test("visitors can fan from one proxy connection into exact provider model versi
     };
   });
   expect.soft(leafWidths.widestProvider).toBeLessThanOrEqual(routingDesktopProviderWidthMaximum);
-  expect(leafWidths.widestModel).toBeLessThanOrEqual(280);
+  expect(leafWidths.widestModel).toBeLessThanOrEqual(routingDesktopModelWidthMaximum);
   const desktopForkGeometry = await routingTree.evaluate((tree) => {
+    const routeMap = tree.querySelector("[data-route-map]");
     const product = tree.querySelector("[data-route-product]");
     const proxy = tree.querySelector("[data-route-proxy]");
     const providerBranches = tree.querySelector(".routing-tree__provider-branches");
-    const modelStage = tree.querySelector(".routing-tree__stage--models");
+    const modelGroup = tree.querySelector("[data-route-model-group]:not([hidden])");
     if (
-      !(product instanceof HTMLElement)
+      !(routeMap instanceof HTMLElement)
+      || !(product instanceof HTMLElement)
       || !(proxy instanceof HTMLElement)
       || !(providerBranches instanceof HTMLElement)
-      || !(modelStage instanceof HTMLElement)
+      || !(modelGroup instanceof HTMLElement)
     ) {
       throw new Error("routing_tree_desktop_stage_missing");
     }
+    const mapBounds = routeMap.getBoundingClientRect();
+    const mapStyle = getComputedStyle(routeMap);
     const productBounds = product.getBoundingClientRect();
     const proxyBounds = proxy.getBoundingClientRect();
     const providerBounds = providerBranches.getBoundingClientRect();
-    const modelBounds = modelStage.getBoundingClientRect();
+    const modelBounds = modelGroup.getBoundingClientRect();
     const providerCenter = providerBounds.top + providerBounds.height / 2;
+    const connectorLaneWidths = [
+      proxyBounds.left - productBounds.right,
+      providerBounds.left - proxyBounds.right,
+      modelBounds.left - providerBounds.right,
+    ];
     return {
+      connectorLaneMaximum: Math.max(...connectorLaneWidths),
+      connectorLaneMinimum: Math.min(...connectorLaneWidths),
+      modelRightDifference: Math.abs(
+        mapBounds.right - Number.parseFloat(mapStyle.paddingRight) - modelBounds.right,
+      ),
       modelFollowsProviders: providerBounds.right < modelBounds.left,
+      productLeftDifference: Math.abs(
+        productBounds.left - mapBounds.left - Number.parseFloat(mapStyle.paddingLeft),
+      ),
       productCenterDifference: Math.abs(productBounds.top + productBounds.height / 2 - providerCenter),
       proxyFollowsProduct: productBounds.right < proxyBounds.left,
-      productProxyGap: proxyBounds.left - productBounds.right,
       providerFollowsProxy: proxyBounds.right < providerBounds.left,
       proxyCenterDifference: Math.abs(proxyBounds.top + proxyBounds.height / 2 - providerCenter),
     };
@@ -876,7 +903,12 @@ test("visitors can fan from one proxy connection into exact provider model versi
   expect.soft(desktopForkGeometry.proxyFollowsProduct).toBe(true);
   expect.soft(desktopForkGeometry.providerFollowsProxy).toBe(true);
   expect.soft(desktopForkGeometry.modelFollowsProviders).toBe(true);
-  expect.soft(desktopForkGeometry.productProxyGap).toBeLessThanOrEqual(routingDesktopProductProxyGapMaximum);
+  expect.soft(desktopForkGeometry.productLeftDifference).toBeLessThanOrEqual(routingDesktopEdgeAlignmentTolerance);
+  expect.soft(desktopForkGeometry.modelRightDifference).toBeLessThanOrEqual(routingDesktopEdgeAlignmentTolerance);
+  expect.soft(desktopForkGeometry.connectorLaneMinimum).toBeGreaterThanOrEqual(routingDesktopConnectorLaneMinimum);
+  expect.soft(
+    desktopForkGeometry.connectorLaneMaximum - desktopForkGeometry.connectorLaneMinimum,
+  ).toBeLessThanOrEqual(routingDesktopConnectorLaneVarianceMaximum);
   expect.soft(desktopForkGeometry.productCenterDifference).toBeLessThanOrEqual(routingDesktopCenterTolerance);
   expect.soft(desktopForkGeometry.proxyCenterDifference).toBeLessThanOrEqual(routingDesktopCenterTolerance);
   const routingOverviewAlignment = await page.locator("#routing-overview").evaluate((routingOverview) => {
@@ -899,6 +931,19 @@ test("visitors can fan from one proxy connection into exact provider model versi
   expect(routingOverviewAlignment.leftDifference).toBeLessThanOrEqual(1);
   expect(routingOverviewAlignment.rightDifference).toBeLessThanOrEqual(1);
   expect(routingOverviewAlignment.widthDifference).toBeLessThanOrEqual(1);
+  if (process.env.I220_SCREENSHOTS === "1") {
+    await mkdir(i220ScreenshotDirectory, { recursive: true });
+    for (const viewport of routingTreeViewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await expect(routingTree).toHaveAttribute(
+        "data-route-lines-rendered",
+        viewport.width > 680 ? "true" : "false",
+      );
+      await routingTree.screenshot({ path: path.join(i220ScreenshotDirectory, `I220-routing-${viewport.name}.png`) });
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "true");
+  }
   const providerTopPositions = await routingProviderTopPositions(routingTree);
 
   await moonshotProvider.focus();
@@ -4702,6 +4747,7 @@ test("management notices occupy the header aux slot immediately before the avata
     await expect(settingsNotification).toHaveAttribute("aria-live", "polite");
     await expect(settingsNotification).toHaveAttribute("aria-atomic", "true");
     await expect(settingsNotification).toBeHidden();
+    await expectSettingsHeaderCloseGeometry(settingsDialog);
     const layerFacts = await settingsLayerFacts(page);
     expect(layerFacts.noticeHit.inSettingsModal || layerFacts.noticeHit.inSettingsOverlay).toBe(true);
     expect(layerFacts.noticeHit.inNotice).toBe(false);
@@ -4710,6 +4756,7 @@ test("management notices occupy the header aux slot immediately before the avata
     await expect(settingsNotification.locator(".notice")).toHaveText("Defaults saved");
     await expect(settingsNotification.locator(".notice")).toHaveAttribute("data-kind", "success");
     await expect(notificationRegion).toBeHidden();
+    await expectSettingsHeaderCloseGeometry(settingsDialog);
     const settingsHeaderBox = await settingsDialog.locator(".settings-header").boundingBox();
     const settingsNotificationBox = await settingsNotification.boundingBox();
     if (!settingsHeaderBox || !settingsNotificationBox) {
@@ -5173,6 +5220,34 @@ async function settingsLayerFacts(page) {
       footerHit: hitAt(viewportWidth / 2, safeBandCenter(footerRect)),
     };
   });
+}
+
+/**
+ * @param {import("@playwright/test").Locator} settingsDialog
+ */
+async function expectSettingsHeaderCloseGeometry(settingsDialog) {
+  const geometry = await settingsDialog.locator(".settings-header").evaluate((headerElement, centerDivisor) => {
+    const titleElement = headerElement.querySelector("#settings-title");
+    const closeElement = headerElement.querySelector(".settings-close");
+    if (!(titleElement instanceof HTMLElement) || !(closeElement instanceof HTMLElement)) {
+      throw new Error("settings_header_geometry_elements_missing");
+    }
+    const headerBounds = headerElement.getBoundingClientRect();
+    const titleBounds = titleElement.getBoundingClientRect();
+    const closeBounds = closeElement.getBoundingClientRect();
+    const headerStyle = getComputedStyle(headerElement);
+    return {
+      rightEdgeDifference: Math.abs(
+        headerBounds.right - Number.parseFloat(headerStyle.paddingRight) - closeBounds.right,
+      ),
+      verticalCenterDifference: Math.abs(
+        (titleBounds.top + titleBounds.bottom) / centerDivisor
+          - (closeBounds.top + closeBounds.bottom) / centerDivisor,
+      ),
+    };
+  }, geometryCenterDivisor);
+  expect(geometry.rightEdgeDifference).toBeLessThanOrEqual(settingsHeaderAlignmentTolerance);
+  expect(geometry.verticalCenterDifference).toBeLessThanOrEqual(settingsHeaderAlignmentTolerance);
 }
 
 /**
