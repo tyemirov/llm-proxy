@@ -10,6 +10,7 @@ export const MPR_UI_CONFIG_URL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchL
 export const MPR_UI_BUNDLE_URL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js";
 export const GOOGLE_IDENTITY_URL = "https://accounts.google.com/gsi/client";
 export const JS_YAML_URL = "https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js";
+export const PUBLIC_FOOTER_COMPACT_MAX_HEIGHT = 56;
 
 const PUBLIC_HEADER_LINKS = Object.freeze({
   alignment: "right",

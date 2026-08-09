@@ -219,8 +219,12 @@ verify_local_capability_catalog() {
 
   landing_page="$(curl --silent --show-error --max-time 5 "${local_frontend_origin}/")" ||
     fail "ghttp did not return the rendered landing page"
+  [[ "${landing_page}" == *'class="routing-tree"'* ]] ||
+    fail "ghttp landing page omitted the generated routing tree"
   [[ "${landing_page}" == *'class="catalog-table"'* ]] ||
     fail "ghttp landing page omitted the generated capability matrix"
+  [[ "${landing_page}" != *"llm-proxy-routing-tree"* ]] ||
+    fail "ghttp landing page retained the unrendered routing marker"
   [[ "${landing_page}" != *"llm-proxy-capability-catalog"* ]] ||
     fail "ghttp landing page retained the unrendered capability marker"
   [[ "${landing_page}" != *"api_key"* && "${landing_page}" != *"base_url"* ]] ||
