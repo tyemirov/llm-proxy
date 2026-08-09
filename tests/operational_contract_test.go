@@ -456,7 +456,7 @@ fi
 [[ ! -f "${CURL_EARLY_CAPTURE:?}" ]]
 if [[ "${arguments}" != *"--write-out"* ]]; then
   [[ "${arguments}" == *"http://localhost:4179/"* ]]
-  builtin printf '%s' '<table class="catalog-table"><tr><td>validated public route</td></tr></table>'
+  builtin printf '%s' '<routing-tree class="routing-tree"></routing-tree><table class="catalog-table"><tr><td>validated public route</td></tr></table>'
   exit 0
 fi
 case "${arguments}" in
@@ -795,7 +795,7 @@ set -euo pipefail
 
 arguments="$*"
 if [[ "${arguments}" != *"--write-out"* ]]; then
-  builtin printf '%s' '<table class="catalog-table"><tr><td>validated public route</td></tr></table>'
+  builtin printf '%s' '<routing-tree class="routing-tree"></routing-tree><table class="catalog-table"><tr><td>validated public route</td></tr></table>'
   exit 0
 fi
 case "${arguments}" in

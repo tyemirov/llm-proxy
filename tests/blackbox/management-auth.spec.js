@@ -12,6 +12,7 @@ import {
   APPLICATION_PATH,
   LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE,
 } from "../../site/assets/llm-proxy/js/constants.js";
+import { PUBLIC_FOOTER_COMPACT_MAX_HEIGHT } from "../../scripts/public_site_shell.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const httpOK = 200;
@@ -429,6 +430,24 @@ test("public Log In opens the authenticated app and the TAuth session survives u
   await page.setViewportSize({ width: 390, height: 780 });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   const portfolioToggle = page.getByRole("button", { name: "Built by Marco Polo Research Lab" });
+  await expect(portfolioToggle).toBeVisible();
+  const footerGeometry = await page.getByRole("contentinfo").evaluate((footerElement) => {
+    const footerBounds = footerElement.getBoundingClientRect();
+    return {
+      anchoredBottom: Math.abs(footerBounds.bottom - window.innerHeight) <= 0.5,
+      anchoredLeft: Math.abs(footerBounds.left) <= 0.5,
+      anchoredRight: Math.abs(footerBounds.right - document.documentElement.clientWidth) <= 0.5,
+      height: footerBounds.height,
+      position: getComputedStyle(footerElement).position,
+      widthFits: footerElement.scrollWidth <= footerElement.clientWidth,
+    };
+  });
+  expect(footerGeometry.position).toBe("fixed");
+  expect(footerGeometry.anchoredBottom).toBe(true);
+  expect(footerGeometry.anchoredLeft).toBe(true);
+  expect(footerGeometry.anchoredRight).toBe(true);
+  expect(footerGeometry.height).toBeLessThanOrEqual(PUBLIC_FOOTER_COMPACT_MAX_HEIGHT);
+  expect(footerGeometry.widthFits).toBe(true);
   await portfolioToggle.click();
   await expect(portfolioToggle).toHaveAttribute("aria-expanded", "true");
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
