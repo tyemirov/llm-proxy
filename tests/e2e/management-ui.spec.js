@@ -45,18 +45,36 @@ const apiDocumentationPath = "/docs/";
 const openAPIPath = "/openapi.yaml";
 const openAPISchemaViewerPath = `${apiDocumentationPath}#openapi-schema`;
 const openAPIDownloadFilename = "llm-proxy-openapi.yaml";
-const applicationModuleRevision = "20260809b123";
+const applicationModuleRevision = "20260809i217";
 const applicationModuleFiles = Object.freeze([
   "alpineRuntime.js",
   "app.js",
   "constants.js",
   "startupGuard.js",
   "core/backendClient.js",
+  "core/managementProfile.js",
   "core/mprShell.js",
   "core/runtimeTransition.js",
+  "ui/adminDashboard.js",
   "ui/applicationStartup.js",
-  "ui/keyManagement.js",
+  "ui/authenticationLifecycle.js",
+  "ui/clientAccess.js",
+  "ui/dialogFocus.js",
+  "ui/managementApplication.js",
+  "ui/managementApplicationPresentation.js",
+  "ui/managementApplicationState.js",
+  "ui/notifications.js",
+  "ui/profileMutations.js",
+  "ui/providerCredentials.js",
+  "ui/providerEditor.js",
+  "ui/providerSettings.js",
+  "ui/requestExamples.js",
+  "ui/routingDefaults.js",
   "ui/runtimeFailure.js",
+  "ui/settingsDialog.js",
+  "ui/tenantSettings.js",
+  "ui/usageDashboard.js",
+  "ui/usageFailurePresentation.js",
   "ui/usagePresentation.js",
 ]);
 const applicationForbiddenTAuthFragments = Object.freeze([
@@ -403,7 +421,9 @@ test("public landing explains the product and exposes the generated capability c
   expect(managementHTML).not.toContain("Sign in to manage LLM Proxy keys");
   expect(managementHTML).toContain(`privacy-link-href="${privacyPath}"`);
   expect(managementHTML).toMatch(/<notification-region\s+slot="aux"[\s\S]*?<mpr-user\s+slot="aux"/);
-  expect(managementHTML).toContain('<body x-data="llmProxyKeyManagement" x-init="init()">');
+  expect(managementHTML).toContain('<body x-data="llmProxyManagementApplication" x-init="init()">');
+  expect(managementHTML).toContain("<llm-proxy-management-application");
+  expect(managementHTML).not.toContain("llm-proxy-key-management");
   expect(managementHTML).not.toContain('x-init="bindNotificationRegion($el)"');
   expect(managementHTML).toContain('<a slot="brand" class="llm-proxy-header-brand" href="/" aria-label="LLM Proxy home">');
   expect(managementHTML).toContain(`<img class="llm-proxy-header-brand__logo" src="${appIconPath}" alt="" aria-hidden="true">`);
@@ -438,7 +458,7 @@ test("public landing explains the product and exposes the generated capability c
   );
   expect(html).not.toContain("MarcoPoloResearchLab/mpr-ui@v");
   expect(html).toMatch(/<notification-region\s+slot="aux"[\s\S]*?<mpr-user\s+slot="aux"/);
-  expect(html).toContain('<body x-data="llmProxyKeyManagement" x-init="init()">');
+  expect(html).toContain('<body x-data="llmProxyManagementApplication" x-init="init()">');
   expect(html).not.toContain('x-init="bindNotificationRegion($el)"');
   expect(html).toContain('<a slot="brand" class="llm-proxy-header-brand" href="/" aria-label="LLM Proxy home">');
   expect(html).toContain(`<img class="llm-proxy-header-brand__logo" src="${appIconPath}" alt="" aria-hidden="true">`);
@@ -563,32 +583,72 @@ test("public landing explains the product and exposes the generated capability c
   expect(mprShellJavaScript).not.toContain("MutationObserver");
   expect(mprShellJavaScript).not.toContain("applyYamlConfig");
 
-  const keyManagementResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/keyManagement.js`);
-  expect(keyManagementResponse.status()).toBe(httpOK);
-  const keyManagementJavaScript = await keyManagementResponse.text();
-  expect(keyManagementJavaScript).toContain("readMprUIAuthStatus");
-  expect(keyManagementJavaScript).not.toContain("authenticatedShellProfileRequested");
-  expect(keyManagementJavaScript).not.toContain("shellAuthenticationSettled");
-  expect(keyManagementJavaScript).not.toContain("document.cookie");
-  expect(keyManagementJavaScript).not.toContain("localStorage");
-  expect(keyManagementJavaScript).not.toContain("/auth/session");
-  expect(keyManagementJavaScript).not.toContain("ResizeObserver");
-  expect(keyManagementJavaScript).not.toContain("NOTIFICATION_HEADER_BOTTOM_PROPERTY");
-  expect(keyManagementJavaScript).not.toContain("bindNotificationRegion");
-  expect(keyManagementJavaScript).toContain("providerEditorSession");
-  expect(keyManagementJavaScript).toContain("autosaveSelectedProvider");
-  expect(keyManagementJavaScript).toContain("autosaveRoutingDefaults");
-  expect(keyManagementJavaScript).toContain("enqueueProfileMutation");
-  expect(keyManagementJavaScript).toContain("waitForProfileMutations");
-  expect(keyManagementJavaScript).not.toContain("saveSelectedProviderKey");
-  expect(keyManagementJavaScript).not.toContain("saveDefaults");
-  expect(keyManagementJavaScript).toContain("requestAndApplyGeneratedSecret");
-  expect(keyManagementJavaScript).toContain("settingsRequired");
-  expect(keyManagementJavaScript).toContain("hasSavedProviderKey");
-  expect(keyManagementJavaScript).not.toContain("providerInputs");
-  expect(keyManagementJavaScript).not.toContain("revealedProviderID");
-  expect(keyManagementJavaScript.match(/window\.setTimeout/g)).toHaveLength(1);
-  expect(keyManagementJavaScript).toContain("NOTICE_AUTO_DISMISS_MILLISECONDS");
+  const managementApplicationResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/managementApplication.js`);
+  expect(managementApplicationResponse.status()).toBe(httpOK);
+  const managementApplicationJavaScript = await managementApplicationResponse.text();
+  expect(managementApplicationJavaScript).toContain("createManagementApplication");
+  expect(managementApplicationJavaScript).not.toContain("readMprUIAuthStatus");
+  expect(managementApplicationJavaScript).not.toContain("autosaveSelectedProvider");
+
+  const authenticationLifecycleResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/authenticationLifecycle.js`);
+  expect(authenticationLifecycleResponse.status()).toBe(httpOK);
+  const authenticationLifecycleJavaScript = await authenticationLifecycleResponse.text();
+  expect(authenticationLifecycleJavaScript).toContain("readMprUIAuthStatus");
+  expect(authenticationLifecycleJavaScript).not.toContain("document.cookie");
+  expect(authenticationLifecycleJavaScript).not.toContain("localStorage");
+  expect(authenticationLifecycleJavaScript).not.toContain("/auth/session");
+
+  const providerSettingsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/providerSettings.js`);
+  expect(providerSettingsResponse.status()).toBe(httpOK);
+  const providerSettingsJavaScript = await providerSettingsResponse.text();
+  expect(providerSettingsJavaScript).toContain("providerEditorSession");
+  expect(providerSettingsJavaScript).toContain("autosaveSelectedProvider");
+  expect(providerSettingsJavaScript).not.toContain("saveSelectedProviderKey");
+  expect(providerSettingsJavaScript).not.toContain("providerInputs");
+  expect(providerSettingsJavaScript).not.toContain("revealedProviderID");
+
+  const providerEditorResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/providerEditor.js`);
+  expect(providerEditorResponse.status()).toBe(httpOK);
+  const providerEditorJavaScript = await providerEditorResponse.text();
+  expect(providerEditorJavaScript).toContain("createProviderEditorSession");
+  expect(providerEditorJavaScript).toContain("selectProvider");
+  expect(providerEditorJavaScript).not.toContain("requestSaveProviderKey");
+
+  const providerCredentialsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/providerCredentials.js`);
+  expect(providerCredentialsResponse.status()).toBe(httpOK);
+  const providerCredentialsJavaScript = await providerCredentialsResponse.text();
+  expect(providerCredentialsJavaScript).toContain("revealSelectedProviderKey");
+  expect(providerCredentialsJavaScript).toContain("removeProviderKey");
+  expect(providerCredentialsJavaScript).not.toContain("requestSaveProviderKey");
+
+  const routingDefaultsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/routingDefaults.js`);
+  expect(routingDefaultsResponse.status()).toBe(httpOK);
+  const routingDefaultsJavaScript = await routingDefaultsResponse.text();
+  expect(routingDefaultsJavaScript).toContain("autosaveRoutingDefaults");
+  expect(routingDefaultsJavaScript).not.toContain("saveDefaults");
+
+  const profileMutationsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/profileMutations.js`);
+  expect(profileMutationsResponse.status()).toBe(httpOK);
+  const profileMutationsJavaScript = await profileMutationsResponse.text();
+  expect(profileMutationsJavaScript).toContain("enqueueProfileMutation");
+  expect(profileMutationsJavaScript).toContain("waitForProfileMutations");
+
+  const clientAccessResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/clientAccess.js`);
+  expect(clientAccessResponse.status()).toBe(httpOK);
+  const clientAccessJavaScript = await clientAccessResponse.text();
+  expect(clientAccessJavaScript).toContain("requestAndApplyGeneratedSecret");
+
+  const applicationStateResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/managementApplicationState.js`);
+  expect(applicationStateResponse.status()).toBe(httpOK);
+  const applicationStateJavaScript = await applicationStateResponse.text();
+  expect(applicationStateJavaScript).toContain("providerEditorSession");
+  expect(applicationStateJavaScript).toContain("routingDefaultsAutosavePromise");
+
+  const notificationsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/ui/notifications.js`);
+  expect(notificationsResponse.status()).toBe(httpOK);
+  const notificationsJavaScript = await notificationsResponse.text();
+  expect(notificationsJavaScript.match(/window\.setTimeout/g)).toHaveLength(1);
+  expect(notificationsJavaScript).toContain("NOTICE_AUTO_DISMISS_MILLISECONDS");
 
   const constantsResponse = await request.get(`${baseURL}/assets/llm-proxy/js/constants.js`);
   expect(constantsResponse.status()).toBe(httpOK);
@@ -1709,7 +1769,7 @@ test("late tenant usage cannot overwrite a newer Usage tenant selection", async 
   });
 
   await page.goto(`${baseURL}${applicationPath}`);
-  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+  await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
     const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
     const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
     if (!applicationState) {
@@ -1718,7 +1778,7 @@ test("late tenant usage cannot overwrite a newer Usage tenant selection", async 
     void applicationState.handleUsageTenantSelection({ target: { value: "tenant_1" } });
   });
   await firstUsageRequested;
-  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+  await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
     const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
     const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
     if (!applicationState) {
@@ -1762,7 +1822,7 @@ test("late tenant lifecycle responses cannot select or overwrite another tenant"
   await page.getByRole("dialog", { name: "Create tenant" }).getByRole("textbox", { name: "Tenant name" }).fill("Late Create");
   await page.getByRole("dialog", { name: "Create tenant" }).getByRole("button", { name: "Create", exact: true }).click();
   await createRequested;
-  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+  await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
     const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
     const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
     if (!applicationState) {
@@ -1801,7 +1861,7 @@ test("late tenant lifecycle responses cannot select or overwrite another tenant"
   await renameRequested;
   await page.keyboard.press("Escape");
   await expect(tenantNameEditor).toBeVisible();
-  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+  await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
     const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
     const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
     if (!applicationState) {
@@ -2141,7 +2201,7 @@ test("usage interval loading blocks controls, ignores stale responses, and clear
     await expect(sevenDayButton).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator("usage-metrics usage-card").first().locator("strong")).toHaveText("0");
     await expect(page.locator("usage-chart-panel").first()).toContainText("No usage recorded");
-    await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+    await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
       const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
       const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
       if (!applicationState) {
@@ -2334,7 +2394,7 @@ test("failed-request responses cannot cross interval or Usage tenant boundaries"
   await page.getByRole("button", { name: "2 failed requests" }).click();
   await expect(page.getByRole("dialog", { name: "Failed request details" })).toHaveAttribute("aria-busy", "true");
 
-  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+  await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
     const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
     const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
     if (!applicationState) {
@@ -2345,7 +2405,7 @@ test("failed-request responses cannot cross interval or Usage tenant boundaries"
   await expect(page.getByRole("dialog", { name: "Failed request details" })).toBeHidden();
   await expect(page.getByRole("button", { name: /failed request/ })).toHaveCount(0);
 
-  await page.locator("llm-proxy-key-management").evaluate((applicationElement) => {
+  await page.locator("llm-proxy-management-application").evaluate((applicationElement) => {
     const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
     const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
     if (!applicationState) {
@@ -2561,7 +2621,7 @@ for (const verificationContextChange of [
     await verificationRequested;
     await expect(providerEditor.getByRole("status")).toHaveText("Verifying key");
 
-    await page.locator("llm-proxy-key-management").evaluate(
+    await page.locator("llm-proxy-management-application").evaluate(
       async (applicationElement, contextChange) => {
         const alpineRuntime = /** @type {typeof globalThis & { Alpine?: { $data: (element: Element) => any } }} */ (globalThis);
         const applicationState = alpineRuntime.Alpine?.$data(applicationElement);
@@ -3804,7 +3864,7 @@ test("a direct anonymous app visit returns to the public page", async ({ page })
 
   await expect(page).toHaveURL(`${baseURL}/`);
   await expect(page.getByRole("heading", { name: "Integrate once. Use the model that fits." })).toBeVisible();
-  await expect(page.locator("llm-proxy-key-management")).toHaveCount(0);
+  await expect(page.locator("llm-proxy-management-application")).toHaveCount(0);
   expect(accountRequests).toHaveLength(0);
 });
 
