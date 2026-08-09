@@ -116,7 +116,7 @@ Guidelines for building the browser front end with semantic web components, Alpi
 
 ## Linting & Formatting
 
-- Run lint/format via the repo `Makefile` targets (prefer `make lint` / `make fmt` / `make ci`). If ESLint runs in Docker, the Makefile target should encapsulate that so contributors do not need ad-hoc commands.
+- Use `.mprlab/POLICY.md` for validation. During the change, run the smallest lint or format target. Keep Dockerized ESLint in the Makefile target.
 - Prettier runs only when explicitly requested; never on save.
 - Enforced rules include `no-unused-vars`, `no-implicit-globals`, `no-var`, `prefer-const`, `eqeqeq`, and `no-magic-numbers` (allowed: -1, 0, 1, 100, 360).
 
