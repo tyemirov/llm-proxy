@@ -923,9 +923,10 @@ The site is declared as a `github_pages` resource in
 exact sibling `../mprlab-gateway`; GitHub Actions is not used for Pages
 deployment. The backend does not serve management HTML or assets; `GET /`
 remains a proxy endpoint and returns `403` without a tenant `key`. The backend
-does serve public `/config-ui.yaml` from the loaded management config so the
-GitHub Pages frontend can consume the current llm-proxy runtime, MPR UI, and
-TAuth bootstrap values from `llm-proxy-api`.
+serves public `/config-ui.yaml` from the loaded management config and
+`/api/public/capabilities` from the validated provider registry. The GitHub
+Pages frontend consumes these REST resources from `llm-proxy-api`; neither
+resource exposes provider credentials, tenant state, or management secrets.
 
 The `/app/` UI uses the shared MPR shell through API-served `config-ui.yaml`,
 literal `mpr-ui@latest` assets, `mpr-ui-config.js`,
@@ -934,19 +935,19 @@ and the shared compact `<mpr-footer>`. MPR UI owns browser authentication,
 session restoration, refresh, logout, and all communication with TAuth;
 application JavaScript does not load a second TAuth client, implement those
 operations, or apply MPR UI config. The Pages artifact contains no static
-`config-ui.yaml` or `llm-proxy-config.json`. The declared Go-only Pages
-container renders every auth-aware HTML page with
-`https://llm-proxy-api.mprlab.com/config-ui.yaml` in the declarative header
-attribute and replaces the public landing's capability marker with a sanitized
-model-centric projection of `configs/config.yml`. It also replaces the landing
-routing marker with the provider-to-text-model tree from that same projection.
+`config-ui.yaml` or `llm-proxy-config.json`. The declared Pages build starts the
+backend's public-capabilities-only REST surface, then the frontend-owned Node
+renderer fetches `/api/public/capabilities`. The renderer writes
+`https://llm-proxy-api.mprlab.com/config-ui.yaml` into every auth-aware header,
+replaces the public landing's capability marker with the returned model-centric
+catalog, and replaces the routing marker with its provider-to-text-model tree.
 Every provider and model remains present in server-rendered HTML without
 JavaScript; browser enhancement supplies selectable provider and model leaves,
 provider-default selection, and the final route display, plus
 one all-characteristics search surface, disclosed match-all capability filters,
-sortable table headers, a live result count, and reset. Production Pages
-rendering has no Node runtime or environment
-expansion path. A missing or invalid provider/model catalog, management config
+sortable table headers, a live result count, and reset. Node exists only in the
+Pages build stage; the published artifact is static and has no runtime renderer
+or environment-expansion path. A missing or invalid provider/model catalog, management config
 attribute, or landing catalog marker fails the site build. That single
 API-served YAML points browser management API
 calls, generated usage examples, and MPR UI/TAuth at the configured origins.
@@ -1386,7 +1387,7 @@ Then configure GitHub Pages for this repository:
 2. Set the Pages custom domain to `llm-proxy.mprlab.com`.
 3. Use the standard `make release`, `make publish`, and `make deploy` lifecycle.
    Those commands delegate to `../mprlab-gateway`, which renders the declared
-   Go-only Pages container, publishes its immutable artifact, activates it on
+   frontend-built Pages container, publishes its immutable artifact, activates it on
    `gh-pages`, and verifies the matching Pages build and cache-distinct
    `/.mprlab-release.json` marker.
 4. Configure real backend deployment secrets outside the Pages artifact:
@@ -1527,11 +1528,12 @@ browser-facing endpoints:
 - Backend API: `http://localhost:8080/`, including the proxy and
   `/api/management/*` endpoints.
 
-`make up` renders an isolated local site artifact from `configs/config.yml`
-before the API starts. The renderer projects the validated provider registry
-into the public routing tree and capability matrix, and ghttp serves that
-rendered artifact read-only. Startup rejects an absent or unrendered routing
-tree or matrix, and shutdown removes the temporary artifact.
+`make up` starts the API, verifies its public capability resource, and runs a
+one-shot frontend site-builder. That builder fetches
+`/api/public/capabilities`, renders the validated provider registry into the
+public routing tree and capability matrix, and writes an isolated static
+artifact for ghttp to serve read-only. Startup rejects a failed API resource or
+site build, and shutdown removes the temporary artifact.
 
 ghttp proxies `http://localhost:4179/config-ui.yaml` to the API and the
 same-origin `/auth/*` and `/me` routes to the internal TAuth service. The
@@ -1798,13 +1800,12 @@ deployment, the gateway verifies that service belongs to llm-proxy before
 removing only its old container. The retained
 `mprlab-nginx-gateway_llm-proxy-data` volume is not removed.
 
-The Pages declaration uses `docker/pages/Dockerfile`, whose renderer is the Go
-CLI built from committed source. The renderer reads the provider/model and
-request-limit subtrees of `configs/config.yml`, validates the canonical runtime
-catalog, emits only public capability fields at `/`, and injects the browser
-configuration URL into every generated auth-aware HTML page. Node remains a developer dependency for
-frontend lint and browser tests only; llm-proxy declares no production Node or
-npm resource. Application runtime code has no Caddy deployment knowledge, and
+The Pages declaration uses `docker/pages/Dockerfile`. A compiled Go backend
+serves the secret-free `/api/public/capabilities` resource during the build;
+the Node frontend renderer fetches that resource, renders the provider/model
+catalog and request limits, and injects the browser configuration URL into
+every generated auth-aware HTML page. The final Pages image contains only the
+static artifact. Application runtime code has no Caddy deployment knowledge, and
 its TAuth knowledge remains limited to the published client/session
 integration.
 
@@ -2561,7 +2562,7 @@ checkout. These are deliberately thin entrypoints into the exact sibling
 lifecycle machinery.
 
 The gateway release transaction validates this app, builds the declared
-multi-platform container and Go-rendered Pages artifact from committed source,
+multi-platform container and frontend-rendered Pages artifact from committed source,
 and seals the canonical SemVer release. Publication creates only missing remote
 state from that exact release and rejects conflicts. Deployment uses the
 gateway-owned Ansible inventory and transaction to reconcile only this app's
