@@ -40,14 +40,14 @@ body {
   flex-direction: column;
 }
 
-llm-proxy-key-management button,
-llm-proxy-key-management input,
-llm-proxy-key-management select,
-llm-proxy-key-management textarea {
+llm-proxy-management-application button,
+llm-proxy-management-application input,
+llm-proxy-management-application select,
+llm-proxy-management-application textarea {
   font: inherit;
 }
 
-llm-proxy-key-management,
+llm-proxy-management-application,
 app-surface,
 tenant-access-row,
 client-access-key,
@@ -278,13 +278,13 @@ dashboard-actions {
   gap: 0.25rem;
 }
 
-llm-proxy-key-management .usage-interval-button {
+llm-proxy-management-application .usage-interval-button {
   min-width: 0;
   white-space: nowrap;
 }
 
-llm-proxy-key-management .usage-interval-button.is-active,
-llm-proxy-key-management .usage-interval-button.is-active:hover:not(:disabled) {
+llm-proxy-management-application .usage-interval-button.is-active,
+llm-proxy-management-application .usage-interval-button.is-active:hover:not(:disabled) {
   border-color: var(--llm-accent);
   background: var(--llm-accent-surface);
   color: var(--llm-accent);
@@ -349,7 +349,7 @@ usage-card strong {
   text-underline-offset: 0.16rem;
 }
 
-llm-proxy-key-management .usage-failure-action:hover:not(:disabled) {
+llm-proxy-management-application .usage-failure-action:hover:not(:disabled) {
   border-color: transparent;
   background: transparent;
   color: #ff8177;
@@ -562,7 +562,7 @@ help-tooltip {
   flex: 0 0 auto;
 }
 
-llm-proxy-key-management .help-tooltip-trigger {
+llm-proxy-management-application .help-tooltip-trigger {
   width: 20px;
   min-width: 20px;
   height: 20px;
@@ -574,8 +574,8 @@ llm-proxy-key-management .help-tooltip-trigger {
   padding: 0;
 }
 
-llm-proxy-key-management .help-tooltip-trigger:hover,
-llm-proxy-key-management .help-tooltip-trigger:focus-visible {
+llm-proxy-management-application .help-tooltip-trigger:hover,
+llm-proxy-management-application .help-tooltip-trigger:focus-visible {
   color: var(--llm-accent);
 }
 
@@ -801,7 +801,7 @@ dd {
   gap: 0.5rem;
 }
 
-llm-proxy-key-management label {
+llm-proxy-management-application label {
   display: grid;
   gap: 0.25rem;
   color: var(--llm-muted);
@@ -809,9 +809,9 @@ llm-proxy-key-management label {
   font-weight: 600;
 }
 
-llm-proxy-key-management input,
-llm-proxy-key-management select,
-llm-proxy-key-management textarea {
+llm-proxy-management-application input,
+llm-proxy-management-application select,
+llm-proxy-management-application textarea {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid var(--llm-border);
@@ -822,11 +822,11 @@ llm-proxy-key-management textarea {
   font-size: 0.78rem;
 }
 
-llm-proxy-key-management textarea {
+llm-proxy-management-application textarea {
   resize: vertical;
 }
 
-llm-proxy-key-management button {
+llm-proxy-management-application button {
   min-height: 30px;
   border: 1px solid var(--llm-border);
   border-radius: 6px;
@@ -843,24 +843,24 @@ llm-proxy-key-management button {
     transform 0.12s ease;
 }
 
-llm-proxy-key-management button:hover:not(:disabled) {
+llm-proxy-management-application button:hover:not(:disabled) {
   border-color: var(--llm-accent);
   background: var(--llm-panel-strong);
 }
 
-llm-proxy-key-management button:active:not(:disabled) {
+llm-proxy-management-application button:active:not(:disabled) {
   transform: scale(0.97);
 }
 
-llm-proxy-key-management button:disabled {
+llm-proxy-management-application button:disabled {
   cursor: not-allowed;
   opacity: 0.52;
 }
 
-llm-proxy-key-management button:focus-visible,
-llm-proxy-key-management input:focus-visible,
-llm-proxy-key-management select:focus-visible,
-llm-proxy-key-management textarea:focus-visible {
+llm-proxy-management-application button:focus-visible,
+llm-proxy-management-application input:focus-visible,
+llm-proxy-management-application select:focus-visible,
+llm-proxy-management-application textarea:focus-visible {
   outline: 2px solid var(--llm-accent);
   outline-offset: 2px;
 }
@@ -1541,7 +1541,7 @@ settings-section,
     width: 100%;
   }
 
-  llm-proxy-key-management .usage-interval-button {
+  llm-proxy-management-application .usage-interval-button {
     flex: 1 1 0;
     padding-inline: 0.35rem;
   }

@@ -44,6 +44,31 @@
 
 /**
  * @typedef {{
+ *   providerID: string,
+ *   keyInput: string,
+ *   keyVisible: boolean,
+ *   keyDirty: boolean,
+ *   textModel: string,
+ *   systemPrompt: string,
+ *   dirty: boolean,
+ *   editVersion: number,
+ *   revealPending: boolean,
+ *   revealVersion: number
+ * }} ProviderEditorSession
+ */
+
+/**
+ * @typedef {{
+ *   $nextTick: (callback: () => void) => void,
+ *   $refs: Record<string, HTMLElement> & {
+ *     providerSelector: HTMLSelectElement,
+ *     settingsTenantSelector: HTMLSelectElement
+ *   }
+ * }} AlpineMagic
+ */
+
+/**
+ * @typedef {{
  *   api_key: string
  * }} ProviderKeyReveal
  */

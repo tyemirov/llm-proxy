@@ -28,11 +28,11 @@
       type="application/json"
       data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
     ></script>
-    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260809b123"></script>
-    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260809b123"></script>
+    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260809i217"></script>
+    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260809i217"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
-  <body x-data="llmProxyKeyManagement" x-init="init()">
+  <body x-data="llmProxyManagementApplication" x-init="init()">
     <mpr-header
       id="llm-proxy-header"
       data-config-url="/config-ui.yaml"
@@ -72,7 +72,7 @@
         <button id="llm-proxy-runtime-failure-reload" class="resource-button" type="button"></button>
       </section>
 
-      <llm-proxy-key-management x-bind:data-auth-state="authState">
+      <llm-proxy-management-application x-bind:data-auth-state="authState">
         <section class="llm-panel" x-cloak x-show="authState === states.loading">
           <p class="eyebrow" x-text="copy.loadingEyebrow"></p>
           <h1 x-text="copy.loadingTitle"></h1>
@@ -958,7 +958,7 @@
             </footer>
           </tenant-dialog>
         </tenant-dialog-overlay>
-      </llm-proxy-key-management>
+      </llm-proxy-management-application>
       <section class="public-resource-link" aria-labelledby="public-resource-title">
         <div>
           <p class="eyebrow">Resources</p>
