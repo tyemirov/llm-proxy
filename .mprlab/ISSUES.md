@@ -40,6 +40,38 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B123] (P1) {B121} Initialize routing from a pending provider default.
+  Goal:
+  Preserve the newly selected provider default model when the same provider is
+  chosen for routing before its provider-settings autosave returns.
+  Evidence:
+  - Provider model edits update only the provider editor while their serialized
+    profile mutation is pending.
+  - Routing-provider selection reads `providers[].text_model` from the last
+    applied profile, so it can queue the previous model behind the provider save
+    and persist that stale model as an explicit routing override.
+  Requirements:
+  - Wait for a matching pending provider autosave before initializing the
+    routing provider/model pair from the returned current profile.
+  - Keep unrelated provider and routing mutations independently editable and
+    preserve the existing serialized whole-profile mutation contract.
+  - Reject a delayed initialization after the tenant, authentication, Settings,
+    or routing-selection context changes.
+  Validation:
+  - Browser coverage holds a provider-model save open, selects that provider as
+    the routing default, and proves the queued defaults mutation uses the saved
+    new model.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+  Resolution:
+  - Matching routing-provider selection now waits for the provider autosave,
+    rereads the current profile model, and rejects stale tenant,
+    authentication, Settings, and routing-selection completions.
+  - The new browser regression failed against the previous behavior with
+    `gpt-4.1` instead of `gpt-5-mini`, then passed after the fix.
+  - Final `make ci` passed all 11 gates in 117 seconds with 100.0% Go statement
+    coverage and 87 frontend browser scenarios.
+
 - [x] [B122] (P1) Show Settings activity notifications in the Settings title.
   Goal:
   Keep feedback from Settings actions visible while the modal obscures and
