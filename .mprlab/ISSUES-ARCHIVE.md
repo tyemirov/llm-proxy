@@ -3,10 +3,15 @@
 This is historical context, not an active backlog. `.mprlab/ISSUES.md`
 contains only current active, blocked, planning, and recurring work.
 
-Archive date: 2026-07-24
-Source: the `v0.2.43` release snapshot. It retains every original issue body,
-resolution note, and validation record:
-`git show v0.2.43:.mprlab/ISSUES.md`
+Archive batches:
+- 2026-07-24 — source `v0.2.43`. That release snapshot retains every
+  original issue body, resolution note, and validation record for the first
+  resolved-history cleanup batch:
+  `git show v0.2.43:.mprlab/ISSUES.md`
+- 2026-08-09 — source `v0.2.60`. That release snapshot retains the exact
+  bodies, resolution notes, and validation records for the issues archived
+  in this cleanup pass:
+  `git show v0.2.60:.mprlab/ISSUES.md`
 
 `CHANGELOG.md` remains the release-level history. This index keeps completed
 issue titles discoverable without making the active tracker noisy.
@@ -14,12 +19,64 @@ issue titles discoverable without making the active tracker noisy.
 ## Archive conventions
 
 - Resolved non-recurring issues are indexed below by their original tracker section.
+- Planning entries remain in `.mprlab/ISSUES.md` and are intentionally not
+  archived here.
+- Each section lists the newest archived batch first, preserving the active
+  tracker order from its source snapshot.
 - `M009` was historically entered as `M009R`, but it was a completed one-off
   consolidation with no recurring cadence and is archived under its canonical
   non-recurring identifier.
 
 ## BugFixes
 
+- [x] [B120] (P0) {B114} Keep production browser authentication on the public TAuth origin.
+- [x] [B119] (P1) {B118,I215} Keep selected models in one readable column.
+- [x] [B118] (P1) {B117,I215} Compact and center the desktop routing fork.
+- [x] [B117] (P1) {I215} Keep the selected provider in place and draw its model fan.
+- [x] [B116] (P1) {I214,B114} Keep the real mobile sticky footer compact.
+- [x] [B115] (P1) {F019,I213} Align public capability-catalog table rows.
+- [x] [B114] (P1) {B111,B112,B113} Restore the single MPR UI authentication path and correct the shared public contract.
+- [x] [B113] (P1) {B111,B112,F019} Prevent authenticated sessions from rendering the anonymous landing page.
+- [x] [B112] (P1) {B111,F019} Restore the authenticated dashboard through the canonical MPR UI and TAuth session.
+- [x] [B111] (P1) {F019,P004,P005} Make public Log In authenticate directly and unify the site footer.
+- [x] [B110] (P1) {F019,B105,B109} Resolve the remaining public-site review correctness findings.
+- [x] [B109] (P1) {F019,I209} Resolve the public-site review validation findings.
+- [x] [B108] (P1) {F019,I209} Toggle capability filters from the catalog search control.
+- [x] [B107] (P1) Add the standard `make down` local service command.
+- [x] [B106] (P1) {F019} Remove workspace terminology from the web site.
+- [x] [B105] (P1) {F019} Populate the local landing capability matrix.
+- [x] [B104] (P1) {F019} Expose explicit OpenAPI view and download actions.
+- [x] [B103] (P1) {F019} Use the shared MPR header and footer on every public page.
+- [x] [B102] (P1) {F019} Publish the authenticated web application only at `/app/`.
+- [x] [B101] (P1) {I029,F019} Serve the canonical OpenAPI schema from local ghttp.
+- [x] [B100] (P0) Make declared frontend validation self-contained in a clean checkout.
+- [x] [B098] (P0) Make canonical CI completion fail closed and visible.
+- [x] [B096] (P0) Make deployment self-contained in the application repository.
+- [x] [B095] (P0) Keep deployment declarations app-owned and execution platform-owned.
+- [x] [B094] (P1) Run the full CI suite once per release lifecycle.
+- [x] [B093] (P0) Publish prepared OCI platform indexes without rejecting attestations.
+- [x] [B092] (P0) Make the container inspection-bound test deterministic.
+- [x] [B091] (P0) Remove synthetic local-orchestration latency from the release gate.
+- [x] [B090] (P0) Make release, publication, and deployment retries converge on one sealed release.
+- [x] [B089] (P1) Return sanitized, correlated provider errors at the public proxy boundary.
+- [x] [B086] (P1) Make Default-tenant production live tests repeatable.
+- [x] [B087] (P1) Restore Default-tenant Gemini and Moonshot production routing.
+- [x] [B085] (P1) {B080} Complete truncated provider output through one shared coordinator.
+- [x] [B084] (P1) {I029} Restore the generated API reference after OpenAPI contract merges.
+- [x] [B083] (P1) Keep tracked environment examples out of runtime use.
+- [x] [B082] (P1) {F014} Restore persisted-routing and dictation-size enforcement.
+- [x] [B081] (P1) {F014,B079} Keep managed routing defaults on providers with saved tenant keys.
+- [x] [B080] (P1) Reject incomplete OpenAI responses that contain partial text.
+- [x] [B079] (P1) {B074,B076,F014} Consolidate tenant and client-key lifecycle into one Settings row.
+- [x] [B078] (P1) {F014,B075} Fail visibly when the management application runtime is blocked.
+- [x] [B076] (P1) {F014,I029,I031} Separate active tenants from Settings and Usage selection.
+- [x] [B075] (P1) {F014} Keep local browser authentication on the ghttp front door.
+- [x] [B074] (P1) {F014} Make tenant context and lifecycle controls compact.
+- [x] [B073] (P1) {B070,F014,I031} Migrate persisted caller-cancellation usage outcomes.
+- [x] [B072] (P1) {F014,B071} Preserve legacy SQLite index names through the ownership migration.
+- [x] [B071] (P1) {F014,I029,I031} Restore the SQLite-only GORM management database contract.
+- [x] [B070] (P1) {F014,I029,I031} Correct review-discovered management presentation and OpenAPI gaps.
+- [x] [B069] (P1) Make upstream request timeouts an explicit, bounded client-to-proxy contract.
 - [x] [B068] Let text callers select a capability-validated reasoning effort.
 - [x] [B001] Make management request examples copyable and provider-specific.
 - [x] [B002] Present provider settings through a selected-provider editor.
@@ -91,6 +148,24 @@ issue titles discoverable without making the active tracker noisy.
 
 ## Improvements
 
+- [x] [I215] (P1) {F019,I212,I213} Show the generated provider-to-model routing tree.
+- [x] [I214] (P1) {B111,B114} Keep the shared footer sticky on every page.
+- [x] [I213] (P1) {F019} Clarify default-route badges in the public model catalog.
+- [x] [I212] (P1) {F019} Center the public site on one integration across supported models.
+- [x] [I211] (P1) {F019} Keep execution lifecycle internal to the public capability catalog.
+- [x] [I209] (P1) {F019} Streamline capability catalog search and table sorting.
+- [x] [I208] (P1) {F019} Make the public capability catalog model-centric and filterable.
+- [x] [I204] (P0) Adopt the app-owned resource and sibling-gateway lifecycle.
+- [x] [I042] (P1) Remove managed-request serialization from SQLite authentication.
+- [x] [I037] (P1) Model provider wire contracts separately from execution lifecycles.
+- [x] [I040] (P1) {I037,B087} Migrate Gemini from generateContent to Interactions resources.
+- [x] [I036] (P1) {F014,B081} Verify pasted provider API keys before persisting them.
+- [x] [I043] (P1) Persist managed usage through one bounded asynchronous writer.
+- [x] [I034] (P2) {B079} Minimize Settings system-prompt editors by default.
+- [x] [I033] (P2) {B076,I029} Keep the visible Usage Overview automatically fresh.
+- [x] [I031] (P1) {I029,F014} Add tenant-scoped failure details to the usage dashboard.
+- [x] [I029] (P1) {B069,F014} Publish one canonical OpenAPI contract and enforce server/client conformance.
+- [x] [I206] (P0) Carry provider-neutral image and audio attachments on the canonical messages API.
 - [x] [I030] Document LLM Proxy client authentication and configuration boundaries.
 - [x] [I028] Emit LLM Proxy page views to its dedicated GA4 property.
 - [x] [I026] {B036} Add provider/model-capability-driven reasoning-effort to tenant routing defaults.
@@ -134,6 +209,8 @@ issue titles discoverable without making the active tracker noisy.
 
 ## Features
 
+- [x] [F014] (P1) Support multiple isolated tenants per managed user.
+- [x] [F019] (P1) Create a canonical public landing page and generated capability catalog.
 - [x] [F001] Add authenticated self-service API key and tenant secret management UI.
 - [x] [F002] Add one-time migration from legacy config tenants and provider API keys into the DB.
 - [x] [F003] Support explicit GORM database dialects for management persistence.
