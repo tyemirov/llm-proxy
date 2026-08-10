@@ -2767,6 +2767,85 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Improvements
 
+- [ ] [I221] (P1) {I215,I219} Make model identity independent from provider offerings.
+  Goal:
+  Make models the primary public discovery items. Keep each selected model's
+  publisher and provider offerings explicit.
+  Requirements:
+  - Replace `ProviderModelCatalogs` and public `providers[].models` with one
+    normalized catalog for model publishers, model families, exact models,
+    providers, and provider offerings.
+  - Give each exact model one canonical identifier, model publisher, model
+    family, version, operation set, and model media capabilities.
+  - Give each provider offering one provider, exact model, provider-native
+    model identifier, wire contract, lifecycle, limits, defaults, and
+    route-specific capabilities.
+  - Use a canonical provider and model pair as the external route. Resolve that
+    pair to exactly one provider offering.
+  - Map each provider-native model identifier only at the provider offering
+    boundary.
+  - Migrate configured catalogs, public REST data, OpenAPI, management data,
+    and stored routing defaults in one forward-only change.
+  - Add one bounded migration that maps each stored provider/model route to its
+    canonical provider offering. Remove the obsolete shape after migration.
+  - Reject duplicate identifiers, dangling references, route conflicts,
+    missing relationships, and invalid route capabilities at startup.
+  - Use model publishers as model groups and labels in the public route
+    explorer.
+  - Open a model picker when the user selects a model publisher. Provide
+    exact model search and model family and operation filters.
+  - Show a model count for each model publisher. Group exact models by model
+    family in the model picker.
+  - Show the selected model publisher and exact model in one compact model
+    stage.
+  - Keep only the selected exact model and its provider offerings in the
+    expanded graph.
+  - Keep the complete catalog available in semantic HTML and the searchable
+    capability table.
+  - Render one capability row for each exact model. Show its provider offerings
+    within that model row.
+  - Report separate model publisher, exact model, provider, and provider
+    offering counts.
+  - Make the graph compact for model publishers with many model families and
+    exact models.
+  - Keep provider credential settings provider-first. Derive each provider's
+    exact models from its provider offerings.
+  - Keep provider keys, base URLs, private handles, tenant defaults, and
+    provider-native model identifiers outside public data.
+  - Generate every publisher, model, family, and provider option from catalog
+    REST data.
+  Deliverables:
+  - Add normalized catalog types, a strict loader, a deterministic public
+    projection, and an exact provider-offering resolver.
+  - Update runtime configuration, public REST and OpenAPI contracts,
+    management profiles, stored routes, and configuration examples.
+  - Add the model picker and provider fan for the selected model to the
+    frontend-owned route explorer.
+  - Add the bounded migration. Remove the provider-nested catalog structures
+    and public fields.
+  - Update current documentation and black-box integration tests.
+  Validation:
+  - Prove that one exact model can have multiple provider offerings without
+    duplicate model records.
+  - Prove that the capability table shows one row for each exact model and all
+    provider offerings for that model.
+  - Prove that one model publisher with many exact models remains compact while
+    every exact model stays discoverable.
+  - Prove that a proprietary model with one provider offering uses the same
+    normalized structure.
+  - Prove that model publisher, exact model, and provider offering selections
+    update one explicit provider/model route.
+  - Prove that each valid provider/model route resolves to one offering. Reject
+    every unknown or ambiguous pair before execution.
+  - Prove that the bounded migration maps every stored route. Require exact
+    route context when an invalid route stops startup.
+  - Prove semantic no-JavaScript access, keyboard operation, reduced-motion
+    behavior, and responsive containment through the public browser entrypoint.
+  - Prove that public data excludes credentials, private provider data, tenant
+    defaults, and provider-native model identifiers.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
 - [x] [I220] (P1) {I215,I219} Distribute routing columns across the graph canvas.
   Goal:
   Use the routing tree's connector lanes to distribute its four node columns
@@ -2869,11 +2948,11 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - The 119-second baseline and 112-second post-correction final `make ci` runs
     pass all 11 gates with 100.0% Go statement coverage.
 
-- [ ] [I218] (P1) {I219} Expand the product node into integration routes.
+- [ ] [I218] (P1) {I219,I221} Expand the product node into integration routes.
   Goal:
   Make the product-to-proxy side of the public routing tree as actionable as
-  its provider-to-model side by expanding `Your product` into exact supported
-  integration routes and route-specific instructions.
+  its model-to-provider-offering side. Expand `Your product` into exact
+  supported integration routes and route-specific instructions.
   Requirements:
   - Make the complete `Your product` box toggle the integration fan through
     pointer activation. The plus/minus is a visual element inside that box, not
@@ -2887,9 +2966,9 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     surface.
   - Extend the single routing graph positioned by F031 without duplicating the
     graph or restoring a second landing-page copy.
-  - Preserve provider/model selection, catalog-derived provider and model
-    content, semantic no-JavaScript access, reduced-motion behavior, and
-    responsive containment without horizontal page overflow.
+  - Preserve model publisher, exact model, and provider offering selection,
+    semantic no-JavaScript access, reduced-motion behavior, and responsive
+    containment without horizontal page overflow.
   Deliverables:
   - Add the product disclosure, four integration nodes, selected-route state,
     instruction panel, connector drawing, and current module revision.
@@ -2898,7 +2977,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Prove exactly four generated integration routes, whole-box pointer
     disclosure including the visual plus/minus, one selected instruction panel,
     and selected connector endpoints through the public entry point.
-  - Prove provider/model interactions remain unchanged and visually inspect
+  - Prove model and provider offering interactions remain unchanged. Inspect
     connector geometry and containment at 1280-, 900-, and 390-pixel widths.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
@@ -2937,7 +3016,7 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     split. Final `make ci` passed all 11 gates in 112 seconds with 100.0% Go
     statement coverage and the TAuth browser black box passing.
 
-- [ ] [I216] (P1) {I215,I029,I037} Make one model-operation capability and pricing catalog authoritative.
+- [ ] [I216] (P1) {I215,I029,I037,I221} Make one model-operation capability and pricing catalog authoritative.
   Goal:
   Publish one tenant-safe catalog for every provider-backed model operation so
   planning, routing, validation, pricing, public discovery, and official
@@ -2946,9 +3025,9 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - MediaOps I068 must finish exact condition matching and its reviewed pricing
     records before those records are imported into LLM Proxy.
   Requirements:
-  - Define one typed catalog schema for provider identifiers, credential kinds,
-    operation kinds, models, wire contracts, execution lifecycles, media roles,
-    controls, enums, bounds, account-dependent limits, and artifact types.
+  - Extend the normalized I221 catalog with credential kinds, operation kinds,
+    pricing, controls, enums, bounds, account-dependent limits, and artifact
+    types.
   - Add typed prices with components, currency, units, exact conditions,
     minimum charges, official source, verification date, and an explicit
     unavailable reason.
