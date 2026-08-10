@@ -188,6 +188,107 @@ func TestClientPostMessagesSendsV2MessagesBody(testingInstance *testing.T) {
 	}
 }
 
+func TestClientReturnsTypedSanitizedHTTPFailures(testingInstance *testing.T) {
+	testCases := []struct {
+		name                   string
+		statusCode             int
+		responseBody           string
+		expectedProxyErrorCode string
+	}{
+		{
+			name:                   "recognized request timeout",
+			statusCode:             http.StatusGatewayTimeout,
+			responseBody:           `{"error":{"code":"request_timeout","request_timeout_seconds":360,"private_detail":"never expose this"}}`,
+			expectedProxyErrorCode: llmproxycontract.ErrorCodeRequestTimeout,
+		},
+		{
+			name:                   "recognized provider rate limit",
+			statusCode:             http.StatusTooManyRequests,
+			responseBody:           `{"error":{"code":"provider_rate_limited","provider":"openai","private_detail":"never expose this"}}`,
+			expectedProxyErrorCode: llmproxycontract.ErrorCodeProviderRateLimited,
+		},
+		{
+			name:                   "recognized invalid request timeout",
+			statusCode:             http.StatusBadRequest,
+			responseBody:           `{"error":{"code":"invalid_request_timeout","private_detail":"never expose this"}}`,
+			expectedProxyErrorCode: llmproxycontract.ErrorCodeInvalidRequestTimeout,
+		},
+		{
+			name:                   "recognized provider failure",
+			statusCode:             http.StatusBadGateway,
+			responseBody:           `{"error":{"code":"provider_error","private_detail":"never expose this"}}`,
+			expectedProxyErrorCode: llmproxycontract.ErrorCodeProviderError,
+		},
+		{
+			name:         "unstructured authentication failure",
+			statusCode:   http.StatusForbidden,
+			responseBody: "forbidden raw body never expose this",
+		},
+		{
+			name:         "malformed structured failure",
+			statusCode:   http.StatusBadGateway,
+			responseBody: `{"error":{"code":`,
+		},
+		{
+			name:         "unknown error code",
+			statusCode:   http.StatusBadRequest,
+			responseBody: `{"error":{"code":"unknown_private_code","private_detail":"never expose this"}}`,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testingInstance.Run(testCase.name, func(subTest *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, _ *http.Request) {
+				responseWriter.WriteHeader(testCase.statusCode)
+				_, _ = responseWriter.Write([]byte(testCase.responseBody))
+			}))
+			defer server.Close()
+
+			config, configError := llmproxyclient.NewConfig(llmproxyclient.ConfigInput{
+				BaseURL: server.URL,
+				Secret:  "sekret",
+			})
+			if configError != nil {
+				subTest.Fatalf("config error: %v", configError)
+			}
+			client, clientError := llmproxyclient.NewClient(config, server.Client())
+			if clientError != nil {
+				subTest.Fatalf("client error: %v", clientError)
+			}
+			request, requestError := llmproxyclient.NewMessagesRequest(llmproxyclient.MessagesRequestInput{
+				Messages: []llmproxyclient.MessageInput{{Role: "user", Content: "Classify safely"}},
+			})
+			if requestError != nil {
+				subTest.Fatalf("request error: %v", requestError)
+			}
+
+			_, postError := client.PostMessages(context.Background(), request)
+			if !errors.Is(postError, llmproxyclient.ErrClientHTTPFailure) {
+				subTest.Fatalf("post error=%v does not preserve HTTP failure sentinel", postError)
+			}
+			var httpFailure *llmproxyclient.HTTPFailure
+			if !errors.As(postError, &httpFailure) {
+				subTest.Fatalf("post error=%T %v is not a typed HTTP failure", postError, postError)
+			}
+			if httpFailure.StatusCode() != testCase.statusCode {
+				subTest.Fatalf("status=%d want=%d", httpFailure.StatusCode(), testCase.statusCode)
+			}
+			if httpFailure.ProxyErrorCode() != testCase.expectedProxyErrorCode {
+				subTest.Fatalf(
+					"proxy error code=%q want=%q",
+					httpFailure.ProxyErrorCode(),
+					testCase.expectedProxyErrorCode,
+				)
+			}
+			if strings.Contains(postError.Error(), "never expose this") ||
+				strings.Contains(postError.Error(), "unknown_private_code") ||
+				strings.Contains(postError.Error(), `{"error"`) {
+				subTest.Fatalf("typed HTTP failure exposed raw response body: %v", postError)
+			}
+		})
+	}
+}
+
 func loadCanonicalOpenAPIContract(testingInstance *testing.T) *openapitest.Contract {
 	testingInstance.Helper()
 	contract, loadError := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
