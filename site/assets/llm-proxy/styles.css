@@ -1292,6 +1292,7 @@ tenant-dialog footer {
 
 .settings-header {
   display: grid;
+  grid-template-areas: "title notification close";
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.75rem;
@@ -1300,13 +1301,21 @@ tenant-dialog footer {
 }
 
 .settings-header .eyebrow {
+  grid-area: title;
   margin: 0;
 }
 
 .settings-notification {
+  grid-area: notification;
   display: block;
   min-inline-size: 0;
   pointer-events: none;
+}
+
+.settings-close {
+  grid-area: close;
+  align-self: center;
+  justify-self: end;
 }
 
 .settings-requirement {

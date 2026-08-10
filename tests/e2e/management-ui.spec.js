@@ -1,7 +1,7 @@
 // @ts-check
 
 import { expect, test } from "@playwright/test";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
@@ -92,14 +92,20 @@ const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@
 const forbiddenTAuthBrowserClientURL = "https://tauth.mprlab.com/tauth.js";
 const catalogColumnCount = 3;
 const b020ScreenshotDirectory = path.join(repoRoot, "output/playwright");
+const i220ScreenshotDirectory = path.join(repoRoot, "output/playwright");
 const httpOK = 200;
 const httpNotFound = 404;
 const httpInternalServerError = 500;
 const routingConnectorEndpointRadius = 4;
 const routingConnectorColorTolerance = 2;
 const routingDesktopCenterTolerance = 1;
-const routingDesktopProductProxyGapMaximum = 24;
+const routingDesktopEdgeAlignmentTolerance = 1;
+const routingDesktopConnectorLaneMinimum = 90;
+const routingDesktopConnectorLaneVarianceMaximum = 16;
 const routingDesktopProviderWidthMaximum = 220;
+const routingDesktopModelWidthMaximum = 220;
+const publicCapabilitiesPath = "/api/public/capabilities";
+const capabilityShutdownProbeTimeoutMilliseconds = 1_000;
 
 /**
  * @param {import("@playwright/test").Locator} routingTree
@@ -226,6 +232,13 @@ const settingsLayerViewports = Object.freeze([
   { name: "compact", width: 480, height: 780 },
   { name: "mobile", width: 390, height: 780 },
 ]);
+const routingTreeViewports = Object.freeze([
+  { name: "desktop", width: 1280, height: 800 },
+  { name: "compact", width: 900, height: 900 },
+  { name: "mobile", width: 390, height: 900 },
+]);
+const settingsHeaderAlignmentTolerance = 1;
+const geometryCenterDivisor = 2;
 
 let server;
 let baseURL = "";
@@ -236,20 +249,48 @@ let renderedSiteRoot = "";
 test.beforeAll(async () => {
   renderedSiteTempRoot = await mkdtemp(path.join(os.tmpdir(), "llm-proxy-site-"));
   renderedSiteRoot = path.join(renderedSiteTempRoot, "rendered");
-  await executeFile(
-    "go",
-    [
-      "run",
-      "./cmd/cli",
-      "--config",
-      "configs/config.yml",
-      "--site-source",
-      "site",
-      "--render-site-output",
-      renderedSiteRoot,
-    ],
+  const capabilityConfigPath = path.join(renderedSiteTempRoot, "capabilities.yml");
+  const capabilityConfigResult = await executeFile(
+    "node",
+    ["scripts/create_public_capability_test_config.mjs", "configs/config.yml", capabilityConfigPath],
     { cwd: repoRoot },
   );
+  const capabilityPort = Number(capabilityConfigResult.stdout.trim());
+  if (!Number.isInteger(capabilityPort) || capabilityPort <= 0) {
+    throw new Error(`public_capability_test_port_invalid: ${capabilityConfigResult.stdout.trim()}`);
+  }
+  const capabilityBinaryPath = path.join(renderedSiteTempRoot, "llm-proxy");
+  await executeFile("go", ["build", "-o", capabilityBinaryPath, "./cmd/cli"], { cwd: repoRoot });
+  const capabilityServer = spawn(
+    capabilityBinaryPath,
+    ["--config", capabilityConfigPath, "--public-capabilities-only"],
+    { cwd: repoRoot },
+  );
+  let capabilityServerOutput = "";
+  capabilityServer.stdout.on("data", (output) => { capabilityServerOutput += output.toString(); });
+  capabilityServer.stderr.on("data", (output) => { capabilityServerOutput += output.toString(); });
+  const capabilitiesURL = `http://127.0.0.1:${capabilityPort}${publicCapabilitiesPath}`;
+  try {
+    await waitForPublicCapabilities(capabilitiesURL, capabilityServer, () => capabilityServerOutput);
+    await executeFile(
+      "node",
+      [
+        "scripts/render_public_site.mjs",
+        "--source",
+        "site",
+        "--output",
+        renderedSiteRoot,
+        "--config-url",
+        configPath,
+        "--capabilities-url",
+        capabilitiesURL,
+      ],
+      { cwd: repoRoot },
+    );
+  } finally {
+    await stopChildProcess(capabilityServer);
+    await assertPublicCapabilitiesStopped(capabilitiesURL);
+  }
   await executeFile(
     "./scripts/stage-openapi-publication.sh",
     ["docs/openapi.yaml", renderedSiteRoot],
@@ -266,6 +307,59 @@ test.beforeAll(async () => {
   }
   baseURL = `http://127.0.0.1:${address.port}`;
 });
+
+/**
+ * @param {string} capabilitiesURL
+ * @param {import("node:child_process").ChildProcessWithoutNullStreams} capabilityServer
+ * @param {() => string} serverOutput
+ */
+async function waitForPublicCapabilities(capabilitiesURL, capabilityServer, serverOutput) {
+  let lastRequestError = "public_capability_server_not_ready";
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    if (capabilityServer.exitCode !== null) {
+      throw new Error(`public_capability_server_stopped: ${serverOutput()}`);
+    }
+    try {
+      const response = await fetch(capabilitiesURL);
+      if (response.ok) {
+        return;
+      }
+      lastRequestError = `status=${response.status}`;
+    } catch (requestError) {
+      lastRequestError = requestError instanceof Error ? requestError.message : String(requestError);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`public_capability_server_timeout: ${lastRequestError}\n${serverOutput()}`);
+}
+
+/**
+ * @param {import("node:child_process").ChildProcessWithoutNullStreams} childProcess
+ */
+async function stopChildProcess(childProcess) {
+  if (childProcess.exitCode !== null) {
+    return;
+  }
+  childProcess.kill("SIGTERM");
+  await new Promise((resolve) => childProcess.once("exit", resolve));
+}
+
+/**
+ * @param {string} capabilitiesURL
+ */
+async function assertPublicCapabilitiesStopped(capabilitiesURL) {
+  try {
+    await fetch(capabilitiesURL, {
+      signal: AbortSignal.timeout(capabilityShutdownProbeTimeoutMilliseconds),
+    });
+  } catch (requestError) {
+    if (requestError instanceof TypeError) {
+      return;
+    }
+    throw requestError;
+  }
+  throw new Error(`public_capability_server_listener_open: ${capabilitiesURL}`);
+}
 
 test.afterAll(async () => {
   await new Promise((resolve, reject) => {
@@ -292,18 +386,24 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain("Platform and engineering teams");
   expect(html).toContain("The catalog is the source of truth.");
   expect(html).toContain("Provider lifecycle, model-onboarding, and hosted uptime commitments are outside the current catalog contract");
+  const heroOffset = html.indexOf('id="hero-title"');
+  const routingOverviewOffset = html.indexOf('id="routing-overview"');
+  const valueStripOffset = html.indexOf('class="value-strip__grid"');
   const integrationOffset = html.indexOf('id="integrate"');
   const audienceOffset = html.indexOf('id="audience-title"');
   const capabilitiesOffset = html.indexOf('id="capabilities"');
   const modelsOffset = html.indexOf('id="models"');
   const routingTreeOffset = html.indexOf('<routing-tree class="routing-tree"');
   const capabilityCatalogOffset = html.indexOf("<capability-catalog");
-  expect(integrationOffset).toBeGreaterThan(-1);
+  expect(heroOffset).toBeGreaterThan(-1);
+  expect(heroOffset).toBeLessThan(routingOverviewOffset);
+  expect(routingOverviewOffset).toBeLessThan(valueStripOffset);
+  expect(valueStripOffset).toBeLessThan(routingTreeOffset);
+  expect(routingTreeOffset).toBeLessThan(integrationOffset);
   expect(integrationOffset).toBeLessThan(audienceOffset);
   expect(audienceOffset).toBeLessThan(capabilitiesOffset);
   expect(capabilitiesOffset).toBeLessThan(modelsOffset);
   expect(modelsOffset).toBeLessThan(capabilityCatalogOffset);
-  expect(capabilityCatalogOffset).toBeLessThan(routingTreeOffset);
   expect(html).toContain(`${LANDING_AUTHENTICATED_REDIRECT_ATTRIBUTE}="${applicationPath}"`);
   expect(html).not.toContain("sign-in-redirect-url=");
   expect(html).toContain(`"href":"${resourcesPath}"`);
@@ -693,7 +793,8 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await page.goto(baseURL);
 
   const routingTree = page.locator("routing-tree");
-  await expect(page.locator("#models > routing-tree")).toHaveCount(1);
+  await expect(page.locator("#routing-overview routing-tree")).toHaveCount(1);
+  await expect(page.locator("#models > routing-tree")).toHaveCount(0);
   await expect(routingTree).toHaveAttribute("data-enhanced", "false");
   await expect(routingTree.locator("[data-route-provider]")).toHaveCount(12);
   await expect(routingTree.locator("[data-route-model]")).toHaveCount(53);
@@ -765,30 +866,46 @@ test("visitors can fan from one proxy connection into exact provider model versi
     };
   });
   expect.soft(leafWidths.widestProvider).toBeLessThanOrEqual(routingDesktopProviderWidthMaximum);
-  expect(leafWidths.widestModel).toBeLessThanOrEqual(280);
+  expect(leafWidths.widestModel).toBeLessThanOrEqual(routingDesktopModelWidthMaximum);
   const desktopForkGeometry = await routingTree.evaluate((tree) => {
+    const routeMap = tree.querySelector("[data-route-map]");
     const product = tree.querySelector("[data-route-product]");
     const proxy = tree.querySelector("[data-route-proxy]");
     const providerBranches = tree.querySelector(".routing-tree__provider-branches");
-    const modelStage = tree.querySelector(".routing-tree__stage--models");
+    const modelGroup = tree.querySelector("[data-route-model-group]:not([hidden])");
     if (
-      !(product instanceof HTMLElement)
+      !(routeMap instanceof HTMLElement)
+      || !(product instanceof HTMLElement)
       || !(proxy instanceof HTMLElement)
       || !(providerBranches instanceof HTMLElement)
-      || !(modelStage instanceof HTMLElement)
+      || !(modelGroup instanceof HTMLElement)
     ) {
       throw new Error("routing_tree_desktop_stage_missing");
     }
+    const mapBounds = routeMap.getBoundingClientRect();
+    const mapStyle = getComputedStyle(routeMap);
     const productBounds = product.getBoundingClientRect();
     const proxyBounds = proxy.getBoundingClientRect();
     const providerBounds = providerBranches.getBoundingClientRect();
-    const modelBounds = modelStage.getBoundingClientRect();
+    const modelBounds = modelGroup.getBoundingClientRect();
     const providerCenter = providerBounds.top + providerBounds.height / 2;
+    const connectorLaneWidths = [
+      proxyBounds.left - productBounds.right,
+      providerBounds.left - proxyBounds.right,
+      modelBounds.left - providerBounds.right,
+    ];
     return {
+      connectorLaneMaximum: Math.max(...connectorLaneWidths),
+      connectorLaneMinimum: Math.min(...connectorLaneWidths),
+      modelRightDifference: Math.abs(
+        mapBounds.right - Number.parseFloat(mapStyle.paddingRight) - modelBounds.right,
+      ),
       modelFollowsProviders: providerBounds.right < modelBounds.left,
+      productLeftDifference: Math.abs(
+        productBounds.left - mapBounds.left - Number.parseFloat(mapStyle.paddingLeft),
+      ),
       productCenterDifference: Math.abs(productBounds.top + productBounds.height / 2 - providerCenter),
       proxyFollowsProduct: productBounds.right < proxyBounds.left,
-      productProxyGap: proxyBounds.left - productBounds.right,
       providerFollowsProxy: proxyBounds.right < providerBounds.left,
       proxyCenterDifference: Math.abs(proxyBounds.top + proxyBounds.height / 2 - providerCenter),
     };
@@ -796,33 +913,47 @@ test("visitors can fan from one proxy connection into exact provider model versi
   expect.soft(desktopForkGeometry.proxyFollowsProduct).toBe(true);
   expect.soft(desktopForkGeometry.providerFollowsProxy).toBe(true);
   expect.soft(desktopForkGeometry.modelFollowsProviders).toBe(true);
-  expect.soft(desktopForkGeometry.productProxyGap).toBeLessThanOrEqual(routingDesktopProductProxyGapMaximum);
+  expect.soft(desktopForkGeometry.productLeftDifference).toBeLessThanOrEqual(routingDesktopEdgeAlignmentTolerance);
+  expect.soft(desktopForkGeometry.modelRightDifference).toBeLessThanOrEqual(routingDesktopEdgeAlignmentTolerance);
+  expect.soft(desktopForkGeometry.connectorLaneMinimum).toBeGreaterThanOrEqual(routingDesktopConnectorLaneMinimum);
+  expect.soft(
+    desktopForkGeometry.connectorLaneMaximum - desktopForkGeometry.connectorLaneMinimum,
+  ).toBeLessThanOrEqual(routingDesktopConnectorLaneVarianceMaximum);
   expect.soft(desktopForkGeometry.productCenterDifference).toBeLessThanOrEqual(routingDesktopCenterTolerance);
   expect.soft(desktopForkGeometry.proxyCenterDifference).toBeLessThanOrEqual(routingDesktopCenterTolerance);
-  const catalogWidthAlignment = await page.locator("#models").evaluate((modelsSection) => {
-    const diagram = modelsSection.querySelector("routing-tree");
-    const table = modelsSection.querySelector(".catalog-table-wrap");
-    const limits = modelsSection.querySelector(".catalog-limits");
-    if (!diagram || !table || !limits) {
-      throw new Error("catalog_diagram_table_or_limits_missing");
+  const routingOverviewAlignment = await page.locator("#routing-overview").evaluate((routingOverview) => {
+    const diagram = routingOverview.querySelector("routing-tree");
+    const facts = routingOverview.querySelector(".value-strip__grid");
+    if (!diagram || !facts) {
+      throw new Error("routing_overview_diagram_or_facts_missing");
     }
     const diagramBounds = diagram.getBoundingClientRect();
-    const tableBounds = table.getBoundingClientRect();
-    const limitsBounds = limits.getBoundingClientRect();
+    const factsBounds = facts.getBoundingClientRect();
     return {
       diagramTop: diagramBounds.top,
-      leftDifference: Math.abs(diagramBounds.left - tableBounds.left),
-      limitsBottom: limitsBounds.bottom,
-      rightDifference: Math.abs(diagramBounds.right - tableBounds.right),
-      tableBottom: tableBounds.bottom,
-      widthDifference: Math.abs(diagramBounds.width - tableBounds.width),
+      factsBottom: factsBounds.bottom,
+      leftDifference: Math.abs(diagramBounds.left - factsBounds.left),
+      rightDifference: Math.abs(diagramBounds.right - factsBounds.right),
+      widthDifference: Math.abs(diagramBounds.width - factsBounds.width),
     };
   });
-  expect(catalogWidthAlignment.diagramTop).toBeGreaterThan(catalogWidthAlignment.tableBottom);
-  expect(catalogWidthAlignment.diagramTop).toBeGreaterThan(catalogWidthAlignment.limitsBottom);
-  expect(catalogWidthAlignment.leftDifference).toBeLessThanOrEqual(1);
-  expect(catalogWidthAlignment.rightDifference).toBeLessThanOrEqual(1);
-  expect(catalogWidthAlignment.widthDifference).toBeLessThanOrEqual(1);
+  expect(routingOverviewAlignment.diagramTop).toBeGreaterThan(routingOverviewAlignment.factsBottom);
+  expect(routingOverviewAlignment.leftDifference).toBeLessThanOrEqual(1);
+  expect(routingOverviewAlignment.rightDifference).toBeLessThanOrEqual(1);
+  expect(routingOverviewAlignment.widthDifference).toBeLessThanOrEqual(1);
+  if (process.env.I220_SCREENSHOTS === "1") {
+    await mkdir(i220ScreenshotDirectory, { recursive: true });
+    for (const viewport of routingTreeViewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await expect(routingTree).toHaveAttribute(
+        "data-route-lines-rendered",
+        viewport.width > 680 ? "true" : "false",
+      );
+      await routingTree.screenshot({ path: path.join(i220ScreenshotDirectory, `I220-routing-${viewport.name}.png`) });
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "true");
+  }
   const providerTopPositions = await routingProviderTopPositions(routingTree);
 
   await moonshotProvider.focus();
@@ -1182,6 +1313,12 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "Integrate once. Use the model that fits.",
   );
+  const routingOverview = page.locator("#routing-overview");
+  await expect(routingOverview).toBeVisible();
+  await expect(routingOverview.getByText("One endpoint", { exact: true })).toBeVisible();
+  await expect(routingOverview.getByText("One credential", { exact: true })).toBeVisible();
+  await expect(routingOverview.getByText("One contract", { exact: true })).toBeVisible();
+  await expect(routingOverview.locator("routing-tree")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Use the API directly or start with a client." })).toBeVisible();
   await expect(page.getByRole("link", { name: "Use the Go client" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Use the Python client" })).toBeVisible();
@@ -1255,7 +1392,7 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
   expect(documentationHTML).not.toContain('id="operation-deleteManagementTenantSecret"');
   expect(documentationHTML).toContain("<code>reasoning_effort</code>");
   expect(documentationHTML).toContain(`href="${openAPIPath}"`);
-  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(20);
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(21);
 });
 
 test("OpenAPI reference views and downloads the exact canonical YAML", async ({ page }) => {
@@ -4620,6 +4757,7 @@ test("management notices occupy the header aux slot immediately before the avata
     await expect(settingsNotification).toHaveAttribute("aria-live", "polite");
     await expect(settingsNotification).toHaveAttribute("aria-atomic", "true");
     await expect(settingsNotification).toBeHidden();
+    await expectSettingsHeaderCloseGeometry(settingsDialog);
     const layerFacts = await settingsLayerFacts(page);
     expect(layerFacts.noticeHit.inSettingsModal || layerFacts.noticeHit.inSettingsOverlay).toBe(true);
     expect(layerFacts.noticeHit.inNotice).toBe(false);
@@ -4628,6 +4766,7 @@ test("management notices occupy the header aux slot immediately before the avata
     await expect(settingsNotification.locator(".notice")).toHaveText("Defaults saved");
     await expect(settingsNotification.locator(".notice")).toHaveAttribute("data-kind", "success");
     await expect(notificationRegion).toBeHidden();
+    await expectSettingsHeaderCloseGeometry(settingsDialog);
     const settingsHeaderBox = await settingsDialog.locator(".settings-header").boundingBox();
     const settingsNotificationBox = await settingsNotification.boundingBox();
     if (!settingsHeaderBox || !settingsNotificationBox) {
@@ -4944,28 +5083,46 @@ function publicShellMarkup(html) {
  * @returns {Promise<void>}
  */
 async function expectCenteredValueStrip(page) {
-  const facts = await page.locator(".value-strip").evaluate((stripElement) => {
-    const gridElement = stripElement.querySelector(".value-strip__grid");
+  const facts = await page.locator("#routing-overview").evaluate((overviewElement) => {
+    const gridElement = overviewElement.querySelector(".value-strip__grid");
     if (!gridElement) {
       throw new Error("landing_value_strip_grid_missing");
     }
-    const stripStyle = getComputedStyle(stripElement);
+    const stripStyle = getComputedStyle(overviewElement);
     const gridStyle = getComputedStyle(gridElement);
     const gridRect = gridElement.getBoundingClientRect();
+    const followingSection = overviewElement.nextElementSibling;
+    if (!followingSection) {
+      throw new Error("landing_routing_overview_following_section_missing");
+    }
+    const followingSectionStyle = getComputedStyle(followingSection);
+    const pageStyle = getComputedStyle(document.body);
     return {
+      followsSectionContract: overviewElement.classList.contains("section"),
       gridBackground: gridStyle.backgroundColor,
       gridBorderTopWidth: gridStyle.borderTopWidth,
       itemCount: gridElement.querySelectorAll(":scope > p").length,
       leftGap: gridRect.left,
+      pageBackground: pageStyle.backgroundColor,
+      paddingBottom: parseFloat(stripStyle.paddingBottom),
+      paddingTop: parseFloat(stripStyle.paddingTop),
       rightGap: document.documentElement.clientWidth - gridRect.right,
       stripBackground: stripStyle.backgroundColor,
+      stripBorderBottomWidth: stripStyle.borderBottomWidth,
       stripBorderTopWidth: stripStyle.borderTopWidth,
+      followingSectionBackground: followingSectionStyle.backgroundColor,
     };
   });
   expect(facts.itemCount).toBe(3);
-  expect(facts.stripBorderTopWidth).toBe("0px");
+  expect(facts.followsSectionContract).toBe(true);
+  expect(facts.stripBorderTopWidth).toBe("1px");
+  expect(facts.stripBorderBottomWidth).toBe("1px");
   expect(facts.gridBorderTopWidth).toBe("1px");
   expect(facts.stripBackground).not.toBe(facts.gridBackground);
+  expect(facts.stripBackground).not.toBe(facts.pageBackground);
+  expect(facts.stripBackground).not.toBe(facts.followingSectionBackground);
+  expect(facts.paddingTop).toBeGreaterThanOrEqual(48);
+  expect(facts.paddingBottom).toBeGreaterThanOrEqual(48);
   expect(facts.leftGap).toBeGreaterThan(0);
   expect(facts.rightGap).toBeGreaterThan(0);
 }
@@ -5073,6 +5230,34 @@ async function settingsLayerFacts(page) {
       footerHit: hitAt(viewportWidth / 2, safeBandCenter(footerRect)),
     };
   });
+}
+
+/**
+ * @param {import("@playwright/test").Locator} settingsDialog
+ */
+async function expectSettingsHeaderCloseGeometry(settingsDialog) {
+  const geometry = await settingsDialog.locator(".settings-header").evaluate((headerElement, centerDivisor) => {
+    const titleElement = headerElement.querySelector("#settings-title");
+    const closeElement = headerElement.querySelector(".settings-close");
+    if (!(titleElement instanceof HTMLElement) || !(closeElement instanceof HTMLElement)) {
+      throw new Error("settings_header_geometry_elements_missing");
+    }
+    const headerBounds = headerElement.getBoundingClientRect();
+    const titleBounds = titleElement.getBoundingClientRect();
+    const closeBounds = closeElement.getBoundingClientRect();
+    const headerStyle = getComputedStyle(headerElement);
+    return {
+      rightEdgeDifference: Math.abs(
+        headerBounds.right - Number.parseFloat(headerStyle.paddingRight) - closeBounds.right,
+      ),
+      verticalCenterDifference: Math.abs(
+        (titleBounds.top + titleBounds.bottom) / centerDivisor
+          - (closeBounds.top + closeBounds.bottom) / centerDivisor,
+      ),
+    };
+  }, geometryCenterDivisor);
+  expect(geometry.rightEdgeDifference).toBeLessThanOrEqual(settingsHeaderAlignmentTolerance);
+  expect(geometry.verticalCenterDifference).toBeLessThanOrEqual(settingsHeaderAlignmentTolerance);
 }
 
 /**

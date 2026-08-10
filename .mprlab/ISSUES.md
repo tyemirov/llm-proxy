@@ -47,6 +47,78 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B125] (P1) {I219} Isolate and stop public-capability test servers.
+  Goal:
+  Keep frontend and Pages artifact validation deterministic and free of
+  background capability-server processes.
+  Evidence:
+  - The Playwright renderer setup starts the capability server through
+    `go run`, then stops only the Go driver while its compiled CLI child keeps
+    listening after the temporary test directory is removed.
+  - The Pages artifact gate always starts and probes port 8080, so a running
+    local stack can satisfy readiness or prevent the test-owned server from
+    binding.
+  Requirements:
+  - Build a temporary CLI binary and run that binary directly in both test
+    launchers so the recorded process is the actual server process.
+  - Give the Pages artifact gate a temporary capability configuration with an
+    ephemeral loopback port instead of the local runtime port.
+  - Stop and wait for every test-owned server before removing its temporary
+    files, and prove its HTTP listener is closed.
+  - Keep validation on the real `--public-capabilities-only` CLI and
+    `/api/public/capabilities` HTTP boundaries.
+  Validation:
+  - Focused Playwright coverage and the Pages artifact target pass without
+    leaving a capability-server process or listener.
+  - Run final `timeout -k 350s -s SIGKILL 350s make ci` after the last code
+    edit; reuse the current exact-code passing result as the baseline.
+  Resolution:
+  - One frontend-owned helper now creates private temporary capability
+    configurations on ephemeral loopback ports for both launchers. Each
+    launcher builds and starts the actual temporary CLI binary, stops that
+    exact process, waits for exit, and rejects a listener that remains open.
+  - The focused Pages artifact target passed while an unrelated HTTP service
+    held port 8080. The complete 89-scenario Playwright target passed with no
+    matching capability-server process before or after the run. Four orphan
+    servers left by the prior harness were stopped.
+  - Final `make ci` passed all 11 gates in 120 seconds with 89 frontend browser
+    scenarios and 100.0% Go statement coverage.
+
+- [x] [B124] (P1) Anchor the Settings close control in the title row.
+  Goal:
+  Keep the Settings close control at the right edge of the title row and
+  vertically centered with the title at every supported width.
+  Evidence:
+  - The title, conditional notification region, and close control rely on
+    automatic three-column grid placement.
+  - When the notification region is hidden, it leaves grid layout and the close
+    control moves into the middle column beside `Settings` instead of remaining
+    at the right edge.
+  Requirements:
+  - Give the title, notification region, and close control explicit positions
+    in the Settings header grid.
+  - Align the close control to the header's right content edge and center it on
+    the title's vertical center whether the notification is hidden or visible.
+  - Preserve notification containment, close behavior, pending-state locking,
+    focus behavior, and narrow-screen layout.
+  Validation:
+  - Browser coverage proves right-edge and title-center geometry with the
+    notification hidden and visible at desktop, compact, and mobile widths.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci` after the last code edit; reuse the
+    current exact-code passing result as the baseline.
+  Resolution:
+  - Named header grid areas now keep the title, conditional notification, and
+    close control in fixed columns. The close control is aligned to the right
+    content edge and centered on the title regardless of notification state.
+  - The browser geometry regression failed against the prior hidden-notification
+    layout with an 836.6875-pixel right-edge difference, then passed for hidden
+    and visible notifications at 1280x720, 480x780, and 390x780 viewports.
+  - Desktop, compact, and mobile screenshots confirm the close control remains
+    in the title row's upper-right corner without overlap or overflow.
+  - Final `make ci` passed all 11 gates in 121 seconds with 89 frontend browser
+    scenarios and 100.0% Go statement coverage.
+
 - [x] [B123] (P1) {B121} Initialize routing from a pending provider default.
   Goal:
   Preserve the newly selected provider default model when the same provider is
@@ -2695,6 +2767,142 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Improvements
 
+- [x] [I220] (P1) {I215,I219} Distribute routing columns across the graph canvas.
+  Goal:
+  Use the routing tree's connector lanes to distribute its four node columns
+  across the available canvas, from the product at the left content edge to
+  the active model at the right content edge.
+  Evidence:
+  - The model group is left-aligned in a flexible final grid track, which
+    collects unused space after the model cards at the graph's right edge.
+  - Fixed narrow gaps pack the product, proxy, provider, and model columns near
+    the graph center instead of letting the measured Bezier connectors absorb
+    the available horizontal space.
+  Requirements:
+  - Align `Your product` to the map's left padded edge and the active model
+    group to its right padded edge in the desktop graph.
+  - Distribute the available horizontal space through the product-to-proxy,
+    proxy-to-provider, and provider-to-model connector lanes.
+  - Shorten desktop model cards to the compact provider-column width while
+    preserving complete labels and selected-default metadata.
+  - Preserve measured connector endpoints, provider/model interactions,
+    semantic no-JavaScript output, and responsive containment.
+  Validation:
+  - Browser geometry proves desktop edge alignment, three positive distributed
+    connector lanes, compact model-card width, and selected connector endpoints.
+  - Visually inspect the graph at 1280-, 900-, and 390-pixel widths.
+  - Run final `timeout -k 350s -s SIGKILL 350s make ci` after the last code
+    edit; reuse the current exact-code passing result as the baseline.
+  Resolution:
+  - Bounded desktop tracks now place the product and active model group on the
+    map's left and right padded edges. `space-between` assigns the remaining
+    width to the three measured connector lanes, and desktop model cards are
+    capped at the provider column's compact 220-pixel width.
+  - The browser regression first failed against the previous 280-pixel model
+    cards, then passed edge alignment within 1 pixel, connector lanes of at
+    least 90 pixels with no more than 16 pixels of spread, and selected Bezier
+    endpoint evidence after provider and model changes.
+  - Desktop, compact, and mobile captures at 1280, 900, and 390 pixels confirm
+    the edge-to-edge desktop distribution and responsive containment.
+  - Final `make ci` passed all 11 gates in 117 seconds with 89 frontend browser
+    scenarios and 100.0% Go statement coverage.
+
+- [x] [I219] (P1) {F019,I215,F031} Move public-site rendering out of Go.
+  Goal:
+  Restore the repository's frontend/backend ownership boundary so Go owns
+  validated capability data and REST delivery while frontend tooling owns all
+  public-site markup, copy, rendering, and interaction structure.
+  Evidence:
+  - `cmd/cli/site_render.go` currently embeds the routing-tree and capability-
+    catalog HTML templates, rewrites HTML attributes and source markers, and
+    exposes Pages-rendering flags from the backend CLI.
+  - `docker/pages/Dockerfile` builds and invokes that Go UI renderer to create
+    the published static artifact.
+  Requirements:
+  - Expose one sanitized public capability resource through the canonical REST
+    API, derived from the same validated provider registry used for request
+    routing, with no credentials, tenant state, configured base URLs, or UI
+    presentation logic in the backend.
+  - Make frontend-owned tooling consume that REST representation and own static
+    site copying, production config-URL injection, routing-tree markup,
+    capability-catalog markup, user-facing copy, and deterministic Pages output.
+  - Preserve the complete generated provider/model catalog, current defaults
+    and limits, semantic no-JavaScript output, SEO metadata, local/production
+    config-URL profiles, and browser interactions.
+  - Remove the Go HTML templates, marker replacement, site-rendering flags, and
+    renderer implementation after the frontend path is authoritative. Keep no
+    alias, compatibility command, dual renderer, or fallback artifact path.
+  - Keep Node and generation dependencies in build/test stages only; the
+    published Pages artifact remains static.
+  Deliverables:
+  - Add the public REST schema and handler, frontend site generator, updated
+    Pages Docker build, current documentation, and migrated black-box coverage.
+  - Delete the obsolete Go rendering surface and its implementation-specific
+    tests.
+  Validation:
+  - Prove the public REST response exactly reflects changed validated catalog
+    data and excludes private configuration through the real HTTP router.
+  - Prove frontend generation fails on missing or invalid REST data and emits
+    the complete static routing tree, capability catalog, request limits, and
+    production config URL without retaining source markers.
+  - Prove the generated site remains complete without JavaScript and preserves
+    current browser behavior and responsive containment.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved 2026-08-09:
+  - Go now exposes the unauthenticated, secret-free
+    `GET /api/public/capabilities` resource from the validated routing registry;
+    real-router coverage proves changed catalog data is returned without
+    provider credentials, configured base URLs, or tenant secrets.
+  - Frontend-owned `scripts/render_public_site.mjs` now fetches that REST
+    resource and exclusively owns static copying, config-URL injection,
+    routing-tree markup, capability-catalog markup, and public copy. The Go HTML
+    templates, marker replacement, renderer flags, and implementation were
+    deleted without aliases or a fallback path.
+  - The Pages build and local orchestration use the backend REST surface plus a
+    build-only Node renderer; both production container targets build, and the
+    final Pages image remains static.
+  - Frontend black-box coverage proves fail-fast missing/invalid REST behavior,
+    complete no-JavaScript output, current interactions, and responsive
+    containment. The rendered landing was visually inspected at desktop and
+    mobile widths.
+  - The 119-second baseline and 112-second post-correction final `make ci` runs
+    pass all 11 gates with 100.0% Go statement coverage.
+
+- [ ] [I218] (P1) {I219} Expand the product node into integration routes.
+  Goal:
+  Make the product-to-proxy side of the public routing tree as actionable as
+  its provider-to-model side by expanding `Your product` into exact supported
+  integration routes and route-specific instructions.
+  Requirements:
+  - Make the complete `Your product` box toggle the integration fan through
+    pointer activation. The plus/minus is a visual element inside that box, not
+    a separate control.
+  - Expand HTTP, Go, Python, and CLI nodes to the left of `Your product`, draw
+    measured Bezier connectors into the product node, and expose one selected
+    integration at a time.
+  - Show exactly one instruction panel for the selected integration and keep
+    integration labels, links, commands, and instruction copy in one
+    frontend-owned definition consumed by the graph and existing integration
+    surface.
+  - Extend the single routing graph positioned by F031 without duplicating the
+    graph or restoring a second landing-page copy.
+  - Preserve provider/model selection, catalog-derived provider and model
+    content, semantic no-JavaScript access, reduced-motion behavior, and
+    responsive containment without horizontal page overflow.
+  Deliverables:
+  - Add the product disclosure, four integration nodes, selected-route state,
+    instruction panel, connector drawing, and current module revision.
+  - Document the integration-fan interaction and accessibility contract.
+  Validation:
+  - Prove exactly four generated integration routes, whole-box pointer
+    disclosure including the visual plus/minus, one selected instruction panel,
+    and selected connector endpoints through the public entry point.
+  - Prove provider/model interactions remain unchanged and visually inspect
+    connector geometry and containment at 1280-, 900-, and 390-pixel widths.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
 - [x] [I217] (P1) {B123} Split the management application by UI responsibility.
   Goal:
   Replace the misleading key-management controller name and isolate the
@@ -4726,6 +4934,47 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## Features
 
+- [x] [F031] (P1) {I215} Surface the routing graph directly below the landing hero.
+  Goal:
+  Make the one-contract product boundary and the interactive provider/model
+  route understandable before visitors reach the longer integration and
+  capability sections.
+  Requirements:
+  - Add one second landing-page section immediately after the hero containing
+    the existing One endpoint, One credential, and One contract facts followed
+    by the complete generated routing graph.
+  - Keep the facts and graph aligned to one 1180-pixel responsive shell without
+    duplicating the facts or retaining the graph below the capability matrix.
+  - Give the routing overview its own full-width bordered surface and section
+    spacing so it is visibly distinct from both the hero and the following
+    integration section, not merely a new semantic wrapper on the page canvas.
+  - Preserve generated provider/model completeness, keyboard selection,
+    measured connector geometry, semantic no-JavaScript content, and narrow
+    viewport containment.
+  - Keep the later Providers and model capabilities section focused on the
+    generated capability catalog and request-limit contract.
+  Validation:
+  - Browser coverage proves the new hero -> routing overview -> integration ->
+    audience -> capabilities -> catalog order and exact facts/graph ownership.
+  - Playwright visually verifies the combined section at desktop and mobile
+    widths, including graph interaction and containment.
+  - Run the required final
+    `timeout -k 350s -s SIGKILL 350s make ci`.
+  Resolved 2026-08-09:
+  - The post-hero routing overview is now a visibly distinct full-width page
+    section with its own bordered surface and responsive section padding. Its
+    1180-pixel inner shell owns the three product facts and the single generated
+    provider/model routing graph; the later Models section owns only the
+    capability catalog and request-limit content.
+  - Browser coverage proves the section class, boundary borders, background
+    separation from the page canvas and following section, desktop/mobile
+    spacing, unique graph ownership, interaction geometry, keyboard selection,
+    and semantic no-JavaScript content. Fresh 1280-pixel and 390-pixel captures
+    verified the corrected visual boundary and containment.
+  - All 87 frontend browser tests and the required final
+    `timeout -k 350s -s SIGKILL 350s make ci` passed; CI completed all 11 gates
+    in 119 seconds with 100.0% Go statement coverage.
+
 - [ ] [F022] (P1) {I216} Add the durable model-operation, asset, and official-client foundation.
   Goal:
   Extend LLM Proxy from blocking text and dictation into a shared model-provider
@@ -5046,8 +5295,9 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Public proxy requests use a generated tenant secret in `key=...`.
   - TAuth browser sessions authorize management operations.
   - Provider credentials remain on the server and belong to one tenant.
-  - TAuth does not yet provide the OAuth authorization-server contract that a
-    remote MCP client requires.
+  - TAuth provides the OAuth authorization-server contract that a remote MCP
+    client requires.
+  - The gateway cannot yet generate the root OAuth block or tenant OAuth policy.
   Requirements:
   - Serve MCP protocol version `2026-07-28` at the exact resource URL
     `https://llm-proxy-api.mprlab.com/mcp/{tenant_id}`.
@@ -5123,11 +5373,8 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     acceptance. Record live-host acceptance as a separate deployment result.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-  Blocked: TAuth F001 must first complete the OAuth 2.1 authorization-server
-  contract.
-  The server must support authorization code plus PKCE, discovery, JWKS,
-  resource indicators, audience-bound tokens, rotating refresh tokens,
-  consent, revocation, and MCP-compatible client metadata or registration.
+  Blocked: mprlab-gateway F001 must complete the TAuth OAuth aggregate
+  deployment contract before this feature can declare its protected resources.
 
 - [ ] [F020] (P1) Design and implement low-level sampling controls in a new v3 API contract and provider adapters.
   Goal:

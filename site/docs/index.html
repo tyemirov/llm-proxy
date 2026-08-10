@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="2183f2da7bed37d1f3f77ae539f0973af828f4b95d52c13bf88c7e29ee56ebc4">
+    <meta name="openapi-source-sha256" content="05d99dae213b5da70c8e1a12339e585eb5a2bc4229d02ffa15aad85d52a9aeb1">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="2183f2da7bed37d1f3f77ae539f0973af828f4b95d52c13bf88c7e29ee56ebc4">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="05d99dae213b5da70c8e1a12339e585eb5a2bc4229d02ffa15aad85d52a9aeb1">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -49,7 +49,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>2183f2da7bed37d1f3f77ae539f0973af828f4b95d52c13bf88c7e29ee56ebc4</code></span>
+          <span>Source SHA-256 <code>05d99dae213b5da70c8e1a12339e585eb5a2bc4229d02ffa15aad85d52a9aeb1</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -89,6 +89,8 @@ tags:
     description: Tenant-key-authenticated text and dictation operations.
   - name: Configuration
     description: Public browser runtime configuration owned by llm-proxy.
+  - name: Capabilities
+    description: Public provider, model, capability, and request-limit resources.
   - name: Management
     description: TAuth-session-authenticated tenant management operations.
 paths:
@@ -261,6 +263,28 @@ paths:
             application/yaml:
               schema:
                 type: string
+  /api/public/capabilities:
+    get:
+      operationId: getPublicCapabilities
+      summary: Read the public provider and model capability catalog
+      description: Returns the deterministic, secret-free projection of the validated provider registry and public proxy request limits.
+      tags:
+        - Capabilities
+      security: []
+      responses:
+        &#39;200&#39;:
+          description: Current public capability catalog.
+          headers:
+            Cache-Control:
+              description: Allows short-lived caching of the public catalog.
+              schema:
+                type: string
+                const: public, max-age=300
+              x-required: true
+          content:
+            application/json:
+              schema:
+                $ref: &#39;#/components/schemas/PublicCapabilityCatalog&#39;
   /api/management/account:
     get:
       operationId: getManagementAccount
@@ -1134,6 +1158,96 @@ components:
         const: no-store
       x-required: true
   schemas:
+    PublicCapabilityCatalog:
+      type: object
+      additionalProperties: false
+      required:
+        - providers
+        - max_prompt_bytes
+        - max_input_audio_bytes
+        - max_request_timeout_seconds
+      properties:
+        providers:
+          type: array
+          minItems: 1
+          items:
+            $ref: &#39;#/components/schemas/PublicProviderCapability&#39;
+        max_prompt_bytes:
+          type: integer
+          format: int64
+          minimum: 1
+        max_input_audio_bytes:
+          type: integer
+          format: int64
+          minimum: 1
+        max_request_timeout_seconds:
+          type: integer
+          minimum: 1
+    PublicProviderCapability:
+      type: object
+      additionalProperties: false
+      required:
+        - identifier
+        - label
+        - models
+      properties:
+        identifier:
+          type: string
+          minLength: 1
+        label:
+          type: string
+          minLength: 1
+        models:
+          type: array
+          minItems: 1
+          items:
+            $ref: &#39;#/components/schemas/PublicModelCapability&#39;
+    PublicModelCapability:
+      type: object
+      additionalProperties: false
+      required:
+        - identifier
+        - default_endpoints
+        - capabilities
+        - wire_contract
+        - output_token_limit
+        - reasoning_efforts
+      properties:
+        identifier:
+          type: string
+          minLength: 1
+        default_endpoints:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - text
+              - dictation
+        capabilities:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - text
+              - dictation
+              - web_search
+              - image_input
+              - audio_input
+              - reasoning
+        wire_contract:
+          type: string
+        output_token_limit:
+          type: integer
+          minimum: 0
+        reasoning_efforts:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
     ChatMessage:
       type: object
       additionalProperties: false
@@ -2134,6 +2248,7 @@ components:
 <a href="#operation-getManagementTenantUsageFailures"><span class="api-method api-method-get">GET</span><code>/api/management/tenants/{tenant_id}/usage/failures</code><span>Read safe failure details for an owned tenant and interval</span></a>
 <a href="#operation-getManagementAccountUsage"><span class="api-method api-method-get">GET</span><code>/api/management/usage</code><span>Read interval-scoped usage across every owned tenant</span></a>
 <a href="#operation-getManagementAccountUsageFailures"><span class="api-method api-method-get">GET</span><code>/api/management/usage/failures</code><span>Read safe failure details across every owned tenant and interval</span></a>
+<a href="#operation-getPublicCapabilities"><span class="api-method api-method-get">GET</span><code>/api/public/capabilities</code><span>Read the public provider and model capability catalog</span></a>
 <a href="#operation-getBrowserConfiguration"><span class="api-method api-method-get">GET</span><code>/config-ui.yaml</code><span>Read the browser runtime configuration</span></a>
 <a href="#operation-postDictation"><span class="api-method api-method-post">POST</span><code>/dictate</code><span>Transcribe an audio upload</span></a>
 <a href="#operation-postV2Messages"><span class="api-method api-method-post">POST</span><code>/v2</code><span>Generate text from canonical messages</span></a>
@@ -2879,6 +2994,29 @@ components:
 <tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
 <tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
 <tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-getPublicCapabilities">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-get">GET</span>
+          <code>/api/public/capabilities</code>
+          <span class="api-operation-id">getPublicCapabilities</span>
+        </header>
+        <h2>Read the public provider and model capability catalog</h2>
+        <p>Returns the deterministic, secret-free projection of the validated provider registry and public proxy request limits.</p>
+        <p class="api-security"><strong>Authentication:</strong> None</p>
+        <div class="api-contract-block"><h3>Parameters</h3><p>None.</p></div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>200</code></td><td>application/json</td><td>Cache-Control</td><td>Current public capability catalog.</td></tr>
               </tbody>
             </table>
           </div>

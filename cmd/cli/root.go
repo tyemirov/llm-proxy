@@ -10,17 +10,17 @@ import (
 )
 
 const (
-	defaultConfigPath    = "config.yml"
-	flagConfig           = "config"
-	flagRenderSiteOutput = "render-site-output"
-	flagSiteConfigURL    = "site-config-url"
-	flagSiteSource       = "site-source"
-	logEventStarting     = "starting proxy"
+	defaultConfigPath             = "config.yml"
+	flagConfig                    = "config"
+	flagPublicCapabilitiesOnly    = "public-capabilities-only"
+	logEventStarting              = "starting proxy"
+	logEventStartingPublicCatalog = "starting public capability API"
 )
 
 var runtimeConfiguration proxy.Configuration
-var siteCapabilityCatalog proxy.PublicCapabilityCatalog
+var publicCapabilityConfiguration publicCapabilityAPIConfiguration
 var serveProxy = proxy.Serve
+var servePublicCapabilityAPI = proxy.ServePublicCapabilities
 var loadConfiguration = loadRuntimeConfiguration
 
 const (
@@ -49,16 +49,16 @@ var rootCmd = &cobra.Command{
 	Long:    rootCmdLong,
 	Example: rootCmdExample,
 	PreRunE: func(command *cobra.Command, arguments []string) error {
-		if command.Flags().Changed(flagRenderSiteOutput) {
-			configPath, _ := command.Flags().GetString(flagConfig)
-			capabilityCatalog, catalogError := loadSiteCapabilityCatalog(configPath)
-			if catalogError != nil {
-				return catalogError
+		configPath, _ := command.Flags().GetString(flagConfig)
+		publicCapabilitiesOnly, _ := command.Flags().GetBool(flagPublicCapabilitiesOnly)
+		if publicCapabilitiesOnly {
+			configuration, loadError := loadPublicCapabilityAPIConfiguration(configPath)
+			if loadError != nil {
+				return loadError
 			}
-			siteCapabilityCatalog = capabilityCatalog
+			publicCapabilityConfiguration = configuration
 			return nil
 		}
-		configPath, _ := command.Flags().GetString(flagConfig)
 		configuration, loadError := loadConfiguration(configPath)
 		if loadError != nil {
 			return loadError
@@ -67,20 +67,25 @@ var rootCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(command *cobra.Command, arguments []string) error {
-		renderSiteOutput, _ := command.Flags().GetString(flagRenderSiteOutput)
-		if command.Flags().Changed(flagRenderSiteOutput) {
-			siteSource, _ := command.Flags().GetString(flagSiteSource)
-			rawSiteConfigURL, _ := command.Flags().GetString(flagSiteConfigURL)
-			siteConfigURLValue, configURLError := newSiteConfigURL(rawSiteConfigURL)
-			if configURLError != nil {
-				return configURLError
-			}
-			return renderSiteArtifact(siteSource, renderSiteOutput, siteConfigURLValue, siteCapabilityCatalog)
+		publicCapabilitiesOnly, _ := command.Flags().GetBool(flagPublicCapabilitiesOnly)
+		logLevel := runtimeConfiguration.LogLevel
+		if publicCapabilitiesOnly {
+			logLevel = publicCapabilityConfiguration.LogLevel
 		}
-
-		logger := loggerForLevel(runtimeConfiguration.LogLevel)
+		logger := loggerForLevel(logLevel)
 		defer func() { _ = logger.Sync() }()
 		structuredLogger := logger.Sugar()
+		if publicCapabilitiesOnly {
+			structuredLogger.Infow(logEventStartingPublicCatalog,
+				"port", publicCapabilityConfiguration.Port,
+				"provider_count", len(publicCapabilityConfiguration.Catalog.Providers),
+			)
+			return servePublicCapabilityAPI(
+				publicCapabilityConfiguration.Catalog,
+				publicCapabilityConfiguration.Port,
+				publicCapabilityConfiguration.LogLevel,
+			)
+		}
 
 		structuredLogger.Infow(logEventStarting,
 			"port", runtimeConfiguration.Port,
@@ -104,7 +109,5 @@ func loggerForLevel(logLevel string) *zap.Logger {
 
 func init() {
 	rootCmd.Flags().String(flagConfig, defaultConfigPath, "path to authoritative config.yml")
-	rootCmd.Flags().String(flagRenderSiteOutput, "", "render the GitHub Pages site artifact to this output directory")
-	rootCmd.Flags().String(flagSiteConfigURL, defaultSiteConfigURL, "browser-facing config-ui.yaml URL for the rendered site")
-	rootCmd.Flags().String(flagSiteSource, defaultSiteSourceDirectory, "static site source directory for render-site-output")
+	rootCmd.Flags().Bool(flagPublicCapabilitiesOnly, false, "serve only the public capability REST resource")
 }

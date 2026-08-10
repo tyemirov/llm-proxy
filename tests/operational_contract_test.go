@@ -472,6 +472,9 @@ case "${arguments}" in
   *"http://localhost:4179/"*)
     status=200
     ;;
+  *"http://localhost:8080/api/public/capabilities"*)
+    status=200
+    ;;
   *"http://localhost:8080/?prompt=ready"*)
     status=403
     ;;
@@ -589,6 +592,7 @@ exec "${REAL_AWK_PATH:?}" "$@"
 		"http://localhost:4179/config-ui.yaml",
 		"http://localhost:4179/auth/session",
 		"http://localhost:4179/auth/nonce",
+		"http://localhost:8080/api/public/capabilities",
 		"http://localhost:8080/?prompt=ready",
 		"http://localhost:8080/api/management/account",
 	} {
@@ -682,11 +686,15 @@ exec "${REAL_AWK_PATH:?}" "$@"
 				"LLM_PROXY_MANAGEMENT_TAUTH_URL: \"http://localhost:4179\"",
 				"127.0.0.1:4179:4179",
 				"127.0.0.1:8080:8080",
-				"--render-site-output /app/render/site",
-				"./site:/app/site-source:ro",
+				"site-builder:",
+				"image: node:22-bookworm-slim",
+				"/app/scripts/render_public_site.mjs",
+				"http://api:8080/api/public/capabilities",
+				"condition: service_completed_successfully",
+				"./site:/app/site:ro",
 				"LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY",
 				"condition: service_healthy",
-				"class=\\\"catalog-table\\\"",
+				"curl --fail --silent http://127.0.0.1:8080/api/public/capabilities",
 				"GHTTP_SERVE_DIRECTORY: \"/app/docs\"",
 				"./docs:/app/docs:ro",
 			},
@@ -803,6 +811,9 @@ case "${arguments}" in
     status=204
     ;;
   *"http://localhost:4179/auth/nonce"*|*"http://localhost:4179/"*)
+    status=200
+    ;;
+  *"http://localhost:8080/api/public/capabilities"*)
     status=200
     ;;
   *"http://localhost:8080/?prompt=ready"*)

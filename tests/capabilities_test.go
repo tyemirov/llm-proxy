@@ -163,6 +163,64 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 	}
 }
 
+func TestPublicCapabilityRESTResourceProjectsChangedCatalogWithoutPrivateConfig(testingInstance *testing.T) {
+	const (
+		changedModelID = "kimi-rest-contract"
+		privateAPIKey  = "private-provider-key-sentinel"
+		privateBaseURL = "https://private-provider-origin.invalid/v1"
+		privateSecret  = "private-tenant-secret-sentinel"
+	)
+	catalogs := testfixtures.ProviderModelCatalogs(testingInstance)
+	moonshotCatalog := catalogs[proxy.ProviderNameMoonshot]
+	changedModel := moonshotCatalog.Text.Models[0]
+	changedModel.ID = changedModelID
+	moonshotCatalog.Text.Models = append(moonshotCatalog.Text.Models, changedModel)
+	catalogs[proxy.ProviderNameMoonshot] = moonshotCatalog
+	router, buildError := proxy.BuildRouter(proxy.Configuration{
+		Tenants:        proxy.SingleTenantConfigurations("private-tenant", privateSecret),
+		OpenAIKey:      privateAPIKey,
+		OpenAIBaseURL:  privateBaseURL,
+		ProviderModels: catalogs,
+	}, zap.NewNop().Sugar())
+	if buildError != nil {
+		testingInstance.Fatalf("BuildRouter error: %v", buildError)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, proxy.PublicCapabilitiesPath, nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		testingInstance.Fatalf("status=%d body=%q", response.Code, response.Body.String())
+	}
+	if response.Header().Get("Cache-Control") != "public, max-age=300" {
+		testingInstance.Fatalf("cache control=%q", response.Header().Get("Cache-Control"))
+	}
+	responseBody := response.Body.String()
+	for _, privateValue := range []string{privateAPIKey, privateBaseURL, privateSecret, "api_key", "base_url"} {
+		if strings.Contains(responseBody, privateValue) {
+			testingInstance.Fatalf("public capability response exposed %q: %s", privateValue, responseBody)
+		}
+	}
+	var catalog proxy.PublicCapabilityCatalog
+	if decodeError := json.Unmarshal(response.Body.Bytes(), &catalog); decodeError != nil {
+		testingInstance.Fatalf("decode public capability response: %v", decodeError)
+	}
+	changedModelFound := false
+	for _, provider := range catalog.Providers {
+		if provider.Identifier != proxy.ProviderNameMoonshot {
+			continue
+		}
+		for _, model := range provider.Models {
+			if model.Identifier == changedModelID {
+				changedModelFound = true
+			}
+		}
+	}
+	if !changedModelFound {
+		testingInstance.Fatalf("public capability response omitted changed model %q", changedModelID)
+	}
+}
+
 func TestPublicCapabilityCatalogRejectsNoncanonicalRuntimeRegistries(testingInstance *testing.T) {
 	testCases := []struct {
 		name          string
@@ -188,7 +246,7 @@ func TestPublicCapabilityCatalogRejectsNoncanonicalRuntimeRegistries(testingInst
 			mutate: func(catalogs proxy.ProviderModelCatalogs) {
 				delete(catalogs, proxy.ProviderNameMeta)
 			},
-			expectedError: "configured_provider_count=11",
+			expectedError: "provider=meta field=providers.meta.text",
 		},
 		{
 			name: "invalid model catalog",

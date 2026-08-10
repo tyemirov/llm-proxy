@@ -5,6 +5,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      site-builder:
+        condition: service_completed_successfully
       schema:
         condition: service_started
       tauth:
@@ -23,6 +25,29 @@ services:
         target: /app/render
         read_only: true
 
+  site-builder:
+    image: node:22-bookworm-slim
+    depends_on:
+      api:
+        condition: service_healthy
+    command:
+      - node
+      - /app/scripts/render_public_site.mjs
+      - --source
+      - /app/site
+      - --output
+      - /app/render/site
+      - --config-url
+      - /config-ui.yaml
+      - --capabilities-url
+      - http://api:8080/api/public/capabilities
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./site:/app/site:ro
+      - type: bind
+        source: ${LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY:?LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY is required}
+        target: /app/render
+
   schema:
     image: ghcr.io/tyemirov/ghttp:latest
     pull_policy: always
@@ -39,11 +64,9 @@ services:
       dockerfile: Dockerfile
     image: llm-proxy-local:latest
     command:
-      - /bin/sh
-      - -ec
-      - |
-        /usr/local/bin/llm-proxy --config /app/configs/config.yml --site-source /app/site-source --render-site-output /app/render/site
-        exec /usr/local/bin/llm-proxy --config /app/configs/config.yml
+      - /usr/local/bin/llm-proxy
+      - --config
+      - /app/configs/config.yml
     env_file:
       - ./configs/.env.api.local
     environment:
@@ -51,17 +74,13 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     healthcheck:
-      test: ["CMD-SHELL", "test -f /app/render/site/index.html && grep -q 'class=\"catalog-table\"' /app/render/site/index.html && ! grep -q 'llm-proxy-capability-catalog' /app/render/site/index.html"]
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:8080/api/public/capabilities >/dev/null"]
       interval: 1s
       timeout: 2s
       retries: 30
       start_period: 1s
     volumes:
       - ./configs/config.yml:/app/configs/config.yml:ro
-      - ./site:/app/site-source:ro
-      - type: bind
-        source: ${LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY:?LLM_PROXY_LOCAL_SITE_ARTIFACT_DIRECTORY is required}
-        target: /app/render
       - llm_proxy_local_data:/data
 
   tauth:

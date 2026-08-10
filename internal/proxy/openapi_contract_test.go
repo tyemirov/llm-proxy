@@ -99,7 +99,7 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 		switch operation.Path {
 		case "/", "/v2", "/dictate":
 			expectedSecurity = [][]string{{"TenantClientKey"}}
-		case proxy.ManagementConfigUIPath:
+		case proxy.ManagementConfigUIPath, proxy.PublicCapabilitiesPath:
 			expectedSecurity = [][]string{}
 		}
 		actualSecurity, securityError := contract.SecurityRequirements(operation.Path, operation.Method)
@@ -208,6 +208,19 @@ func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {
 	t.Cleanup(upstreamServer.Close)
 	router := newManagementRouter(t, proxy.Configuration{DeepSeekBaseURL: upstreamServer.URL})
 	sessionCookie := managementSessionCookie(t, "openapi-contract-user")
+
+	capabilitiesRequest := httptest.NewRequest(http.MethodGet, proxy.PublicCapabilitiesPath, nil)
+	assertOpenAPIRequest(t, contract, proxy.PublicCapabilitiesPath, capabilitiesRequest, nil)
+	capabilitiesResponse := httptest.NewRecorder()
+	router.ServeHTTP(capabilitiesResponse, capabilitiesRequest)
+	assertOpenAPIResponse(t, contract, proxy.PublicCapabilitiesPath, http.MethodGet, capabilitiesResponse)
+	var capabilityCatalog proxy.PublicCapabilityCatalog
+	if decodeError := json.Unmarshal(capabilitiesResponse.Body.Bytes(), &capabilityCatalog); decodeError != nil {
+		t.Fatalf("decode public capability catalog: %v", decodeError)
+	}
+	if len(capabilityCatalog.Providers) != 12 {
+		t.Fatalf("public capability providers=%d want=12", len(capabilityCatalog.Providers))
+	}
 
 	configRequest := httptest.NewRequest(http.MethodGet, proxy.ManagementConfigUIPath, nil)
 	configRequest.Header.Set("Origin", "http://localhost:8080")

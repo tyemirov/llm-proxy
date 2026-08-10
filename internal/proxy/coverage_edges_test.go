@@ -2182,6 +2182,35 @@ func TestCoverageServeAndEndpointReset(t *testing.T) {
 	}
 }
 
+func TestCoveragePublicCapabilityRESTSurface(t *testing.T) {
+	capabilityCatalog, catalogError := proxy.NewPublicCapabilityCatalog(withProviderModelCatalogs(t, proxy.Configuration{}))
+	if catalogError != nil {
+		t.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
+	}
+	router := proxy.BuildPublicCapabilityRouter(capabilityCatalog, proxy.LogLevelDebug)
+	request := httptest.NewRequest(http.MethodGet, proxy.PublicCapabilitiesPath, nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%q", response.Code, response.Body.String())
+	}
+	if response.Header().Get("Cache-Control") != "public, max-age=300" {
+		t.Fatalf("cache control=%q", response.Header().Get("Cache-Control"))
+	}
+	var decodedCatalog proxy.PublicCapabilityCatalog
+	if decodeError := json.Unmarshal(response.Body.Bytes(), &decodedCatalog); decodeError != nil {
+		t.Fatalf("decode public capability catalog: %v", decodeError)
+	}
+	if len(decodedCatalog.Providers) != len(capabilityCatalog.Providers) || decodedCatalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes {
+		t.Fatalf("decoded public capability catalog=%+v", decodedCatalog)
+	}
+
+	serveError := proxy.ServePublicCapabilities(capabilityCatalog, -1, proxy.LogLevelInfo)
+	if serveError == nil {
+		t.Fatal("ServePublicCapabilities error=nil want non-nil")
+	}
+}
+
 func TestCoverageHTTPUtilityReadFailure(t *testing.T) {
 	previousClient := proxy.HTTPClient
 	proxy.HTTPClient = &http.Client{Transport: coverageRoundTripper(func(httpRequest *http.Request) (*http.Response, error) {
