@@ -47,6 +47,41 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B097] (P1) Return typed sanitized failures from the official Go client.
+  Goal:
+  Let server-side callers classify authentication, rate-limit, proxy
+  work-budget, and upstream-availability failures without parsing formatted
+  error strings or retaining raw response bodies.
+  Evidence:
+  - `pkg/llmproxyclient` returns only `ErrClientHTTPFailure` plus a formatted
+    `status=<n> body=<raw>` string for every non-2xx response.
+  - The public proxy publishes four stable JSON error codes for invalid request
+    timeouts, provider failures, provider rate limits, and proxy work-budget
+    expiry.
+  Requirements:
+  - Return one typed official-client failure for every completed non-2xx HTTP
+    response, with read-only HTTP status and recognized stable proxy error-code
+    accessors.
+  - Preserve `errors.Is(error, ErrClientHTTPFailure)` while supporting
+    `errors.As` for the typed failure.
+  - Exclude raw response bodies from the returned error.
+  - Keep transport and read failures distinct from completed HTTP responses.
+  Validation:
+  - Exercise the public Go client through a fake HTTP server for structured and
+    unstructured non-2xx responses.
+  - Prove typed status and code values, sentinel identity, sanitized error text,
+    and rejection of unknown or malformed error codes.
+  - Run final `timeout -k 350s -s SIGKILL 350s make ci`.
+  Resolution:
+  - Completed non-2xx responses now return a sanitized `HTTPFailure` with
+    read-only status and recognized proxy error-code accessors while preserving
+    `ErrClientHTTPFailure` identity. Raw bodies remain outside the returned
+    error, and transport and response-read failures retain their distinct path.
+  - Fake-server coverage passes for all four published codes and for
+    unstructured, malformed, and unknown bodies. The focused Go gate passed at
+    100.0% statement coverage, and final `make ci` passed all 11 gates in 102
+    seconds with 100.0% Go statement coverage.
+
 - [x] [B125] (P1) {I219} Isolate and stop public-capability test servers.
   Goal:
   Keep frontend and Pages artifact validation deterministic and free of

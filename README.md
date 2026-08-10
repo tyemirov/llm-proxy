@@ -1947,6 +1947,14 @@ caller's independent cancellation authority, and the injected `HTTPDoer` may
 have its own explicitly selected transport policy. The package does not add a
 total-response timeout.
 
+Every completed non-2xx response returns an `*llmproxyclient.HTTPFailure`.
+Use `errors.As` to read its `StatusCode()` and recognized stable
+`ProxyErrorCode()` values; `errors.Is(err,
+llmproxyclient.ErrClientHTTPFailure)` also remains true. Raw response bodies
+are never included in or exposed by the returned error. Transport and response
+read failures preserve `ErrClientHTTPFailure` without fabricating a completed
+HTTP status.
+
 To upgrade the Go package and CLI:
 
 ```shell

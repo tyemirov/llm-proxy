@@ -442,12 +442,7 @@ func (client Client) postPayload(contextValue context.Context, requestURL url.UR
 		return "", fmt.Errorf("%w: read response body: %v", ErrClientHTTPFailure, readError)
 	}
 	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
-		return "", fmt.Errorf(
-			"%w: status=%d body=%q",
-			ErrClientHTTPFailure,
-			httpResponse.StatusCode,
-			strings.TrimSpace(string(responseBody)),
-		)
+		return "", newHTTPFailure(httpResponse.StatusCode, responseBody)
 	}
 	return string(responseBody), nil
 }
