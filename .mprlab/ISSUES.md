@@ -47,6 +47,43 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
 
 ## BugFixes
 
+- [x] [B125] (P1) {I219} Isolate and stop public-capability test servers.
+  Goal:
+  Keep frontend and Pages artifact validation deterministic and free of
+  background capability-server processes.
+  Evidence:
+  - The Playwright renderer setup starts the capability server through
+    `go run`, then stops only the Go driver while its compiled CLI child keeps
+    listening after the temporary test directory is removed.
+  - The Pages artifact gate always starts and probes port 8080, so a running
+    local stack can satisfy readiness or prevent the test-owned server from
+    binding.
+  Requirements:
+  - Build a temporary CLI binary and run that binary directly in both test
+    launchers so the recorded process is the actual server process.
+  - Give the Pages artifact gate a temporary capability configuration with an
+    ephemeral loopback port instead of the local runtime port.
+  - Stop and wait for every test-owned server before removing its temporary
+    files, and prove its HTTP listener is closed.
+  - Keep validation on the real `--public-capabilities-only` CLI and
+    `/api/public/capabilities` HTTP boundaries.
+  Validation:
+  - Focused Playwright coverage and the Pages artifact target pass without
+    leaving a capability-server process or listener.
+  - Run final `timeout -k 350s -s SIGKILL 350s make ci` after the last code
+    edit; reuse the current exact-code passing result as the baseline.
+  Resolution:
+  - One frontend-owned helper now creates private temporary capability
+    configurations on ephemeral loopback ports for both launchers. Each
+    launcher builds and starts the actual temporary CLI binary, stops that
+    exact process, waits for exit, and rejects a listener that remains open.
+  - The focused Pages artifact target passed while an unrelated HTTP service
+    held port 8080. The complete 89-scenario Playwright target passed with no
+    matching capability-server process before or after the run. Four orphan
+    servers left by the prior harness were stopped.
+  - Final `make ci` passed all 11 gates in 120 seconds with 89 frontend browser
+    scenarios and 100.0% Go statement coverage.
+
 - [x] [B124] (P1) Anchor the Settings close control in the title row.
   Goal:
   Keep the Settings close control at the right edge of the title row and
@@ -5258,8 +5295,9 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
   - Public proxy requests use a generated tenant secret in `key=...`.
   - TAuth browser sessions authorize management operations.
   - Provider credentials remain on the server and belong to one tenant.
-  - TAuth does not yet provide the OAuth authorization-server contract that a
-    remote MCP client requires.
+  - TAuth provides the OAuth authorization-server contract that a remote MCP
+    client requires.
+  - The gateway cannot yet generate the root OAuth block or tenant OAuth policy.
   Requirements:
   - Serve MCP protocol version `2026-07-28` at the exact resource URL
     `https://llm-proxy-api.mprlab.com/mcp/{tenant_id}`.
@@ -5335,11 +5373,8 @@ explicit caller completion-budget exhaustion, not missing B077 activation.
     acceptance. Record live-host acceptance as a separate deployment result.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
-  Blocked: TAuth F001 must first complete the OAuth 2.1 authorization-server
-  contract.
-  The server must support authorization code plus PKCE, discovery, JWKS,
-  resource indicators, audience-bound tokens, rotating refresh tokens,
-  consent, revocation, and MCP-compatible client metadata or registration.
+  Blocked: mprlab-gateway F001 must complete the TAuth OAuth aggregate
+  deployment contract before this feature can declare its protected resources.
 
 - [ ] [F020] (P1) Design and implement low-level sampling controls in a new v3 API contract and provider adapters.
   Goal:
