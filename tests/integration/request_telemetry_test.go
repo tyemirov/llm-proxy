@@ -176,6 +176,7 @@ func TestIntegrationRequestTelemetryClassifiesFailureCancellationAndBudgetExpiry
 		doer            proxy.HTTPDoer
 		expectedStatus  int
 		expectedOutcome string
+		expectedSignal  string
 	}{
 		{
 			name: "provider failure",
@@ -186,6 +187,7 @@ func TestIntegrationRequestTelemetryClassifiesFailureCancellationAndBudgetExpiry
 			}),
 			expectedStatus:  http.StatusBadGateway,
 			expectedOutcome: "provider_failure",
+			expectedSignal:  "failure",
 		},
 		{
 			name: "provider cancellation signal",
@@ -194,6 +196,7 @@ func TestIntegrationRequestTelemetryClassifiesFailureCancellationAndBudgetExpiry
 			}),
 			expectedStatus:  http.StatusBadGateway,
 			expectedOutcome: "provider_failure",
+			expectedSignal:  "canceled",
 		},
 		{
 			name:           "caller cancellation",
@@ -204,6 +207,7 @@ func TestIntegrationRequestTelemetryClassifiesFailureCancellationAndBudgetExpiry
 			}),
 			expectedStatus:  499,
 			expectedOutcome: "caller_cancelled",
+			expectedSignal:  "canceled",
 		},
 		{
 			name:          "proxy budget expiry",
@@ -214,6 +218,7 @@ func TestIntegrationRequestTelemetryClassifiesFailureCancellationAndBudgetExpiry
 			}),
 			expectedStatus:  http.StatusGatewayTimeout,
 			expectedOutcome: "proxy_timeout",
+			expectedSignal:  "canceled",
 		},
 	}
 	for _, testCase := range testCases {
@@ -242,9 +247,54 @@ func TestIntegrationRequestTelemetryClassifiesFailureCancellationAndBudgetExpiry
 			}
 			assertTelemetrySummaryIdentity(subTest, summary, "/", proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, expectedBudget, int64(testCase.expectedStatus), testCase.expectedOutcome)
 			assertTelemetrySummaryPhases(subTest, summary)
+			createProgress := telemetryProgressForKind(subTest, observedLogs, requestID, telemetryOpenAICreateProgress)
+			if createProgress["completion_signal"] != testCase.expectedSignal {
+				subTest.Fatalf("OpenAI create completion signal=%v want=%q", createProgress, testCase.expectedSignal)
+			}
 			assertTelemetryLogsExcludeContent(subTest, observedLogs, telemetryUnsafePrompt, telemetryUnsafeProviderBody, serviceSecretValue, openAIKeyValue)
 		})
 	}
+}
+
+func TestIntegrationRequestTelemetryClassifiesCanceledOpenAIPoll(testingInstance *testing.T) {
+	requestContext, cancelRequest := context.WithCancel(context.Background())
+	testingInstance.Cleanup(cancelRequest)
+	var upstreamCalls atomic.Int64
+	observedCore, observedLogs := observer.New(zapcore.InfoLevel)
+	router := timeoutContractRouter(
+		testingInstance,
+		requestTimeoutHTTPDoer(func(request *http.Request) (*http.Response, error) {
+			if upstreamCalls.Add(1) == 1 {
+				return completedTimeoutContractResponse(`{"id":"` + telemetryUnsafeUpstreamID + `","status":"queued"}`), nil
+			}
+			cancelRequest()
+			<-request.Context().Done()
+			return nil, request.Context().Err()
+		}),
+		timeoutContractConfiguration(2, 3),
+		zap.New(observedCore).Sugar(),
+	)
+	request := httptest.NewRequest(http.MethodGet, "/?key="+serviceSecretValue+"&prompt="+telemetryUnsafePrompt, nil).WithContext(requestContext)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != 499 {
+		testingInstance.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	requestID := response.Header().Get(llmproxycontract.HeaderRequestID)
+	pollProgress := telemetryProgressForKind(testingInstance, observedLogs, requestID, telemetryOpenAIPollProgress)
+	if pollProgress["completion_signal"] != "canceled" {
+		testingInstance.Fatalf("OpenAI poll completion signal=%v", pollProgress)
+	}
+	continuationProgress := telemetryProgressForKind(testingInstance, observedLogs, requestID, telemetryContinuationProgress)
+	if continuationProgress["completion_signal"] != "canceled" {
+		testingInstance.Fatalf("continuation completion signal=%v", continuationProgress)
+	}
+	summary := telemetrySummaryForRequest(testingInstance, observedLogs, requestID)
+	assertTelemetrySummaryIdentity(testingInstance, summary, "/", proxy.ProviderNameOpenAI, proxy.ModelNameGPT41, 2, 499, "caller_cancelled")
+	assertTelemetrySummaryPhases(testingInstance, summary)
+	assertTelemetryLogsExcludeContent(testingInstance, observedLogs, telemetryUnsafePrompt, telemetryUnsafeUpstreamID, serviceSecretValue, openAIKeyValue)
 }
 
 func TestIntegrationRequestTelemetrySeparatesAdmissionAndRateLimitWait(testingInstance *testing.T) {
@@ -343,6 +393,18 @@ func telemetrySummaryForRequest(testingInstance *testing.T, observedLogs *observ
 		}
 	}
 	testingInstance.Fatalf("missing terminal telemetry summary for request_id=%q: %v", requestID, observedLogs.All())
+	return nil
+}
+
+func telemetryProgressForKind(testingInstance *testing.T, observedLogs *observer.ObservedLogs, requestID string, progressKind string) map[string]any {
+	testingInstance.Helper()
+	for _, entry := range observedLogs.FilterMessage(telemetryProgressEvent).All() {
+		fields := entry.ContextMap()
+		if fields["request_id"] == requestID && fields["progress_kind"] == progressKind {
+			return fields
+		}
+	}
+	testingInstance.Fatalf("missing %s telemetry progress for request_id=%q: %v", progressKind, requestID, observedLogs.All())
 	return nil
 }
 
