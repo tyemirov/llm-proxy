@@ -173,6 +173,24 @@ retain satisfied historical dependencies.
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 ## Improvements
 
+- [x] [I222] (P0) Adopt CalVer for product releases.
+  Goal:
+  Use the canonical UTC CalVer decision for every new llm-proxy release.
+  Requirements:
+  - Declare CalVer as the single current Gix release scheme.
+  - Align current release documentation with the declaration.
+  - Preserve the zero-argument release, publication, and deployment lifecycle.
+  Validation:
+  - Prove Gix selects CalVer for a fixed UTC release timestamp.
+  - Prove current repository guidance contains no obsolete release claim.
+  - Run the Governor check and `git diff --check` for the `.mprlab/` change.
+  Resolved 2026-08-10:
+  - `.mprlab/release.yml` now selects CalVer. Current release documentation
+    describes the same lifecycle.
+  - Gix selected `26.810.235959` for the fixed UTC validation timestamp.
+  - The changed documentation passed the scoped STE check. The Governor check
+    reported only the existing M012 and M013 governance drift.
+
 - [ ] [I221] (P1) {I039} Make model identity independent from provider offerings.
   Goal:
   Make models the primary public discovery items. Keep each selected model's
