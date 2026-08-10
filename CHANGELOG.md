@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Added the canonical public landing page and model-centered capability catalog from the validated runtime registry.
+- Added the generated provider-to-model routing graph below the landing hero.
+- Moved public-page rendering to the frontend-owned renderer and backend public-capability REST resource.
+- Restored one MPR UI and TAuth browser authentication flow across the public landing page and authenticated application.
+- Added the shared MPR header and compact footer to public pages, resource pages, legal pages, and the application.
+- Migrated Gemini text routing to the native Interactions API with explicit synchronous and background execution lifecycles.
+- Added provider-neutral image and audio attachments to canonical `POST /v2` requests for compatible models.
+- Added shared missing-suffix continuation for provider output-budget stops and sanitized provider failure responses.
+- Added typed, sanitized non-success HTTP failures to the official Go client.
 - Make every public frontend validation path install the pinned npm graph and project-local Chromium before use, including clean `make test` and `make ci` executions.
 - **Breaking:** `GET /` now accepts `web_search` only as exact `true` or `false`; former aliases and malformed supplied values return HTTP 400. The bundled Go package, Go CLI, and Python package remain on `POST /v2` and serialize `web_search` as a native JSON boolean.
 - Remove Moonshot's unavailable former default model and promote the verified `kimi-k2.6` model as the sole canonical default without an alias or fallback.
