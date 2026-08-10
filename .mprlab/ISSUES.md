@@ -9,12 +9,13 @@ Format: `- [ ] [B042] (P1) {I007} Title`
 - `[ ]` open, `[-]` taken, `[!]` blocked, `[x]` closed.
 - Blocked issues (`[!]`) must include a `Blocked:` line in the body.
 
-Repository development is the default completion boundary for each issue.
-Unless an issue states another outcome, development completion requires the
+Issue work tracks the development SDLC. Development completion requires the
 specified repository changes and repository validation.
-An Improvement or Feature uses production state only when the issue is an activation issue.
-An activation issue depends on its development issues. A development issue
-in Improvements or Features never depends on production state.
+
+Production state is outside development completion. An issue can include
+production state only when its goal explicitly specifies an activation issue
+or production acceptance. Keep repository validation separate from production
+acceptance. An activation issue depends only on unresolved development work.
 
 Resolved history is in `.mprlab/ISSUES-ARCHIVE.md`. The archive contains the
 initial `v0.2.43` index and complete entries from later archive passes.
@@ -53,35 +54,76 @@ retain satisfied historical dependencies.
     HTTP `403` after activation.
   Blocked: the production operator must run the repository-owned deployment
   lifecycle and record the image and Pages activation receipt.
-- [ ] [B088] (P1) {I045} Restore Default-tenant long completion routing for OpenAI and Meta.
+- [!] [B127] (P1) Activate I045 telemetry for B088 production acceptance.
   Goal:
-  Make the Default tenant complete the production live test's deterministic
-  large request through OpenAI and Meta without a local provider credential,
-  fallback provider, or client-side polling path. Keep Anthropic's repaired
-  long-completion case as a required regression check.
+  This activation issue makes the production proxy emit I045's safe request
+  phase and provider-progress events. A public request id can then identify the
+  exact long-completion boundary.
+  Evidence:
+  - The I045 work is completed. Its baseline and final 11-gate `make ci` runs
+    passed with 100.0% Go statement coverage.
+  - The currently active production revision does not contain the I045 source.
+  - The 2026-08-10 B088 paid run produced correlated OpenAI and Meta request
+    ids, but the running service cannot emit I045's phase totals or progress
+    events for them.
+  Requirements:
+  - Complete the repository execution chain for the I045 source, release the
+    resulting immutable revision, and activate that exact revision through the
+    repository-owned production lifecycle.
+  - Preserve the current production configuration and managed data volume.
+    Record the release tag, source commit, container manifest digest, running
+    image id, and repository digest in the activation receipt.
+  Validation:
+  - Send one redacted accepted request and prove its validated
+    `X-LLM-Proxy-Request-ID` correlates with one terminal phase summary and the
+    applicable content-free provider-progress events in production logs.
+  - Prove the running revision matches the recorded immutable source and image
+    before B088 spends another paid long-completion or canary request.
+  Blocked: the execution chain must merge and release the completed I045 source,
+  then the production operator must activate that immutable revision and record
+  the receipt.
+- [ ] [B088] (P1) {B127} Restore Default-tenant long completion routing for OpenAI and Meta.
+  Goal:
+  Make the Default tenant complete deterministic production live-test requests
+  through OpenAI and Meta. Do not use local provider credentials, fallback
+  providers, or client-side polling. Keep the repaired Anthropic case as a
+  required regression check.
+  Completion boundary:
+  - Repository changes and repository validation prove development completion.
+  - Production acceptance is an explicit completion condition for this issue.
   Evidence:
   - The initial expanded `make live-test` run returned HTTP `200` for all three
     providers' short echo requests. OpenAI's background-polling case exhausted
-    its 900-second budget with a safe HTTP `504`; Anthropic and Meta long
+    its 900-second budget with a safe HTTP `504`. Anthropic and Meta long
     completion cases returned safe HTTP `502`.
   - After the shared continuation coordinator shipped in release `v0.2.48`,
     Anthropic long completion returned HTTP `200` with 18,098 response bytes.
     OpenAI still exhausted the full budget with HTTP `504`, while Meta moved
-    from the immediate `502` to a full-budget `504`. Anthropic is therefore no
-    longer an unresolved route, while OpenAI and Meta still need diagnosis.
+    from the immediate `502` to a full-budget `504`. As a result, Anthropic is
+    no longer an unresolved route. OpenAI and Meta still need diagnosis.
   - The harness sent the same request larger than 16 KiB to all three cases,
     required normalized output for all 120 fictional portfolio records before
-    the final marker, printed no response body or credential, and continued
-    through the complete eight-case matrix.
-  - B089 supplies a safe proxy request id and provider failure metadata, but
-    the live harness does not print the response request id and the proxy has
-    no correlated phase or provider-progress timeline. I045 owns that
-    prerequisite observability.
+    the final marker. It printed no response body or credential. It continued
+    through the then-current eight-case matrix. The current harness contains
+    five echo cases and four long-completion cases.
+  - B089 supplies a safe proxy request id and provider failure metadata. I045
+    now prints the validated response request id in the live harness and adds a
+    correlated proxy phase and provider-progress timeline.
+  - On 2026-08-10, the current nine-case paid run passed all five echo cases.
+    OpenAI background polling exhausted 900 seconds with HTTP `504`. Its request
+    id was `SYAQENJCFBOD5QE7RNB62IKNDD`. Meta long completion exhausted 900
+    seconds with HTTP `504`. Its request id was
+    `KW5SYFPYZP2FPSCOI4WCMTJKTW`. Anthropic long completion remained healthy
+    with HTTP `200`, 10,836 response bytes, and its final marker. Its request id
+    was `2GTUJCLSMIOO7CIJUW6XYLWTM3`.
+  - The same run proved both target routes accept the saved Default-tenant
+    credential and model through their echo cases. Exact phase classification
+    now depends on B127 because the running production revision predates I045.
   Requirements:
-  - Implement I045 first, then diagnose and restore the exact OpenAI and Meta
-    production routes through the saved Default-tenant provider configuration.
-    Retain OpenAI's server-owned Responses polling and Meta's canonical
-    blocking request contract.
+  - Diagnose and restore the exact OpenAI and Meta production routes through
+    the saved Default-tenant provider configuration. Retain OpenAI's
+    server-owned Responses polling and Meta's canonical blocking request
+    contract.
   - Keep the repaired Anthropic long-completion case in the production matrix
     and treat any regression from HTTP `200` as a new failure of this issue's
     acceptance gate.
@@ -99,6 +141,34 @@ retain satisfied historical dependencies.
   - Run one normalized Terra/max Creative Director source-world canary with
     the explicit 900-second request budget. Use I045 phase evidence to classify
     any failure before another paid run.
+  - For any source change, run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+- [ ] [B128] (P1) Restore Gemini long-completion production acceptance after provider rate limiting.
+  Goal:
+  Make the Default tenant's Gemini 3.5 Flash background case complete the
+  production live-test contract. First, classify and resolve the provider
+  rate-limit failure.
+  Completion boundary:
+  - Repository changes and repository validation prove development completion.
+  - Production acceptance is an explicit completion condition for this issue.
+  Evidence:
+  - On 2026-08-10, `gemini-echo` returned HTTP `200` with its exact marker, so
+    the saved Default-tenant credential and ordinary Gemini route were active.
+  - The later `gemini-background-polling` case returned the sanitized provider
+    HTTP `429` boundary with 162 response bytes and request id
+    `H3VZZRB52HTFOBITJH22NNZ3WR`.
+  Requirements:
+  - Correlate the failed request with safe provider rate-limit metadata and
+    determine the exact quota, billing, or configured proxy-window boundary.
+  - Preserve Gemini 3.5 Flash's stored background Interactions lifecycle, the
+    900-second request budget, response redaction, and the current deterministic
+    long-completion case.
+  - Apply only the correction supported by that evidence. Keep provider quota
+    or billing work operational and proxy rate-window work in source/config.
+  Validation:
+  - After the identified boundary is resolved, run the exact Gemini echo and
+    background cases with only the Default-tenant secret and prove HTTP `200`,
+    the final markers, validated request ids, and no response-body disclosure.
   - For any source change, run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 ## Improvements
@@ -318,87 +388,7 @@ retain satisfied historical dependencies.
     request with `LLM_PROXY_LIVE_META_MODEL=muse-spark-1.2`. Run the required
     baseline and final `timeout -k 350s -s SIGKILL 350s make ci` pair; deployment
     and production acceptance remain operator-owned.
-- [ ] [I045] (P1) Correlate proxy phase latency and provider progress.
-  Goal:
-  Make a slow or timed-out request diagnosable without exposing request or
-  response content. Distinguish authentication, proxy admission, rate-limit
-  waiting, provider work, polling, continuation, formatting, and post-response
-  usage enqueue time under the same proxy-owned request id.
-  Evidence:
-  - The request logger records only total response latency. Managed usage stores
-    only the same end-to-end latency, so neither surface identifies which
-    proxy-owned phase consumed a request's budget.
-  - The shared upstream limiter emits origin-level rate-limit delay logs, but
-    those events are not a complete request timeline and do not expose ordinary
-    admission wait or aggregate provider HTTP time.
-  - OpenAI's background loop polls until a terminal state without emitting a
-    content-free poll count, provider state, elapsed time, or output-size
-    progress event. The provider-neutral continuation coordinator likewise
-    accumulates output across attempts without attempt or accumulated-byte
-    telemetry.
-  - B088 has reproducible full-budget OpenAI and Meta failures. The production
-    live harness reports only case, provider, HTTP status, and response size,
-    even though B089 already returns a safe request id that could correlate the
-    failed case with structured server evidence.
-  Requirements:
-  - Define one centralized structured telemetry contract keyed by the existing
-    proxy request id. A terminal request summary must carry endpoint, canonical
-    provider and model, effective request budget, total latency, and explicit
-    millisecond totals for authentication, upstream admission, upstream
-    rate-limit waiting, provider HTTP work, provider poll waiting,
-    continuation waiting, response formatting, and managed-usage enqueue.
-    Phases not entered use zero; omit no phase and do not infer one phase by
-    subtracting unrelated totals.
-  - Emit content-free provider progress for every OpenAI create/poll lifecycle
-    and every provider-neutral continuation attempt. Include attempt or poll
-    count, normalized provider state or completion signal, elapsed
-    milliseconds, current output bytes, and accumulated output bytes. Do not
-    log upstream response ids, prompts, messages, generated text, provider
-    bodies, headers beyond already-sanitized metadata, credentials, or tenant
-    secrets.
-  - Use monotonic in-process timing and one request-scoped accumulator rather
-    than reconstructing phases from independent log timestamps. Preserve the
-    existing request budget and cancellation ownership; telemetry must not add
-    retries, polling, goroutines, blocking persistence, or timeout inflation.
-  - Keep structured logs as the observability boundary. Do not add phase fields
-    to managed usage persistence, public response bodies, OpenAPI schemas, or
-    bundled client models. The existing `X-LLM-Proxy-Request-ID` remains the
-    sole public correlation value.
-  - Make `make live-test` print the validated proxy request id from the response
-    header on every passed or failed HTTP case while continuing to suppress the
-    tenant secret and response body. A transport failure with no response
-    reports no invented id.
-  - Correct the README command summary to state that the production target runs
-    all five echo cases plus OpenAI, Anthropic, and Meta long-completion cases.
-    Document the phase and progress field meanings in the canonical provider
-    routing guidance without claiming billing accuracy or provider-side
-    execution time outside observed HTTP boundaries.
-  Deliverables:
-  - One request-scoped phase accumulator, centralized safe log event and field
-    constants, OpenAI polling and shared-continuation progress events, and a
-    terminal phase summary for every accepted proxy request.
-  - Request-id correlation in the production live harness plus updated README
-    and provider-routing documentation.
-  - No persistent schema change, public payload expansion, upstream identifier
-    disclosure, or content-bearing telemetry.
-  Validation:
-  - Drive real public proxy handlers against controlled upstream servers and
-    assert exact phase summaries for success, queue wait, configured rate-limit
-    delay, provider failure, caller cancellation, and proxy-budget expiry.
-  - Cover OpenAI `queued` and `in_progress` polling through completion and
-    provider-neutral output-limit continuation through multiple attempts.
-    Prove counts, normalized states, elapsed values, current bytes, accumulated
-    bytes, and terminal totals belong to the same request id.
-  - Exercise the production live-test script through its fake-curl boundary and
-    prove it reports validated response request ids without printing secrets or
-    bodies, and reports no fabricated id for a transport failure.
-  - Assert that prompts, messages, generated output, upstream response ids,
-    provider bodies, credentials, cookies, and tenant secrets are absent from
-    every new event and command output.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
-    the final run after the last code edit.
-- [ ] [I046] (P1) {I045} Make upstream admission fair across provider origins.
+- [ ] [I046] (P1) Make upstream admission fair across provider origins.
   Goal:
   Keep upstream work globally bounded while preventing one slow or throttled
   origin from consuming the active and queued capacity needed by unrelated
