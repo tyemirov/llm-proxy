@@ -17,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/llm-proxy/internal/constants"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -29,6 +30,16 @@ type blockingManagedUsageDatabase struct {
 	releaseOnce       sync.Once
 	recordsMutex      sync.Mutex
 	records           []managedUsageEventRecord
+}
+
+type delayedFlushResponseRecorder struct {
+	*httptest.ResponseRecorder
+	delay time.Duration
+}
+
+func (recorder *delayedFlushResponseRecorder) Flush() {
+	time.Sleep(recorder.delay)
+	recorder.ResponseRecorder.Flush()
 }
 
 func newBlockingManagedUsageDatabase(database managedTenantDatabase) *blockingManagedUsageDatabase {
@@ -260,7 +271,7 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 		requestTimeoutPolicy:       timeoutPolicy,
 		validated:                  true,
 	}
-	observedCore, observedLogs := observer.New(zapcore.WarnLevel)
+	observedCore, observedLogs := observer.New(zapcore.InfoLevel)
 	router, buildError := buildRouter(configuration, zap.New(observedCore).Sugar(), func(_ ManagementConfiguration, providers *providerRegistry) (*managedTenantStore, error) {
 		store.routingDefaults = providers
 		return store, nil
@@ -269,10 +280,25 @@ func TestManagedUsageWriterKeepsPublicResponsesIndependentFromPersistence(t *tes
 		t.Fatalf("build router: %v", buildError)
 	}
 
-	successResponse := httptest.NewRecorder()
+	const flushDelay = 100 * time.Millisecond
+	successResponse := &delayedFlushResponseRecorder{
+		ResponseRecorder: httptest.NewRecorder(),
+		delay:            flushDelay,
+	}
 	router.ServeHTTP(successResponse, httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(rawSecret)+"&prompt=hello", nil))
 	if successResponse.Code != http.StatusOK || strings.TrimSpace(successResponse.Body.String()) != "queue ok" {
 		t.Fatalf("success status=%d body=%q", successResponse.Code, successResponse.Body.String())
+	}
+	requestID := successResponse.Header().Get(llmproxycontract.HeaderRequestID)
+	phaseSummaries := observedLogs.FilterMessage(logEventRequestPhaseSummary).All()
+	if len(phaseSummaries) != 1 || phaseSummaries[0].ContextMap()[logFieldRequestID] != requestID {
+		t.Fatalf("managed request phase summaries=%+v request_id=%q", phaseSummaries, requestID)
+	}
+	phaseFields := phaseSummaries[0].ContextMap()
+	formattingMilliseconds := phaseFields[logFieldResponseFormattingMilliseconds].(int64)
+	enqueueMilliseconds := phaseFields[logFieldManagedUsageEnqueueMilliseconds].(int64)
+	if formattingMilliseconds < (flushDelay-20*time.Millisecond).Milliseconds() || enqueueMilliseconds >= (flushDelay/2).Milliseconds() {
+		t.Fatalf("managed request phase summary=%v", phaseFields)
 	}
 	select {
 	case <-database.firstWriteStarted:

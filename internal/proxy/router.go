@@ -675,7 +675,9 @@ func recordManagedUsage(managedTenants *managedTenantStore, structuredLogger *za
 	if managedTenants == nil || !requestTenant.managed {
 		return
 	}
+	formattingStartedAt := time.Now()
 	ginContext.Writer.Flush()
+	addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseResponseFormatting, formattingStartedAt)
 	enqueueStartedAt := time.Now()
 	managedTenants.usageWriter.submit(requestTenant, managedUsageEvent{
 		endpoint:            endpoint,

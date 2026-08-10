@@ -193,6 +193,9 @@ func normalizedOpenAIState(state string) string {
 }
 
 func openAICompletionSignal(snapshot openAIResponseSnapshot, progressError error) string {
+	if errors.Is(progressError, context.Canceled) || errors.Is(progressError, context.DeadlineExceeded) {
+		return telemetryCompletionCanceled
+	}
 	if progressError != nil {
 		return telemetryCompletionFailure
 	}
