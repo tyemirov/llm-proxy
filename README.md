@@ -2603,7 +2603,7 @@ lifecycle machinery.
 
 The gateway release transaction validates this app, builds the declared
 multi-platform container and frontend-rendered Pages artifact from committed source,
-and seals the canonical SemVer release. Publication creates only missing remote
+and seals the canonical CalVer release. Publication creates only missing remote
 state from that exact release and rejects conflicts. Deployment uses the
 gateway-owned Ansible inventory and transaction to reconcile only this app's
 declared resources, then verifies its backend and Pages boundaries. Publish and
