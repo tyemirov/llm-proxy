@@ -152,6 +152,36 @@ budget and one of `validation_failure`, `success`, `proxy_timeout`,
 `proxy_overload`, `provider_failure`, or `caller_cancelled`. Queue-capacity
 rejection is proxy overload, not a provider failure.
 
+Every routed proxy request also emits one `proxy request phase summary`
+structured event keyed by the same `request_id` returned in
+`X-LLM-Proxy-Request-ID`. It carries the query-free `endpoint`, canonical
+`provider` and `model`, `request_timeout_seconds`, terminal `status` and
+`outcome`, `total_latency_ms`, and these explicit phase totals:
+
+- `authentication_ms`: static or managed tenant authentication.
+- `upstream_admission_ms`: bounded queue admission and worker acquisition.
+- `upstream_rate_limit_wait_ms`: time waiting for configured origin windows.
+- `provider_http_ms`: observed provider HTTP work through response-body close.
+- `provider_poll_wait_ms`: proxy-owned sleeps between provider resource polls.
+- `continuation_wait_ms`: proxy-owned sleeps between missing-suffix attempts.
+- `response_formatting_ms`: construction and writing of the selected proxy response.
+- `managed_usage_enqueue_ms`: synchronous construction and non-blocking enqueue
+  of a managed usage event; detached persistence is outside the request.
+
+An unused phase is present with zero. The totals use one request-scoped
+monotonic accumulator. They describe proxy-observed boundaries, not provider
+execution time or billing, and unclassified orchestration time must not be
+derived by subtracting phase totals from total latency.
+
+OpenAI create and poll observations and every provider-neutral continuation
+attempt emit `proxy provider progress` under the same request ID. The event
+contains canonical provider/model, `progress_kind`, an `attempt_count` or
+`poll_count`, normalized `provider_state` or `completion_signal`, `elapsed_ms`,
+`current_output_bytes`, and `accumulated_output_bytes`. It contains no provider
+resource ID, prompt, message, generated text, provider body, credential,
+cookie, or tenant secret. Phase fields remain structured-log-only and do not
+extend responses, OpenAPI, bundled clients, or managed usage persistence.
+
 For managed tenants, the proxy writes and flushes the selected response before
 it attempts a non-blocking usage enqueue. Each management runtime has one FIFO
 channel bounded by `management.usage_queue_size` and starts one writer goroutine
@@ -1748,9 +1778,11 @@ the blocking caller request open while their resource adapters perform
 server-owned background polling. Anthropic and Meta use their canonical
 synchronous completion paths (including shared output-continuation work when
 needed); the test client never polls a provider or llm-proxy itself.
-Each case verifies HTTP `200`, the echoed request budget, and a completion marker
-without printing the response body or tenant secret. It runs all nine cases
-before returning nonzero for any failed case.
+Each case verifies HTTP `200`, the echoed request budget, a validated proxy
+request ID, and a completion marker. Its result line prints that request ID for
+log correlation without printing the response body or tenant secret. A
+transport failure with no response prints no request ID. The command runs all
+nine cases before returning nonzero for any failed case.
 
 Set only the Default-tenant client secret before invoking it:
 

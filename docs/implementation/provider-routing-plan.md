@@ -460,6 +460,29 @@ queries, fragments, or user info, non-positive maxima or intervals, invalid Go
 duration strings, and duplicate normalized origins fail startup. Delayed calls
 and context-canceled waits emit structured shared-client logs.
 
+One request-scoped monotonic accumulator correlates the complete routed proxy
+lifecycle with the proxy-owned request id. The terminal
+`proxy request phase summary` event always includes query-free endpoint,
+canonical provider/model, effective request budget, status, outcome, total
+latency, and explicit millisecond totals for authentication, upstream
+admission, configured origin-rate-limit waiting, observed provider HTTP work
+through response-body close, provider poll waiting, shared-continuation
+waiting, response formatting, and managed-usage enqueue. Unused phases remain
+present with zero. Detached managed-usage persistence is outside the enqueue
+phase. These values describe only proxy-observed boundaries; they are neither
+provider execution/billing measurements nor a basis for inferring unclassified
+time by subtraction.
+
+The `proxy provider progress` event records each OpenAI create/poll observation
+and each provider-neutral continuation attempt under the same request id. It
+uses an attempt or poll count, normalized provider state or completion signal,
+elapsed milliseconds, current output bytes, and accumulated output bytes.
+Progress and terminal events never include provider resource ids, prompts,
+messages, generated text, provider bodies, credentials, cookies, or tenant
+secrets. The telemetry stays in structured logs; managed usage persistence,
+public response/OpenAPI contracts, and bundled clients retain their existing
+shapes.
+
 The live-provider harness parses `LIVE_ENV_FILE` as dotenv data without shell
 execution and discovers selected provider keys. A paid run starts a disposable
 management database with ephemeral encryption/session material, creates one
@@ -486,10 +509,12 @@ for each portfolio record before the final marker. The Gemini long case selects
 `gemini-3.5-flash`, while the Gemini echo retains the saved provider model.
 OpenAI and Gemini 3.5 keep one blocking request open while the proxy owns their
 resource polling. Anthropic and Meta exercise their canonical synchronous completion paths, including shared
-output-continuation work when needed. The client validates only the final marker,
-status, and resolved timeout header. This paid check remains outside `make ci`,
-runs all nine cases even after an earlier failure, and never prints a tenant
-secret or response body.
+output-continuation work when needed. The client validates the final marker,
+status, resolved timeout header, and proxy request-id header. Each HTTP result
+prints the validated request id for structured-log correlation; a transport
+failure without a response prints none. This paid check remains outside
+`make ci`, runs all nine cases even after an earlier failure, and never prints
+a tenant secret or response body.
 
 Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, requires API keys for each configured static tenant's default text and dictation providers when management mode is disabled, allows non-default provider API keys to be blank so those providers are disabled until configured, requires every configured provider base URL, requires transcription URLs for dictation-capable providers, requires text model catalogs for every provider, requires dictation model catalogs for dictation-capable providers, rejects blank or duplicate model ids, rejects defaults not listed in their model catalog, rejects `web_search` outside OpenAI text model entries, validates OpenAI request profiles, validates exact model-owned reasoning-effort lists, validates each configured static tenant's default text provider/model and effort, and validates endpoint/credential support for each configured static tenant's default dictation provider/model. When `management.enabled` is false, at least one static tenant is required. When `management.enabled` is true, static tenants and nonblank config-level provider API keys are rejected because managed tokens and provider credentials are user-owned database state.
 

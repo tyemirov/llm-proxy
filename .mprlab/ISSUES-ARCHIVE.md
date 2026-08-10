@@ -97,6 +97,39 @@ issue titles discoverable without making the active tracker noisy.
 
 ### Complete entries archived 2026-08-10
 
+- [x] [B129] (P2) Correct I045 cancellation and managed response-flush telemetry.
+  Goal:
+  Make I045 progress events and phase totals agree with the request outcome.
+  Evidence:
+  - OpenAI progress mapped `context.Canceled` and `context.DeadlineExceeded` to
+    `completion_signal=failure`. The terminal summary mapped these errors to a
+    canceled or timed-out request outcome.
+  - Managed usage flushed the response before the response-formatting timer and
+    the managed-usage timer. A slow flush appeared only in total request time.
+  Requirements:
+  - Map OpenAI context cancellation and deadline errors to
+    `completion_signal=canceled` before the generic failure case.
+  - Measure a managed response flush as response formatting. Start the
+    managed-usage enqueue phase after the flush finishes.
+  - Preserve all request budgets, provider lifecycles, public payloads, and
+    managed usage data.
+  Validation:
+  - Drive the public handler through canceled OpenAI create and poll requests.
+    Prove each progress event uses `completion_signal=canceled`.
+  - Use a managed public request with a delayed response flush. Prove the delay
+    enters `response_formatting_ms` and not `managed_usage_enqueue_ms`.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - OpenAI transport cancellation and deadline errors now emit the canceled
+    completion signal for create and poll progress events, consistent with the
+    continuation event and terminal request outcome.
+  - Managed response flushing now contributes to response formatting before
+    managed usage enqueue timing begins. Public-handler coverage delays the
+    flush and verifies both phase totals.
+  - The required pre-change and final `make ci` runs passed all 11 gates with
+    100.0% Go statement coverage. The final run completed in 118 seconds.
+
 - [x] [B097] (P1) Return typed sanitized failures from the official Go client.
   Goal:
   Let server-side callers classify authentication, rate-limit, proxy
@@ -4011,6 +4044,93 @@ issue titles discoverable without making the active tracker noisy.
     Python constructor rejects non-boolean runtime values before HTTP.
 
 
+- [x] [I045] (P1) Correlate proxy phase latency and provider progress.
+  Goal:
+  Make a slow or timed-out request diagnosable without exposing request or
+  response content. Distinguish authentication, proxy admission, rate-limit
+  waiting, provider work, polling, continuation, formatting, and post-response
+  usage enqueue time under the same proxy-owned request id.
+  Evidence:
+  - The request logger records only total response latency. Managed usage stores
+    only the same end-to-end latency, so neither surface identifies which
+    proxy-owned phase consumed a request's budget.
+  - The shared upstream limiter emits origin-level rate-limit delay logs, but
+    those events are not a complete request timeline and do not expose ordinary
+    admission wait or aggregate provider HTTP time.
+  - OpenAI's background loop polls until a terminal state without emitting a
+    content-free poll count, provider state, elapsed time, or output-size
+    progress event. The provider-neutral continuation coordinator likewise
+    accumulates output across attempts without attempt or accumulated-byte
+    telemetry.
+  - B088 has reproducible full-budget OpenAI and Meta failures. The production
+    live harness reports only case, provider, HTTP status, and response size,
+    even though B089 already returns a safe request id that could correlate the
+    failed case with structured server evidence.
+  Requirements:
+  - Define one centralized structured telemetry contract keyed by the existing
+    proxy request id. A terminal request summary must carry endpoint, canonical
+    provider and model, effective request budget, total latency, and explicit
+    millisecond totals for authentication, upstream admission, upstream
+    rate-limit waiting, provider HTTP work, provider poll waiting,
+    continuation waiting, response formatting, and managed-usage enqueue.
+    Phases not entered use zero; omit no phase and do not infer one phase by
+    subtracting unrelated totals.
+  - Emit content-free provider progress for every OpenAI create/poll lifecycle
+    and every provider-neutral continuation attempt. Include attempt or poll
+    count, normalized provider state or completion signal, elapsed
+    milliseconds, current output bytes, and accumulated output bytes. Do not
+    log upstream response ids, prompts, messages, generated text, provider
+    bodies, headers beyond already-sanitized metadata, credentials, or tenant
+    secrets.
+  - Use monotonic in-process timing and one request-scoped accumulator rather
+    than reconstructing phases from independent log timestamps. Preserve the
+    existing request budget and cancellation ownership; telemetry must not add
+    retries, polling, goroutines, blocking persistence, or timeout inflation.
+  - Keep structured logs as the observability boundary. Do not add phase fields
+    to managed usage persistence, public response bodies, OpenAPI schemas, or
+    bundled client models. The existing `X-LLM-Proxy-Request-ID` remains the
+    sole public correlation value.
+  - Make `make live-test` print the validated proxy request id from the response
+    header on every passed or failed HTTP case while continuing to suppress the
+    tenant secret and response body. A transport failure with no response
+    reports no invented id.
+  - Keep the README command summary aligned with the current production target:
+    all five echo cases plus OpenAI, Anthropic, Meta, and Gemini long-completion
+    cases.
+    Document the phase and progress field meanings in the canonical provider
+    routing guidance without claiming billing accuracy or provider-side
+    execution time outside observed HTTP boundaries.
+  Deliverables:
+  - One request-scoped phase accumulator, centralized safe log event and field
+    constants, OpenAI polling and shared-continuation progress events, and a
+    terminal phase summary for every accepted proxy request.
+  - Request-id correlation in the production live harness plus updated README
+    and provider-routing documentation.
+  - No persistent schema change, public payload expansion, upstream identifier
+    disclosure, or content-bearing telemetry.
+  Validation:
+  - Drive real public proxy handlers against controlled upstream servers and
+    assert exact phase summaries for success, queue wait, configured rate-limit
+    delay, provider failure, caller cancellation, and proxy-budget expiry.
+  - Cover OpenAI `queued` and `in_progress` polling through completion and
+    provider-neutral output-limit continuation through multiple attempts.
+    Prove counts, normalized states, elapsed values, current bytes, accumulated
+    bytes, and terminal totals belong to the same request id.
+  - Exercise the production live-test script through its fake-curl boundary and
+    prove it reports validated response request ids without printing secrets or
+    bodies, and reports no fabricated id for a transport failure.
+  - Assert that prompts, messages, generated output, upstream response ids,
+    provider bodies, credentials, cookies, and tenant secrets are absent from
+    every new event and command output.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
+    the final run after the last code edit.
+  Resolution:
+  Added request-scoped monotonic phase and progress telemetry, correlated
+  validated request ids across the current nine-case live-test harness, and
+  documented the safe structured-log contract. Public-handler and fake-curl
+  coverage passed; the baseline and final 11-gate `make ci` runs passed with
+  100.0% Go statement coverage.
 - [x] [I205] (P2) Let's align the text inside the card to the left so it's on the same vertical line as the left of the title, let's align both the text of the card, such as goal etc to the left so it's visually aligned with the ttitle of the card.
   ![image](images/1785478561383_image.png)
   Resolved 2026-08-10:

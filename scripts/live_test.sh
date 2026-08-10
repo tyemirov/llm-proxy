@@ -132,6 +132,26 @@ has_expected_timeout_header() {
   tr -d '\r' <"${headers_path}" | grep -Eiq "^X-LLM-Proxy-Request-Timeout-Seconds:[[:space:]]*${request_timeout_seconds}[[:space:]]*$"
 }
 
+validated_response_request_id() {
+  local headers_path="$1"
+  [[ -f "${headers_path}" ]] || return 1
+  python3 -c '
+import re
+import sys
+
+header_path = sys.argv[1]
+with open(header_path, encoding="utf-8", errors="strict") as header_file:
+    values = [
+        line.split(":", 1)[1].strip()
+        for line in header_file
+        if line.lower().startswith("x-llm-proxy-request-id:")
+    ]
+if len(values) != 1 or re.fullmatch(r"[A-Z2-7]{26,}", values[0]) is None:
+    raise SystemExit(1)
+print(values[0], end="")
+' "${headers_path}"
+}
+
 run_live_case() {
   local case_identifier="$1"
   local provider_identifier="$2"
@@ -145,6 +165,7 @@ run_live_case() {
   local response_path="${TEMPORARY_DIRECTORY}/${case_identifier}.response"
   local http_status=""
   local response_bytes
+  local response_request_id=""
 
   write_curl_config "${provider_identifier}" "${model_identifier}" "${curl_config_path}"
   if ! http_status="$(
@@ -163,30 +184,40 @@ run_live_case() {
       --data-binary @-
   )"; then
     response_bytes="$(response_size "${response_path}")"
-    builtin printf 'live test failed: case=%s provider=%s transport_error response_bytes=%s\n' \
-      "${case_identifier}" "${provider_identifier}" "${response_bytes}" >&2
+    if response_request_id="$(validated_response_request_id "${headers_path}")"; then
+      builtin printf 'live test failed: case=%s provider=%s transport_error response_bytes=%s request_id=%s\n' \
+        "${case_identifier}" "${provider_identifier}" "${response_bytes}" "${response_request_id}" >&2
+    else
+      builtin printf 'live test failed: case=%s provider=%s transport_error response_bytes=%s\n' \
+        "${case_identifier}" "${provider_identifier}" "${response_bytes}" >&2
+    fi
     return 1
   fi
 
   response_bytes="$(response_size "${response_path}")"
-  if [[ "${http_status}" != '200' ]]; then
-    builtin printf 'live test failed: case=%s provider=%s status=%s response_bytes=%s\n' \
+  if ! response_request_id="$(validated_response_request_id "${headers_path}")"; then
+    builtin printf 'live test failed: case=%s provider=%s status=%s response_bytes=%s invalid_request_id_header\n' \
       "${case_identifier}" "${provider_identifier}" "${http_status}" "${response_bytes}" >&2
+    return 1
+  fi
+  if [[ "${http_status}" != '200' ]]; then
+    builtin printf 'live test failed: case=%s provider=%s status=%s response_bytes=%s request_id=%s\n' \
+      "${case_identifier}" "${provider_identifier}" "${http_status}" "${response_bytes}" "${response_request_id}" >&2
     return 1
   fi
   if ! has_expected_timeout_header "${headers_path}" "${request_timeout_seconds}"; then
-    builtin printf 'live test failed: case=%s provider=%s status=%s response_bytes=%s missing_timeout_header\n' \
-      "${case_identifier}" "${provider_identifier}" "${http_status}" "${response_bytes}" >&2
+    builtin printf 'live test failed: case=%s provider=%s status=%s response_bytes=%s request_id=%s missing_timeout_header\n' \
+      "${case_identifier}" "${provider_identifier}" "${http_status}" "${response_bytes}" "${response_request_id}" >&2
     return 1
   fi
   if [[ ! -f "${response_path}" ]] || ! grep -Fq "${expected_marker}" "${response_path}"; then
-    builtin printf 'live test failed: case=%s provider=%s status=%s response_bytes=%s missing_response_marker\n' \
-      "${case_identifier}" "${provider_identifier}" "${http_status}" "${response_bytes}" >&2
+    builtin printf 'live test failed: case=%s provider=%s status=%s response_bytes=%s request_id=%s missing_response_marker\n' \
+      "${case_identifier}" "${provider_identifier}" "${http_status}" "${response_bytes}" "${response_request_id}" >&2
     return 1
   fi
 
-  builtin printf 'live test passed: case=%s provider=%s status=%s response_bytes=%s\n' \
-    "${case_identifier}" "${provider_identifier}" "${http_status}" "${response_bytes}"
+  builtin printf 'live test passed: case=%s provider=%s status=%s response_bytes=%s request_id=%s\n' \
+    "${case_identifier}" "${provider_identifier}" "${http_status}" "${response_bytes}" "${response_request_id}"
 }
 
 if [[ "${1:-}" == '--help' || "${1:-}" == '-h' ]]; then
