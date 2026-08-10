@@ -64,16 +64,21 @@ func newLimitedHTTPDoer(next HTTPDoer, workerCount int, queueSize int, rateLimit
 }
 
 func (doer *limitedHTTPDoer) Do(httpRequest *http.Request) (*http.Response, error) {
+	admissionStartedAt := time.Now()
 	if admissionError := doer.admit(); admissionError != nil {
+		addRequestTelemetryPhase(httpRequest.Context(), requestTelemetryPhaseUpstreamAdmission, admissionStartedAt)
 		return nil, admissionError
 	}
+	addRequestTelemetryPhase(httpRequest.Context(), requestTelemetryPhaseUpstreamAdmission, admissionStartedAt)
 	if acquireError := doer.acquireUpstreamWorker(httpRequest); acquireError != nil {
 		doer.releaseAdmission()
 		return nil, acquireError
 	}
 
+	providerHTTPStartedAt := time.Now()
 	httpResponse, requestError := doer.next.Do(httpRequest)
 	if requestError != nil {
+		addRequestTelemetryPhase(httpRequest.Context(), requestTelemetryPhaseProviderHTTP, providerHTTPStartedAt)
 		doer.releaseActive()
 		doer.releaseAdmission()
 		return nil, requestError
@@ -81,6 +86,7 @@ func (doer *limitedHTTPDoer) Do(httpRequest *http.Request) (*http.Response, erro
 	httpResponse.Body = &releasingReadCloser{
 		body: httpResponse.Body,
 		release: func() {
+			addRequestTelemetryPhase(httpRequest.Context(), requestTelemetryPhaseProviderHTTP, providerHTTPStartedAt)
 			doer.releaseActive()
 			doer.releaseAdmission()
 		},
@@ -140,7 +146,9 @@ func (doer *limitedHTTPDoer) acquireRateLimitedWorker(httpRequest *http.Request,
 			wait.initial = waitDuration
 		}
 		rateWaitStartedAt := doer.clock.Now()
+		telemetryRateWaitStartedAt := time.Now()
 		waitError := doer.clock.Wait(httpRequest.Context(), waitDuration)
+		addRequestTelemetryPhase(httpRequest.Context(), requestTelemetryPhaseUpstreamRateLimit, telemetryRateWaitStartedAt)
 		wait.total += doer.clock.Now().Sub(rateWaitStartedAt)
 		if waitError != nil {
 			return wait, waitError
@@ -187,10 +195,13 @@ func (doer *limitedHTTPDoer) admit() error {
 }
 
 func (doer *limitedHTTPDoer) acquire(httpRequest *http.Request) error {
+	admissionStartedAt := time.Now()
 	select {
 	case doer.active <- struct{}{}:
+		addRequestTelemetryPhase(httpRequest.Context(), requestTelemetryPhaseUpstreamAdmission, admissionStartedAt)
 		return nil
 	case <-httpRequest.Context().Done():
+		addRequestTelemetryPhase(httpRequest.Context(), requestTelemetryPhaseUpstreamAdmission, admissionStartedAt)
 		return httpRequest.Context().Err()
 	}
 }

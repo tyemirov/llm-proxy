@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/tyemirov/llm-proxy/internal/utils"
 	"go.uber.org/zap"
@@ -53,6 +52,7 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 		generation, generationError := router.generateTextAttempt(requestContext, request, structuredLogger)
 		accumulatedText.WriteString(generation.text)
 		accumulatedUsage = mergeTokenUsage(accumulatedUsage, generation.usage)
+		recordContinuationProgress(requestContext, structuredLogger, generation, len([]byte(accumulatedText.String())), generationError)
 		if !errors.Is(generationError, errProviderOutputLimitReached) {
 			return textGenerationResult{
 				text:  strings.TrimSpace(accumulatedText.String()),
@@ -62,13 +62,11 @@ func (router *providerRouter) generateText(requestContext context.Context, reque
 
 		request.messages = completionContinuationMessages(originalMessages, accumulatedText.String())
 		request.maxTokens = continuationMaxTokens(request.maxTokens, request.model, generation.text)
-		select {
-		case <-time.After(responsePollInterval):
-		case <-requestContext.Done():
+		if waitError := waitForRequestTelemetryPhase(requestContext, responsePollInterval, requestTelemetryPhaseContinuationWait); waitError != nil {
 			return textGenerationResult{
 				text:  strings.TrimSpace(accumulatedText.String()),
 				usage: accumulatedUsage,
-			}, requestContext.Err()
+			}, waitError
 		}
 	}
 }

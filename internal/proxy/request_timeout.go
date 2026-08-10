@@ -17,8 +17,6 @@ import (
 const (
 	contextKeyRequestTimeoutState = "request_timeout_state"
 	logEventUpstreamRequestEnded  = "upstream request ended"
-	logFieldRequestTimeoutSeconds = "request_timeout_seconds"
-	logFieldOutcome               = "outcome"
 	requestOutcomeValidation      = "validation_failure"
 	requestOutcomeSuccess         = "success"
 	requestOutcomeProxyTimeout    = "proxy_timeout"
@@ -139,6 +137,7 @@ func requestTimeoutHandler(policy requestTimeoutPolicy, structuredLogger *zap.Su
 		_ = stopBodyClose()
 		cancelRequest()
 		if structuredLogger != nil {
+			emitRequestTelemetrySummary(ginContext.Request.Context(), structuredLogger, ginContext.Writer.Status(), state.outcome)
 			requestTenant := authenticatedTenantFromContext(ginContext)
 			structuredLogger.Infow(
 				logEventUpstreamRequestEnded,
@@ -196,11 +195,14 @@ func requestContextEnded(ginContext *gin.Context) bool {
 	if !errors.Is(requestCause, errRequestTimeoutBudgetExpired) {
 		state.outcome = requestOutcomeCallerCancelled
 		state.managedUsageOutcome = managedUsageOutcomeRequestTimeout
+		formattingStartedAt := time.Now()
 		ginContext.Status(statusClientClosedRequest)
+		addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseResponseFormatting, formattingStartedAt)
 		return true
 	}
 	state.outcome = requestOutcomeProxyTimeout
 	state.managedUsageOutcome = managedUsageOutcomeRequestTimeout
+	formattingStartedAt := time.Now()
 	ginContext.Data(
 		http.StatusGatewayTimeout,
 		mimeApplicationJSON,
@@ -210,6 +212,7 @@ func requestContextEnded(ginContext *gin.Context) bool {
 			state.budget.seconds,
 		)),
 	)
+	addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseResponseFormatting, formattingStartedAt)
 	return true
 }
 

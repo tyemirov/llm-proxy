@@ -82,15 +82,18 @@ func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIK
 	httpRequest, buildError := buildAuthorizedJSONRequest(parentContext, http.MethodPost, client.endpoints.GetResponsesURL(), openAIKey, bytes.NewReader(payloadBytes))
 	if buildError != nil {
 		structuredLogger.Errorw(logEventBuildHTTPRequest, constants.LogFieldError, buildError)
+		recordOpenAIProgress(parentContext, structuredLogger, telemetryProgressKindOpenAICreate, openAIResponseSnapshot{}, buildError)
 		return textGenerationResult{}, buildError
 	}
 
 	statusCode, responseBytes, _, latencyMillis, requestError := client.performResponsesRequest(httpRequest, structuredLogger, logEventOpenAIRequestError)
 	if requestError != nil {
+		recordOpenAIProgress(parentContext, structuredLogger, telemetryProgressKindOpenAICreate, openAIResponseSnapshot{}, requestError)
 		return textGenerationResult{}, requestError
 	}
 
 	responseSnapshot, snapshotError := newOpenAIResponseSnapshot(responseBytes)
+	recordOpenAIProgress(parentContext, structuredLogger, telemetryProgressKindOpenAICreate, responseSnapshot, snapshotError)
 
 	structuredLogger.Infow(
 		logEventOpenAIResponse,
@@ -183,7 +186,6 @@ func (client *OpenAIClient) resolveOpenAIResponse(parentContext context.Context,
 		if !errors.Is(pollError, errProviderOutputLimitReached) {
 			structuredLogger.Errorw(
 				logEventOpenAIPollError,
-				logFieldID, responseSnapshot.identifier,
 				constants.LogFieldError, pollError,
 			)
 		}
@@ -214,7 +216,6 @@ func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.
 		if synthErr != nil {
 			structuredLogger.Errorw(
 				logEventOpenAIContinueError,
-				logFieldID, responseSnapshot.identifier,
 				constants.LogFieldError, synthErr,
 			)
 			return textGenerationResult{}, openAIStageError(synthErr)
@@ -225,7 +226,6 @@ func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.
 			if !errors.Is(pollError, errProviderOutputLimitReached) {
 				structuredLogger.Errorw(
 					logEventOpenAIPollError,
-					logFieldID, continuedResponseID,
 					constants.LogFieldError, pollError,
 				)
 			}
@@ -282,8 +282,11 @@ func (client *OpenAIClient) startContinuationResponse(parentContext context.Cont
 
 	_, responseBytes, _, _, requestError := client.performResponsesRequest(request, structuredLogger, logEventOpenAIRequestError)
 	if requestError != nil {
+		recordOpenAIProgress(parentContext, structuredLogger, telemetryProgressKindOpenAICreate, openAIResponseSnapshot{}, requestError)
 		return constants.EmptyString, requestError
 	}
+	responseSnapshot, snapshotError := newOpenAIResponseSnapshot(responseBytes)
+	recordOpenAIProgress(parentContext, structuredLogger, telemetryProgressKindOpenAICreate, responseSnapshot, snapshotError)
 
 	var decodedResponse map[string]any
 	if json.Unmarshal(responseBytes, &decodedResponse) != nil {
@@ -300,6 +303,7 @@ func (client *OpenAIClient) startContinuationResponse(parentContext context.Cont
 func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context, openAIKey string, responseIdentifier string, latestUsage *tokenUsage, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	for {
 		responseSnapshot, responseComplete, fetchError := client.fetchResponseByID(parentContext, openAIKey, responseIdentifier, structuredLogger)
+		recordOpenAIProgress(parentContext, structuredLogger, telemetryProgressKindOpenAIPoll, responseSnapshot, fetchError)
 		if responseSnapshot.usage != nil {
 			latestUsage = responseSnapshot.usage
 		}
@@ -313,9 +317,7 @@ func (client *OpenAIClient) pollResponseUntilDone(parentContext context.Context,
 			responseSnapshot.usage = latestUsage
 			return client.resolveTerminalOpenAIResponse(parentContext, openAIKey, modelIdentifier, webSearchEnabled, maxTokens, reasoningEffort, responseSnapshot, structuredLogger)
 		}
-		select {
-		case <-time.After(responsePollInterval):
-		case <-parentContext.Done():
+		if waitError := waitForRequestTelemetryPhase(parentContext, responsePollInterval, requestTelemetryPhaseProviderPollWait); waitError != nil {
 			return textGenerationResult{usage: latestUsage}, parentContext.Err()
 		}
 	}

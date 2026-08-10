@@ -83,6 +83,10 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	if validationError != nil {
 		return nil, validationError
 	}
+	upstreamHTTPClient := newLimitedHTTPDoer(HTTPClient, configuration.WorkerCount, configuration.QueueSize, configuration.upstreamRateLimits, structuredLogger, systemUpstreamRateLimitClock{})
+	if structuredLogger == nil {
+		structuredLogger = zap.NewNop().Sugar()
+	}
 
 	if configuration.Endpoints == nil {
 		configuration.Endpoints = NewEndpointsForURLs(configuration.OpenAIBaseURL, configuration.OpenAITranscriptionsURL)
@@ -103,7 +107,6 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		router.Use(requestResponseLogger(structuredLogger))
 	}
 
-	upstreamHTTPClient := newLimitedHTTPDoer(HTTPClient, configuration.WorkerCount, configuration.QueueSize, configuration.upstreamRateLimits, structuredLogger, systemUpstreamRateLimitClock{})
 	openAIClient := NewOpenAIClient(upstreamHTTPClient, configuration.Endpoints)
 	chatClient := newOpenAICompatibleChatClient(upstreamHTTPClient)
 	geminiClient := newGeminiInteractionsClient(upstreamHTTPClient)
@@ -511,6 +514,7 @@ func requestReasoningEffortForResolvedTextRoute(provider providerDefinition, mod
 
 func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRouter, chatRequest chatRequestParameters, requestTenant tenant, usageEndpoint string, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger) {
 	requestStart := time.Now()
+	bindRequestTelemetryRoute(ginContext, chatRequest.provider.identifier.string(), chatRequest.model.string())
 	generation, requestError := upstreamProviders.generateText(ginContext.Request.Context(), chatRequest, structuredLogger)
 	if requestError != nil {
 		if requestContextEnded(ginContext) {
@@ -519,7 +523,9 @@ func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRoute
 		}
 		markRequestOutcome(ginContext, requestFailureOutcome(requestError), managedRequestFailureOutcome(requestError))
 		statusCode := statusCodeForError(requestError)
+		formattingStartedAt := time.Now()
 		writeProviderRequestErrorResponse(ginContext, chatRequest.provider.identifier.string(), requestError, structuredLogger)
+		addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseResponseFormatting, formattingStartedAt)
 		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), statusCode, generation.usage, requestStart)
 		return
 	}
@@ -531,15 +537,19 @@ func submitChatRequest(ginContext *gin.Context, upstreamProviders *providerRoute
 }
 
 func completeChatRequest(ginContext *gin.Context, chatRequest chatRequestParameters, generation textGenerationResult, requestTenant tenant, usageEndpoint string, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, requestStart time.Time) {
+	formattingStartedAt := time.Now()
 	mime := preferredMime(ginContext)
 	formattedBody, contentType := formatResponse(generation.text, mime, chatRequest, generation.usage)
+	addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseResponseFormatting, formattingStartedAt)
 	if requestContextEnded(ginContext) {
 		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), ginContext.Writer.Status(), generation.usage, requestStart)
 		return
 	}
 	markRequestOutcome(ginContext, requestOutcomeSuccess, managedUsageOutcomeSuccess)
+	formattingStartedAt = time.Now()
 	writeTokenUsageHeaders(ginContext.Writer.Header(), generation.usage)
 	ginContext.Data(http.StatusOK, contentType, []byte(formattedBody))
+	addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseResponseFormatting, formattingStartedAt)
 	recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpoint, chatRequest.provider.identifier.string(), chatRequest.model.string(), http.StatusOK, generation.usage, requestStart)
 }
 
@@ -614,6 +624,7 @@ func dictateHandler(upstreamProviders *providerRouter, providers *providerRegist
 			fileName:    fileName,
 			audioReader: contextReader{contextValue: ginContext.Request.Context(), reader: audioFile},
 		}
+		bindRequestTelemetryRoute(ginContext, providerDefinition.identifier.string(), modelIdentifier.string())
 		transcribedText, requestError := upstreamProviders.transcribeAudio(ginContext.Request.Context(), dictationRequest, structuredLogger)
 		if requestError != nil {
 			if requestContextEnded(ginContext) {
@@ -622,7 +633,9 @@ func dictateHandler(upstreamProviders *providerRouter, providers *providerRegist
 			}
 			markRequestOutcome(ginContext, requestFailureOutcome(requestError), managedRequestFailureOutcome(requestError))
 			statusCode := statusCodeForError(requestError)
+			formattingStartedAt := time.Now()
 			writeProviderRequestErrorResponse(ginContext, providerDefinition.identifier.string(), requestError, structuredLogger)
+			addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseResponseFormatting, formattingStartedAt)
 			recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, providerDefinition.identifier.string(), modelIdentifier.string(), statusCode, nil, requestStart)
 			return
 		}
@@ -636,14 +649,26 @@ func dictateHandler(upstreamProviders *providerRouter, providers *providerRegist
 }
 
 func completeDictationRequest(ginContext *gin.Context, transcribedText string, requestTenant tenant, providerDefinition providerDefinition, modelIdentifier modelID, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, requestStart time.Time) {
+	formattingStartedAt := time.Now()
 	responseBody, _ := json.Marshal(gin.H{keyText: transcribedText})
+	addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseResponseFormatting, formattingStartedAt)
 	if requestContextEnded(ginContext) {
 		recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, providerDefinition.identifier.string(), modelIdentifier.string(), ginContext.Writer.Status(), nil, requestStart)
 		return
 	}
 	markRequestOutcome(ginContext, requestOutcomeSuccess, managedUsageOutcomeSuccess)
+	formattingStartedAt = time.Now()
 	ginContext.Data(http.StatusOK, mimeApplicationJSON, responseBody)
+	addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseResponseFormatting, formattingStartedAt)
 	recordManagedUsage(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointDictation, providerDefinition.identifier.string(), modelIdentifier.string(), http.StatusOK, nil, requestStart)
+}
+
+func bindRequestTelemetryRoute(ginContext *gin.Context, providerIdentifier string, modelIdentifier string) {
+	requestTelemetryFromContext(ginContext.Request.Context()).bindRoute(
+		providerIdentifier,
+		modelIdentifier,
+		requestTimeoutStateFromContext(ginContext).budget.seconds,
+	)
 }
 
 func recordManagedUsage(managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, ginContext *gin.Context, requestTenant tenant, endpoint string, providerIdentifier string, modelIdentifier string, statusCode int, usage *tokenUsage, requestStart time.Time) {
@@ -651,6 +676,7 @@ func recordManagedUsage(managedTenants *managedTenantStore, structuredLogger *za
 		return
 	}
 	ginContext.Writer.Flush()
+	enqueueStartedAt := time.Now()
 	managedTenants.usageWriter.submit(requestTenant, managedUsageEvent{
 		endpoint:            endpoint,
 		providerIdentifier:  providerIdentifier,
@@ -660,6 +686,7 @@ func recordManagedUsage(managedTenants *managedTenantStore, structuredLogger *za
 		latencyMilliseconds: time.Since(requestStart).Milliseconds(),
 		usage:               usage,
 	}, structuredLogger)
+	addRequestTelemetryPhase(ginContext.Request.Context(), requestTelemetryPhaseManagedUsageEnqueue, enqueueStartedAt)
 }
 
 func recordManagedUsageValidationFailure(managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger, ginContext *gin.Context, requestTenant tenant, endpoint string, providerIdentifier string, modelIdentifier string, requestStart time.Time) {

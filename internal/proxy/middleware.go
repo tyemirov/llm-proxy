@@ -66,9 +66,14 @@ func requestResponseLogger(structuredLogger *zap.SugaredLogger) gin.HandlerFunc 
 
 func tenantAuthenticatedHandler(authenticator tenantAuthenticator, structuredLogger *zap.SugaredLogger, handler gin.HandlerFunc) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
+		telemetry := newRequestTelemetry(requestIDFromContext(ginContext), requestLogPath(ginContext.Request.URL))
+		ginContext.Request = ginContext.Request.WithContext(requestContextWithTelemetry(ginContext.Request.Context(), telemetry))
+		authenticationStartedAt := time.Now()
 		if !authenticateTenantRequest(ginContext, authenticator, structuredLogger) {
+			telemetry.addPhase(requestTelemetryPhaseAuthentication, time.Since(authenticationStartedAt))
 			return
 		}
+		telemetry.addPhase(requestTelemetryPhaseAuthentication, time.Since(authenticationStartedAt))
 		handler(ginContext)
 	}
 }

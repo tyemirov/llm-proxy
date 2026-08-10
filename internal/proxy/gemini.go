@@ -109,7 +109,7 @@ func (client *geminiInteractionsClient) generateText(parentContext context.Conte
 		if background && !utils.IsBlank(snapshot.identifier) {
 			cleanupError := client.releaseInteraction(parentContext, apiKey, baseURL, snapshot.identifier, snapshot.cleanupMode(), structuredLogger)
 			if cleanupError != nil {
-				client.logInteractionCleanupError(cleanupError, snapshot.identifier, structuredLogger)
+				client.logInteractionCleanupError(cleanupError, structuredLogger)
 			}
 		}
 		return textGenerationResult{usage: snapshot.usage}, createError
@@ -132,7 +132,7 @@ func (client *geminiInteractionsClient) generateText(parentContext context.Conte
 		if cleanupError == nil {
 			return
 		}
-		client.logInteractionCleanupError(cleanupError, interactionIdentifier, structuredLogger)
+		client.logInteractionCleanupError(cleanupError, structuredLogger)
 		if generationError == nil || errors.Is(generationError, errProviderOutputLimitReached) {
 			generation = textGenerationResult{usage: generation.usage}
 			generationError = cleanupError
@@ -140,9 +140,7 @@ func (client *geminiInteractionsClient) generateText(parentContext context.Conte
 	}()
 
 	for snapshot.isPending() {
-		select {
-		case <-time.After(responsePollInterval):
-		case <-parentContext.Done():
+		if waitError := waitForRequestTelemetryPhase(parentContext, responsePollInterval, requestTelemetryPhaseProviderPollWait); waitError != nil {
 			return textGenerationResult{usage: latestUsage}, parentContext.Err()
 		}
 
@@ -250,10 +248,9 @@ func (client *geminiInteractionsClient) performInteractionRequest(parentContext 
 	return responseBytes, nil
 }
 
-func (client *geminiInteractionsClient) logInteractionCleanupError(cleanupError error, interactionIdentifier string, structuredLogger *zap.SugaredLogger) {
+func (client *geminiInteractionsClient) logInteractionCleanupError(cleanupError error, structuredLogger *zap.SugaredLogger) {
 	structuredLogger.Errorw(
 		"Gemini interaction cleanup error",
-		logFieldID, interactionIdentifier,
 		constants.LogFieldError, cleanupError,
 	)
 }
