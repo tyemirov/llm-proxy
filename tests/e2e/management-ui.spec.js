@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -105,6 +105,7 @@ const routingDesktopConnectorLaneVarianceMaximum = 16;
 const routingDesktopProviderWidthMaximum = 220;
 const routingDesktopModelWidthMaximum = 220;
 const publicCapabilitiesPath = "/api/public/capabilities";
+const capabilityShutdownProbeTimeoutMilliseconds = 1_000;
 
 /**
  * @param {import("@playwright/test").Locator} routingTree
@@ -248,17 +249,21 @@ let renderedSiteRoot = "";
 test.beforeAll(async () => {
   renderedSiteTempRoot = await mkdtemp(path.join(os.tmpdir(), "llm-proxy-site-"));
   renderedSiteRoot = path.join(renderedSiteTempRoot, "rendered");
-  const capabilityPort = await availableLoopbackPort();
   const capabilityConfigPath = path.join(renderedSiteTempRoot, "capabilities.yml");
-  const packagedConfig = await readFile(path.join(repoRoot, "configs/config.yml"), "utf8");
-  const capabilityConfig = packagedConfig.replace("  port: 8080", `  port: ${capabilityPort}`);
-  if (capabilityConfig === packagedConfig) {
-    throw new Error("public_capability_test_port_source_missing");
+  const capabilityConfigResult = await executeFile(
+    "node",
+    ["scripts/create_public_capability_test_config.mjs", "configs/config.yml", capabilityConfigPath],
+    { cwd: repoRoot },
+  );
+  const capabilityPort = Number(capabilityConfigResult.stdout.trim());
+  if (!Number.isInteger(capabilityPort) || capabilityPort <= 0) {
+    throw new Error(`public_capability_test_port_invalid: ${capabilityConfigResult.stdout.trim()}`);
   }
-  await writeFile(capabilityConfigPath, capabilityConfig, "utf8");
+  const capabilityBinaryPath = path.join(renderedSiteTempRoot, "llm-proxy");
+  await executeFile("go", ["build", "-o", capabilityBinaryPath, "./cmd/cli"], { cwd: repoRoot });
   const capabilityServer = spawn(
-    "go",
-    ["run", "./cmd/cli", "--config", capabilityConfigPath, "--public-capabilities-only"],
+    capabilityBinaryPath,
+    ["--config", capabilityConfigPath, "--public-capabilities-only"],
     { cwd: repoRoot },
   );
   let capabilityServerOutput = "";
@@ -284,6 +289,7 @@ test.beforeAll(async () => {
     );
   } finally {
     await stopChildProcess(capabilityServer);
+    await assertPublicCapabilitiesStopped(capabilitiesURL);
   }
   await executeFile(
     "./scripts/stage-openapi-publication.sh",
@@ -302,27 +308,13 @@ test.beforeAll(async () => {
   baseURL = `http://127.0.0.1:${address.port}`;
 });
 
-async function availableLoopbackPort() {
-  const portServer = http.createServer();
-  await new Promise((resolve) => {
-    portServer.listen(0, "127.0.0.1", resolve);
-  });
-  const address = portServer.address();
-  if (!address || typeof address === "string") {
-    throw new Error("public_capability_test_port_missing");
-  }
-  await new Promise((resolve, reject) => {
-    portServer.close((closeError) => closeError ? reject(closeError) : resolve(undefined));
-  });
-  return address.port;
-}
-
 /**
  * @param {string} capabilitiesURL
  * @param {import("node:child_process").ChildProcessWithoutNullStreams} capabilityServer
  * @param {() => string} serverOutput
  */
 async function waitForPublicCapabilities(capabilitiesURL, capabilityServer, serverOutput) {
+  let lastRequestError = "public_capability_server_not_ready";
   for (let attempt = 0; attempt < 300; attempt += 1) {
     if (capabilityServer.exitCode !== null) {
       throw new Error(`public_capability_server_stopped: ${serverOutput()}`);
@@ -332,12 +324,13 @@ async function waitForPublicCapabilities(capabilitiesURL, capabilityServer, serv
       if (response.ok) {
         return;
       }
-    } catch {
-      // The backend is still compiling or binding its configured port.
+      lastRequestError = `status=${response.status}`;
+    } catch (requestError) {
+      lastRequestError = requestError instanceof Error ? requestError.message : String(requestError);
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`public_capability_server_timeout: ${serverOutput()}`);
+  throw new Error(`public_capability_server_timeout: ${lastRequestError}\n${serverOutput()}`);
 }
 
 /**
@@ -349,6 +342,23 @@ async function stopChildProcess(childProcess) {
   }
   childProcess.kill("SIGTERM");
   await new Promise((resolve) => childProcess.once("exit", resolve));
+}
+
+/**
+ * @param {string} capabilitiesURL
+ */
+async function assertPublicCapabilitiesStopped(capabilitiesURL) {
+  try {
+    await fetch(capabilitiesURL, {
+      signal: AbortSignal.timeout(capabilityShutdownProbeTimeoutMilliseconds),
+    });
+  } catch (requestError) {
+    if (requestError instanceof TypeError) {
+      return;
+    }
+    throw requestError;
+  }
+  throw new Error(`public_capability_server_listener_open: ${capabilitiesURL}`);
 }
 
 test.afterAll(async () => {
