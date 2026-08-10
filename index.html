@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LLM Proxy — Integrate once. Use the model that fits.</title>
+    <meta name="description" content="Integrate applications once through one authenticated API or official Go, Python, and CLI clients, then route across supported providers and models.">
+    <link rel="canonical" href="https://llm-proxy.mprlab.com/">
+    <meta property="og:title" content="LLM Proxy — Integrate once. Use the model that fits.">
+    <meta property="og:description" content="One stable integration for the supported providers and models your product needs, available through HTTP, Go, Python, and the command line.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://llm-proxy.mprlab.com/">
+    <meta name="twitter:card" content="summary">
+    <meta name="theme-color" content="#0f1114">
+    <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
+    <link rel="apple-touch-icon" href="/assets/llm-proxy/img/llm-proxy-icon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
+    <link rel="stylesheet" href="/assets/llm-proxy/landing.css">
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "LLM Proxy",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Web",
+        "url": "https://llm-proxy.mprlab.com/",
+        "description": "One authenticated integration for routing applications across supported AI providers and models through HTTP, Go, Python, or the command line.",
+        "featureList": [
+          "Canonical v2 messages API",
+          "Official Go, Python, and command-line clients",
+          "Multi-provider model routing",
+          "Image and audio message attachments on supported models",
+          "Audio dictation",
+          "Encrypted provider key management"
+        ]
+      }
+    </script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.3.0/dist/js-yaml.min.js"></script>
+    <script type="module" src="/assets/llm-proxy/js/ui/landingAuthRoute.js?v=20260808b113"></script>
+    <script src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"></script>
+    <script
+      id="mpr-ui-bundle"
+      type="application/json"
+      data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
+    ></script>
+    <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
+    <script type="module" src="/assets/llm-proxy/js/ui/routingTree.js?v=20260808i215b"></script>
+    <script type="module" src="/assets/llm-proxy/js/ui/capabilityCatalog.js?v=20260806i209"></script>
+    <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+
+    <!-- llm-proxy-public-header:start -->
+    <mpr-header
+      class="public-site-header"
+      data-config-url="https://llm-proxy-api.mprlab.com/config-ui.yaml"
+      brand-label="LLM Proxy"
+      brand-href="/"
+      logout-url="/"
+      settings="false"
+      sign-in-label="Log In"
+      data-llm-proxy-authenticated-redirect-url="/app/"
+      size="small"
+      sticky="true"
+      auth-transition='{"title":"Opening LLM Proxy","message":"Loading your app."}'
+      horizontal-links='{"alignment":"right","links":[{"label":"Capabilities","href":"/#capabilities"},{"label":"Models","href":"/#models"},{"label":"API","href":"/docs/"},{"label":"Resources","href":"/resources/"}]}'
+    >
+      <a slot="brand" class="public-site-brand" href="/" aria-label="LLM Proxy home">
+        <img src="/assets/llm-proxy/img/llm-proxy-icon.svg" alt="" width="24" height="24" aria-hidden="true">
+        <span>LLM Proxy</span>
+      </a>
+    </mpr-header>
+    <!-- llm-proxy-public-header:end -->
+
+    <main id="main-content">
+      <section class="hero landing-shell" aria-labelledby="hero-title">
+        <div class="hero__copy">
+          <p class="eyebrow"><span class="signal-dot" aria-hidden="true"></span> One integration. Many supported models.</p>
+          <h1 id="hero-title">Integrate once. Use the model that fits.</h1>
+          <p class="hero__lede">
+            Connect through one authenticated API—or start with the official Go, Python, and command-line clients. Then route canonical messages to any supported text provider and model without adding another provider SDK, credential flow, or request contract to your product.
+          </p>
+          <div class="hero__actions" aria-label="Get started">
+            <a class="button button--primary" href="#integrate">Start integrating <span aria-hidden="true">→</span></a>
+            <a class="button" href="#models">Explore supported models</a>
+          </div>
+          <ul class="hero__proof" aria-label="Key benefits">
+            <li><span aria-hidden="true">✓</span> Keep one canonical request contract as models change</li>
+            <li><span aria-hidden="true">✓</span> Start with HTTP, Go, Python, or the command line</li>
+            <li><span aria-hidden="true">✓</span> Keep upstream credentials out of client requests</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="routing-overview" class="section route-overview" aria-label="Product routing overview">
+        <div class="landing-shell route-overview__layout">
+          <section class="value-strip__grid" aria-label="Product summary">
+            <p><strong>One endpoint</strong><span>Route across native and compatible provider APIs.</span></p>
+            <p><strong>One credential</strong><span>Applications send a tenant secret, never provider keys.</span></p>
+            <p><strong>One contract</strong><span>Consistent request, error, usage, and timeout behavior.</span></p>
+          </section>
+
+          <routing-tree class="routing-tree" data-enhanced="false" aria-label="Interactive LLM routing map">
+  <header class="routing-tree__header">
+    <h2>One integration. Choose the exact route.</h2>
+    <span>12 providers · 53 text models</span>
+  </header>
+  <div class="routing-tree__map" data-route-map>
+    <canvas class="routing-tree__connectors" data-route-canvas aria-hidden="true"></canvas>
+    <div class="routing-tree__ingress" aria-label="One connection into LLM Proxy">
+      <article class="routing-tree__node routing-tree__node--product" data-route-product>
+        <strong>Your product</strong>
+        <span>HTTP · Go · Python · CLI</span>
+      </article>
+      <article class="routing-tree__node routing-tree__node--proxy" data-route-proxy>
+        <strong>LLM Proxy</strong>
+        <span>Authenticate · validate · route</span>
+      </article>
+    </div>
+    <section class="routing-tree__stage routing-tree__stage--providers" aria-labelledby="routing-tree-provider-title">
+      <h3 id="routing-tree-provider-title" class="routing-tree__stage-title">Choose a provider</h3>
+      <div class="routing-tree__branches routing-tree__provider-branches" role="group" aria-label="Supported providers">
+        <button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="anthropic" aria-controls="routing-tree-models-anthropic" aria-pressed="true" disabled>
+          <strong>Anthropic</strong><small>10 models</small>
+        </button>        <button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="dashscope" aria-controls="routing-tree-models-dashscope" aria-pressed="false" disabled>
+          <strong>DashScope</strong><small>1 models</small>
+        </button>        <button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="deepseek" aria-controls="routing-tree-models-deepseek" aria-pressed="false" disabled>
+          <strong>DeepSeek</strong><small>4 models</small>
+        </button>        <button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="gemini" aria-controls="routing-tree-models-gemini" aria-pressed="false" disabled>
+          <strong>Gemini</strong><small>7 models</small>
+        </button>        <button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="grok" aria-controls="routing-tree-models-grok" aria-pressed="false" disabled>
+          <strong>Grok</strong><small>10 models</small>
+        </button>        <button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="meta" aria-controls="routing-tree-models-meta" aria-pressed="false" disabled>
+          <strong>Meta</strong><small>1 models</small>
+        </button>        <button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="minimax" aria-controls="routing-tree-models-minimax" aria-pressed="false" disabled>
+          <strong>MiniMax</strong><small>1 models</small>
+        </button>        <button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="moonshot" aria-controls="routing-tree-models-moonshot" aria-pressed="false" disabled>
+          <strong>Moonshot</strong><small>4 models</small>
+        </button>        <button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="openai" aria-controls="routing-tree-models-openai" aria-pressed="false" disabled>
+          <strong>OpenAI</strong><small>11 models</small>
+        </button>        <button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="qwencloud" aria-controls="routing-tree-models-qwencloud" aria-pressed="false" disabled>
+          <strong>Qwen Cloud</strong><small>1 models</small>
+        </button>        <button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="siliconflow" aria-controls="routing-tree-models-siliconflow" aria-pressed="false" disabled>
+          <strong>SiliconFlow</strong><small>1 models</small>
+        </button>        <button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="zhipu" aria-controls="routing-tree-models-zhipu" aria-pressed="false" disabled>
+          <strong>Zhipu</strong><small>2 models</small>
+        </button>
+      </div>
+    </section>
+    <section class="routing-tree__stage routing-tree__stage--models" aria-labelledby="routing-tree-model-title">
+      <h3 id="routing-tree-model-title" class="routing-tree__stage-title">Choose an exact model and version</h3>
+      <section id="routing-tree-models-anthropic" class="routing-tree__model-group" data-route-model-group="anthropic" aria-label="Anthropic supported text models">
+        <p><strong>Anthropic</strong><span>10 supported text models</span></p>
+        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose a Anthropic model">
+          <button type="button" class="routing-tree__branch routing-tree__model" data-route-model="claude-fable-5" aria-pressed="false" disabled><code>claude-fable-5</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="claude-haiku-4-5" aria-pressed="false" disabled><code>claude-haiku-4-5</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="claude-haiku-4-5-20251001" aria-pressed="false" disabled><code>claude-haiku-4-5-20251001</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="claude-opus-4-1" aria-pressed="false" disabled><code>claude-opus-4-1</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="claude-opus-4-1-20250805" aria-pressed="false" disabled><code>claude-opus-4-1-20250805</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="claude-opus-4-8" aria-pressed="false" disabled><code>claude-opus-4-8</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="claude-sonnet-4-5" aria-pressed="false" disabled><code>claude-sonnet-4-5</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="claude-sonnet-4-5-20250929" aria-pressed="false" disabled><code>claude-sonnet-4-5-20250929</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="claude-sonnet-4-6" data-route-default-model="true" aria-pressed="true" disabled><code>claude-sonnet-4-6</code><small>Provider default</small></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="claude-sonnet-5" aria-pressed="false" disabled><code>claude-sonnet-5</code></button>
+        </div>
+      </section>      <section id="routing-tree-models-dashscope" class="routing-tree__model-group" data-route-model-group="dashscope" aria-label="DashScope supported text models" hidden>
+        <p><strong>DashScope</strong><span>1 supported text models</span></p>
+        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose a DashScope model">
+          <button type="button" class="routing-tree__branch routing-tree__model" data-route-model="qwen-plus" data-route-default-model="true" aria-pressed="false" disabled><code>qwen-plus</code><small>Provider default</small></button>
+        </div>
+      </section>      <section id="routing-tree-models-deepseek" class="routing-tree__model-group" data-route-model-group="deepseek" aria-label="DeepSeek supported text models" hidden>
+        <p><strong>DeepSeek</strong><span>4 supported text models</span></p>
+        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose a DeepSeek model">
+          <button type="button" class="routing-tree__branch routing-tree__model" data-route-model="deepseek-chat" aria-pressed="false" disabled><code>deepseek-chat</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="deepseek-reasoner" aria-pressed="false" disabled><code>deepseek-reasoner</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="deepseek-v4-flash" data-route-default-model="true" aria-pressed="false" disabled><code>deepseek-v4-flash</code><small>Provider default</small></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="deepseek-v4-pro" aria-pressed="false" disabled><code>deepseek-v4-pro</code></button>
+        </div>
+      </section>      <section id="routing-tree-models-gemini" class="routing-tree__model-group" data-route-model-group="gemini" aria-label="Gemini supported text models" hidden>
+        <p><strong>Gemini</strong><span>7 supported text models</span></p>
+        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose a Gemini model">
+          <button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gemini-2.5-flash" data-route-default-model="true" aria-pressed="false" disabled><code>gemini-2.5-flash</code><small>Provider default</small></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gemini-2.5-flash-lite" aria-pressed="false" disabled><code>gemini-2.5-flash-lite</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gemini-2.5-pro" aria-pressed="false" disabled><code>gemini-2.5-pro</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gemini-3-flash-preview" aria-pressed="false" disabled><code>gemini-3-flash-preview</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gemini-3.1-flash-lite" aria-pressed="false" disabled><code>gemini-3.1-flash-lite</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gemini-3.1-pro-preview" aria-pressed="false" disabled><code>gemini-3.1-pro-preview</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gemini-3.5-flash" aria-pressed="false" disabled><code>gemini-3.5-flash</code></button>
+        </div>
+      </section>      <section id="routing-tree-models-grok" class="routing-tree__model-group" data-route-model-group="grok" aria-label="Grok supported text models" hidden>
+        <p><strong>Grok</strong><span>10 supported text models</span></p>
+        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose a Grok model">
+          <button type="button" class="routing-tree__branch routing-tree__model" data-route-model="grok-4.20-0309-non-reasoning" aria-pressed="false" disabled><code>grok-4.20-0309-non-reasoning</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="grok-4.20-0309-reasoning" aria-pressed="false" disabled><code>grok-4.20-0309-reasoning</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="grok-4.3" data-route-default-model="true" aria-pressed="false" disabled><code>grok-4.3</code><small>Provider default</small></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="grok-4.3-latest" aria-pressed="false" disabled><code>grok-4.3-latest</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="grok-4.5" aria-pressed="false" disabled><code>grok-4.5</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="grok-build-0.1" aria-pressed="false" disabled><code>grok-build-0.1</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="grok-code-fast" aria-pressed="false" disabled><code>grok-code-fast</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="grok-code-fast-1" aria-pressed="false" disabled><code>grok-code-fast-1</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="grok-code-fast-1-0825" aria-pressed="false" disabled><code>grok-code-fast-1-0825</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="grok-latest" aria-pressed="false" disabled><code>grok-latest</code></button>
+        </div>
+      </section>      <section id="routing-tree-models-meta" class="routing-tree__model-group" data-route-model-group="meta" aria-label="Meta supported text models" hidden>
+        <p><strong>Meta</strong><span>1 supported text models</span></p>
+        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose a Meta model">
+          <button type="button" class="routing-tree__branch routing-tree__model" data-route-model="muse-spark-1.1" data-route-default-model="true" aria-pressed="false" disabled><code>muse-spark-1.1</code><small>Provider default</small></button>
+        </div>
+      </section>      <section id="routing-tree-models-minimax" class="routing-tree__model-group" data-route-model-group="minimax" aria-label="MiniMax supported text models" hidden>
+        <p><strong>MiniMax</strong><span>1 supported text models</span></p>
+        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose a MiniMax model">
+          <button type="button" class="routing-tree__branch routing-tree__model" data-route-model="MiniMax-M2.7" data-route-default-model="true" aria-pressed="false" disabled><code>MiniMax-M2.7</code><small>Provider default</small></button>
+        </div>
+      </section>      <section id="routing-tree-models-moonshot" class="routing-tree__model-group" data-route-model-group="moonshot" aria-label="Moonshot supported text models" hidden>
+        <p><strong>Moonshot</strong><span>4 supported text models</span></p>
+        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose a Moonshot model">
+          <button type="button" class="routing-tree__branch routing-tree__model" data-route-model="kimi-k2.6" data-route-default-model="true" aria-pressed="false" disabled><code>kimi-k2.6</code><small>Provider default</small></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="kimi-k2.7-code" aria-pressed="false" disabled><code>kimi-k2.7-code</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="kimi-k2.7-code-highspeed" aria-pressed="false" disabled><code>kimi-k2.7-code-highspeed</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="kimi-k3" aria-pressed="false" disabled><code>kimi-k3</code></button>
+        </div>
+      </section>      <section id="routing-tree-models-openai" class="routing-tree__model-group" data-route-model-group="openai" aria-label="OpenAI supported text models" hidden>
+        <p><strong>OpenAI</strong><span>11 supported text models</span></p>
+        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose a OpenAI model">
+          <button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gpt-4.1" data-route-default-model="true" aria-pressed="false" disabled><code>gpt-4.1</code><small>Provider default</small></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gpt-4o" aria-pressed="false" disabled><code>gpt-4o</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gpt-4o-mini" aria-pressed="false" disabled><code>gpt-4o-mini</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gpt-5" aria-pressed="false" disabled><code>gpt-5</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gpt-5-mini" aria-pressed="false" disabled><code>gpt-5-mini</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gpt-5.5" aria-pressed="false" disabled><code>gpt-5.5</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gpt-5.5-pro" aria-pressed="false" disabled><code>gpt-5.5-pro</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gpt-5.6" aria-pressed="false" disabled><code>gpt-5.6</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gpt-5.6-luna" aria-pressed="false" disabled><code>gpt-5.6-luna</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gpt-5.6-sol" aria-pressed="false" disabled><code>gpt-5.6-sol</code></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="gpt-5.6-terra" aria-pressed="false" disabled><code>gpt-5.6-terra</code></button>
+        </div>
+      </section>      <section id="routing-tree-models-qwencloud" class="routing-tree__model-group" data-route-model-group="qwencloud" aria-label="Qwen Cloud supported text models" hidden>
+        <p><strong>Qwen Cloud</strong><span>1 supported text models</span></p>
+        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose a Qwen Cloud model">
+          <button type="button" class="routing-tree__branch routing-tree__model" data-route-model="qwen3.8-max-preview" data-route-default-model="true" aria-pressed="false" disabled><code>qwen3.8-max-preview</code><small>Provider default</small></button>
+        </div>
+      </section>      <section id="routing-tree-models-siliconflow" class="routing-tree__model-group" data-route-model-group="siliconflow" aria-label="SiliconFlow supported text models" hidden>
+        <p><strong>SiliconFlow</strong><span>1 supported text models</span></p>
+        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose a SiliconFlow model">
+          <button type="button" class="routing-tree__branch routing-tree__model" data-route-model="deepseek-ai/DeepSeek-R1" data-route-default-model="true" aria-pressed="false" disabled><code>deepseek-ai/DeepSeek-R1</code><small>Provider default</small></button>
+        </div>
+      </section>      <section id="routing-tree-models-zhipu" class="routing-tree__model-group" data-route-model-group="zhipu" aria-label="Zhipu supported text models" hidden>
+        <p><strong>Zhipu</strong><span>2 supported text models</span></p>
+        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose a Zhipu model">
+          <button type="button" class="routing-tree__branch routing-tree__model" data-route-model="glm-5.1" data-route-default-model="true" aria-pressed="false" disabled><code>glm-5.1</code><small>Provider default</small></button><button type="button" class="routing-tree__branch routing-tree__model" data-route-model="glm-5.2" aria-pressed="false" disabled><code>glm-5.2</code></button>
+        </div>
+      </section>
+    </section>
+    <footer class="routing-tree__selection">
+      <span>Selected route:</span>
+      <output aria-live="polite"><code data-route-selected-provider>anthropic</code><i aria-hidden="true">/</i><code data-route-selected-model>claude-sonnet-4-6</code></output>
+    </footer>
+  </div>
+</routing-tree>
+        </div>
+      </section>
+
+      <section id="integrate" class="section section--raised" aria-labelledby="integrate-title">
+        <div class="landing-shell integration-layout">
+          <div class="integration-copy">
+            <p class="eyebrow">Integrate once</p>
+            <h2 id="integrate-title">Use the API directly or start with a client.</h2>
+            <p>Every integration surface targets the same canonical <code>POST /v2</code> messages contract. Provider selection changes the route, not the shape your application owns.</p>
+            <ol class="integration-steps">
+              <li><span>1</span><div><strong>Choose an integration</strong><p>Use ordinary HTTP or an official Go, Python, or command-line client.</p></div></li>
+              <li><span>2</span><div><strong>Authenticate once</strong><p>Give the application one client key while provider credentials remain behind the proxy.</p></div></li>
+              <li><span>3</span><div><strong>Select the model</strong><p>Use centrally managed defaults or choose a supported provider and model for one request.</p></div></li>
+            </ol>
+          </div>
+
+          <div class="integration-options" aria-label="Integration options">
+            <article>
+              <span class="integration-options__label">HTTP API</span>
+              <h3>Any language. No client dependency.</h3>
+              <p>Send canonical JSON over HTTPS and keep provider-specific wire formats out of application code.</p>
+              <a href="/docs/#operation-postV2Messages">Read the v2 reference <span aria-hidden="true">→</span></a>
+            </article>
+            <article>
+              <span class="integration-options__label">Official Go client</span>
+              <h3>Typed requests and media attachments.</h3>
+              <p>Construct validated messages, attach supported media, and preserve typed transport and HTTP failures.</p>
+              <a href="/resources/go-client-v2-only-llm-proxy/">Use the Go client <span aria-hidden="true">→</span></a>
+            </article>
+            <article>
+              <span class="integration-options__label">Official Python client</span>
+              <h3>A small synchronous client.</h3>
+              <p>Send the same canonical messages with explicit configuration and provider/model selection.</p>
+              <a href="/resources/python-client-v2-only-llm-proxy/">Use the Python client <span aria-hidden="true">→</span></a>
+            </article>
+            <article>
+              <span class="integration-options__label">Official CLI</span>
+              <h3>Pipe prompts from scripts and tools.</h3>
+              <p>Install the reusable command for stdin workflows, output limits, and request-level time budgets.</p>
+              <a href="/resources/installable-llm-proxy-cli/">Install the CLI <span aria-hidden="true">→</span></a>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section landing-shell audience-section" aria-labelledby="audience-title">
+        <header class="section-heading">
+          <div>
+            <p class="eyebrow">Built for the way teams ship</p>
+            <h2 id="audience-title">One boundary. Three ways to benefit.</h2>
+          </div>
+          <p>Start with the path closest to your work. Each path reaches the same API, client-key boundary, and supported model catalog.</p>
+        </header>
+
+        <div class="audience-grid">
+          <article class="audience-card">
+            <span>AI-assisted builders</span>
+            <h3>Turn generated code into a durable integration.</h3>
+            <p>Give coding agents and rapid prototypes one documented request shape instead of accumulating provider SDKs and raw keys.</p>
+            <a class="text-link" href="/resources/copyable-llm-curl-examples/">Start with a copyable request <span aria-hidden="true">→</span></a>
+          </article>
+          <article class="audience-card">
+            <span>Startups and product teams</span>
+            <h3>Test model fit without multiplying integrations.</h3>
+            <p>Compare supported providers behind the same product boundary, then change the route as quality, capability, or product needs evolve.</p>
+            <a class="text-link" href="/resources/openai-claude-gemini-one-endpoint/">Compare native providers <span aria-hidden="true">→</span></a>
+          </article>
+          <article class="audience-card">
+            <span>Platform and engineering teams</span>
+            <h3>Standardize access across applications.</h3>
+            <p>Centralize provider credentials, routing validation, usage signals, and client access while product teams keep one contract.</p>
+            <a class="text-link" href="/resources/internal-ai-gateway-for-product-tools/">Design an internal gateway <span aria-hidden="true">→</span></a>
+          </article>
+        </div>
+      </section>
+
+      <section id="capabilities" class="section section--raised" aria-labelledby="capabilities-title">
+        <div class="landing-shell">
+        <header class="section-heading">
+          <div>
+            <p class="eyebrow">What stays stable</p>
+            <h2 id="capabilities-title">Change providers without rebuilding the product boundary.</h2>
+          </div>
+          <p>
+            LLM Proxy owns provider-specific wire contracts, credential handling, route validation, and observable failure behavior so application code can stay focused on the job it performs.
+          </p>
+        </header>
+
+        <div class="capability-grid">
+          <article class="capability-card capability-card--primary">
+            <span class="capability-card__index">01</span>
+            <h3>Switch routes, not integrations.</h3>
+            <p>Select a supported provider and model per request, use managed defaults, or update an application-owned model profile without replacing the client contract.</p>
+            <ul class="tag-list" aria-label="Routing capabilities">
+              <li>Provider selection</li>
+              <li>Model defaults</li>
+              <li>Reasoning effort</li>
+            </ul>
+          </article>
+          <article class="capability-card">
+            <span class="capability-card__index">02</span>
+            <h3>Keep secrets server-side.</h3>
+            <p>Tenant-secret authentication gives each application access without exposing upstream provider keys. Client access can be generated and rotated independently, while managed provider keys are encrypted at rest and explicitly verified before use.</p>
+            <a class="text-link" href="/resources/server-side-provider-api-keys/">Explore the security boundary <span aria-hidden="true">→</span></a>
+          </article>
+          <article class="capability-card">
+            <span class="capability-card__index">03</span>
+            <h3>Keep one request and error contract.</h3>
+            <p>Send canonical messages while the proxy maps provider payloads, output limits, timeouts, usage metadata, and provider failures into one documented boundary.</p>
+            <a class="text-link" href="/docs/">Inspect the API contract <span aria-hidden="true">→</span></a>
+          </article>
+          <article class="capability-card">
+            <span class="capability-card__index">04</span>
+            <h3>Use capabilities the route declares.</h3>
+            <p>Send images or audio, request reasoning or constrained web search, or transcribe audio only when the selected model explicitly publishes that capability.</p>
+            <a class="text-link" href="#models">Inspect model capabilities <span aria-hidden="true">→</span></a>
+          </article>
+        </div>
+        </div>
+      </section>
+
+      <section id="models" class="section landing-shell catalog-section" aria-labelledby="models-title">
+        <header class="section-heading">
+          <div>
+            <p class="eyebrow">Current runtime contract</p>
+            <h2 id="models-title">Providers and model capabilities.</h2>
+          </div>
+          <p>
+            This matrix is generated from the same validated provider registry used by request routing. It describes proxy support—not whether a specific account has configured a provider key.
+          </p>
+        </header>
+
+        <capability-catalog data-enhanced="false">
+  <div class="catalog-summary" aria-label="Catalog summary">
+    <p><strong>12</strong><span>Providers</span></p>
+    <p><strong>58</strong><span>Models</span></p>
+    <p><strong>6</strong><span>Filterable capabilities</span></p>
+  </div>
+  <form class="catalog-toolbar" data-catalog-toolbar role="search" aria-label="Search and filter models">
+    <div class="catalog-search-row">
+      <input type="search" name="catalog-search" autocomplete="off" aria-label="Search all model characteristics" placeholder="Search provider, model, capability, contract, or limit" data-catalog-search>
+      <button type="button" class="catalog-search-submit" aria-label="Toggle capability filters" aria-controls="catalog-capability-filters" aria-expanded="false" data-catalog-search-submit>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.5 15.5 4.5 4.5"></path></svg>
+      </button>
+    </div>
+    <div id="catalog-capability-filters" class="catalog-filter-panel" data-catalog-filter-panel hidden>
+      <fieldset class="catalog-filter-group">
+        <legend>Capabilities <span>Match all selected</span></legend>
+        <div class="catalog-filters">
+          <label class="catalog-filter"><input type="checkbox" name="catalog-capability" value="text" data-catalog-capability><span>Text generation</span></label><label class="catalog-filter"><input type="checkbox" name="catalog-capability" value="dictation" data-catalog-capability><span>Dictation</span></label><label class="catalog-filter"><input type="checkbox" name="catalog-capability" value="image_input" data-catalog-capability><span>Image input</span></label><label class="catalog-filter"><input type="checkbox" name="catalog-capability" value="audio_input" data-catalog-capability><span>Audio message input</span></label><label class="catalog-filter"><input type="checkbox" name="catalog-capability" value="web_search" data-catalog-capability><span>Web search</span></label><label class="catalog-filter"><input type="checkbox" name="catalog-capability" value="reasoning" data-catalog-capability><span>Reasoning</span></label>
+        </div>
+      </fieldset>
+      <div class="catalog-toolbar__status">
+        <output aria-live="polite" data-catalog-result-count>58 models</output>
+        <button type="reset" data-catalog-reset>Reset</button>
+      </div>
+    </div>
+  </form>
+  <div class="catalog-table-wrap" tabindex="0" role="region" aria-label="Provider and model capability matrix">
+    <table class="catalog-table">
+      <caption>Current model capabilities generated from the validated LLM Proxy provider registry.</caption>
+      <thead>
+        <tr>
+          <th scope="col" aria-sort="ascending" data-catalog-sort-header="provider"><button type="button" class="catalog-sort-button" data-catalog-sort="provider" data-sort-label="Provider" disabled>Provider<span class="catalog-sort-indicator" aria-hidden="true"></span></button></th>
+          <th scope="col" data-catalog-sort-header="model"><button type="button" class="catalog-sort-button" data-catalog-sort="model" data-sort-label="Model" disabled>Model<span class="catalog-sort-indicator" aria-hidden="true"></span></button></th>
+          <th scope="col" data-catalog-sort-header="capabilities"><button type="button" class="catalog-sort-button" data-catalog-sort="capabilities" data-sort-label="Capabilities" disabled>Capabilities<span class="catalog-sort-indicator" aria-hidden="true"></span></button></th>
+        </tr>
+      </thead>
+      <tbody data-catalog-body>
+        <tr data-catalog-row data-provider="anthropic" data-model="claude-fable-5" data-capabilities="text" data-capability-count="1" data-catalog-search-text="anthropic Anthropic claude-fable-5 anthropic_messages 128000 128000 token output text Text generation">
+          <td class="catalog-provider"><strong>Anthropic</strong><code>anthropic</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>claude-fable-5</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>anthropic_messages</code><span>128000 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="anthropic" data-model="claude-haiku-4-5" data-capabilities="text" data-capability-count="1" data-catalog-search-text="anthropic Anthropic claude-haiku-4-5 anthropic_messages 64000 64000 token output text Text generation">
+          <td class="catalog-provider"><strong>Anthropic</strong><code>anthropic</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>claude-haiku-4-5</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>anthropic_messages</code><span>64000 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="anthropic" data-model="claude-haiku-4-5-20251001" data-capabilities="text" data-capability-count="1" data-catalog-search-text="anthropic Anthropic claude-haiku-4-5-20251001 anthropic_messages 64000 64000 token output text Text generation">
+          <td class="catalog-provider"><strong>Anthropic</strong><code>anthropic</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>claude-haiku-4-5-20251001</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>anthropic_messages</code><span>64000 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="anthropic" data-model="claude-opus-4-1" data-capabilities="text" data-capability-count="1" data-catalog-search-text="anthropic Anthropic claude-opus-4-1 anthropic_messages 32000 32000 token output text Text generation">
+          <td class="catalog-provider"><strong>Anthropic</strong><code>anthropic</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>claude-opus-4-1</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>anthropic_messages</code><span>32000 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="anthropic" data-model="claude-opus-4-1-20250805" data-capabilities="text" data-capability-count="1" data-catalog-search-text="anthropic Anthropic claude-opus-4-1-20250805 anthropic_messages 32000 32000 token output text Text generation">
+          <td class="catalog-provider"><strong>Anthropic</strong><code>anthropic</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>claude-opus-4-1-20250805</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>anthropic_messages</code><span>32000 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="anthropic" data-model="claude-opus-4-8" data-capabilities="text" data-capability-count="1" data-catalog-search-text="anthropic Anthropic claude-opus-4-8 anthropic_messages 128000 128000 token output text Text generation">
+          <td class="catalog-provider"><strong>Anthropic</strong><code>anthropic</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>claude-opus-4-8</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>anthropic_messages</code><span>128000 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="anthropic" data-model="claude-sonnet-4-5" data-capabilities="text" data-capability-count="1" data-catalog-search-text="anthropic Anthropic claude-sonnet-4-5 anthropic_messages 64000 64000 token output text Text generation">
+          <td class="catalog-provider"><strong>Anthropic</strong><code>anthropic</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>claude-sonnet-4-5</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>anthropic_messages</code><span>64000 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="anthropic" data-model="claude-sonnet-4-5-20250929" data-capabilities="text" data-capability-count="1" data-catalog-search-text="anthropic Anthropic claude-sonnet-4-5-20250929 anthropic_messages 64000 64000 token output text Text generation">
+          <td class="catalog-provider"><strong>Anthropic</strong><code>anthropic</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>claude-sonnet-4-5-20250929</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>anthropic_messages</code><span>64000 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="anthropic" data-model="claude-sonnet-4-6" data-capabilities="text" data-capability-count="1" data-catalog-search-text="anthropic Anthropic claude-sonnet-4-6 anthropic_messages 64000 64000 token output text Default for text This is the provider catalog default for text routing; account settings can select another model. text Text generation">
+          <td class="catalog-provider"><strong>Anthropic</strong><code>anthropic</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>claude-sonnet-4-6</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>anthropic_messages</code><span>64000 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="anthropic" data-model="claude-sonnet-5" data-capabilities="text" data-capability-count="1" data-catalog-search-text="anthropic Anthropic claude-sonnet-5 anthropic_messages 128000 128000 token output text Text generation">
+          <td class="catalog-provider"><strong>Anthropic</strong><code>anthropic</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>claude-sonnet-5</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>anthropic_messages</code><span>128000 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="dashscope" data-model="qwen-plus" data-capabilities="text" data-capability-count="1" data-catalog-search-text="dashscope DashScope qwen-plus openai_chat_completions 0 Provider-enforced output text Default for text This is the provider catalog default for text routing; account settings can select another model. text Text generation">
+          <td class="catalog-provider"><strong>DashScope</strong><code>dashscope</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>qwen-plus</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="deepseek" data-model="deepseek-chat" data-capabilities="text" data-capability-count="1" data-catalog-search-text="deepseek DeepSeek deepseek-chat openai_chat_completions 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>DeepSeek</strong><code>deepseek</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>deepseek-chat</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="deepseek" data-model="deepseek-reasoner" data-capabilities="text" data-capability-count="1" data-catalog-search-text="deepseek DeepSeek deepseek-reasoner openai_chat_completions 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>DeepSeek</strong><code>deepseek</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>deepseek-reasoner</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="deepseek" data-model="deepseek-v4-flash" data-capabilities="text" data-capability-count="1" data-catalog-search-text="deepseek DeepSeek deepseek-v4-flash openai_chat_completions 0 Provider-enforced output text Default for text This is the provider catalog default for text routing; account settings can select another model. text Text generation">
+          <td class="catalog-provider"><strong>DeepSeek</strong><code>deepseek</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>deepseek-v4-flash</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="deepseek" data-model="deepseek-v4-pro" data-capabilities="text" data-capability-count="1" data-catalog-search-text="deepseek DeepSeek deepseek-v4-pro openai_chat_completions 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>DeepSeek</strong><code>deepseek</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>deepseek-v4-pro</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="gemini" data-model="gemini-2.5-flash" data-capabilities="text audio_input image_input" data-capability-count="3" data-catalog-search-text="gemini Gemini gemini-2.5-flash gemini_interactions 65536 65536 token output text Default for text This is the provider catalog default for text routing; account settings can select another model. text audio_input image_input Text generation Image input Audio message input">
+          <td class="catalog-provider"><strong>Gemini</strong><code>gemini</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gemini-2.5-flash</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button><button type="button" class="capability-badge capability-badge--info" aria-label="Filter by Image input" data-catalog-capability-action="image_input" disabled>Image input</button><button type="button" class="capability-badge capability-badge--info" aria-label="Filter by Audio message input" data-catalog-capability-action="audio_input" disabled>Audio message input</button>
+          </div>
+          <div class="catalog-technical">
+            <code>gemini_interactions</code><span>65536 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="gemini" data-model="gemini-2.5-flash-lite" data-capabilities="text" data-capability-count="1" data-catalog-search-text="gemini Gemini gemini-2.5-flash-lite gemini_interactions 65536 65536 token output text Text generation">
+          <td class="catalog-provider"><strong>Gemini</strong><code>gemini</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gemini-2.5-flash-lite</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>gemini_interactions</code><span>65536 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="gemini" data-model="gemini-2.5-pro" data-capabilities="text" data-capability-count="1" data-catalog-search-text="gemini Gemini gemini-2.5-pro gemini_interactions 65536 65536 token output text Text generation">
+          <td class="catalog-provider"><strong>Gemini</strong><code>gemini</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gemini-2.5-pro</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>gemini_interactions</code><span>65536 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="gemini" data-model="gemini-3-flash-preview" data-capabilities="text" data-capability-count="1" data-catalog-search-text="gemini Gemini gemini-3-flash-preview gemini_interactions 65536 65536 token output text Text generation">
+          <td class="catalog-provider"><strong>Gemini</strong><code>gemini</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gemini-3-flash-preview</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>gemini_interactions</code><span>65536 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="gemini" data-model="gemini-3.1-flash-lite" data-capabilities="text" data-capability-count="1" data-catalog-search-text="gemini Gemini gemini-3.1-flash-lite gemini_interactions 65536 65536 token output text Text generation">
+          <td class="catalog-provider"><strong>Gemini</strong><code>gemini</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gemini-3.1-flash-lite</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>gemini_interactions</code><span>65536 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="gemini" data-model="gemini-3.1-pro-preview" data-capabilities="text" data-capability-count="1" data-catalog-search-text="gemini Gemini gemini-3.1-pro-preview gemini_interactions 65536 65536 token output text Text generation">
+          <td class="catalog-provider"><strong>Gemini</strong><code>gemini</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gemini-3.1-pro-preview</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>gemini_interactions</code><span>65536 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="gemini" data-model="gemini-3.5-flash" data-capabilities="text audio_input image_input" data-capability-count="3" data-catalog-search-text="gemini Gemini gemini-3.5-flash gemini_interactions 65536 65536 token output text audio_input image_input Text generation Image input Audio message input">
+          <td class="catalog-provider"><strong>Gemini</strong><code>gemini</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gemini-3.5-flash</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button><button type="button" class="capability-badge capability-badge--info" aria-label="Filter by Image input" data-catalog-capability-action="image_input" disabled>Image input</button><button type="button" class="capability-badge capability-badge--info" aria-label="Filter by Audio message input" data-catalog-capability-action="audio_input" disabled>Audio message input</button>
+          </div>
+          <div class="catalog-technical">
+            <code>gemini_interactions</code><span>65536 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="grok" data-model="grok-4.20-0309-non-reasoning" data-capabilities="text" data-capability-count="1" data-catalog-search-text="grok Grok grok-4.20-0309-non-reasoning openai_chat_completions 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>Grok</strong><code>grok</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>grok-4.20-0309-non-reasoning</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="grok" data-model="grok-4.20-0309-reasoning" data-capabilities="text" data-capability-count="1" data-catalog-search-text="grok Grok grok-4.20-0309-reasoning openai_chat_completions 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>Grok</strong><code>grok</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>grok-4.20-0309-reasoning</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="grok" data-model="grok-4.3" data-capabilities="text" data-capability-count="1" data-catalog-search-text="grok Grok grok-4.3 openai_chat_completions 0 Provider-enforced output text Default for text This is the provider catalog default for text routing; account settings can select another model. text Text generation">
+          <td class="catalog-provider"><strong>Grok</strong><code>grok</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>grok-4.3</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="grok" data-model="grok-4.3-latest" data-capabilities="text" data-capability-count="1" data-catalog-search-text="grok Grok grok-4.3-latest openai_chat_completions 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>Grok</strong><code>grok</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>grok-4.3-latest</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="grok" data-model="grok-4.5" data-capabilities="text" data-capability-count="1" data-catalog-search-text="grok Grok grok-4.5 openai_chat_completions 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>Grok</strong><code>grok</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>grok-4.5</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="grok" data-model="grok-build-0.1" data-capabilities="text" data-capability-count="1" data-catalog-search-text="grok Grok grok-build-0.1 openai_chat_completions 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>Grok</strong><code>grok</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>grok-build-0.1</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="grok" data-model="grok-code-fast" data-capabilities="text" data-capability-count="1" data-catalog-search-text="grok Grok grok-code-fast openai_chat_completions 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>Grok</strong><code>grok</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>grok-code-fast</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="grok" data-model="grok-code-fast-1" data-capabilities="text" data-capability-count="1" data-catalog-search-text="grok Grok grok-code-fast-1 openai_chat_completions 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>Grok</strong><code>grok</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>grok-code-fast-1</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="grok" data-model="grok-code-fast-1-0825" data-capabilities="text" data-capability-count="1" data-catalog-search-text="grok Grok grok-code-fast-1-0825 openai_chat_completions 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>Grok</strong><code>grok</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>grok-code-fast-1-0825</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="grok" data-model="grok-latest" data-capabilities="text" data-capability-count="1" data-catalog-search-text="grok Grok grok-latest openai_chat_completions 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>Grok</strong><code>grok</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>grok-latest</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="grok" data-model="xai-stt" data-capabilities="dictation" data-capability-count="1" data-catalog-search-text="grok Grok xai-stt  0  dictation Default for dictation This is the provider catalog default for dictation routing; account settings can select another model. dictation Dictation">
+          <td class="catalog-provider"><strong>Grok</strong><code>grok</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>xai-stt</code><span class="catalog-model__default" title="This is the provider catalog default for dictation routing; account settings can select another model.">Default for dictation</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--info" aria-label="Filter by Dictation" data-catalog-capability-action="dictation" disabled>Dictation</button>
+          </div>
+          <div class="catalog-technical">
+            
+          </div></td>
+        </tr><tr data-catalog-row data-provider="meta" data-model="muse-spark-1.1" data-capabilities="text" data-capability-count="1" data-catalog-search-text="meta Meta muse-spark-1.1 openai_chat_completions 0 Provider-enforced output text Default for text This is the provider catalog default for text routing; account settings can select another model. text Text generation">
+          <td class="catalog-provider"><strong>Meta</strong><code>meta</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>muse-spark-1.1</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="minimax" data-model="MiniMax-M2.7" data-capabilities="text" data-capability-count="1" data-catalog-search-text="minimax MiniMax MiniMax-M2.7 openai_chat_completions 2048 2048 token output text Default for text This is the provider catalog default for text routing; account settings can select another model. text Text generation">
+          <td class="catalog-provider"><strong>MiniMax</strong><code>minimax</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>MiniMax-M2.7</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>2048 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="moonshot" data-model="kimi-k2.6" data-capabilities="text" data-capability-count="1" data-catalog-search-text="moonshot Moonshot kimi-k2.6 openai_chat_completions 0 Provider-enforced output text Default for text This is the provider catalog default for text routing; account settings can select another model. text Text generation">
+          <td class="catalog-provider"><strong>Moonshot</strong><code>moonshot</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>kimi-k2.6</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="moonshot" data-model="kimi-k2.7-code" data-capabilities="text" data-capability-count="1" data-catalog-search-text="moonshot Moonshot kimi-k2.7-code openai_chat_completions 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>Moonshot</strong><code>moonshot</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>kimi-k2.7-code</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="moonshot" data-model="kimi-k2.7-code-highspeed" data-capabilities="text" data-capability-count="1" data-catalog-search-text="moonshot Moonshot kimi-k2.7-code-highspeed openai_chat_completions 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>Moonshot</strong><code>moonshot</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>kimi-k2.7-code-highspeed</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="moonshot" data-model="kimi-k3" data-capabilities="text" data-capability-count="1" data-catalog-search-text="moonshot Moonshot kimi-k3 openai_chat_completions 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>Moonshot</strong><code>moonshot</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>kimi-k3</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="openai" data-model="gpt-4.1" data-capabilities="text web_search" data-capability-count="2" data-catalog-search-text="openai OpenAI gpt-4.1 openai_responses 0 Provider-enforced output text Default for text This is the provider catalog default for text routing; account settings can select another model. text web_search Text generation Web search">
+          <td class="catalog-provider"><strong>OpenAI</strong><code>openai</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gpt-4.1</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Web search" data-catalog-capability-action="web_search" disabled>Web search</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_responses</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="openai" data-model="gpt-4o" data-capabilities="text web_search" data-capability-count="2" data-catalog-search-text="openai OpenAI gpt-4o openai_responses 0 Provider-enforced output text web_search Text generation Web search">
+          <td class="catalog-provider"><strong>OpenAI</strong><code>openai</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gpt-4o</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Web search" data-catalog-capability-action="web_search" disabled>Web search</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_responses</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="openai" data-model="gpt-4o-mini" data-capabilities="text" data-capability-count="1" data-catalog-search-text="openai OpenAI gpt-4o-mini openai_responses 0 Provider-enforced output text Text generation">
+          <td class="catalog-provider"><strong>OpenAI</strong><code>openai</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gpt-4o-mini</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_responses</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="openai" data-model="gpt-4o-mini-transcribe" data-capabilities="dictation" data-capability-count="1" data-catalog-search-text="openai OpenAI gpt-4o-mini-transcribe  0  dictation Default for dictation This is the provider catalog default for dictation routing; account settings can select another model. dictation Dictation">
+          <td class="catalog-provider"><strong>OpenAI</strong><code>openai</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gpt-4o-mini-transcribe</code><span class="catalog-model__default" title="This is the provider catalog default for dictation routing; account settings can select another model.">Default for dictation</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--info" aria-label="Filter by Dictation" data-catalog-capability-action="dictation" disabled>Dictation</button>
+          </div>
+          <div class="catalog-technical">
+            
+          </div></td>
+        </tr><tr data-catalog-row data-provider="openai" data-model="gpt-4o-transcribe" data-capabilities="dictation" data-capability-count="1" data-catalog-search-text="openai OpenAI gpt-4o-transcribe  0  dictation Dictation">
+          <td class="catalog-provider"><strong>OpenAI</strong><code>openai</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gpt-4o-transcribe</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--info" aria-label="Filter by Dictation" data-catalog-capability-action="dictation" disabled>Dictation</button>
+          </div>
+          <div class="catalog-technical">
+            
+          </div></td>
+        </tr><tr data-catalog-row data-provider="openai" data-model="gpt-5" data-capabilities="text web_search reasoning" data-capability-count="3" data-catalog-search-text="openai OpenAI gpt-5 openai_responses 0 Provider-enforced output text web_search reasoning minimal low medium high Text generation Web search Reasoning">
+          <td class="catalog-provider"><strong>OpenAI</strong><code>openai</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gpt-5</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Web search" data-catalog-capability-action="web_search" disabled>Web search</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Reasoning" data-catalog-capability-action="reasoning" disabled>Reasoning</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_responses</code><span>Reasoning: minimal, low, medium, high</span><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="openai" data-model="gpt-5-mini" data-capabilities="text reasoning" data-capability-count="2" data-catalog-search-text="openai OpenAI gpt-5-mini openai_responses 0 Provider-enforced output text reasoning minimal low medium high Text generation Reasoning">
+          <td class="catalog-provider"><strong>OpenAI</strong><code>openai</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gpt-5-mini</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Reasoning" data-catalog-capability-action="reasoning" disabled>Reasoning</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_responses</code><span>Reasoning: minimal, low, medium, high</span><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="openai" data-model="gpt-5.5" data-capabilities="text web_search reasoning" data-capability-count="3" data-catalog-search-text="openai OpenAI gpt-5.5 openai_responses 0 Provider-enforced output text web_search reasoning none low medium high xhigh Text generation Web search Reasoning">
+          <td class="catalog-provider"><strong>OpenAI</strong><code>openai</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gpt-5.5</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Web search" data-catalog-capability-action="web_search" disabled>Web search</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Reasoning" data-catalog-capability-action="reasoning" disabled>Reasoning</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_responses</code><span>Reasoning: none, low, medium, high, xhigh</span><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="openai" data-model="gpt-5.5-pro" data-capabilities="text web_search reasoning" data-capability-count="3" data-catalog-search-text="openai OpenAI gpt-5.5-pro openai_responses 0 Provider-enforced output text web_search reasoning medium high xhigh Text generation Web search Reasoning">
+          <td class="catalog-provider"><strong>OpenAI</strong><code>openai</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gpt-5.5-pro</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Web search" data-catalog-capability-action="web_search" disabled>Web search</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Reasoning" data-catalog-capability-action="reasoning" disabled>Reasoning</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_responses</code><span>Reasoning: medium, high, xhigh</span><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="openai" data-model="gpt-5.6" data-capabilities="text web_search reasoning" data-capability-count="3" data-catalog-search-text="openai OpenAI gpt-5.6 openai_responses 0 Provider-enforced output text web_search reasoning none low medium high xhigh max Text generation Web search Reasoning">
+          <td class="catalog-provider"><strong>OpenAI</strong><code>openai</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gpt-5.6</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Web search" data-catalog-capability-action="web_search" disabled>Web search</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Reasoning" data-catalog-capability-action="reasoning" disabled>Reasoning</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_responses</code><span>Reasoning: none, low, medium, high, xhigh, max</span><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="openai" data-model="gpt-5.6-luna" data-capabilities="text web_search reasoning" data-capability-count="3" data-catalog-search-text="openai OpenAI gpt-5.6-luna openai_responses 0 Provider-enforced output text web_search reasoning none low medium high xhigh max Text generation Web search Reasoning">
+          <td class="catalog-provider"><strong>OpenAI</strong><code>openai</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gpt-5.6-luna</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Web search" data-catalog-capability-action="web_search" disabled>Web search</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Reasoning" data-catalog-capability-action="reasoning" disabled>Reasoning</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_responses</code><span>Reasoning: none, low, medium, high, xhigh, max</span><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="openai" data-model="gpt-5.6-sol" data-capabilities="text web_search reasoning" data-capability-count="3" data-catalog-search-text="openai OpenAI gpt-5.6-sol openai_responses 0 Provider-enforced output text web_search reasoning none low medium high xhigh max Text generation Web search Reasoning">
+          <td class="catalog-provider"><strong>OpenAI</strong><code>openai</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gpt-5.6-sol</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Web search" data-catalog-capability-action="web_search" disabled>Web search</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Reasoning" data-catalog-capability-action="reasoning" disabled>Reasoning</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_responses</code><span>Reasoning: none, low, medium, high, xhigh, max</span><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="openai" data-model="gpt-5.6-terra" data-capabilities="text web_search reasoning" data-capability-count="3" data-catalog-search-text="openai OpenAI gpt-5.6-terra openai_responses 0 Provider-enforced output text web_search reasoning none low medium high xhigh max Text generation Web search Reasoning">
+          <td class="catalog-provider"><strong>OpenAI</strong><code>openai</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>gpt-5.6-terra</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Web search" data-catalog-capability-action="web_search" disabled>Web search</button><button type="button" class="capability-badge capability-badge--success" aria-label="Filter by Reasoning" data-catalog-capability-action="reasoning" disabled>Reasoning</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_responses</code><span>Reasoning: none, low, medium, high, xhigh, max</span><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="qwencloud" data-model="qwen3.8-max-preview" data-capabilities="text" data-capability-count="1" data-catalog-search-text="qwencloud Qwen Cloud qwen3.8-max-preview openai_chat_completions 0 Provider-enforced output text Default for text This is the provider catalog default for text routing; account settings can select another model. text Text generation">
+          <td class="catalog-provider"><strong>Qwen Cloud</strong><code>qwencloud</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>qwen3.8-max-preview</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="siliconflow" data-model="FunAudioLLM/SenseVoiceSmall" data-capabilities="dictation" data-capability-count="1" data-catalog-search-text="siliconflow SiliconFlow FunAudioLLM/SenseVoiceSmall  0  dictation Default for dictation This is the provider catalog default for dictation routing; account settings can select another model. dictation Dictation">
+          <td class="catalog-provider"><strong>SiliconFlow</strong><code>siliconflow</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>FunAudioLLM/SenseVoiceSmall</code><span class="catalog-model__default" title="This is the provider catalog default for dictation routing; account settings can select another model.">Default for dictation</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--info" aria-label="Filter by Dictation" data-catalog-capability-action="dictation" disabled>Dictation</button>
+          </div>
+          <div class="catalog-technical">
+            
+          </div></td>
+        </tr><tr data-catalog-row data-provider="siliconflow" data-model="deepseek-ai/DeepSeek-R1" data-capabilities="text" data-capability-count="1" data-catalog-search-text="siliconflow SiliconFlow deepseek-ai/DeepSeek-R1 openai_chat_completions 0 Provider-enforced output text Default for text This is the provider catalog default for text routing; account settings can select another model. text Text generation">
+          <td class="catalog-provider"><strong>SiliconFlow</strong><code>siliconflow</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>deepseek-ai/DeepSeek-R1</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="zhipu" data-model="glm-5.1" data-capabilities="text" data-capability-count="1" data-catalog-search-text="zhipu Zhipu glm-5.1 openai_chat_completions 0 Provider-enforced output text Default for text This is the provider catalog default for text routing; account settings can select another model. text Text generation">
+          <td class="catalog-provider"><strong>Zhipu</strong><code>zhipu</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>glm-5.1</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>Provider-enforced output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="zhipu" data-model="glm-5.2" data-capabilities="text" data-capability-count="1" data-catalog-search-text="zhipu Zhipu glm-5.2 openai_chat_completions 131072 131072 token output text Text generation">
+          <td class="catalog-provider"><strong>Zhipu</strong><code>zhipu</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>glm-5.2</code></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--primary" aria-label="Filter by Text generation" data-catalog-capability-action="text" disabled>Text generation</button>
+          </div>
+          <div class="catalog-technical">
+            <code>openai_chat_completions</code><span>131072 token output</span>
+          </div></td>
+        </tr><tr data-catalog-row data-provider="zhipu" data-model="glm-asr-2512" data-capabilities="dictation" data-capability-count="1" data-catalog-search-text="zhipu Zhipu glm-asr-2512  0  dictation Default for dictation This is the provider catalog default for dictation routing; account settings can select another model. dictation Dictation">
+          <td class="catalog-provider"><strong>Zhipu</strong><code>zhipu</code></td>
+          <td class="catalog-model"><span class="catalog-model__content"><code data-catalog-model-id>glm-asr-2512</code><span class="catalog-model__default" title="This is the provider catalog default for dictation routing; account settings can select another model.">Default for dictation</span></span></td>
+          <td><div class="catalog-capabilities">
+            <button type="button" class="capability-badge capability-badge--info" aria-label="Filter by Dictation" data-catalog-capability-action="dictation" disabled>Dictation</button>
+          </div>
+          <div class="catalog-technical">
+            
+          </div></td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="catalog-empty" data-catalog-empty hidden>No models match the selected filters.</p>
+  </div>
+</capability-catalog>
+<div class="catalog-limits" aria-label="Proxy request limits">
+  <p><strong>4 MiB</strong>Maximum JSON request body</p>
+  <p><strong>25 MiB</strong>Maximum input audio</p>
+  <p><strong>3600 seconds</strong>Maximum request work budget</p>
+</div>
+      </section>
+
+      <section class="section section--raised support-contract" aria-labelledby="support-contract-title">
+        <div class="landing-shell support-contract__layout">
+          <div>
+            <p class="eyebrow">Current support contract</p>
+            <h2 id="support-contract-title">The catalog is the source of truth.</h2>
+          </div>
+          <div class="support-contract__content">
+            <p>The public matrix is generated from the same validated provider registry used by request routing. It states exactly which providers, models, and capabilities the current proxy release supports.</p>
+            <ul>
+              <li>Provider and model routes are explicit, validated runtime contracts.</li>
+              <li>Unsupported models and capabilities fail before provider dispatch.</li>
+              <li>The canonical client contract stays stable while provider adapters own upstream API differences.</li>
+              <li>Provider lifecycle, model-onboarding, and hosted uptime commitments are outside the current catalog contract pending an approved support and SLA policy.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="final-cta landing-shell" aria-labelledby="cta-title">
+        <div>
+          <p class="eyebrow">One integration, ongoing choice</p>
+          <h2 id="cta-title">Start once. Keep choosing the model that fits.</h2>
+          <p>Choose HTTP, Go, Python, or the command line, then use the current model catalog to select the route your product needs.</p>
+        </div>
+        <div class="final-cta__actions">
+          <a class="button button--primary" href="#integrate">Choose an integration <span aria-hidden="true">→</span></a>
+          <a class="button" href="/resources/">Read implementation guides</a>
+        </div>
+      </section>
+    </main>
+
+    <!-- llm-proxy-public-footer:start -->
+    <mpr-footer
+      class="public-site-footer"
+      size="small"
+      sticky="true"
+      wrapper-class="public-site-footer-layout"
+      privacy-link-label="Privacy"
+      privacy-link-href="/privacy/"
+      theme-switcher="square"
+      horizontal-links='{"alignment":"left","links":[{"label":"Terms","href":"/terms/"},{"label":"Resources","href":"/resources/"},{"label":"GitHub","href":"https://github.com/tyemirov/llm-proxy"}]}'
+      links-collection='{"style":"drop-up","text":"Built by Marco Polo Research Lab","links":[{"label":"Marco Polo Research Lab","url":"https://mprlab.com"},{"label":"Gravity Notes","url":"https://gravity.mprlab.com"},{"label":"LoopAware","url":"https://loopaware.mprlab.com"},{"label":"Allergy Wheel","url":"https://allergy.mprlab.com"},{"label":"Social Threader","url":"https://threader.mprlab.com"},{"label":"RSVP","url":"https://rsvp.mprlab.com"},{"label":"Countdown Calendar","url":"https://countdown.mprlab.com"},{"label":"LLM Crossword","url":"https://llm-crossword.mprlab.com"},{"label":"Prompt Bubbles","url":"https://prompts.mprlab.com"},{"label":"Wallpapers","url":"https://wallpapers.mprlab.com"}]}'
+    >
+      <footer class="public-site-footer-fallback" role="contentinfo">
+        <nav class="public-site-footer-fallback__nav" aria-label="Footer">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/resources/">Resources</a>
+          <a href="https://github.com/tyemirov/llm-proxy">GitHub</a>
+        </nav>
+        <details class="public-site-footer-fallback__projects">
+          <summary>Built by Marco Polo Research Lab</summary>
+          <ul>
+            <li><a href="https://mprlab.com">Marco Polo Research Lab</a></li>
+            <li><a href="https://gravity.mprlab.com">Gravity Notes</a></li>
+            <li><a href="https://loopaware.mprlab.com">LoopAware</a></li>
+            <li><a href="https://allergy.mprlab.com">Allergy Wheel</a></li>
+            <li><a href="https://threader.mprlab.com">Social Threader</a></li>
+            <li><a href="https://rsvp.mprlab.com">RSVP</a></li>
+            <li><a href="https://countdown.mprlab.com">Countdown Calendar</a></li>
+            <li><a href="https://llm-crossword.mprlab.com">LLM Crossword</a></li>
+            <li><a href="https://prompts.mprlab.com">Prompt Bubbles</a></li>
+            <li><a href="https://wallpapers.mprlab.com">Wallpapers</a></li>
+          </ul>
+        </details>
+      </footer>
+    </mpr-footer>
+    <!-- llm-proxy-public-footer:end -->
+  </body>
+</html>
