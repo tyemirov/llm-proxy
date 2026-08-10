@@ -97,6 +97,39 @@ issue titles discoverable without making the active tracker noisy.
 
 ### Complete entries archived 2026-08-10
 
+- [x] [B129] (P2) Correct I045 cancellation and managed response-flush telemetry.
+  Goal:
+  Make I045 progress events and phase totals agree with the request outcome.
+  Evidence:
+  - OpenAI progress mapped `context.Canceled` and `context.DeadlineExceeded` to
+    `completion_signal=failure`. The terminal summary mapped these errors to a
+    canceled or timed-out request outcome.
+  - Managed usage flushed the response before the response-formatting timer and
+    the managed-usage timer. A slow flush appeared only in total request time.
+  Requirements:
+  - Map OpenAI context cancellation and deadline errors to
+    `completion_signal=canceled` before the generic failure case.
+  - Measure a managed response flush as response formatting. Start the
+    managed-usage enqueue phase after the flush finishes.
+  - Preserve all request budgets, provider lifecycles, public payloads, and
+    managed usage data.
+  Validation:
+  - Drive the public handler through canceled OpenAI create and poll requests.
+    Prove each progress event uses `completion_signal=canceled`.
+  - Use a managed public request with a delayed response flush. Prove the delay
+    enters `response_formatting_ms` and not `managed_usage_enqueue_ms`.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolution:
+  - OpenAI transport cancellation and deadline errors now emit the canceled
+    completion signal for create and poll progress events, consistent with the
+    continuation event and terminal request outcome.
+  - Managed response flushing now contributes to response formatting before
+    managed usage enqueue timing begins. Public-handler coverage delays the
+    flush and verifies both phase totals.
+  - The required pre-change and final `make ci` runs passed all 11 gates with
+    100.0% Go statement coverage. The final run completed in 118 seconds.
+
 - [x] [B097] (P1) Return typed sanitized failures from the official Go client.
   Goal:
   Let server-side callers classify authentication, rate-limit, proxy
