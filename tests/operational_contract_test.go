@@ -1200,7 +1200,7 @@ response_marker="LLM_PROXY_LIVE_ECHO_OK"
 if [[ "${request_body}" == *LLM_PROXY_LIVE_COMPLEX_OK* ]]; then
   response_marker="LLM_PROXY_LIVE_COMPLEX_OK"
 fi
-builtin printf 'HTTP/1.1 200 OK\r\nX-LLM-Proxy-Request-Timeout-Seconds: %s\r\n\r\n' "${request_timeout_seconds}" >"${headers_path}"
+builtin printf 'HTTP/1.1 200 OK\r\nX-LLM-Proxy-Request-Timeout-Seconds: %s\r\nX-LLM-Proxy-Request-ID: AAAAAAAAAAAAAAAAAAAAAAAAAA\r\n\r\n' "${request_timeout_seconds}" >"${headers_path}"
 builtin printf '%s' "${response_marker}" >"${response_path}"
 builtin printf '%s' '200'
 `, 0o755)
@@ -1217,6 +1217,9 @@ builtin printf '%s' '200'
 	}
 	if !strings.Contains(output, "live test passed: total_cases=9") {
 		testingInstance.Fatalf("production live-test did not report all cases: %s", output)
+	}
+	if strings.Count(output, "request_id=AAAAAAAAAAAAAAAAAAAAAAAAAA") != 9 {
+		testingInstance.Fatalf("production live-test did not report one validated request id per case: %s", output)
 	}
 	for _, expectedCase := range []string{
 		"case=openai-background-polling provider=openai status=200",
@@ -1313,6 +1316,43 @@ func TestOperationalProductionLiveTestRequiresDefaultTenantSecret(testingInstanc
 	}
 	if !strings.Contains(string(output), "LLM_PROXY_SECRET must contain the Default-tenant client secret") {
 		testingInstance.Fatalf("missing-secret error omitted the Default-tenant contract: %s", output)
+	}
+}
+
+func TestOperationalProductionLiveTestDoesNotInventRequestIDForTransportFailure(testingInstance *testing.T) {
+	repositoryRoot := operationalRepositoryRoot(testingInstance)
+	fixtureRoot := testingInstance.TempDir()
+	for _, relativePath := range []string{
+		"Makefile",
+		filepath.Join(operationalScriptsDirectory, "live_test.sh"),
+	} {
+		copyOperationalFile(testingInstance, filepath.Join(repositoryRoot, relativePath), filepath.Join(fixtureRoot, relativePath))
+	}
+
+	toolDirectory := filepath.Join(fixtureRoot, "tools")
+	writeOperationalFile(testingInstance, filepath.Join(toolDirectory, "curl"), `#!/usr/bin/env bash
+exit 7
+`, 0o755)
+	defaultTenantSecret := "transport-failure-tenant-secret"
+	command := exec.Command("make", "live-test")
+	command.Dir = fixtureRoot
+	command.Env = append(
+		os.Environ(),
+		"PATH="+toolDirectory+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"LLM_PROXY_SECRET="+defaultTenantSecret,
+	)
+	output, commandError := command.CombinedOutput()
+	if commandError == nil {
+		testingInstance.Fatalf("make live-test accepted transport failures: %s", output)
+	}
+	outputText := string(output)
+	if strings.Count(outputText, "transport_error") != 9 || !strings.Contains(outputText, "failed_cases=9 total_cases=9") {
+		testingInstance.Fatalf("make live-test did not report the complete transport-failure matrix: %s", outputText)
+	}
+	for _, forbiddenValue := range []string{"request_id=", defaultTenantSecret, "LLM_PROXY_LIVE_ECHO_OK", "LLM_PROXY_LIVE_COMPLEX_OK"} {
+		if strings.Contains(outputText, forbiddenValue) {
+			testingInstance.Fatalf("make live-test transport failure exposed or invented %q: %s", forbiddenValue, outputText)
+		}
 	}
 }
 
