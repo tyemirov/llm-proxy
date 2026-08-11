@@ -69,7 +69,7 @@ func TestManagementProviderKeyVerificationUsesEveryCanonicalTransportBeforePersi
 		{provider: proxy.ProviderNameGemini, model: proxy.ModelNameGemini25Flash, transport: verificationTransportGemini},
 		{provider: proxy.ProviderNameAnthropic, model: proxy.ModelNameClaudeSonnet46, transport: verificationTransportAnthropic},
 		{provider: proxy.ProviderNameMeta, model: proxy.ModelNameMuseSpark11, transport: verificationTransportChat, tokenLimitField: "max_completion_tokens"},
-		{provider: proxy.ProviderNameGrok, model: proxy.ModelNameGrok43, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
+		{provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok43, transport: verificationTransportChat, tokenLimitField: "max_tokens"},
 	}
 
 	for _, transportCase := range transportCases {
@@ -505,7 +505,7 @@ func providerKeyVerificationConfiguration(upstreamURL string) proxy.Configuratio
 		GeminiBaseURL:      upstreamURL,
 		AnthropicBaseURL:   upstreamURL,
 		MetaBaseURL:        upstreamURL,
-		GrokBaseURL:        upstreamURL,
+		XAIBaseURL:         upstreamURL,
 	}
 }
 

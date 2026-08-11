@@ -25,7 +25,6 @@ const (
 	providerAliasKimi   = "kimi"
 	providerAliasGLM    = "glm"
 	providerAliasClaude = "claude"
-	providerAliasXAI    = "xai"
 )
 
 var (
@@ -46,11 +45,11 @@ var (
 )
 
 type fileConfiguration struct {
-	Server     serverConfiguration       `mapstructure:"server"`
-	Management managementConfiguration   `mapstructure:"management"`
-	Tenants    []tenantConfiguration     `mapstructure:"tenants"`
-	Providers  providersConfiguration    `mapstructure:"providers"`
-	Catalog    modelCatalogConfiguration `mapstructure:"catalog"`
+	Server     serverConfiguration     `mapstructure:"server"`
+	Management managementConfiguration `mapstructure:"management"`
+	Tenants    []tenantConfiguration   `mapstructure:"tenants"`
+	Providers  providersConfiguration  `mapstructure:"providers"`
+	Catalog    proxy.ModelCatalog      `mapstructure:"catalog"`
 }
 
 type serverConfiguration struct {
@@ -120,7 +119,7 @@ type providersConfiguration struct {
 	Gemini      providerConfiguration             `mapstructure:"gemini"`
 	Anthropic   providerConfiguration             `mapstructure:"anthropic"`
 	Meta        providerConfiguration             `mapstructure:"meta"`
-	Grok        transcribingProviderConfiguration `mapstructure:"grok"`
+	XAI         transcribingProviderConfiguration `mapstructure:"xai"`
 }
 
 type providerConfiguration struct {
@@ -132,59 +131,6 @@ type transcribingProviderConfiguration struct {
 	APIKey            string `mapstructure:"api_key"`
 	BaseURL           string `mapstructure:"base_url"`
 	TranscriptionsURL string `mapstructure:"transcriptions_url"`
-}
-
-type modelCatalogConfiguration struct {
-	Providers  []catalogProviderConfiguration  `mapstructure:"providers"`
-	Publishers []modelPublisherConfiguration   `mapstructure:"publishers"`
-	Families   []modelFamilyConfiguration      `mapstructure:"families"`
-	Models     []exactModelConfiguration       `mapstructure:"models"`
-	Offerings  []providerOfferingConfiguration `mapstructure:"offerings"`
-}
-
-type catalogProviderConfiguration struct {
-	ID    string `mapstructure:"id"`
-	Label string `mapstructure:"label"`
-}
-
-type modelPublisherConfiguration struct {
-	ID    string `mapstructure:"id"`
-	Label string `mapstructure:"label"`
-}
-
-type modelFamilyConfiguration struct {
-	ID        string `mapstructure:"id"`
-	Publisher string `mapstructure:"publisher"`
-	Label     string `mapstructure:"label"`
-}
-
-type exactModelConfiguration struct {
-	ID          string   `mapstructure:"id"`
-	Publisher   string   `mapstructure:"publisher"`
-	Family      string   `mapstructure:"family"`
-	Version     string   `mapstructure:"version"`
-	Operations  []string `mapstructure:"operations"`
-	MediaInputs []string `mapstructure:"media_inputs"`
-}
-
-type providerOfferingConfiguration struct {
-	Provider           string                           `mapstructure:"provider"`
-	Model              string                           `mapstructure:"model"`
-	ProviderModel      string                           `mapstructure:"provider_model"`
-	Operations         []string                         `mapstructure:"operations"`
-	DefaultOperations  []string                         `mapstructure:"default_operations"`
-	WireContract       string                           `mapstructure:"wire_contract"`
-	ExecutionLifecycle string                           `mapstructure:"execution_lifecycle"`
-	RequestProfile     string                           `mapstructure:"request_profile"`
-	WebSearch          bool                             `mapstructure:"web_search"`
-	OutputTokenLimit   int                              `mapstructure:"output_token_limit"`
-	ReasoningEffort    *reasoningEffortCapabilityConfig `mapstructure:"reasoning_effort"`
-	MediaInputs        []string                         `mapstructure:"media_inputs"`
-}
-
-type reasoningEffortCapabilityConfig struct {
-	Adapter string   `mapstructure:"adapter"`
-	Efforts []string `mapstructure:"efforts"`
 }
 
 type providerAPIKeyRequirement struct {
@@ -341,7 +287,7 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		GeminiKey:                    configuration.Providers.Gemini.APIKey,
 		AnthropicKey:                 configuration.Providers.Anthropic.APIKey,
 		MetaKey:                      configuration.Providers.Meta.APIKey,
-		GrokKey:                      configuration.Providers.Grok.APIKey,
+		XAIKey:                       configuration.Providers.XAI.APIKey,
 		OpenAIBaseURL:                configuration.Providers.OpenAI.BaseURL,
 		OpenAITranscriptionsURL:      configuration.Providers.OpenAI.TranscriptionsURL,
 		DeepSeekBaseURL:              configuration.Providers.DeepSeek.BaseURL,
@@ -355,8 +301,8 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		GeminiBaseURL:                configuration.Providers.Gemini.BaseURL,
 		AnthropicBaseURL:             configuration.Providers.Anthropic.BaseURL,
 		MetaBaseURL:                  configuration.Providers.Meta.BaseURL,
-		GrokBaseURL:                  configuration.Providers.Grok.BaseURL,
-		GrokTranscriptionsURL:        configuration.Providers.Grok.TranscriptionsURL,
+		XAIBaseURL:                   configuration.Providers.XAI.BaseURL,
+		XAITranscriptionsURL:         configuration.Providers.XAI.TranscriptionsURL,
 		Port:                         configuration.Server.Port,
 		LogLevel:                     configuration.Server.LogLevel,
 		WorkerCount:                  configuration.Server.Workers,
@@ -366,7 +312,7 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		MaxPromptBytes:               configuration.Server.MaxPromptBytes,
 		MaxInputAudioBytes:           configuration.Server.MaxInputAudioBytes,
 		UpstreamRateLimits:           proxyUpstreamRateLimitConfigurations(configuration.Server.UpstreamRateLimits),
-		ModelCatalog:                 configuration.Catalog.proxyCatalog(),
+		ModelCatalog:                 configuration.Catalog,
 	})
 }
 
@@ -417,39 +363,6 @@ func managementProxyConfiguration(configuration managementConfiguration, usageQu
 	}
 }
 
-func (configuration modelCatalogConfiguration) proxyCatalog() proxy.ModelCatalog {
-	providers := make([]proxy.CatalogProvider, 0, len(configuration.Providers))
-	for _, provider := range configuration.Providers {
-		providers = append(providers, proxy.CatalogProvider{ID: provider.ID, Label: provider.Label})
-	}
-	publishers := make([]proxy.ModelPublisher, 0, len(configuration.Publishers))
-	for _, publisher := range configuration.Publishers {
-		publishers = append(publishers, proxy.ModelPublisher{ID: publisher.ID, Label: publisher.Label})
-	}
-	families := make([]proxy.ModelFamily, 0, len(configuration.Families))
-	for _, family := range configuration.Families {
-		families = append(families, proxy.ModelFamily{ID: family.ID, Publisher: family.Publisher, Label: family.Label})
-	}
-	models := make([]proxy.ExactModel, 0, len(configuration.Models))
-	for _, model := range configuration.Models {
-		models = append(models, proxy.ExactModel{
-			ID: model.ID, Publisher: model.Publisher, Family: model.Family, Version: model.Version,
-			Operations: append([]string(nil), model.Operations...), MediaInputs: append([]string(nil), model.MediaInputs...),
-		})
-	}
-	offerings := make([]proxy.ProviderOffering, 0, len(configuration.Offerings))
-	for _, offering := range configuration.Offerings {
-		offerings = append(offerings, proxy.ProviderOffering{
-			Provider: offering.Provider, Model: offering.Model, ProviderModel: offering.ProviderModel,
-			Operations: append([]string(nil), offering.Operations...), DefaultOperations: append([]string(nil), offering.DefaultOperations...),
-			WireContract: offering.WireContract, ExecutionLifecycle: offering.ExecutionLifecycle, RequestProfile: offering.RequestProfile,
-			WebSearch: offering.WebSearch, OutputTokenLimit: offering.OutputTokenLimit,
-			ReasoningEffort: proxyReasoningEffortCapability(offering.ReasoningEffort), MediaInputs: append([]string(nil), offering.MediaInputs...),
-		})
-	}
-	return proxy.ModelCatalog{Providers: providers, Publishers: publishers, Families: families, Models: models, Offerings: offerings}
-}
-
 func (configuration fileConfiguration) validateCompleteConfiguration() error {
 	if providerValidationError := configuration.Providers.validateCompleteProviderConfiguration(); providerValidationError != nil {
 		return providerValidationError
@@ -458,16 +371,6 @@ func (configuration fileConfiguration) validateCompleteConfiguration() error {
 		return nil
 	}
 	return configuration.validateTenantDefaultProviderCredentials()
-}
-
-func proxyReasoningEffortCapability(configuration *reasoningEffortCapabilityConfig) *proxy.ReasoningEffortCapability {
-	if configuration == nil {
-		return nil
-	}
-	return &proxy.ReasoningEffortCapability{
-		Adapter: configuration.Adapter,
-		Efforts: append([]string(nil), configuration.Efforts...),
-	}
 }
 
 func (configuration providersConfiguration) validateCompleteProviderConfiguration() error {
@@ -486,7 +389,7 @@ func (configuration providersConfiguration) validateCompleteProviderConfiguratio
 		{providerName: proxy.ProviderNameGemini, fieldName: "providers.gemini.base_url", baseURL: configuration.Gemini.BaseURL},
 		{providerName: proxy.ProviderNameAnthropic, fieldName: "providers.anthropic.base_url", baseURL: configuration.Anthropic.BaseURL},
 		{providerName: proxy.ProviderNameMeta, fieldName: "providers.meta.base_url", baseURL: configuration.Meta.BaseURL},
-		{providerName: proxy.ProviderNameGrok, fieldName: "providers.grok.base_url", baseURL: configuration.Grok.BaseURL},
+		{providerName: proxy.ProviderNameXAI, fieldName: "providers.xai.base_url", baseURL: configuration.XAI.BaseURL},
 	}
 	for _, requiredBaseURL := range requiredBaseURLs {
 		if strings.TrimSpace(requiredBaseURL.baseURL) == constants.EmptyString {
@@ -502,7 +405,7 @@ func (configuration providersConfiguration) validateCompleteProviderConfiguratio
 		{providerName: proxy.ProviderNameOpenAI, fieldName: "providers.openai.transcriptions_url", transcriptionsURL: configuration.OpenAI.TranscriptionsURL},
 		{providerName: proxy.ProviderNameSiliconFlow, fieldName: "providers.siliconflow.transcriptions_url", transcriptionsURL: configuration.SiliconFlow.TranscriptionsURL},
 		{providerName: proxy.ProviderNameZhipu, fieldName: "providers.zhipu.transcriptions_url", transcriptionsURL: configuration.Zhipu.TranscriptionsURL},
-		{providerName: proxy.ProviderNameGrok, fieldName: "providers.grok.transcriptions_url", transcriptionsURL: configuration.Grok.TranscriptionsURL},
+		{providerName: proxy.ProviderNameXAI, fieldName: "providers.xai.transcriptions_url", transcriptionsURL: configuration.XAI.TranscriptionsURL},
 	}
 	for _, requiredTranscriptionsURL := range requiredTranscriptionsURLs {
 		if strings.TrimSpace(requiredTranscriptionsURL.transcriptionsURL) == constants.EmptyString {
@@ -538,7 +441,7 @@ func (configuration providersConfiguration) dictationAPIKeyRequirement(rawProvid
 		normalizedProvider = proxy.ProviderNameOpenAI
 	}
 	switch normalizedProvider {
-	case proxy.ProviderNameOpenAI, proxy.ProviderNameSiliconFlow, proxy.ProviderNameZhipu, providerAliasGLM, proxy.ProviderNameGrok, providerAliasXAI:
+	case proxy.ProviderNameOpenAI, proxy.ProviderNameSiliconFlow, proxy.ProviderNameZhipu, providerAliasGLM, proxy.ProviderNameXAI:
 		return configuration.apiKeyRequirement(normalizedProvider)
 	default:
 		return providerAPIKeyRequirement{}, false
@@ -567,8 +470,8 @@ func (configuration providersConfiguration) apiKeyRequirement(normalizedProvider
 		return providerAPIKeyRequirement{providerName: proxy.ProviderNameAnthropic, fieldName: "providers.anthropic.api_key", apiKey: configuration.Anthropic.APIKey}, true
 	case proxy.ProviderNameMeta:
 		return providerAPIKeyRequirement{providerName: proxy.ProviderNameMeta, fieldName: "providers.meta.api_key", apiKey: configuration.Meta.APIKey}, true
-	case proxy.ProviderNameGrok, providerAliasXAI:
-		return providerAPIKeyRequirement{providerName: proxy.ProviderNameGrok, fieldName: "providers.grok.api_key", apiKey: configuration.Grok.APIKey}, true
+	case proxy.ProviderNameXAI:
+		return providerAPIKeyRequirement{providerName: proxy.ProviderNameXAI, fieldName: "providers.xai.api_key", apiKey: configuration.XAI.APIKey}, true
 	default:
 		return providerAPIKeyRequirement{}, false
 	}

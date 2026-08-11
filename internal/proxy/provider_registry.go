@@ -136,9 +136,9 @@ func configuredProviderDefinitions(configuration Configuration) map[providerID]p
 			identifier: providerID(ProviderNameMeta), textAPIKey: configuration.MetaKey, textBaseURL: configuration.MetaBaseURL,
 			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
 		},
-		providerID(ProviderNameGrok): {
-			identifier: providerID(ProviderNameGrok), aliases: []string{providerAliasXAI}, textAPIKey: configuration.GrokKey, textBaseURL: configuration.GrokBaseURL,
-			transcriptionAPIKey: configuration.GrokKey, transcriptionsURL: configuration.GrokTranscriptionsURL, transcriptionModelField: constants.EmptyString,
+		providerID(ProviderNameXAI): {
+			identifier: providerID(ProviderNameXAI), textAPIKey: configuration.XAIKey, textBaseURL: configuration.XAIBaseURL,
+			transcriptionAPIKey: configuration.XAIKey, transcriptionsURL: configuration.XAITranscriptionsURL, transcriptionModelField: constants.EmptyString,
 			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
 		},
 	}
@@ -156,7 +156,7 @@ func configuredProviderAPIKeys(configuration Configuration) map[providerID]strin
 	configuredProviderAPIKey(configuration.GeminiKey, ProviderNameGemini, providerAPIKeys)
 	configuredProviderAPIKey(configuration.AnthropicKey, ProviderNameAnthropic, providerAPIKeys)
 	configuredProviderAPIKey(configuration.MetaKey, ProviderNameMeta, providerAPIKeys)
-	configuredProviderAPIKey(configuration.GrokKey, ProviderNameGrok, providerAPIKeys)
+	configuredProviderAPIKey(configuration.XAIKey, ProviderNameXAI, providerAPIKeys)
 	return providerAPIKeys
 }
 

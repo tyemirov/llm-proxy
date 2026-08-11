@@ -45,9 +45,9 @@ func TestRootCommandRunsConfiguredProxyFromConfigFile(t *testing.T) {
 	providerValues.AnthropicBaseURL = "https://anthropic.example"
 	providerValues.MetaAPIKey = ""
 	providerValues.MetaBaseURL = "https://meta.example/v1"
-	providerValues.GrokAPIKey = ""
-	providerValues.GrokBaseURL = "https://grok.example"
-	providerValues.GrokTranscriptionsURL = "https://grok.example/stt"
+	providerValues.XAIAPIKey = ""
+	providerValues.XAIBaseURL = "https://xai.example"
+	providerValues.XAITranscriptionsURL = "https://xai.example/stt"
 	configPath := writeTestConfig(t, tempDir, `
 server:
   port: 18080
@@ -192,14 +192,14 @@ P411_MANAGEMENT_PROVIDER_KEY_ENCRYPTION_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlh
 	if capturedConfiguration.ZhipuTranscriptionsURL != "https://zhipu.example/audio/transcriptions" {
 		t.Fatalf("zhipuTranscriptionsURL=%q", capturedConfiguration.ZhipuTranscriptionsURL)
 	}
-	if capturedConfiguration.GrokKey != "" {
-		t.Fatalf("grokKey=%q", capturedConfiguration.GrokKey)
+	if capturedConfiguration.XAIKey != "" {
+		t.Fatalf("grokKey=%q", capturedConfiguration.XAIKey)
 	}
-	if capturedConfiguration.GrokBaseURL != "https://grok.example" {
-		t.Fatalf("grokBaseURL=%q", capturedConfiguration.GrokBaseURL)
+	if capturedConfiguration.XAIBaseURL != "https://xai.example" {
+		t.Fatalf("grokBaseURL=%q", capturedConfiguration.XAIBaseURL)
 	}
-	if capturedConfiguration.GrokTranscriptionsURL != "https://grok.example/stt" {
-		t.Fatalf("grokTranscriptionsURL=%q", capturedConfiguration.GrokTranscriptionsURL)
+	if capturedConfiguration.XAITranscriptionsURL != "https://xai.example/stt" {
+		t.Fatalf("grokTranscriptionsURL=%q", capturedConfiguration.XAITranscriptionsURL)
 	}
 	deepSeekDefault, deepSeekDefaultFound := configuredDefaultOffering(capturedConfiguration.ModelCatalog, proxy.ProviderNameDeepSeek, proxy.ModelOperationText)
 	if !deepSeekDefaultFound || deepSeekDefault.Model != "deepseek-v4-flash" {
@@ -868,13 +868,13 @@ func TestRootCommandRejectsMissingDefaultTextProviderKeys(t *testing.T) {
 			expectedError: "provider_api_key_required: provider=meta field=providers.meta.api_key",
 		},
 		{
-			name:     "grok alias",
-			provider: providerAliasXAI,
+			name:     "xai canonical",
+			provider: proxy.ProviderNameXAI,
 			model:    proxy.ModelNameGrok43,
 			missingKey: func(values *providerYAMLValues) {
-				values.GrokAPIKey = "${P411_MISSING_XAI_KEY}"
+				values.XAIAPIKey = "${P411_MISSING_XAI_KEY}"
 			},
-			expectedError: "provider_api_key_required: provider=grok field=providers.grok.api_key",
+			expectedError: "provider_api_key_required: provider=xai field=providers.xai.api_key",
 		},
 	}
 	for _, testCase := range testCases {
@@ -1187,7 +1187,7 @@ providers:
   meta:
     api_key: "sk-meta"
     base_url: "https://api.meta.ai/v1"
-  grok:
+  xai:
     api_key: "sk-grok"
     base_url: "https://api.x.ai/v1"
     transcriptions_url: "https://api.x.ai/v1/stt"
@@ -1227,12 +1227,12 @@ providers:
   meta:
     api_key: "sk-meta"
     base_url: "https://api.meta.ai/v1"
-  grok:
+  xai:
     api_key: "sk-grok"
     base_url: ""
     transcriptions_url: "https://api.x.ai/v1/stt"
 `,
-			expectedError: "provider_base_url_required: provider=grok field=providers.grok.base_url",
+			expectedError: "provider_base_url_required: provider=xai field=providers.xai.base_url",
 		},
 		{
 			name: "missing openai transcriptions url",
@@ -1268,7 +1268,7 @@ providers:
   meta:
     api_key: "sk-meta"
     base_url: "https://api.meta.ai/v1"
-  grok:
+  xai:
     api_key: "sk-grok"
     base_url: "https://api.x.ai/v1"
     transcriptions_url: "https://api.x.ai/v1/stt"
@@ -1309,7 +1309,7 @@ providers:
   meta:
     api_key: "sk-meta"
     base_url: "https://api.meta.ai/v1"
-  grok:
+  xai:
     api_key: "sk-grok"
     base_url: "https://api.x.ai/v1"
     transcriptions_url: "https://api.x.ai/v1/stt"
@@ -1350,7 +1350,7 @@ providers:
   meta:
     api_key: "sk-meta"
     base_url: "https://api.meta.ai/v1"
-  grok:
+  xai:
     api_key: "sk-grok"
     base_url: "https://api.x.ai/v1"
     transcriptions_url: "https://api.x.ai/v1/stt"
@@ -1358,7 +1358,7 @@ providers:
 			expectedError: "provider_transcriptions_url_required: provider=zhipu field=providers.zhipu.transcriptions_url",
 		},
 		{
-			name: "missing grok transcriptions url",
+			name: "missing xai transcriptions url",
 			providersYAML: `
 providers:
   openai:
@@ -1391,12 +1391,12 @@ providers:
   meta:
     api_key: "sk-meta"
     base_url: "https://api.meta.ai/v1"
-  grok:
+  xai:
     api_key: "sk-grok"
     base_url: "https://api.x.ai/v1"
     transcriptions_url: ""
 `,
-			expectedError: "provider_transcriptions_url_required: provider=grok field=providers.grok.transcriptions_url",
+			expectedError: "provider_transcriptions_url_required: provider=xai field=providers.xai.transcriptions_url",
 		},
 		{
 			name:          "missing provider text models",
@@ -1674,16 +1674,16 @@ providers:
 		{
 			name: "dictation wire contract",
 			providersYAML: mutateCatalogOfferingYAML(completeLiteralProvidersYAML(), proxy.ProviderNameOpenAI, proxy.DefaultDictationModel, func(block string) string {
-				return strings.Replace(block, "    operations:\n", "    wire_contract: openai_responses\n    operations:\n", 1)
+				return strings.Replace(block, "wire_contract: multipart_transcription", "wire_contract: openai_responses", 1)
 			}),
-			expectedError: "text_capabilities_without_text_operation",
+			expectedError: "unsupported_dictation_route",
 		},
 		{
 			name: "dictation execution lifecycle",
 			providersYAML: mutateCatalogOfferingYAML(completeLiteralProvidersYAML(), proxy.ProviderNameOpenAI, proxy.DefaultDictationModel, func(block string) string {
-				return strings.Replace(block, "    operations:\n", "    execution_lifecycle: synchronous_completion\n    operations:\n", 1)
+				return strings.Replace(block, "execution_lifecycle: synchronous_completion", "execution_lifecycle: pollable_resource", 1)
 			}),
-			expectedError: "text_capabilities_without_text_operation",
+			expectedError: "unsupported_dictation_route",
 		},
 		{
 			name:          "blank openai request profile",
@@ -1719,7 +1719,7 @@ providers:
 			providersYAML: mutateCatalogOfferingYAML(completeLiteralProvidersYAML(), proxy.ProviderNameOpenAI, proxy.DefaultDictationModel, func(block string) string {
 				return strings.Replace(block, "    operations:\n", "    web_search: true\n    operations:\n", 1)
 			}),
-			expectedError: "text_capabilities_without_text_operation",
+			expectedError: "text_capabilities_on_dictation_route",
 		},
 	}
 
@@ -1893,9 +1893,9 @@ type providerYAMLValues struct {
 	AnthropicBaseURL             string
 	MetaAPIKey                   string
 	MetaBaseURL                  string
-	GrokAPIKey                   string
-	GrokBaseURL                  string
-	GrokTranscriptionsURL        string
+	XAIAPIKey                    string
+	XAIBaseURL                   string
+	XAITranscriptionsURL         string
 }
 
 func defaultProviderYAMLValues() providerYAMLValues {
@@ -1923,9 +1923,9 @@ func defaultProviderYAMLValues() providerYAMLValues {
 		AnthropicBaseURL:             "https://api.anthropic.com",
 		MetaAPIKey:                   "sk-meta",
 		MetaBaseURL:                  "https://api.meta.ai/v1",
-		GrokAPIKey:                   "sk-grok",
-		GrokBaseURL:                  "https://api.x.ai/v1",
-		GrokTranscriptionsURL:        "https://api.x.ai/v1/stt",
+		XAIAPIKey:                    "sk-grok",
+		XAIBaseURL:                   "https://api.x.ai/v1",
+		XAITranscriptionsURL:         "https://api.x.ai/v1/stt",
 	}
 }
 
@@ -1965,7 +1965,7 @@ providers:
   meta:
     api_key: "%s"
     base_url: "%s"
-  grok:
+  xai:
     api_key: "%s"
     base_url: "%s"
     transcriptions_url: "%s"
@@ -1993,9 +1993,9 @@ providers:
 		values.AnthropicBaseURL,
 		values.MetaAPIKey,
 		values.MetaBaseURL,
-		values.GrokAPIKey,
-		values.GrokBaseURL,
-		values.GrokTranscriptionsURL,
+		values.XAIAPIKey,
+		values.XAIBaseURL,
+		values.XAITranscriptionsURL,
 	)
 	return providersYAML + canonicalModelCatalogYAML()
 }

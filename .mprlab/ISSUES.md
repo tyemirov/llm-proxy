@@ -173,47 +173,38 @@ retain satisfied historical dependencies.
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 ## Improvements
 
-- [ ] [I216] (P0) Make one model-operation capability and pricing catalog authoritative.
+- [ ] [I041] (P1) Migrate xAI text routes to Responses without OpenAI background assumptions.
   Goal:
-  Publish one tenant-safe catalog for every provider-backed model operation.
-  Use it for planning, routing, validation, pricing, public discovery, and
-  official clients.
-  Cross-repository source:
-  - Completed MediaOps I068 supplies exact condition matching and reviewed
-    pricing records for the bounded import into LLM Proxy.
+  Move Grok models off xAI's deprecated Chat Completions surface while
+  preserving xAI's actual synchronous Responses behavior.
+  Evidence:
+  - xAI calls Responses its preferred API and Chat Completions deprecated:
+    https://docs.x.ai/developers/model-capabilities/text/comparison
+  - xAI Responses supports typed output and optional stored conversation state,
+    but its `background` field is currently compatibility-only and unused:
+    https://docs.x.ai/developers/rest-api-reference/inference/chat
+  - xAI separately exposes Deferred Chat Completions with `202` polling and a
+    final result retrievable exactly once, but that operation belongs to the
+    deprecated Chat family:
+    https://docs.x.ai/developers/advanced-api-usage/deferred-chat-completions
   Requirements:
-  - Extend the normalized I221 catalog with credential kinds, operation kinds,
-    pricing, controls, enums, bounds, account-dependent limits, and artifact
-    types.
-  - Add typed prices with components, currency, units, exact conditions,
-    minimum charges, official source, verification date, and an explicit
-    unavailable reason.
-  - Require exact price-condition matches. Missing, incomplete, or conflicting
-    conditions must return a typed unavailable result.
-  - Keep observed provider usage as execution evidence separate from published
-    pricing and management usage telemetry.
-  - Use organization-level canonical provider identifiers at shared credential
-    boundaries. Keep `gemini` and `vertex` distinct because they use different
-    APIs and credentials. Make `xai` canonical for xAI text and video, migrate
-    persisted managed `grok` routes once, and remove the dual selector.
-  - Expose one catalog service consumed by the later
-    `GET /model/v1/capabilities` handler, planning validation, the public
-    catalog, and provider-management choices.
-  - Import the stabilized MediaOps pricing data in one bounded migration and
-    remove each migrated MediaOps provider record during its family cutover.
-  Deliverables:
-  - Add the catalog types, strict loader, deterministic public projection,
-    exact price selector, one-off xAI route migration, and generated docs.
-  - Add catalog revision identifiers that bind plans to the exact capability
-    and pricing snapshot used to create them.
+  - Verify Responses support for every configured Grok model and migrate each
+    eligible model to an xAI-owned Responses codec. Do not reuse OpenAI's
+    request builder or terminal-state parser merely because the endpoint path
+    and typed output resemble OpenAI.
+  - Omit `background` and register the lifecycle as synchronous. Parse xAI
+    output, reasoning, usage, errors, storage controls, and output limits from
+    xAI's schema.
+  - Keep proxy requests stateless by default and document any approved use of
+    xAI's 30-day stored response state. Do not retrieve a completed stored
+    response as if it were an in-progress job.
+  - Do not adopt Deferred Chat merely to manufacture polling. If xAI later
+    offers deferred execution on its current Responses contract, audit that
+    lifecycle in a separate issue.
   Validation:
-  - Prove all accepted operation routes and prices are catalog-backed and that
-    unknown fields, duplicate identifiers, unsupported credential/lifecycle
-    pairs, and ambiguous prices fail startup.
-  - Prove the public projection excludes credentials, private account state,
-    provider handles, and tenant defaults.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  - Public fixtures prove xAI Responses request/response mapping, synchronous
+    continuation, storage policy, usage, safe errors, and absence of
+    `background` polling. Existing xAI speech routing remains independent.
 
 - [ ] [I218] (P1) Expand the product node into integration routes.
   Goal:
@@ -378,34 +369,6 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-- [ ] [I038] (P2) Adopt DashScope's synchronous Responses API without background mode.
-  Goal:
-  Move eligible DashScope Qwen models from Chat Completions to Alibaba's newer
-  Responses wire format while retaining its explicitly synchronous lifecycle.
-  Evidence:
-  - Alibaba documents an OpenAI-compatible Responses endpoint with typed output,
-    tools, `previous_response_id`, and storage controls:
-    https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses
-  - The same reference states that `background` is unsupported and that only
-    synchronous calls are processed. Unlisted OpenAI fields may be ignored.
-  Requirements:
-  - Verify the Responses support matrix for every configured DashScope model.
-    Migrate supported models to a dedicated DashScope Responses wire adapter;
-    leave any unsupported model on one explicitly registered current contract
-    rather than trying Responses and falling back at runtime.
-  - Send only Alibaba-documented fields and omit `background`. Parse typed
-    output items, incomplete status, Qwen reasoning usage, and provider errors
-    from the Alibaba schema rather than the OpenAI schema by assumption.
-  - Keep public proxy calls stateless unless a separately approved retention
-    contract requires stored provider state. Do not adopt
-    `previous_response_id`, conversations, built-in tools, or default storage
-    merely because the fields exist.
-  - Use output-limit continuation only after a terminal incomplete result.
-    Never issue `GET /responses/{id}` as a progress poll.
-  Validation:
-  - Public black-box tests prove the eligible-model request shape, typed text
-    extraction, synchronous incomplete continuation, usage, safe errors, and
-    rejection of accidental `background` or unsupported OpenAI-only fields.
 - [ ] [I207] (P1) Add Gemini 3.6 Flash with route-bound Interactions thinking levels.
   Goal:
   Add Google's current stable Flash model to the Gemini Interactions catalog
@@ -475,38 +438,128 @@ retain satisfied historical dependencies.
     create/poll/delete flow for `gemini-3.6-flash`. The final `make ci` passes
     after the last implementation edit; deployment and production acceptance
     remain operator-owned.
-- [ ] [I041] (P2) {I216} Migrate Grok to xAI Responses without OpenAI background assumptions.
+- [ ] [I027] (P1) Redesign the user dashboard around connected-provider widgets.
   Goal:
-  Move Grok off xAI's deprecated Chat Completions surface while preserving
-  xAI's actual synchronous Responses behavior.
-  Evidence:
-  - xAI calls Responses its preferred API and Chat Completions deprecated:
-    https://docs.x.ai/developers/model-capabilities/text/comparison
-  - xAI Responses supports typed output and optional stored conversation state,
-    but its `background` field is currently compatibility-only and unused:
-    https://docs.x.ai/developers/rest-api-reference/inference/chat
-  - xAI separately exposes Deferred Chat Completions with `202` polling and a
-    final result retrievable exactly once, but that operation belongs to the
-    deprecated Chat family:
-    https://docs.x.ai/developers/advanced-api-usage/deferred-chat-completions
+  Make the authenticated dashboard answer, at a glance, which upstream
+  providers the selected Usage scope has connected. Preserve usage reporting as
+  a separate measure of activity so an unused connected provider remains
+  visible and historical traffic never implies that a provider is still
+  connected.
+  Current scope:
+  - Usage is account-wide by default and has an independent tenant filter. One
+    selected Usage tenant shows that tenant's connections. `All tenants` shows
+    tenant-labelled connections across all owned tenants. The Settings tenant
+    does not control the dashboard projection.
   Requirements:
-  - Verify Responses support for every configured Grok model and migrate each
-    eligible model to an xAI-owned Responses codec. Do not reuse OpenAI's
-    request builder or terminal-state parser merely because the endpoint path
-    and typed output resemble OpenAI.
-  - Omit `background` and register the lifecycle as synchronous. Parse xAI
-    output, reasoning, usage, errors, storage controls, and output limits from
-    xAI's schema.
-  - Keep proxy requests stateless by default and document any approved use of
-    xAI's 30-day stored response state. Do not retrieve a completed stored
-    response as if it were an in-progress job.
-  - Do not adopt Deferred Chat merely to manufacture polling. If xAI later
-    offers deferred execution on its current Responses contract, audit that
-    lifecycle in a separate issue.
+  - Define a connected provider solely from canonical authenticated profile
+    data whose `has_key` value is `true`. Do not infer connection from catalog
+    membership, aliases, routing defaults, local environment credentials, or a
+    provider's presence in historical usage.
+  - Add a prominent `Connected providers` section to the user usage dashboard
+    and render exactly one widget for each tenant/provider connection in the
+    selected Usage scope. An explicit tenant uses that profile's deterministic
+    provider order. `All tenants` groups connections by account tenant order and
+    then provider order, labels every group with tenant name and opaque ID, and
+    does not merge the same provider across two tenants. Do not hard-code
+    provider names or duplicate provider-registration state in the browser.
+  - Give each widget a concise, consistent summary: the profile label,
+    `Connected` status, saved text model, declared text/dictation capabilities,
+    and current-period request and token totals matched by exact canonical
+    provider ID. A connected provider with no usage in the period must still
+    render with zero activity. A usage-load failure must render as unavailable,
+    not as a false zero or a disconnected provider.
+  - Add a provider-specific `Manage` action that opens Settings with that exact
+    tenant and provider selected without changing the Usage tenant filter. It
+    must not reveal a key, invoke the key-reveal endpoint, or alter
+    provider/default settings merely by opening the editor.
+  - Replace the ambiguous usage-derived `Providers` summary metric with a
+    `Connected providers` count derived from the same scope-correct `has_key`
+    projection. Under `All tenants`, count tenant/provider connections rather
+    than deduplicated provider IDs.
+    Keep provider/model usage breakdowns explicitly labeled as activity for the
+    selected reporting period, including historical rows for providers that are
+    no longer connected.
+  - Render a purposeful empty state when no providers are connected, with one
+    action that opens Settings. The state must coexist with mandatory onboarding
+    and must not create a path around its persisted-key requirements.
+  - Keep the widgets synchronized with canonical profile state: a successful
+    provider-key autosave adds its widget, a successful removal removes it,
+    failed mutations leave the current projection unchanged, and dashboard
+    refresh reloads both connection state and usage for the selected Usage
+    scope. Never let an out-of-order response restore stale connection state.
+  - Treat widgets as non-secret metadata. Never render provider API keys,
+    masked-key suffixes, client keys, system prompts, or credential-bearing
+    values in widget text, attributes, accessible names, or browser storage.
+  - Use semantic headings and per-provider articles, unique accessible action
+    names such as `Manage OpenAI`, full keyboard operation, and a responsive
+    grid that remains aligned without horizontal overflow on narrow screens.
+    Keep the provider widgets confined to the current user's owned tenants. The
+    admin dashboard must not project another tenant's provider credentials or
+    connection state.
+  - Add one canonical owner-wide safe connection projection because the account
+    summary does not contain provider `has_key` facts and the browser must not
+    fan out profile requests under `All tenants`. Preserve the existing tenant
+    profile as the canonical explicitly selected-tenant projection. Do not add
+    cached shadow state, compatibility aliases, fallback matching, or expose
+    masked/raw key material in the owner-wide response.
+  - Update dashboard and self-service documentation so `connected provider` and
+    `active provider` have explicit, non-overlapping meanings.
+  Deliverables:
+  - Add the connected-provider widget grid, connected count, provider-specific
+    Settings navigation, empty/error states, and responsive styling to the user
+    dashboard.
+  - Add the owner-wide safe connection projection plus one derived presentation
+    model that joins tenant/provider connections to usage by exact canonical IDs
+    while keeping registration authoritative to `has_key`.
+  - Update first-party frontend types, copy, documentation, and rendered-browser
+    coverage for the final dashboard contract.
   Validation:
-  - Public fixtures prove xAI Responses request/response mapping, synchronous
-    continuation, storage policy, usage, safe errors, and absence of
-    `background` polling; existing xAI speech routing remains independent.
+  - Add Playwright scenarios for `All tenants` and one explicit Usage tenant.
+  - Cover zero, one, and multiple connected providers.
+  - Cover duplicate provider IDs in two tenants and deterministic group order.
+  - Cover a connected provider with zero activity.
+  - Cover an unconnected provider with historical activity.
+  - Cover exact model, capability, usage, and connected-provider count values.
+  - Prove successful key autosave/removal and dashboard refresh update the
+    widgets, while rejected or out-of-order requests do not mutate the visible
+    projection and usage failure leaves connection state intact with activity
+    marked unavailable.
+  - Prove each `Manage` action selects the intended Settings tenant and provider
+    without changing the Usage tenant or making a reveal/mutation request, no
+    secret-bearing value reaches the rendered dashboard or browser storage, and
+    admin/user dashboard switching preserves isolation.
+  - Cover keyboard navigation, accessible names, and desktop/narrow viewport
+    layout without overlap or horizontal overflow.
+  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
+    pair for the implementation, with the final run after the last code edit.
+- [ ] [I038] (P2) Adopt DashScope's synchronous Responses API without background mode.
+  Goal:
+  Move eligible DashScope Qwen models from Chat Completions to Alibaba's newer
+  Responses wire format while retaining its explicitly synchronous lifecycle.
+  Evidence:
+  - Alibaba documents an OpenAI-compatible Responses endpoint with typed output,
+    tools, `previous_response_id`, and storage controls:
+    https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-responses
+  - The same reference states that `background` is unsupported and that only
+    synchronous calls are processed. Unlisted OpenAI fields may be ignored.
+  Requirements:
+  - Verify the Responses support matrix for every configured DashScope model.
+    Migrate supported models to a dedicated DashScope Responses wire adapter.
+    Leave any unsupported model on one explicitly registered current contract
+    rather than trying Responses and falling back at runtime.
+  - Send only Alibaba-documented fields and omit `background`. Parse typed
+    output items, incomplete status, Qwen reasoning usage, and provider errors
+    from the Alibaba schema rather than the OpenAI schema by assumption.
+  - Keep public proxy calls stateless unless a separately approved retention
+    contract requires stored provider state. Do not adopt
+    `previous_response_id`, conversations, built-in tools, or default storage
+    merely because the fields exist.
+  - Use output-limit continuation only after a terminal incomplete result.
+    Never issue `GET /responses/{id}` as a progress poll.
+  Validation:
+  - Public black-box tests prove the eligible-model request shape, typed text
+    extraction, synchronous incomplete continuation, usage, safe errors, and
+    rejection of accidental `background` or unsupported OpenAI-only fields.
 - [ ] [I035] (P2) Persist each user's selected Usage interval across sessions.
   Goal:
   Make the Usage Overview reopen with the last interval the authenticated user
@@ -733,105 +786,12 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-- [ ] [I027] (P1) Redesign the user dashboard around connected-provider widgets.
-  Goal:
-  Make the authenticated dashboard answer, at a glance, which upstream
-  providers the selected Usage scope has connected. Preserve usage reporting as
-  a separate measure of activity so an unused connected provider remains
-  visible and historical traffic never implies that a provider is still
-  connected.
-  Current scope:
-  - Usage is account-wide by default and has an independent tenant filter. One
-    selected Usage tenant shows that tenant's connections. `All tenants` shows
-    tenant-labelled connections across all owned tenants. The Settings tenant
-    does not control the dashboard projection.
-  Requirements:
-  - Define a connected provider solely from canonical authenticated profile
-    data whose `has_key` value is `true`. Do not infer connection from catalog
-    membership, aliases, routing defaults, local environment credentials, or a
-    provider's presence in historical usage.
-  - Add a prominent `Connected providers` section to the user usage dashboard
-    and render exactly one widget for each tenant/provider connection in the
-    selected Usage scope. An explicit tenant uses that profile's deterministic
-    provider order. `All tenants` groups connections by account tenant order and
-    then provider order, labels every group with tenant name and opaque ID, and
-    does not merge the same provider across two tenants. Do not hard-code
-    provider names or duplicate provider-registration state in the browser.
-  - Give each widget a concise, consistent summary: the profile label,
-    `Connected` status, saved text model, declared text/dictation capabilities,
-    and current-period request and token totals matched by exact canonical
-    provider ID. A connected provider with no usage in the period must still
-    render with zero activity; a usage-load failure must render as unavailable,
-    not as a false zero or a disconnected provider.
-  - Add a provider-specific `Manage` action that opens Settings with that exact
-    tenant and provider selected without changing the Usage tenant filter. It
-    must not reveal a key, invoke the key-reveal endpoint, or alter
-    provider/default settings merely by opening the editor.
-  - Replace the ambiguous usage-derived `Providers` summary metric with a
-    `Connected providers` count derived from the same scope-correct `has_key`
-    projection. Under `All tenants`, count tenant/provider connections rather
-    than deduplicated provider IDs.
-    Keep provider/model usage breakdowns explicitly labeled as activity for the
-    selected reporting period, including historical rows for providers that are
-    no longer connected.
-  - Render a purposeful empty state when no providers are connected, with one
-    action that opens Settings. The state must coexist with mandatory onboarding
-    and must not create a path around its persisted-key requirements.
-  - Keep the widgets synchronized with canonical profile state: a successful
-    provider-key autosave adds its widget, a successful removal removes it,
-    failed mutations leave the current projection unchanged, and dashboard
-    refresh reloads both connection state and usage for the selected Usage
-    scope. Never let an out-of-order response restore stale connection state.
-  - Treat widgets as non-secret metadata. Never render provider API keys,
-    masked-key suffixes, client keys, system prompts, or credential-bearing
-    values in widget text, attributes, accessible names, or browser storage.
-  - Use semantic headings and per-provider articles, unique accessible action
-    names such as `Manage OpenAI`, full keyboard operation, and a responsive
-    grid that remains aligned without horizontal overflow on narrow screens.
-    Keep the provider widgets confined to the current user's owned tenants; the
-    admin dashboard must not project another tenant's provider credentials or
-    connection state.
-  - Add one canonical owner-wide safe connection projection because the account
-    summary does not contain provider `has_key` facts and the browser must not
-    fan out profile requests under `All tenants`. Preserve the existing tenant
-    profile as the canonical explicitly selected-tenant projection. Do not add
-    cached shadow state, compatibility aliases, fallback matching, or expose
-    masked/raw key material in the owner-wide response.
-  - Update dashboard and self-service documentation so `connected provider` and
-    `active provider` have explicit, non-overlapping meanings.
-  Deliverables:
-  - Add the connected-provider widget grid, connected count, provider-specific
-    Settings navigation, empty/error states, and responsive styling to the user
-    dashboard.
-  - Add the owner-wide safe connection projection plus one derived presentation
-    model that joins tenant/provider connections to usage by exact canonical IDs
-    while keeping registration authoritative to `has_key`.
-  - Update first-party frontend types, copy, documentation, and rendered-browser
-    coverage for the final dashboard contract.
-  Validation:
-  - Add Playwright scenarios for `All tenants` and one explicit Usage tenant;
-    zero, one, and multiple connected providers; duplicate provider IDs in two
-    tenants; deterministic grouping/order; a connected provider with zero
-    activity; an unconnected provider with historical activity; exact
-    model/capability and usage rendering; and the connected-provider count.
-  - Prove successful key autosave/removal and dashboard refresh update the
-    widgets, while rejected or out-of-order requests do not mutate the visible
-    projection and usage failure leaves connection state intact with activity
-    marked unavailable.
-  - Prove each `Manage` action selects the intended Settings tenant and provider
-    without changing the Usage tenant or making a reveal/mutation request, no
-    secret-bearing value reaches the rendered dashboard or browser storage, and
-    admin/user dashboard switching preserves isolation.
-  - Cover keyboard navigation, accessible names, and desktop/narrow viewport
-    layout without overlap or horizontal overflow.
-  - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
-    pair for the implementation, with the final run after the last code edit.
 ## Maintenance
 
 - [ ] [M021] (P1) {F024,F025,F026,F027} Remove the completed MediaOps operation-import bridge.
   Goal:
-  Leave only the canonical model-operation contract after every selected
-  MediaOps provider record has been migrated.
+  Leave only the canonical model-operation contract after migration of every
+  selected MediaOps provider record.
   Cross-repository prerequisite:
   - MediaOps M227 must produce the operator-held final per-tenant migration
     receipt and prove that every eligible legacy record is migrated or
@@ -852,72 +812,6 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
-- [ ] [M001R] (P2) Backlog hygiene and archive.
-  Goal:
-  Keep the issue tracker reliable, readable, and focused on active work while preserving resolved history in the appropriate archive.
-  Requirements:
-  - Cadence: run weekly during active development and before each release cut.
-  - Validate section names, identifier prefixes, recurrence suffixes, priority markers, dependencies, and duplicate IDs against the current `issues-md-format.md`.
-  - Reconcile stale statuses, duplicate issues, broken references, obsolete instructions, and entries filed under the wrong section.
-  - Move completed non-recurring history to the repository issue archive or durable documentation when the active tracker becomes noisy.
-  - Keep active, blocked, planning, and recurring entries visible in `ISSUES.md`.
-  Deliverables:
-  - Normalized `ISSUES.md` structure and statuses.
-  - Updated issue archive or docs when completed entries are removed from the active tracker.
-  - A short `Last run:` note summarizing the cleanup and any follow-up issues filed.
-  Validation:
-  - Re-read `ISSUES.md` after edits and confirm every issue is under the right section with a unique section-aware ID.
-  - Confirm recurring entries remain open and keep the `R` suffix.
-  - Confirm no active, blocked, recurring, or planning work was archived.
-  Last run: 2026-08-10. Reviewed 84 resolved or retired non-recurring issues
-  against current source and durable documentation. Archived 56 BugFixes, 22
-  Improvements, four Features, and two Planning issues. Kept all 44 current
-  open, blocked, Planning, and recurring entries active. Removed 28 satisfied
-  dependency tokens from 17 active entries during the archive pass.
-- [ ] [M002R] (P2) Polish open issues.
-  Goal:
-  Keep unresolved work executable by making each open issue concrete, ordered, and testable.
-  Requirements:
-  - Cadence: run weekly during active development and before handing a repo to automated execution.
-  - Review every unresolved non-recurring issue for missing context, dependencies, repro steps, acceptance criteria, and validation expectations.
-  - Make priorities concrete and ensure each open issue has actionable deliverables.
-  - Merge duplicate open issues or add explicit dependency links when separate entries must remain.
-  - Do not close or implement issues as part of this polish pass unless that work is separately requested.
-  Deliverables:
-  - Open issues with enough detail for a person or agent to execute without rediscovery.
-  - New or updated dependency markers where ordering matters.
-  - A short `Last run:` note listing the number of issues polished and any blockers found.
-  Validation:
-  - Sample the open entries after the pass and confirm each has clear next actions and validation expectations.
-  - Confirm no recurring runbook was marked complete.
-  - Confirm duplicates were merged or explicitly cross-referenced.
-  Last run: 2026-08-10. Audited all 46 unresolved entries from the archive
-  pass. Archived B099 because its merged contract is enforced. Archived B077
-  because its historical release contract is verified. Archived F018 because
-  I027 supersedes it. Archived I205 because it belongs to the ISSUES.md editor
-  repository. Added B126 for current release activation and P007 for the
-  Alibaba provider decision.
-  Added 11 dependency tokens, removed stale prerequisite prose, and demoted six
-  downstream or planning items to P2. The tracker now has 44 current entries:
-  42 open and two blocked. B126 and F021 each name one exact external action or
-  issue in their `Blocked:` line.
-- [ ] [M003R] (P2) Architecture and policy review.
-  Goal:
-  Catch architecture, policy, and workflow drift before it becomes hidden maintenance debt.
-  Requirements:
-  - Cadence: run monthly, before large refactors, and after major framework or runtime changes.
-  - Review the codebase, docs, and workflow against `AGENTS.md`, `POLICY.md`, stack guides, and the current architecture notes.
-  - Look for drift from forward-only contracts, edge-validation boundaries, smart-constructor usage, testing policy, and module ownership.
-  - Record findings as new Maintenance issues with concrete scope, priority, and validation.
-  - Close the pass with a no-action note only when the review finds no actionable drift.
-  Deliverables:
-  - New Maintenance issues for each actionable architecture or policy drift finding.
-  - Updated notes on areas reviewed and areas intentionally left unchanged.
-  - A short `Last run:` note with the review scope and outcome.
-  Validation:
-  - Confirm every finding is represented as an issue with owner-readable context and validation criteria.
-  - Confirm no implementation changes were mixed into the review runbook unless separately requested.
-  - Confirm all recurring runbooks remain open.
 - [ ] [M004R] (P1) Dependency and security audit.
   Goal:
   Keep third-party dependencies, runtime versions, and security-sensitive configuration within the current supported contract.
@@ -997,6 +891,72 @@ retain satisfied historical dependencies.
   The public Pages marker still reports `v0.3.0` and source commit
   `7917ce1ed824b9946d2a98a5a55b90c443db884a`. B126 owns that exact activation
   drift and the operator-held running-image receipt.
+- [ ] [M001R] (P2) Backlog hygiene and archive.
+  Goal:
+  Keep the issue tracker reliable, readable, and focused on active work while preserving resolved history in the appropriate archive.
+  Requirements:
+  - Cadence: run weekly during active development and before each release cut.
+  - Validate section names, identifier prefixes, recurrence suffixes, priority markers, dependencies, and duplicate IDs against the current `issues-md-format.md`.
+  - Reconcile stale statuses, duplicate issues, broken references, obsolete instructions, and entries filed under the wrong section.
+  - Move completed non-recurring history to the repository issue archive or durable documentation when the active tracker becomes noisy.
+  - Keep active, blocked, planning, and recurring entries visible in `ISSUES.md`.
+  Deliverables:
+  - Normalized `ISSUES.md` structure and statuses.
+  - Updated issue archive or docs when completed entries are removed from the active tracker.
+  - A short `Last run:` note summarizing the cleanup and any follow-up issues filed.
+  Validation:
+  - Re-read `ISSUES.md` after edits and confirm every issue is under the right section with a unique section-aware ID.
+  - Confirm recurring entries remain open and keep the `R` suffix.
+  - Confirm no active, blocked, recurring, or planning work was archived.
+  Last run: 2026-08-10. Reviewed 84 resolved or retired non-recurring issues
+  against current source and durable documentation. Archived 56 BugFixes, 22
+  Improvements, four Features, and two Planning issues. Kept all 44 current
+  open, blocked, Planning, and recurring entries active. Removed 28 satisfied
+  dependency tokens from 17 active entries during the archive pass.
+- [ ] [M002R] (P2) Polish open issues.
+  Goal:
+  Keep unresolved work executable by making each open issue concrete, ordered, and testable.
+  Requirements:
+  - Cadence: run weekly during active development and before handing a repo to automated execution.
+  - Review every unresolved non-recurring issue for missing context, dependencies, repro steps, acceptance criteria, and validation expectations.
+  - Make priorities concrete. Make sure each open issue has actionable deliverables.
+  - Merge duplicate open issues or add explicit dependency links when separate entries must remain.
+  - Do not close or implement issues as part of this polish pass unless that work is separately requested.
+  Deliverables:
+  - Open issues with enough detail for a person or agent to execute without rediscovery.
+  - New or updated dependency markers where ordering matters.
+  - A short `Last run:` note listing the number of issues polished and any blockers found.
+  Validation:
+  - Sample the open entries after the pass and confirm each has clear next actions and validation expectations.
+  - Confirm no recurring runbook was marked complete.
+  - Confirm duplicates were merged or explicitly cross-referenced.
+  Last run: 2026-08-10. Audited all 46 unresolved entries from the archive
+  pass. Archived B099 because its merged contract is enforced. Archived B077
+  because its historical release contract is verified. Archived F018 because
+  I027 supersedes it. Archived I205 because it belongs to the ISSUES.md editor
+  repository. Added B126 for current release activation and P007 for the
+  Alibaba provider decision.
+  Added 11 dependency tokens, removed stale prerequisite prose, and demoted six
+  downstream or planning items to P2. The tracker now has 44 current entries:
+  42 open and two blocked. B126 and F021 each name one exact external action or
+  issue in their `Blocked:` line.
+- [ ] [M003R] (P2) Architecture and policy review.
+  Goal:
+  Catch architecture, policy, and workflow drift before it becomes hidden maintenance debt.
+  Requirements:
+  - Cadence: run monthly, before large refactors, and after major framework or runtime changes.
+  - Review the codebase, docs, and workflow against `AGENTS.md`, `POLICY.md`, stack guides, and the current architecture notes.
+  - Look for drift from forward-only contracts, edge-validation boundaries, smart-constructor usage, testing policy, and module ownership.
+  - Record findings as new Maintenance issues with concrete scope, priority, and validation.
+  - Close the pass with a no-action note only when the review finds no actionable drift.
+  Deliverables:
+  - New Maintenance issues for each actionable architecture or policy drift finding.
+  - Updated notes on areas reviewed and areas intentionally left unchanged.
+  - A short `Last run:` note with the review scope and outcome.
+  Validation:
+  - Confirm every finding is represented as an issue with owner-readable context and validation criteria.
+  - Confirm no implementation changes were mixed into the review runbook unless separately requested.
+  - Confirm all recurring runbooks remain open.
 - [ ] [M008R] (P2) Documentation and runbook hygiene.
   Goal:
   Keep durable documentation and runbooks aligned with the current behavior users and operators actually rely on.
@@ -1021,19 +981,6 @@ retain satisfied historical dependencies.
   current endpoint contract. Regenerated 46 SEO resources. Their content
   already matched the current source. `PRD.md` and `ARCHITECTURE.md` remain
   absent, and M013 tracks that decision.
-- [ ] [M012] (P2) {M013} Reconcile repository governance with the MPR Lab normalizer.
-  Goal:
-  Make the governance normalizer check pass without deleting repository-owned binding contracts.
-  Requirements:
-  - Resolve M013's product-context document decision first so the normalizer
-    works from the final repository-owned root guidance.
-  - Inspect the normalizer differences reported for root `AGENTS.md` and every managed `.mprlab/` guide.
-  - Preserve the M011 pre-change and post-change CI requirement and all other current repository-owned rules.
-  - Update the appropriate managed templates, boundaries, or repository documents as one canonical forward-only contract rather than applying a destructive bulk rewrite.
-  Deliverables:
-  - A reviewed governance normalization change with no unrelated product or runtime edits.
-  Validation:
-  - Run the MPR Lab governor in `--dry-run` and `--check` modes and require no pending managed-file changes.
 - [ ] [M013] (P2) Resolve missing product-context document references.
   Goal:
   Keep the root governance entrypoint limited to product-context documents that exist and represent the current contract.
@@ -1048,6 +995,21 @@ retain satisfied historical dependencies.
   - Root governance references that resolve to current product-context files.
   Validation:
   - Verify every product-context path named by root `AGENTS.md` exists and contains current repository guidance.
+- [ ] [M012] (P2) {M013} Reconcile repository governance with the MPR Lab normalizer.
+  Goal:
+  Make the governance normalizer check pass without deleting repository-owned binding contracts.
+  Requirements:
+  - Resolve M013's product-context document decision first so the normalizer
+    works from the final repository-owned root guidance.
+  - Inspect the normalizer differences reported for root `AGENTS.md` and every managed `.mprlab/` guide.
+  - Preserve the M011 pre-change and post-change CI requirement and all other current repository-owned rules.
+  - Update the appropriate managed templates, boundaries, or repository
+    documents as one canonical forward-only contract.
+  - Do not apply a destructive bulk rewrite.
+  Deliverables:
+  - A reviewed governance normalization change with no unrelated product or runtime edits.
+  Validation:
+  - Run the MPR Lab governor in `--dry-run` and `--check` modes and require no pending managed-file changes.
 - [ ] [M019] (P2) Refresh non-security direct dependency pins.
   Goal:
   Bring direct Go, frontend, and Python development dependencies to their current supported releases after the security graph is stable.
@@ -1063,6 +1025,122 @@ retain satisfied historical dependencies.
 
 
 ## Features
+
+- [ ] [F033] (P0) {F022} Pass canonical message media to selected providers.
+  Goal:
+  Let `/v2` accept provider-neutral media without a smaller LLM Proxy media
+  limit. Translate each attachment into the selected provider's supported
+  transport. Preserve exact media bytes, order, MIME type, and SHA-256.
+
+  Observed failure:
+  - Creative Director sends `master-character-sheet.png` through
+    `NewImageAttachment` for Gemini semantic image QA.
+  - The PNG is 3,326,724 bytes. Canonical base64 requires 4,435,632 bytes
+    before JSON and prompt content.
+  - The deployed capability resource reports `max_prompt_bytes: 4194304`.
+  - LLM Proxy returns HTTP 413 `prompt payload too large` before Gemini
+    receives the image.
+  - Gemini permits this request under its documented inline request limit.
+  - Creative Director receives no QA result. It cannot produce the next
+    MediaOps operation.
+
+  Provider limit evidence:
+  - The following provider limits were verified on 2026-08-10.
+  - Gemini Interactions permits 20 MB for a request with inline image data.
+    This total includes text, system instructions, and inline bytes. Gemini
+    permits 3,600 image files per request. Gemini directs larger requests to
+    its Files API:
+    https://ai.google.dev/gemini-api/docs/image-understanding
+  - OpenAI vision permits a 512 MB total request payload. It permits 1,500
+    image inputs per request:
+    https://developers.openai.com/api/docs/guides/images-vision
+  - Anthropic Messages permits a 32 MB request. The direct Claude API permits
+    10 MB for each base64 image:
+    https://platform.claude.com/docs/en/api/errors
+    https://platform.claude.com/docs/en/build-with-claude/vision
+  - Anthropic permits 100 images for models with a 200,000-token context.
+    Anthropic permits 600 images for other models.
+  - xAI permits 20 MiB for each image. xAI publishes no image-count limit:
+    https://docs.x.ai/developers/model-capabilities/images/understanding
+  - These values are provider facts. They do not define one proxy limit.
+  - LLM Proxy currently routes message media only to Gemini. Other values
+    define contracts for future provider adapters.
+
+  Contract gap:
+  - The current `/v2` contract applies one 4 MiB limit before provider
+    dispatch.
+  - The selected Gemini provider permits the rejected request.
+  - One proxy limit cannot represent different provider limits or transports.
+  - F022 defines asset upload. It does not connect assets to `/v2` attachments.
+
+  Requirements:
+  - Use the F022 tenant asset store for asset-backed attachments.
+  - Add an asset-reference variant to the canonical user-message attachment
+    union.
+  - Require `type`, `asset_id`, `mime_type`, and `sha256` in each asset
+    reference.
+  - Reject an attachment that contains both `data` and `asset_id`.
+  - Remove `server.max_prompt_bytes` as a provider-independent `/v2` media
+    admission rule.
+  - Do not define a smaller proxy-owned media limit.
+  - Apply the selected provider offering limits before provider dispatch.
+  - Count bytes with the selected provider's documented unit and scope.
+  - Include base64 expansion only when the provider counts encoded request
+    bytes.
+  - Send inline media when the selected provider accepts that transport and
+    size.
+  - Use provider file upload when the selected provider requires that
+    transport for the media size.
+  - Return a stable provider-limit error when no provider transport accepts
+    the media.
+  - Send the request when the provider publishes no applicable limit.
+  - Map a provider limit response into the stable LLM Proxy error contract.
+  - Keep provider limits in provider offering data, not one server setting.
+  - Add media limits only to provider offerings that declare the media input.
+  - Publish each limit's value, unit, scope, source, and verification date.
+  - Represent an explicit provider no-limit value as `unbounded`.
+  - Represent an unpublished provider limit as `unknown`.
+  - Reverify provider limits during implementation.
+  - Validate tenant ownership, asset state, expiry, MIME type, size, and
+    SHA-256 before provider dispatch.
+  - Preserve message order and attachment order after asset resolution.
+  - Preserve caller bytes without resize, compression, or format conversion.
+  - Keep caller filesystem paths outside the HTTP contract.
+  - Exclude asset bytes and authenticated asset URLs from logs, responses, and
+    usage records.
+  - Add official-client constructors for asset-backed image and audio
+    attachments.
+
+  Deliverables:
+  - Add the OpenAPI asset-reference schema and provider limit schema.
+  - Add tenant asset resolution and provider transport selection.
+  - Add provider offering limits to the public capability resource.
+  - Add official-client support for asset-backed attachments and provider
+    limits.
+  - Update the root README, API reference, provider routing guide, and release
+    notes.
+
+  Validation:
+  - Send the 3,326,724-byte image inline through `/v2` to fake Gemini.
+  - Require provider dispatch without a proxy 413 response.
+  - Upload the same fixture through F022. Send one `/v2` asset reference.
+  - Require fake Gemini to receive the exact bytes, MIME type, SHA-256, and
+    order.
+  - Do a test of each provider boundary at the limit and one unit above it.
+  - Do a test of Gemini inline and Files API transport selection.
+  - Do a test of each documented provider limit record.
+  - Prove no provider-valid request fails because of a smaller proxy limit.
+  - Cover missing, foreign, expired, deleted, wrong-MIME, and wrong-digest
+    assets.
+  - Cover one image, ordered images, audio, and mixed media.
+  - Prove asset cleanup cannot change an admitted request or expose another
+    tenant's asset.
+  - Prove logs, errors, responses, and usage records contain no asset bytes or
+    authenticated asset URLs.
+  - Exercise the public router and every released official client against fake
+    providers.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
 - [ ] [F032] (P1) Add Baidu Qianfan as a user-configurable text provider.
   Goal:
@@ -1158,7 +1236,7 @@ retain satisfied historical dependencies.
     `timeout -k 350s -s SIGKILL 350s make ci` pair. Keep deployment and
     production acceptance operator-owned.
 
-- [ ] [F022] (P1) {I216} Add the durable model-operation, asset, and official-client foundation.
+- [ ] [F022] (P1) Add the durable model-operation, asset, and official-client foundation.
   Goal:
   Extend LLM Proxy from blocking text and dictation into a shared model-provider
   data plane while keeping MediaOps and other callers responsible for their
@@ -1298,7 +1376,7 @@ retain satisfied historical dependencies.
   - Preserve GCS/object-store staging, xAI retained-file authentication and
     cleanup evidence, observed usage, and every current recoverable artifact.
   - Make `xai` the only xAI selector supplied by the canonical catalog after
-    the I216 persisted-route migration.
+    the schema-v6 xAI persisted-route migration.
   - Register exact import validators for selected recoverable Vertex, Gemini
     Omni, Runway, FAL, Kling, and xAI video records. Imported records must enter
     the canonical operation schema without submitting new provider work.
@@ -1384,222 +1462,6 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
-- [ ] [F028] (P2) {F027} Add HeyGen Avatar V as a gateway-owned avatar engine.
-  Goal:
-  Add the current Avatar V engine to the gateway HeyGen avatar contract before
-  MediaOps exposes it through its product surfaces.
-  Cross-repository sequence:
-  - MediaOps I066 consumes this after its I073 base HeyGen/Kling cutover.
-  Requirements:
-  - Add exact engine values `avatar_iv` and `avatar_v` to the HeyGen avatar-video
-    operation and capability catalog.
-  - Resolve the selected look through `GET /v3/avatars/looks/{look_id}` and
-    require `supported_api_engines` to contain `avatar_v` before submitting an
-    Avatar V operation.
-  - Reject Avatar IV-only `motion_prompt` and `expressiveness` controls for an
-    Avatar V plan and preserve the selected engine in the immutable intent.
-  - Use the existing tenant-owned HeyGen credential profile, durable operation
-    state, gateway assets, price evidence, and artifact recovery.
-  Deliverables:
-  - Add the provider adapter fields, catalog metadata, official-client types,
-    HeyGen fixtures, docs, and an explicitly enabled paid live target.
-  Validation:
-  - Prove eligible success, ineligible pre-dispatch rejection, engine-specific
-    control rejection, terminal artifact download, and restart recovery.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
-- [ ] [F029] (P2) {F025} Add MiniMax H3 V2 video generation to model operations.
-  Goal:
-  Add the provider-qualified MiniMax H3 V2 route to the gateway before MediaOps
-  exposes the model through its video product contracts.
-  Cross-repository sequence:
-  - MediaOps I060 consumes this after its I071 base video cutover.
-  Requirements:
-  - Add canonical provider `minimax`, exact model `MiniMax-H3`, and only the
-    documented V2 create/query and `video_generation_input` upload contracts.
-  - Support text, first/last frame, and reference image/video/audio roles with
-    the documented mutual exclusions, media limits, 768P/2K resolutions,
-    4..15-second duration, and exact aspect behavior.
-  - Store provider task and upload ids in the durable operation, poll only the
-    V2 task resource, materialize the terminal MP4 as a gateway artifact, and
-    recover through the gateway operation id.
-  - Publish the H3 price as unavailable until MiniMax publishes an exact rate;
-    preserve returned duration and media counts as observed usage.
-  - Use one tenant-owned MiniMax credential profile and catalog-owned account
-    concurrency.
-  Deliverables:
-  - Add the MiniMax adapter, catalog, official-client types, provider fixtures,
-    recovery, docs, and an explicitly enabled minimal live target.
-  Validation:
-  - Prove exact payload roles, upload URI mapping, polling states, restart and
-    uncertain recovery, input limits, artifact integrity, and absence of Hailuo
-    V1 behavior through public black-box tests.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
-- [ ] [F030] (P2) {F026} Add Speechify text-to-speech and voice discovery to model operations.
-  Goal:
-  Add the current Speechify complete-response speech and voice-discovery
-  contracts to the gateway before MediaOps exposes them in narration flows.
-  Cross-repository sequence:
-  - MediaOps I058 consumes this after its I072 base audio cutover.
-  Requirements:
-  - Add canonical provider `speechify`, live `GET /v1/audio/models` and
-    `GET /v1/voices` discovery, and complete-response `POST /v1/audio/speech`.
-  - Admit only non-deprecated models that declare the speech endpoint and
-    preserve exact model, language, voice, output format, billable character,
-    request-id, and speech-mark metadata.
-  - Apply the documented input and pagination limits, account concurrency,
-    `Retry-After`, and provider error classification before returning a typed
-    result.
-  - Decode and validate returned audio into a gateway artifact and expose
-    provider-tagged speech marks as a JSON artifact. Mark provider recovery
-    unavailable when no durable retrieval handle exists.
-  - Use one tenant-owned Speechify credential profile. Publish price
-    unavailable until an exact official rate is cataloged.
-  Deliverables:
-  - Add Speechify adapters, live discovery projection, catalog entries,
-    official-client types, fixtures, docs, and an explicitly enabled live
-    discovery/minimal speech target.
-  Validation:
-  - Prove discovery, voice pagination, exact speech payload, audio decoding,
-    speech marks, rate/concurrency handling, transport uncertainty, secret
-    safety, and artifact integrity through public black-box tests.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
-- [!] [F021] (P1) Add OAuth-authenticated tenant-scoped MCP access.
-  Goal:
-  An authenticated user can connect a remote MCP client to one owned tenant.
-  The server uses that tenant's saved provider credentials, routing defaults,
-  and standard text-generation lifecycle for each MCP request.
-  Current contract:
-  - Public proxy requests use a generated tenant secret in `key=...`.
-  - TAuth browser sessions authorize management operations.
-  - Provider credentials remain on the server and belong to one tenant.
-  - TAuth provides the OAuth authorization-server contract that a remote MCP
-    client requires.
-  - The gateway cannot yet generate the root OAuth block or tenant OAuth policy.
-  Requirements:
-  - Serve MCP protocol version `2026-07-28` at the exact resource URL
-    `https://llm-proxy-api.mprlab.com/mcp/{tenant_id}`.
-  - Use the official Go MCP SDK in stateless Streamable HTTP mode. Return JSON
-    responses and reject every unsupported protocol version.
-  - Do not create an MCP session or implement an earlier MCP transport.
-  - Treat the exact MCP URL as the OAuth protected-resource identifier and
-    access-token audience.
-  - Publish path-specific OAuth Protected Resource Metadata at
-    `/.well-known/oauth-protected-resource/mcp/{tenant_id}`.
-  - Return an RFC-compliant Bearer challenge for an unauthenticated MCP
-    request. Include the protected-resource metadata URL in the challenge.
-  - Validate each JWT access token signature, issuer, subject, exact audience,
-    expiry, and required `llm-proxy:use` scope at the HTTP edge.
-  - Confirm that the token subject owns `{tenant_id}` before an MCP operation.
-    Return the same `404 Not Found` result for a missing tenant and a foreign
-    tenant after successful token validation.
-  - Keep provider credentials on the server. Never return provider credentials,
-    tenant secrets, access tokens, refresh tokens, or session data through MCP.
-  - Expose one tool named `llm_proxy.generate_text`. Require `messages` and
-    accept optional `provider`, `model`, `web_search`, `max_tokens`,
-    `reasoning_effort`, and `request_timeout_seconds` inputs.
-  - Use the canonical `/v2` message and attachment contract for the tool.
-    Preserve ordered image and audio attachments on user messages.
-  - Return generated text and structured `request_id`, `provider`, `model`,
-    `usage`, and `request_timeout_seconds` fields from a successful tool call.
-  - Mark the tool as not read-only, not destructive, not idempotent, and
-    open-world because one call can create provider charges.
-  - Return a sanitized MCP tool error with `isError: true` for an accepted tool
-    call that fails. Preserve the canonical proxy error classification without
-    exposing an upstream body, provider message, prompt, response, or secret.
-  - Expose `llm-proxy://routes` as a tenant-scoped resource. Return only the
-    tenant's configured text routes, defaults, and declared capabilities.
-  - Keep management and dictation outside this first MCP contract.
-  - Extract one transport-neutral text-generation service from the current
-    HTTP handlers. Make `/v2` and MCP use the same routing, admission, queue,
-    rate-limit, timeout, cancellation, continuation, error, and usage logic.
-  - Record MCP usage with endpoint value `mcp`. Record the logical proxy result
-    status when an MCP tool error uses a successful HTTP transport response.
-  - Add a `Copy MCP URL` action for each owned tenant. Show the action only
-    after the tenant has at least one configured text route.
-  - Document the MCP URL, OAuth flow, tool schema, resource schema, client
-    configuration, security boundary, and provider-key requirement.
-  - Add the MCP route and OAuth metadata to OpenAPI, runtime configuration, and
-    the repository deployment capability contract.
-  - Keep local acceptance separate from live deployment acceptance. Do not
-    contact or change production during implementation.
-  Deliverables:
-  - Add the stateless MCP transport and the path-specific protected-resource
-    metadata endpoint.
-  - Add strict OAuth bearer-token validation and tenant ownership checks.
-  - Add the shared text-generation service, `llm_proxy.generate_text` tool,
-    and `llm-proxy://routes` resource.
-  - Add tenant UI copy, configuration, OpenAPI, deployment, and user-guide
-    updates for the MCP connection contract.
-  - Add black-box integration and browser coverage through public entry points.
-  Validation:
-  - Run an official MCP client against the real local HTTP route, real local
-    TAuth OAuth flow, and a fake upstream provider.
-  - Verify successful authorization-code and PKCE login, token refresh, token
-    revocation, and consent behavior.
-  - Verify missing, malformed, expired, wrong-issuer, wrong-audience, and
-    wrong-scope tokens. Verify missing and foreign tenant identifiers.
-  - Verify exact tool discovery, input-schema validation, route selection,
-    defaults, media inputs, structured success output, and route-resource data.
-  - Verify queue rejection, provider rate limits, request timeouts, caller
-    cancellation, sanitized tool errors, and managed usage records.
-  - Verify that logs, MCP results, OAuth responses, and browser content contain
-    no provider credential, tenant secret, token, prompt, or generated response.
-  - Run `/v2` regression scenarios to prove one shared execution lifecycle and
-    unchanged tenant-secret authentication for the REST contract.
-  - Use MCP Inspector and one supported remote MCP client for manual local
-    acceptance. Record live-host acceptance as a separate deployment result.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
-  Blocked: mprlab-gateway F001 must complete the TAuth OAuth aggregate
-  deployment contract before this feature can declare its protected resources.
-
-- [ ] [F020] (P2) {I216,F016} Add route-validated sampling controls to the canonical v3 messages contract.
-  Goal:
-  Let a caller set low-level sampling controls only when the selected provider
-  offering declares exact support for them.
-  Requirements:
-  - Use I216 as the authoritative source for each provider offering's supported
-    controls, numeric bounds, defaults, and incompatible control combinations.
-  - Add one optional `sampling` object with exact fields `temperature`,
-    `top_p`, `presence_penalty`, and `frequency_penalty`. Reject unknown
-    fields, non-finite numbers, and values outside the selected route's bounds.
-  - Make `POST /v3` the canonical messages operation. Update every first-party
-    client, example, generated contract, and caller in the same forward-only
-    change, then remove the obsolete `/v2` route and schema.
-  - Resolve the provider and model route before validation. Reject a supplied
-    control that the resolved offering does not support before an upstream
-    request. Omit only controls that the caller did not supply.
-  - Define the exact interaction between `sampling` and `reasoning_effort`
-    for each offering in the capability catalog. Reject unsupported
-    combinations without translation, clamping, or silent removal.
-  - Map each accepted field through the provider-owned adapter and documented
-    provider-native field. Keep provider-specific names and defaults at that
-    adapter boundary.
-  - Update the Go, Python, Node.js, and CLI clients to expose the same typed
-    sampling object and canonical `/v3` request.
-  Deliverables:
-  - Add the strict `/v3` request schema, route-capability validation, provider
-    mappings, official-client types, CLI flags, OpenAPI contract, and current
-    documentation.
-  - Remove the obsolete `/v2` route, schemas, examples, and first-party client
-    calls after the forward migration.
-  Validation:
-  - Exercise the real public router against fake upstream providers. Prove each
-    accepted control maps to the exact provider request and every invalid or
-    unsupported control fails before upstream dispatch.
-  - Prove absent controls remain absent, accepted zero values remain explicit,
-    and supported sampling plus reasoning combinations preserve exact values.
-  - Exercise all official clients and the CLI through `/v3`. Prove they expose
-    the same typed failures and do not retain a `/v2` request path.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
 - [ ] [F017] (P1) Add shared MPR UI inactivity warning and automatic logout.
   Goal:
   Make an authenticated browser session warn and sign out explicitly after
@@ -1609,8 +1471,8 @@ retain satisfied historical dependencies.
   Evidence:
   - An unattended llm-proxy Usage view can retain MPR UI's last authenticated
     state and the last accepted workspace data after the server session has
-    expired. Returning to the tab therefore presents stale data; a full reload
-    then restores the authoritative signed-out first screen.
+    expired. As a result, returning to the tab presents stale data. A full
+    reload then restores the authoritative signed-out first screen.
   - llm-proxy currently refreshes Usage only during authenticated-workspace
     startup, scope/interval changes, or explicit Refresh. It receives MPR UI
     authentication events but has no independent authority to inspect,
@@ -1626,8 +1488,8 @@ retain satisfied historical dependencies.
     create a second browser authentication owner and violate the shared
     MPR UI/TAuth integration contract.
   - I033 proposed 60-second foreground Usage polling for the stale-snapshot
-    symptom. Product direction now selects explicit inactivity warning/logout
-    instead; active users retain the existing manual Refresh path.
+    symptom. Product direction now selects explicit inactivity warning/logout.
+    Active users retain the existing manual Refresh path.
   Requirements:
   - Implement the inactivity state machine, warning surface, and logout
     transaction in MPR UI first. Publish it through the canonical literal
@@ -1857,29 +1719,225 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
+- [!] [F021] (P1) Add OAuth-authenticated tenant-scoped MCP access.
+  Goal:
+  An authenticated user can connect a remote MCP client to one owned tenant.
+  The server uses that tenant's saved provider credentials, routing defaults,
+  and standard text-generation lifecycle for each MCP request.
+  Current contract:
+  - Public proxy requests use a generated tenant secret in `key=...`.
+  - TAuth browser sessions authorize management operations.
+  - Provider credentials remain on the server and belong to one tenant.
+  - TAuth provides the OAuth authorization-server contract that a remote MCP
+    client requires.
+  - The gateway cannot yet generate the root OAuth block or tenant OAuth policy.
+  Requirements:
+  - Serve MCP protocol version `2026-07-28` at the exact resource URL
+    `https://llm-proxy-api.mprlab.com/mcp/{tenant_id}`.
+  - Use the official Go MCP SDK in stateless Streamable HTTP mode. Return JSON
+    responses and reject every unsupported protocol version.
+  - Do not create an MCP session or implement an earlier MCP transport.
+  - Treat the exact MCP URL as the OAuth protected-resource identifier and
+    access-token audience.
+  - Publish path-specific OAuth Protected Resource Metadata at
+    `/.well-known/oauth-protected-resource/mcp/{tenant_id}`.
+  - Return an RFC-compliant Bearer challenge for an unauthenticated MCP
+    request. Include the protected-resource metadata URL in the challenge.
+  - Validate each JWT access token signature, issuer, subject, exact audience,
+    expiry, and required `llm-proxy:use` scope at the HTTP edge.
+  - Confirm that the token subject owns `{tenant_id}` before an MCP operation.
+    Return the same `404 Not Found` result for a missing tenant and a foreign
+    tenant after successful token validation.
+  - Keep provider credentials on the server. Never return provider credentials,
+    tenant secrets, access tokens, refresh tokens, or session data through MCP.
+  - Expose one tool named `llm_proxy.generate_text`. Require `messages` and
+    accept optional `provider`, `model`, `web_search`, `max_tokens`,
+    `reasoning_effort`, and `request_timeout_seconds` inputs.
+  - Use the canonical `/v2` message and attachment contract for the tool.
+    Preserve ordered image and audio attachments on user messages.
+  - Return generated text and structured `request_id`, `provider`, `model`,
+    `usage`, and `request_timeout_seconds` fields from a successful tool call.
+  - Mark the tool as not read-only, not destructive, not idempotent, and
+    open-world because one call can create provider charges.
+  - Return a sanitized MCP tool error with `isError: true` for an accepted tool
+    call that fails. Preserve the canonical proxy error classification without
+    exposing an upstream body, provider message, prompt, response, or secret.
+  - Expose `llm-proxy://routes` as a tenant-scoped resource. Return only the
+    tenant's configured text routes, defaults, and declared capabilities.
+  - Keep management and dictation outside this first MCP contract.
+  - Extract one transport-neutral text-generation service from the current
+    HTTP handlers. Make `/v2` and MCP use the same routing, admission, queue,
+    rate-limit, timeout, cancellation, continuation, error, and usage logic.
+  - Record MCP usage with endpoint value `mcp`. Record the logical proxy result
+    status when an MCP tool error uses a successful HTTP transport response.
+  - Add a `Copy MCP URL` action for each owned tenant. Show the action only
+    after the tenant has at least one configured text route.
+  - Document the MCP URL, OAuth flow, tool schema, resource schema, client
+    configuration, security boundary, and provider-key requirement.
+  - Add the MCP route and OAuth metadata to OpenAPI, runtime configuration, and
+    the repository deployment capability contract.
+  - Keep local acceptance separate from live deployment acceptance. Do not
+    contact or change production during implementation.
+  Deliverables:
+  - Add the stateless MCP transport and the path-specific protected-resource
+    metadata endpoint.
+  - Add strict OAuth bearer-token validation and tenant ownership checks.
+  - Add the shared text-generation service, `llm_proxy.generate_text` tool,
+    and `llm-proxy://routes` resource.
+  - Add tenant UI copy, configuration, OpenAPI, deployment, and user-guide
+    updates for the MCP connection contract.
+  - Add black-box integration and browser coverage through public entry points.
+  Validation:
+  - Run an official MCP client against the real local HTTP route, real local
+    TAuth OAuth flow, and a fake upstream provider.
+  - Verify successful authorization-code and PKCE login, token refresh, token
+    revocation, and consent behavior.
+  - Verify missing, malformed, expired, wrong-issuer, wrong-audience, and
+    wrong-scope tokens. Verify missing and foreign tenant identifiers.
+  - Verify exact tool discovery, input-schema validation, route selection,
+    defaults, media inputs, structured success output, and route-resource data.
+  - Verify queue rejection, provider rate limits, request timeouts, caller
+    cancellation, sanitized tool errors, and managed usage records.
+  - Verify that logs, MCP results, OAuth responses, and browser content contain
+    no provider credential, tenant secret, token, prompt, or generated response.
+  - Run `/v2` regression scenarios to prove one shared execution lifecycle and
+    unchanged tenant-secret authentication for the REST contract.
+  - Use MCP Inspector and one supported remote MCP client for manual local
+    acceptance. Record live-host acceptance as a separate deployment result.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Blocked: mprlab-gateway F001 must complete the TAuth OAuth aggregate
+  deployment contract before this feature can declare its protected resources.
+
+- [ ] [F028] (P2) {F027} Add HeyGen Avatar V as a gateway-owned avatar engine.
+  Goal:
+  Add the current Avatar V engine to the gateway HeyGen avatar contract before
+  MediaOps exposes it through its product surfaces.
+  Cross-repository sequence:
+  - MediaOps I066 consumes this after its I073 base HeyGen/Kling cutover.
+  Requirements:
+  - Add exact engine values `avatar_iv` and `avatar_v` to the HeyGen avatar-video
+    operation and capability catalog.
+  - Resolve the selected look through `GET /v3/avatars/looks/{look_id}` and
+    require `supported_api_engines` to contain `avatar_v` before submitting an
+    Avatar V operation.
+  - Reject Avatar IV-only `motion_prompt` and `expressiveness` controls for an
+    Avatar V plan and preserve the selected engine in the immutable intent.
+  - Use the existing tenant-owned HeyGen credential profile, durable operation
+    state, gateway assets, price evidence, and artifact recovery.
+  Deliverables:
+  - Add the provider adapter fields, catalog metadata, official-client types,
+    HeyGen fixtures, docs, and an explicitly enabled paid live target.
+  Validation:
+  - Prove eligible success, ineligible pre-dispatch rejection, engine-specific
+    control rejection, terminal artifact download, and restart recovery.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [ ] [F029] (P2) {F025} Add MiniMax H3 V2 video generation to model operations.
+  Goal:
+  Add the provider-qualified MiniMax H3 V2 route to the gateway before MediaOps
+  exposes the model through its video product contracts.
+  Cross-repository sequence:
+  - MediaOps I060 consumes this after its I071 base video cutover.
+  Requirements:
+  - Add canonical provider `minimax`, exact model `MiniMax-H3`, and only the
+    documented V2 create/query and `video_generation_input` upload contracts.
+  - Support text, first/last frame, and reference image/video/audio roles with
+    the documented mutual exclusions, media limits, 768P/2K resolutions,
+    4..15-second duration, and exact aspect behavior.
+  - Store provider task and upload ids in the durable operation, poll only the
+    V2 task resource, materialize the terminal MP4 as a gateway artifact, and
+    recover through the gateway operation id.
+  - Publish the H3 price as unavailable until MiniMax publishes an exact rate.
+    Preserve returned duration and media counts as observed usage.
+  - Use one tenant-owned MiniMax credential profile and catalog-owned account
+    concurrency.
+  Deliverables:
+  - Add the MiniMax adapter, catalog, official-client types, provider fixtures,
+    recovery, docs, and an explicitly enabled minimal live target.
+  Validation:
+  - Prove exact payload roles, upload URI mapping, polling states, restart and
+    uncertain recovery, input limits, artifact integrity, and absence of Hailuo
+    V1 behavior through public black-box tests.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [ ] [F030] (P2) {F026} Add Speechify text-to-speech and voice discovery to model operations.
+  Goal:
+  Add the current Speechify complete-response speech and voice-discovery
+  contracts to the gateway before MediaOps exposes them in narration flows.
+  Cross-repository sequence:
+  - MediaOps I058 consumes this after its I072 base audio cutover.
+  Requirements:
+  - Add canonical provider `speechify`, live `GET /v1/audio/models` and
+    `GET /v1/voices` discovery, and complete-response `POST /v1/audio/speech`.
+  - Admit only non-deprecated models that declare the speech endpoint and
+    preserve exact model, language, voice, output format, billable character,
+    request-id, and speech-mark metadata.
+  - Apply the documented input and pagination limits, account concurrency,
+    `Retry-After`, and provider error classification before returning a typed
+    result.
+  - Decode and validate returned audio into a gateway artifact and expose
+    provider-tagged speech marks as a JSON artifact. Mark provider recovery
+    unavailable when no durable retrieval handle exists.
+  - Use one tenant-owned Speechify credential profile. Publish price
+    unavailable until an exact official rate is cataloged.
+  Deliverables:
+  - Add Speechify adapters, live discovery projection, catalog entries,
+    official-client types, fixtures, docs, and an explicitly enabled live
+    discovery/minimal speech target.
+  Validation:
+  - Prove discovery, voice pagination, exact speech payload, audio decoding,
+    speech marks, rate/concurrency handling, transport uncertainty, secret
+    safety, and artifact integrity through public black-box tests.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+- [ ] [F020] (P2) {F016} Add route-validated sampling controls to the canonical v3 messages contract.
+  Goal:
+  Let a caller set low-level sampling controls only when the selected provider
+  offering declares exact support for them.
+  Requirements:
+  - Use the authoritative catalog as the source for each provider offering's supported
+    controls, numeric bounds, defaults, and incompatible control combinations.
+  - Add one optional `sampling` object with exact fields `temperature`,
+    `top_p`, `presence_penalty`, and `frequency_penalty`. Reject unknown
+    fields, non-finite numbers, and values outside the selected route's bounds.
+  - Make `POST /v3` the canonical messages operation. Update every first-party
+    client, example, generated contract, and caller in the same forward-only
+    change, then remove the obsolete `/v2` route and schema.
+  - Resolve the provider and model route before validation. Reject a supplied
+    control that the resolved offering does not support before an upstream
+    request. Omit only controls that the caller did not supply.
+  - Define the exact interaction between `sampling` and `reasoning_effort`
+    for each offering in the capability catalog. Reject unsupported
+    combinations without translation, clamping, or silent removal.
+  - Map each accepted field through the provider-owned adapter and documented
+    provider-native field. Keep provider-specific names and defaults at that
+    adapter boundary.
+  - Update the Go, Python, Node.js, and CLI clients to expose the same typed
+    sampling object and canonical `/v3` request.
+  Deliverables:
+  - Add the strict `/v3` request schema, route-capability validation, provider
+    mappings, official-client types, CLI flags, OpenAPI contract, and current
+    documentation.
+  - Remove the obsolete `/v2` route, schemas, examples, and first-party client
+    calls after the forward migration.
+  Validation:
+  - Exercise the real public router against fake upstream providers. Prove each
+    accepted control maps to the exact provider request and every invalid or
+    unsupported control fails before upstream dispatch.
+  - Prove absent controls remain absent, accepted zero values remain explicit,
+    and supported sampling plus reasoning combinations preserve exact values.
+  - Exercise all official clients and the CLI through `/v3`. Prove they expose
+    the same typed failures and do not retain a `/v2` request path.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
 ## Planning
 *do not implement yet*
 
-- [ ] [P006] (P2) Define provider lifecycle, model onboarding, and hosted service SLA terms.
-  Goal:
-  Turn the proposed long-term provider support, model-addition timing, and
-  hosted availability promises into measurable service commitments before they
-  appear in public marketing copy.
-  Requirements:
-  - Define separate provider lifecycle, model-onboarding SLO, and hosted uptime
-    SLA scopes, including eligibility, measurement windows, exclusions,
-    deprecation notice, incident communication, and remedies where applicable.
-  - Decide which commitments apply to the open-source integration contract,
-    managed provider onboarding, and a hosted service; do not collapse them into
-    one ambiguous guarantee.
-  - Identify the operational evidence, ownership, monitoring, support channel,
-    and approval needed to publish each commitment.
-  Deliverables:
-  - An approved support-policy and SLA contract suitable for public-site copy,
-    with implementation issues for any missing operational controls.
-  Validation:
-  - Legal, product, and service owners approve each published metric and the
-    production evidence path can calculate it without manual interpretation.
 - [ ] [P001] (P1) Design a tenant-scoped provider, model, and key-acquisition onboarding flow.
   Goal:
   Let a signed-in managed user complete one clear text-routing setup: select a
@@ -1945,6 +2003,26 @@ retain satisfied historical dependencies.
     narrow layouts, saved-key updates, and explicit failure states.
   - Run the required baseline and final `timeout -k 350s -s SIGKILL 350s make ci`
     pair for the implementation, with the final run after the last code edit.
+- [ ] [P006] (P2) Define provider lifecycle, model onboarding, and hosted service SLA terms.
+  Goal:
+  Turn the proposed long-term provider support, model-addition timing, and
+  hosted availability promises into measurable service commitments before they
+  appear in public marketing copy.
+  Requirements:
+  - Define separate provider lifecycle, model-onboarding SLO, and hosted uptime
+    SLA scopes, including eligibility, measurement windows, exclusions,
+    deprecation notice, incident communication, and remedies where applicable.
+  - Decide which commitments apply to the open-source integration contract,
+    managed provider onboarding, and a hosted service. Do not collapse them into
+    one ambiguous guarantee.
+  - Identify the operational evidence, ownership, monitoring, support channel,
+    and approval needed to publish each commitment.
+  Deliverables:
+  - An approved support-policy and SLA contract suitable for public-site copy,
+    with implementation issues for any missing operational controls.
+  Validation:
+  - Legal, product, and service owners approve each published metric and the
+    production evidence path can calculate it without manual interpretation.
 - [ ] [P003] (P2) {I218} Re-audit and expand the SEO/use-case resource system from verified product contracts.
   Goal:
   Refresh LLM Proxy's search and resource strategy from the current repository

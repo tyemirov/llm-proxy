@@ -1987,7 +1987,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 				wantStatus: http.StatusBadRequest,
 			},
 			{
-				name: "grok missing credential",
+				name: "xai missing credential",
 				configuration: proxy.Configuration{
 					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
 					OpenAIKey:             TestAPIKey,
@@ -1997,7 +1997,7 @@ func TestCoverageDictationEdges(t *testing.T) {
 					RequestTimeoutSeconds: TestTimeout,
 					MaxInputAudioBytes:    1024,
 				},
-				requestURL: "/dictate?key=" + TestSecret + "&provider=grok",
+				requestURL: "/dictate?key=" + TestSecret + "&provider=xai",
 				wantStatus: http.StatusServiceUnavailable,
 			},
 			{
@@ -2005,14 +2005,14 @@ func TestCoverageDictationEdges(t *testing.T) {
 				configuration: proxy.Configuration{
 					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
 					OpenAIKey:             TestAPIKey,
-					GrokKey:               testGrokKey,
+					XAIKey:                testXAIKey,
 					LogLevel:              proxy.LogLevelInfo,
 					WorkerCount:           1,
 					QueueSize:             1,
 					RequestTimeoutSeconds: TestTimeout,
 					MaxInputAudioBytes:    1024,
 				},
-				requestURL: "/dictate?key=" + TestSecret + "&provider=grok&model=unknown",
+				requestURL: "/dictate?key=" + TestSecret + "&provider=xai&model=unknown",
 				wantStatus: http.StatusBadRequest,
 			},
 		}

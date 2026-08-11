@@ -25,8 +25,8 @@ const (
 	ProviderNameAnthropic = "anthropic"
 	// ProviderNameMeta identifies Meta Model API routing.
 	ProviderNameMeta = "meta"
-	// ProviderNameGrok identifies xAI Grok routing.
-	ProviderNameGrok = "grok"
+	// ProviderNameXAI identifies the xAI credential and routing boundary.
+	ProviderNameXAI = "xai"
 )
 
 const (
@@ -34,7 +34,6 @@ const (
 	providerAliasKimi   = "kimi"
 	providerAliasGLM    = "glm"
 	providerAliasClaude = "claude"
-	providerAliasXAI    = "xai"
 )
 
 const (
@@ -48,8 +47,8 @@ const (
 	defaultGeminiBaseURL          = "https://generativelanguage.googleapis.com/v1beta"
 	defaultAnthropicBaseURL       = "https://api.anthropic.com"
 	defaultMetaBaseURL            = "https://api.meta.ai/v1"
-	defaultGrokBaseURL            = "https://api.x.ai/v1"
-	defaultGrokTranscriptionsURL  = "https://api.x.ai/v1/stt"
+	defaultXAIBaseURL             = "https://api.x.ai/v1"
+	defaultXAITranscriptionsURL   = "https://api.x.ai/v1/stt"
 )
 
 const (

@@ -77,6 +77,8 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 		UpdatedAt:       fixedTime.Add(2 * time.Hour),
 	}
 	secondTenant.applyDefaults(defaultManagedRoutingDefaults())
+	secondTenant.DefaultProvider = retiredGrokProviderIdentifier
+	secondTenant.DefaultModel = ModelNameGrok43
 	if createError := legacyDatabase.Table(managedTenantTable).Create(&[]legacyManagedTenantRecord{firstTenant, secondTenant}).Error; createError != nil {
 		t.Fatalf("seed legacy tenants: %v", createError)
 	}
@@ -84,20 +86,20 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 	if firstEncryptionError != nil {
 		t.Fatalf("encrypt first key: %v", firstEncryptionError)
 	}
-	secondCiphertext, secondEncryptionError := providerKeyCipher.encrypt(bytes.NewReader(bytes.Repeat([]byte{1}, providerKeyCipher.aeadCipher.NonceSize())), secondTenant.UserID, ProviderNameOpenAI, "sk-second")
+	secondCiphertext, secondEncryptionError := providerKeyCipher.encrypt(bytes.NewReader(bytes.Repeat([]byte{1}, providerKeyCipher.aeadCipher.NonceSize())), secondTenant.UserID, retiredGrokProviderIdentifier, "sk-second")
 	if secondEncryptionError != nil {
 		t.Fatalf("encrypt second key: %v", secondEncryptionError)
 	}
 	legacyProviderKeys := []legacyManagedProviderAPIKeyRecord{
 		{UserID: firstTenant.UserID, ProviderID: ProviderNameOpenAI, EncryptedAPIKey: firstCiphertext, TextModel: ModelNameGPT41, SystemPrompt: "first system", CreatedAt: fixedTime, UpdatedAt: fixedTime.Add(time.Minute)},
-		{UserID: secondTenant.UserID, ProviderID: ProviderNameOpenAI, EncryptedAPIKey: secondCiphertext, TextModel: ModelNameGPT41, SystemPrompt: "second system", CreatedAt: fixedTime.Add(time.Hour), UpdatedAt: fixedTime.Add(2 * time.Hour)},
+		{UserID: secondTenant.UserID, ProviderID: retiredGrokProviderIdentifier, EncryptedAPIKey: secondCiphertext, TextModel: ModelNameGrok43, SystemPrompt: "second system", CreatedAt: fixedTime.Add(time.Hour), UpdatedAt: fixedTime.Add(2 * time.Hour)},
 	}
 	if createError := legacyDatabase.Table(managedProviderKeyTable).Create(&legacyProviderKeys).Error; createError != nil {
 		t.Fatalf("seed legacy provider keys: %v", createError)
 	}
 	legacyUsage := []legacyManagedUsageEventRecord{
 		{ID: 11, UserID: firstTenant.UserID, TenantID: firstTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: http.StatusOK, Success: true, LatencyMilliseconds: 17, RequestTokens: 2, ResponseTokens: 3, TotalTokens: 5, CreatedAt: fixedTime.Add(3 * time.Hour)},
-		{ID: 29, UserID: secondTenant.UserID, TenantID: secondTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: http.StatusBadGateway, Success: false, LatencyMilliseconds: 31, CreatedAt: fixedTime.Add(4 * time.Hour)},
+		{ID: 29, UserID: secondTenant.UserID, TenantID: secondTenant.TenantID, Endpoint: usageEndpointText, ProviderID: retiredGrokProviderIdentifier, ModelID: ModelNameGrok43, StatusCode: http.StatusBadGateway, Success: false, LatencyMilliseconds: 31, CreatedAt: fixedTime.Add(4 * time.Hour)},
 		{ID: 41, UserID: firstTenant.UserID, TenantID: firstTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: statusClientClosedRequest, Success: false, LatencyMilliseconds: 7, CreatedAt: fixedTime.Add(5 * time.Hour)},
 	}
 	if createError := legacyDatabase.Table(managedUsageEventTable).Create(&legacyUsage).Error; createError != nil {
@@ -169,6 +171,86 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 	}
 	if initializeError := initializeManagedTenantSchema(database.database, providerKeyCipher, providers); initializeError != nil {
 		t.Fatalf("reopen current schema: %v", initializeError)
+	}
+}
+
+func TestManagedTenantSQLiteOwnershipMigrationCanonicalizesConfirmedRouteIdentities(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "legacy-native-models.db")
+	providerKeyCipher := internalManagedProviderKeyCipher()
+	providers := internalManagementProviderRegistry()
+	legacyDatabase := openLegacyManagedTenantDatabase(t, databasePath)
+	fixedTime := time.Date(2026, 8, 11, 7, 0, 0, 0, time.UTC)
+	legacyTenant := legacyManagedTenantRecord{
+		UserID: "native-model-owner", TenantID: "native-model-tenant",
+		DefaultProvider: ProviderNameMiniMax, DefaultModel: managedMiniMaxNativeModel,
+		DefaultDictationProvider: ProviderNameSiliconFlow, DefaultDictationModel: managedSenseVoiceNativeModel,
+		DefaultSystemPrompt: "preserve native prompt", CreatedAt: fixedTime, UpdatedAt: fixedTime.Add(time.Minute),
+	}
+	if createError := legacyDatabase.Table(managedTenantTable).Create(&legacyTenant).Error; createError != nil {
+		t.Fatalf("seed native legacy tenant: %v", createError)
+	}
+	encryptLegacyProviderKey := func(providerIdentifier string, rawAPIKey string, nonceByte byte) string {
+		t.Helper()
+		encryptedKey, encryptionError := providerKeyCipher.encrypt(
+			bytes.NewReader(bytes.Repeat([]byte{nonceByte}, providerKeyCipher.aeadCipher.NonceSize())),
+			legacyTenant.UserID,
+			providerIdentifier,
+			rawAPIKey,
+		)
+		if encryptionError != nil {
+			t.Fatalf("encrypt native legacy provider=%s: %v", providerIdentifier, encryptionError)
+		}
+		return encryptedKey
+	}
+	legacyProviderKeys := []legacyManagedProviderAPIKeyRecord{
+		{UserID: legacyTenant.UserID, ProviderID: ProviderNameMiniMax, EncryptedAPIKey: encryptLegacyProviderKey(ProviderNameMiniMax, "sk-minimax", 1), TextModel: managedMiniMaxNativeModel, CreatedAt: fixedTime, UpdatedAt: fixedTime},
+		{UserID: legacyTenant.UserID, ProviderID: ProviderNameSiliconFlow, EncryptedAPIKey: encryptLegacyProviderKey(ProviderNameSiliconFlow, "sk-siliconflow", 2), TextModel: managedSiliconFlowDeepSeekNativeModel, CreatedAt: fixedTime, UpdatedAt: fixedTime},
+	}
+	if createError := legacyDatabase.Table(managedProviderKeyTable).Create(&legacyProviderKeys).Error; createError != nil {
+		t.Fatalf("seed native legacy provider keys: %v", createError)
+	}
+	legacyUsage := legacyManagedUsageEventRecord{
+		ID: 51, UserID: legacyTenant.UserID, TenantID: legacyTenant.TenantID, Endpoint: usageEndpointText,
+		ProviderID: ProviderNameMiniMax, ModelID: managedMiniMaxNativeModel,
+		StatusCode: http.StatusOK, Success: true, CreatedAt: fixedTime.Add(2 * time.Minute),
+	}
+	if createError := legacyDatabase.Table(managedUsageEventTable).Create(&legacyUsage).Error; createError != nil {
+		t.Fatalf("seed native legacy usage: %v", createError)
+	}
+
+	database, databaseError := newGORMManagedTenantDatabase(
+		ManagementConfiguration{DatabasePath: databasePath, DatabaseDialector: sqlite.Open(databasePath)},
+		providerKeyCipher,
+		providers,
+	)
+	if databaseError != nil {
+		t.Fatalf("migrate native legacy database: %v", databaseError)
+	}
+	migratedTenant, tenantError := database.tenantByOwnerAndID(legacyTenant.UserID, legacyTenant.TenantID)
+	if tenantError != nil {
+		t.Fatalf("load migrated native legacy tenant: %v", tenantError)
+	}
+	expectedDefaults := TenantDefaults{
+		Provider: ProviderNameMiniMax, Model: ModelNameMiniMaxM27,
+		DictationProvider: ProviderNameSiliconFlow, DictationModel: "sensevoice-small",
+		SystemPrompt: "preserve native prompt",
+	}
+	if migratedTenant.defaults() != expectedDefaults || len(migratedTenant.ProviderAPIKeys) != 2 || !migratedTenant.UpdatedAt.Equal(legacyTenant.UpdatedAt) {
+		t.Fatalf("migrated native legacy tenant=%+v", migratedTenant)
+	}
+	modelsByProvider := map[string]string{}
+	for _, providerKey := range migratedTenant.ProviderAPIKeys {
+		modelsByProvider[providerKey.ProviderID] = providerKey.TextModel
+	}
+	if modelsByProvider[ProviderNameMiniMax] != ModelNameMiniMaxM27 || modelsByProvider[ProviderNameSiliconFlow] != ModelNameSiliconFlowDeepSeek {
+		t.Fatalf("migrated native legacy provider models=%v", modelsByProvider)
+	}
+	var migratedUsage managedUsageEventRecord
+	if queryError := database.database.First(&migratedUsage, legacyUsage.ID).Error; queryError != nil || migratedUsage.ProviderID != legacyUsage.ProviderID || migratedUsage.ModelID != legacyUsage.ModelID {
+		t.Fatalf("migrated native legacy usage=%+v error=%v", migratedUsage, queryError)
+	}
+	if initializeError := initializeManagedTenantSchema(database.database, providerKeyCipher, providers); initializeError != nil {
+		t.Fatalf("reopen native legacy schema: %v", initializeError)
 	}
 }
 
@@ -724,6 +806,8 @@ func internalManagementProviderRegistry() *providerRegistry {
 			internalTestOffering(ProviderNameMiniMax, ModelNameMiniMaxM27, []string{ModelOperationText}, []string{ModelOperationText}),
 			internalTestOffering(ProviderNameSiliconFlow, ModelNameSiliconFlowDeepSeek, []string{ModelOperationText}, []string{ModelOperationText}),
 			internalTestOffering(ProviderNameSiliconFlow, "sensevoice-small", []string{ModelOperationDictation}, []string{ModelOperationDictation}),
+			internalTestOffering(ProviderNameXAI, ModelNameGrok43, []string{ModelOperationText}, []string{ModelOperationText}),
+			internalTestOffering(ProviderNameXAI, "xai-stt", []string{ModelOperationDictation}, []string{ModelOperationDictation}),
 		),
 	})
 }

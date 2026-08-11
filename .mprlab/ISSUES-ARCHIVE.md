@@ -17,6 +17,8 @@ Archive passes:
   managed data to schema version 4.
 - 2026-08-10: Archived I221 after normalizing model identity and provider
   offerings.
+- 2026-08-10: Archived I216 after publishing the authoritative model-operation
+  capability and pricing catalog.
 
 `CHANGELOG.md` remains the release-level history. This index keeps completed
 issue titles discoverable without making the active tracker noisy.
@@ -2891,6 +2893,64 @@ issue titles discoverable without making the active tracker noisy.
 
 
 ### Complete entries archived 2026-08-10
+
+- [x] [I216] (P0) Make one model-operation capability and pricing catalog authoritative.
+  Goal:
+  Publish one tenant-safe catalog for every provider-backed model operation.
+  Use it for planning, routing, validation, pricing, public discovery, and
+  official clients.
+  Cross-repository source:
+  - Completed MediaOps I068 supplies exact condition matching and reviewed
+    pricing records for the bounded import into LLM Proxy.
+  Requirements:
+  - Extend the normalized I221 catalog with credential kinds, operation kinds,
+    pricing, controls, enums, bounds, account-dependent limits, and artifact
+    types.
+  - Add typed prices with components, currency, units, exact conditions,
+    minimum charges, official source, verification date, and an explicit
+    unavailable reason.
+  - Require exact price-condition matches. Missing, incomplete, or conflicting
+    conditions must return a typed unavailable result.
+  - Keep observed provider usage as execution evidence separate from published
+    pricing and management usage telemetry.
+  - Use organization-level canonical provider identifiers at shared credential
+    boundaries. Keep `gemini` and `vertex` distinct because they use different
+    APIs and credentials. Make `xai` canonical for xAI text and video, migrate
+    persisted managed `grok` routes once, and remove the dual selector.
+  - Expose one catalog service consumed by the later
+    `GET /model/v1/capabilities` handler, planning validation, the public
+    catalog, and provider-management choices.
+  - Import the stabilized MediaOps pricing data in one bounded migration and
+    remove each migrated MediaOps provider record during its family cutover.
+  Deliverables:
+  - Add the catalog types, strict loader, deterministic public projection,
+    exact price selector, one-off xAI route migration, and generated docs.
+  - Add catalog revision identifiers that bind plans to the exact capability
+    and pricing snapshot used to create them.
+  Validation:
+  - Prove all accepted operation routes and prices are catalog-backed and that
+    unknown fields, duplicate identifiers, unsupported credential/lifecycle
+    pairs, and ambiguous prices fail startup.
+  - Prove the public projection excludes credentials, private account state,
+    provider handles, and tenant defaults.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved 2026-08-10:
+  - Catalog revision `2026-08-10.i216.1` now defines operation artifacts,
+    provider credential kinds, exact offerings, controls, limits, and one typed
+    price descriptor for every offering operation.
+  - Exact condition selection imports the reviewed xAI video rates from
+    MediaOps I068 and returns typed unavailable results for every missing or
+    incomplete match. Historical managed usage remains separate telemetry.
+  - `xai` is the sole current provider identifier. Schema version 6 re-encrypts
+    stored `grok` credentials for `xai`, rewrites current text and dictation
+    defaults once, and preserves historical `grok` usage unchanged.
+  - Public REST data, OpenAPI, generated site content, runtime configuration,
+    management choices, and the catalog service share the same validated
+    snapshot without provider-native models, credentials, tenant defaults, or
+    private account state.
+  - The final `make ci` passed all 11 reported gates with 100.0% Go statement
+    coverage and 90 browser scenarios.
 
 - [x] [I221] (P0) Make model identity independent from provider offerings.
   Goal:

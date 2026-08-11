@@ -14,6 +14,7 @@ const binaryBytesPerMiB = 1024 * 1024;
 const capabilityDefinitions = Object.freeze([
   { identifier: "text", label: "Text generation", className: "capability-badge--primary" },
   { identifier: "dictation", label: "Dictation", className: "capability-badge--info" },
+  { identifier: "video_generation", label: "Video generation", className: "capability-badge--info" },
   { identifier: "image_input", label: "Image input", className: "capability-badge--info" },
   { identifier: "audio_input", label: "Audio message input", className: "capability-badge--info" },
   { identifier: "web_search", label: "Web search", className: "capability-badge--success" },
@@ -35,7 +36,8 @@ await renderPublicSite(options);
  * }} RenderOptions
  */
 
-/** @typedef {{identifier: string, label: string}} PublicProviderCapability */
+/** @typedef {{id: string, input_artifacts: string[], output_artifacts: string[]}} PublicModelOperation */
+/** @typedef {{identifier: string, label: string, credential_kinds: string[]}} PublicProviderCapability */
 /** @typedef {{identifier: string, label: string, model_count: number}} PublicModelPublisher */
 /** @typedef {{identifier: string, publisher: string, label: string}} PublicModelFamily */
 /**
@@ -57,10 +59,19 @@ await renderPublicSite(options);
  *   model: string,
  *   capabilities: string[],
  *   wire_contract: string,
+ *   execution_lifecycle: string,
  *   output_token_limit: number,
  *   reasoning_efforts: string[],
+ *   controls: PublicCatalogControl[],
+ *   limits: PublicCatalogLimit[],
  * }} PublicProviderOffering
  */
+/** @typedef {{id: string, kind: string, values: string[], minimum: number | null, maximum: number | null, account_dependent: boolean}} PublicCatalogControl */
+/** @typedef {{id: string, value: number | null, unit: string, account_dependent: boolean}} PublicCatalogLimit */
+/** @typedef {{resolution: string, generated_audio: string, input_media: string, output_media: string, duration: string, quantity: string, quality: string, mode: string, api_version: string, avatar_type: string, billing_mode: string, billing_outcome: string}} PublicPriceConditions */
+/** @typedef {{component: string, currency: string, rate: number, unit: string, conditions: PublicPriceConditions}} PublicPriceRate */
+/** @typedef {{currency: string, amount: number, unit: string}} PublicMinimumCharge */
+/** @typedef {{provider: string, model: string, operation: string, available: boolean, rates: PublicPriceRate[], minimum_charge: PublicMinimumCharge | null, source: string, last_verified: string, unavailable_reason: string}} PublicPriceDescriptor */
 /**
  * @typedef {{
  *   providers: number,
@@ -72,11 +83,14 @@ await renderPublicSite(options);
  */
 /**
  * @typedef {{
+ *   revision: string,
+ *   operations: PublicModelOperation[],
  *   providers: PublicProviderCapability[],
  *   publishers: PublicModelPublisher[],
  *   families: PublicModelFamily[],
  *   models: PublicExactModelCapability[],
  *   offerings: PublicProviderOffering[],
+ *   prices: PublicPriceDescriptor[],
  *   counts: PublicCapabilityCounts,
  *   max_prompt_bytes: number,
  *   max_input_audio_bytes: number,
@@ -175,24 +189,47 @@ async function fetchCapabilityCatalog(capabilitiesURL) {
 function parseCapabilityCatalog(rawCatalog) {
   const catalog = requiredRecord(rawCatalog, "catalog");
   requireExactKeys(catalog, [
+    "revision",
+    "operations",
     "providers",
     "publishers",
     "families",
     "models",
     "offerings",
+    "prices",
     "counts",
     "max_prompt_bytes",
     "max_input_audio_bytes",
     "max_request_timeout_seconds",
   ], "catalog");
 
+  const operations = requiredNonemptyArray(catalog.operations, "catalog.operations").map((rawOperation, operationIndex) => {
+    const field = `catalog.operations[${operationIndex}]`;
+    const operation = requiredRecord(rawOperation, field);
+    requireExactKeys(operation, ["id", "input_artifacts", "output_artifacts"], field);
+    const identifier = requiredString(operation.id, `${field}.id`);
+    if (identifier !== "text" && identifier !== "dictation" && identifier !== "video_generation") {
+      throw new Error(`public_capabilities_invalid: ${field}.id value=${identifier}`);
+    }
+    return {
+      id: identifier,
+      input_artifacts: parseArtifactKinds(operation.input_artifacts, `${field}.input_artifacts`),
+      output_artifacts: parseArtifactKinds(operation.output_artifacts, `${field}.output_artifacts`),
+    };
+  });
+
   const providers = requiredNonemptyArray(catalog.providers, "catalog.providers").map((rawProvider, providerIndex) => {
     const field = `catalog.providers[${providerIndex}]`;
     const provider = requiredRecord(rawProvider, field);
-    requireExactKeys(provider, ["identifier", "label"], field);
+    requireExactKeys(provider, ["identifier", "label", "credential_kinds"], field);
+    const credentialKinds = requiredNonemptyStringArray(provider.credential_kinds, `${field}.credential_kinds`);
+    if (credentialKinds.length !== 1 || credentialKinds[0] !== "api_key") {
+      throw new Error(`public_capabilities_invalid: ${field}.credential_kinds`);
+    }
     return {
       identifier: requiredString(provider.identifier, `${field}.identifier`),
       label: requiredString(provider.label, `${field}.label`),
+      credential_kinds: credentialKinds,
     };
   });
 
@@ -226,7 +263,7 @@ function parseCapabilityCatalog(rawCatalog) {
     ], field);
     const operations = requiredNonemptyStringArray(model.operations, `${field}.operations`);
     for (const operation of operations) {
-      if (operation !== "text" && operation !== "dictation") {
+      if (operation !== "text" && operation !== "dictation" && operation !== "video_generation") {
         throw new Error(`public_capabilities_invalid: ${field}.operations value=${operation}`);
       }
     }
@@ -252,7 +289,8 @@ function parseCapabilityCatalog(rawCatalog) {
     const field = `catalog.offerings[${offeringIndex}]`;
     const offering = requiredRecord(rawOffering, field);
     requireExactKeys(offering, [
-      "identifier", "provider", "model", "capabilities", "wire_contract", "output_token_limit", "reasoning_efforts",
+      "identifier", "provider", "model", "capabilities", "wire_contract", "execution_lifecycle",
+      "output_token_limit", "reasoning_efforts", "controls", "limits",
     ], field);
     return {
       identifier: requiredString(offering.identifier, `${field}.identifier`),
@@ -260,10 +298,17 @@ function parseCapabilityCatalog(rawCatalog) {
       model: requiredString(offering.model, `${field}.model`),
       capabilities: parseCapabilities(offering.capabilities, `${field}.capabilities`),
       wire_contract: requiredString(offering.wire_contract, `${field}.wire_contract`, true),
+      execution_lifecycle: requiredExecutionLifecycle(offering.execution_lifecycle, `${field}.execution_lifecycle`),
       output_token_limit: requiredNonnegativeInteger(offering.output_token_limit, `${field}.output_token_limit`),
       reasoning_efforts: requiredStringArray(offering.reasoning_efforts, `${field}.reasoning_efforts`),
+      controls: requiredArray(offering.controls, `${field}.controls`).map((control, controlIndex) => parseCatalogControl(control, `${field}.controls[${controlIndex}]`)),
+      limits: requiredArray(offering.limits, `${field}.limits`).map((limit, limitIndex) => parseCatalogLimit(limit, `${field}.limits[${limitIndex}]`)),
     };
   });
+
+  const prices = requiredNonemptyArray(catalog.prices, "catalog.prices").map((price, priceIndex) => (
+    parsePriceDescriptor(price, `catalog.prices[${priceIndex}]`)
+  ));
 
   const countsRecord = requiredRecord(catalog.counts, "catalog.counts");
   requireExactKeys(countsRecord, [
@@ -278,6 +323,7 @@ function parseCapabilityCatalog(rawCatalog) {
   };
 
   const providersByIdentifier = uniqueByIdentifier(providers, "catalog.providers");
+  const operationsByIdentifier = uniqueByIdentifier(operations.map((operation) => ({ identifier: operation.id })), "catalog.operations");
   const publishersByIdentifier = uniqueByIdentifier(publishers, "catalog.publishers");
   const familiesByIdentifier = uniqueByIdentifier(families, "catalog.families");
   const modelsByIdentifier = uniqueByIdentifier(models, "catalog.models");
@@ -294,6 +340,9 @@ function parseCapabilityCatalog(rawCatalog) {
       throw new Error(`public_capabilities_invalid: model=${model.identifier} family_publisher_mismatch`);
     }
     actualModelCounts.set(model.publisher, (actualModelCounts.get(model.publisher) ?? 0) + 1);
+    for (const operation of model.operations) {
+      requireReference(operationsByIdentifier, operation, `model=${model.identifier} operation`);
+    }
     for (const offeringIdentifier of model.provider_offerings) {
       const offering = requireReference(offeringsByIdentifier, offeringIdentifier, `model=${model.identifier} offering`);
       if (offering.model !== model.identifier || referencedOfferings.has(offeringIdentifier)) {
@@ -314,6 +363,17 @@ function parseCapabilityCatalog(rawCatalog) {
       throw new Error(`public_capabilities_invalid: offering=${offering.identifier} route_identity`);
     }
   }
+  const priceIdentifiers = new Set();
+  for (const price of prices) {
+    requireReference(providersByIdentifier, price.provider, `price provider`);
+    requireReference(modelsByIdentifier, price.model, `price model`);
+    requireReference(operationsByIdentifier, price.operation, `price operation`);
+    const priceIdentifier = `${price.provider}:${price.model}:${price.operation}`;
+    if (priceIdentifiers.has(priceIdentifier) || !offeringsByIdentifier.has(`${price.provider}:${price.model}`)) {
+      throw new Error(`public_capabilities_invalid: price=${priceIdentifier}`);
+    }
+    priceIdentifiers.add(priceIdentifier);
+  }
   requireCount(counts.providers, providers.length, "catalog.counts.providers");
   requireCount(counts.model_publishers, publishers.length, "catalog.counts.model_publishers");
   requireCount(counts.model_families, families.length, "catalog.counts.model_families");
@@ -321,11 +381,14 @@ function parseCapabilityCatalog(rawCatalog) {
   requireCount(counts.provider_offerings, offerings.length, "catalog.counts.provider_offerings");
 
   return {
+    revision: requiredString(catalog.revision, "catalog.revision"),
+    operations,
     providers,
     publishers,
     families,
     models,
     offerings,
+    prices,
     counts,
     max_prompt_bytes: requiredPositiveInteger(catalog.max_prompt_bytes, "catalog.max_prompt_bytes"),
     max_input_audio_bytes: requiredPositiveInteger(catalog.max_input_audio_bytes, "catalog.max_input_audio_bytes"),
@@ -349,6 +412,132 @@ function parseCapabilities(rawCapabilities, field) {
     }
   }
   return capabilities;
+}
+
+/**
+ * @param {unknown} rawArtifacts
+ * @param {string} field
+ */
+function parseArtifactKinds(rawArtifacts, field) {
+  const artifacts = requiredNonemptyStringArray(rawArtifacts, field);
+  for (const artifact of artifacts) {
+    if (artifact !== "text" && artifact !== "image" && artifact !== "audio" && artifact !== "video") {
+      throw new Error(`public_capabilities_invalid: ${field} value=${artifact}`);
+    }
+  }
+  return artifacts;
+}
+
+/**
+ * @param {unknown} rawLifecycle
+ * @param {string} field
+ */
+function requiredExecutionLifecycle(rawLifecycle, field) {
+  const lifecycle = requiredString(rawLifecycle, field);
+  if (lifecycle !== "synchronous_completion" && lifecycle !== "pollable_resource") {
+    throw new Error(`public_capabilities_invalid: ${field} value=${lifecycle}`);
+  }
+  return lifecycle;
+}
+
+/**
+ * @param {unknown} rawControl
+ * @param {string} field
+ * @returns {PublicCatalogControl}
+ */
+function parseCatalogControl(rawControl, field) {
+  const control = requiredRecord(rawControl, field);
+  requireExactKeys(control, ["id", "kind", "values", "minimum", "maximum", "account_dependent"], field);
+  const kind = requiredString(control.kind, `${field}.kind`);
+  if (kind !== "enum" && kind !== "integer" && kind !== "boolean") {
+    throw new Error(`public_capabilities_invalid: ${field}.kind value=${kind}`);
+  }
+  return {
+    id: requiredString(control.id, `${field}.id`),
+    kind,
+    values: requiredStringArray(control.values, `${field}.values`),
+    minimum: nullableNonnegativeInteger(control.minimum, `${field}.minimum`),
+    maximum: nullableNonnegativeInteger(control.maximum, `${field}.maximum`),
+    account_dependent: requiredBoolean(control.account_dependent, `${field}.account_dependent`),
+  };
+}
+
+/**
+ * @param {unknown} rawLimit
+ * @param {string} field
+ * @returns {PublicCatalogLimit}
+ */
+function parseCatalogLimit(rawLimit, field) {
+  const limit = requiredRecord(rawLimit, field);
+  requireExactKeys(limit, ["id", "value", "unit", "account_dependent"], field);
+  return {
+    id: requiredString(limit.id, `${field}.id`),
+    value: nullableNonnegativeInteger(limit.value, `${field}.value`),
+    unit: requiredString(limit.unit, `${field}.unit`),
+    account_dependent: requiredBoolean(limit.account_dependent, `${field}.account_dependent`),
+  };
+}
+
+/**
+ * @param {unknown} rawPrice
+ * @param {string} field
+ * @returns {PublicPriceDescriptor}
+ */
+function parsePriceDescriptor(rawPrice, field) {
+  const price = requiredRecord(rawPrice, field);
+  requireExactKeys(price, [
+    "provider", "model", "operation", "available", "rates", "minimum_charge", "source", "last_verified", "unavailable_reason",
+  ], field);
+  const rates = requiredArray(price.rates, `${field}.rates`).map((rawRate, rateIndex) => {
+    const rateField = `${field}.rates[${rateIndex}]`;
+    const rate = requiredRecord(rawRate, rateField);
+    requireExactKeys(rate, ["component", "currency", "rate", "unit", "conditions"], rateField);
+    return {
+      component: requiredString(rate.component, `${rateField}.component`),
+      currency: requiredString(rate.currency, `${rateField}.currency`),
+      rate: requiredNonnegativeNumber(rate.rate, `${rateField}.rate`),
+      unit: requiredString(rate.unit, `${rateField}.unit`),
+      conditions: parsePriceConditions(rate.conditions, `${rateField}.conditions`),
+    };
+  });
+  let minimumCharge = null;
+  if (price.minimum_charge !== null) {
+    const minimum = requiredRecord(price.minimum_charge, `${field}.minimum_charge`);
+    requireExactKeys(minimum, ["currency", "amount", "unit"], `${field}.minimum_charge`);
+    minimumCharge = {
+      currency: requiredString(minimum.currency, `${field}.minimum_charge.currency`),
+      amount: requiredNonnegativeNumber(minimum.amount, `${field}.minimum_charge.amount`),
+      unit: requiredString(minimum.unit, `${field}.minimum_charge.unit`),
+    };
+  }
+  return {
+    provider: requiredString(price.provider, `${field}.provider`),
+    model: requiredString(price.model, `${field}.model`),
+    operation: requiredString(price.operation, `${field}.operation`),
+    available: requiredBoolean(price.available, `${field}.available`),
+    rates,
+    minimum_charge: minimumCharge,
+    source: requiredString(price.source, `${field}.source`),
+    last_verified: requiredString(price.last_verified, `${field}.last_verified`),
+    unavailable_reason: requiredString(price.unavailable_reason, `${field}.unavailable_reason`, true),
+  };
+}
+
+/**
+ * @param {unknown} rawConditions
+ * @param {string} field
+ * @returns {PublicPriceConditions}
+ */
+function parsePriceConditions(rawConditions, field) {
+  const conditions = requiredRecord(rawConditions, field);
+  const keys = [
+    "resolution", "generated_audio", "input_media", "output_media", "duration", "quantity",
+    "quality", "mode", "api_version", "avatar_type", "billing_mode", "billing_outcome",
+  ];
+  requireExactKeys(conditions, keys, field);
+  return /** @type {PublicPriceConditions} */ (Object.fromEntries(
+    keys.map((key) => [key, requiredString(conditions[key], `${field}.${key}`, true)]),
+  ));
 }
 
 /**
@@ -457,7 +646,7 @@ function renderRoutingTree(catalog) {
   <form class="routing-tree__filters" data-route-picker role="search" aria-label="Find an exact model">
     <input type="search" aria-label="Search exact models" placeholder="Search publisher, family, or model" autocomplete="off" data-route-search disabled>
     <select aria-label="Filter model family" data-route-family-filter disabled><option value="">All families</option>${familyOptions}</select>
-    <select aria-label="Filter model operation" data-route-operation-filter disabled><option value="">All operations</option><option value="text">Text</option><option value="dictation">Dictation</option></select>
+    <select aria-label="Filter model operation" data-route-operation-filter disabled><option value="">All operations</option><option value="text">Text</option><option value="dictation">Dictation</option><option value="video_generation">Video generation</option></select>
     <button type="reset" data-route-reset disabled>Reset</button>
   </form>
   <div class="routing-tree__catalog">
@@ -796,6 +985,39 @@ function requiredNonnegativeInteger(value, field) {
     throw new Error(`public_capabilities_invalid: ${field} must be a nonnegative integer`);
   }
   return Number(value);
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} field
+ */
+function nullableNonnegativeInteger(value, field) {
+  if (value === null) {
+    return null;
+  }
+  return requiredNonnegativeInteger(value, field);
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} field
+ */
+function requiredNonnegativeNumber(value, field) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(`public_capabilities_invalid: ${field} must be a nonnegative number`);
+  }
+  return value;
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} field
+ */
+function requiredBoolean(value, field) {
+  if (typeof value !== "boolean") {
+    throw new Error(`public_capabilities_invalid: ${field} must be a boolean`);
+  }
+  return value;
 }
 
 /**

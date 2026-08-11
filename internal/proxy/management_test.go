@@ -1555,7 +1555,7 @@ func TestManagementProfileListsCurrentCatalogModels(t *testing.T) {
 		proxy.ProviderNameZhipu:     {"glm-5.2"},
 		proxy.ProviderNameGemini:    {"gemini-3.1-pro-preview", "gemini-3-flash-preview"},
 		proxy.ProviderNameAnthropic: {"claude-fable-5", "claude-sonnet-5"},
-		proxy.ProviderNameGrok:      {"grok-4.5", "grok-4.20-0309-reasoning", "grok-4.20-0309-non-reasoning"},
+		proxy.ProviderNameXAI:       {"grok-4.5", "grok-4.20-0309-reasoning", "grok-4.20-0309-non-reasoning"},
 	}
 	for providerIdentifier, expectedProviderModels := range expectedModels {
 		configuredModels, configured := modelsByProvider[providerIdentifier]

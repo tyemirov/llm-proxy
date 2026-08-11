@@ -88,7 +88,7 @@
             <h2>How it works</h2>
             <ol class="resource-steps">
               <li>Configure provider base_url, api_key, and normalized provider offerings.</li>
-<li>Use provider selectors such as meta, deepseek, dashscope, moonshot, minimax, siliconflow, zhipu, or grok.</li>
+<li>Use provider selectors such as meta, deepseek, dashscope, moonshot, minimax, siliconflow, zhipu, or xai.</li>
 <li>Send GET, compatibility POST, or canonical /v2 requests.</li>
 <li>Let omitted model use the selected provider's configured default.</li>
             </ol>
@@ -116,7 +116,7 @@
 
                         <tr>
                           <td>Provider aliases</td>
-                          <td>Some providers expose aliases such as qwen, kimi, glm, or xai.</td>
+                          <td>Some providers expose aliases such as qwen, kimi, or glm.</td>
                           <td>Callers can use documented selectors.</td>
                         </tr>
 
@@ -156,7 +156,7 @@
 
                     <section class="resource-card">
                       <h3>xAI route</h3>
-                      <p>A Grok text request uses the OpenAI-compatible chat adapter behind provider=grok.</p>
+                      <p>A Grok text request uses the OpenAI-compatible chat adapter behind provider=xai.</p>
                     </section>
 
             </div>

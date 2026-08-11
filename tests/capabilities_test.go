@@ -127,7 +127,7 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 	if catalogError != nil {
 		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
 	}
-	if catalog.Counts.Providers != 11 || catalog.Counts.ModelPublishers != 11 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
+	if catalog.Revision == "" || len(catalog.Operations) != 3 || len(catalog.Prices) != len(catalog.Offerings) || catalog.Counts.Providers != 11 || catalog.Counts.ModelPublishers != 11 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
 		testingInstance.Fatalf("catalog summary=%+v", catalog)
 	}
 	geminiCapabilityFound := false
@@ -193,6 +193,11 @@ func TestPublicCapabilityRESTResourceProjectsChangedCatalogWithoutPrivateConfig(
 	changedOffering.DefaultOperations = nil
 	catalogs.Models = append(catalogs.Models, changedModel)
 	catalogs.Offerings = append(catalogs.Offerings, changedOffering)
+	catalogs.Prices = append(catalogs.Prices, proxy.CatalogPriceDescriptor{
+		Provider: changedOffering.Provider, Model: changedModelID, Operation: proxy.ModelOperationText,
+		Source: "https://platform.moonshot.ai/docs/pricing/chat", LastVerified: "2026-08-10",
+		UnavailableReason: "Exact published pricing has not been imported for this provider offering.",
+	})
 	router, buildError := proxy.BuildRouter(proxy.Configuration{
 		Tenants:       proxy.SingleTenantConfigurations("private-tenant", privateSecret),
 		OpenAIKey:     privateAPIKey,
@@ -213,7 +218,7 @@ func TestPublicCapabilityRESTResourceProjectsChangedCatalogWithoutPrivateConfig(
 		testingInstance.Fatalf("cache control=%q", response.Header().Get("Cache-Control"))
 	}
 	responseBody := response.Body.String()
-	for _, privateValue := range []string{privateAPIKey, privateBaseURL, privateSecret, changedOffering.ProviderModel, "api_key", "base_url", "provider_model", "default_operations"} {
+	for _, privateValue := range []string{privateAPIKey, privateBaseURL, privateSecret, changedOffering.ProviderModel, "base_url", "provider_model", "default_operations"} {
 		if strings.Contains(responseBody, privateValue) {
 			testingInstance.Fatalf("public capability response exposed %q: %s", privateValue, responseBody)
 		}
@@ -221,6 +226,9 @@ func TestPublicCapabilityRESTResourceProjectsChangedCatalogWithoutPrivateConfig(
 	var catalog proxy.PublicCapabilityCatalog
 	if decodeError := json.Unmarshal(response.Body.Bytes(), &catalog); decodeError != nil {
 		testingInstance.Fatalf("decode public capability response: %v", decodeError)
+	}
+	if !slices.Equal(catalog.Providers[0].CredentialKinds, []string{proxy.CatalogCredentialAPIKey}) {
+		testingInstance.Fatalf("public provider credential kinds=%v", catalog.Providers[0].CredentialKinds)
 	}
 	changedModelFound := false
 	for _, model := range catalog.Models {

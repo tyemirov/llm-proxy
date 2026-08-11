@@ -367,7 +367,7 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('<routing-tree class="routing-tree" data-enhanced="false" aria-label="Interactive LLM routing map">');
   expect(html).toContain("One integration. Choose the exact route.");
   expect(html).toContain('<canvas class="routing-tree__connectors" data-route-canvas aria-hidden="true"></canvas>');
-  expect(html).toContain('<span>11 publishers · 56 exact models · 57 offerings</span>');
+  expect(html).toContain('<span>11 publishers · 57 exact models · 58 offerings</span>');
   expect(html).toContain('data-route-publisher="deepseek"');
   expect(html).toContain('data-route-publisher="alibaba"');
   expect(html).toContain('data-route-publisher="moonshot"');
@@ -378,9 +378,9 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('<table class="catalog-table">');
   expect(html).toContain('<strong>11</strong><span>Providers</span>');
   expect(html).toContain('<strong>11</strong><span>Publishers</span>');
-  expect(html).toContain('<strong>23</strong><span>Families</span>');
-  expect(html).toContain('<strong>56</strong><span>Exact models</span>');
-  expect(html).toContain('<strong>57</strong><span>Offerings</span>');
+  expect(html).toContain('<strong>24</strong><span>Families</span>');
+  expect(html).toContain('<strong>57</strong><span>Exact models</span>');
+  expect(html).toContain('<strong>58</strong><span>Offerings</span>');
   expect(html).toContain('data-catalog-sort-header="publisher"');
   expect(html).toContain('data-catalog-sort-header="model"');
   expect(html).toContain('data-catalog-sort-header="capabilities"');
@@ -404,6 +404,8 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain("gemini-2.5-flash");
   expect(html).toContain("claude-sonnet-4-6");
   expect(html).toContain("grok-4.3");
+  expect(html).toContain("grok-imagine-video-1.5");
+  expect(html).toContain('<option value="video_generation">Video generation</option>');
   expect(html).not.toContain("api_key");
   expect(html).not.toContain("base_url");
   expect(html).not.toContain("provider_model");
@@ -755,8 +757,8 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(page.locator("#models > routing-tree")).toHaveCount(0);
   await expect(routingTree).toHaveAttribute("data-enhanced", "false");
   await expect(routingTree.locator("[data-route-publisher]")).toHaveCount(11);
-  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(57);
-  await expect(routingTree.locator("[data-route-model]")).toHaveCount(56);
+  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(58);
+  await expect(routingTree.locator("[data-route-model]")).toHaveCount(57);
   await expect(routingTree.locator('[data-route-publisher="alibaba"]')).toHaveAttribute("aria-pressed", "true");
   await expect(routingTree.locator('[data-route-model-group="alibaba"]')).toBeVisible();
   await expect(routingTree.locator('[data-route-model-group="moonshot"]')).toBeHidden();
@@ -770,7 +772,7 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(catalog).toHaveAttribute("data-enhanced", "false");
   await expect(catalog.locator("[data-catalog-toolbar]")).toBeHidden();
   await expect(catalog.getByRole("columnheader")).toHaveText(["Publisher", "Model", "Provider offerings and capabilities"]);
-  await expect(catalog.locator("[data-catalog-row]")).toHaveCount(56);
+  await expect(catalog.locator("[data-catalog-row]")).toHaveCount(57);
   await expect(catalog.locator('[data-model="gpt-4o-mini-transcribe"]')).toContainText("Dictation");
 
   const footer = page.locator(".public-site-footer-fallback");
@@ -801,8 +803,8 @@ test("visitors can choose a publisher, exact model, and provider offering", asyn
   await expect(routingTree).toHaveAttribute("data-enhanced", "true");
   await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "true");
   await expect(routingTree.locator("[data-route-publisher]")).toHaveCount(11);
-  await expect(routingTree.locator("[data-route-model]")).toHaveCount(56);
-  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(57);
+  await expect(routingTree.locator("[data-route-model]")).toHaveCount(57);
+  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(58);
   await expect(routingTree.locator("[data-route-provider]:visible")).toHaveCount(1);
   await expect(selectedPublisher).toHaveText("Alibaba");
   await expect(selectedModel).toHaveText("qwen-plus");
@@ -872,6 +874,9 @@ test("visitors can choose a publisher, exact model, and provider offering", asyn
   await operationFilter.selectOption("dictation");
   await expect(routingTree.locator("[data-route-publisher]:visible")).toHaveCount(4);
   await expect(routingTree.locator("[data-route-model]:not([hidden])")).toHaveCount(5);
+  await operationFilter.selectOption("video_generation");
+  await expect(routingTree.locator("[data-route-publisher]:visible")).toHaveCount(1);
+  await expect(routingTree.locator("[data-route-model]:not([hidden])")).toHaveCount(1);
 
   if (process.env.I220_SCREENSHOTS === "1") {
     await mkdir(i220ScreenshotDirectory, { recursive: true });
@@ -912,8 +917,8 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   const modelHeader = catalog.locator('[data-catalog-sort-header="model"]');
   const capabilitiesHeader = catalog.locator('[data-catalog-sort-header="capabilities"]');
   await expect(catalog).toHaveAttribute("data-enhanced", "true");
-  await expect(rows).toHaveCount(56);
-  await expect(resultCount).toHaveText("56 of 56 models");
+  await expect(rows).toHaveCount(57);
+  await expect(resultCount).toHaveText("57 of 57 models");
   await expect(filterPanel).toBeHidden();
   await expect(searchSubmit).toHaveAttribute("aria-expanded", "false");
 
@@ -935,20 +940,20 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await expect(catalog.locator('[data-catalog-search-text*="synchronous"]')).toHaveCount(0);
   await searchInput.fill("gemini-3.5-flash image_input audio_input");
   await expect(filterPanel).toBeVisible();
-  await expect(resultCount).toHaveText("1 of 56 model");
+  await expect(resultCount).toHaveText("1 of 57 model");
   await expect(visibleRows).toHaveAttribute("data-model", "gemini-3.5-flash");
 
   await searchInput.fill("gpt-5.5-pro openai_responses xhigh");
-  await expect(resultCount).toHaveText("1 of 56 model");
+  await expect(resultCount).toHaveText("1 of 57 model");
   await expect(visibleRows).toHaveAttribute("data-model", "gpt-5.5-pro");
 
   await searchInput.fill("glm-5.2 131072 token");
-  await expect(resultCount).toHaveText("1 of 56 model");
+  await expect(resultCount).toHaveText("1 of 57 model");
   await expect(visibleRows).toHaveAttribute("data-model", "glm-5.2");
 
   await catalog.getByRole("button", { name: "Reset" }).click();
   await searchInput.fill("dictation");
-  await expect(resultCount).toHaveText("5 of 56 models");
+  await expect(resultCount).toHaveText("5 of 57 models");
   for (const visibleRow of await visibleRows.all()) {
     await expect(visibleRow).toHaveAttribute("data-capabilities", "dictation");
   }
@@ -956,28 +961,28 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await catalog.getByRole("button", { name: "Reset" }).click();
   await catalog.getByRole("checkbox", { name: "Image input" }).check();
   await catalog.getByRole("checkbox", { name: "Audio message input" }).check();
-  await expect(resultCount).toHaveText("2 of 56 models");
+  await expect(resultCount).toHaveText("2 of 57 models");
   await expect(visibleRows).toHaveCount(2);
 
   await searchSubmit.click();
   await expect(filterPanel).toBeHidden();
-  await expect(resultCount).toHaveText("2 of 56 models");
+  await expect(resultCount).toHaveText("2 of 57 models");
   await searchSubmit.click();
   await expect(filterPanel).toBeVisible();
   await expect(catalog.getByRole("checkbox", { name: "Image input" })).toBeChecked();
   await expect(catalog.getByRole("checkbox", { name: "Audio message input" })).toBeChecked();
 
   await catalog.getByRole("checkbox", { name: "Dictation" }).check();
-  await expect(resultCount).toHaveText("0 of 56 models");
+  await expect(resultCount).toHaveText("0 of 57 models");
   await expect(catalog.locator("[data-catalog-empty]")).toBeVisible();
 
   await catalog.getByRole("button", { name: "Reset" }).click();
-  await expect(resultCount).toHaveText("56 of 56 models");
+  await expect(resultCount).toHaveText("57 of 57 models");
   await searchInput.press("Escape");
   await catalog.getByRole("button", { name: "Filter by Dictation" }).first().click();
   await expect(filterPanel).toBeVisible();
   await expect(catalog.getByRole("checkbox", { name: "Dictation" })).toBeChecked();
-  await expect(resultCount).toHaveText("5 of 56 models");
+  await expect(resultCount).toHaveText("5 of 57 models");
 
   await catalog.getByRole("button", { name: "Reset" }).click();
   await expect(publisherHeader).toHaveAttribute("aria-sort", "ascending");
@@ -2725,8 +2730,8 @@ test("provider selection autosaves its exact editor while transient removal stay
   const providerEditor = settingsDialog.locator("provider-editor");
   const providerSelector = providerEditor.getByRole("combobox", { name: "Provider", exact: true });
 
-  await providerSelector.selectOption("grok");
-  const grokKeyInput = providerEditor.getByRole("textbox", { name: "Grok API key" });
+  await providerSelector.selectOption("xai");
+  const grokKeyInput = providerEditor.getByRole("textbox", { name: "xAI API key" });
   await grokKeyInput.fill(firstGrokKey);
   const providerRemovalButton = providerEditor.getByRole("button", { name: "Remove provider key and settings" });
   await expect(providerRemovalButton).toBeVisible();
@@ -2742,7 +2747,7 @@ test("provider selection autosaves its exact editor while transient removal stay
   await expect.poll(() => providerMutations.length).toBe(1);
   expect(providerMutations.at(-1)).toMatchObject({
     method: "PUT",
-    url: providerKeyEndpointURL("grok"),
+    url: providerKeyEndpointURL("xai"),
     payload: { api_key: firstGrokKey, text_model: "grok-4.3", system_prompt: "" },
   });
   const metaKeyInput = providerEditor.getByRole("textbox", { name: "Meta API key" });
@@ -2750,7 +2755,7 @@ test("provider selection autosaves its exact editor while transient removal stay
   await expect(metaKeyInput).toHaveAttribute("readonly", "readonly");
   await expect(providerEditor.getByRole("combobox", { name: "Provider default model" })).toHaveValue("muse-spark-1.1");
 
-  await providerSelector.selectOption("grok");
+  await providerSelector.selectOption("xai");
   await expect(grokKeyInput).toHaveValue("****aved");
   await expect(grokKeyInput).toHaveAttribute("readonly", "readonly");
   await providerEditor.getByRole("button", { name: "Show key" }).click();
@@ -2762,7 +2767,7 @@ test("provider selection autosaves its exact editor while transient removal stay
   await expect.poll(() => providerMutations.length).toBe(2);
   expect(providerMutations.at(-1)).toMatchObject({
     method: "PUT",
-    url: providerKeyEndpointURL("grok"),
+    url: providerKeyEndpointURL("xai"),
     payload: { api_key: secondGrokKey, text_model: "grok-4.3", system_prompt: "" },
   });
   const deepSeekKeyInput = providerEditor.getByRole("textbox", { name: "DeepSeek API key" });
@@ -2770,7 +2775,7 @@ test("provider selection autosaves its exact editor while transient removal stay
   await providerEditor.getByRole("button", { name: "Show key" }).click();
   await expect(deepSeekKeyInput).toHaveValue(deepSeekProviderKey);
 
-  await providerSelector.selectOption("grok");
+  await providerSelector.selectOption("xai");
   await expect(grokKeyInput).toHaveValue("****aved");
   await providerEditor.getByRole("button", { name: "Show key" }).click();
   await expect(grokKeyInput).toHaveValue(secondGrokKey);
@@ -2779,7 +2784,7 @@ test("provider selection autosaves its exact editor while transient removal stay
   await expect(deepSeekKeyInput).not.toHaveValue(deepSeekProviderKey);
   await expect(deepSeekKeyInput).toHaveAttribute("readonly", "readonly");
 
-  await providerSelector.selectOption("grok");
+  await providerSelector.selectOption("xai");
   await expect(grokKeyInput).not.toHaveValue(secondGrokKey);
   expect(await browserStorageContains(page, firstGrokKey)).toBe(false);
   expect(await browserStorageContains(page, secondGrokKey)).toBe(false);
@@ -2807,7 +2812,7 @@ test("provider selection autosaves its exact editor while transient removal stay
   await expect.poll(() => providerMutations.filter((mutation) => mutation.method === "DELETE").length).toBe(1);
   expect(providerMutations.at(-1)).toMatchObject({
     method: "DELETE",
-    url: providerKeyEndpointURL("grok"),
+    url: providerKeyEndpointURL("xai"),
   });
   await expect(grokKeyInput).toHaveValue("");
 });
@@ -3211,7 +3216,7 @@ test("routing defaults autosave complete provider and model pairs without a manu
     }
   });
   await installAssetRoutes(page);
-  await installManagementRoutes(page, { savedProviderIDs: ["openai", "deepseek", "meta", "grok"] });
+  await installManagementRoutes(page, { savedProviderIDs: ["openai", "deepseek", "meta", "xai"] });
 
   await page.goto(`${baseURL}${applicationPath}`);
   await page.getByTestId("avatar-menu").click();
@@ -3245,13 +3250,13 @@ test("routing defaults autosave complete provider and model pairs without a manu
     reasoning_effort: "",
   });
 
-  await dictationProvider.selectOption("grok");
+  await dictationProvider.selectOption("xai");
   await expect(dictationModel).toHaveValue("xai-stt");
   await expect.poll(() => defaultsMutations.length).toBe(2);
   expect(defaultsMutations.at(-1)).toEqual({
     provider: "deepseek",
     model: "deepseek-chat",
-    dictation_provider: "grok",
+    dictation_provider: "xai",
     dictation_model: "xai-stt",
     system_prompt: "",
     reasoning_effort: "",
@@ -3265,7 +3270,7 @@ test("routing defaults autosave complete provider and model pairs without a manu
   expect(defaultsMutations.at(-1)).toEqual({
     provider: "deepseek",
     model: "deepseek-chat",
-    dictation_provider: "grok",
+    dictation_provider: "xai",
     dictation_model: "xai-stt",
     system_prompt: "Use tenant-wide autosaved guidance.",
     reasoning_effort: "",
@@ -3284,7 +3289,7 @@ test("routing defaults autosave complete provider and model pairs without a manu
   await page.getByTestId("avatar-menu-item").nth(0).click();
   await expect(settingsDialog.getByRole("combobox", { name: "Text provider" })).toHaveValue("deepseek");
   await expect(settingsDialog.getByRole("combobox", { name: "Text model" }).first()).toHaveValue("deepseek-chat");
-  await expect(settingsDialog.getByRole("combobox", { name: "Dictation provider" })).toHaveValue("grok");
+  await expect(settingsDialog.getByRole("combobox", { name: "Dictation provider" })).toHaveValue("xai");
   await expect(settingsDialog.getByRole("combobox", { name: "Dictation model" })).toHaveValue("xai-stt");
   await expect(settingsDialog.locator("#routing-system-prompt-input")).toHaveValue(
     "Use tenant-wide autosaved guidance.",
@@ -3345,7 +3350,7 @@ test("routing-default autosave queues newer edits without resetting the provider
   await installAssetRoutes(page);
   await installManagementRoutes(page, {
     providerKeys: { openai: revealedProviderKey },
-    savedProviderIDs: ["openai", "deepseek", "meta", "grok"],
+    savedProviderIDs: ["openai", "deepseek", "meta", "xai"],
   });
   await page.route(`${baseURL}${managementDefaultTenantPath}/defaults`, async (route) => {
     defaultsMutations.push(route.request().postDataJSON());
@@ -3369,7 +3374,7 @@ test("routing-default autosave queues newer edits without resetting the provider
   const defaultsForm = settingsDialog.locator(".settings-grid-form");
   await defaultsForm.getByRole("combobox", { name: "Text provider" }).selectOption("deepseek");
   await firstDefaultsSaveRequested;
-  await defaultsForm.getByRole("combobox", { name: "Dictation provider" }).selectOption("grok");
+  await defaultsForm.getByRole("combobox", { name: "Dictation provider" }).selectOption("xai");
   await defaultsForm.locator("summary.system-prompt-summary").click();
   await defaultsForm.getByRole("textbox", { name: "System prompt" }).fill("Keep the latest defaults only.");
   await page.keyboard.press("Tab");
@@ -3379,7 +3384,7 @@ test("routing-default autosave queues newer edits without resetting the provider
   expect(defaultsMutations.at(-1)).toEqual({
     provider: "deepseek",
     model: "deepseek-chat",
-    dictation_provider: "grok",
+    dictation_provider: "xai",
     dictation_model: "xai-stt",
     system_prompt: "Keep the latest defaults only.",
     reasoning_effort: "",
@@ -6009,8 +6014,8 @@ function managementProfile(isAdmin = false, hasSecret = true) {
         dictation_models: [],
       },
       {
-        id: "grok",
-        label: "Grok",
+        id: "xai",
+        label: "xAI",
         aliases: ["xai"],
         has_key: false,
         text_model: "grok-4.3",
