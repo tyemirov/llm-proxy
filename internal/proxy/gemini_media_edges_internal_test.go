@@ -11,8 +11,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"go.uber.org/zap"
 )
 
 type geminiEdgeDoer func(*http.Request) (*http.Response, error)
@@ -208,8 +206,9 @@ func TestGeminiFileUploadValidationAndPollingContracts(t *testing.T) {
 			cancelRequest()
 			return geminiEdgeResponse(http.StatusOK, strings.NewReader(fileJSON(geminiFileStateProcessing)), nil), nil
 		}))
-		if _, uploadError := client.uploadGeminiFile(requestContext, "key", baseURL, attachment); !errors.Is(uploadError, context.Canceled) {
-			subTest.Fatalf("error=%v", uploadError)
+		uploadedFile, uploadError := client.uploadGeminiFile(requestContext, "key", baseURL, attachment)
+		if !errors.Is(uploadError, context.Canceled) || uploadedFile.name != "files/media_1" {
+			subTest.Fatalf("file=%+v error=%v", uploadedFile, uploadError)
 		}
 	})
 
@@ -226,8 +225,9 @@ func TestGeminiFileUploadValidationAndPollingContracts(t *testing.T) {
 				return nil, errAssetEdge
 			}
 		}))
-		if _, uploadError := client.uploadGeminiFile(context.Background(), "key", baseURL, attachment); !errors.Is(uploadError, ErrProviderAPI) {
-			subTest.Fatalf("error=%v", uploadError)
+		uploadedFile, uploadError := client.uploadGeminiFile(context.Background(), "key", baseURL, attachment)
+		if !errors.Is(uploadError, ErrProviderAPI) || uploadedFile.name != "files/media_1" {
+			subTest.Fatalf("file=%+v error=%v", uploadedFile, uploadError)
 		}
 	})
 
@@ -259,8 +259,9 @@ func TestGeminiFileUploadValidationAndPollingContracts(t *testing.T) {
 			}
 			return geminiEdgeResponse(http.StatusOK, strings.NewReader(fileJSON("FAILED")), nil), nil
 		}))
-		if _, uploadError := client.uploadGeminiFile(context.Background(), "key", baseURL, attachment); !errors.Is(uploadError, ErrProviderAPI) {
-			subTest.Fatalf("error=%v", uploadError)
+		uploadedFile, uploadError := client.uploadGeminiFile(context.Background(), "key", baseURL, attachment)
+		if !errors.Is(uploadError, ErrProviderAPI) || uploadedFile.name != "files/media_1" {
+			subTest.Fatalf("file=%+v error=%v", uploadedFile, uploadError)
 		}
 	})
 
@@ -380,7 +381,9 @@ func TestGeminiFileResourceAndInteractionInputEdges(t *testing.T) {
 	}
 
 	cleanupClient := newGeminiInteractionsClient(geminiEdgeDoer(func(*http.Request) (*http.Response, error) { return nil, errAssetEdge }))
-	cleanupClient.releaseGeminiFiles(context.Background(), "key", "https://provider.test", []geminiUploadedFile{{name: "bad"}, {name: "files/media"}}, zap.NewNop().Sugar())
+	if cleanupError := cleanupClient.releaseGeminiFiles(context.Background(), "key", "https://provider.test", []geminiUploadedFile{{name: "bad"}, {name: "files/media"}}); !errors.Is(cleanupError, ErrProviderAPI) {
+		t.Fatalf("cleanup error=%v", cleanupError)
+	}
 }
 
 func TestGeminiPrepareInteractionPayloadFailureContracts(t *testing.T) {
@@ -422,6 +425,51 @@ func TestGeminiPrepareInteractionPayloadFailureContracts(t *testing.T) {
 	}
 	if _, requestError := newGeminiInteractionRequest(textModelDefinition{}, messages, []string{"one", "two"}, nil, false); !errors.Is(requestError, ErrProviderAPI) {
 		t.Fatalf("request input error=%v", requestError)
+	}
+}
+
+func TestGeminiFinalizedFileIsCleanedAfterProcessingCancellation(t *testing.T) {
+	data := []byte("processing-media")
+	digest := sha256.Sum256(data)
+	attachment := messageMedia{mediaType: messageMediaTypeImage, mimeType: "image/png", sha256: hex.EncodeToString(digest[:]), sizeBytes: int64(len(data)), data: data}
+	messages := chatMessages{{role: chatRoleUser, content: "inspect", attachments: []messageMedia{attachment}}}
+	model := textModelDefinition{mediaLimits: []CatalogMediaLimit{
+		{ID: CatalogMediaLimitIDInlineRequestBytes, MediaType: CatalogMediaLimitTypeAll, Status: CatalogMediaLimitStatusBounded, Value: int64Pointer(1)},
+		{ID: CatalogMediaLimitIDImageCount, MediaType: "image", Status: CatalogMediaLimitStatusUnbounded},
+		{ID: CatalogMediaLimitIDImageFileBytes, MediaType: "image", Status: CatalogMediaLimitStatusUnbounded},
+	}}
+	requestContext, cancelRequest := context.WithCancel(context.Background())
+	calls := 0
+	cleanupCalls := 0
+	encodedDigest := base64.StdEncoding.EncodeToString(digest[:])
+	processingBody := `{"file":{"name":"files/processing","mimeType":"image/png","sizeBytes":"16","sha256Hash":"` + encodedDigest + `","uri":"https://provider.test/files/processing","state":"PROCESSING"}}`
+	if _, validationError := validatedGeminiFile([]byte(processingBody), &attachment, "https://provider.test"); validationError != nil {
+		t.Fatalf("processing file validation: %v", validationError)
+	}
+	startHeaders := http.Header{}
+	startHeaders.Set(geminiUploadURLHeader, "https://provider.test/upload-session")
+	client := newGeminiInteractionsClient(geminiEdgeDoer(func(request *http.Request) (*http.Response, error) {
+		calls++
+		switch calls {
+		case 1:
+			return geminiEdgeResponse(http.StatusOK, strings.NewReader(""), startHeaders), nil
+		case 2:
+			cancelRequest()
+			return geminiEdgeResponse(http.StatusOK, strings.NewReader(processingBody), nil), nil
+		default:
+			if request.Method != http.MethodDelete || request.URL.Path != "/files/processing" || request.Context().Err() != nil {
+				t.Errorf("cleanup request method=%s path=%s context_error=%v", request.Method, request.URL.Path, request.Context().Err())
+			}
+			cleanupCalls++
+			return geminiEdgeResponse(http.StatusNoContent, strings.NewReader(""), nil), nil
+		}
+	}))
+	_, uploadedFiles, prepareError := client.prepareInteractionPayload(requestContext, "key", "https://provider.test", model, messages, nil, false)
+	if !errors.Is(prepareError, context.Canceled) || len(uploadedFiles) != 1 || uploadedFiles[0].name != "files/processing" {
+		t.Fatalf("calls=%d files=%+v error=%v", calls, uploadedFiles, prepareError)
+	}
+	if cleanupError := client.releaseGeminiFiles(requestContext, "key", "https://provider.test", uploadedFiles); cleanupError != nil || cleanupCalls != 1 {
+		t.Fatalf("cleanup_error=%v cleanup_calls=%d", cleanupError, cleanupCalls)
 	}
 }
 

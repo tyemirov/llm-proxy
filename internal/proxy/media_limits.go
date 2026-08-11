@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"strings"
 	"time"
@@ -157,4 +158,19 @@ func catalogMediaLimit(limits []CatalogMediaLimit, identifier string, mediaType 
 		return limit, true
 	}
 	return CatalogMediaLimit{}, false
+}
+
+func maximumV2RequestBytes(maxPromptBytes int64, catalog ModelCatalog) int64 {
+	maximumInlineBytes := int64(0)
+	for _, offering := range catalog.Offerings {
+		for _, limit := range offering.MediaLimits {
+			if limit.ID == CatalogMediaLimitIDInlineRequestBytes && limit.Status == CatalogMediaLimitStatusBounded && limit.Value != nil && *limit.Value > maximumInlineBytes {
+				maximumInlineBytes = *limit.Value
+			}
+		}
+	}
+	if maximumInlineBytes > math.MaxInt64-maxPromptBytes {
+		return math.MaxInt64
+	}
+	return maxPromptBytes + maximumInlineBytes
 }

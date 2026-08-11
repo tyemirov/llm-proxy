@@ -89,6 +89,8 @@ type tenantAssetStore struct {
 	retention     time.Duration
 	now           func() time.Time
 	mutex         sync.Mutex
+	initialized   bool
+	cleanupError  error
 }
 
 var (
@@ -100,9 +102,11 @@ var (
 	assetRename     = os.Rename
 	assetRemove     = os.Remove
 	assetOpen       = os.Open
+	assetReadDir    = os.ReadDir
 	assetStat       = func(file *os.File) (os.FileInfo, error) { return file.Stat() }
 	assetSeek       = func(file *os.File, offset int64, whence int) (int64, error) { return file.Seek(offset, whence) }
 	assetWrite      = func(file *os.File, data []byte) (int, error) { return file.Write(data) }
+	assetAfterFunc  = time.AfterFunc
 )
 
 func newTenantAssetStore(root string, maxAssetBytes int64, retentionSeconds int) *tenantAssetStore {
@@ -119,12 +123,10 @@ func (store *tenantAssetStore) upload(requestTenant tenant, mimeType string, exp
 		return tenantAssetMetadata{}, errAssetInvalid
 	}
 	store.mutex.Lock()
-	defer store.mutex.Unlock()
-	if directoryError := assetMkdirAll(store.root, assetDirectoryMode); directoryError != nil {
-		return tenantAssetMetadata{}, fmt.Errorf("%w: create directory", errAssetStore)
-	}
-	if chmodError := assetChmod(store.root, assetDirectoryMode); chmodError != nil {
-		return tenantAssetMetadata{}, fmt.Errorf("%w: set directory mode", errAssetStore)
+	initializationError := store.initializeLocked()
+	store.mutex.Unlock()
+	if initializationError != nil {
+		return tenantAssetMetadata{}, initializationError
 	}
 	temporaryFile, temporaryError := assetCreateTemp(store.root, ".asset-upload-*")
 	if temporaryError != nil {
@@ -152,6 +154,11 @@ func (store *tenantAssetStore) upload(requestTenant tenant, mimeType string, exp
 	if !bytes.Equal([]byte(actualDigest), []byte(expectedDigest)) {
 		return tenantAssetMetadata{}, errAssetDigestMismatch
 	}
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+	if store.cleanupError != nil {
+		return tenantAssetMetadata{}, store.cleanupError
+	}
 	assetID := newAssetIdentifier()
 	createdAt := store.now().UTC()
 	metadata := tenantAssetMetadata{
@@ -173,6 +180,7 @@ func (store *tenantAssetStore) upload(requestTenant tenant, mimeType string, exp
 		assetRemove(dataPath)
 		return tenantAssetMetadata{}, metadataError
 	}
+	store.scheduleExpirationLocked(metadata)
 	return metadata, nil
 }
 
@@ -181,33 +189,45 @@ func (store *tenantAssetStore) resolve(requestTenant tenant, assetID string, exp
 		return nil, errAssetInvalid
 	}
 	store.mutex.Lock()
-	defer store.mutex.Unlock()
+	if initializationError := store.initializeLocked(); initializationError != nil {
+		store.mutex.Unlock()
+		return nil, initializationError
+	}
 	metadata, metadataError := store.readMetadata(assetID)
 	if metadataError != nil {
+		store.mutex.Unlock()
 		return nil, metadataError
 	}
 	if metadata.TenantID != requestTenant.identifier.string() {
+		store.mutex.Unlock()
 		return nil, errAssetNotFound
 	}
 	if metadata.State == assetStateDeleted {
+		store.mutex.Unlock()
 		return nil, errAssetDeleted
 	}
 	if !store.now().UTC().Before(metadata.ExpiresAt) {
 		if removeError := assetRemove(store.dataPath(assetID)); removeError != nil && !errors.Is(removeError, os.ErrNotExist) {
+			store.mutex.Unlock()
 			return nil, errAssetStore
 		}
+		store.mutex.Unlock()
 		return nil, errAssetExpired
 	}
 	if metadata.MIMEType != expectedMIMEType {
+		store.mutex.Unlock()
 		return nil, errAssetMIMEMismatch
 	}
 	if metadata.SHA256 != expectedDigest {
+		store.mutex.Unlock()
 		return nil, errAssetDigestMismatch
 	}
 	dataFile, openError := assetOpen(store.dataPath(assetID))
 	if openError != nil {
+		store.mutex.Unlock()
 		return nil, errAssetStore
 	}
+	store.mutex.Unlock()
 	valid := false
 	defer func() {
 		if !valid {
@@ -238,6 +258,9 @@ func (store *tenantAssetStore) delete(requestTenant tenant, assetID string) erro
 	}
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
+	if initializationError := store.initializeLocked(); initializationError != nil {
+		return initializationError
+	}
 	metadata, metadataError := store.readMetadata(assetID)
 	if metadataError != nil {
 		return metadataError
@@ -267,6 +290,84 @@ func (store *tenantAssetStore) delete(requestTenant tenant, assetID string) erro
 		return errAssetStore
 	}
 	return nil
+}
+
+func (store *tenantAssetStore) initializeLocked() error {
+	if store.cleanupError != nil {
+		return store.cleanupError
+	}
+	if store.initialized {
+		return nil
+	}
+	if directoryError := assetMkdirAll(store.root, assetDirectoryMode); directoryError != nil {
+		return fmt.Errorf("%w: create directory", errAssetStore)
+	}
+	if chmodError := assetChmod(store.root, assetDirectoryMode); chmodError != nil {
+		return fmt.Errorf("%w: set directory mode", errAssetStore)
+	}
+	entries, readDirectoryError := assetReadDir(store.root)
+	if readDirectoryError != nil {
+		return fmt.Errorf("%w: read directory", errAssetStore)
+	}
+	availableAssets := make([]tenantAssetMetadata, 0)
+	for _, entry := range entries {
+		entryName := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(entryName, ".json") {
+			continue
+		}
+		assetID := strings.TrimSuffix(entryName, ".json")
+		if !assetIdentifierPattern.MatchString(assetID) {
+			continue
+		}
+		metadata, metadataError := store.readMetadata(assetID)
+		if metadataError != nil {
+			return metadataError
+		}
+		if metadata.State == assetStateDeleted || !store.now().UTC().Before(metadata.ExpiresAt) {
+			if removeError := assetRemove(store.dataPath(assetID)); removeError != nil && !errors.Is(removeError, os.ErrNotExist) {
+				return fmt.Errorf("%w: reclaim asset", errAssetStore)
+			}
+			continue
+		}
+		availableAssets = append(availableAssets, metadata)
+	}
+	store.initialized = true
+	for _, metadata := range availableAssets {
+		store.scheduleExpirationLocked(metadata)
+	}
+	return nil
+}
+
+func (store *tenantAssetStore) scheduleExpirationLocked(metadata tenantAssetMetadata) {
+	delay := metadata.ExpiresAt.Sub(store.now().UTC())
+	if delay < 0 {
+		delay = 0
+	}
+	assetAfterFunc(delay, func() {
+		store.expireAsset(metadata.AssetID, metadata.ExpiresAt)
+	})
+}
+
+func (store *tenantAssetStore) expireAsset(assetID string, expectedExpiry time.Time) {
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+	if store.cleanupError != nil {
+		return
+	}
+	metadata, metadataError := store.readMetadata(assetID)
+	if errors.Is(metadataError, errAssetNotFound) {
+		return
+	}
+	if metadataError != nil {
+		store.cleanupError = metadataError
+		return
+	}
+	if metadata.ExpiresAt != expectedExpiry || metadata.State == assetStateDeleted || store.now().UTC().Before(metadata.ExpiresAt) {
+		return
+	}
+	if removeError := assetRemove(store.dataPath(assetID)); removeError != nil && !errors.Is(removeError, os.ErrNotExist) {
+		store.cleanupError = fmt.Errorf("%w: expire asset", errAssetStore)
+	}
 }
 
 func (store *tenantAssetStore) readMetadata(assetID string) (tenantAssetMetadata, error) {
@@ -352,9 +453,13 @@ func tenantAssetUploadHandler(store *tenantAssetStore) gin.HandlerFunc {
 			ginContext.Request.Body,
 		)
 		if uploadError != nil {
+			if requestContextEnded(ginContext) {
+				return
+			}
 			writeTenantAssetError(ginContext, uploadError)
 			return
 		}
+		markRequestOutcome(ginContext, requestOutcomeSuccess, managedUsageOutcomeSuccess)
 		ginContext.JSON(http.StatusCreated, tenantAssetResponse{
 			AssetID: metadata.AssetID, MIMEType: metadata.MIMEType, SizeBytes: metadata.SizeBytes,
 			SHA256: metadata.SHA256, State: metadata.State, CreatedAt: metadata.CreatedAt, ExpiresAt: metadata.ExpiresAt,

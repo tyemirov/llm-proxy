@@ -133,7 +133,19 @@ func (client *geminiInteractionsClient) generateText(parentContext context.Conte
 	background := executionLifecycle == textExecutionLifecyclePollableResource
 	payload, uploadedFiles, payloadError := client.prepareInteractionPayload(parentContext, apiKey, baseURL, modelIdentifier, messages, maxTokens, background)
 	if len(uploadedFiles) > 0 {
-		defer client.releaseGeminiFiles(parentContext, apiKey, baseURL, uploadedFiles, structuredLogger)
+		defer func() {
+			cleanupError := client.releaseGeminiFiles(parentContext, apiKey, baseURL, uploadedFiles)
+			if cleanupError == nil {
+				return
+			}
+			client.logFileCleanupError(cleanupError, structuredLogger)
+			generation = textGenerationResult{usage: generation.usage}
+			if errors.Is(generationError, errProviderOutputLimitReached) {
+				generationError = cleanupError
+				return
+			}
+			generationError = errors.Join(generationError, cleanupError)
+		}()
 	}
 	if payloadError != nil {
 		return textGenerationResult{}, payloadError
@@ -308,6 +320,13 @@ func (client *geminiInteractionsClient) logInteractionCleanupError(cleanupError 
 	)
 }
 
+func (client *geminiInteractionsClient) logFileCleanupError(cleanupError error, structuredLogger *zap.SugaredLogger) {
+	structuredLogger.Errorw(
+		"Gemini file cleanup error",
+		constants.LogFieldError, cleanupError,
+	)
+}
+
 func (client *geminiInteractionsClient) prepareInteractionPayload(parentContext context.Context, apiKey string, baseURL string, model textModelDefinition, messages chatMessages, maxTokens *int, background bool) (geminiInteractionRequest, []geminiUploadedFile, error) {
 	inlineLimit, hasInlineLimit := catalogMediaLimit(model.mediaLimits, CatalogMediaLimitIDInlineRequestBytes, messageMediaTypeImage)
 	mediaCount := messages.mediaCount()
@@ -342,10 +361,12 @@ func (client *geminiInteractionsClient) prepareInteractionPayload(parentContext 
 				return geminiInteractionRequest{}, uploadedFiles, limitError
 			}
 			uploadedFile, uploadError := client.uploadGeminiFile(parentContext, apiKey, baseURL, attachment)
+			if uploadedFile.name != constants.EmptyString {
+				uploadedFiles = append(uploadedFiles, uploadedFile)
+			}
 			if uploadError != nil {
 				return geminiInteractionRequest{}, uploadedFiles, uploadError
 			}
-			uploadedFiles = append(uploadedFiles, uploadedFile)
 			mediaURIs = append(mediaURIs, uploadedFile.uri)
 		}
 	}
@@ -461,23 +482,25 @@ func (client *geminiInteractionsClient) uploadGeminiFile(parentContext context.C
 	if parseError != nil {
 		return geminiUploadedFile{}, parseError
 	}
+	uploadedFile := geminiUploadedFile{name: file.Name, uri: file.URI}
 	for file.State == geminiFileStateProcessing {
 		waitTimer := time.NewTimer(geminiFilePollInterval)
 		select {
 		case <-parentContext.Done():
 			waitTimer.Stop()
-			return geminiUploadedFile{}, parentContext.Err()
+			return uploadedFile, parentContext.Err()
 		case <-waitTimer.C:
 		}
 		file, parseError = client.getGeminiFile(parentContext, apiKey, baseURL, file.Name, attachment)
 		if parseError != nil {
-			return geminiUploadedFile{}, parseError
+			return uploadedFile, parseError
 		}
+		uploadedFile = geminiUploadedFile{name: file.Name, uri: file.URI}
 	}
 	if file.State != geminiFileStateActive {
-		return geminiUploadedFile{}, ErrProviderAPI
+		return uploadedFile, ErrProviderAPI
 	}
-	return geminiUploadedFile{name: file.Name, uri: file.URI}, nil
+	return uploadedFile, nil
 }
 
 func (client *geminiInteractionsClient) getGeminiFile(parentContext context.Context, apiKey string, baseURL string, fileName string, attachment *messageMedia) (geminiFile, error) {
@@ -544,11 +567,12 @@ func (client *geminiInteractionsClient) performGeminiFileRequest(request *http.R
 	return responseBytes, response.Header, nil
 }
 
-func (client *geminiInteractionsClient) releaseGeminiFiles(parentContext context.Context, apiKey string, baseURL string, files []geminiUploadedFile, structuredLogger *zap.SugaredLogger) {
+func (client *geminiInteractionsClient) releaseGeminiFiles(parentContext context.Context, apiKey string, baseURL string, files []geminiUploadedFile) error {
+	cleanupErrors := make([]error, 0)
 	for _, file := range files {
 		requestURL, urlError := geminiFileResourceURL(baseURL, file.name)
 		if urlError != nil {
-			structuredLogger.Errorw("Gemini file cleanup error")
+			cleanupErrors = append(cleanupErrors, urlError)
 			continue
 		}
 		cleanupContext, cancelCleanup := context.WithTimeout(context.WithoutCancel(parentContext), geminiInteractionCleanupTimeout)
@@ -559,9 +583,10 @@ func (client *geminiInteractionsClient) releaseGeminiFiles(parentContext context
 		}
 		cancelCleanup()
 		if buildError != nil {
-			structuredLogger.Errorw("Gemini file cleanup error")
+			cleanupErrors = append(cleanupErrors, buildError)
 		}
 	}
+	return errors.Join(cleanupErrors...)
 }
 
 func geminiFilesUploadURL(baseURL string) string {

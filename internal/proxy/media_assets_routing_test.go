@@ -6,10 +6,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -77,6 +79,24 @@ func TestV2LargeInlineMediaBypassesCompatibilityPromptLimit(t *testing.T) {
 	response := postV2MediaRequest(t, router, "secret-a", requestBody)
 	if response.Code != http.StatusOK || !bytes.Equal(receivedMedia, mediaBytes) {
 		t.Fatalf("status=%d received=%d want=%d", response.Code, len(receivedMedia), len(mediaBytes))
+	}
+}
+
+func TestV2RejectsJSONAboveCatalogDerivedIngressBound(t *testing.T) {
+	catalog := testfixtures.ModelCatalog(t)
+	for offeringIndex := range catalog.Offerings {
+		for limitIndex := range catalog.Offerings[offeringIndex].MediaLimits {
+			limit := &catalog.Offerings[offeringIndex].MediaLimits[limitIndex]
+			if limit.ID == proxy.CatalogMediaLimitIDInlineRequestBytes && limit.Status == proxy.CatalogMediaLimitStatusBounded {
+				value := int64(64)
+				limit.Value = &value
+			}
+		}
+	}
+	router := mediaAssetRouterWithMaxPrompt(t, "https://provider.invalid", t.TempDir(), catalog, 60, 32)
+	response := postV2MediaRequest(t, router, "secret-a", bytes.Repeat([]byte("x"), 97))
+	if response.Code != http.StatusRequestEntityTooLarge || !strings.Contains(response.Body.String(), "prompt payload too large") {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 
@@ -275,6 +295,45 @@ func TestGeminiFileTransportPreservesAssetBytesAndCleansUp(t *testing.T) {
 	}
 }
 
+func TestGeminiFileCleanupFailureFailsTheRequest(t *testing.T) {
+	for _, interactionStatus := range []string{"completed", "incomplete"} {
+		t.Run(interactionStatus, func(subTest *testing.T) {
+			mediaBytes := []byte("cleanup-failure")
+			digest := sha256.Sum256(mediaBytes)
+			interactionCalls := 0
+			var upstream *httptest.Server
+			upstream = httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+				switch {
+				case request.Method == http.MethodPost && request.URL.Path == "/upload/v1beta/files":
+					responseWriter.Header().Set("X-Goog-Upload-URL", upstream.URL+"/upload-session")
+					responseWriter.WriteHeader(http.StatusOK)
+				case request.Method == http.MethodPost && request.URL.Path == "/upload-session":
+					_, _ = fmt.Fprintf(responseWriter, `{"file":{"name":"files/cleanup-failure","mimeType":"image/png","sizeBytes":"%d","sha256Hash":"%s","uri":"%s/files/cleanup-failure","state":"ACTIVE"}}`, len(mediaBytes), base64.StdEncoding.EncodeToString(digest[:]), upstream.URL)
+				case request.Method == http.MethodPost && request.URL.Path == "/interactions":
+					interactionCalls++
+					responseWriter.Header().Set("Content-Type", "application/json")
+					_, _ = fmt.Fprintf(responseWriter, `{"status":%q,"steps":[{"type":"model_output","content":[{"type":"text","text":"accepted"}]}]}`, interactionStatus)
+				case request.Method == http.MethodDelete && request.URL.Path == "/files/cleanup-failure":
+					responseWriter.WriteHeader(http.StatusInternalServerError)
+				default:
+					http.NotFound(responseWriter, request)
+				}
+			}))
+			defer upstream.Close()
+			catalog := testfixtures.ModelCatalog(subTest)
+			setGeminiMediaLimit(subTest, &catalog, proxy.ModelNameGemini25Flash, proxy.CatalogMediaLimitIDInlineRequestBytes, 1)
+			setGeminiMediaLimit(subTest, &catalog, proxy.ModelNameGemini25Flash, proxy.CatalogMediaLimitIDImageFileBytes, int64(len(mediaBytes)))
+			router := mediaAssetRouter(subTest, upstream.URL, subTest.TempDir(), catalog, 60)
+			response := postV2MediaRequest(subTest, router, "secret-a", []byte(mediaV2RequestBody(subTest, proxy.ModelNameGemini25Flash, "inspect", []map[string]any{
+				messageMediaPayload("image", "image/png", mediaBytes),
+			})))
+			if response.Code != http.StatusBadGateway || !strings.Contains(response.Body.String(), llmproxycontract.ErrorCodeProviderError) || interactionCalls != 1 {
+				subTest.Fatalf("status=%d body=%s interaction_calls=%d", response.Code, response.Body.String(), interactionCalls)
+			}
+		})
+	}
+}
+
 func TestDeletingAssetAfterAdmissionKeepsTheOpenRequestStable(t *testing.T) {
 	mediaBytes := bytes.Repeat([]byte("admitted-media"), 100)
 	digest := sha256.Sum256(mediaBytes)
@@ -330,9 +389,21 @@ func TestExpiredAssetAndProviderMediaLimitsFailWithStableCodes(t *testing.T) {
 			subTest.Error("expired asset reached provider")
 		}))
 		defer upstream.Close()
-		router := mediaAssetRouter(subTest, upstream.URL, subTest.TempDir(), testfixtures.ModelCatalog(subTest), 1)
+		assetRoot := subTest.TempDir()
+		router := mediaAssetRouter(subTest, upstream.URL, assetRoot, testfixtures.ModelCatalog(subTest), 1)
 		asset := uploadTestAsset(subTest, router, "secret-a", "image/png", []byte("expires"))
-		time.Sleep(1100 * time.Millisecond)
+		dataPath := fmt.Sprintf("%s/%s.data", assetRoot, asset.AssetID)
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			_, statError := os.Stat(dataPath)
+			if errors.Is(statError, os.ErrNotExist) {
+				break
+			}
+			if statError != nil || time.Now().After(deadline) {
+				subTest.Fatalf("expired asset cleanup path=%s error=%v", dataPath, statError)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 		response := postV2MediaRequest(subTest, router, "secret-a", v2AssetReferencePayload(asset.AssetID, asset.MIMEType, asset.SHA256))
 		if response.Code != http.StatusGone || !strings.Contains(response.Body.String(), "asset_expired") {
 			subTest.Fatalf("status=%d body=%s", response.Code, response.Body.String())
@@ -375,7 +446,25 @@ func TestExpiredAssetAndProviderMediaLimitsFailWithStableCodes(t *testing.T) {
 	})
 }
 
+func TestTenantAssetUploadUsesTheAuthenticatedRequestBudget(t *testing.T) {
+	router := mediaAssetRouter(t, "https://provider.invalid", t.TempDir(), testfixtures.ModelCatalog(t), 60)
+	request := httptest.NewRequest(http.MethodPost, llmproxycontract.AssetPath+"?key=secret-a", strings.NewReader("asset"))
+	request.Header.Set("Content-Type", "image/png")
+	request.Header.Set(llmproxycontract.HeaderAssetSHA256, strings.Repeat("0", 64))
+	request.Header.Set(llmproxycontract.HeaderRequestTimeoutSeconds, "3601")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), llmproxycontract.ErrorCodeInvalidRequestTimeout) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func mediaAssetRouter(t *testing.T, geminiBaseURL string, assetRoot string, catalog proxy.ModelCatalog, retentionSeconds int) http.Handler {
+	t.Helper()
+	return mediaAssetRouterWithMaxPrompt(t, geminiBaseURL, assetRoot, catalog, retentionSeconds, proxy.DefaultMaxPromptBytes)
+}
+
+func mediaAssetRouterWithMaxPrompt(t *testing.T, geminiBaseURL string, assetRoot string, catalog proxy.ModelCatalog, retentionSeconds int, maxPromptBytes int64) http.Handler {
 	t.Helper()
 	configuration := proxy.Configuration{
 		Tenants: []proxy.TenantConfiguration{
@@ -383,7 +472,7 @@ func mediaAssetRouter(t *testing.T, geminiBaseURL string, assetRoot string, cata
 			{ID: "tenant-b", Secret: "secret-b", Defaults: proxy.TenantDefaults{Provider: proxy.ProviderNameGemini, Model: proxy.ModelNameGemini25Flash, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel}},
 		},
 		OpenAIKey: "openai-key", GeminiKey: "gemini-key", GeminiBaseURL: geminiBaseURL,
-		WorkerCount: 2, QueueSize: 4, RequestTimeoutSeconds: 10, MaxPromptBytes: proxy.DefaultMaxPromptBytes,
+		WorkerCount: 2, QueueSize: 4, RequestTimeoutSeconds: 10, MaxPromptBytes: maxPromptBytes,
 		MaxAssetBytes: 10 * 1024 * 1024, AssetRetentionSeconds: retentionSeconds, AssetStorePath: assetRoot,
 		ModelCatalog: catalog,
 	}
