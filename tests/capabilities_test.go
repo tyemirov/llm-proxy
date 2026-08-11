@@ -164,6 +164,81 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 	}
 }
 
+func TestPublicCapabilityCatalogPublishesExactGeminiMediaLimits(testingInstance *testing.T) {
+	catalog, catalogError := proxy.NewPublicCapabilityCatalog(proxy.Configuration{
+		ModelCatalog: testfixtures.ModelCatalog(testingInstance),
+	})
+	if catalogError != nil {
+		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
+	}
+	expectedLimits := map[string]struct {
+		mediaType string
+		transport string
+		status    string
+		value     int64
+		unit      string
+		scope     string
+		source    string
+	}{
+		proxy.CatalogMediaLimitIDInlineRequestBytes: {
+			mediaType: proxy.CatalogMediaLimitTypeAll, transport: proxy.CatalogMediaTransportInline,
+			status: proxy.CatalogMediaLimitStatusBounded, value: 20_000_000,
+			unit: proxy.CatalogMediaLimitUnitBytes, scope: proxy.CatalogMediaLimitScopeRequestEncodedBytes,
+			source: "https://ai.google.dev/gemini-api/docs/file-input-methods",
+		},
+		proxy.CatalogMediaLimitIDImageCount: {
+			mediaType: "image", transport: proxy.CatalogMediaTransportAny,
+			status: proxy.CatalogMediaLimitStatusBounded, value: 3_600,
+			unit: proxy.CatalogMediaLimitUnitFiles, scope: proxy.CatalogMediaLimitScopeRequest,
+			source: "https://ai.google.dev/gemini-api/docs/image-understanding",
+		},
+		proxy.CatalogMediaLimitIDAudioCount: {
+			mediaType: "audio", transport: proxy.CatalogMediaTransportAny,
+			status: proxy.CatalogMediaLimitStatusUnknown,
+			unit:   proxy.CatalogMediaLimitUnitFiles, scope: proxy.CatalogMediaLimitScopeRequest,
+			source: "https://ai.google.dev/gemini-api/docs/audio",
+		},
+		proxy.CatalogMediaLimitIDImageFileBytes: {
+			mediaType: "image", transport: proxy.CatalogMediaTransportFile,
+			status: proxy.CatalogMediaLimitStatusBounded, value: 2_000_000_000,
+			unit: proxy.CatalogMediaLimitUnitBytes, scope: proxy.CatalogMediaLimitScopeAttachment,
+			source: "https://ai.google.dev/gemini-api/docs/files",
+		},
+		proxy.CatalogMediaLimitIDAudioFileBytes: {
+			mediaType: "audio", transport: proxy.CatalogMediaTransportFile,
+			status: proxy.CatalogMediaLimitStatusBounded, value: 2_000_000_000,
+			unit: proxy.CatalogMediaLimitUnitBytes, scope: proxy.CatalogMediaLimitScopeAttachment,
+			source: "https://ai.google.dev/gemini-api/docs/files",
+		},
+	}
+
+	mediaOfferingCount := 0
+	for _, offering := range catalog.Offerings {
+		if len(offering.MediaLimits) == 0 {
+			continue
+		}
+		mediaOfferingCount++
+		if offering.Provider != proxy.ProviderNameGemini || (offering.Model != proxy.ModelNameGemini35Flash && offering.Model != proxy.ModelNameGemini25Flash) || len(offering.MediaLimits) != len(expectedLimits) {
+			testingInstance.Fatalf("unexpected media offering=%+v", offering)
+		}
+		for _, limit := range offering.MediaLimits {
+			expected, exists := expectedLimits[limit.ID]
+			if !exists || limit.MediaType != expected.mediaType || limit.Transport != expected.transport || limit.Status != expected.status || limit.Unit != expected.unit || limit.Scope != expected.scope || limit.Source != expected.source || limit.LastVerified != "2026-08-11" {
+				testingInstance.Fatalf("media limit=%+v", limit)
+			}
+			if expected.status == proxy.CatalogMediaLimitStatusBounded && (limit.Value == nil || *limit.Value != expected.value) {
+				testingInstance.Fatalf("bounded media limit=%+v", limit)
+			}
+			if expected.status != proxy.CatalogMediaLimitStatusBounded && limit.Value != nil {
+				testingInstance.Fatalf("non-bounded media limit=%+v", limit)
+			}
+		}
+	}
+	if mediaOfferingCount != 2 {
+		testingInstance.Fatalf("media offerings=%d want=2", mediaOfferingCount)
+	}
+}
+
 func TestPublicCapabilityRESTResourceProjectsChangedCatalogWithoutPrivateConfig(testingInstance *testing.T) {
 	const (
 		changedModelID = "kimi-rest-contract"
@@ -274,6 +349,30 @@ func TestPublicCapabilityCatalogRejectsNoncanonicalRuntimeRegistries(testingInst
 				catalogs.Offerings[0].Model = "missing-model"
 			},
 			expectedError: "reason=dangling_reference",
+		},
+		{
+			name: "missing media limits",
+			mutate: func(catalogs *proxy.ModelCatalog) {
+				for offeringIndex := range catalogs.Offerings {
+					if catalogs.Offerings[offeringIndex].Provider == proxy.ProviderNameGemini && catalogs.Offerings[offeringIndex].Model == proxy.ModelNameGemini25Flash {
+						catalogs.Offerings[offeringIndex].MediaLimits = nil
+						return
+					}
+				}
+			},
+			expectedError: "reason=media_limits_missing",
+		},
+		{
+			name: "bounded media limit without value",
+			mutate: func(catalogs *proxy.ModelCatalog) {
+				for offeringIndex := range catalogs.Offerings {
+					if catalogs.Offerings[offeringIndex].Provider == proxy.ProviderNameGemini && catalogs.Offerings[offeringIndex].Model == proxy.ModelNameGemini25Flash {
+						catalogs.Offerings[offeringIndex].MediaLimits[0].Value = nil
+						return
+					}
+				}
+			},
+			expectedError: ".media_limits[0].value",
 		},
 	}
 

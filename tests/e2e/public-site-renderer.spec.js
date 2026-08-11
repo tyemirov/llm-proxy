@@ -88,6 +88,7 @@ function normalizedCapabilityFixture() {
       reasoning_efforts: [],
       controls: [],
       limits: [],
+      media_limits: [],
     }],
     prices: [{
       provider: "example-provider",
