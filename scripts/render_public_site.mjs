@@ -64,10 +64,12 @@ await renderPublicSite(options);
  *   reasoning_efforts: string[],
  *   controls: PublicCatalogControl[],
  *   limits: PublicCatalogLimit[],
+ *   media_limits: PublicCatalogMediaLimit[],
  * }} PublicProviderOffering
  */
 /** @typedef {{id: string, kind: string, values: string[], minimum: number | null, maximum: number | null, account_dependent: boolean}} PublicCatalogControl */
 /** @typedef {{id: string, value: number | null, unit: string, account_dependent: boolean}} PublicCatalogLimit */
+/** @typedef {{id: string, media_type: string, transport: string, status: string, value: number | null, unit: string, scope: string, source: string, last_verified: string}} PublicCatalogMediaLimit */
 /** @typedef {{resolution: string, generated_audio: string, input_media: string, output_media: string, duration: string, quantity: string, quality: string, mode: string, api_version: string, avatar_type: string, billing_mode: string, billing_outcome: string}} PublicPriceConditions */
 /** @typedef {{component: string, currency: string, rate: number, unit: string, conditions: PublicPriceConditions}} PublicPriceRate */
 /** @typedef {{currency: string, amount: number, unit: string}} PublicMinimumCharge */
@@ -290,7 +292,7 @@ function parseCapabilityCatalog(rawCatalog) {
     const offering = requiredRecord(rawOffering, field);
     requireExactKeys(offering, [
       "identifier", "provider", "model", "capabilities", "wire_contract", "execution_lifecycle",
-      "output_token_limit", "reasoning_efforts", "controls", "limits",
+      "output_token_limit", "reasoning_efforts", "controls", "limits", "media_limits",
     ], field);
     return {
       identifier: requiredString(offering.identifier, `${field}.identifier`),
@@ -303,6 +305,7 @@ function parseCapabilityCatalog(rawCatalog) {
       reasoning_efforts: requiredStringArray(offering.reasoning_efforts, `${field}.reasoning_efforts`),
       controls: requiredArray(offering.controls, `${field}.controls`).map((control, controlIndex) => parseCatalogControl(control, `${field}.controls[${controlIndex}]`)),
       limits: requiredArray(offering.limits, `${field}.limits`).map((limit, limitIndex) => parseCatalogLimit(limit, `${field}.limits[${limitIndex}]`)),
+      media_limits: requiredArray(offering.media_limits, `${field}.media_limits`).map((limit, limitIndex) => parseCatalogMediaLimit(limit, `${field}.media_limits[${limitIndex}]`)),
     };
   });
 
@@ -475,6 +478,55 @@ function parseCatalogLimit(rawLimit, field) {
     value: nullableNonnegativeInteger(limit.value, `${field}.value`),
     unit: requiredString(limit.unit, `${field}.unit`),
     account_dependent: requiredBoolean(limit.account_dependent, `${field}.account_dependent`),
+  };
+}
+
+/**
+ * @param {unknown} rawLimit
+ * @param {string} field
+ * @returns {PublicCatalogMediaLimit}
+ */
+function parseCatalogMediaLimit(rawLimit, field) {
+  const limit = requiredRecord(rawLimit, field);
+  requireExactKeys(limit, [
+    "id", "media_type", "transport", "status", "value", "unit", "scope", "source", "last_verified",
+  ], field);
+  const mediaType = requiredString(limit.media_type, `${field}.media_type`);
+  const transport = requiredString(limit.transport, `${field}.transport`);
+  const status = requiredString(limit.status, `${field}.status`);
+  const unit = requiredString(limit.unit, `${field}.unit`);
+  const scope = requiredString(limit.scope, `${field}.scope`);
+  const value = nullableNonnegativeInteger(limit.value, `${field}.value`);
+  if (!new Set(["all", "image", "audio"]).has(mediaType)
+      || !new Set(["any", "inline", "file"]).has(transport)
+      || !new Set(["bounded", "unbounded", "unknown"]).has(status)
+      || !new Set(["bytes", "files"]).has(unit)
+      || !new Set(["attachment", "request", "request_encoded_bytes"]).has(scope)
+      || (status === "bounded" ? value === null || value === 0 : value !== null)) {
+    throw new Error(`public_capabilities_invalid: ${field} media limit`);
+  }
+  const source = requiredString(limit.source, `${field}.source`);
+  try {
+    if (new URL(source).protocol !== "https:") {
+      throw new Error("source protocol");
+    }
+  } catch {
+    throw new Error(`public_capabilities_invalid: ${field}.source`);
+  }
+  const lastVerified = requiredString(limit.last_verified, `${field}.last_verified`);
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(lastVerified)) {
+    throw new Error(`public_capabilities_invalid: ${field}.last_verified`);
+  }
+  return {
+    id: requiredString(limit.id, `${field}.id`),
+    media_type: mediaType,
+    transport,
+    status,
+    value,
+    unit,
+    scope,
+    source,
+    last_verified: lastVerified,
   };
 }
 
