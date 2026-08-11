@@ -92,6 +92,7 @@ var (
 	errManagedProviderKeyEncryption  = errors.New("managed_provider_key_encryption_failed")
 	errManagedProviderKeyDecryption  = errors.New("managed_provider_key_decryption_failed")
 	errManagedProviderKeyNotFound    = errors.New("managed_provider_key_not_found")
+	errManagedProviderKeyConflict    = errors.New("managed_provider_key_conflict")
 	errManagedSecretGeneration       = errors.New("managed_secret_generation_failed")
 	errManagedSecretCollision        = errors.New("managed_secret_collision")
 	errManagedTenantIDGeneration     = errors.New("managed_tenant_id_generation_failed")
@@ -2330,6 +2331,10 @@ func (store *managedTenantStore) deleteTenant(principal managementPrincipal, ten
 }
 
 func (store *managedTenantStore) saveProviderKey(requestContext context.Context, principal managementPrincipal, tenantIdentifier managedTenantIdentifier, providerIdentifier providerID, rawAPIKey string, rawBaseURL string, textModel string, systemPrompt string) (managedTenantSnapshot, error) {
+	return store.saveProviderKeyWithVerifiedVersion(requestContext, principal, tenantIdentifier, providerIdentifier, rawAPIKey, rawBaseURL, textModel, systemPrompt, nil)
+}
+
+func (store *managedTenantStore) saveProviderKeyWithVerifiedVersion(requestContext context.Context, principal managementPrincipal, tenantIdentifier managedTenantIdentifier, providerIdentifier providerID, rawAPIKey string, rawBaseURL string, textModel string, systemPrompt string, verifiedAPIKeyVersion *managedProviderKeyVersion) (managedTenantSnapshot, error) {
 	apiKey := strings.TrimSpace(rawAPIKey)
 	baseURL, baseURLError := managedProviderBaseURL(providerIdentifier, rawBaseURL)
 	if baseURLError != nil {
@@ -2347,6 +2352,9 @@ func (store *managedTenantStore) saveProviderKey(requestContext context.Context,
 	existingProviderKeyRecord, hasExistingProviderKey := managedProviderKeyRecordForProvider(record.ProviderAPIKeys, providerIdentifier)
 	if apiKey == constants.EmptyString && !hasExistingProviderKey {
 		return managedTenantSnapshot{}, fmt.Errorf("%w: provider=%s", errManagedProviderKeyInvalid, providerIdentifier.string())
+	}
+	if verifiedAPIKeyVersion != nil && managedProviderKeyVersionForRecord(existingProviderKeyRecord) != *verifiedAPIKeyVersion {
+		return managedTenantSnapshot{}, fmt.Errorf("%w: provider=%s", errManagedProviderKeyConflict, providerIdentifier.string())
 	}
 	providerTextModelChanged := hasExistingProviderKey && strings.TrimSpace(existingProviderKeyRecord.TextModel) != normalizedTextModel
 	timestamp := store.now()
@@ -2381,10 +2389,11 @@ func (store *managedTenantStore) saveProviderKey(requestContext context.Context,
 		savedAPIKey = providerSettings[providerIdentifier].apiKey
 	}
 	providerSettings[providerIdentifier] = managedProviderSettings{
-		apiKey:       savedAPIKey,
-		baseURL:      baseURL,
-		textModel:    normalizedTextModel,
-		systemPrompt: systemPrompt,
+		apiKey:        savedAPIKey,
+		apiKeyVersion: managedProviderKeyVersionForCiphertext(encryptedAPIKey),
+		baseURL:       baseURL,
+		textModel:     normalizedTextModel,
+		systemPrompt:  systemPrompt,
 	}
 	currentDefaults, defaultsError := validateCanonicalManagedRoutingDefaults(store.routingDefaults, record.defaults())
 	if defaultsError != nil {
@@ -2741,14 +2750,23 @@ func managedProviderSettingsFromRecordsForSchema(providerKeyCipher managedProvid
 				}
 			}
 			providerSettings[providerIdentifier] = managedProviderSettings{
-				apiKey:       apiKey,
-				baseURL:      baseURL,
-				textModel:    strings.TrimSpace(providerKeyRecord.TextModel),
-				systemPrompt: providerKeyRecord.SystemPrompt,
+				apiKey:        apiKey,
+				apiKeyVersion: managedProviderKeyVersionForRecord(providerKeyRecord),
+				baseURL:       baseURL,
+				textModel:     strings.TrimSpace(providerKeyRecord.TextModel),
+				systemPrompt:  providerKeyRecord.SystemPrompt,
 			}
 		}
 	}
 	return providerSettings, nil
+}
+
+func managedProviderKeyVersionForRecord(record managedProviderAPIKeyRecord) managedProviderKeyVersion {
+	return managedProviderKeyVersionForCiphertext(record.EncryptedAPIKey)
+}
+
+func managedProviderKeyVersionForCiphertext(encryptedAPIKey string) managedProviderKeyVersion {
+	return sha256.Sum256([]byte(encryptedAPIKey))
 }
 
 func managedProviderSettingsFromPredecessorRecords(providerKeyCipher managedProviderKeyCipher, providerKeyRecords []managedProviderAPIKeyRecord) (map[providerID]managedProviderSettings, error) {

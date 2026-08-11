@@ -622,8 +622,10 @@ func (service *managementService) saveProviderKeyHandler() gin.HandlerFunc {
 			return
 		}
 		verificationAPIKey := strings.TrimSpace(request.APIKey)
+		var verifiedAPIKeyVersion *managedProviderKeyVersion
 		if currentSettings, configured := currentSnapshot.providerSettings[providerIdentifier]; verificationAPIKey == constants.EmptyString && configured && providerIdentifier.string() == ProviderNameDashScope && currentSettings.baseURL != provider.textBaseURL {
 			verificationAPIKey = currentSettings.apiKey
+			verifiedAPIKeyVersion = &currentSettings.apiKeyVersion
 		}
 		if verificationAPIKey != constants.EmptyString {
 			if verificationError := service.keyVerifier.verify(ginContext.Request.Context(), provider, textModel, verificationAPIKey); verificationError != nil {
@@ -631,7 +633,7 @@ func (service *managementService) saveProviderKeyHandler() gin.HandlerFunc {
 				return
 			}
 		}
-		snapshot, storeError := service.store.saveProviderKey(ginContext.Request.Context(), principal, tenantIdentifier, providerIdentifier, request.APIKey, request.BaseURL, request.TextModel, request.SystemPrompt)
+		snapshot, storeError := service.store.saveProviderKeyWithVerifiedVersion(ginContext.Request.Context(), principal, tenantIdentifier, providerIdentifier, request.APIKey, request.BaseURL, request.TextModel, request.SystemPrompt, verifiedAPIKeyVersion)
 		if storeError != nil {
 			writeManagementStoreError(ginContext, storeError)
 			return
@@ -797,7 +799,7 @@ func writeManagementStoreError(ginContext *gin.Context, storeError error) {
 	switch {
 	case errors.Is(storeError, errManagedTenantNotFound):
 		ginContext.AbortWithStatus(http.StatusNotFound)
-	case errors.Is(storeError, errManagedTenantNameConflict), errors.Is(storeError, errManagedFinalTenantDeletion):
+	case errors.Is(storeError, errManagedTenantNameConflict), errors.Is(storeError, errManagedFinalTenantDeletion), errors.Is(storeError, errManagedProviderKeyConflict):
 		ginContext.String(http.StatusConflict, storeError.Error())
 	case errors.Is(storeError, errManagedTenantNameInvalid), errors.Is(storeError, errManagedProviderKeyInvalid), errors.Is(storeError, errManagedProviderBaseURLInvalid):
 		ginContext.String(http.StatusBadRequest, storeError.Error())

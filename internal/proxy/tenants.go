@@ -86,11 +86,14 @@ func normalizedTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
 }
 
 type managedProviderSettings struct {
-	apiKey       string
-	baseURL      string
-	textModel    string
-	systemPrompt string
+	apiKey        string
+	apiKeyVersion managedProviderKeyVersion
+	baseURL       string
+	textModel     string
+	systemPrompt  string
 }
+
+type managedProviderKeyVersion [sha256.Size]byte
 
 type tenant struct {
 	identifier       tenantID

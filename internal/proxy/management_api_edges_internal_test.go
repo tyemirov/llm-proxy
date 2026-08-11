@@ -101,6 +101,69 @@ func TestManagementProviderKeySaveStopsWhenVerifiedRequestIsCanceled(t *testing.
 	}
 }
 
+func TestManagementDashScopeURLSaveRejectsAReplacedVerifiedKey(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	principal := managementPrincipal{userID: "tauth-handler-user", userEmail: "owner@example.com"}
+	service, _ := newSeededInternalManagementService(t)
+	providerIdentifier := newProviderID(ProviderNameDashScope)
+	initialURL := "https://initial-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+	verifiedURL := "https://verified-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+	replacementURL := "https://replacement-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+	if _, saveError := service.store.saveProviderKey(context.Background(), principal, "managed-default", providerIdentifier, "sk-initial", initialURL, ModelNameDashScopeQwenPlus, ""); saveError != nil {
+		t.Fatalf("seed DashScope provider key: %v", saveError)
+	}
+	verifier := pausingProviderKeyVerifier{
+		verificationStarted:  make(chan struct{}),
+		releaseVerification:  make(chan struct{}),
+		verificationComplete: make(chan struct{}),
+	}
+	service.keyVerifier = verifier
+	responseComplete := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		responseComplete <- executeInternalManagementHandler(
+			service.saveProviderKeyHandler(),
+			http.MethodPut,
+			"/api/management/tenants/managed-default/provider-keys/dashscope",
+			`{"api_key":"","base_url":"`+verifiedURL+`","text_model":"`+ModelNameDashScopeQwenPlus+`","system_prompt":""}`,
+			gin.Params{
+				{Key: "tenant_id", Value: "managed-default"},
+				{Key: "provider", Value: ProviderNameDashScope},
+			},
+			principal,
+		)
+	}()
+
+	select {
+	case <-verifier.verificationStarted:
+	case <-time.After(time.Second):
+		t.Fatal("retained provider-key verification did not start")
+	}
+	if _, saveError := service.store.saveProviderKey(context.Background(), principal, "managed-default", providerIdentifier, "sk-replacement", replacementURL, ModelNameDashScopeQwenPlus, ""); saveError != nil {
+		t.Fatalf("replace DashScope provider key: %v", saveError)
+	}
+	close(verifier.releaseVerification)
+
+	select {
+	case response := <-responseComplete:
+		if response.Code != http.StatusConflict {
+			t.Fatalf("stale URL save status=%d body=%q", response.Code, response.Body.String())
+		}
+		if !strings.Contains(response.Body.String(), errManagedProviderKeyConflict.Error()) {
+			t.Fatalf("stale URL save body=%q", response.Body.String())
+		}
+	case <-time.After(time.Second):
+		t.Fatal("stale URL save did not complete")
+	}
+	finalSnapshot, profileError := service.store.tenantProfile(principal, "managed-default")
+	if profileError != nil {
+		t.Fatalf("load final tenant profile: %v", profileError)
+	}
+	finalSettings := finalSnapshot.providerSettings[providerIdentifier]
+	if finalSettings.apiKey != "sk-replacement" || finalSettings.baseURL != replacementURL {
+		t.Fatalf("final DashScope settings=%+v", finalSettings)
+	}
+}
+
 func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	now := time.Date(2026, 7, 25, 15, 0, 0, 0, time.UTC)
@@ -388,6 +451,7 @@ func TestManagementResponseErrorMappings(t *testing.T) {
 		{storeError: errManagedTenantNotFound, statusCode: http.StatusNotFound},
 		{storeError: errManagedTenantNameConflict, statusCode: http.StatusConflict},
 		{storeError: errManagedFinalTenantDeletion, statusCode: http.StatusConflict},
+		{storeError: errManagedProviderKeyConflict, statusCode: http.StatusConflict},
 		{storeError: errManagedTenantNameInvalid, statusCode: http.StatusBadRequest},
 		{storeError: errManagedProviderKeyInvalid, statusCode: http.StatusBadRequest},
 		{storeError: errInternalTestDatabase, statusCode: http.StatusInternalServerError},
