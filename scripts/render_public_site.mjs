@@ -634,18 +634,16 @@ async function renderLandingContent(outputDirectory, capabilityCatalog) {
  */
 function renderRoutingTree(catalog) {
   const providersByIdentifier = new Map(catalog.providers.map((provider) => [provider.identifier, provider]));
-  const publishersByIdentifier = new Map(catalog.publishers.map((publisher) => [publisher.identifier, publisher]));
-  const familiesByIdentifier = new Map(catalog.families.map((family) => [family.identifier, family]));
   const offeringsByIdentifier = new Map(catalog.offerings.map((offering) => [offering.identifier, offering]));
   /** @type {Map<string, PublicExactModelCapability[]>} */
-  const modelsByPublisher = new Map(catalog.publishers.map((publisher) => [publisher.identifier, []]));
+  const modelsByFamily = new Map(catalog.families.map((family) => [family.identifier, []]));
   for (const model of catalog.models) {
-    modelsByPublisher.get(model.publisher)?.push(model);
+    modelsByFamily.get(model.family)?.push(model);
   }
-  const selectedPublisher = catalog.publishers[0];
-  const selectedModel = modelsByPublisher.get(selectedPublisher.identifier)?.[0];
+  const selectedFamily = catalog.families[0];
+  const selectedModel = modelsByFamily.get(selectedFamily.identifier)?.[0];
   if (!selectedModel) {
-    throw new Error(`public_capabilities_invalid: publisher=${selectedPublisher.identifier} has no exact models`);
+    throw new Error(`public_capabilities_invalid: family=${selectedFamily.identifier} has no exact models`);
   }
   const selectedOffering = offeringsByIdentifier.get(selectedModel.provider_offerings[0]);
   if (!selectedOffering) {
@@ -655,19 +653,20 @@ function renderRoutingTree(catalog) {
   if (!selectedProvider) {
     throw new Error(`public_capabilities_invalid: offering=${selectedOffering.identifier} provider`);
   }
-  const publisherButtons = catalog.publishers.map((publisher, publisherIndex) => `        <button type="button" class="routing-tree__branch routing-tree__publisher" data-route-publisher="${escapeAttribute(publisher.identifier)}" aria-controls="routing-tree-models-${escapeAttribute(publisher.identifier)}" aria-pressed="${publisherIndex === 0 ? "true" : "false"}" disabled>
-          <strong>${escapeHTML(publisher.label)}</strong><small>${countLabel(publisher.model_count, "model")}</small>
-        </button>`).join("");
-  const modelGroups = catalog.publishers.map((publisher, publisherIndex) => {
-    const publisherModels = modelsByPublisher.get(publisher.identifier) ?? [];
-    const modelButtons = publisherModels.map((model, modelIndex) => {
-      const family = familiesByIdentifier.get(model.family);
-      const searchText = [publisher.identifier, publisher.label, model.identifier, model.version, model.family, family?.label ?? "", ...model.operations].join(" ");
-      return `<button type="button" class="routing-tree__branch routing-tree__model" data-route-model="${escapeAttribute(model.identifier)}" data-route-model-publisher="${escapeAttribute(model.publisher)}" data-route-family="${escapeAttribute(model.family)}" data-route-operations="${escapeAttribute(model.operations.join(" "))}" data-route-search-text="${escapeAttribute(searchText)}" aria-pressed="${publisherIndex === 0 && modelIndex === 0 ? "true" : "false"}" disabled><code>${escapeHTML(model.identifier)}</code><small>${escapeHTML(family?.label ?? model.family)} · ${escapeHTML(model.operations.join(" + "))}</small></button>`;
+  const familyButtons = catalog.families.map((family, familyIndex) => {
+    const familyModels = modelsByFamily.get(family.identifier) ?? [];
+    return `        <button type="button" class="routing-tree__branch routing-tree__family" data-route-family="${escapeAttribute(family.identifier)}" aria-controls="routing-tree-models-${escapeAttribute(family.identifier)}" aria-pressed="${familyIndex === 0 ? "true" : "false"}" disabled>
+          <strong>${escapeHTML(family.label)}</strong><small>${countLabel(familyModels.length, "model")}</small>
+        </button>`;
+  }).join("");
+  const modelGroups = catalog.families.map((family, familyIndex) => {
+    const familyModels = modelsByFamily.get(family.identifier) ?? [];
+    const modelButtons = familyModels.map((model, modelIndex) => {
+      return `<button type="button" class="routing-tree__branch routing-tree__model" data-route-model="${escapeAttribute(model.identifier)}" data-route-model-family="${escapeAttribute(model.family)}" aria-pressed="${familyIndex === 0 && modelIndex === 0 ? "true" : "false"}" disabled><code>${escapeHTML(model.identifier)}</code><small>${escapeHTML(model.operations.join(" + "))}</small></button>`;
     }).join("");
-    return `      <section id="routing-tree-models-${escapeAttribute(publisher.identifier)}" class="routing-tree__model-group" data-route-model-group="${escapeAttribute(publisher.identifier)}" aria-label="${escapeAttribute(publisher.label)} exact models"${publisherIndex === 0 ? "" : " hidden"}>
-        <p><strong>${escapeHTML(publisher.label)}</strong><span>${countLabel(publisherModels.length, "exact model")}</span></p>
-        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose an exact ${escapeAttribute(publisher.label)} model">
+    return `      <section id="routing-tree-models-${escapeAttribute(family.identifier)}" class="routing-tree__model-group" data-route-model-group="${escapeAttribute(family.identifier)}" aria-label="${escapeAttribute(family.label)} exact models"${familyIndex === 0 ? "" : " hidden"}>
+        <p><strong>${escapeHTML(family.label)}</strong><span>${countLabel(familyModels.length, "exact model")}</span></p>
+        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose an exact ${escapeAttribute(family.label)} model">
           ${modelButtons}
         </div>
       </section>`;
@@ -689,55 +688,38 @@ function renderRoutingTree(catalog) {
         </div>
       </section>`;
   }).join("");
-  const familyOptions = catalog.families.map((family) => `<option value="${escapeAttribute(family.identifier)}">${escapeHTML(family.label)}</option>`).join("");
   return `<routing-tree class="routing-tree" data-enhanced="false" aria-label="Interactive LLM routing map">
   <header class="routing-tree__header">
     <h2>One integration. Choose the exact route.</h2>
-    <span>${countLabel(catalog.counts.model_publishers, "publisher")} · ${countLabel(catalog.counts.exact_models, "exact model")} · ${countLabel(catalog.counts.provider_offerings, "offering")}</span>
+    <span>${countLabel(catalog.counts.model_families, "family", "families")} · ${countLabel(catalog.counts.exact_models, "exact model")} · ${countLabel(catalog.counts.provider_offerings, "offering")}</span>
   </header>
-  <form class="routing-tree__filters" data-route-picker role="search" aria-label="Find an exact model">
-    <input type="search" aria-label="Search exact models" placeholder="Search publisher, family, or model" autocomplete="off" data-route-search disabled>
-    <select aria-label="Filter model family" data-route-family-filter disabled><option value="">All families</option>${familyOptions}</select>
-    <select aria-label="Filter model operation" data-route-operation-filter disabled><option value="">All operations</option><option value="text">Text</option><option value="dictation">Dictation</option><option value="video_generation">Video generation</option></select>
-    <button type="reset" data-route-reset disabled>Reset</button>
-  </form>
-  <div class="routing-tree__catalog">
-    <section class="routing-tree__stage routing-tree__stage--publishers" aria-labelledby="routing-tree-publisher-title">
-      <h3 id="routing-tree-publisher-title">Choose a publisher</h3>
-      <div class="routing-tree__branches routing-tree__publisher-branches" role="group" aria-label="Model publishers">
-${publisherButtons}
+  <div class="routing-tree__map" data-route-map>
+    <canvas class="routing-tree__connectors" data-route-canvas aria-hidden="true"></canvas>
+    <article class="routing-tree__node routing-tree__node--product" data-route-product>
+      <strong>Your product</strong>
+      <span>HTTP · Go · Python · CLI</span>
+    </article>
+    <article class="routing-tree__node routing-tree__node--proxy" data-route-proxy>
+      <strong>LLM Proxy</strong>
+      <span>Authenticate · validate · route</span>
+    </article>
+    <section class="routing-tree__stage routing-tree__stage--families" aria-labelledby="routing-tree-family-title">
+      <h3 id="routing-tree-family-title">Choose a model family</h3>
+      <div class="routing-tree__branches routing-tree__family-branches" role="group" aria-label="Model families">
+${familyButtons}
       </div>
     </section>
     <section class="routing-tree__stage routing-tree__stage--models" aria-labelledby="routing-tree-model-title">
       <h3 id="routing-tree-model-title">Choose an exact model</h3>
 ${modelGroups}
-      <p class="routing-tree__empty" data-route-empty hidden>No exact models match these filters.</p>
     </section>
-  </div>
-  <div class="routing-tree__map" data-route-map>
-    <canvas class="routing-tree__connectors" data-route-canvas aria-hidden="true"></canvas>
-    <div class="routing-tree__ingress" aria-label="One connection into LLM Proxy">
-      <article class="routing-tree__node routing-tree__node--product" data-route-product>
-        <strong>Your product</strong>
-        <span>HTTP · Go · Python · CLI</span>
-      </article>
-      <article class="routing-tree__node routing-tree__node--proxy" data-route-proxy>
-        <strong>LLM Proxy</strong>
-        <span>Authenticate · validate · route</span>
-      </article>
-    </div>
-    <article class="routing-tree__node routing-tree__node--selection" data-route-selection-node>
-      <span data-route-selected-publisher>${escapeHTML(selectedPublisher.label)}</span>
-      <strong><code data-route-selected-model>${escapeHTML(selectedModel.identifier)}</code></strong>
-      <small>${escapeHTML(selectedModel.operations.join(" + "))}</small>
-    </article>
     <section class="routing-tree__stage routing-tree__stage--providers" aria-labelledby="routing-tree-provider-title">
       <h3 id="routing-tree-provider-title">Choose a provider offering</h3>
 ${providerGroups}
     </section>
     <footer class="routing-tree__selection">
       <span>Selected route:</span>
-      <output aria-live="polite"><code data-route-selected-provider>${escapeHTML(selectedProvider.identifier)}</code><i aria-hidden="true">/</i><code data-route-selected-route-model>${escapeHTML(selectedModel.identifier)}</code></output>
+      <output aria-live="polite"><code data-route-selected-provider>${escapeHTML(selectedProvider.identifier)}</code><i aria-hidden="true">/</i><code data-route-selected-model>${escapeHTML(selectedModel.identifier)}</code></output>
     </footer>
   </div>
 </routing-tree>`;
@@ -1131,9 +1113,10 @@ function requireCount(declared, actual, field) {
 /**
  * @param {number} count
  * @param {string} singular
+ * @param {string} [plural]
  */
-function countLabel(count, singular) {
-  return `${count} ${singular}${count === 1 ? "" : "s"}`;
+function countLabel(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 /**
