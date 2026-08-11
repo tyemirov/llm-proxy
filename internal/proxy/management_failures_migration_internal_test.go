@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -506,6 +507,355 @@ func TestManagedModelIdentityMigrationRejectsStageFailures(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestManagedTenantInitializationPropagatesModelIdentityFailure(t *testing.T) {
+	fixture := newManagedModelIdentityMigrationFixture(t)
+	if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: managedQwenCloudRetirementVersion, AppliedAt: fixture.tenant.CreatedAt}).Error; createError != nil {
+		t.Fatalf("seed schema version: %v", createError)
+	}
+	if updateError := fixture.database.Model(&managedProviderAPIKeyRecord{}).
+		Where(&managedProviderAPIKeyRecord{TenantID: fixture.tenant.TenantID, ProviderID: ProviderNameMiniMax}).
+		Update("encrypted_api_key", "invalid").Error; updateError != nil {
+		t.Fatalf("seed invalid model identity provider: %v", updateError)
+	}
+	initializeError := initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers)
+	if !errors.Is(initializeError, errManagedTenantSchemaMigration) || !strings.Contains(initializeError.Error(), "operation=preflight") {
+		t.Fatalf("initialize error=%v", initializeError)
+	}
+}
+
+type managedXAIProviderMigrationFixture struct {
+	database          *gorm.DB
+	providerKeyCipher managedProviderKeyCipher
+	providers         *providerRegistry
+	tenant            managedTenantRecord
+	providerKey       managedProviderAPIKeyRecord
+	usage             managedUsageEventRecord
+}
+
+type managedXAIProviderFailingReader struct{}
+
+func (managedXAIProviderFailingReader) Read([]byte) (int, error) {
+	return 0, errInternalTestDatabase
+}
+
+func newManagedXAIProviderMigrationFixture(t *testing.T) managedXAIProviderMigrationFixture {
+	t.Helper()
+	database, openError := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "xai-provider-stage.db")), &gorm.Config{})
+	if openError != nil {
+		t.Fatalf("open xAI provider fixture: %v", openError)
+	}
+	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
+		t.Fatalf("create xAI provider schema: %v", migrationError)
+	}
+	now := time.Date(2026, 8, 10, 23, 45, 0, 0, time.UTC)
+	user := managedUserRecord{UserID: "xai-provider-owner", CreatedAt: now, UpdatedAt: now}
+	if createError := database.Create(&user).Error; createError != nil {
+		t.Fatalf("seed xAI provider user: %v", createError)
+	}
+	tenantRecord := fakeTenantRecord(user.UserID, "xai-provider-tenant", "Default", now)
+	tenantRecord.DefaultProvider = retiredGrokProviderIdentifier
+	tenantRecord.DefaultModel = ModelNameGrok43
+	tenantRecord.DefaultDictationProvider = retiredGrokProviderIdentifier
+	tenantRecord.DefaultDictationModel = "xai-stt"
+	tenantRecord.DefaultSystemPrompt = "preserve tenant prompt"
+	if createError := database.Create(&tenantRecord).Error; createError != nil {
+		t.Fatalf("seed xAI provider tenant: %v", createError)
+	}
+	providerKeyCipher := internalManagedProviderKeyCipher()
+	encryptedKey, encryptionError := providerKeyCipher.encrypt(
+		strings.NewReader(strings.Repeat("x", providerKeyCipher.aeadCipher.NonceSize())),
+		tenantRecord.TenantID,
+		retiredGrokProviderIdentifier,
+		"sk-grok",
+	)
+	if encryptionError != nil {
+		t.Fatalf("encrypt xAI provider key: %v", encryptionError)
+	}
+	providerKey := managedProviderAPIKeyRecord{
+		TenantID: tenantRecord.TenantID, ProviderID: retiredGrokProviderIdentifier,
+		EncryptedAPIKey: encryptedKey, TextModel: ModelNameGrok43,
+		SystemPrompt: "preserve provider prompt", CreatedAt: now, UpdatedAt: now,
+	}
+	if createError := database.Create(&providerKey).Error; createError != nil {
+		t.Fatalf("seed xAI provider key: %v", createError)
+	}
+	usage := managedUsageEventRecord{
+		ID: 101, TenantID: tenantRecord.TenantID, Endpoint: usageEndpointText,
+		ProviderID: retiredGrokProviderIdentifier, ModelID: ModelNameGrok43,
+		StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now,
+	}
+	if createError := database.Create(&usage).Error; createError != nil {
+		t.Fatalf("seed xAI provider usage: %v", createError)
+	}
+	return managedXAIProviderMigrationFixture{
+		database: database, providerKeyCipher: providerKeyCipher,
+		providers: internalManagementProviderRegistry(), tenant: tenantRecord,
+		providerKey: providerKey, usage: usage,
+	}
+}
+
+func (fixture managedXAIProviderMigrationFixture) addProvider(t *testing.T, providerIdentifier string, textModel string, encryptedAPIKey string) {
+	t.Helper()
+	if encryptedAPIKey == "" {
+		var encryptionError error
+		encryptedAPIKey, encryptionError = fixture.providerKeyCipher.encrypt(
+			strings.NewReader(strings.Repeat("p", fixture.providerKeyCipher.aeadCipher.NonceSize())),
+			fixture.tenant.TenantID,
+			providerIdentifier,
+			"sk-provider",
+		)
+		if encryptionError != nil {
+			t.Fatalf("encrypt provider=%s: %v", providerIdentifier, encryptionError)
+		}
+	}
+	if createError := fixture.database.Create(&managedProviderAPIKeyRecord{
+		TenantID: fixture.tenant.TenantID, ProviderID: providerIdentifier,
+		EncryptedAPIKey: encryptedAPIKey, TextModel: textModel,
+		CreatedAt: fixture.tenant.CreatedAt, UpdatedAt: fixture.tenant.UpdatedAt,
+	}).Error; createError != nil {
+		t.Fatalf("seed provider=%s: %v", providerIdentifier, createError)
+	}
+}
+
+func applyManagedXAIProviderDataset(t *testing.T, fixture managedXAIProviderMigrationFixture, dataset managedXAIProviderDataset) {
+	t.Helper()
+	for _, backfill := range dataset.providerKeys {
+		if updateError := fixture.database.Model(&managedProviderAPIKeyRecord{}).
+			Where(&managedProviderAPIKeyRecord{TenantID: backfill.record.TenantID, ProviderID: retiredGrokProviderIdentifier}).
+			UpdateColumns(map[string]any{"provider_id": backfill.record.ProviderID, "encrypted_api_key": backfill.record.EncryptedAPIKey}).Error; updateError != nil {
+			t.Fatalf("apply xAI provider key: %v", updateError)
+		}
+	}
+	for _, backfill := range dataset.tenants {
+		if updateError := fixture.database.Model(&managedTenantRecord{}).
+			Where(&managedTenantRecord{TenantID: backfill.tenantID}).
+			Updates(managedRoutingDefaultsDatabaseUpdates(backfill.defaults, backfill.updatedAt)).Error; updateError != nil {
+			t.Fatalf("apply xAI tenant defaults: %v", updateError)
+		}
+	}
+}
+
+func TestManagedXAIProviderMigrationCanonicalizesCurrentRoutesAndPreservesUsage(t *testing.T) {
+	fixture := newManagedXAIProviderMigrationFixture(t)
+	if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: managedModelIdentitySchemaVersion, AppliedAt: fixture.tenant.CreatedAt}).Error; createError != nil {
+		t.Fatalf("seed schema version: %v", createError)
+	}
+	if migrationError := initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers); migrationError != nil {
+		t.Fatalf("migrate xAI provider: %v", migrationError)
+	}
+	var retiredCount int64
+	if countError := fixture.database.Model(&managedProviderAPIKeyRecord{}).Where(&managedProviderAPIKeyRecord{ProviderID: retiredGrokProviderIdentifier}).Count(&retiredCount).Error; countError != nil || retiredCount != 0 {
+		t.Fatalf("retired provider count=%d error=%v", retiredCount, countError)
+	}
+	var providerKey managedProviderAPIKeyRecord
+	if queryError := fixture.database.Where(&managedProviderAPIKeyRecord{TenantID: fixture.tenant.TenantID, ProviderID: ProviderNameXAI}).First(&providerKey).Error; queryError != nil {
+		t.Fatalf("load xAI provider key: %v", queryError)
+	}
+	apiKey, decryptError := fixture.providerKeyCipher.decrypt(providerKey)
+	if decryptError != nil || apiKey != "sk-grok" || providerKey.TextModel != fixture.providerKey.TextModel || providerKey.SystemPrompt != fixture.providerKey.SystemPrompt || !providerKey.CreatedAt.Equal(fixture.providerKey.CreatedAt) || !providerKey.UpdatedAt.Equal(fixture.providerKey.UpdatedAt) {
+		t.Fatalf("migrated provider key=%+v api_key=%q error=%v", providerKey, apiKey, decryptError)
+	}
+	var tenantRecord managedTenantRecord
+	if queryError := fixture.database.Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).First(&tenantRecord).Error; queryError != nil {
+		t.Fatalf("load xAI tenant: %v", queryError)
+	}
+	expectedDefaults := TenantDefaults{
+		Provider: ProviderNameXAI, Model: ModelNameGrok43,
+		DictationProvider: ProviderNameXAI, DictationModel: "xai-stt",
+		SystemPrompt: "preserve tenant prompt",
+	}
+	if tenantRecord.defaults() != expectedDefaults || !tenantRecord.UpdatedAt.Equal(fixture.tenant.UpdatedAt) {
+		t.Fatalf("migrated defaults=%+v updated_at=%s", tenantRecord.defaults(), tenantRecord.UpdatedAt)
+	}
+	var historicalUsage []managedUsageEventRecord
+	if queryError := fixture.database.Where(&managedUsageEventRecord{ProviderID: retiredGrokProviderIdentifier}).Order("id").Find(&historicalUsage).Error; queryError != nil || !slices.Equal(historicalUsage, []managedUsageEventRecord{fixture.usage}) {
+		t.Fatalf("historical usage=%+v error=%v", historicalUsage, queryError)
+	}
+	var latest managedSchemaMigrationRecord
+	if queryError := fixture.database.Order("version DESC").First(&latest).Error; queryError != nil || latest.Version != managedTenantSchemaVersion {
+		t.Fatalf("latest version=%+v error=%v", latest, queryError)
+	}
+	if validationError := initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers); validationError != nil {
+		t.Fatalf("reopen xAI provider schema: %v", validationError)
+	}
+}
+
+func TestManagedXAIProviderMigrationRejectsStageFailures(t *testing.T) {
+	assertMigrationError := func(t *testing.T, migrationError error, want string) {
+		t.Helper()
+		if !errors.Is(migrationError, errManagedTenantSchemaMigration) || !strings.Contains(migrationError.Error(), want) {
+			t.Fatalf("migration error=%v want=%q", migrationError, want)
+		}
+	}
+	t.Run("encryption", func(t *testing.T) {
+		fixture := newManagedXAIProviderMigrationFixture(t)
+		_, migrationError := preflightManagedXAIProviderWithReader(fixture.database, fixture.providerKeyCipher, fixture.providers, managedXAIProviderFailingReader{})
+		assertMigrationError(t, migrationError, "operation=preflight")
+	})
+	for _, testCase := range []struct {
+		name      string
+		want      string
+		configure func(*testing.T, managedXAIProviderMigrationFixture)
+	}{
+		{
+			name: "read tenants", want: "operation=read",
+			configure: func(t *testing.T, fixture managedXAIProviderMigrationFixture) {
+				registerManagedGORMError(t, fixture.database, "xai_provider_read", "query", managedTenantTable, errInternalTestDatabase)
+			},
+		},
+		{
+			name: "provider conflict", want: "provider_conflict=grok:xai",
+			configure: func(t *testing.T, fixture managedXAIProviderMigrationFixture) {
+				fixture.addProvider(t, ProviderNameXAI, ModelNameGrok43, "")
+			},
+		},
+		{
+			name: "decrypt retired provider", want: "operation=preflight",
+			configure: func(t *testing.T, fixture managedXAIProviderMigrationFixture) {
+				if updateError := fixture.database.Model(&managedProviderAPIKeyRecord{}).Where(&managedProviderAPIKeyRecord{TenantID: fixture.tenant.TenantID, ProviderID: retiredGrokProviderIdentifier}).Update("encrypted_api_key", "invalid").Error; updateError != nil {
+					t.Fatalf("seed invalid retired provider: %v", updateError)
+				}
+			},
+		},
+		{
+			name: "decrypt retained provider", want: "operation=preflight",
+			configure: func(t *testing.T, fixture managedXAIProviderMigrationFixture) {
+				fixture.addProvider(t, ProviderNameOpenAI, ModelNameGPT41, "invalid")
+			},
+		},
+		{
+			name: "invalid defaults", want: "operation=preflight table=" + managedTenantTable,
+			configure: func(t *testing.T, fixture managedXAIProviderMigrationFixture) {
+				if updateError := fixture.database.Model(&managedTenantRecord{}).Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).Update("default_model", "missing-model").Error; updateError != nil {
+					t.Fatalf("seed invalid defaults: %v", updateError)
+				}
+			},
+		},
+		{
+			name: "read historical usage", want: "operation=read table=" + managedUsageEventTable,
+			configure: func(t *testing.T, fixture managedXAIProviderMigrationFixture) {
+				registerManagedGORMError(t, fixture.database, "xai_provider_usage_read", "query", managedUsageEventTable, errInternalTestDatabase)
+			},
+		},
+		{
+			name: "backfill provider key", want: "operation=backfill table=" + managedProviderKeyTable,
+			configure: func(t *testing.T, fixture managedXAIProviderMigrationFixture) {
+				registerManagedGORMError(t, fixture.database, "xai_provider_key_backfill", "update", managedProviderKeyTable, errInternalTestDatabase)
+			},
+		},
+		{
+			name: "backfill tenant", want: "operation=backfill table=" + managedTenantTable,
+			configure: func(t *testing.T, fixture managedXAIProviderMigrationFixture) {
+				registerManagedGORMError(t, fixture.database, "xai_provider_tenant_backfill", "update", managedTenantTable, errInternalTestDatabase)
+			},
+		},
+		{
+			name: "verify", want: "operation=verify",
+			configure: func(t *testing.T, fixture managedXAIProviderMigrationFixture) {
+				if callbackError := fixture.database.Callback().Query().Before("gorm:query").Register("xai_provider_verify", func(callbackDatabase *gorm.DB) {
+					if callbackDatabase.Statement.Table == managedProviderKeyTable {
+						if _, isCount := callbackDatabase.Statement.Dest.(*int64); isCount {
+							callbackDatabase.AddError(errInternalTestDatabase)
+						}
+					}
+				}); callbackError != nil {
+					t.Fatalf("register xAI verification failure: %v", callbackError)
+				}
+			},
+		},
+		{
+			name: "record version", want: "operation=record_version",
+			configure: func(t *testing.T, fixture managedXAIProviderMigrationFixture) {
+				registerManagedGORMError(t, fixture.database, "xai_provider_record_version", "create", managedSchemaMigrationTable, errInternalTestDatabase)
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			fixture := newManagedXAIProviderMigrationFixture(t)
+			testCase.configure(t, fixture)
+			assertMigrationError(t, migrateManagedXAIProvider(fixture.database, fixture.providerKeyCipher, fixture.providers), testCase.want)
+		})
+	}
+
+	t.Run("schema five validation", func(t *testing.T) {
+		fixture := newManagedXAIProviderMigrationFixture(t)
+		if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: managedModelIdentitySchemaVersion, AppliedAt: fixture.tenant.CreatedAt}).Error; createError != nil {
+			t.Fatalf("seed schema version: %v", createError)
+		}
+		if dropError := fixture.database.Migrator().DropIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex); dropError != nil {
+			t.Fatalf("drop usage failure index: %v", dropError)
+		}
+		assertMigrationError(t, initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers), "operation=validate_current_schema")
+	})
+}
+
+func TestManagedXAIProviderVerificationRejectsDrift(t *testing.T) {
+	assertVerificationError := func(t *testing.T, verificationError error, want string) {
+		t.Helper()
+		if !errors.Is(verificationError, errManagedTenantSchemaMigration) || !strings.Contains(verificationError.Error(), want) {
+			t.Fatalf("verification error=%v want=%q", verificationError, want)
+		}
+	}
+	verifiedFixture := func(t *testing.T) (managedXAIProviderMigrationFixture, managedXAIProviderDataset) {
+		t.Helper()
+		fixture := newManagedXAIProviderMigrationFixture(t)
+		dataset, preflightError := preflightManagedXAIProvider(fixture.database, fixture.providerKeyCipher, fixture.providers)
+		if preflightError != nil {
+			t.Fatalf("preflight xAI verification fixture: %v", preflightError)
+		}
+		applyManagedXAIProviderDataset(t, fixture, dataset)
+		return fixture, dataset
+	}
+
+	t.Run("retired provider remains", func(t *testing.T) {
+		fixture := newManagedXAIProviderMigrationFixture(t)
+		assertVerificationError(t, verifyManagedXAIProviderMigration(fixture.database, fixture.providerKeyCipher, fixture.providers, managedXAIProviderDataset{}), "operation=verify")
+	})
+	t.Run("provider query", func(t *testing.T) {
+		fixture, dataset := verifiedFixture(t)
+		if callbackError := fixture.database.Callback().Query().Before("gorm:query").Register("xai_verify_provider_query", func(callbackDatabase *gorm.DB) {
+			if callbackDatabase.Statement.Table == managedProviderKeyTable {
+				if _, isRecord := callbackDatabase.Statement.Dest.(*managedProviderAPIKeyRecord); isRecord {
+					callbackDatabase.AddError(errInternalTestDatabase)
+				}
+			}
+		}); callbackError != nil {
+			t.Fatalf("register provider query failure: %v", callbackError)
+		}
+		assertVerificationError(t, verifyManagedXAIProviderMigration(fixture.database, fixture.providerKeyCipher, fixture.providers, dataset), "operation=verify")
+	})
+	t.Run("provider values", func(t *testing.T) {
+		fixture, dataset := verifiedFixture(t)
+		dataset.providerKeys[0].apiKey = "changed"
+		assertVerificationError(t, verifyManagedXAIProviderMigration(fixture.database, fixture.providerKeyCipher, fixture.providers, dataset), "operation=verify")
+	})
+	t.Run("tenant query", func(t *testing.T) {
+		fixture, dataset := verifiedFixture(t)
+		registerManagedGORMError(t, fixture.database, "xai_verify_tenant_query", "query", managedTenantTable, errInternalTestDatabase)
+		assertVerificationError(t, verifyManagedXAIProviderMigration(fixture.database, fixture.providerKeyCipher, fixture.providers, dataset), "operation=verify")
+	})
+	t.Run("tenant values", func(t *testing.T) {
+		fixture, dataset := verifiedFixture(t)
+		dataset.tenants[0].updatedAt = dataset.tenants[0].updatedAt.Add(time.Second)
+		assertVerificationError(t, verifyManagedXAIProviderMigration(fixture.database, fixture.providerKeyCipher, fixture.providers, dataset), "values")
+	})
+	t.Run("current routing validation", func(t *testing.T) {
+		fixture, dataset := verifiedFixture(t)
+		fixture.addProvider(t, ProviderNameOpenAI, ModelNameGPT41, "invalid")
+		assertVerificationError(t, verifyManagedXAIProviderMigration(fixture.database, fixture.providerKeyCipher, fixture.providers, dataset), "operation=validate")
+	})
+	t.Run("usage query", func(t *testing.T) {
+		fixture, dataset := verifiedFixture(t)
+		registerManagedGORMError(t, fixture.database, "xai_verify_usage_query", "query", managedUsageEventTable, errInternalTestDatabase)
+		assertVerificationError(t, verifyManagedXAIProviderMigration(fixture.database, fixture.providerKeyCipher, fixture.providers, dataset), "operation=read")
+	})
+	t.Run("usage values", func(t *testing.T) {
+		fixture, dataset := verifiedFixture(t)
+		dataset.historicalUsage = nil
+		assertVerificationError(t, verifyManagedXAIProviderMigration(fixture.database, fixture.providerKeyCipher, fixture.providers, dataset), "historical_usage_changed")
+	})
 }
 
 type managedQwenCloudRetirementFixture struct {

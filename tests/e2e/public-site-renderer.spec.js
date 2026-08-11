@@ -58,7 +58,13 @@ test("public site rendering writes the normalized exact model catalog", async ()
 
 function normalizedCapabilityFixture() {
   return {
-    providers: [{ identifier: "example-provider", label: "Example Provider" }],
+    revision: "2026-08-10.test.1",
+    operations: [
+      { id: "text", input_artifacts: ["text"], output_artifacts: ["text"] },
+      { id: "dictation", input_artifacts: ["audio"], output_artifacts: ["text"] },
+      { id: "video_generation", input_artifacts: ["text", "image"], output_artifacts: ["video"] },
+    ],
+    providers: [{ identifier: "example-provider", label: "Example Provider", credential_kinds: ["api_key"] }],
     publishers: [{ identifier: "example-publisher", label: "Example Publisher", model_count: 1 }],
     families: [{ identifier: "example-family", publisher: "example-publisher", label: "Example Family" }],
     models: [{
@@ -77,8 +83,22 @@ function normalizedCapabilityFixture() {
       model: "example-model",
       capabilities: ["text"],
       wire_contract: "openai_chat_completions",
+      execution_lifecycle: "synchronous_completion",
       output_token_limit: 0,
       reasoning_efforts: [],
+      controls: [],
+      limits: [],
+    }],
+    prices: [{
+      provider: "example-provider",
+      model: "example-model",
+      operation: "text",
+      available: false,
+      rates: [],
+      minimum_charge: null,
+      source: "https://example.com/pricing",
+      last_verified: "2026-08-10",
+      unavailable_reason: "Test price is unavailable.",
     }],
     counts: {
       providers: 1,

@@ -629,6 +629,21 @@ func (contract *Contract) validateValue(schema map[string]any, value any, contex
 			}
 		}
 		return nil
+	case "number":
+		numberValue, numberError := contractNumber(value)
+		if numberError != nil {
+			return fmt.Errorf("%w: %s must be a number", errInvalidContract, context)
+		}
+		if rawMinimum, hasMinimum := resolvedSchema["minimum"]; hasMinimum {
+			minimum, minimumError := contractNumber(rawMinimum)
+			if minimumError != nil {
+				return fmt.Errorf("%w: %s minimum: %v", errInvalidContract, context, minimumError)
+			}
+			if numberValue < minimum {
+				return fmt.Errorf("%w: %s must be at least %g", errInvalidContract, context, minimum)
+			}
+		}
+		return nil
 	case "boolean":
 		if _, ok := value.(bool); !ok {
 			return fmt.Errorf("%w: %s must be a boolean", errInvalidContract, context)
@@ -703,6 +718,21 @@ func contractInteger(value any) (int64, error) {
 		return typedValue.Int64()
 	default:
 		return 0, fmt.Errorf("value=%v is not an integer", value)
+	}
+}
+
+func contractNumber(value any) (float64, error) {
+	switch typedValue := value.(type) {
+	case int:
+		return float64(typedValue), nil
+	case int64:
+		return float64(typedValue), nil
+	case float64:
+		return typedValue, nil
+	case json.Number:
+		return typedValue.Float64()
+	default:
+		return 0, fmt.Errorf("value=%v is not a number", value)
 	}
 }
 

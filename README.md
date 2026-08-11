@@ -326,7 +326,7 @@ adapters before they are available through `/dictate`.
 | `zhipu` | `glm` | `openai_chat_completions` | `synchronous_completion` | `glm-5.1` | `providers.zhipu.api_key` | `https://open.bigmodel.cn/api/paas/v4` | Yes: `glm-asr-2512` | No |
 | `gemini` | none | `gemini_interactions` | Model-specific: Gemini 3.x `pollable_resource`; Gemini 2.5 `synchronous_completion` | `gemini-2.5-flash` | `providers.gemini.api_key` | `https://generativelanguage.googleapis.com/v1beta` | No | No |
 | `anthropic` | `claude` | `anthropic_messages` | `synchronous_completion` | `claude-sonnet-4-6` | `providers.anthropic.api_key` | `https://api.anthropic.com` | No | No |
-| `grok` | `xai` | `openai_chat_completions` | `synchronous_completion` | `grok-4.3` | `providers.grok.api_key` | `https://api.x.ai/v1` | Yes: `xai-stt` | No |
+| `xai` | none | `openai_chat_completions` | `synchronous_completion` | `grok-4.3` | `providers.xai.api_key` | `https://api.x.ai/v1` | Yes: `xai-stt` | No |
 
 All upstream provider credentials are server-side only. Client requests must
 never send OpenAI, Meta, Anthropic, xAI, Gemini, or other upstream API keys.
@@ -343,18 +343,28 @@ declares `image` and `audio` only for `gemini-3.5-flash` and
 
 ### Model catalog schema
 
-The normalized `catalog` has five related lists:
+The normalized `catalog` has one immutable `revision` and seven related lists:
 
-- `providers` identifies each provider that can own an offering.
+- `operations` defines operation identifiers and their input and output artifact kinds.
+- `providers` identifies each provider that can own an offering and its credential kinds.
 - `publishers` identifies each organization or community that publishes models.
 - `families` groups exact models under one publisher.
 - `models` defines each provider-independent exact model.
 - `offerings` defines each provider route for one exact model.
+- `prices` defines one typed available or unavailable price descriptor for each offering operation.
 
 An exact model owns its canonical identifier, publisher, family, version,
 operations, and media inputs. A provider offering owns its provider-native
 model identifier, operations, defaults, wire contract, lifecycle, limits, and
 route-specific capabilities.
+
+Controls declare canonical boolean, integer, or enum inputs. Limits declare
+fixed bounds or account-dependent capacity. Prices declare components, USD
+rates, units, exact condition tuples, an optional minimum charge, an official
+source, and a verification date. Price selection succeeds only for an exact
+component and condition match. Missing or conflicting matches return a typed
+unavailable result. Managed usage remains execution telemetry and is not a
+pricing or billing record.
 
 A request route contains a canonical provider identifier and exact model
 identifier. The registry resolves that pair to one provider offering. The
@@ -373,11 +383,13 @@ operation. Defaults belong to provider offerings through
 `default_operations`. Managed tenant defaults remain canonical provider and
 exact model pairs.
 
-`wire_contract` is required for each text offering. Its current values are
+`wire_contract` and `execution_lifecycle` are required for every offering. Text
+wire contracts are
 `openai_responses`, `openai_chat_completions`,
-`gemini_interactions`, and `anthropic_messages`.
-`execution_lifecycle` is also required for each text offering. Its current
-values are `synchronous_completion` and `pollable_resource`.
+`gemini_interactions`, and `anthropic_messages`. Dictation uses
+`multipart_transcription`, and xAI video generation uses
+`xai_videos_generations`. Lifecycle values are `synchronous_completion` and
+`pollable_resource`.
 
 `output_token_limit`, `web_search`, `request_profile`,
 `reasoning_effort`, and offering `media_inputs` are route-specific
@@ -460,8 +472,8 @@ Provider-specific details:
 * Only dictation-capable providers expose `transcriptions_url` fields:
   OpenAI uses `providers.openai.transcriptions_url`, SiliconFlow uses
   `providers.siliconflow.transcriptions_url`, Zhipu uses
-  `providers.zhipu.transcriptions_url`, and Grok/xAI uses
-  `providers.grok.transcriptions_url`.
+  `providers.zhipu.transcriptions_url`, and xAI uses
+  `providers.xai.transcriptions_url`.
 * Gemini text requests use native `POST /interactions` against the configured
   `v1beta` base URL with `x-goog-api-key` and
   `Api-Revision: 2026-05-20`. Gemini 3.x sends `background: true` and
@@ -491,9 +503,9 @@ Provider-specific details:
 * Zhipu dictation uses Z.AI GLM-ASR through
   `providers.zhipu.transcriptions_url` with the selected configured dictation
   model.
-* Grok text requests use xAI's OpenAI-compatible `/chat/completions` API at
+* xAI text requests use xAI's OpenAI-compatible `/chat/completions` API at
   `https://api.x.ai/v1`. Grok/xAI dictation uses xAI STT through
-  `providers.grok.transcriptions_url`; the upstream STT endpoint does not
+  `providers.xai.transcriptions_url`. The upstream STT endpoint does not
   receive a `model` multipart field.
 
 When management is disabled, provider API keys are optional until a configured
@@ -1256,14 +1268,14 @@ tenants:
       model: claude-sonnet-4-6
 ```
 
-Set Grok as the default text provider:
+Set xAI as the default text provider:
 
 ```yaml
 tenants:
-  - id: grok
+  - id: xai
     secret: "${SERVICE_SECRET}"
     defaults:
-      provider: grok
+      provider: xai
       model: grok-4.3
 ```
 
@@ -1322,7 +1334,7 @@ an ignored coverage artifact from an earlier run cannot satisfy completion.
 | Zhipu/GLM | `ZHIPU_API_KEY` | `LLM_PROXY_LIVE_ZHIPU_MODEL` |
 | Gemini | `GEMINI_API_KEY` | `LLM_PROXY_LIVE_GEMINI_MODEL` |
 | Anthropic/Claude | `ANTHROPIC_API_KEY` | `LLM_PROXY_LIVE_ANTHROPIC_MODEL` |
-| Grok/xAI | `XAI_API_KEY` | `LLM_PROXY_LIVE_GROK_MODEL` |
+| xAI/Grok | `XAI_API_KEY` | `LLM_PROXY_LIVE_XAI_MODEL` |
 
 Run every provider with an available key:
 
@@ -1820,13 +1832,13 @@ curl --get \
   "http://localhost:8080/"
 ```
 
-Grok text generation:
+xAI Grok text generation:
 
 ```shell
 curl --get \
   --data-urlencode "prompt=Summarize this with Grok" \
   --data-urlencode "key=mysecret" \
-  --data-urlencode "provider=grok" \
+  --data-urlencode "provider=xai" \
   --data-urlencode "model=grok-4.3" \
   --data-urlencode "max_tokens=512" \
   "http://localhost:8080/"
@@ -2128,7 +2140,7 @@ and [latest-model guide](https://developers.openai.com/api/docs/guides/latest-mo
 | `openai` | `gpt-4o-mini-transcribe`, `gpt-4o-transcribe` | `providers.openai.api_key` | `providers.openai.transcriptions_url` | Default dictation provider and default model `gpt-4o-mini-transcribe`. |
 | `siliconflow` | `sensevoice-small` | `providers.siliconflow.api_key` | `providers.siliconflow.transcriptions_url` | OpenAI-compatible audio transcription. |
 | `zhipu` / `glm` | `glm-asr-2512` | `providers.zhipu.api_key` | `providers.zhipu.transcriptions_url` | Z.AI GLM-ASR; sends `model=glm-asr-2512`. |
-| `grok` / `xai` | `xai-stt` | `providers.grok.api_key` | `providers.grok.transcriptions_url` | xAI STT; the proxy model name selects the provider but is not sent as a multipart `model` field. |
+| `xai` | `xai-stt` | `providers.xai.api_key` | `providers.xai.transcriptions_url` | xAI STT. The proxy model name selects the provider but is not sent as a multipart `model` field. |
 
 ### Status codes
 

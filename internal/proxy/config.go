@@ -54,7 +54,7 @@ type Configuration struct {
 	GeminiKey                    string
 	AnthropicKey                 string
 	MetaKey                      string
-	GrokKey                      string
+	XAIKey                       string
 	OpenAIBaseURL                string
 	OpenAITranscriptionsURL      string
 	DeepSeekBaseURL              string
@@ -68,8 +68,8 @@ type Configuration struct {
 	GeminiBaseURL                string
 	AnthropicBaseURL             string
 	MetaBaseURL                  string
-	GrokBaseURL                  string
-	GrokTranscriptionsURL        string
+	XAIBaseURL                   string
+	XAITranscriptionsURL         string
 	Port                         int
 	LogLevel                     string
 	WorkerCount                  int
@@ -210,7 +210,7 @@ func (configuration *Configuration) ApplyTunables() {
 	configuration.GeminiKey = strings.TrimSpace(configuration.GeminiKey)
 	configuration.AnthropicKey = strings.TrimSpace(configuration.AnthropicKey)
 	configuration.MetaKey = strings.TrimSpace(configuration.MetaKey)
-	configuration.GrokKey = strings.TrimSpace(configuration.GrokKey)
+	configuration.XAIKey = strings.TrimSpace(configuration.XAIKey)
 	if configuration.WorkerCount <= 0 {
 		configuration.WorkerCount = DefaultWorkers
 	}
@@ -281,13 +281,13 @@ func (configuration *Configuration) ApplyTunables() {
 	if strings.TrimSpace(configuration.MetaBaseURL) == constants.EmptyString {
 		configuration.MetaBaseURL = defaultMetaBaseURL
 	}
-	configuration.GrokBaseURL = strings.TrimSpace(configuration.GrokBaseURL)
-	if strings.TrimSpace(configuration.GrokBaseURL) == constants.EmptyString {
-		configuration.GrokBaseURL = defaultGrokBaseURL
+	configuration.XAIBaseURL = strings.TrimSpace(configuration.XAIBaseURL)
+	if strings.TrimSpace(configuration.XAIBaseURL) == constants.EmptyString {
+		configuration.XAIBaseURL = defaultXAIBaseURL
 	}
-	configuration.GrokTranscriptionsURL = strings.TrimSpace(configuration.GrokTranscriptionsURL)
-	if strings.TrimSpace(configuration.GrokTranscriptionsURL) == constants.EmptyString {
-		configuration.GrokTranscriptionsURL = defaultGrokTranscriptionsURL
+	configuration.XAITranscriptionsURL = strings.TrimSpace(configuration.XAITranscriptionsURL)
+	if strings.TrimSpace(configuration.XAITranscriptionsURL) == constants.EmptyString {
+		configuration.XAITranscriptionsURL = defaultXAITranscriptionsURL
 	}
 }
 

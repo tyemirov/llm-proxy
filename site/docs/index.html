@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="58579ec3520f8be4a8cec867b6fe95492ce320019bf3b9c4b55aff6c1a643a6f">
+    <meta name="openapi-source-sha256" content="8db5f2e1ba42fdaf9ddd28eda8ccb8f2c0dee460addbb035adafd097c7fa2b32">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="58579ec3520f8be4a8cec867b6fe95492ce320019bf3b9c4b55aff6c1a643a6f">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="8db5f2e1ba42fdaf9ddd28eda8ccb8f2c0dee460addbb035adafd097c7fa2b32">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -49,7 +49,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>58579ec3520f8be4a8cec867b6fe95492ce320019bf3b9c4b55aff6c1a643a6f</code></span>
+          <span>Source SHA-256 <code>8db5f2e1ba42fdaf9ddd28eda8ccb8f2c0dee460addbb035adafd097c7fa2b32</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -1162,16 +1162,27 @@ components:
       type: object
       additionalProperties: false
       required:
+        - revision
+        - operations
         - providers
         - publishers
         - families
         - models
         - offerings
+        - prices
         - counts
         - max_prompt_bytes
         - max_input_audio_bytes
         - max_request_timeout_seconds
       properties:
+        revision:
+          type: string
+          minLength: 1
+        operations:
+          type: array
+          minItems: 1
+          items:
+            $ref: &#39;#/components/schemas/PublicModelOperation&#39;
         providers:
           type: array
           minItems: 1
@@ -1197,6 +1208,11 @@ components:
           minItems: 1
           items:
             $ref: &#39;#/components/schemas/PublicProviderOffering&#39;
+        prices:
+          type: array
+          minItems: 1
+          items:
+            $ref: &#39;#/components/schemas/PublicPriceDescriptor&#39;
         counts:
           $ref: &#39;#/components/schemas/PublicCapabilityCounts&#39;
         max_prompt_bytes:
@@ -1216,6 +1232,7 @@ components:
       required:
         - identifier
         - label
+        - credential_kinds
       properties:
         identifier:
           type: string
@@ -1223,6 +1240,47 @@ components:
         label:
           type: string
           minLength: 1
+        credential_kinds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - api_key
+    PublicModelOperation:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - input_artifacts
+        - output_artifacts
+      properties:
+        id:
+          type: string
+          enum:
+            - text
+            - dictation
+            - video_generation
+        input_artifacts:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: &#39;#/components/schemas/PublicArtifactKind&#39;
+        output_artifacts:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: &#39;#/components/schemas/PublicArtifactKind&#39;
+    PublicArtifactKind:
+      type: string
+      enum:
+        - text
+        - image
+        - audio
+        - video
     PublicModelPublisher:
       type: object
       additionalProperties: false
@@ -1291,6 +1349,7 @@ components:
             enum:
               - text
               - dictation
+              - video_generation
         media_inputs:
           type: array
           uniqueItems: true
@@ -1312,6 +1371,7 @@ components:
               - image_input
               - audio_input
               - reasoning
+              - video_generation
         provider_offerings:
           type: array
           minItems: 1
@@ -1328,8 +1388,11 @@ components:
         - model
         - capabilities
         - wire_contract
+        - execution_lifecycle
         - output_token_limit
         - reasoning_efforts
+        - controls
+        - limits
       properties:
         identifier:
           type: string
@@ -1353,8 +1416,15 @@ components:
               - image_input
               - audio_input
               - reasoning
+              - video_generation
         wire_contract:
           type: string
+          minLength: 1
+        execution_lifecycle:
+          type: string
+          enum:
+            - synchronous_completion
+            - pollable_resource
         output_token_limit:
           type: integer
           minimum: 0
@@ -1364,6 +1434,189 @@ components:
           items:
             type: string
             minLength: 1
+        controls:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/PublicCatalogControl&#39;
+        limits:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/PublicCatalogLimit&#39;
+    PublicCatalogControl:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - kind
+        - values
+        - minimum
+        - maximum
+        - account_dependent
+      properties:
+        id:
+          type: string
+          minLength: 1
+        kind:
+          type: string
+          enum:
+            - enum
+            - integer
+            - boolean
+        values:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+        minimum:
+          oneOf:
+            - type: integer
+              minimum: 0
+            - type: &#39;null&#39;
+        maximum:
+          oneOf:
+            - type: integer
+              minimum: 0
+            - type: &#39;null&#39;
+        account_dependent:
+          type: boolean
+    PublicCatalogLimit:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - value
+        - unit
+        - account_dependent
+      properties:
+        id:
+          type: string
+          minLength: 1
+        value:
+          oneOf:
+            - type: integer
+              minimum: 0
+            - type: &#39;null&#39;
+        unit:
+          type: string
+          minLength: 1
+        account_dependent:
+          type: boolean
+    PublicPriceDescriptor:
+      type: object
+      additionalProperties: false
+      required:
+        - provider
+        - model
+        - operation
+        - available
+        - rates
+        - minimum_charge
+        - source
+        - last_verified
+        - unavailable_reason
+      properties:
+        provider:
+          type: string
+          minLength: 1
+        model:
+          type: string
+          minLength: 1
+        operation:
+          type: string
+          enum:
+            - text
+            - dictation
+            - video_generation
+        available:
+          type: boolean
+        rates:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/PublicPriceRate&#39;
+        minimum_charge:
+          oneOf:
+            - $ref: &#39;#/components/schemas/PublicMinimumCharge&#39;
+            - type: &#39;null&#39;
+        source:
+          type: string
+          format: uri
+          pattern: &#39;^https://&#39;
+        last_verified:
+          type: string
+          format: date
+        unavailable_reason:
+          type: string
+    PublicPriceRate:
+      type: object
+      additionalProperties: false
+      required:
+        - component
+        - currency
+        - rate
+        - unit
+        - conditions
+      properties:
+        component:
+          type: string
+          minLength: 1
+        currency:
+          type: string
+          const: USD
+        rate:
+          type: number
+          minimum: 0
+        unit:
+          type: string
+          minLength: 1
+        conditions:
+          $ref: &#39;#/components/schemas/PublicPriceConditions&#39;
+    PublicMinimumCharge:
+      type: object
+      additionalProperties: false
+      required:
+        - currency
+        - amount
+        - unit
+      properties:
+        currency:
+          type: string
+          const: USD
+        amount:
+          type: number
+          minimum: 0
+        unit:
+          type: string
+          minLength: 1
+    PublicPriceConditions:
+      type: object
+      additionalProperties: false
+      required:
+        - resolution
+        - generated_audio
+        - input_media
+        - output_media
+        - duration
+        - quantity
+        - quality
+        - mode
+        - api_version
+        - avatar_type
+        - billing_mode
+        - billing_outcome
+      properties:
+        resolution: {type: string}
+        generated_audio: {type: string}
+        input_media: {type: string}
+        output_media: {type: string}
+        duration: {type: string}
+        quantity: {type: string}
+        quality: {type: string}
+        mode: {type: string}
+        api_version: {type: string}
+        avatar_type: {type: string}
+        billing_mode: {type: string}
+        billing_outcome: {type: string}
     PublicCapabilityCounts:
       type: object
       additionalProperties: false

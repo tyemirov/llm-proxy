@@ -53,7 +53,7 @@ Per-provider model overrides:
   LLM_PROXY_LIVE_GEMINI_MODEL
   LLM_PROXY_LIVE_ANTHROPIC_MODEL
   LLM_PROXY_LIVE_META_MODEL
-  LLM_PROXY_LIVE_GROK_MODEL'
+  LLM_PROXY_LIVE_XAI_MODEL'
 }
 
 env_or_default() {
@@ -138,7 +138,7 @@ provider_key_variable() {
     gemini) printf "%s\n" "GEMINI_API_KEY" ;;
     anthropic) printf "%s\n" "ANTHROPIC_API_KEY" ;;
     meta) printf "%s\n" "MODEL_API_KEY" ;;
-    grok) printf "%s\n" "XAI_API_KEY" ;;
+    xai) printf "%s\n" "XAI_API_KEY" ;;
     *) return 1 ;;
   esac
 }
@@ -155,7 +155,7 @@ provider_model_override() {
     gemini) env_or_default LLM_PROXY_LIVE_GEMINI_MODEL "" ;;
     anthropic) env_or_default LLM_PROXY_LIVE_ANTHROPIC_MODEL "" ;;
     meta) env_or_default LLM_PROXY_LIVE_META_MODEL "" ;;
-    grok) env_or_default LLM_PROXY_LIVE_GROK_MODEL "" ;;
+    xai) env_or_default LLM_PROXY_LIVE_XAI_MODEL "" ;;
     *) return 1 ;;
   esac
 }
@@ -263,7 +263,7 @@ write_static_live_config() {
       provider_keys["gemini"] = "GEMINI_API_KEY"
       provider_keys["anthropic"] = "ANTHROPIC_API_KEY"
       provider_keys["meta"] = "MODEL_API_KEY"
-      provider_keys["grok"] = "XAI_API_KEY"
+      provider_keys["xai"] = "XAI_API_KEY"
     }
     /^  port: / && replaced == 0 {
       print "  port: " port
@@ -608,7 +608,7 @@ if [[ "${PREFLIGHT_ONLY}" == "true" && -n "${WRITE_CONFIG_PATH}" ]]; then
   exit 1
 fi
 
-SUPPORTED_PROVIDERS=(openai deepseek dashscope moonshot minimax siliconflow zhipu gemini anthropic meta grok)
+SUPPORTED_PROVIDERS=(openai deepseek dashscope moonshot minimax siliconflow zhipu gemini anthropic meta xai)
 LIVE_PROVIDERS=()
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"

@@ -15,11 +15,14 @@ const PublicCapabilitiesPath = "/api/public/capabilities"
 
 // PublicCapabilityCatalog is the normalized tenant-safe model discovery contract.
 type PublicCapabilityCatalog struct {
+	Revision                 string                       `json:"revision"`
+	Operations               []ModelOperationKind         `json:"operations"`
 	Providers                []PublicProviderCapability   `json:"providers"`
 	Publishers               []PublicModelPublisher       `json:"publishers"`
 	Families                 []PublicModelFamily          `json:"families"`
 	Models                   []PublicExactModelCapability `json:"models"`
 	Offerings                []PublicProviderOffering     `json:"offerings"`
+	Prices                   []CatalogPriceDescriptor     `json:"prices"`
 	Counts                   PublicCapabilityCounts       `json:"counts"`
 	MaxPromptBytes           int64                        `json:"max_prompt_bytes"`
 	MaxInputAudioBytes       int64                        `json:"max_input_audio_bytes"`
@@ -37,8 +40,9 @@ type PublicCapabilityCounts struct {
 
 // PublicProviderCapability identifies one selectable provider.
 type PublicProviderCapability struct {
-	Identifier string `json:"identifier"`
-	Label      string `json:"label"`
+	Identifier      string   `json:"identifier"`
+	Label           string   `json:"label"`
+	CredentialKinds []string `json:"credential_kinds"`
 }
 
 // PublicModelPublisher identifies one model publisher and its exact-model count.
@@ -69,13 +73,16 @@ type PublicExactModelCapability struct {
 
 // PublicProviderOffering describes one selectable provider and exact-model route.
 type PublicProviderOffering struct {
-	Identifier       string   `json:"identifier"`
-	Provider         string   `json:"provider"`
-	Model            string   `json:"model"`
-	Capabilities     []string `json:"capabilities"`
-	WireContract     string   `json:"wire_contract"`
-	OutputTokenLimit int      `json:"output_token_limit"`
-	ReasoningEfforts []string `json:"reasoning_efforts"`
+	Identifier         string           `json:"identifier"`
+	Provider           string           `json:"provider"`
+	Model              string           `json:"model"`
+	Capabilities       []string         `json:"capabilities"`
+	WireContract       string           `json:"wire_contract"`
+	ExecutionLifecycle string           `json:"execution_lifecycle"`
+	OutputTokenLimit   int              `json:"output_token_limit"`
+	ReasoningEfforts   []string         `json:"reasoning_efforts"`
+	Controls           []CatalogControl `json:"controls"`
+	Limits             []CatalogLimit   `json:"limits"`
 }
 
 // Public model capability identifiers are the stable filter vocabulary for the
@@ -87,6 +94,7 @@ const (
 	PublicModelCapabilityImageInput = "image_input"
 	PublicModelCapabilityAudioInput = "audio_input"
 	PublicModelCapabilityReasoning  = "reasoning"
+	PublicModelCapabilityVideo      = "video_generation"
 )
 
 // NewPublicCapabilityCatalog validates and projects the runtime catalog into a
@@ -100,9 +108,18 @@ func NewPublicCapabilityCatalog(configuration Configuration) (PublicCapabilityCa
 }
 
 func newPublicCapabilityCatalog(configuration Configuration) PublicCapabilityCatalog {
+	operations := append([]ModelOperationKind(nil), configuration.ModelCatalog.Operations...)
+	for operationIndex := range operations {
+		operations[operationIndex].InputArtifacts = append([]string{}, operations[operationIndex].InputArtifacts...)
+		operations[operationIndex].OutputArtifacts = append([]string{}, operations[operationIndex].OutputArtifacts...)
+	}
+	sort.Slice(operations, func(first int, second int) bool { return operations[first].ID < operations[second].ID })
+
 	providers := make([]PublicProviderCapability, 0, len(configuration.ModelCatalog.Providers))
 	for _, provider := range configuration.ModelCatalog.Providers {
-		providers = append(providers, PublicProviderCapability{Identifier: provider.ID, Label: provider.Label})
+		providers = append(providers, PublicProviderCapability{
+			Identifier: provider.ID, Label: provider.Label, CredentialKinds: append([]string{}, provider.CredentialKinds...),
+		})
 	}
 	sort.Slice(providers, func(first int, second int) bool { return providers[first].Identifier < providers[second].Identifier })
 
@@ -156,12 +173,25 @@ func newPublicCapabilityCatalog(configuration Configuration) PublicCapabilityCat
 	}
 	sort.Slice(models, func(first int, second int) bool { return models[first].Identifier < models[second].Identifier })
 
+	prices := append([]CatalogPriceDescriptor(nil), configuration.ModelCatalog.Prices...)
+	for priceIndex := range prices {
+		prices[priceIndex].Rates = append([]CatalogPriceRate{}, prices[priceIndex].Rates...)
+	}
+	sort.Slice(prices, func(first int, second int) bool {
+		firstIdentifier := catalogPriceIdentifier(prices[first].Provider, prices[first].Model, prices[first].Operation)
+		secondIdentifier := catalogPriceIdentifier(prices[second].Provider, prices[second].Model, prices[second].Operation)
+		return firstIdentifier < secondIdentifier
+	})
+
 	return PublicCapabilityCatalog{
+		Revision:   configuration.ModelCatalog.Revision,
+		Operations: operations,
 		Providers:  providers,
 		Publishers: publishers,
 		Families:   families,
 		Models:     models,
 		Offerings:  offerings,
+		Prices:     prices,
 		Counts: PublicCapabilityCounts{
 			Providers:         len(providers),
 			ModelPublishers:   len(publishers),
@@ -189,14 +219,29 @@ func publicProviderOffering(offering ProviderOffering) PublicProviderOffering {
 	}
 	sort.Strings(capabilities)
 	return PublicProviderOffering{
-		Identifier:       providerOfferingIdentifier(offering.Provider, offering.Model),
-		Provider:         offering.Provider,
-		Model:            offering.Model,
-		Capabilities:     capabilities,
-		WireContract:     offering.WireContract,
-		OutputTokenLimit: offering.OutputTokenLimit,
-		ReasoningEfforts: reasoningEfforts,
+		Identifier:         providerOfferingIdentifier(offering.Provider, offering.Model),
+		Provider:           offering.Provider,
+		Model:              offering.Model,
+		Capabilities:       capabilities,
+		WireContract:       offering.WireContract,
+		ExecutionLifecycle: offering.ExecutionLifecycle,
+		OutputTokenLimit:   offering.OutputTokenLimit,
+		ReasoningEfforts:   reasoningEfforts,
+		Controls:           publicCatalogControls(offering.Controls),
+		Limits:             publicCatalogLimits(offering.Limits),
 	}
+}
+
+func publicCatalogControls(controls []CatalogControl) []CatalogControl {
+	result := append([]CatalogControl{}, controls...)
+	for controlIndex := range result {
+		result[controlIndex].Values = append([]string{}, result[controlIndex].Values...)
+	}
+	return result
+}
+
+func publicCatalogLimits(limits []CatalogLimit) []CatalogLimit {
+	return append([]CatalogLimit{}, limits...)
 }
 
 func sortedPublicCapabilities(capabilities map[string]struct{}) []string {

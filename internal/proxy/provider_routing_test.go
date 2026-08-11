@@ -27,7 +27,7 @@ const (
 	testGeminiKey      = "sk-gemini"
 	testAnthropicKey   = "sk-ant"
 	testMetaKey        = "sk-meta"
-	testGrokKey        = "sk-xai"
+	testXAIKey         = "sk-xai"
 )
 
 func openAIResponsesReasoningEffortCapability() *proxy.ReasoningEffortCapability {
@@ -114,7 +114,7 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 		proxy.ProviderNameGemini,
 		proxy.ProviderNameAnthropic,
 		proxy.ProviderNameMeta,
-		proxy.ProviderNameGrok,
+		proxy.ProviderNameXAI,
 	}
 	expectedCapabilities := map[string]struct {
 		wireContract       string
@@ -129,7 +129,7 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 		proxy.ProviderNameZhipu:       {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
 		proxy.ProviderNameAnthropic:   {wireContract: "anthropic_messages", executionLifecycle: "synchronous_completion"},
 		proxy.ProviderNameMeta:        {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
-		proxy.ProviderNameGrok:        {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
+		proxy.ProviderNameXAI:         {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
 	}
 	catalogs := testfixtures.ModelCatalog(t)
 	type providerRoute struct {
@@ -222,7 +222,7 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 		GeminiKey:                    testGeminiKey,
 		AnthropicKey:                 testAnthropicKey,
 		MetaKey:                      testMetaKey,
-		GrokKey:                      testGrokKey,
+		XAIKey:                       testXAIKey,
 		OpenAIBaseURL:                upstreamServer.URL,
 		OpenAITranscriptionsURL:      upstreamServer.URL + "/audio/transcriptions",
 		DeepSeekBaseURL:              upstreamServer.URL,
@@ -236,8 +236,8 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 		GeminiBaseURL:                upstreamServer.URL,
 		AnthropicBaseURL:             upstreamServer.URL,
 		MetaBaseURL:                  upstreamServer.URL,
-		GrokBaseURL:                  upstreamServer.URL,
-		GrokTranscriptionsURL:        upstreamServer.URL + "/audio/transcriptions",
+		XAIBaseURL:                   upstreamServer.URL,
+		XAITranscriptionsURL:         upstreamServer.URL + "/audio/transcriptions",
 		LogLevel:                     proxy.LogLevelInfo,
 		WorkerCount:                  1,
 		QueueSize:                    1,
@@ -376,8 +376,8 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 		{name: "MiniMax M2.7", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27, providerModel: "MiniMax-M2.7", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
 		{name: "SiliconFlow DeepSeek R1", provider: proxy.ProviderNameSiliconFlow, model: proxy.ModelNameSiliconFlowDeepSeek, providerModel: "deepseek-ai/DeepSeek-R1", tokenParameterField: "max_tokens", expectedAPIKey: testSiliconFlowKey},
 		{name: "Zhipu GLM 5.2", provider: proxy.ProviderNameZhipu, model: "glm-5.2", tokenParameterField: "max_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
-		{name: "Grok 4.5", provider: proxy.ProviderNameGrok, model: "grok-4.5", tokenParameterField: "max_tokens"},
-		{name: "Grok 4.20 reasoning", provider: proxy.ProviderNameGrok, model: "grok-4.20-0309-reasoning", tokenParameterField: "max_tokens"},
+		{name: "Grok 4.5", provider: proxy.ProviderNameXAI, model: "grok-4.5", tokenParameterField: "max_tokens"},
+		{name: "Grok 4.20 reasoning", provider: proxy.ProviderNameXAI, model: "grok-4.20-0309-reasoning", tokenParameterField: "max_tokens"},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
@@ -423,8 +423,8 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 				SiliconFlowBaseURL:    upstreamServer.URL,
 				ZhipuKey:              testZhipuKey,
 				ZhipuBaseURL:          upstreamServer.URL,
-				GrokKey:               testGrokKey,
-				GrokBaseURL:           upstreamServer.URL,
+				XAIKey:                testXAIKey,
+				XAIBaseURL:            upstreamServer.URL,
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
 				QueueSize:             1,
@@ -737,6 +737,11 @@ func TestProviderRoutingUsesConfiguredTextModelCatalog(t *testing.T) {
 	configuredOffering.DefaultOperations = nil
 	configuredCatalogs.Models = append(configuredCatalogs.Models, configuredModel)
 	configuredCatalogs.Offerings = append(configuredCatalogs.Offerings, configuredOffering)
+	configuredCatalogs.Prices = append(configuredCatalogs.Prices, proxy.CatalogPriceDescriptor{
+		Provider: configuredOffering.Provider, Model: configuredDeepSeekModel, Operation: proxy.ModelOperationText,
+		Source: "https://api-docs.deepseek.com/quick_start/pricing", LastVerified: "2026-08-10",
+		UnavailableReason: "Exact published pricing has not been imported for this provider offering.",
+	})
 
 	var capturedPayload map[string]any
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
@@ -1880,8 +1885,8 @@ func TestProviderRoutingSupportsGrokChatCompletions(t *testing.T) {
 		if request.URL.Path != "/chat/completions" {
 			t.Fatalf("path=%s want=%s", request.URL.Path, "/chat/completions")
 		}
-		if authorizationHeader := request.Header.Get("Authorization"); authorizationHeader != "Bearer "+testGrokKey {
-			t.Fatalf("authorization=%q want=%q", authorizationHeader, "Bearer "+testGrokKey)
+		if authorizationHeader := request.Header.Get("Authorization"); authorizationHeader != "Bearer "+testXAIKey {
+			t.Fatalf("authorization=%q want=%q", authorizationHeader, "Bearer "+testXAIKey)
 		}
 		bodyBytes, readError := io.ReadAll(request.Body)
 		if readError != nil {
@@ -1898,8 +1903,8 @@ func TestProviderRoutingSupportsGrokChatCompletions(t *testing.T) {
 	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
 		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
 		OpenAIKey:             TestAPIKey,
-		GrokKey:               testGrokKey,
-		GrokBaseURL:           upstreamServer.URL,
+		XAIKey:                testXAIKey,
+		XAIBaseURL:            upstreamServer.URL,
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -2108,10 +2113,10 @@ func TestProviderRoutingRejectsAnthropicMetaAndGrokUnsupportedCapabilities(t *te
 		OpenAIKey:             TestAPIKey,
 		AnthropicKey:          testAnthropicKey,
 		MetaKey:               testMetaKey,
-		GrokKey:               testGrokKey,
+		XAIKey:                testXAIKey,
 		AnthropicBaseURL:      "https://anthropic.invalid",
 		MetaBaseURL:           "https://meta.invalid",
-		GrokBaseURL:           "https://grok.invalid",
+		XAIBaseURL:            "https://xai.invalid",
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -2128,7 +2133,7 @@ func TestProviderRoutingRejectsAnthropicMetaAndGrokUnsupportedCapabilities(t *te
 	}{
 		{name: "anthropic web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=anthropic&web_search=true"},
 		{name: "meta web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=meta&web_search=true"},
-		{name: "grok web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=grok&web_search=true"},
+		{name: "xai web search", method: http.MethodGet, target: "/?key=" + TestSecret + "&prompt=hello&provider=xai&web_search=true"},
 		{name: "anthropic dictation", method: http.MethodPost, target: "/dictate?key=" + TestSecret + "&provider=anthropic"},
 		{name: "meta dictation", method: http.MethodPost, target: "/dictate?key=" + TestSecret + "&provider=meta"},
 	}
@@ -2196,7 +2201,7 @@ func TestProviderRoutingRejectsAnthropicMetaAndGrokMissingCredentials(t *testing
 		OpenAIKey:             TestAPIKey,
 		AnthropicBaseURL:      "https://anthropic.invalid",
 		MetaBaseURL:           "https://meta.invalid",
-		GrokBaseURL:           "https://grok.invalid",
+		XAIBaseURL:            "https://xai.invalid",
 		LogLevel:              proxy.LogLevelInfo,
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -2213,7 +2218,7 @@ func TestProviderRoutingRejectsAnthropicMetaAndGrokMissingCredentials(t *testing
 	}{
 		{name: "anthropic", provider: proxy.ProviderNameAnthropic, model: proxy.ModelNameClaudeSonnet46},
 		{name: "meta", provider: proxy.ProviderNameMeta, model: proxy.ModelNameMuseSpark11},
-		{name: "grok", provider: proxy.ProviderNameGrok, model: proxy.ModelNameGrok43},
+		{name: "xai", provider: proxy.ProviderNameXAI, model: proxy.ModelNameGrok43},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
@@ -2261,9 +2266,9 @@ func TestProviderRoutingRejectsMissingAnthropicMetaAndGrokDefaultCredentials(t *
 			expectedError: "provider not configured: provider=meta",
 		},
 		{
-			name:          "grok",
-			defaults:      proxy.TenantDefaults{Provider: proxy.ProviderNameGrok, Model: proxy.ModelNameGrok43, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel},
-			expectedError: "provider not configured: provider=grok",
+			name:          "xai",
+			defaults:      proxy.TenantDefaults{Provider: proxy.ProviderNameXAI, Model: proxy.ModelNameGrok43, DictationProvider: proxy.ProviderNameOpenAI, DictationModel: proxy.DefaultDictationModel},
+			expectedError: "provider not configured: provider=xai",
 		},
 	}
 	for _, testCase := range testCases {
@@ -2647,14 +2652,14 @@ func TestProviderRoutingRejectsInvalidDefaultDictationProvider(t *testing.T) {
 		{
 			name: "missing_grok_credential",
 			configuration: proxy.Configuration{
-				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameGrok}),
+				Tenants:               proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, proxy.TenantDefaults{Provider: proxy.ProviderNameOpenAI, Model: proxy.DefaultModel, DictationProvider: proxy.ProviderNameXAI}),
 				OpenAIKey:             TestAPIKey,
 				LogLevel:              proxy.LogLevelInfo,
 				WorkerCount:           1,
 				QueueSize:             1,
 				RequestTimeoutSeconds: TestTimeout,
 			},
-			expectedError: "provider not configured: provider=grok endpoint=dictation",
+			expectedError: "provider not configured: provider=xai endpoint=dictation",
 		},
 	}
 	for _, testCase := range testCases {
@@ -2802,18 +2807,18 @@ func TestProviderRoutingSupportsZhipuAndGrokDictation(t *testing.T) {
 			},
 		},
 		{
-			name:             "grok",
-			providerName:     proxy.ProviderNameGrok,
-			apiKey:           testGrokKey,
+			name:             "xai",
+			providerName:     proxy.ProviderNameXAI,
+			apiKey:           testXAIKey,
 			expectedModel:    "",
 			expectModelField: false,
-			expectedResponse: "grok dictation ok",
+			expectedResponse: "xai dictation ok",
 			configuration: func(transcriptionsURL string) proxy.Configuration {
 				return proxy.Configuration{
 					Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
 					OpenAIKey:             TestAPIKey,
-					GrokKey:               testGrokKey,
-					GrokTranscriptionsURL: transcriptionsURL,
+					XAIKey:                testXAIKey,
+					XAITranscriptionsURL:  transcriptionsURL,
 					LogLevel:              proxy.LogLevelInfo,
 					WorkerCount:           1,
 					QueueSize:             1,

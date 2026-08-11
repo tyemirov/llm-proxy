@@ -77,6 +77,8 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 		UpdatedAt:       fixedTime.Add(2 * time.Hour),
 	}
 	secondTenant.applyDefaults(defaultManagedRoutingDefaults())
+	secondTenant.DefaultProvider = retiredGrokProviderIdentifier
+	secondTenant.DefaultModel = ModelNameGrok43
 	if createError := legacyDatabase.Table(managedTenantTable).Create(&[]legacyManagedTenantRecord{firstTenant, secondTenant}).Error; createError != nil {
 		t.Fatalf("seed legacy tenants: %v", createError)
 	}
@@ -84,20 +86,20 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 	if firstEncryptionError != nil {
 		t.Fatalf("encrypt first key: %v", firstEncryptionError)
 	}
-	secondCiphertext, secondEncryptionError := providerKeyCipher.encrypt(bytes.NewReader(bytes.Repeat([]byte{1}, providerKeyCipher.aeadCipher.NonceSize())), secondTenant.UserID, ProviderNameOpenAI, "sk-second")
+	secondCiphertext, secondEncryptionError := providerKeyCipher.encrypt(bytes.NewReader(bytes.Repeat([]byte{1}, providerKeyCipher.aeadCipher.NonceSize())), secondTenant.UserID, retiredGrokProviderIdentifier, "sk-second")
 	if secondEncryptionError != nil {
 		t.Fatalf("encrypt second key: %v", secondEncryptionError)
 	}
 	legacyProviderKeys := []legacyManagedProviderAPIKeyRecord{
 		{UserID: firstTenant.UserID, ProviderID: ProviderNameOpenAI, EncryptedAPIKey: firstCiphertext, TextModel: ModelNameGPT41, SystemPrompt: "first system", CreatedAt: fixedTime, UpdatedAt: fixedTime.Add(time.Minute)},
-		{UserID: secondTenant.UserID, ProviderID: ProviderNameOpenAI, EncryptedAPIKey: secondCiphertext, TextModel: ModelNameGPT41, SystemPrompt: "second system", CreatedAt: fixedTime.Add(time.Hour), UpdatedAt: fixedTime.Add(2 * time.Hour)},
+		{UserID: secondTenant.UserID, ProviderID: retiredGrokProviderIdentifier, EncryptedAPIKey: secondCiphertext, TextModel: ModelNameGrok43, SystemPrompt: "second system", CreatedAt: fixedTime.Add(time.Hour), UpdatedAt: fixedTime.Add(2 * time.Hour)},
 	}
 	if createError := legacyDatabase.Table(managedProviderKeyTable).Create(&legacyProviderKeys).Error; createError != nil {
 		t.Fatalf("seed legacy provider keys: %v", createError)
 	}
 	legacyUsage := []legacyManagedUsageEventRecord{
 		{ID: 11, UserID: firstTenant.UserID, TenantID: firstTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: http.StatusOK, Success: true, LatencyMilliseconds: 17, RequestTokens: 2, ResponseTokens: 3, TotalTokens: 5, CreatedAt: fixedTime.Add(3 * time.Hour)},
-		{ID: 29, UserID: secondTenant.UserID, TenantID: secondTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: http.StatusBadGateway, Success: false, LatencyMilliseconds: 31, CreatedAt: fixedTime.Add(4 * time.Hour)},
+		{ID: 29, UserID: secondTenant.UserID, TenantID: secondTenant.TenantID, Endpoint: usageEndpointText, ProviderID: retiredGrokProviderIdentifier, ModelID: ModelNameGrok43, StatusCode: http.StatusBadGateway, Success: false, LatencyMilliseconds: 31, CreatedAt: fixedTime.Add(4 * time.Hour)},
 		{ID: 41, UserID: firstTenant.UserID, TenantID: firstTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameOpenAI, ModelID: ModelNameGPT41, StatusCode: statusClientClosedRequest, Success: false, LatencyMilliseconds: 7, CreatedAt: fixedTime.Add(5 * time.Hour)},
 	}
 	if createError := legacyDatabase.Table(managedUsageEventTable).Create(&legacyUsage).Error; createError != nil {
@@ -724,6 +726,8 @@ func internalManagementProviderRegistry() *providerRegistry {
 			internalTestOffering(ProviderNameMiniMax, ModelNameMiniMaxM27, []string{ModelOperationText}, []string{ModelOperationText}),
 			internalTestOffering(ProviderNameSiliconFlow, ModelNameSiliconFlowDeepSeek, []string{ModelOperationText}, []string{ModelOperationText}),
 			internalTestOffering(ProviderNameSiliconFlow, "sensevoice-small", []string{ModelOperationDictation}, []string{ModelOperationDictation}),
+			internalTestOffering(ProviderNameXAI, ModelNameGrok43, []string{ModelOperationText}, []string{ModelOperationText}),
+			internalTestOffering(ProviderNameXAI, "xai-stt", []string{ModelOperationDictation}, []string{ModelOperationDictation}),
 		),
 	})
 }

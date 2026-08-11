@@ -1100,16 +1100,27 @@ components:
       type: object
       additionalProperties: false
       required:
+        - revision
+        - operations
         - providers
         - publishers
         - families
         - models
         - offerings
+        - prices
         - counts
         - max_prompt_bytes
         - max_input_audio_bytes
         - max_request_timeout_seconds
       properties:
+        revision:
+          type: string
+          minLength: 1
+        operations:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/PublicModelOperation'
         providers:
           type: array
           minItems: 1
@@ -1135,6 +1146,11 @@ components:
           minItems: 1
           items:
             $ref: '#/components/schemas/PublicProviderOffering'
+        prices:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/PublicPriceDescriptor'
         counts:
           $ref: '#/components/schemas/PublicCapabilityCounts'
         max_prompt_bytes:
@@ -1154,6 +1170,7 @@ components:
       required:
         - identifier
         - label
+        - credential_kinds
       properties:
         identifier:
           type: string
@@ -1161,6 +1178,47 @@ components:
         label:
           type: string
           minLength: 1
+        credential_kinds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - api_key
+    PublicModelOperation:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - input_artifacts
+        - output_artifacts
+      properties:
+        id:
+          type: string
+          enum:
+            - text
+            - dictation
+            - video_generation
+        input_artifacts:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/PublicArtifactKind'
+        output_artifacts:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/PublicArtifactKind'
+    PublicArtifactKind:
+      type: string
+      enum:
+        - text
+        - image
+        - audio
+        - video
     PublicModelPublisher:
       type: object
       additionalProperties: false
@@ -1229,6 +1287,7 @@ components:
             enum:
               - text
               - dictation
+              - video_generation
         media_inputs:
           type: array
           uniqueItems: true
@@ -1250,6 +1309,7 @@ components:
               - image_input
               - audio_input
               - reasoning
+              - video_generation
         provider_offerings:
           type: array
           minItems: 1
@@ -1266,8 +1326,11 @@ components:
         - model
         - capabilities
         - wire_contract
+        - execution_lifecycle
         - output_token_limit
         - reasoning_efforts
+        - controls
+        - limits
       properties:
         identifier:
           type: string
@@ -1291,8 +1354,15 @@ components:
               - image_input
               - audio_input
               - reasoning
+              - video_generation
         wire_contract:
           type: string
+          minLength: 1
+        execution_lifecycle:
+          type: string
+          enum:
+            - synchronous_completion
+            - pollable_resource
         output_token_limit:
           type: integer
           minimum: 0
@@ -1302,6 +1372,189 @@ components:
           items:
             type: string
             minLength: 1
+        controls:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicCatalogControl'
+        limits:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicCatalogLimit'
+    PublicCatalogControl:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - kind
+        - values
+        - minimum
+        - maximum
+        - account_dependent
+      properties:
+        id:
+          type: string
+          minLength: 1
+        kind:
+          type: string
+          enum:
+            - enum
+            - integer
+            - boolean
+        values:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+        minimum:
+          oneOf:
+            - type: integer
+              minimum: 0
+            - type: 'null'
+        maximum:
+          oneOf:
+            - type: integer
+              minimum: 0
+            - type: 'null'
+        account_dependent:
+          type: boolean
+    PublicCatalogLimit:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - value
+        - unit
+        - account_dependent
+      properties:
+        id:
+          type: string
+          minLength: 1
+        value:
+          oneOf:
+            - type: integer
+              minimum: 0
+            - type: 'null'
+        unit:
+          type: string
+          minLength: 1
+        account_dependent:
+          type: boolean
+    PublicPriceDescriptor:
+      type: object
+      additionalProperties: false
+      required:
+        - provider
+        - model
+        - operation
+        - available
+        - rates
+        - minimum_charge
+        - source
+        - last_verified
+        - unavailable_reason
+      properties:
+        provider:
+          type: string
+          minLength: 1
+        model:
+          type: string
+          minLength: 1
+        operation:
+          type: string
+          enum:
+            - text
+            - dictation
+            - video_generation
+        available:
+          type: boolean
+        rates:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicPriceRate'
+        minimum_charge:
+          oneOf:
+            - $ref: '#/components/schemas/PublicMinimumCharge'
+            - type: 'null'
+        source:
+          type: string
+          format: uri
+          pattern: '^https://'
+        last_verified:
+          type: string
+          format: date
+        unavailable_reason:
+          type: string
+    PublicPriceRate:
+      type: object
+      additionalProperties: false
+      required:
+        - component
+        - currency
+        - rate
+        - unit
+        - conditions
+      properties:
+        component:
+          type: string
+          minLength: 1
+        currency:
+          type: string
+          const: USD
+        rate:
+          type: number
+          minimum: 0
+        unit:
+          type: string
+          minLength: 1
+        conditions:
+          $ref: '#/components/schemas/PublicPriceConditions'
+    PublicMinimumCharge:
+      type: object
+      additionalProperties: false
+      required:
+        - currency
+        - amount
+        - unit
+      properties:
+        currency:
+          type: string
+          const: USD
+        amount:
+          type: number
+          minimum: 0
+        unit:
+          type: string
+          minLength: 1
+    PublicPriceConditions:
+      type: object
+      additionalProperties: false
+      required:
+        - resolution
+        - generated_audio
+        - input_media
+        - output_media
+        - duration
+        - quantity
+        - quality
+        - mode
+        - api_version
+        - avatar_type
+        - billing_mode
+        - billing_outcome
+      properties:
+        resolution: {type: string}
+        generated_audio: {type: string}
+        input_media: {type: string}
+        output_media: {type: string}
+        duration: {type: string}
+        quantity: {type: string}
+        quality: {type: string}
+        mode: {type: string}
+        api_version: {type: string}
+        avatar_type: {type: string}
+        billing_mode: {type: string}
+        billing_outcome: {type: string}
     PublicCapabilityCounts:
       type: object
       additionalProperties: false

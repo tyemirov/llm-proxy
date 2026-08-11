@@ -12,75 +12,105 @@ const (
 	ModelOperationText = "text"
 	// ModelOperationDictation identifies audio transcription through the proxy dictation contract.
 	ModelOperationDictation = "dictation"
+	// ModelOperationVideoGeneration identifies provider-backed video generation.
+	ModelOperationVideoGeneration = "video_generation"
+	// CatalogCredentialAPIKey identifies one opaque provider API key.
+	CatalogCredentialAPIKey = "api_key"
+	// CatalogArtifactText identifies text input or output.
+	CatalogArtifactText = "text"
+	// CatalogArtifactImage identifies image input or output.
+	CatalogArtifactImage = "image"
+	// CatalogArtifactAudio identifies audio input or output.
+	CatalogArtifactAudio = "audio"
+	// CatalogArtifactVideo identifies video input or output.
+	CatalogArtifactVideo = "video"
+	// CatalogWireContractMultipartTranscription identifies normalized multipart dictation.
+	CatalogWireContractMultipartTranscription = "multipart_transcription"
 )
 
 // ModelCatalog is the canonical normalized model and provider-offering registry.
 type ModelCatalog struct {
-	Providers  []CatalogProvider
-	Publishers []ModelPublisher
-	Families   []ModelFamily
-	Models     []ExactModel
-	Offerings  []ProviderOffering
+	Revision   string                   `mapstructure:"revision"`
+	Operations []ModelOperationKind     `mapstructure:"operations"`
+	Providers  []CatalogProvider        `mapstructure:"providers"`
+	Publishers []ModelPublisher         `mapstructure:"publishers"`
+	Families   []ModelFamily            `mapstructure:"families"`
+	Models     []ExactModel             `mapstructure:"models"`
+	Offerings  []ProviderOffering       `mapstructure:"offerings"`
+	Prices     []CatalogPriceDescriptor `mapstructure:"prices"`
+}
+
+// ModelOperationKind declares one operation and its possible artifact types.
+type ModelOperationKind struct {
+	ID              string   `json:"id" mapstructure:"id"`
+	InputArtifacts  []string `json:"input_artifacts" mapstructure:"input_artifacts"`
+	OutputArtifacts []string `json:"output_artifacts" mapstructure:"output_artifacts"`
 }
 
 // CatalogProvider declares one provider that can own provider offerings.
 type CatalogProvider struct {
-	ID    string
-	Label string
+	ID              string   `mapstructure:"id"`
+	Label           string   `mapstructure:"label"`
+	CredentialKinds []string `mapstructure:"credential_kinds"`
 }
 
 // ModelPublisher declares the organization or community that publishes models.
 type ModelPublisher struct {
-	ID    string
-	Label string
+	ID    string `mapstructure:"id"`
+	Label string `mapstructure:"label"`
 }
 
 // ModelFamily groups exact models from one publisher.
 type ModelFamily struct {
-	ID        string
-	Publisher string
-	Label     string
+	ID        string `mapstructure:"id"`
+	Publisher string `mapstructure:"publisher"`
+	Label     string `mapstructure:"label"`
 }
 
 // ExactModel declares provider-independent identity and model capabilities.
 type ExactModel struct {
-	ID          string
-	Publisher   string
-	Family      string
-	Version     string
-	Operations  []string
-	MediaInputs []string
+	ID          string   `mapstructure:"id"`
+	Publisher   string   `mapstructure:"publisher"`
+	Family      string   `mapstructure:"family"`
+	Version     string   `mapstructure:"version"`
+	Operations  []string `mapstructure:"operations"`
+	MediaInputs []string `mapstructure:"media_inputs"`
 }
 
 // ProviderOffering declares one provider route for one exact model.
 type ProviderOffering struct {
-	Provider           string
-	Model              string
-	ProviderModel      string
-	Operations         []string
-	DefaultOperations  []string
-	WireContract       string
-	ExecutionLifecycle string
-	RequestProfile     string
-	WebSearch          bool
-	OutputTokenLimit   int
-	ReasoningEffort    *ReasoningEffortCapability
-	MediaInputs        []string
+	Provider           string                     `mapstructure:"provider"`
+	Model              string                     `mapstructure:"model"`
+	ProviderModel      string                     `mapstructure:"provider_model"`
+	Operations         []string                   `mapstructure:"operations"`
+	DefaultOperations  []string                   `mapstructure:"default_operations"`
+	WireContract       string                     `mapstructure:"wire_contract"`
+	ExecutionLifecycle string                     `mapstructure:"execution_lifecycle"`
+	RequestProfile     string                     `mapstructure:"request_profile"`
+	WebSearch          bool                       `mapstructure:"web_search"`
+	OutputTokenLimit   int                        `mapstructure:"output_token_limit"`
+	ReasoningEffort    *ReasoningEffortCapability `mapstructure:"reasoning_effort"`
+	MediaInputs        []string                   `mapstructure:"media_inputs"`
+	Controls           []CatalogControl           `mapstructure:"controls"`
+	Limits             []CatalogLimit             `mapstructure:"limits"`
 }
 
 // ReasoningEffortCapability declares the configured upstream mapping for one
 // exact provider offering.
 type ReasoningEffortCapability struct {
-	Adapter string
-	Efforts []string
+	Adapter string   `mapstructure:"adapter"`
+	Efforts []string `mapstructure:"efforts"`
 }
 
 type validatedModelCatalog struct {
+	revision   string
+	operations map[string]ModelOperationKind
 	providers  map[string]CatalogProvider
 	publishers map[string]ModelPublisher
 	families   map[string]ModelFamily
 	models     map[string]ExactModel
 	offerings  map[string]ProviderOffering
+	prices     map[string]CatalogPriceDescriptor
 }
 
 var providerTextRouteCapabilities = map[string]map[textRouteCapabilities]struct{}{
@@ -97,16 +127,25 @@ var providerTextRouteCapabilities = map[string]map[textRouteCapabilities]struct{
 	},
 	ProviderNameAnthropic: {anthropicMessagesSynchronousRouteCapabilities: {}},
 	ProviderNameMeta:      {openAIChatCompletionsSynchronousRouteCapabilities: {}},
-	ProviderNameGrok:      {openAIChatCompletionsSynchronousRouteCapabilities: {}},
+	ProviderNameXAI:       {openAIChatCompletionsSynchronousRouteCapabilities: {}},
 }
 
 func validateModelCatalog(catalog ModelCatalog) (validatedModelCatalog, error) {
 	validated := validatedModelCatalog{
+		revision:   catalog.Revision,
+		operations: map[string]ModelOperationKind{},
 		providers:  map[string]CatalogProvider{},
 		publishers: map[string]ModelPublisher{},
 		families:   map[string]ModelFamily{},
 		models:     map[string]ExactModel{},
 		offerings:  map[string]ProviderOffering{},
+		prices:     map[string]CatalogPriceDescriptor{},
+	}
+	if revisionError := validateCatalogRevision(catalog.Revision); revisionError != nil {
+		return validatedModelCatalog{}, revisionError
+	}
+	if operationError := validateModelOperationKinds(catalog.Operations, validated.operations); operationError != nil {
+		return validatedModelCatalog{}, operationError
 	}
 	if catalogError := validateCatalogProviders(catalog.Providers, validated.providers); catalogError != nil {
 		return validatedModelCatalog{}, catalogError
@@ -121,6 +160,9 @@ func validateModelCatalog(catalog ModelCatalog) (validatedModelCatalog, error) {
 		return validatedModelCatalog{}, catalogError
 	}
 	if catalogError := validateProviderOfferings(catalog.Offerings, validated); catalogError != nil {
+		return validatedModelCatalog{}, catalogError
+	}
+	if catalogError := validateCatalogPrices(catalog.Prices, validated); catalogError != nil {
 		return validatedModelCatalog{}, catalogError
 	}
 	return validated, nil
@@ -140,6 +182,9 @@ func validateCatalogProviders(providers []CatalogProvider, validated map[string]
 		}
 		if strings.TrimSpace(provider.Label) == constants.EmptyString || provider.Label != strings.TrimSpace(provider.Label) {
 			return fmt.Errorf("%w: field=catalog.providers[%d].label", ErrInvalidModelCatalog, index)
+		}
+		if credentialError := validateCredentialKinds(provider.CredentialKinds, fmt.Sprintf("catalog.providers[%d].credential_kinds", index)); credentialError != nil {
+			return credentialError
 		}
 		if _, supported := providerTextRouteCapabilities[identifier]; !supported {
 			return fmt.Errorf("%w: field=catalog.providers[%d].id provider=%s reason=unknown", ErrInvalidModelCatalog, index, identifier)
@@ -293,12 +338,24 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 		if offering.OutputTokenLimit < 0 {
 			return fmt.Errorf("%w: field=%s.output_token_limit", ErrInvalidModelCatalog, fieldPrefix)
 		}
+		if controlError := validateCatalogControls(offering.Controls, fieldPrefix+".controls"); controlError != nil {
+			return controlError
+		}
+		if limitError := validateCatalogLimits(offering.Limits, fieldPrefix+".limits"); limitError != nil {
+			return limitError
+		}
 		if _, supportsText := offeredOperations[ModelOperationText]; supportsText {
 			if routeError := validateTextOffering(offering, fieldPrefix); routeError != nil {
 				return routeError
 			}
-		} else if offering.WireContract != constants.EmptyString || offering.ExecutionLifecycle != constants.EmptyString || offering.RequestProfile != constants.EmptyString || offering.WebSearch || offering.OutputTokenLimit != 0 || offering.ReasoningEffort != nil || len(offering.MediaInputs) != 0 {
-			return fmt.Errorf("%w: field=%s reason=text_capabilities_without_text_operation", ErrInvalidModelCatalog, fieldPrefix)
+		} else if _, supportsVideo := offeredOperations[ModelOperationVideoGeneration]; supportsVideo {
+			if routeError := validateVideoOffering(offering, fieldPrefix); routeError != nil {
+				return routeError
+			}
+		} else if _, supportsDictation := offeredOperations[ModelOperationDictation]; supportsDictation {
+			if routeError := validateDictationOffering(offering, fieldPrefix); routeError != nil {
+				return routeError
+			}
 		}
 		modelMediaInputs, _ := validatedExactModelMediaInputs(exactModel.MediaInputs, "catalog.models.media_inputs")
 		offeringMediaInputs, mediaError := validatedMediaInputSet(offering.Provider, offering.MediaInputs, fieldPrefix+".media_inputs")
@@ -326,6 +383,16 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 				return fmt.Errorf("%w: model=%s operation=%s reason=missing_provider_offering", ErrInvalidModelCatalog, modelIdentifier, operation)
 			}
 		}
+	}
+	return nil
+}
+
+func validateDictationOffering(offering ProviderOffering, fieldPrefix string) error {
+	if offering.WireContract != CatalogWireContractMultipartTranscription || offering.ExecutionLifecycle != string(textExecutionLifecycleSynchronousCompletion) {
+		return fmt.Errorf("%w: field=%s reason=unsupported_dictation_route", ErrInvalidModelCatalog, fieldPrefix)
+	}
+	if offering.RequestProfile != constants.EmptyString || offering.WebSearch || offering.OutputTokenLimit != 0 || offering.ReasoningEffort != nil || len(offering.MediaInputs) != 0 || len(offering.Controls) != 0 || len(offering.Limits) != 0 {
+		return fmt.Errorf("%w: field=%s reason=text_capabilities_on_dictation_route", ErrInvalidModelCatalog, fieldPrefix)
 	}
 	return nil
 }
@@ -395,7 +462,7 @@ func validatedOperationSet(rawOperations []string, field string) (map[string]str
 	}
 	operations := make(map[string]struct{}, len(rawOperations))
 	for index, operation := range rawOperations {
-		if operation != ModelOperationText && operation != ModelOperationDictation {
+		if operation != ModelOperationText && operation != ModelOperationDictation && operation != ModelOperationVideoGeneration {
 			return nil, fmt.Errorf("%w: field=%s[%d] operation=%s", ErrInvalidModelCatalog, field, index, operation)
 		}
 		if _, duplicate := operations[operation]; duplicate {

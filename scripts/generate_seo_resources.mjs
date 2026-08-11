@@ -1340,7 +1340,7 @@ text = client.post_messages(
     problem: "Speech providers use different URLs, models, and multipart details. Client apps should not carry those differences.",
     solution: "LLM Proxy exposes dictation-capable providers through configured catalogs and provider-specific transcription URLs while preserving one /dictate endpoint.",
     steps: [
-      "Configure dictation catalogs for OpenAI, SiliconFlow, Zhipu, or Grok/xAI as needed.",
+      "Configure dictation catalogs for OpenAI, SiliconFlow, Zhipu, or xAI as needed.",
       "Send multipart audio to /dictate with key=<tenant secret>.",
       "Omit provider/model for tenant defaults or select a dictation-capable provider and model.",
       "Receive JSON text output from the proxy.",
@@ -1353,7 +1353,7 @@ text = client.post_messages(
     examples: [
       ["OpenAI default dictation", "A caller omits provider and model to use tenant dictation defaults."],
       ["Zhipu transcription", "A caller chooses provider=zhipu when that tenant has GLM-ASR configured."],
-      ["Grok/xAI STT", "The proxy routes provider=grok to the configured xAI STT endpoint."],
+      ["xAI STT", "The proxy routes provider=xai to the configured xAI STT endpoint."],
     ],
     limitations: [
       "Text-only providers do not support /dictate through the proxy.",
@@ -1372,20 +1372,20 @@ text = client.post_messages(
     solution: "LLM Proxy uses a shared compatible chat adapter for configured providers while keeping provider URLs, keys, and model catalogs in config.",
     steps: [
       "Configure provider base_url, api_key, and normalized provider offerings.",
-      "Use provider selectors such as meta, deepseek, dashscope, moonshot, minimax, siliconflow, zhipu, or grok.",
+      "Use provider selectors such as meta, deepseek, dashscope, moonshot, minimax, siliconflow, zhipu, or xai.",
       "Send GET, compatibility POST, or canonical /v2 requests.",
       "Let omitted model use the selected provider's configured default.",
     ],
     features: [
       ["Shared adapter", "Compatible chat providers use one proxy integration pattern.", "Provider-specific logic stays centralized."],
-      ["Provider aliases", "Some providers expose aliases such as qwen, kimi, glm, or xai.", "Callers can use documented selectors."],
+      ["Provider aliases", "Some providers expose aliases such as qwen, kimi, or glm.", "Callers can use documented selectors."],
       ["Disabled-provider behavior", "Blank non-default provider keys keep startup working and return 503 when selected.", "Operators can stage provider support before credentials exist."],
     ],
     examples: [
       ["Meta Muse route", "A caller sends provider=meta and model=muse-spark-1.1 through Chat Completions."],
       ["Qwen alias", "A caller uses provider=qwen for DashScope routing."],
       ["MiniMax route", "A caller uses provider=minimax and model=minimax-m2.7 through the shared Chat Completions adapter."],
-      ["xAI route", "A Grok text request uses the OpenAI-compatible chat adapter behind provider=grok."],
+      ["xAI route", "A Grok text request uses the OpenAI-compatible chat adapter behind provider=xai."],
     ],
     limitations: [
       "Meta support is text-only; the proxy does not expose Meta dictation, web search, tools, multimodal inputs, or a Responses fallback.",

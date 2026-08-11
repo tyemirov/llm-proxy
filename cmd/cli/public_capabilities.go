@@ -51,7 +51,7 @@ func loadPublicCapabilityAPIConfiguration(rawConfigPath string) (publicCapabilit
 	if unmarshalError := providersReader.UnmarshalExact(&providersConfig); unmarshalError != nil {
 		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s field=providers: %v", errPublicCapabilityConfig, configPath, unmarshalError)
 	}
-	var catalogConfig modelCatalogConfiguration
+	var catalogConfig proxy.ModelCatalog
 	if unmarshalError := catalogReader.UnmarshalExact(&catalogConfig); unmarshalError != nil {
 		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s field=catalog: %v", errPublicCapabilityConfig, configPath, unmarshalError)
 	}
@@ -60,7 +60,7 @@ func loadPublicCapabilityAPIConfiguration(rawConfigPath string) (publicCapabilit
 		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s: %v", errPublicCapabilityConfig, configPath, timeoutError)
 	}
 	capabilityCatalog, catalogError := proxy.NewPublicCapabilityCatalog(proxy.Configuration{
-		ModelCatalog:             catalogConfig.proxyCatalog(),
+		ModelCatalog:             catalogConfig,
 		MaxPromptBytes:           serverConfig.MaxPromptBytes,
 		MaxInputAudioBytes:       serverConfig.MaxInputAudioBytes,
 		MaxRequestTimeoutSeconds: maxRequestTimeoutSeconds,

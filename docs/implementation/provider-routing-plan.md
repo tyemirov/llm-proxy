@@ -76,7 +76,7 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 | `zhipu` | `glm` | `openai_chat_completions` | `synchronous_completion` | Z.AI GLM-ASR transcription | Not supported |
 | `gemini` | none | `gemini_interactions` | Model-specific: Gemini 3.x `pollable_resource`; Gemini 2.5 `synchronous_completion` | Not supported | Not supported |
 | `anthropic` | `claude` | `anthropic_messages` | `synchronous_completion` | Not supported | Not supported |
-| `grok` | `xai` | `openai_chat_completions` | `synchronous_completion` | xAI STT | Not supported |
+| `xai` | none | `openai_chat_completions` | `synchronous_completion` | xAI STT | Not supported |
 
 This matrix describes capabilities wired through `llm-proxy`. Upstream products
 can expose speech APIs that are not yet proxy adapters; do not mark them
@@ -171,11 +171,14 @@ Provider credentials and base URLs:
 - `providers.zhipu.api_key`, `providers.zhipu.base_url`, `providers.zhipu.transcriptions_url`
 - `providers.gemini.api_key`, `providers.gemini.base_url`
 - `providers.anthropic.api_key`, `providers.anthropic.base_url`
-- `providers.grok.api_key`, `providers.grok.base_url`, `providers.grok.transcriptions_url`
+- `providers.xai.api_key`, `providers.xai.base_url`, `providers.xai.transcriptions_url`
 
 Normalized model catalog:
 
+- `catalog.revision`
+- `catalog.operations[].id`, `input_artifacts`, and `output_artifacts`
 - `catalog.providers[].id` and `catalog.providers[].label`
+- `catalog.providers[].credential_kinds`
 - `catalog.publishers[].id` and `catalog.publishers[].label`
 - `catalog.families[].id`, `publisher`, and `label`
 - `catalog.models[].id`, `publisher`, `family`, and `version`
@@ -186,6 +189,9 @@ Normalized model catalog:
 - `catalog.offerings[].output_token_limit` and `media_inputs`
 - `catalog.offerings[].reasoning_effort`
 - `catalog.offerings[].request_profile` and `web_search`
+- `catalog.offerings[].controls` and `limits`
+- `catalog.prices[].provider`, `model`, `operation`, availability, rates,
+  exact conditions, minimum charge, source, and verification date
 
 The model catalog is runtime config data. Code owns provider selectors,
 aliases, allowed wire and lifecycle pairs, endpoint shapes, adapters, and
@@ -630,14 +636,14 @@ that response or structured provider-failure logs.
   non-stored synchronous request. For exact models whose catalog declares the capability, ordered
   image and audio attachments become typed interaction content after the
   message text.
-- Grok uses the shared OpenAI-compatible Chat Completions adapter against `providers.grok.base_url`.
+- xAI uses the shared OpenAI-compatible Chat Completions adapter against `providers.xai.base_url`.
 - OpenAI-compatible chat providers receive validated and sorted `messages[]` as provider-supported `role` and `content` items.
 - OpenAI Responses payload shape comes from the selected configured model's stable `request_profile`; model-specific web-search support comes from the selected model catalog entry. OpenAI Responses text calls run in background mode with stored responses so long provider work can be polled by llm-proxy while the caller waits on one REST request.
 - Gemini receives user messages as `user_input` steps, assistant messages as
   `model_output` steps, and system messages as `system_instruction`. Other
   adapters remain text-only and reject model media declarations at startup.
 - OpenAI Responses receives single-prompt requests unchanged and multi-message requests as a deterministic role-labelled transcript.
-- Dictation routing reuses the multipart transcription adapter with provider-specific URLs. OpenAI, SiliconFlow, and Zhipu send a multipart `model` field; Grok/xAI uses xAI STT and omits the multipart `model` field. Only providers that support `/dictate` expose transcription URL config fields.
+- Dictation routing reuses the multipart transcription adapter with provider-specific URLs. OpenAI, SiliconFlow, and Zhipu send a multipart `model` field. xAI STT omits the multipart `model` field. Only providers that support `/dictate` expose transcription URL config fields.
 - Response formatting keeps existing text/XML/CSV bodies and existing JSON `request`, `response`, and normalized `usage` fields. JSON responses also include OpenRouter-style `object`, `model`, and `choices[].message.content` metadata, plus caller-visible request `messages` with provided `order` values. Server-injected tenant default system prompts are sent upstream but not echoed in response metadata.
 
 ## Test Strategy

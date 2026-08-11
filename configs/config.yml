@@ -56,33 +56,75 @@ providers:
     base_url: https://api.anthropic.com
   meta:
     base_url: https://api.meta.ai/v1
-  grok:
+  xai:
     base_url: https://api.x.ai/v1
     transcriptions_url: https://api.x.ai/v1/stt
 catalog:
+  revision: 2026-08-10.i216.1
+  operations:
+  - id: text
+    input_artifacts:
+    - text
+    - image
+    - audio
+    output_artifacts:
+    - text
+  - id: dictation
+    input_artifacts:
+    - audio
+    output_artifacts:
+    - text
+  - id: video_generation
+    input_artifacts:
+    - text
+    - image
+    output_artifacts:
+    - video
   providers:
   - id: openai
     label: OpenAI
+    credential_kinds:
+    - api_key
   - id: deepseek
     label: DeepSeek
+    credential_kinds:
+    - api_key
   - id: dashscope
     label: DashScope
+    credential_kinds:
+    - api_key
   - id: moonshot
     label: Moonshot
+    credential_kinds:
+    - api_key
   - id: minimax
     label: MiniMax
+    credential_kinds:
+    - api_key
   - id: siliconflow
     label: SiliconFlow
+    credential_kinds:
+    - api_key
   - id: zhipu
     label: Zhipu
+    credential_kinds:
+    - api_key
   - id: gemini
     label: Gemini
+    credential_kinds:
+    - api_key
   - id: anthropic
     label: Anthropic
+    credential_kinds:
+    - api_key
   - id: meta
     label: Meta
-  - id: grok
-    label: Grok
+    credential_kinds:
+    - api_key
+  - id: xai
+    label: xAI
+    credential_kinds:
+    - api_key
   publishers:
   - id: openai
     label: OpenAI
@@ -173,6 +215,9 @@ catalog:
   - id: grok-code
     publisher: xai
     label: Grok Code
+  - id: grok-imagine
+    publisher: xai
+    label: Grok Imagine
   - id: xai-stt
     publisher: xai
     label: xAI STT
@@ -513,6 +558,12 @@ catalog:
     version: grok-code-fast-1-0825
     operations:
     - text
+  - id: grok-imagine-video-1.5
+    publisher: xai
+    family: grok-imagine
+    version: grok-imagine-video-1.5
+    operations:
+    - video_generation
   - id: xai-stt
     publisher: xai
     family: xai-stt
@@ -690,11 +741,15 @@ catalog:
     - dictation
     default_operations:
     - dictation
+    wire_contract: multipart_transcription
+    execution_lifecycle: synchronous_completion
   - provider: openai
     model: gpt-4o-transcribe
     provider_model: gpt-4o-transcribe
     operations:
     - dictation
+    wire_contract: multipart_transcription
+    execution_lifecycle: synchronous_completion
   - provider: deepseek
     model: deepseek-v4-flash
     provider_model: deepseek-v4-flash
@@ -790,6 +845,8 @@ catalog:
     - dictation
     default_operations:
     - dictation
+    wire_contract: multipart_transcription
+    execution_lifecycle: synchronous_completion
   - provider: zhipu
     model: glm-5.1
     provider_model: glm-5.1
@@ -814,6 +871,8 @@ catalog:
     - dictation
     default_operations:
     - dictation
+    wire_contract: multipart_transcription
+    execution_lifecycle: synchronous_completion
   - provider: gemini
     model: gemini-3.5-flash
     provider_model: gemini-3.5-flash
@@ -969,7 +1028,7 @@ catalog:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
-  - provider: grok
+  - provider: xai
     model: grok-4.3
     provider_model: grok-4.3
     operations:
@@ -978,73 +1037,546 @@ catalog:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
-  - provider: grok
+  - provider: xai
     model: grok-4.3-latest
     provider_model: grok-4.3-latest
     operations:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
-  - provider: grok
+  - provider: xai
     model: grok-4.5
     provider_model: grok-4.5
     operations:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
-  - provider: grok
+  - provider: xai
     model: grok-4.20-0309-reasoning
     provider_model: grok-4.20-0309-reasoning
     operations:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
-  - provider: grok
+  - provider: xai
     model: grok-4.20-0309-non-reasoning
     provider_model: grok-4.20-0309-non-reasoning
     operations:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
-  - provider: grok
+  - provider: xai
     model: grok-latest
     provider_model: grok-latest
     operations:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
-  - provider: grok
+  - provider: xai
     model: grok-build-0.1
     provider_model: grok-build-0.1
     operations:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
-  - provider: grok
+  - provider: xai
     model: grok-code-fast
     provider_model: grok-code-fast
     operations:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
-  - provider: grok
+  - provider: xai
     model: grok-code-fast-1
     provider_model: grok-code-fast-1
     operations:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
-  - provider: grok
+  - provider: xai
     model: grok-code-fast-1-0825
     provider_model: grok-code-fast-1-0825
     operations:
     - text
     wire_contract: openai_chat_completions
     execution_lifecycle: synchronous_completion
-  - provider: grok
+  - provider: xai
+    model: grok-imagine-video-1.5
+    provider_model: grok-imagine-video-1.5
+    operations:
+    - video_generation
+    default_operations:
+    - video_generation
+    wire_contract: xai_videos_generations
+    execution_lifecycle: pollable_resource
+    controls:
+    - id: aspect_ratio
+      kind: enum
+      values:
+      - "1:1"
+      - "16:9"
+      - "9:16"
+      - "4:3"
+      - "3:4"
+      - "3:2"
+      - "2:3"
+    - id: duration_seconds
+      kind: integer
+      minimum: 1
+      maximum: 15
+    - id: resolution
+      kind: enum
+      values:
+      - 480p
+      - 720p
+      - 1080p
+    - id: start_image
+      kind: boolean
+    limits:
+    - id: concurrent_requests
+      unit: requests
+      account_dependent: true
+  - provider: xai
     model: xai-stt
     provider_model: xai-stt
     operations:
     - dictation
     default_operations:
     - dictation
+    wire_contract: multipart_transcription
+    execution_lifecycle: synchronous_completion
+  prices:
+  - provider: openai
+    model: gpt-4o-mini
+    operation: text
+    available: false
+    source: https://developers.openai.com/api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: openai
+    model: gpt-4o
+    operation: text
+    available: false
+    source: https://developers.openai.com/api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: openai
+    model: gpt-4.1
+    operation: text
+    available: false
+    source: https://developers.openai.com/api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: openai
+    model: gpt-5-mini
+    operation: text
+    available: false
+    source: https://developers.openai.com/api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: openai
+    model: gpt-5
+    operation: text
+    available: false
+    source: https://developers.openai.com/api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: openai
+    model: gpt-5.5
+    operation: text
+    available: false
+    source: https://developers.openai.com/api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: openai
+    model: gpt-5.5-pro
+    operation: text
+    available: false
+    source: https://developers.openai.com/api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: openai
+    model: gpt-5.6
+    operation: text
+    available: false
+    source: https://developers.openai.com/api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: openai
+    model: gpt-5.6-sol
+    operation: text
+    available: false
+    source: https://developers.openai.com/api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: openai
+    model: gpt-5.6-terra
+    operation: text
+    available: false
+    source: https://developers.openai.com/api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: openai
+    model: gpt-5.6-luna
+    operation: text
+    available: false
+    source: https://developers.openai.com/api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: openai
+    model: gpt-4o-mini-transcribe
+    operation: dictation
+    available: false
+    source: https://developers.openai.com/api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: openai
+    model: gpt-4o-transcribe
+    operation: dictation
+    available: false
+    source: https://developers.openai.com/api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: deepseek
+    model: deepseek-v4-flash
+    operation: text
+    available: false
+    source: https://api-docs.deepseek.com/quick_start/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: deepseek
+    model: deepseek-v4-pro
+    operation: text
+    available: false
+    source: https://api-docs.deepseek.com/quick_start/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: deepseek
+    model: deepseek-chat
+    operation: text
+    available: false
+    source: https://api-docs.deepseek.com/quick_start/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: deepseek
+    model: deepseek-reasoner
+    operation: text
+    available: false
+    source: https://api-docs.deepseek.com/quick_start/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: dashscope
+    model: qwen-plus
+    operation: text
+    available: false
+    source: https://www.alibabacloud.com/help/en/model-studio/model-pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: moonshot
+    model: kimi-k2.6
+    operation: text
+    available: false
+    source: https://platform.moonshot.ai/docs/pricing/chat
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: moonshot
+    model: kimi-k3
+    operation: text
+    available: false
+    source: https://platform.moonshot.ai/docs/pricing/chat
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: moonshot
+    model: kimi-k2.7-code
+    operation: text
+    available: false
+    source: https://platform.moonshot.ai/docs/pricing/chat
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: moonshot
+    model: kimi-k2.7-code-highspeed
+    operation: text
+    available: false
+    source: https://platform.moonshot.ai/docs/pricing/chat
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: minimax
+    model: minimax-m2.7
+    operation: text
+    available: false
+    source: https://platform.minimax.io/docs/pricing/pay-as-you-go
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: siliconflow
+    model: deepseek-reasoner
+    operation: text
+    available: false
+    source: https://docs.siliconflow.com/en/userguide/introduction/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: siliconflow
+    model: sensevoice-small
+    operation: dictation
+    available: false
+    source: https://docs.siliconflow.com/en/userguide/introduction/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: zhipu
+    model: glm-5.1
+    operation: text
+    available: false
+    source: https://docs.z.ai/guides/overview/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: zhipu
+    model: glm-5.2
+    operation: text
+    available: false
+    source: https://docs.z.ai/guides/overview/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: zhipu
+    model: glm-asr-2512
+    operation: dictation
+    available: false
+    source: https://docs.z.ai/guides/overview/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: gemini
+    model: gemini-3.5-flash
+    operation: text
+    available: false
+    source: https://ai.google.dev/gemini-api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: gemini
+    model: gemini-3.1-pro-preview
+    operation: text
+    available: false
+    source: https://ai.google.dev/gemini-api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: gemini
+    model: gemini-3-flash-preview
+    operation: text
+    available: false
+    source: https://ai.google.dev/gemini-api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: gemini
+    model: gemini-3.1-flash-lite
+    operation: text
+    available: false
+    source: https://ai.google.dev/gemini-api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: gemini
+    model: gemini-2.5-flash
+    operation: text
+    available: false
+    source: https://ai.google.dev/gemini-api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: gemini
+    model: gemini-2.5-flash-lite
+    operation: text
+    available: false
+    source: https://ai.google.dev/gemini-api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: gemini
+    model: gemini-2.5-pro
+    operation: text
+    available: false
+    source: https://ai.google.dev/gemini-api/docs/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: anthropic
+    model: claude-fable-5
+    operation: text
+    available: false
+    source: https://docs.anthropic.com/en/docs/about-claude/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: anthropic
+    model: claude-sonnet-5
+    operation: text
+    available: false
+    source: https://docs.anthropic.com/en/docs/about-claude/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: anthropic
+    model: claude-opus-4-8
+    operation: text
+    available: false
+    source: https://docs.anthropic.com/en/docs/about-claude/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: anthropic
+    model: claude-sonnet-4-6
+    operation: text
+    available: false
+    source: https://docs.anthropic.com/en/docs/about-claude/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: anthropic
+    model: claude-haiku-4-5-20251001
+    operation: text
+    available: false
+    source: https://docs.anthropic.com/en/docs/about-claude/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: anthropic
+    model: claude-haiku-4-5
+    operation: text
+    available: false
+    source: https://docs.anthropic.com/en/docs/about-claude/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: anthropic
+    model: claude-sonnet-4-5-20250929
+    operation: text
+    available: false
+    source: https://docs.anthropic.com/en/docs/about-claude/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: anthropic
+    model: claude-sonnet-4-5
+    operation: text
+    available: false
+    source: https://docs.anthropic.com/en/docs/about-claude/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: anthropic
+    model: claude-opus-4-1-20250805
+    operation: text
+    available: false
+    source: https://docs.anthropic.com/en/docs/about-claude/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: anthropic
+    model: claude-opus-4-1
+    operation: text
+    available: false
+    source: https://docs.anthropic.com/en/docs/about-claude/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: meta
+    model: muse-spark-1.1
+    operation: text
+    available: false
+    source: https://dev.meta.ai/docs/pricing-rate-limits
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: xai
+    model: grok-4.3
+    operation: text
+    available: false
+    source: https://docs.x.ai/developers/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: xai
+    model: grok-4.3-latest
+    operation: text
+    available: false
+    source: https://docs.x.ai/developers/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: xai
+    model: grok-4.5
+    operation: text
+    available: false
+    source: https://docs.x.ai/developers/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: xai
+    model: grok-4.20-0309-reasoning
+    operation: text
+    available: false
+    source: https://docs.x.ai/developers/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: xai
+    model: grok-4.20-0309-non-reasoning
+    operation: text
+    available: false
+    source: https://docs.x.ai/developers/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: xai
+    model: grok-latest
+    operation: text
+    available: false
+    source: https://docs.x.ai/developers/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: xai
+    model: grok-build-0.1
+    operation: text
+    available: false
+    source: https://docs.x.ai/developers/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: xai
+    model: grok-code-fast
+    operation: text
+    available: false
+    source: https://docs.x.ai/developers/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: xai
+    model: grok-code-fast-1
+    operation: text
+    available: false
+    source: https://docs.x.ai/developers/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: xai
+    model: grok-code-fast-1-0825
+    operation: text
+    available: false
+    source: https://docs.x.ai/developers/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
+  - provider: xai
+    model: grok-imagine-video-1.5
+    operation: video_generation
+    available: true
+    rates:
+    - component: output_video
+      currency: USD
+      rate: 0.08
+      unit: USD/output_second
+      conditions:
+        resolution: 480p
+        duration: output
+    - component: output_video
+      currency: USD
+      rate: 0.14
+      unit: USD/output_second
+      conditions:
+        resolution: 720p
+        duration: output
+    - component: output_video
+      currency: USD
+      rate: 0.25
+      unit: USD/output_second
+      conditions:
+        resolution: 1080p
+        duration: output
+    - component: input_image
+      currency: USD
+      rate: 0.01
+      unit: USD/input_image
+      conditions:
+        input_media: image
+        quantity: input_image
+    source: https://docs.x.ai/developers/pricing
+    last_verified: "2026-08-08"
+  - provider: xai
+    model: xai-stt
+    operation: dictation
+    available: false
+    source: https://docs.x.ai/developers/pricing
+    last_verified: "2026-08-10"
+    unavailable_reason: Exact published pricing has not been imported for this provider offering.
