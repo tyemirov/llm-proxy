@@ -154,75 +154,99 @@ catalog:
   - id: gpt-4
     publisher: openai
     label: GPT-4
+    weight_access: proprietary
   - id: gpt-5
     publisher: openai
     label: GPT-5
+    weight_access: proprietary
   - id: gpt-transcribe
     publisher: openai
     label: GPT Transcribe
+    weight_access: proprietary
   - id: deepseek-v4
     publisher: deepseek
     label: DeepSeek V4
+    weight_access: open_weights
   - id: deepseek-v3
     publisher: deepseek
     label: DeepSeek V3
+    weight_access: open_weights
   - id: deepseek-r1
     publisher: deepseek
     label: DeepSeek R1
+    weight_access: open_weights
   - id: qwen
     publisher: alibaba
     label: Qwen
+    weight_access: proprietary
   - id: kimi-k2
     publisher: moonshot
     label: Kimi K2
+    weight_access: open_weights
   - id: kimi-k3
     publisher: moonshot
     label: Kimi K3
+    weight_access: open_weights
   - id: minimax-m2
     publisher: minimax
     label: MiniMax M2
+    weight_access: open_weights
   - id: sensevoice
     publisher: funaudio
     label: SenseVoice
+    weight_access: open_weights
   - id: glm-5
     publisher: zhipu
     label: GLM-5
+    weight_access: open_weights
   - id: glm-asr
     publisher: zhipu
     label: GLM ASR
+    weight_access: open_weights
   - id: gemini
     publisher: google
     label: Gemini
+    weight_access: proprietary
   - id: claude-fable
     publisher: anthropic
     label: Claude Fable
+    weight_access: proprietary
   - id: claude-sonnet
     publisher: anthropic
     label: Claude Sonnet
+    weight_access: proprietary
   - id: claude-opus
     publisher: anthropic
     label: Claude Opus
+    weight_access: proprietary
   - id: claude-haiku
     publisher: anthropic
     label: Claude Haiku
+    weight_access: proprietary
   - id: muse-spark
     publisher: meta
     label: Muse Spark
+    weight_access: proprietary
   - id: grok
     publisher: xai
     label: Grok
+    weight_access: proprietary
   - id: grok-build
     publisher: xai
     label: Grok Build
+    weight_access: proprietary
   - id: grok-code
     publisher: xai
     label: Grok Code
+    weight_access: proprietary
   - id: grok-imagine
     publisher: xai
     label: Grok Imagine
+    weight_access: proprietary
   - id: xai-stt
     publisher: xai
     label: xAI STT
+    weight_access: proprietary
   models:
   - id: gpt-4o-mini
     publisher: openai
