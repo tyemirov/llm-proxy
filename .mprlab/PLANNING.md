@@ -20,7 +20,7 @@ When the execution is not for an issue, use `X` plus three random hexadecimal ch
 
 Before you make the plan, make sure that no plan has the same path. When a plan has the same path, generate a new ID.
 
-Do not make `.mprlab/PLAN.md`. Keep the execution plan short, current, and untracked. After you complete the execution, remove its plan.
+Keep the execution plan short, current, and untracked. After you complete the execution, remove its plan.
 
 Use `/.mprlab/*-PLAN.md` as the canonical execution-plan rule in `.gitignore`.
 

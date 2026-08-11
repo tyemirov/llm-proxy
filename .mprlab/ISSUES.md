@@ -25,6 +25,39 @@ retain satisfied historical dependencies.
 
 ## BugFixes
 
+- [x] [B130] (P1) Store each DashScope workspace URL with its tenant settings.
+  Goal:
+  Keep provider configuration in the management domain and keep local and
+  production orchestration independent of provider-specific URLs.
+  Evidence:
+  - `make up` stops before Docker when `configs/.env.local` does not define
+    `DASHSCOPE_BASE_URL`.
+  - A DashScope API key is valid only for its matching workspace URL.
+  - The management store saves a tenant API key, model, and system prompt but
+    does not save the tenant workspace URL.
+  Requirements:
+  - Save the DashScope workspace URL with the tenant provider settings.
+  - Require the URL when management verifies and saves a DashScope key.
+  - Use the saved URL for tenant requests and provider-key verification.
+  - Remove the global DashScope URL from local and production orchestration.
+  - Advance incomplete stored DashScope settings through one bounded migration
+    into the current canonical schema.
+  - Keep public catalog projections free of provider endpoint details.
+  Validation:
+  - Exercise the management API and routed provider request with a tenant-owned
+    DashScope workspace URL.
+  - Run `make up` without a local DashScope base URL.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - Local and deployment orchestration no longer bind a DashScope URL.
+  - Managed settings now verify, encrypt, and save each tenant's DashScope key
+    with its matching Singapore workspace URL.
+  - Schema version 7 removes incomplete prior DashScope settings, reconciles
+    affected defaults, and preserves tenant timestamps and historical usage.
+  - `make up` passed without a local DashScope URL and passed all local
+    orchestration readiness checks.
+  - `make ci` passed all 11 gates with 91 browser tests and 100.0% Go statement
+    coverage.
 - [!] [B126] (P1) Activate the current v0.4.0 release on every public surface.
   Goal:
   Make the production API, container, and Pages site serve the immutable
