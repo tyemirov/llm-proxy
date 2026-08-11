@@ -54,9 +54,10 @@ type PublicModelPublisher struct {
 
 // PublicModelFamily identifies one family within a model publisher.
 type PublicModelFamily struct {
-	Identifier string `json:"identifier"`
-	Publisher  string `json:"publisher"`
-	Label      string `json:"label"`
+	Identifier   string `json:"identifier"`
+	Publisher    string `json:"publisher"`
+	Label        string `json:"label"`
+	WeightAccess string `json:"weight_access"`
 }
 
 // PublicExactModelCapability describes one provider-independent exact model.
@@ -136,7 +137,9 @@ func newPublicCapabilityCatalog(configuration Configuration) PublicCapabilityCat
 
 	families := make([]PublicModelFamily, 0, len(configuration.ModelCatalog.Families))
 	for _, family := range configuration.ModelCatalog.Families {
-		families = append(families, PublicModelFamily{Identifier: family.ID, Publisher: family.Publisher, Label: family.Label})
+		families = append(families, PublicModelFamily{
+			Identifier: family.ID, Publisher: family.Publisher, Label: family.Label, WeightAccess: family.WeightAccess,
+		})
 	}
 	sort.Slice(families, func(first int, second int) bool { return families[first].Identifier < families[second].Identifier })
 

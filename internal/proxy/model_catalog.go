@@ -63,10 +63,18 @@ type ModelPublisher struct {
 
 // ModelFamily groups exact models from one publisher.
 type ModelFamily struct {
-	ID        string `mapstructure:"id"`
-	Publisher string `mapstructure:"publisher"`
-	Label     string `mapstructure:"label"`
+	ID           string `mapstructure:"id"`
+	Publisher    string `mapstructure:"publisher"`
+	Label        string `mapstructure:"label"`
+	WeightAccess string `mapstructure:"weight_access"`
 }
+
+const (
+	// ModelWeightAccessProprietary identifies families whose model weights are not published for independent deployment.
+	ModelWeightAccessProprietary = "proprietary"
+	// ModelWeightAccessOpenWeights identifies families with published weights for independent deployment.
+	ModelWeightAccessOpenWeights = "open_weights"
+)
 
 // ExactModel declares provider-independent identity and model capabilities.
 type ExactModel struct {
@@ -240,6 +248,9 @@ func validateModelFamilies(families []ModelFamily, publishers map[string]ModelPu
 		}
 		if strings.TrimSpace(family.Label) == constants.EmptyString || family.Label != strings.TrimSpace(family.Label) {
 			return fmt.Errorf("%w: field=catalog.families[%d].label", ErrInvalidModelCatalog, index)
+		}
+		if family.WeightAccess != ModelWeightAccessProprietary && family.WeightAccess != ModelWeightAccessOpenWeights {
+			return fmt.Errorf("%w: field=catalog.families[%d].weight_access value=%s", ErrInvalidModelCatalog, index, family.WeightAccess)
 		}
 		validated[identifier] = family
 	}
