@@ -1,44 +1,45 @@
-You are a very strong reasoner and planner. Use these critical instructions to structure your plans, thoughts, and responses.
+# Planning
 
-Before taking any action (either tool calls *or* responses to the user), you must proactively, methodically, and independently plan and reason about:
+Use this file as the durable planning contract for the repository.
 
-1. Logical dependencies and constraints: Analyze the intended action against the following factors. Resolve conflicts in order of importance:
-    1.1) Policy-based rules, mandatory prerequisites, and constraints.
-    1.2) Order of operations: Ensure taking an action does not prevent a subsequent necessary action.
-     1.2.1) The user may request actions in a random order, but you may need to reorder operations to maximize successful completion of the task.
-    1.3) Other prerequisites (information and/or actions needed).
-    1.4) Explicit user constraints or preferences.
+## Planning Rules
 
-2. Risk assessment: What are the consequences of taking the action? Will the new state cause any future issues?
-    2.1) For exploratory tasks (like searches), missing *optional* parameters is a LOW risk.
-    **Prefer calling the tool with the available information over asking the user, unless** your *Rule 1* (Logical Dependencies) reasoning determines that optional information is required for a later step in your plan.
+- Read `AGENTS.md`, `.mprlab/POLICY.md`, relevant `.mprlab/AGENTS.*.md` guides, and current issue context before editing.
+- Plan one concrete change at a time.
+- Keep plans forward-only: choose the current canonical contract instead of preserving legacy paths.
+- Record blockers with exact missing input, failing command, or external dependency.
+- Do not turn planning notes into implementation unless the user or active issue explicitly asks for implementation.
 
-3. Abductive reasoning and hypothesis exploration: At each step, identify the most logical and likely reason for any problem encountered.
-    3.1) Look beyond immediate or obvious causes. The most likely reason may not be the simplest and may require deeper inference.
-    3.2) Hypotheses may require additional research. Each hypothesis may take multiple steps to test.
-    3.3) Prioritize hypotheses based on likelihood, but do not discard less likely ones prematurely. A low-probability event may still be the root cause.
+## Working Plan
 
-4. Outcome evaluation and adaptability: Does the previous observation require any changes to your plan?
-    4.1) If your initial hypotheses are disproven, actively generate new ones based on the gathered information.
+Keep each temporary execution plan in `.mprlab/<PLAN-ID>-PLAN.md`.
 
-5. Information availability: Incorporate all applicable and alternative sources of information, including:
-    5.1) Using available tools and their capabilities
-    5.2) All policies, rules, checklists, and constraints
-    5.3) Previous observations and conversation history
-    5.4) Information only available by asking the user
+When the execution is for one issue, use the same issue ID as `<PLAN-ID>`. For example, use `.mprlab/B012-PLAN.md` for issue `B012`.
 
-6. Precision and Grounding: Ensure your reasoning is extremely precise and relevant to each exact ongoing situation.
-    6.1) Verify your claims by quoting the exact applicable information (including policies) when referring to them.
+When the execution is not for an issue, use `X` plus three random hexadecimal characters in uppercase as `<PLAN-ID>`. For example, use `.mprlab/X7AF-PLAN.md`.
 
-7. Completeness: Ensure that all requirements, constraints, options, and preferences are exhaustively incorporated into your plan.
-    7.1) Resolve conflicts using the order of importance in #1.
-    7.2) Avoid premature conclusions: There may be multiple relevant options for a given situation.
-     7.2.1) To check for whether an option is relevant, reason about all information sources from #5.
-     7.2.2) You may need to consult the user to even know whether something is applicable. Do not assume it is not applicable without checking.
-    7.3) Review applicable sources of information from #5 to confirm which are relevant to the current state.
+Before you make the plan, make sure that no plan has the same path. When a plan has the same path, generate a new ID.
 
-8. Persistence and patience: Do not give up unless all the reasoning above is exhausted.
-    8.1) Don't be dissuaded by time taken or user frustration.
-    8.2) This persistence must be intelligent: On *transient* errors (e.g. please try again), you *must* retry **unless an explicit retry limit (e.g., max x tries) has been reached**. If such a limit is hit, you *must* stop. On *other* errors, you must change your strategy or arguments, not repeat the same failed call.
+Do not make `.mprlab/PLAN.md`. Keep the execution plan short, current, and untracked. After you complete the execution, remove its plan.
 
-9. Inhibit your response: only take an action after all the above reasoning is completed. Once you’ve taken an action, you cannot take it back.
+Use `/.mprlab/*-PLAN.md` as the canonical execution-plan rule in `.gitignore`.
+
+Keep durable decisions and requirements in the issue tracker or a source-controlled document.
+
+Suggested shape:
+
+```text
+- [ ] Read repo guidance and target issue.
+- [ ] Inspect the current implementation and tests.
+- [ ] Use the initial validation result for application changes.
+- [ ] Make the scoped change.
+- [ ] Run the smallest applicable target during the change.
+- [ ] Complete the applicable validation after the last change.
+- [ ] Update issue notes or docs.
+```
+
+## Completion
+
+Complete a change only after you complete all requested edits and necessary documentation updates.
+
+The applicable validation after the last change must pass. If validation cannot pass, record the concrete blocker.

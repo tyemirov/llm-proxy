@@ -1,23 +1,33 @@
-# Confident Programming (Binding Policy for Agents)
+# Confident Programming
 
-## 0) One-page summary (operator rules)
+This policy controls all agent work in this repository.
 
-- Validate **only at edges** (I/O, HTTP, CLI, DB adapters). Core assumes valid domain objects.
-- **Make illegal states unrepresentable** via types and smart constructors.
-- **Fail fast** (dev) and **wrap errors with context** at boundaries (prod).
-- **Narrow interfaces**: accept domain types, not loose primitives, when a domain type exists.
-- **No duplicate checks** in core; once validated, don’t re-validate.
-- **No duplicated reusable literals**: define shared paths/keys/operation names/messages once and reference constants.
-- Tests target **contracts/invariants**, not defensive branches.
-- **Inverted test pyramid (integration-first)**: Bias hard toward black-box integration and end-to-end tests that exercise the real code path through public entry points (HTTP endpoints, CLI commands, browser flows).
-- **Integration tests only (default)**: Unit tests are prohibited for Go and Front-End/JS work. Python may allow narrow unit tests only when explicitly permitted by `AGENTS.PY.md`, and never as a substitute for black-box coverage of user-visible behavior.
-- We **strive for (approximately) 100% test coverage** achieved via those black-box integration/end-to-end suites, with CI enforcing an agreed threshold. If coverage drops, add scenarios at the public entry points.
+## Operator Rules
 
----
+- Validate only at edges: I/O, HTTP, CLI, DB adapters, browser bootstrap, imported files, and other external boundaries.
+- Design HTTP APIs as resource-oriented REST APIs. Use standard HTTP methods, status codes, and semantics.
+- For gRPC APIs, obey protobuf service and RPC conventions. REST constraints do not apply.
+- Make illegal states unrepresentable with domain types, smart constructors, dataclasses, enums, or closed action objects.
+- Fail fast on impossible states.
+- Wrap boundary errors with operation and subject context.
+- After boundary validation, do not repeat validation in core modules.
+- Keep interfaces narrow. Prefer domain types instead of loose strings, maps, booleans, or `any` values.
+- Centralize reusable literals: paths, operation names, event names, config keys, status values, and shared messages.
+- Tests target public contracts and invariants, not defensive branches.
+- Prefer black-box integration and end-to-end tests through real entry points.
+
+## Prohibited Patterns
+
+- Silent fallbacks, best-effort behavior, legacy aliases, and compatibility reads unless an explicit product requirement says the behavior is current.
+- Duplicated validation inside core modules.
+- Exporting invalid zero-values as usable domain objects.
+- Swallowing errors.
+- Increasing waits or timeouts as the primary fix for flakiness.
+- Boolean parameters that switch unrelated behaviors.
+- Hardcoded workflow, path, event, or message literals when a canonical constant or backend payload exists.
+- Unit tests as a substitute for public contract coverage.
 
 ## Validation
-
-This section controls when validation targets run.
 
 - Use repository-native `make` targets when available.
 - Use a satisfactory CI result only when the source code, tests, config, dependencies, and build files stay the same.
@@ -33,242 +43,54 @@ This section controls when validation targets run.
 - For `.mprlab/`-only work, run the Governor check and `git diff --check`.
 - These checks are the full validation for `.mprlab/`-only work.
 - For read-only work, use source facts and run only the necessary checks.
-- Other CI sections define the required contents and coverage.
+- For frontend behavior, verify through a browser test when the behavior is user-visible.
+- For services and CLIs, verify through HTTP, CLI, or public API entry points.
 
-## A. Hard rules (agent MUST follow)
+## Documentation Language
 
-1. Edge-only validation; core **assumes** valid domain objects.
-2. All domain entities created via **smart constructors**; exporting “zero-but-invalid” is **forbidden**.
-3. **No duplicated validation** inside core modules—remove it when found.
-4. **Narrow interfaces**: functions accept domain types (not `string`, `any`, bare `float64`, etc., when a domain type exists).
-5. Errors are **explicit and contextual**. Choices:
+- Write new or changed English technical prose in ASD-STE100 Simplified Technical English, Issue 9.
+- Read `.mprlab/AGENTS.DOCS.md` and `.mprlab/TERMINOLOGY.md` before you write technical prose.
+- Apply this rule to PRDs, architecture documents, issues, plans, policies, ADRs, READMEs, runbooks, and API documents.
+- Do not change technical meaning to make the language simpler.
+- Run the skill `prepare-ste-reference` script to retrieve and verify the official Issue 9 PDF.
+- Run the skill `check-ste` script on each technical document that you change.
+- The producing agent must review Part 1 writing rules and the Part 2 dictionary.
+- Do not assign the reference retrieval or language review to the end user.
+- If the official reference is not available, report a blocker and do not claim compliance.
 
-   - **Dev**: assert/panic for impossible states.
-   - **Prod boundary**: **wrap** with operation + subject + stable code.
-
-6. **No silent fallbacks** or “best-effort” paths unless a product requirement is cited in the commit.
-7. **Timeout inflation is forbidden as a fix**: do not increase test/runtime timeouts to mask failures. Fix the underlying logic/state contract first.
-8. **Centralize reusable constants**: repeated literals (paths, filenames, operation values, shared messages, config keys) MUST have a single canonical declaration.
-9. **Go constant source of truth**: shared literals MUST be exported from a reusable package and consumed via constants, not repeated string literals.
-10. **JS constant/payload rule**: UI logic MUST use shared constants or backend-provided payload values; avoid hardcoded workflow/path literals in feature code.
-
----
-
-## B. Invariants & contracts (declare per module)
-
-- **Preconditions**: truth required at entry.
-- **Postconditions**: guarantees on success.
-- **Invariants**: properties that can never be false for the type/module.
-- Each constructor MUST reject invalid state with a **typed/explicit** error.
-
----
-
-## C. Language targets (agent MUST implement)
+## Language Rules
 
 ### Go
 
-- Smart constructors returning `(Type, error)`; **no exported invalid zero-values**.
-- Typed/sentinel errors; wrap using `fmt.Errorf("%w: context", ErrX)`.
-- CI gates MUST pass via the repository `Makefile` targets (prefer `make ci`): `make lint` MUST run `go vet`, `staticcheck`, and `ineffassign`, and `make test` MUST run `go test`.
+- Use smart constructors returning `(Type, error)` when a type has invariants.
+- Do not export invalid zero-values.
+- Wrap errors with `%w`.
+- Prefer integration tests through real HTTP, CLI, or package entry points.
+- `make lint` must include `go vet`, `staticcheck`, and `ineffassign` when those tools are part of the repo contract.
 
 ### Python
 
-- `@dataclass(frozen=True)` or **Pydantic if already present**.
-- Validate in `__post_init__` (or Pydantic validators); raise `ValueError` subclasses.
-- CI gates MUST pass via the repository `Makefile` targets (prefer `make ci`): `make lint` MUST run `mypy --strict` (or `pyright` equivalent), and `make test` MUST run `pytest`.
+- Use `@dataclass(frozen=True)` or Pydantic when already in use.
+- Validate in constructors or edge adapters.
+- Use type hints throughout.
+- Prefer pytest scenarios through public entry points.
+- Unit tests are allowed only as narrow guardrails for pure deterministic helpers.
 
-### JavaScript (vanilla ESM + JSDoc; no build step)
+### JavaScript And Frontend
 
-- `// @ts-check` at top of every new/edited file.
-- JSDoc typedefs; factory functions **throw** on invalid input.
-- CI gates MUST pass via the repository `Makefile` targets (prefer `make ci`): `make lint` and/or `make test` MUST run `tsc --noEmit` (type-checking only) for edited files.
+- Put `// @ts-check` at the top of new or edited JavaScript modules when the repo uses checked JS.
+- Use JSDoc typedefs for domain objects and payload contracts.
+- Components render validated state and emit intent.
+- Backend clients own request construction and response validation.
+- User-visible behavior belongs in browser or integration coverage.
 
----
+## Self-Check
 
-## D. Prohibited patterns (auto-reject)
+Before claiming completion:
 
-- Adding unit tests in Go or Front-End/JS work.
-- Using unit tests as product-correctness coverage for externally observable behavior. If a behavior is user-visible, it must be covered via a black-box integration/end-to-end test through a public entry point (even if a stack allows narrow unit tests for pure helpers).
-- Tests that claim product correctness but bypass the real entry point (HTTP routing/middleware, CLI entrypoint, browser flow) as the only validation.
-- Exporting partially initialized/invalid structs/classes.
-- Swallowing errors (`catch {}` with no action; `if err == nil { /* ignore */ }`).
-- Re-validating a domain object already built by a smart constructor.
-- Adding "best-effort" fallback without a cited product requirement.
-- Boolean/flag parameters that conflate behaviors when a sum-type or distinct API is clearer.
-- Increasing timeouts/waits as the primary response to flakiness or failing behavior.
-- Repeating shared string literals across files when a canonical constant exists.
-- Hardcoding frontend workflow/path/message literals when the backend payload already provides those values.
-
----
-
-## M. Constants & Literals Centralization (binding)
-
-- Treat reusable literals as API: define once, reuse everywhere.
-- Canonical constants must be imported/consumed across packages/modules instead of retyping string literals.
-- For Go shared literals, prefer exported constants in a dedicated package (for example, `issuesspec`) and use those constants in runtime code and tests.
-- For JS/frontend flows, consume backend payload fields (`message`, `operation`, `confirmationMessage`, `contextDirectory`, etc.) and shared constants modules; do not reconstruct canonical strings inline.
-- Add/maintain automated guards that fail CI when protected literals appear outside their canonical source.
-
----
-
-## L. Timeout & waiting policy (binding)
-
-- Treat waits/timeouts as **diagnostic guards**, not correctness mechanisms.
-- For any timeout-related failure, first identify the missing precondition or stalled contract (API readiness, event delivery, state transition, lock release, etc.).
-- Required remediation order:
-1. Make the state transition explicit and observable.
-2. Gate on deterministic readiness signals.
-3. Remove or reduce blind waiting/retry loops.
-- Only after systemic remediation may timeout values be revisited, and only with a documented justification tied to an external constraint.
-
----
-
-## E. Agent patching protocol (order of operations)
-
-1. **Introduce or reuse** a domain type before changing service logic.
-2. **Move validation** from core into the nearest edge (handler/CLI/repo adapter).
-3. Replace ambiguous flags with **sum-type** style (Go: newtype + constants; Python/JS: literal unions).
-4. **Wrap errors** with operation + subject + stable code; do not couple core to HTTP/log formatting.
-5. **Delete redundant checks**; note removal in commit message: “removed interior validation (edge-validated)”.
-
----
-
-## F. CI gates (must wire or respect)
-
-- **Go:** `make lint` (must run `go vet`, `staticcheck`, `ineffassign`) and `make test` (or `make ci`).
-- **Python:** `make lint` (mypy/pyright) and `make test` (pytest), as wired in the repository.
-- **JS:** `make lint` and/or `make test` must include `tsc --noEmit` for edited files, with `// @ts-check` present in edited modules.
-- **Coverage:** CI MUST enforce a coverage gate aligned with the repo-wide testing philosophy in `AGENTS.md`—integration/black-box suites should drive effective coverage toward (approximately) 100% for code under test, and CI should fail when coverage drops below the agreed threshold.
-
-> Failing any gate = patch is not acceptable.
-
----
-
-## G. PR template checks (agent MUST tick)
-
-- [ ] Validation moved to edges; core free of re-checks
-- [ ] Domain types created/extended via smart constructors
-- [ ] Errors wrapped with operation + subject + stable code
-- [ ] No zero-but-invalid exports
-- [ ] Language CI gates pass (Go/Py/JS as applicable)
-
----
-
-## H. Agent self-check rubric (0/1 each; **must score 6/6**)
-
-1. All external inputs validated **exactly once** at edges.
-2. All core function params are **domain types**, not loose primitives.
-3. No defensive re-checks remain inside core.
-4. Every constructor rejects invalid state with a typed/explicit error.
-5. Every error path includes **operation + subject + stable code**.
-6. CI gates configured or confirmed passing for edited languages.
-
-If score < 6, agent MUST continue patching until score = 6.
-
----
-
-## I. Minimal boilerplate the agent MAY reuse
-
-### Go
-
-```go
-package domain
-
-import (
-	"errors"
-	"fmt"
-)
-
-var ErrInvalidExample = errors.New("invalid_example")
-
-type ExampleID string
-
-func NewExampleID(rawInput string) (ExampleID, error) {
-	if rawInput == "" {
-		return "", fmt.Errorf("%w: empty id", ErrInvalidExample)
-	}
-	return ExampleID(rawInput), nil
-}
-```
-
-### Python
-
-```python
-from dataclasses import dataclass
-
-class InvalidExample(ValueError):
-    pass
-
-@dataclass(frozen=True)
-class ExampleId:
-    value: str
-    def __post_init__(self) -> None:
-        if not self.value:
-            raise InvalidExample("empty id")
-```
-
-### JavaScript (ESM + JSDoc)
-
-/_ @ts-check _/
-
-```js
-/**
- * @typedef {{ value: string }} ExampleId
- */
-
-/**
- * @param {string} rawInput
- * @returns {ExampleId}
- */
-export function createExampleId(rawInput) {
-  const normalized = String(rawInput).trim();
-  if (!normalized) throw new Error("invalid_example: empty id");
-  return { value: normalized };
-}
-```
-
----
-
-## J. Commit message template (agent MUST use)
-
-```
-feat(domain): introduce {DomainType} smart constructor; move validation to edge
-
-- add {DomainType} with invariants: {list}
-- adapt handlers/adapters to construct at edges
-- remove interior defensive checks (validated once at boundary)
-- wrap errors with operation+subject+stable code (e.g., user.create.invalid_email)
-- CI: `make fmt`, `make lint`, `make test` (or `make ci`) passing
-```
-
----
-
-## K. Example edge→core flow (reference)
-
-1. **Edge** (HTTP/CLI/Repo): parse → validate → construct domain types.
-2. **Core** (services/domain): operate only on domain types; no re-validation.
-3. **Boundary**: map domain/infra errors to stable codes and user-facing messages.
-
----
-
-### Notes for agents
-
-- Prefer **static guarantees** over runtime checks.
-- If you must catch and continue, include a **product requirement citation** and justification.
-- Do not introduce new dependencies unless an existing project standard already includes them.
-
----
-
-### CI snippets
-
-Run the repo's CI gates via `make` (preferred) and always prefix commands with `timeout`:
-
-```sh
-# Full suite (preferred when available)
-timeout -k 350s -s SIGKILL 350s make ci
-
-# Per-target (when you need to isolate failures)
-timeout -k 30s -s SIGKILL 30s make fmt
-timeout -k 30s -s SIGKILL 30s make lint
-timeout -k 350s -s SIGKILL 350s make test
-```
+- External inputs are validated once at the edge.
+- Core modules consume validated domain values.
+- Error paths include operation and subject context.
+- Reusable literals are centralized.
+- Public behavior is covered through public entry points.
+- Repo-native validation was run or a concrete blocker is documented.

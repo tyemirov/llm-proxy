@@ -2,79 +2,37 @@
 
 ## Scope
 
-Backend guidance for Python code. Follow AGENTS.md for repo-wide policies, documentation rules, and workflow expectations.
+This file gives backend rules for Python code. Obey root `AGENTS.md` and `.mprlab/POLICY.md` for shared workflow rules.
 
-## Backend (Python)
+## Core Principles
 
-### Core Principles
+- Reuse existing modules first.
+- Prefer data-driven registries and explicit domain types instead of branching.
+- Use `@dataclass(frozen=True)` or Pydantic when already in use for validated domain values.
+- Keep logic small, typed, and testable through public entry points.
+- Inject files, network, randomness, time, and environment access.
+- Validate at CLI, HTTP, file, and adapter edges.
 
-- Reuse existing modules first; extend or adapt before writing new code.
-- Generalize existing implementations rather than duplicating logic.
-- Favor **data-driven** solutions (maps, registries, configuration) over imperative branching.
-- Encapsulate domain rules in **dataclasses** or dedicated classes with clear invariants.
-- Keep functions small, pure, and composable; separate logic from I/O.
-- Inject all external dependencies (files, network, randomness, time). No hidden globals.
-- Treat inputs as immutable; always return new values instead of mutating.
-- Minimal public API surface; expose only one clear solution.
-- For validation, error handling, and invariants, follow **POLICY.md (Confident Programming)**.
+## Code Style
 
----
+- Use type hints.
+- Use descriptive identifiers.
+- Lift repeated literals into constants.
+- Use module, class, and function docstrings where they clarify public behavior.
+- Use `logging`. Do not leave stray `print` calls in libraries.
+- Raise explicit exceptions for domain validation failures.
 
-### Code Style
+## Testing
 
-- Descriptive identifiers only; no single-letter names.
-- Use `@dataclass(frozen=True)` for immutable domain types.
-- Validation happens in `__post_init__` or via Pydantic (if already in use).
-- Raise `ValueError` subclasses for domain validation errors.
-- Lift repeated string literals to constants.
-- Module docstrings and class/function docstrings required; no inline comments.
-- Use type hints everywhere; keep strict type checking and run it via the repo `Makefile` (for example, `make lint`).
-- Logging through standard `logging` module; no stray `print`.
+- Use pytest.
+- Prefer black-box integration tests through CLI, HTTP, or public package entry points.
+- Use fixtures and `tmp_path` to isolate side effects.
+- Unit tests are allowed only as narrow guardrails for pure deterministic helpers and never as replacement coverage for user-visible behavior.
 
----
+## Validation
 
-### Project Structure
+Use `.mprlab/POLICY.md` for validation.
 
-- `app/` or `src/` as top-level application package.
-- `domain/` for core business objects and invariants.
-- `infrastructure/` for DB, network, and OS integration.
-- `services/` for orchestration logic using domain + infra.
+During the change, run the smallest Python target that validates the changed contract.
 
----
-
-### Configuration & CLI
-
-- Use `argparse` or `typer` for CLI.
-- Read configuration from environment or `.env` files.
-- Validate configuration up front (edge validation).
-
----
-
-### Dependencies
-
-- Prefer standard library; third-party libraries require explicit approval.
-- Allowed: `dataclasses`, `typing`, `pydantic` (optional), `pytest`, `mypy`.
-
----
-
-### Testing
-
-- Follows the repo-wide **Testing Philosophy** in `AGENTS.md`: inverted test pyramid, coverage driven by black-box integration/end-to-end scenarios through public entry points and trending toward (approximately) 100% with an agreed CI threshold; unit tests are discouraged and allowed only as narrow guardrails.
-- Use `pytest` for black-box integration/end-to-end tests; parameterize cases to cover scenario matrices without drifting into unit-test-only coverage.
-- Isolate side effects with fixtures.
-- Use `tmp_path` for filesystem operations (no pollution).
-- Black-box: test only public API contracts.
-- Use `.mprlab/POLICY.md` for validation.
-- The `make ci` target must include the required type and test checks.
-
----
-
-### Review Checklist
-
-- [ ] Reused/extended existing code.
-- [ ] Domain objects created via smart constructors or dataclasses with invariants.
-- [ ] No duplicated validation inside core.
-- [ ] Constants used for repeated strings.
-- [ ] Clear type hints, no single-letter identifiers.
-- [ ] Config validated at startup.
-- [ ] The applicable validation in `.mprlab/POLICY.md` passes.
+When the repository contract includes it, lint must run mypy or pyright for typed Python surfaces.
