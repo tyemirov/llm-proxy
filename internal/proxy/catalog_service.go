@@ -194,6 +194,7 @@ func cloneProviderOffering(offering ProviderOffering) ProviderOffering {
 	cloned.Operations = append([]string(nil), offering.Operations...)
 	cloned.DefaultOperations = append([]string(nil), offering.DefaultOperations...)
 	cloned.MediaInputs = append([]string(nil), offering.MediaInputs...)
+	cloned.MediaLimits = cloneCatalogMediaLimits(offering.MediaLimits)
 	if offering.ReasoningEffort != nil {
 		cloned.ReasoningEffort = &ReasoningEffortCapability{
 			Adapter: offering.ReasoningEffort.Adapter,

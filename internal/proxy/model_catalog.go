@@ -92,6 +92,7 @@ type ProviderOffering struct {
 	OutputTokenLimit   int                        `mapstructure:"output_token_limit"`
 	ReasoningEffort    *ReasoningEffortCapability `mapstructure:"reasoning_effort"`
 	MediaInputs        []string                   `mapstructure:"media_inputs"`
+	MediaLimits        []CatalogMediaLimit        `mapstructure:"media_limits"`
 	Controls           []CatalogControl           `mapstructure:"controls"`
 	Limits             []CatalogLimit             `mapstructure:"limits"`
 }
@@ -383,6 +384,9 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 				return fmt.Errorf("%w: field=%s.media_inputs media_input=%s reason=unsupported_by_model", ErrInvalidModelCatalog, fieldPrefix, mediaInput)
 			}
 		}
+		if mediaLimitError := validateCatalogMediaLimits(offering.MediaLimits, offering.MediaInputs, fieldPrefix+".media_limits"); mediaLimitError != nil {
+			return mediaLimitError
+		}
 		catalog.offerings[offeringIdentifier] = offering
 	}
 	for provider, operations := range providerOperations {
@@ -407,7 +411,7 @@ func validateDictationOffering(offering ProviderOffering, fieldPrefix string) er
 	if offering.WireContract != CatalogWireContractMultipartTranscription || offering.ExecutionLifecycle != string(textExecutionLifecycleSynchronousCompletion) {
 		return fmt.Errorf("%w: field=%s reason=unsupported_dictation_route", ErrInvalidModelCatalog, fieldPrefix)
 	}
-	if offering.RequestProfile != constants.EmptyString || offering.WebSearch || offering.OutputTokenLimit != 0 || offering.ReasoningEffort != nil || len(offering.MediaInputs) != 0 || len(offering.Controls) != 0 || len(offering.Limits) != 0 {
+	if offering.RequestProfile != constants.EmptyString || offering.WebSearch || offering.OutputTokenLimit != 0 || offering.ReasoningEffort != nil || len(offering.MediaInputs) != 0 || len(offering.MediaLimits) != 0 || len(offering.Controls) != 0 || len(offering.Limits) != 0 {
 		return fmt.Errorf("%w: field=%s reason=text_capabilities_on_dictation_route", ErrInvalidModelCatalog, fieldPrefix)
 	}
 	return nil

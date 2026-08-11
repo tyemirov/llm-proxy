@@ -346,7 +346,14 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 		}
 	})
 
-	t.Run("v2 json body rejects oversized payload", func(subTest *testing.T) {
+	t.Run("v2 json body is independent from the compatibility prompt limit", func(subTest *testing.T) {
+		upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, _ *http.Request) {
+			responseWriter.Header().Set("Content-Type", "application/json")
+			_, _ = responseWriter.Write([]byte(`{"status":"completed","output_text":"accepted"}`))
+		}))
+		defer upstreamServer.Close()
+		endpoints := proxy.NewEndpoints()
+		endpoints.SetResponsesURL(upstreamServer.URL)
 		smallRouter := coverageRouter(subTest, proxy.Configuration{
 			Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
 			OpenAIKey:             TestAPIKey,
@@ -355,12 +362,13 @@ func TestCoverageFormatsAndRequestEdges(t *testing.T) {
 			QueueSize:             1,
 			RequestTimeoutSeconds: TestTimeout,
 			MaxPromptBytes:        4,
+			Endpoints:             endpoints,
 		})
 		request := httptest.NewRequest(http.MethodPost, "/v2?key="+TestSecret, strings.NewReader(`{"messages":[{"role":"user","content":"hello"}]}`))
 		request.Header.Set("Content-Type", "application/json")
 		responseRecorder := httptest.NewRecorder()
 		smallRouter.ServeHTTP(responseRecorder, request)
-		if responseRecorder.Code != http.StatusRequestEntityTooLarge {
+		if responseRecorder.Code != http.StatusOK {
 			subTest.Fatalf("status=%d body=%s", responseRecorder.Code, responseRecorder.Body.String())
 		}
 	})

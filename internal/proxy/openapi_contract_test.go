@@ -2,6 +2,8 @@ package proxy_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -97,7 +99,7 @@ func TestOpenAPIContractDocumentsActualAuthenticationBoundaries(t *testing.T) {
 	for _, operation := range operations {
 		expectedSecurity := [][]string{{"TAuthSession"}}
 		switch operation.Path {
-		case "/", "/v2", "/dictate":
+		case "/", "/v2", "/dictate", "/model/v1/assets", "/model/v1/assets/{asset_id}":
 			expectedSecurity = [][]string{{"TenantClientKey"}}
 		case proxy.ManagementConfigUIPath, proxy.PublicCapabilitiesPath:
 			expectedSecurity = [][]string{}
@@ -163,6 +165,16 @@ func TestOpenAPIContractEnforcesV2MediaRelationships(t *testing.T) {
 			wantValid: true,
 		},
 		{
+			name:      "user image asset attachment",
+			body:      `{"messages":[{"role":"user","content":"Describe the image.","attachments":[{"type":"image","mime_type":"image/png","asset_id":"ast_0123456789abcdef0123456789abcdef","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
+			wantValid: true,
+		},
+		{
+			name:      "user audio asset attachment",
+			body:      `{"messages":[{"role":"user","content":"Transcribe the audio.","attachments":[{"type":"audio","mime_type":"audio/wav","asset_id":"ast_0123456789abcdef0123456789abcdef","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
+			wantValid: true,
+		},
+		{
 			name:      "assistant text",
 			body:      `{"messages":[{"role":"assistant","content":"Text only."}]}`,
 			wantValid: true,
@@ -174,6 +186,10 @@ func TestOpenAPIContractEnforcesV2MediaRelationships(t *testing.T) {
 		{
 			name: "system attachment",
 			body: `{"messages":[{"role":"system","content":"Reject attached system media.","attachments":[{"type":"image","mime_type":"image/png","data":"YQ==","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
+		},
+		{
+			name: "attachment with data and asset id",
+			body: `{"messages":[{"role":"user","content":"Reject conflicting media.","attachments":[{"type":"image","mime_type":"image/png","data":"YQ==","asset_id":"ast_0123456789abcdef0123456789abcdef","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]}]}`,
 		},
 	}
 
@@ -191,6 +207,42 @@ func TestOpenAPIContractEnforcesV2MediaRelationships(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOpenAPIContractValidatesTenantAssetUploadAndDeleteExchanges(t *testing.T) {
+	contract, loadError := openapitest.Load(filepath.Join("..", "..", openapitest.CanonicalDocumentPath))
+	if loadError != nil {
+		t.Fatalf("load canonical OpenAPI contract: %v", loadError)
+	}
+	router, buildError := buildRouterWithCatalogs(t, proxy.Configuration{
+		Tenants:        proxy.SingleTenantConfigurations("asset-contract", TestSecret),
+		OpenAIKey:      TestAPIKey,
+		AssetStorePath: t.TempDir(),
+	}, nil)
+	if buildError != nil {
+		t.Fatalf("BuildRouter error: %v", buildError)
+	}
+	assetBytes := []byte("openapi-asset")
+	digest := sha256.Sum256(assetBytes)
+	uploadRequest := httptest.NewRequest(http.MethodPost, "/model/v1/assets?key="+TestSecret, bytes.NewReader(assetBytes))
+	uploadRequest.Header.Set("Content-Type", "image/png")
+	uploadRequest.Header.Set("X-LLM-Proxy-Asset-SHA256", hex.EncodeToString(digest[:]))
+	assertOpenAPIRequest(t, contract, "/model/v1/assets", uploadRequest, assetBytes)
+	uploadResponse := httptest.NewRecorder()
+	router.ServeHTTP(uploadResponse, uploadRequest)
+	assertOpenAPIResponse(t, contract, "/model/v1/assets", http.MethodPost, uploadResponse)
+	var asset struct {
+		AssetID string `json:"asset_id"`
+	}
+	if decodeError := json.Unmarshal(uploadResponse.Body.Bytes(), &asset); decodeError != nil || asset.AssetID == "" {
+		t.Fatalf("asset response=%s error=%v", uploadResponse.Body.String(), decodeError)
+	}
+	deletePath := "/model/v1/assets/" + asset.AssetID
+	deleteRequest := httptest.NewRequest(http.MethodDelete, deletePath+"?key="+TestSecret, nil)
+	assertOpenAPIRequest(t, contract, "/model/v1/assets/{asset_id}", deleteRequest, nil)
+	deleteResponse := httptest.NewRecorder()
+	router.ServeHTTP(deleteResponse, deleteRequest)
+	assertOpenAPIResponse(t, contract, "/model/v1/assets/{asset_id}", http.MethodDelete, deleteResponse)
 }
 
 func TestOpenAPIContractValidatesRepresentativeRealHTTPExchanges(t *testing.T) {

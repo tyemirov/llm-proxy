@@ -733,7 +733,7 @@ func TestManagementUsageFailuresExposeSafeCanonicalRowsWithStableSnapshotPaginat
 		{
 			request: httptest.NewRequest(
 				http.MethodPost,
-				"/v2?key="+secretQuery,
+				"/?key="+secretQuery,
 				bytes.NewBufferString(`{"messages":[{"role":"user","content":"payload that exceeds the configured request boundary"}]}`),
 			),
 			wantStatus: http.StatusRequestEntityTooLarge,

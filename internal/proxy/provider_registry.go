@@ -57,6 +57,7 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 				hasOutputTokenLimit: offering.OutputTokenLimit > 0,
 				reasoningEffort:     configuredReasoningEffortCapability(offering.ReasoningEffort),
 				mediaInputs:         configuredMediaInputSet(offering.MediaInputs),
+				mediaLimits:         cloneCatalogMediaLimits(offering.MediaLimits),
 			}
 			if offeringDefaultsOperation(offering, ModelOperationText) {
 				definition.defaultTextModel = modelID(offering.Model)

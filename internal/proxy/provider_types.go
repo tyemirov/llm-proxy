@@ -267,6 +267,7 @@ type textModelDefinition struct {
 	hasOutputTokenLimit bool
 	reasoningEffort     *reasoningEffortCapability
 	mediaInputs         map[messageMediaType]struct{}
+	mediaLimits         []CatalogMediaLimit
 }
 
 func (definition textModelDefinition) string() string {

@@ -22,6 +22,8 @@ var (
 	ErrProviderRateLimited = errors.New(errorProviderRateLimited)
 	// ErrProviderAPI is returned when an upstream provider returns an unsuccessful response.
 	ErrProviderAPI = errors.New(errorProviderAPI)
+	// ErrProviderMediaLimit is returned when media exceeds the selected provider offering limit.
+	ErrProviderMediaLimit = errors.New("provider media limit exceeded")
 	// ErrInvalidChatMessages is returned when a JSON request body contains invalid chat messages.
 	ErrInvalidChatMessages = errors.New(errorInvalidChatMessages)
 	// ErrInvalidModelCatalog is returned when configured provider model catalogs are incomplete or inconsistent.
@@ -45,6 +47,15 @@ func newProviderHTTPError(statusCode int, responseHeader http.Header) error {
 		statusCode:    statusCode,
 		retryAfter:    sanitizedRetryAfter(responseHeader.Get("Retry-After")),
 		retryableHint: retryableProviderStatus(statusCode),
+	}
+}
+
+func newProviderMediaLimitHTTPError(statusCode int, responseHeader http.Header) error {
+	return &providerHTTPError{
+		error:         ErrProviderMediaLimit,
+		statusCode:    statusCode,
+		retryAfter:    sanitizedRetryAfter(responseHeader.Get("Retry-After")),
+		retryableHint: false,
 	}
 }
 

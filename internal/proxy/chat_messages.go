@@ -73,8 +73,13 @@ func newPayloadChatMessages(payloadMessages []chatMessagePayload, defaultSystemP
 	return newCandidateChatMessages(candidates, defaultSystemPrompt, requestSystemPrompt)
 }
 
-func newV2PayloadChatMessages(payloadMessages []chatV2MessagePayload, defaultSystemPrompt string) (chatMessages, error) {
+func newV2PayloadChatMessages(payloadMessages []chatV2MessagePayload, defaultSystemPrompt string, requestTenant tenant, assetStore *tenantAssetStore) (messages chatMessages, messagesError error) {
 	candidates := make([]chatMessageCandidate, 0, len(payloadMessages))
+	defer func() {
+		if messagesError != nil {
+			chatMessagesFromCandidates(candidates).closeMedia()
+		}
+	}()
 	for messageIndex, payloadMessage := range payloadMessages {
 		attachmentPayloads, attachmentsError := decodeChatMessageAttachments(payloadMessage.Attachments)
 		if attachmentsError != nil {
@@ -82,8 +87,9 @@ func newV2PayloadChatMessages(payloadMessages []chatV2MessagePayload, defaultSys
 		}
 		attachments := make([]messageMedia, 0, len(attachmentPayloads))
 		for attachmentIndex, attachmentPayload := range attachmentPayloads {
-			attachment, attachmentError := newMessageMedia(attachmentPayload)
+			attachment, attachmentError := newMessageMedia(attachmentPayload, requestTenant, assetStore)
 			if attachmentError != nil {
+				candidates = append(candidates, chatMessageCandidate{attachments: attachments})
 				return nil, fmt.Errorf("messages[%d].attachments[%d]: %w", messageIndex, attachmentIndex, attachmentError)
 			}
 			attachments = append(attachments, attachment)
@@ -96,6 +102,14 @@ func newV2PayloadChatMessages(payloadMessages []chatV2MessagePayload, defaultSys
 		})
 	}
 	return newCandidateChatMessages(candidates, defaultSystemPrompt, constants.EmptyString)
+}
+
+func chatMessagesFromCandidates(candidates []chatMessageCandidate) chatMessages {
+	messages := make(chatMessages, 0, len(candidates))
+	for _, candidate := range candidates {
+		messages = append(messages, chatMessage{attachments: candidate.attachments})
+	}
+	return messages
 }
 
 func decodeChatMessageAttachments(rawAttachments json.RawMessage) ([]chatMessageAttachmentPayload, error) {
