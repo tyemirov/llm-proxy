@@ -1,15 +1,15 @@
 // @ts-check
 
-import { COPY, NOTICE_KINDS } from "../constants.js?v=20260809i217";
+import { COPY, NOTICE_KINDS } from "../constants.js?v=20260811b130";
 import {
   removeProviderKey as requestRemoveProviderKey,
   revealProviderKey as requestRevealProviderKey,
-} from "../core/backendClient.js?v=20260809i217";
+} from "../core/backendClient.js?v=20260811b130";
 import {
   isAbortError,
   profileFailureMessage,
   profileProvider,
-} from "../core/managementProfile.js?v=20260809i217";
+} from "../core/managementProfile.js?v=20260811b130";
 
 const EMPTY_STRING = "";
 const MASKED_PROVIDER_KEY_PREFIX = "****";

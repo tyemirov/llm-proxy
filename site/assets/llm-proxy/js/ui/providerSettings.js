@@ -5,12 +5,12 @@ import {
   COPY,
   NOTICE_KINDS,
   PROVIDER_KEY_VERIFICATION_ERRORS,
-} from "../constants.js?v=20260809i217";
-import { saveProviderKey as requestSaveProviderKey } from "../core/backendClient.js?v=20260809i217";
+} from "../constants.js?v=20260811b130";
+import { saveProviderKey as requestSaveProviderKey } from "../core/backendClient.js?v=20260811b130";
 import {
   isAbortError,
   profileFailureMessage,
-} from "../core/managementProfile.js?v=20260809i217";
+} from "../core/managementProfile.js?v=20260811b130";
 
 const EMPTY_STRING = "";
 
@@ -77,7 +77,7 @@ export function createProviderSettingsResponsibility() {
         if (!lifetimeController) {
           return false;
         }
-        const verifiesCandidate = apiKey !== EMPTY_STRING;
+        const verifiesCandidate = apiKey !== EMPTY_STRING || editorSession.baseURL.trim() !== provider.base_url;
         let requestSignal = lifetimeController.signal;
         /** @type {AbortController | null} */
         let verificationController = null;
@@ -110,6 +110,7 @@ export function createProviderSettingsResponsibility() {
               tenantID,
               providerID,
               apiKey,
+              editorSession.baseURL.trim(),
               editorSession.textModel,
               editorSession.systemPrompt,
               requestSignal,

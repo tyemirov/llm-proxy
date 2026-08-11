@@ -1,6 +1,6 @@
 // @ts-check
 
-import { MPR_UI } from "../constants.js?v=20260809i217";
+import { MPR_UI } from "../constants.js?v=20260811b130";
 
 const MANAGEMENT_BASE_PATH = "/api/management";
 const HEADER_CONTENT_TYPE = "Content-Type";
@@ -157,15 +157,16 @@ export function fetchAdminUsers() {
  * @param {string} tenantID
  * @param {string} provider
  * @param {string} apiKey
+ * @param {string} baseURL
  * @param {string} textModel
  * @param {string} systemPrompt
  * @param {AbortSignal} [signal]
  * @returns {Promise<import("../types.d.js").ManagementTenantProfile>}
  */
-export function saveProviderKey(tenantID, provider, apiKey, textModel, systemPrompt, signal) {
+export function saveProviderKey(tenantID, provider, apiKey, baseURL, textModel, systemPrompt, signal) {
   return requestJSON(`${managementTenantPath(tenantID)}/provider-keys/${encodeURIComponent(provider)}`, {
     method: "PUT",
-    body: { api_key: apiKey, text_model: textModel, system_prompt: systemPrompt },
+    body: { api_key: apiKey, base_url: baseURL, text_model: textModel, system_prompt: systemPrompt },
     signal,
   });
 }

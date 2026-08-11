@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="8db5f2e1ba42fdaf9ddd28eda8ccb8f2c0dee460addbb035adafd097c7fa2b32">
+    <meta name="openapi-source-sha256" content="5785709beb1ce3fcabb47c46003f2e902b2a6a8a36d445a4cd4aaa642597a4e7">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="8db5f2e1ba42fdaf9ddd28eda8ccb8f2c0dee460addbb035adafd097c7fa2b32">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="5785709beb1ce3fcabb47c46003f2e902b2a6a8a36d445a4cd4aaa642597a4e7">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -49,7 +49,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>8db5f2e1ba42fdaf9ddd28eda8ccb8f2c0dee460addbb035adafd097c7fa2b32</code></span>
+          <span>Source SHA-256 <code>5785709beb1ce3fcabb47c46003f2e902b2a6a8a36d445a4cd4aaa642597a4e7</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -521,7 +521,7 @@ paths:
     put:
       operationId: putManagementProviderKey
       summary: Verify and save provider settings and a provider credential
-      description: A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider and text model under the management request context and shared upstream admission/rate-limit boundary. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential while updating settings without reverification.
+      description: A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider, text model, and provider base URL under the management request context and shared upstream admission/rate-limit boundary. Changing a saved DashScope base_url also verifies the retained key against the new URL. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential.
       tags:
         - Management
       security:
@@ -1999,12 +1999,16 @@ components:
       additionalProperties: false
       required:
         - api_key
+        - base_url
         - text_model
         - system_prompt
       properties:
         api_key:
           type: string
-          description: An unverified new or replacement provider key. A nonempty value is verified against the exact path provider and selected text_model before any persistence. Send an empty string to retain the tenant&#39;s existing verified credential while updating its provider model or system prompt; an empty value is rejected when no credential exists.
+          description: An unverified new or replacement provider key. A nonempty value is verified against the exact path provider, selected text_model, and submitted base_url before any persistence. Send an empty string to retain the tenant&#39;s existing verified credential; an empty value is rejected when no credential exists.
+        base_url:
+          type: string
+          description: Exact tenant-owned Singapore Model Studio URL for dashscope. It must use https://{resource-id}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1. It must be empty for every other provider.
         text_model:
           type: string
           minLength: 1
@@ -2170,6 +2174,7 @@ components:
         - label
         - aliases
         - has_key
+        - base_url
         - text_model
         - system_prompt
         - text_default_model
@@ -2189,6 +2194,9 @@ components:
           type: boolean
         masked_key:
           type: string
+        base_url:
+          type: string
+          description: Saved tenant-owned DashScope API URL, or empty for an unconfigured DashScope provider and every other provider.
         text_model:
           type: string
         system_prompt:
@@ -3107,7 +3115,7 @@ components:
           <span class="api-operation-id">putManagementProviderKey</span>
         </header>
         <h2>Verify and save provider settings and a provider credential</h2>
-        <p>A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider and text model under the management request context and shared upstream admission/rate-limit boundary. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential while updating settings without reverification.</p>
+        <p>A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider, text model, and provider base URL under the management request context and shared upstream admission/rate-limit boundary. Changing a saved DashScope base_url also verifies the retained key against the new URL. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential.</p>
         <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
         <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
         <div class="api-contract-block">
@@ -3129,7 +3137,8 @@ components:
             <table>
               <thead><tr><th>Field</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
               <tbody>
-                <tr><td><code>api_key</code></td><td>Yes</td><td>string</td><td>An unverified new or replacement provider key. A nonempty value is verified against the exact path provider and selected text_model before any persistence. Send an empty string to retain the tenant&#39;s existing verified credential while updating its provider model or system prompt; an empty value is rejected when no credential exists.</td></tr>
+                <tr><td><code>api_key</code></td><td>Yes</td><td>string</td><td>An unverified new or replacement provider key. A nonempty value is verified against the exact path provider, selected text_model, and submitted base_url before any persistence. Send an empty string to retain the tenant&#39;s existing verified credential; an empty value is rejected when no credential exists.</td></tr>
+<tr><td><code>base_url</code></td><td>Yes</td><td>string</td><td>Exact tenant-owned Singapore Model Studio URL for dashscope. It must use https://{resource-id}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1. It must be empty for every other provider.</td></tr>
 <tr><td><code>text_model</code></td><td>Yes</td><td>string</td><td></td></tr>
 <tr><td><code>system_prompt</code></td><td>Yes</td><td>string</td><td></td></tr>
               </tbody>

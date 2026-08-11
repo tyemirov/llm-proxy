@@ -4,7 +4,7 @@ import {
   APP_INTEGRITY_ERROR,
   COPY,
   ROUTING_DEFAULTS_INVALID_ERROR,
-} from "../constants.js?v=20260809i217";
+} from "../constants.js?v=20260811b130";
 
 const EMPTY_STRING = "";
 const TENANT_NAME_MAXIMUM_CHARACTERS = 80;

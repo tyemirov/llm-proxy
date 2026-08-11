@@ -4,10 +4,10 @@ import {
   COPY,
   DASHBOARD_VIEWS,
   NOTICE_KINDS,
-} from "../constants.js?v=20260809i217";
-import { fetchAdminUsers } from "../core/backendClient.js?v=20260809i217";
-import { formatNumber } from "./usageFailurePresentation.js?v=20260809i217";
-import { successRateLabel } from "./usagePresentation.js?v=20260809i217";
+} from "../constants.js?v=20260811b130";
+import { fetchAdminUsers } from "../core/backendClient.js?v=20260811b130";
+import { formatNumber } from "./usageFailurePresentation.js?v=20260811b130";
+import { successRateLabel } from "./usagePresentation.js?v=20260811b130";
 
 /** @typedef {ReturnType<typeof import("./managementApplicationState.js").createManagementApplicationState>} ManagementApplicationState */
 /** @typedef {ManagementApplicationState & {

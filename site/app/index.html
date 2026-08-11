@@ -28,8 +28,8 @@
       type="application/json"
       data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"
     ></script>
-    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260809i217"></script>
-    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260809i217"></script>
+    <script type="module" src="/assets/llm-proxy/js/startupGuard.js?v=20260811b130"></script>
+    <script id="llm-proxy-application-module" type="module" src="/assets/llm-proxy/js/app.js?v=20260811b130"></script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body x-data="llmProxyManagementApplication" x-init="init()">
@@ -738,6 +738,19 @@
                               </template>
                             </select>
                           </provider-model-field>
+                          <provider-base-url-field x-show="selectedProvider.id === 'dashscope'">
+                            <label for="provider-base-url-input" x-text="copy.providerBaseURL"></label>
+                            <input
+                              id="provider-base-url-input"
+                              type="url"
+                              autocomplete="url"
+                              x-bind:value="providerEditorSession.baseURL"
+                              x-on:input="handleSelectedProviderBaseURLInput($event)"
+                              x-on:change="autosaveSelectedProvider()"
+                              x-bind:disabled="settingsControlsDisabled || providerKeyRevealPending"
+                            >
+                            <p class="field-hint" x-text="copy.providerBaseURLHint"></p>
+                          </provider-base-url-field>
                           <details
                             class="provider-system-prompt system-prompt-disclosure"
                             x-bind:open="providerSystemPromptOpen"
