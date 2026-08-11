@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="5785709beb1ce3fcabb47c46003f2e902b2a6a8a36d445a4cd4aaa642597a4e7">
+    <meta name="openapi-source-sha256" content="10884193feb1e24d84a8334498a3f3f4be0e05bc7362ab1c64b9fb10216f7145">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="5785709beb1ce3fcabb47c46003f2e902b2a6a8a36d445a4cd4aaa642597a4e7">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="10884193feb1e24d84a8334498a3f3f4be0e05bc7362ab1c64b9fb10216f7145">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -49,7 +49,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>5785709beb1ce3fcabb47c46003f2e902b2a6a8a36d445a4cd4aaa642597a4e7</code></span>
+          <span>Source SHA-256 <code>10884193feb1e24d84a8334498a3f3f4be0e05bc7362ab1c64b9fb10216f7145</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -521,7 +521,7 @@ paths:
     put:
       operationId: putManagementProviderKey
       summary: Verify and save provider settings and a provider credential
-      description: A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider, text model, and provider base URL under the management request context and shared upstream admission/rate-limit boundary. Changing a saved DashScope base_url also verifies the retained key against the new URL. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential.
+      description: A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider, text model, and provider base URL under the management request context and shared upstream admission/rate-limit boundary. Changing a saved DashScope base_url also verifies the retained key against the new URL. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential. The operation returns 409 without a mutation if that retained credential changes before the verified update can persist.
       tags:
         - Management
       security:
@@ -544,6 +544,8 @@ paths:
           $ref: &#39;#/components/responses/ManagementForbidden&#39;
         &#39;404&#39;:
           $ref: &#39;#/components/responses/ManagementNotFound&#39;
+        &#39;409&#39;:
+          $ref: &#39;#/components/responses/ManagementConflict&#39;
         &#39;415&#39;:
           $ref: &#39;#/components/responses/ManagementUnsupportedMediaType&#39;
         &#39;422&#39;:
@@ -1082,7 +1084,7 @@ components:
     ManagementNotFound:
       description: The tenant or provider credential does not exist within the authenticated ownership boundary.
     ManagementConflict:
-      description: The requested tenant name conflicts or the final owned tenant cannot be deleted.
+      description: The requested tenant name conflicts, the final owned tenant cannot be deleted, or a retained provider credential changed after verification began.
       content:
         text/plain:
           schema:
@@ -2876,7 +2878,7 @@ components:
 <tr><td><code>400</code></td><td>text/plain</td><td>none</td><td>Malformed or invalid management input.</td></tr>
 <tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
 <tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
-<tr><td><code>409</code></td><td>text/plain</td><td>none</td><td>The requested tenant name conflicts or the final owned tenant cannot be deleted.</td></tr>
+<tr><td><code>409</code></td><td>text/plain</td><td>none</td><td>The requested tenant name conflicts, the final owned tenant cannot be deleted, or a retained provider credential changed after verification began.</td></tr>
 <tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
 <tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
               </tbody>
@@ -2916,7 +2918,7 @@ components:
 <tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
 <tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
 <tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
-<tr><td><code>409</code></td><td>text/plain</td><td>none</td><td>The requested tenant name conflicts or the final owned tenant cannot be deleted.</td></tr>
+<tr><td><code>409</code></td><td>text/plain</td><td>none</td><td>The requested tenant name conflicts, the final owned tenant cannot be deleted, or a retained provider credential changed after verification began.</td></tr>
 <tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
 <tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
               </tbody>
@@ -3003,7 +3005,7 @@ components:
 <tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
 <tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
 <tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
-<tr><td><code>409</code></td><td>text/plain</td><td>none</td><td>The requested tenant name conflicts or the final owned tenant cannot be deleted.</td></tr>
+<tr><td><code>409</code></td><td>text/plain</td><td>none</td><td>The requested tenant name conflicts, the final owned tenant cannot be deleted, or a retained provider credential changed after verification began.</td></tr>
 <tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
 <tr><td><code>500</code></td><td>text/plain</td><td>none</td><td>The management operation failed internally.</td></tr>
               </tbody>
@@ -3115,7 +3117,7 @@ components:
           <span class="api-operation-id">putManagementProviderKey</span>
         </header>
         <h2>Verify and save provider settings and a provider credential</h2>
-        <p>A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider, text model, and provider base URL under the management request context and shared upstream admission/rate-limit boundary. Changing a saved DashScope base_url also verifies the retained key against the new URL. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential.</p>
+        <p>A nonempty api_key performs exactly one provider-authenticated verification operation for the selected provider, text model, and provider base URL under the management request context and shared upstream admission/rate-limit boundary. Changing a saved DashScope base_url also verifies the retained key against the new URL. Only a successful verification atomically persists the credential and submitted settings, reconciles routing defaults, and returns a keyed profile. Rejection and unconfirmed transient outcomes never mutate the provider key, settings, defaults, or managed usage. An empty api_key retains the existing verified credential. The operation returns 409 without a mutation if that retained credential changes before the verified update can persist.</p>
         <p class="api-security"><strong>Authentication:</strong> TAuthSession (cookie app_session_llm_proxy)</p>
         <p class="api-security"><strong>Required Content-Type:</strong> <code>application/json</code></p>
         <div class="api-contract-block">
@@ -3156,6 +3158,7 @@ components:
 <tr><td><code>401</code></td><td>none</td><td>none</td><td>The TAuth session is absent or invalid.</td></tr>
 <tr><td><code>403</code></td><td>none</td><td>none</td><td>The user lacks the required role or the supplied Origin is not allowed.</td></tr>
 <tr><td><code>404</code></td><td>none</td><td>none</td><td>The tenant or provider credential does not exist within the authenticated ownership boundary.</td></tr>
+<tr><td><code>409</code></td><td>text/plain</td><td>none</td><td>The requested tenant name conflicts, the final owned tenant cannot be deleted, or a retained provider credential changed after verification began.</td></tr>
 <tr><td><code>415</code></td><td>none</td><td>none</td><td>A management mutation did not supply application/json.</td></tr>
 <tr><td><code>422</code></td><td>text/plain</td><td>none</td><td>The candidate credential was rejected or cannot access the selected text model. Nothing was saved.</td></tr>
 <tr><td><code>429</code></td><td>text/plain</td><td>none</td><td>The provider rate-limited the single verification operation. The credential remains unconfirmed and nothing was saved.</td></tr>

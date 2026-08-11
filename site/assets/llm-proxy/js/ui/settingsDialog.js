@@ -4,7 +4,7 @@ import {
   AUTH_STATES,
   MENU_ACTIONS,
   NOTICE_KINDS,
-} from "../constants.js?v=20260811b130";
+} from "../constants.js?v=20260811c131";
 
 /** @typedef {ReturnType<typeof import("./managementApplicationState.js").createManagementApplicationState>} ManagementApplicationState */
 /** @typedef {ManagementApplicationState & import("../types.d.js").AlpineMagic & {

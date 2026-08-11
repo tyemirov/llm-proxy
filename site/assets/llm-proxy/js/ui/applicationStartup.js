@@ -1,8 +1,8 @@
 // @ts-check
 
-import { RUNTIME_UI } from "../constants.js?v=20260811b130";
-import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260811b130";
-import { renderRuntimeFailure } from "./runtimeFailure.js?v=20260811b130";
+import { RUNTIME_UI } from "../constants.js?v=20260811c131";
+import { dispatchManagementReady } from "../core/runtimeTransition.js?v=20260811c131";
+import { renderRuntimeFailure } from "./runtimeFailure.js?v=20260811c131";
 
 /** @type {Promise<void> | null} */
 let startupFailurePromise = null;

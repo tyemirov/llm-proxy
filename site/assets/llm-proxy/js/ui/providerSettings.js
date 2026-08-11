@@ -5,14 +5,15 @@ import {
   COPY,
   NOTICE_KINDS,
   PROVIDER_KEY_VERIFICATION_ERRORS,
-} from "../constants.js?v=20260811b130";
-import { saveProviderKey as requestSaveProviderKey } from "../core/backendClient.js?v=20260811b130";
+} from "../constants.js?v=20260811c131";
+import { saveProviderKey as requestSaveProviderKey } from "../core/backendClient.js?v=20260811c131";
 import {
   isAbortError,
   profileFailureMessage,
-} from "../core/managementProfile.js?v=20260811b130";
+} from "../core/managementProfile.js?v=20260811c131";
 
 const EMPTY_STRING = "";
+const DASH_SCOPE_PROVIDER_ID = "dashscope";
 
 /** @typedef {ReturnType<typeof import("./managementApplicationState.js").createManagementApplicationState>} ManagementApplicationState */
 /** @typedef {ManagementApplicationState & {
@@ -67,6 +68,9 @@ export function createProviderSettingsResponsibility() {
         if (!provider.has_key && !apiKey) {
           editorSession.dirty = false;
           return true;
+        }
+        if (provider.id === DASH_SCOPE_PROVIDER_ID && editorSession.baseURL.trim() === EMPTY_STRING) {
+          return false;
         }
         const providerID = provider.id;
         const revealVersion = editorSession.revealVersion;

@@ -7,21 +7,21 @@ import {
   DASHBOARD_VIEWS,
   NOTICE_KINDS,
   USAGE_FAILURE_PAGE_LIMIT,
-} from "../constants.js?v=20260811b130";
+} from "../constants.js?v=20260811c131";
 import {
   fetchAccountUsageFailures,
   fetchAccountUsageSummary,
   fetchUsageFailures,
   fetchUsageSummary,
-} from "../core/backendClient.js?v=20260811b130";
-import { isAbortError } from "../core/managementProfile.js?v=20260811b130";
-import { trapDialogFocus } from "./dialogFocus.js?v=20260811b130";
+} from "../core/backendClient.js?v=20260811c131";
+import { isAbortError } from "../core/managementProfile.js?v=20260811c131";
+import { trapDialogFocus } from "./dialogFocus.js?v=20260811c131";
 import {
   formatNumber,
   normalizedUsageFailurePage,
   usageFailurePresentation,
   usageStatusLabel,
-} from "./usageFailurePresentation.js?v=20260811b130";
+} from "./usageFailurePresentation.js?v=20260811c131";
 import {
   emptyUsageSummary,
   modelRows,
@@ -30,7 +30,7 @@ import {
   usagePolyline,
   USAGE_CHART,
   USAGE_METRICS,
-} from "./usagePresentation.js?v=20260811b130";
+} from "./usagePresentation.js?v=20260811c131";
 
 const EMPTY_STRING = "";
 const HTTP_ERROR_STATUS_MINIMUM = 400;

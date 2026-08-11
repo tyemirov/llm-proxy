@@ -1,12 +1,12 @@
 // @ts-check
 
-import { AUTH_STATES, NOTICE_KINDS } from "../constants.js?v=20260811b130";
+import { AUTH_STATES, NOTICE_KINDS } from "../constants.js?v=20260811c131";
 import {
   assertManagementTenantProfile,
   createAppRoutingDefaults,
   profileFailureMessage,
   profileProvider,
-} from "../core/managementProfile.js?v=20260811b130";
+} from "../core/managementProfile.js?v=20260811c131";
 
 const EMPTY_STRING = "";
 
