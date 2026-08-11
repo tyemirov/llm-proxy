@@ -240,48 +240,47 @@ func TestCompatibilityMessagesRejectMediaAndV2BoundsEncodedMediaBody(testingInst
 func TestModelCatalogRejectsInvalidMediaInputDeclarations(testingInstance *testing.T) {
 	for _, testCase := range []struct {
 		name      string
-		configure func(proxy.ProviderModelCatalogs)
+		configure func(proxy.ModelCatalog)
 	}{
 		{
 			name: "unknown media input",
-			configure: func(catalogs proxy.ProviderModelCatalogs) {
+			configure: func(catalogs proxy.ModelCatalog) {
 				setModelMediaInputs(catalogs, proxy.ProviderNameGemini, proxy.ModelNameGemini25Flash, []string{"video"})
 			},
 		},
 		{
 			name: "noncanonical media input",
-			configure: func(catalogs proxy.ProviderModelCatalogs) {
+			configure: func(catalogs proxy.ModelCatalog) {
 				setModelMediaInputs(catalogs, proxy.ProviderNameGemini, proxy.ModelNameGemini25Flash, []string{" image"})
 			},
 		},
 		{
 			name: "duplicate media input",
-			configure: func(catalogs proxy.ProviderModelCatalogs) {
+			configure: func(catalogs proxy.ModelCatalog) {
 				setModelMediaInputs(catalogs, proxy.ProviderNameGemini, proxy.ModelNameGemini25Flash, []string{"image", "image"})
 			},
 		},
 		{
 			name: "unsupported provider adapter",
-			configure: func(catalogs proxy.ProviderModelCatalogs) {
+			configure: func(catalogs proxy.ModelCatalog) {
 				setModelMediaInputs(catalogs, proxy.ProviderNameDeepSeek, proxy.ModelNameDeepSeekV4Flash, []string{"image"})
 			},
 		},
 		{
 			name: "unsupported endpoint",
-			configure: func(catalogs proxy.ProviderModelCatalogs) {
-				openAICatalog := catalogs[proxy.ProviderNameOpenAI]
-				openAICatalog.Dictation.Models[0].MediaInputs = []string{"image"}
-				catalogs[proxy.ProviderNameOpenAI] = openAICatalog
+			configure: func(catalogs proxy.ModelCatalog) {
+				offeringIndex := catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel)
+				catalogs.Offerings[offeringIndex].MediaInputs = []string{"image"}
 			},
 		},
 	} {
 		testingInstance.Run(testCase.name, func(subTest *testing.T) {
-			catalogs := testfixtures.ProviderModelCatalogs(subTest)
+			catalogs := testfixtures.ModelCatalog(subTest)
 			testCase.configure(catalogs)
 			_, buildError := proxy.BuildRouter(proxy.Configuration{
-				Tenants:        proxy.SingleTenantConfigurations("test", TestSecret),
-				OpenAIKey:      TestAPIKey,
-				ProviderModels: catalogs,
+				Tenants:      proxy.SingleTenantConfigurations("test", TestSecret),
+				OpenAIKey:    TestAPIKey,
+				ModelCatalog: catalogs,
 			}, zap.NewNop().Sugar())
 			if buildError == nil || !strings.Contains(buildError.Error(), "invalid_model_catalog") {
 				subTest.Fatalf("build error=%v", buildError)
@@ -336,12 +335,9 @@ func assertGeminiInteractionMediaContent(testingInstance *testing.T, rawContent 
 	}
 }
 
-func setModelMediaInputs(catalogs proxy.ProviderModelCatalogs, providerName string, modelName string, mediaInputs []string) {
-	providerCatalog := catalogs[providerName]
-	for modelIndex := range providerCatalog.Text.Models {
-		if providerCatalog.Text.Models[modelIndex].ID == modelName {
-			providerCatalog.Text.Models[modelIndex].MediaInputs = mediaInputs
-		}
-	}
-	catalogs[providerName] = providerCatalog
+func setModelMediaInputs(catalogs proxy.ModelCatalog, providerName string, modelName string, mediaInputs []string) {
+	modelIndex := catalogExactModelIndex(catalogs, modelName)
+	offeringIndex := catalogOfferingIndex(catalogs, providerName, modelName)
+	catalogs.Models[modelIndex].MediaInputs = mediaInputs
+	catalogs.Offerings[offeringIndex].MediaInputs = mediaInputs
 }

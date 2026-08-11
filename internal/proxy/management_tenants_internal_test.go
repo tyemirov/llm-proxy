@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -250,6 +251,116 @@ func TestManagedTenantKeyedRoutingDefaultsMigrationReconcilesExistingTenants(t *
 	}
 }
 
+func TestManagedTenantModelIdentityMigrationCanonicalizesCurrentRoutesAndPreservesUsage(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "model-identity.db")
+	database, openError := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+	if openError != nil {
+		t.Fatalf("open SQLite fixture: %v", openError)
+	}
+	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
+		t.Fatalf("create schema four fixture: %v", migrationError)
+	}
+	providers := internalManagementProviderRegistry()
+	providerKeyCipher := internalManagedProviderKeyCipher()
+	now := time.Date(2026, 8, 10, 23, 0, 0, 0, time.UTC)
+	users := []managedUserRecord{
+		{UserID: "native-model-owner", CreatedAt: now, UpdatedAt: now},
+		{UserID: "canonical-model-owner", CreatedAt: now.Add(time.Minute), UpdatedAt: now.Add(time.Minute)},
+	}
+	if createError := database.Create(&users).Error; createError != nil {
+		t.Fatalf("seed users: %v", createError)
+	}
+	nativeTenant := fakeTenantRecord(users[0].UserID, "native-model-tenant", "Default", now)
+	nativeTenant.UpdatedAt = now.Add(2 * time.Minute)
+	nativeTenant.applyRoutingDefaults(managedRoutingDefaults{tenantDefaults: TenantDefaults{
+		Provider: ProviderNameMiniMax, Model: managedMiniMaxNativeModel,
+		DictationProvider: ProviderNameSiliconFlow, DictationModel: managedSenseVoiceNativeModel,
+		SystemPrompt: "preserve native tenant prompt",
+	}})
+	canonicalTenant := fakeTenantRecord(users[1].UserID, "canonical-model-tenant", "Default", now.Add(time.Minute))
+	canonicalTenant.applyRoutingDefaults(managedRoutingDefaults{tenantDefaults: TenantDefaults{
+		Provider: ProviderNameDeepSeek, Model: ModelNameDeepSeekV4Flash,
+		SystemPrompt: "preserve canonical tenant prompt",
+	}})
+	if createError := database.Create(&[]managedTenantRecord{nativeTenant, canonicalTenant}).Error; createError != nil {
+		t.Fatalf("seed tenants: %v", createError)
+	}
+	encryptProviderKey := func(tenantID string, providerIdentifier string, rawAPIKey string, nonceByte byte) string {
+		t.Helper()
+		encryptedKey, encryptionError := providerKeyCipher.encrypt(
+			bytes.NewReader(bytes.Repeat([]byte{nonceByte}, providerKeyCipher.aeadCipher.NonceSize())),
+			tenantID,
+			providerIdentifier,
+			rawAPIKey,
+		)
+		if encryptionError != nil {
+			t.Fatalf("encrypt tenant=%s provider=%s: %v", tenantID, providerIdentifier, encryptionError)
+		}
+		return encryptedKey
+	}
+	providerKeys := []managedProviderAPIKeyRecord{
+		{TenantID: nativeTenant.TenantID, ProviderID: ProviderNameMiniMax, EncryptedAPIKey: encryptProviderKey(nativeTenant.TenantID, ProviderNameMiniMax, "sk-minimax", 1), TextModel: managedMiniMaxNativeModel, CreatedAt: now, UpdatedAt: now},
+		{TenantID: nativeTenant.TenantID, ProviderID: ProviderNameSiliconFlow, EncryptedAPIKey: encryptProviderKey(nativeTenant.TenantID, ProviderNameSiliconFlow, "sk-siliconflow", 2), TextModel: managedSiliconFlowDeepSeekNativeModel, CreatedAt: now, UpdatedAt: now},
+		{TenantID: canonicalTenant.TenantID, ProviderID: ProviderNameDeepSeek, EncryptedAPIKey: encryptProviderKey(canonicalTenant.TenantID, ProviderNameDeepSeek, "sk-deepseek", 3), TextModel: ModelNameDeepSeekV4Flash, CreatedAt: now, UpdatedAt: now},
+	}
+	if createError := database.Create(&providerKeys).Error; createError != nil {
+		t.Fatalf("seed provider keys: %v", createError)
+	}
+	historicalUsage := []managedUsageEventRecord{
+		{ID: 81, TenantID: nativeTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameMiniMax, ModelID: managedMiniMaxNativeModel, StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now.Add(3 * time.Minute)},
+		{ID: 82, TenantID: nativeTenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameSiliconFlow, ModelID: managedSiliconFlowDeepSeekNativeModel, StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now.Add(4 * time.Minute)},
+		{ID: 83, TenantID: nativeTenant.TenantID, Endpoint: usageEndpointDictation, ProviderID: ProviderNameSiliconFlow, ModelID: managedSenseVoiceNativeModel, StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: now.Add(5 * time.Minute)},
+	}
+	if createError := database.Create(&historicalUsage).Error; createError != nil {
+		t.Fatalf("seed historical usage: %v", createError)
+	}
+	if createError := database.Create(&managedSchemaMigrationRecord{Version: managedQwenCloudRetirementVersion, AppliedAt: now}).Error; createError != nil {
+		t.Fatalf("seed schema version: %v", createError)
+	}
+
+	if migrationError := initializeManagedTenantSchema(database, providerKeyCipher, providers); migrationError != nil {
+		t.Fatalf("migrate model identity: %v", migrationError)
+	}
+	var migratedTenants []managedTenantRecord
+	if queryError := database.Preload("ProviderAPIKeys").Order("tenant_id").Find(&migratedTenants).Error; queryError != nil {
+		t.Fatalf("load migrated tenants: %v", queryError)
+	}
+	if len(migratedTenants) != 2 {
+		t.Fatalf("migrated tenants=%+v", migratedTenants)
+	}
+	migratedCanonicalTenant := migratedTenants[0]
+	migratedNativeTenant := migratedTenants[1]
+	expectedNativeDefaults := TenantDefaults{
+		Provider: ProviderNameMiniMax, Model: ModelNameMiniMaxM27,
+		DictationProvider: ProviderNameSiliconFlow, DictationModel: "sensevoice-small",
+		SystemPrompt: "preserve native tenant prompt",
+	}
+	if migratedNativeTenant.defaults() != expectedNativeDefaults || !migratedNativeTenant.UpdatedAt.Equal(nativeTenant.UpdatedAt) || len(migratedNativeTenant.ProviderAPIKeys) != 2 {
+		t.Fatalf("migrated native tenant=%+v keys=%+v", migratedNativeTenant, migratedNativeTenant.ProviderAPIKeys)
+	}
+	modelsByProvider := map[string]string{}
+	for _, providerKey := range migratedNativeTenant.ProviderAPIKeys {
+		modelsByProvider[providerKey.ProviderID] = providerKey.TextModel
+	}
+	if modelsByProvider[ProviderNameMiniMax] != ModelNameMiniMaxM27 || modelsByProvider[ProviderNameSiliconFlow] != ModelNameSiliconFlowDeepSeek {
+		t.Fatalf("migrated provider models=%v", modelsByProvider)
+	}
+	if migratedCanonicalTenant.defaults() != canonicalTenant.defaults() || len(migratedCanonicalTenant.ProviderAPIKeys) != 1 || migratedCanonicalTenant.ProviderAPIKeys[0].TextModel != ModelNameDeepSeekV4Flash {
+		t.Fatalf("canonical tenant changed=%+v", migratedCanonicalTenant)
+	}
+	var migratedUsage []managedUsageEventRecord
+	if queryError := database.Order("id").Find(&migratedUsage).Error; queryError != nil || !slices.Equal(migratedUsage, historicalUsage) {
+		t.Fatalf("historical usage=%+v error=%v", migratedUsage, queryError)
+	}
+	var latest managedSchemaMigrationRecord
+	if queryError := database.Order("version DESC").First(&latest).Error; queryError != nil || latest.Version != managedTenantSchemaVersion {
+		t.Fatalf("latest version=%+v error=%v", latest, queryError)
+	}
+	if validationError := initializeManagedTenantSchema(database, providerKeyCipher, providers); validationError != nil {
+		t.Fatalf("reopen canonical model schema: %v", validationError)
+	}
+}
+
 func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *testing.T) {
 	databasePath := filepath.Join(t.TempDir(), "qwen-cloud-retirement.db")
 	database, openError := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
@@ -393,7 +504,7 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 	configuration := Configuration{
 		Management:  ManagementConfiguration{Enabled: true},
 		WorkerCount: 1, QueueSize: 1, MaxPromptBytes: 1024,
-		Endpoints: endpoints, ProviderModels: internalManagedUsageWriterProviderModels(),
+		Endpoints: endpoints, ModelCatalog: internalManagedUsageWriterProviderModels(),
 		upstreamRateLimits:   upstreamRateLimits{rules: map[string]upstreamRateLimitRule{}},
 		requestTimeoutPolicy: timeoutPolicy, validated: true,
 	}
@@ -604,33 +715,16 @@ func internalManagementProviderRegistry() *providerRegistry {
 	return newProviderRegistry(Configuration{
 		OpenAIKey:               "sk-config-openai",
 		OpenAITranscriptionsURL: "https://openai.example/transcriptions",
-		ProviderModels: ProviderModelCatalogs{
-			ProviderNameOpenAI: {
-				Text: ModelEndpointCatalog{
-					DefaultModel: ModelNameGPT41,
-					Models: []ModelConfiguration{
-						{ID: ModelNameGPT41},
-						{ID: ModelNameGPT55},
-					},
-				},
-				Dictation: ModelEndpointCatalog{
-					DefaultModel: DefaultDictationModel,
-					Models:       []ModelConfiguration{{ID: DefaultDictationModel}},
-				},
-			},
-			ProviderNameDeepSeek: {
-				Text: ModelEndpointCatalog{
-					DefaultModel: ModelNameDeepSeekV4Flash,
-					Models:       []ModelConfiguration{{ID: ModelNameDeepSeekV4Flash}},
-				},
-			},
-			ProviderNameDashScope: {
-				Text: ModelEndpointCatalog{
-					DefaultModel: ModelNameDashScopeQwenPlus,
-					Models:       []ModelConfiguration{{ID: ModelNameDashScopeQwenPlus}},
-				},
-			},
-		},
+		ModelCatalog: internalTestModelCatalog(
+			internalTestOffering(ProviderNameOpenAI, ModelNameGPT41, []string{ModelOperationText}, []string{ModelOperationText}),
+			internalTestOffering(ProviderNameOpenAI, ModelNameGPT55, []string{ModelOperationText}, nil),
+			internalTestOffering(ProviderNameOpenAI, DefaultDictationModel, []string{ModelOperationDictation}, []string{ModelOperationDictation}),
+			internalTestOffering(ProviderNameDeepSeek, ModelNameDeepSeekV4Flash, []string{ModelOperationText}, []string{ModelOperationText}),
+			internalTestOffering(ProviderNameDashScope, ModelNameDashScopeQwenPlus, []string{ModelOperationText}, []string{ModelOperationText}),
+			internalTestOffering(ProviderNameMiniMax, ModelNameMiniMaxM27, []string{ModelOperationText}, []string{ModelOperationText}),
+			internalTestOffering(ProviderNameSiliconFlow, ModelNameSiliconFlowDeepSeek, []string{ModelOperationText}, []string{ModelOperationText}),
+			internalTestOffering(ProviderNameSiliconFlow, "sensevoice-small", []string{ModelOperationDictation}, []string{ModelOperationDictation}),
+		),
 	})
 }
 

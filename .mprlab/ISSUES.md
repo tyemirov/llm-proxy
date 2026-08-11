@@ -173,89 +173,7 @@ retain satisfied historical dependencies.
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 ## Improvements
 
-- [ ] [I221] (P0) Make model identity independent from provider offerings.
-  Goal:
-  Make models the primary public discovery items. Keep each selected model's
-  publisher and provider offerings explicit.
-  Requirements:
-  - Replace `ProviderModelCatalogs` and public `providers[].models` with one
-    normalized catalog for model publishers, model families, exact models,
-    providers, and provider offerings.
-  - Give each exact model one canonical identifier, model publisher, model
-    family, version, operation set, and model media capabilities.
-  - Give each provider offering one provider, exact model, provider-native
-    model identifier, wire contract, lifecycle, limits, defaults, and
-    route-specific capabilities.
-  - Use a canonical provider and model pair as the external route. Resolve that
-    pair to exactly one provider offering.
-  - Map each provider-native model identifier only at the provider offering
-    boundary.
-  - Migrate configured catalogs, public REST data, OpenAPI, management data,
-    and stored routing defaults in one forward-only change.
-  - Preserve I039's historical `qwencloud` usage as observed execution
-    evidence. Do not expose it as a current provider offering.
-  - Do not relabel historical `qwencloud` usage as `dashscope` usage.
-  - Add one bounded migration that maps each stored provider/model route to its
-    canonical provider offering. Remove the obsolete shape after migration.
-  - Reject duplicate identifiers, dangling references, route conflicts,
-    missing relationships, and invalid route capabilities at startup.
-  - Use model publishers as model groups and labels in the public route
-    explorer.
-  - Open a model picker when the user selects a model publisher. Provide
-    exact model search and model family and operation filters.
-  - Show a model count for each model publisher. Group exact models by model
-    family in the model picker.
-  - Show the selected model publisher and exact model in one compact model
-    stage.
-  - Keep only the selected exact model and its provider offerings in the
-    expanded graph.
-  - Keep the complete catalog available in semantic HTML and the searchable
-    capability table.
-  - Render one capability row for each exact model. Show its provider offerings
-    within that model row.
-  - Report separate model publisher, exact model, provider, and provider
-    offering counts.
-  - Make the graph compact for model publishers with many model families and
-    exact models.
-  - Keep provider credential settings provider-first. Derive each provider's
-    exact models from its provider offerings.
-  - Keep provider keys, base URLs, private handles, tenant defaults, and
-    provider-native model identifiers outside public data.
-  - Generate every publisher, model, family, and provider option from catalog
-    REST data.
-  Deliverables:
-  - Add normalized catalog types, a strict loader, a deterministic public
-    projection, and an exact provider-offering resolver.
-  - Update runtime configuration, public REST and OpenAPI contracts,
-    management profiles, stored routes, and configuration examples.
-  - Add the model picker and provider fan for the selected model to the
-    frontend-owned route explorer.
-  - Add the bounded migration. Remove the provider-nested catalog structures
-    and public fields.
-  - Update current documentation and black-box integration tests.
-  Validation:
-  - Prove that one exact model can have multiple provider offerings without
-    duplicate model records.
-  - Prove that the capability table shows one row for each exact model and all
-    provider offerings for that model.
-  - Prove that one model publisher with many exact models remains compact while
-    every exact model stays discoverable.
-  - Prove that a proprietary model with one provider offering uses the same
-    normalized structure.
-  - Prove that model publisher, exact model, and provider offering selections
-    update one explicit provider/model route.
-  - Prove that each valid provider/model route resolves to one offering. Reject
-    every unknown or ambiguous pair before execution.
-  - Prove that the bounded migration maps every stored route. Require exact
-    route context when an invalid route stops startup.
-  - Prove semantic no-JavaScript access, keyboard operation, reduced-motion
-    behavior, and responsive containment through the public browser entrypoint.
-  - Prove that public data excludes credentials, private provider data, tenant
-    defaults, and provider-native model identifiers.
-  - Run the required baseline and final
-    `timeout -k 350s -s SIGKILL 350s make ci` pair.
-
-- [ ] [I216] (P0) {I221} Make one model-operation capability and pricing catalog authoritative.
+- [ ] [I216] (P0) Make one model-operation capability and pricing catalog authoritative.
   Goal:
   Publish one tenant-safe catalog for every provider-backed model operation.
   Use it for planning, routing, validation, pricing, public discovery, and
@@ -297,7 +215,7 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
-- [ ] [I218] (P1) {I221} Expand the product node into integration routes.
+- [ ] [I218] (P1) Expand the product node into integration routes.
   Goal:
   Make the product-to-proxy side of the public routing tree as actionable as
   its model-to-provider-offering side. Expand `Your product` into exact
@@ -331,7 +249,7 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 
-- [ ] [I210] (P1) {I221} Add Meta Muse Spark 1.2 as a selectable Standard-tier model.
+- [ ] [I210] (P1) Add Meta Muse Spark 1.2 as a selectable Standard-tier model.
   Goal:
   Add Meta's current Muse Spark 1.2 checkpoint to the existing `meta` text
   offering through the repository's exact model-owned routing contract.
@@ -460,7 +378,7 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-- [ ] [I038] (P2) {I221} Adopt DashScope's synchronous Responses API without background mode.
+- [ ] [I038] (P2) Adopt DashScope's synchronous Responses API without background mode.
   Goal:
   Move eligible DashScope Qwen models from Chat Completions to Alibaba's newer
   Responses wire format while retaining its explicitly synchronous lifecycle.
@@ -488,7 +406,7 @@ retain satisfied historical dependencies.
   - Public black-box tests prove the eligible-model request shape, typed text
     extraction, synchronous incomplete continuation, usage, safe errors, and
     rejection of accidental `background` or unsupported OpenAI-only fields.
-- [ ] [I207] (P1) {I221} Add Gemini 3.6 Flash with route-bound Interactions thinking levels.
+- [ ] [I207] (P1) Add Gemini 3.6 Flash with route-bound Interactions thinking levels.
   Goal:
   Add Google's current stable Flash model to the Gemini Interactions catalog
   and carry the existing provider-neutral `reasoning_effort` contract onto its
@@ -815,7 +733,7 @@ retain satisfied historical dependencies.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair for the implementation, with
     the final run after the last code edit.
-- [ ] [I027] (P1) {I221} Redesign the user dashboard around connected-provider widgets.
+- [ ] [I027] (P1) Redesign the user dashboard around connected-provider widgets.
   Goal:
   Make the authenticated dashboard answer, at a glance, which upstream
   providers the selected Usage scope has connected. Preserve usage reporting as
@@ -1146,7 +1064,7 @@ retain satisfied historical dependencies.
 
 ## Features
 
-- [ ] [F032] (P1) {I221} Add Baidu Qianfan as a user-configurable text provider.
+- [ ] [F032] (P1) Add Baidu Qianfan as a user-configurable text provider.
   Goal:
   Let a managed user paste, verify, and save a Baidu Qianfan API key through
   the existing tenant-scoped provider editor. Route blocking LLM Proxy text
@@ -1962,7 +1880,7 @@ retain satisfied historical dependencies.
   Validation:
   - Legal, product, and service owners approve each published metric and the
     production evidence path can calculate it without manual interpretation.
-- [ ] [P001] (P1) {I221} Design a tenant-scoped provider, model, and key-acquisition onboarding flow.
+- [ ] [P001] (P1) Design a tenant-scoped provider, model, and key-acquisition onboarding flow.
   Goal:
   Let a signed-in managed user complete one clear text-routing setup: select a
   supported provider, select one of that provider's supported text models, and

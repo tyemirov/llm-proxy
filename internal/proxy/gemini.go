@@ -94,7 +94,7 @@ func (client *geminiInteractionsClient) generateText(parentContext context.Conte
 	input, systemInstruction := messages.geminiInteractionInput()
 	background := executionLifecycle == textExecutionLifecyclePollableResource
 	payload := geminiInteractionRequest{
-		Model:             modelIdentifier.string(),
+		Model:             modelIdentifier.providerString(),
 		Input:             input,
 		SystemInstruction: systemInstruction,
 		Background:        background,

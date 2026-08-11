@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="05d99dae213b5da70c8e1a12339e585eb5a2bc4229d02ffa15aad85d52a9aeb1">
+    <meta name="openapi-source-sha256" content="58579ec3520f8be4a8cec867b6fe95492ce320019bf3b9c4b55aff6c1a643a6f">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="05d99dae213b5da70c8e1a12339e585eb5a2bc4229d02ffa15aad85d52a9aeb1">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="58579ec3520f8be4a8cec867b6fe95492ce320019bf3b9c4b55aff6c1a643a6f">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -49,7 +49,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>05d99dae213b5da70c8e1a12339e585eb5a2bc4229d02ffa15aad85d52a9aeb1</code></span>
+          <span>Source SHA-256 <code>58579ec3520f8be4a8cec867b6fe95492ce320019bf3b9c4b55aff6c1a643a6f</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -266,8 +266,8 @@ paths:
   /api/public/capabilities:
     get:
       operationId: getPublicCapabilities
-      summary: Read the public provider and model capability catalog
-      description: Returns the deterministic, secret-free projection of the validated provider registry and public proxy request limits.
+      summary: Read the public normalized model capability catalog
+      description: Returns the deterministic, secret-free projection of model publishers, families, exact models, provider offerings, and public proxy request limits.
       tags:
         - Capabilities
       security: []
@@ -1163,6 +1163,11 @@ components:
       additionalProperties: false
       required:
         - providers
+        - publishers
+        - families
+        - models
+        - offerings
+        - counts
         - max_prompt_bytes
         - max_input_audio_bytes
         - max_request_timeout_seconds
@@ -1172,6 +1177,28 @@ components:
           minItems: 1
           items:
             $ref: &#39;#/components/schemas/PublicProviderCapability&#39;
+        publishers:
+          type: array
+          minItems: 1
+          items:
+            $ref: &#39;#/components/schemas/PublicModelPublisher&#39;
+        families:
+          type: array
+          minItems: 1
+          items:
+            $ref: &#39;#/components/schemas/PublicModelFamily&#39;
+        models:
+          type: array
+          minItems: 1
+          items:
+            $ref: &#39;#/components/schemas/PublicExactModelCapability&#39;
+        offerings:
+          type: array
+          minItems: 1
+          items:
+            $ref: &#39;#/components/schemas/PublicProviderOffering&#39;
+        counts:
+          $ref: &#39;#/components/schemas/PublicCapabilityCounts&#39;
         max_prompt_bytes:
           type: integer
           format: int64
@@ -1189,7 +1216,6 @@ components:
       required:
         - identifier
         - label
-        - models
       properties:
         identifier:
           type: string
@@ -1197,17 +1223,109 @@ components:
         label:
           type: string
           minLength: 1
-        models:
-          type: array
-          minItems: 1
-          items:
-            $ref: &#39;#/components/schemas/PublicModelCapability&#39;
-    PublicModelCapability:
+    PublicModelPublisher:
       type: object
       additionalProperties: false
       required:
         - identifier
-        - default_endpoints
+        - label
+        - model_count
+      properties:
+        identifier:
+          type: string
+          minLength: 1
+        label:
+          type: string
+          minLength: 1
+        model_count:
+          type: integer
+          minimum: 1
+    PublicModelFamily:
+      type: object
+      additionalProperties: false
+      required:
+        - identifier
+        - publisher
+        - label
+      properties:
+        identifier:
+          type: string
+          minLength: 1
+        publisher:
+          type: string
+          minLength: 1
+        label:
+          type: string
+          minLength: 1
+    PublicExactModelCapability:
+      type: object
+      additionalProperties: false
+      required:
+        - identifier
+        - publisher
+        - family
+        - version
+        - operations
+        - media_inputs
+        - capabilities
+        - provider_offerings
+      properties:
+        identifier:
+          type: string
+          minLength: 1
+        publisher:
+          type: string
+          minLength: 1
+        family:
+          type: string
+          minLength: 1
+        version:
+          type: string
+          minLength: 1
+        operations:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - text
+              - dictation
+        media_inputs:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - image
+              - audio
+        capabilities:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - text
+              - dictation
+              - web_search
+              - image_input
+              - audio_input
+              - reasoning
+        provider_offerings:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+    PublicProviderOffering:
+      type: object
+      additionalProperties: false
+      required:
+        - identifier
+        - provider
+        - model
         - capabilities
         - wire_contract
         - output_token_limit
@@ -1216,14 +1334,12 @@ components:
         identifier:
           type: string
           minLength: 1
-        default_endpoints:
-          type: array
-          uniqueItems: true
-          items:
-            type: string
-            enum:
-              - text
-              - dictation
+        provider:
+          type: string
+          minLength: 1
+        model:
+          type: string
+          minLength: 1
         capabilities:
           type: array
           minItems: 1
@@ -1248,6 +1364,31 @@ components:
           items:
             type: string
             minLength: 1
+    PublicCapabilityCounts:
+      type: object
+      additionalProperties: false
+      required:
+        - providers
+        - model_publishers
+        - model_families
+        - exact_models
+        - provider_offerings
+      properties:
+        providers:
+          type: integer
+          minimum: 1
+        model_publishers:
+          type: integer
+          minimum: 1
+        model_families:
+          type: integer
+          minimum: 1
+        exact_models:
+          type: integer
+          minimum: 1
+        provider_offerings:
+          type: integer
+          minimum: 1
     ChatMessage:
       type: object
       additionalProperties: false
@@ -2248,7 +2389,7 @@ components:
 <a href="#operation-getManagementTenantUsageFailures"><span class="api-method api-method-get">GET</span><code>/api/management/tenants/{tenant_id}/usage/failures</code><span>Read safe failure details for an owned tenant and interval</span></a>
 <a href="#operation-getManagementAccountUsage"><span class="api-method api-method-get">GET</span><code>/api/management/usage</code><span>Read interval-scoped usage across every owned tenant</span></a>
 <a href="#operation-getManagementAccountUsageFailures"><span class="api-method api-method-get">GET</span><code>/api/management/usage/failures</code><span>Read safe failure details across every owned tenant and interval</span></a>
-<a href="#operation-getPublicCapabilities"><span class="api-method api-method-get">GET</span><code>/api/public/capabilities</code><span>Read the public provider and model capability catalog</span></a>
+<a href="#operation-getPublicCapabilities"><span class="api-method api-method-get">GET</span><code>/api/public/capabilities</code><span>Read the public normalized model capability catalog</span></a>
 <a href="#operation-getBrowserConfiguration"><span class="api-method api-method-get">GET</span><code>/config-ui.yaml</code><span>Read the browser runtime configuration</span></a>
 <a href="#operation-postDictation"><span class="api-method api-method-post">POST</span><code>/dictate</code><span>Transcribe an audio upload</span></a>
 <a href="#operation-postV2Messages"><span class="api-method api-method-post">POST</span><code>/v2</code><span>Generate text from canonical messages</span></a>
@@ -3005,8 +3146,8 @@ components:
           <code>/api/public/capabilities</code>
           <span class="api-operation-id">getPublicCapabilities</span>
         </header>
-        <h2>Read the public provider and model capability catalog</h2>
-        <p>Returns the deterministic, secret-free projection of the validated provider registry and public proxy request limits.</p>
+        <h2>Read the public normalized model capability catalog</h2>
+        <p>Returns the deterministic, secret-free projection of model publishers, families, exact models, provider offerings, and public proxy request limits.</p>
         <p class="api-security"><strong>Authentication:</strong> None</p>
         <div class="api-contract-block"><h3>Parameters</h3><p>None.</p></div>
         <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>

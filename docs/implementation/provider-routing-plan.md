@@ -102,7 +102,7 @@ with the regional `${DASHSCOPE_API_KEY}` credential. The `qwen` alias resolves
 to DashScope.
 
 MiniMax is a distinct text-only provider with canonical selector `minimax`,
-model `MiniMax-M2.7`, endpoint `https://api.minimax.io/v1`, and
+exact model `minimax-m2.7`, endpoint `https://api.minimax.io/v1`, and
 `${MINIMAX_API_KEY}`. The shared adapter maps public `max_tokens` to MiniMax
 `max_completion_tokens`; its configured `2048` output limit is rejected at the
 proxy edge before an upstream call. The proxy does not add MiniMax-specific
@@ -173,33 +173,24 @@ Provider credentials and base URLs:
 - `providers.anthropic.api_key`, `providers.anthropic.base_url`
 - `providers.grok.api_key`, `providers.grok.base_url`, `providers.grok.transcriptions_url`
 
-Provider model catalogs:
+Normalized model catalog:
 
-- `providers.<provider>.text.default_model`
-- `providers.<provider>.text.models[].id`
-- `providers.<provider>.text.models[].wire_contract`
-- `providers.<provider>.text.models[].execution_lifecycle`
-- `providers.<provider>.text.models[].output_token_limit`
-- `providers.<provider>.text.models[].media_inputs`
-- `providers.<provider>.text.models[].reasoning_effort`
-- `providers.openai.text.models[].request_profile`
-- `providers.openai.text.models[].web_search`
-- `providers.openai.dictation.default_model`
-- `providers.openai.dictation.models[].id`
-- `providers.siliconflow.dictation.default_model`
-- `providers.siliconflow.dictation.models[].id`
-- `providers.zhipu.dictation.default_model`
-- `providers.zhipu.dictation.models[].id`
-- `providers.grok.dictation.default_model`
-- `providers.grok.dictation.models[].id`
+- `catalog.providers[].id` and `catalog.providers[].label`
+- `catalog.publishers[].id` and `catalog.publishers[].label`
+- `catalog.families[].id`, `publisher`, and `label`
+- `catalog.models[].id`, `publisher`, `family`, and `version`
+- `catalog.models[].operations` and `catalog.models[].media_inputs`
+- `catalog.offerings[].provider`, `model`, and `provider_model`
+- `catalog.offerings[].operations` and `default_operations`
+- `catalog.offerings[].wire_contract` and `execution_lifecycle`
+- `catalog.offerings[].output_token_limit` and `media_inputs`
+- `catalog.offerings[].reasoning_effort`
+- `catalog.offerings[].request_profile` and `web_search`
 
 The model catalog is runtime config data. Code owns provider selectors,
-aliases, allowed wire/lifecycle pairs, endpoint shapes, adapters, and stable
-OpenAI request-profile implementations. `config.yml` owns provider model ids,
-each model's explicit wire contract and execution lifecycle, provider default models,
-dictation model ids, model-specific web-search enablement, provider/model
-reasoning-effort and media-input capability declarations, and known
-provider-side output-token limits.
+aliases, allowed wire and lifecycle pairs, endpoint shapes, adapters, and
+stable OpenAI request profiles. `config.yml` owns normalized model identity and
+provider offerings. Provider-native model identifiers exist only in offerings.
 
 The README model-capability table mirrors `config.yml`; refresh those two
 catalog representations together and do not hardcode model ids in provider
@@ -443,6 +434,11 @@ usage record occurs inside the transaction. The transaction records version 4
 after verification. Current-version startup rejects any retired provider
 setting or default.
 
+The bounded schema-version-5 migration converts stored provider-native model
+values to canonical exact model identifiers. It updates affected provider
+settings and tenant defaults. It preserves tenant timestamps and historical
+usage records. Current-version startup rejects invalid canonical routes.
+
 `server.workers` limits concurrent upstream provider HTTP operations, not whole
 client request lifecycles. `server.queue_size` limits the number of additional
 upstream HTTP operations waiting for that shared worker limit. OpenAI
@@ -519,7 +515,16 @@ failure without a response prints none. This paid check remains outside
 `make ci`, runs all nine cases even after an earlier failure, and never prints
 a tenant secret or response body.
 
-Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, requires API keys for each configured static tenant's default text and dictation providers when management mode is disabled, allows non-default provider API keys to be blank so those providers are disabled until configured, requires every configured provider base URL, requires transcription URLs for dictation-capable providers, requires text model catalogs for every provider, requires dictation model catalogs for dictation-capable providers, rejects blank or duplicate model ids, rejects defaults not listed in their model catalog, rejects `web_search` outside OpenAI text model entries, validates OpenAI request profiles, validates exact model-owned reasoning-effort lists, validates each configured static tenant's default text provider/model and effort, and validates endpoint/credential support for each configured static tenant's default dictation provider/model. When `management.enabled` is false, at least one static tenant is required. When `management.enabled` is true, static tenants and nonblank config-level provider API keys are rejected because managed tokens and provider credentials are user-owned database state.
+Startup validates configured tenants, provider endpoints, and the normalized
+model catalog. Catalog validation rejects invalid identities, references,
+route pairs, defaults, and capabilities.
+
+When management mode is disabled, at least one static tenant is required. Each
+static tenant default must resolve to one valid provider offering.
+
+When management mode is enabled, static tenants and config-level provider keys
+are invalid. Managed tenants own their provider credentials and routing
+defaults in the database.
 
 The repository owns the schema-v4 production declaration in
 `.mprlab/deploy/resources.yml`. The repository also owns the standard
@@ -571,6 +576,10 @@ text defaults against remaining keyed providers. It clears text and reasoning
 when no key remains. It preserves tenant timestamps and historical usage
 provider and model identifiers. The same transaction verifies the result and
 records version 4. Current startup rejects retired settings and defaults.
+
+Schema version 5 converts affected provider-native model values to canonical
+exact model identifiers. It preserves tenant timestamps and historical usage
+records. Current startup rejects invalid canonical routes.
 
 Server/runtime settings, backend auth validation, browser-facing MPR UI/TAuth settings, provider base URLs, transcription URLs, and model catalogs remain config-file-owned. Database access must use GORM model APIs without raw SQL. Generated llm-proxy client secrets are returned once and stored as SHA-256 digests. Managed tenants authenticate the same public proxy endpoints with `key=<generated secret>` and use only their own saved provider credentials.
 

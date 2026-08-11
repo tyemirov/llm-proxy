@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -130,18 +131,22 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 		proxy.ProviderNameMeta:        {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
 		proxy.ProviderNameGrok:        {wireContract: "openai_chat_completions", executionLifecycle: "synchronous_completion"},
 	}
-	catalogs := testfixtures.ProviderModelCatalogs(t)
-	providerByModel := map[string]string{}
+	catalogs := testfixtures.ModelCatalog(t)
+	type providerRoute struct {
+		provider       string
+		canonicalModel string
+	}
+	providerByNativeModel := map[string]providerRoute{}
 	for _, providerName := range providerOrder {
-		for _, model := range catalogs[providerName].Text.Models {
-			if existingProvider, duplicate := providerByModel[model.ID]; duplicate {
-				t.Fatalf("model=%s is shared by providers=%s,%s", model.ID, existingProvider, providerName)
+		for _, offering := range catalogOfferingsForProvider(catalogs, providerName, proxy.ModelOperationText) {
+			if existingRoute, duplicate := providerByNativeModel[offering.ProviderModel]; duplicate {
+				t.Fatalf("native model=%s is shared by providers=%s,%s", offering.ProviderModel, existingRoute.provider, providerName)
 			}
-			providerByModel[model.ID] = providerName
+			providerByNativeModel[offering.ProviderModel] = providerRoute{provider: providerName, canonicalModel: offering.Model}
 		}
 	}
 
-	pollModel := catalogs[proxy.ProviderNameOpenAI].Text.Models[0].ID
+	pollModel := catalogOfferingsForProvider(catalogs, proxy.ProviderNameOpenAI, proxy.ModelOperationText)[0].Model
 	observedPaths := map[string][]string{}
 	geminiModelsByInteraction := map[string]string{}
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
@@ -170,11 +175,13 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 			Store      bool   `json:"store"`
 		}
 		_ = json.NewDecoder(request.Body).Decode(&payload)
-		modelIdentifier := payload.Model
-		providerName, configured := providerByModel[modelIdentifier]
+		nativeModelIdentifier := payload.Model
+		route, configured := providerByNativeModel[nativeModelIdentifier]
 		if !configured {
-			t.Fatalf("unrecognized upstream model=%q path=%s", modelIdentifier, request.URL.Path)
+			t.Fatalf("unrecognized upstream model=%q path=%s", nativeModelIdentifier, request.URL.Path)
 		}
+		providerName := route.provider
+		modelIdentifier := route.canonicalModel
 		routeKey := providerName + "/" + modelIdentifier
 		observedPaths[routeKey] = append(observedPaths[routeKey], request.Method+" "+request.URL.Path)
 
@@ -235,45 +242,45 @@ func TestProviderRoutingEnumeratesConfiguredTextRouteCapabilities(t *testing.T) 
 		WorkerCount:                  1,
 		QueueSize:                    1,
 		RequestTimeoutSeconds:        TestTimeout,
-		ProviderModels:               catalogs,
+		ModelCatalog:                 catalogs,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
 
 	for _, providerName := range providerOrder {
-		for _, model := range catalogs[providerName].Text.Models {
+		for _, offering := range catalogOfferingsForProvider(catalogs, providerName, proxy.ModelOperationText) {
 			expected := expectedCapabilities[providerName]
 			if providerName == proxy.ProviderNameGemini {
 				expected.wireContract = "gemini_interactions"
 				expected.executionLifecycle = "pollable_resource"
-				if strings.HasPrefix(model.ID, "gemini-2.5-") {
+				if strings.HasPrefix(offering.Model, "gemini-2.5-") {
 					expected.executionLifecycle = "synchronous_completion"
 				}
 			}
-			if model.WireContract != expected.wireContract || model.ExecutionLifecycle != expected.executionLifecycle {
-				t.Fatalf("provider=%s model=%s capabilities=%s/%s want=%s/%s", providerName, model.ID, model.WireContract, model.ExecutionLifecycle, expected.wireContract, expected.executionLifecycle)
+			if offering.WireContract != expected.wireContract || offering.ExecutionLifecycle != expected.executionLifecycle {
+				t.Fatalf("provider=%s model=%s capabilities=%s/%s want=%s/%s", providerName, offering.Model, offering.WireContract, offering.ExecutionLifecycle, expected.wireContract, expected.executionLifecycle)
 			}
 			queryParameters := url.Values{}
 			queryParameters.Set("key", TestSecret)
 			queryParameters.Set("prompt", "enumerate route capabilities")
 			queryParameters.Set("provider", providerName)
-			queryParameters.Set("model", model.ID)
+			queryParameters.Set("model", offering.Model)
 			response := httptest.NewRecorder()
 			router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/?"+queryParameters.Encode(), nil))
 			if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != "route ok" {
-				t.Fatalf("provider=%s model=%s status=%d body=%q", providerName, model.ID, response.Code, response.Body.String())
+				t.Fatalf("provider=%s model=%s status=%d body=%q", providerName, offering.Model, response.Code, response.Body.String())
 			}
-			routeKey := providerName + "/" + model.ID
+			routeKey := providerName + "/" + offering.Model
 			expectedRequestCount := 1
-			if model.ID == pollModel {
+			if offering.Model == pollModel {
 				expectedRequestCount = 2
 			}
-			if providerName == proxy.ProviderNameGemini && model.ExecutionLifecycle == "pollable_resource" {
+			if providerName == proxy.ProviderNameGemini && offering.ExecutionLifecycle == "pollable_resource" {
 				expectedRequestCount = 2
 			}
 			if len(observedPaths[routeKey]) != expectedRequestCount {
-				t.Fatalf("provider=%s model=%s upstream=%v want requests=%d", providerName, model.ID, observedPaths[routeKey], expectedRequestCount)
+				t.Fatalf("provider=%s model=%s upstream=%v want requests=%d", providerName, offering.Model, observedPaths[routeKey], expectedRequestCount)
 			}
 		}
 	}
@@ -357,6 +364,7 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 		name                string
 		provider            string
 		model               string
+		providerModel       string
 		tokenParameterField string
 		expectedAPIKey      string
 		forbiddenFields     []string
@@ -365,8 +373,8 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 		{name: "Moonshot Kimi K2.6", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK26, tokenParameterField: "max_completion_tokens"},
 		{name: "Moonshot Kimi K3", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK3, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
 		{name: "Moonshot Kimi K2.7 Code", provider: proxy.ProviderNameMoonshot, model: proxy.ModelNameMoonshotKimiK27Code, tokenParameterField: "max_completion_tokens", forbiddenFields: []string{"temperature", "top_p", "n", "presence_penalty", "frequency_penalty"}},
-		{name: "MiniMax M2.7", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27, tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
-		{name: "SiliconFlow DeepSeek R1", provider: proxy.ProviderNameSiliconFlow, model: "deepseek-ai/DeepSeek-R1", tokenParameterField: "max_tokens", expectedAPIKey: testSiliconFlowKey},
+		{name: "MiniMax M2.7", provider: proxy.ProviderNameMiniMax, model: proxy.ModelNameMiniMaxM27, providerModel: "MiniMax-M2.7", tokenParameterField: "max_completion_tokens", expectedAPIKey: "sk-minimax", forbiddenFields: []string{"max_tokens"}},
+		{name: "SiliconFlow DeepSeek R1", provider: proxy.ProviderNameSiliconFlow, model: proxy.ModelNameSiliconFlowDeepSeek, providerModel: "deepseek-ai/DeepSeek-R1", tokenParameterField: "max_tokens", expectedAPIKey: testSiliconFlowKey},
 		{name: "Zhipu GLM 5.2", provider: proxy.ProviderNameZhipu, model: "glm-5.2", tokenParameterField: "max_tokens", forbiddenFields: []string{"thinking", "reasoning_effort"}},
 		{name: "Grok 4.5", provider: proxy.ProviderNameGrok, model: "grok-4.5", tokenParameterField: "max_tokens"},
 		{name: "Grok 4.20 reasoning", provider: proxy.ProviderNameGrok, model: "grok-4.20-0309-reasoning", tokenParameterField: "max_tokens"},
@@ -445,8 +453,12 @@ func TestProviderRoutingSupportsCurrentOpenAICompatibleCatalogModels(t *testing.
 			if requestCount != 2 {
 				subTest.Fatalf("upstream requests=%d want=2", requestCount)
 			}
-			if capturedPayload["model"] != testCase.model {
-				subTest.Fatalf("model=%v want=%s", capturedPayload["model"], testCase.model)
+			expectedProviderModel := testCase.providerModel
+			if expectedProviderModel == "" {
+				expectedProviderModel = testCase.model
+			}
+			if capturedPayload["model"] != expectedProviderModel {
+				subTest.Fatalf("model=%v want=%s", capturedPayload["model"], expectedProviderModel)
 			}
 			if capturedPayload[testCase.tokenParameterField] != float64(321) {
 				subTest.Fatalf("%s=%v payload=%v", testCase.tokenParameterField, capturedPayload[testCase.tokenParameterField], capturedPayload)
@@ -702,7 +714,10 @@ func TestProviderRoutingSupportsMetaMuseSparkAcrossPublicTextEndpoints(t *testin
 }
 
 func TestProviderRoutingUsesConfiguredTextModelCatalog(t *testing.T) {
-	const configuredDeepSeekModel = "deepseek-configured-latest"
+	const (
+		configuredDeepSeekModel = "deepseek-configured-latest"
+		configuredNativeModel   = "deepseek-native-route"
+	)
 
 	baseConfiguration, configurationError := newConfigurationWithCatalogs(t, proxy.Configuration{
 		Tenants:   proxy.SingleTenantConfigurations("test", TestSecret),
@@ -711,12 +726,17 @@ func TestProviderRoutingUsesConfiguredTextModelCatalog(t *testing.T) {
 	if configurationError != nil {
 		t.Fatalf("NewConfiguration error: %v", configurationError)
 	}
-	configuredCatalogs := baseConfiguration.ProviderModels
-	deepSeekCatalog := configuredCatalogs[proxy.ProviderNameDeepSeek]
-	configuredModel := deepSeekCatalog.Text.Models[0]
+	configuredCatalogs := baseConfiguration.ModelCatalog
+	deepSeekOfferings := catalogOfferingsForProvider(configuredCatalogs, proxy.ProviderNameDeepSeek, proxy.ModelOperationText)
+	configuredOffering := deepSeekOfferings[0]
+	configuredModel := configuredCatalogs.Models[catalogExactModelIndex(configuredCatalogs, configuredOffering.Model)]
 	configuredModel.ID = configuredDeepSeekModel
-	deepSeekCatalog.Text.Models = append(deepSeekCatalog.Text.Models, configuredModel)
-	configuredCatalogs[proxy.ProviderNameDeepSeek] = deepSeekCatalog
+	configuredModel.Version = "configured-latest"
+	configuredOffering.Model = configuredDeepSeekModel
+	configuredOffering.ProviderModel = configuredNativeModel
+	configuredOffering.DefaultOperations = nil
+	configuredCatalogs.Models = append(configuredCatalogs.Models, configuredModel)
+	configuredCatalogs.Offerings = append(configuredCatalogs.Offerings, configuredOffering)
 
 	var capturedPayload map[string]any
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
@@ -741,7 +761,7 @@ func TestProviderRoutingUsesConfiguredTextModelCatalog(t *testing.T) {
 		WorkerCount:           1,
 		QueueSize:             1,
 		RequestTimeoutSeconds: TestTimeout,
-		ProviderModels:        configuredCatalogs,
+		ModelCatalog:          configuredCatalogs,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -760,13 +780,13 @@ func TestProviderRoutingUsesConfiguredTextModelCatalog(t *testing.T) {
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("status=%d want=%d body=%s", responseRecorder.Code, http.StatusOK, responseRecorder.Body.String())
 	}
-	if capturedPayload["model"] != configuredDeepSeekModel {
-		t.Fatalf("model=%v want=%s", capturedPayload["model"], configuredDeepSeekModel)
+	if capturedPayload["model"] != configuredNativeModel {
+		t.Fatalf("model=%v want=%s", capturedPayload["model"], configuredNativeModel)
 	}
 }
 
 func TestProviderRoutingAppliesModelSpecificReasoningEffortCapability(t *testing.T) {
-	catalogs := testfixtures.ProviderModelCatalogs(t)
+	catalogs := testfixtures.ModelCatalog(t)
 	var capturedPayload map[string]any
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost || request.URL.Path != "/" {
@@ -797,7 +817,7 @@ func TestProviderRoutingAppliesModelSpecificReasoningEffortCapability(t *testing
 		QueueSize:             1,
 		RequestTimeoutSeconds: TestTimeout,
 		Endpoints:             endpoints,
-		ProviderModels:        catalogs,
+		ModelCatalog:          catalogs,
 	}, zap.NewNop().Sugar())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
@@ -815,15 +835,13 @@ func TestProviderRoutingAppliesModelSpecificReasoningEffortCapability(t *testing
 }
 
 func TestProviderRoutingRejectsModelReasoningEffortCapabilityOnUnsupportedRoute(t *testing.T) {
-	catalogs := testfixtures.ProviderModelCatalogs(t)
-	openAIModels := catalogs[proxy.ProviderNameOpenAI]
-	openAIModels.Text.Models[0].ReasoningEffort = openAIResponsesReasoningEffortCapability()
-	catalogs[proxy.ProviderNameOpenAI] = openAIModels
+	catalogs := testfixtures.ModelCatalog(t)
+	catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.ModelNameGPT4oMini)].ReasoningEffort = openAIResponsesReasoningEffortCapability()
 
 	_, configurationError := proxy.NewConfiguration(proxy.Configuration{
-		Tenants:        proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:      TestAPIKey,
-		ProviderModels: catalogs,
+		Tenants:      proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:    TestAPIKey,
+		ModelCatalog: catalogs,
 	})
 	if configurationError == nil || !strings.Contains(configurationError.Error(), "invalid_model_catalog") || !strings.Contains(configurationError.Error(), "adapter=openai_responses") {
 		t.Fatalf("configuration error=%v want unsupported model capability", configurationError)
@@ -833,75 +851,63 @@ func TestProviderRoutingRejectsModelReasoningEffortCapabilityOnUnsupportedRoute(
 func TestProviderRoutingRejectsInvalidReasoningEffortCatalogCapabilities(t *testing.T) {
 	testCases := []struct {
 		name      string
-		configure func(proxy.ProviderModelCatalogs)
+		configure func(proxy.ModelCatalog)
 	}{
 		{
 			name: "model capability has no adapter",
-			configure: func(catalogs proxy.ProviderModelCatalogs) {
-				openAIModels := catalogs[proxy.ProviderNameOpenAI]
+			configure: func(catalogs proxy.ModelCatalog) {
 				capability := openAIResponsesReasoningEffortCapability()
 				capability.Adapter = ""
-				openAIModels.Text.Models[4].ReasoningEffort = capability
-				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.ModelNameGPT5)].ReasoningEffort = capability
 			},
 		},
 		{
 			name: "model capability has unknown adapter",
-			configure: func(catalogs proxy.ProviderModelCatalogs) {
-				openAIModels := catalogs[proxy.ProviderNameOpenAI]
+			configure: func(catalogs proxy.ModelCatalog) {
 				capability := openAIResponsesReasoningEffortCapability()
 				capability.Adapter = "unsupported_adapter"
-				openAIModels.Text.Models[4].ReasoningEffort = capability
-				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.ModelNameGPT5)].ReasoningEffort = capability
 			},
 		},
 		{
 			name: "model capability has an empty option list",
-			configure: func(catalogs proxy.ProviderModelCatalogs) {
-				openAIModels := catalogs[proxy.ProviderNameOpenAI]
+			configure: func(catalogs proxy.ModelCatalog) {
 				capability := openAIResponsesReasoningEffortCapability()
 				capability.Efforts = []string{}
-				openAIModels.Text.Models[4].ReasoningEffort = capability
-				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.ModelNameGPT5)].ReasoningEffort = capability
 			},
 		},
 		{
 			name: "model capability has duplicate options",
-			configure: func(catalogs proxy.ProviderModelCatalogs) {
-				openAIModels := catalogs[proxy.ProviderNameOpenAI]
+			configure: func(catalogs proxy.ModelCatalog) {
 				capability := openAIResponsesReasoningEffortCapability()
 				capability.Efforts = []string{"minimal", "low", "low"}
-				openAIModels.Text.Models[4].ReasoningEffort = capability
-				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.ModelNameGPT5)].ReasoningEffort = capability
 			},
 		},
 		{
 			name: "model capability has unsupported effort",
-			configure: func(catalogs proxy.ProviderModelCatalogs) {
-				openAIModels := catalogs[proxy.ProviderNameOpenAI]
+			configure: func(catalogs proxy.ModelCatalog) {
 				capability := openAIResponsesReasoningEffortCapability()
 				capability.Efforts = []string{"warp"}
-				openAIModels.Text.Models[4].ReasoningEffort = capability
-				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.ModelNameGPT5)].ReasoningEffort = capability
 			},
 		},
 		{
 			name: "dictation capability is forbidden",
-			configure: func(catalogs proxy.ProviderModelCatalogs) {
-				openAIModels := catalogs[proxy.ProviderNameOpenAI]
-				openAIModels.Dictation.Models[0].ReasoningEffort = openAIResponsesReasoningEffortCapability()
-				catalogs[proxy.ProviderNameOpenAI] = openAIModels
+			configure: func(catalogs proxy.ModelCatalog) {
+				catalogs.Offerings[catalogOfferingIndex(catalogs, proxy.ProviderNameOpenAI, proxy.DefaultDictationModel)].ReasoningEffort = openAIResponsesReasoningEffortCapability()
 			},
 		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
-			catalogs := testfixtures.ProviderModelCatalogs(subTest)
+			catalogs := testfixtures.ModelCatalog(subTest)
 			testCase.configure(catalogs)
 			_, configurationError := proxy.NewConfiguration(proxy.Configuration{
-				Tenants:        proxy.SingleTenantConfigurations("test", TestSecret),
-				OpenAIKey:      TestAPIKey,
-				ProviderModels: catalogs,
+				Tenants:      proxy.SingleTenantConfigurations("test", TestSecret),
+				OpenAIKey:    TestAPIKey,
+				ModelCatalog: catalogs,
 			})
 			if configurationError == nil || !strings.Contains(configurationError.Error(), "invalid_model_catalog") {
 				subTest.Fatalf("configuration error=%v want invalid capability", configurationError)
@@ -914,9 +920,9 @@ func TestProviderRoutingRejectsUnsupportedStaticTenantReasoningEffort(t *testing
 	defaults := proxy.DefaultTenantDefaults()
 	defaults.ReasoningEffort = "unsupported_effort"
 	_, configurationError := proxy.NewConfiguration(proxy.Configuration{
-		Tenants:        proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, defaults),
-		OpenAIKey:      TestAPIKey,
-		ProviderModels: testfixtures.ProviderModelCatalogs(t),
+		Tenants:      proxy.SingleTenantConfigurationsWithDefaults("test", TestSecret, defaults),
+		OpenAIKey:    TestAPIKey,
+		ModelCatalog: testfixtures.ModelCatalog(t),
 	})
 	if configurationError == nil || !strings.Contains(configurationError.Error(), "unsupported provider capability") {
 		t.Fatalf("configuration error=%v want unsupported tenant reasoning effort", configurationError)
@@ -931,15 +937,20 @@ func TestProviderRoutingRejectsMissingConfiguredProviderCatalog(t *testing.T) {
 	if configurationError != nil {
 		t.Fatalf("NewConfiguration error: %v", configurationError)
 	}
-	configuredCatalogs := baseConfiguration.ProviderModels
-	delete(configuredCatalogs, proxy.ProviderNameDeepSeek)
+	configuredCatalogs := baseConfiguration.ModelCatalog
+	for index, provider := range configuredCatalogs.Providers {
+		if provider.ID == proxy.ProviderNameDeepSeek {
+			configuredCatalogs.Providers = slices.Delete(configuredCatalogs.Providers, index, index+1)
+			break
+		}
+	}
 
 	_, configurationError = newConfigurationWithCatalogs(t, proxy.Configuration{
-		Tenants:        proxy.SingleTenantConfigurations("test", TestSecret),
-		OpenAIKey:      TestAPIKey,
-		ProviderModels: configuredCatalogs,
+		Tenants:      proxy.SingleTenantConfigurations("test", TestSecret),
+		OpenAIKey:    TestAPIKey,
+		ModelCatalog: configuredCatalogs,
 	})
-	if configurationError == nil || !strings.Contains(configurationError.Error(), "invalid_model_catalog: provider=deepseek field=providers.deepseek.text") {
+	if configurationError == nil || !strings.Contains(configurationError.Error(), "field=catalog.providers provider=deepseek reason=missing") {
 		t.Fatalf("error=%v want missing deepseek catalog", configurationError)
 	}
 }

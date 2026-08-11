@@ -36,6 +36,10 @@ func loadPublicCapabilityAPIConfiguration(rawConfigPath string) (publicCapabilit
 	if providersReader == nil {
 		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s field=providers", errPublicCapabilityConfig, configPath)
 	}
+	catalogReader := configReader.Sub("catalog")
+	if catalogReader == nil {
+		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s field=catalog", errPublicCapabilityConfig, configPath)
+	}
 	var serverConfig serverConfiguration
 	if unmarshalError := serverReader.UnmarshalExact(&serverConfig); unmarshalError != nil {
 		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s field=server: %v", errPublicCapabilityConfig, configPath, unmarshalError)
@@ -47,12 +51,16 @@ func loadPublicCapabilityAPIConfiguration(rawConfigPath string) (publicCapabilit
 	if unmarshalError := providersReader.UnmarshalExact(&providersConfig); unmarshalError != nil {
 		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s field=providers: %v", errPublicCapabilityConfig, configPath, unmarshalError)
 	}
+	var catalogConfig modelCatalogConfiguration
+	if unmarshalError := catalogReader.UnmarshalExact(&catalogConfig); unmarshalError != nil {
+		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s field=catalog: %v", errPublicCapabilityConfig, configPath, unmarshalError)
+	}
 	maxRequestTimeoutSeconds, timeoutError := configuredPositiveInteger(serverConfig.MaxRequestTimeoutSeconds, proxy.DefaultMaxRequestTimeoutSeconds, "server.max_request_timeout_seconds")
 	if timeoutError != nil {
 		return publicCapabilityAPIConfiguration{}, fmt.Errorf("%w: path=%s: %v", errPublicCapabilityConfig, configPath, timeoutError)
 	}
 	capabilityCatalog, catalogError := proxy.NewPublicCapabilityCatalog(proxy.Configuration{
-		ProviderModels:           providersConfig.providerModelCatalogs(),
+		ModelCatalog:             catalogConfig.proxyCatalog(),
 		MaxPromptBytes:           serverConfig.MaxPromptBytes,
 		MaxInputAudioBytes:       serverConfig.MaxInputAudioBytes,
 		MaxRequestTimeoutSeconds: maxRequestTimeoutSeconds,

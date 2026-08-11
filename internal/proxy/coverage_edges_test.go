@@ -61,7 +61,7 @@ func requireUpstreamFailureStatus(t *testing.T, statusCode int) {
 
 func coverageRouter(t *testing.T, configuration proxy.Configuration) *gin.Engine {
 	t.Helper()
-	router, buildError := proxy.BuildRouter(withProviderModelCatalogs(t, configuration), coverageLogger())
+	router, buildError := proxy.BuildRouter(withModelCatalog(t, configuration), coverageLogger())
 	if buildError != nil {
 		t.Fatalf(messageBuildRouterError, buildError)
 	}
@@ -687,7 +687,7 @@ func TestCoverageConfigurationValidationMatrix(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(subTest *testing.T) {
-			_, buildError := proxy.BuildRouter(withProviderModelCatalogs(subTest, testCase.configuration), coverageLogger())
+			_, buildError := proxy.BuildRouter(withModelCatalog(subTest, testCase.configuration), coverageLogger())
 			if buildError == nil || !strings.Contains(buildError.Error(), testCase.expectedError) {
 				subTest.Fatalf("error=%v want contains %q", buildError, testCase.expectedError)
 			}
@@ -2168,7 +2168,7 @@ func TestCoverageServeAndEndpointReset(t *testing.T) {
 		t.Fatalf("Serve buildError=nil want non-nil")
 	}
 
-	serveError := proxy.Serve(withProviderModelCatalogs(t, proxy.Configuration{
+	serveError := proxy.Serve(withModelCatalog(t, proxy.Configuration{
 		Tenants:               proxy.SingleTenantConfigurations("test", TestSecret),
 		OpenAIKey:             TestAPIKey,
 		Port:                  -1,
@@ -2183,7 +2183,7 @@ func TestCoverageServeAndEndpointReset(t *testing.T) {
 }
 
 func TestCoveragePublicCapabilityRESTSurface(t *testing.T) {
-	capabilityCatalog, catalogError := proxy.NewPublicCapabilityCatalog(withProviderModelCatalogs(t, proxy.Configuration{}))
+	capabilityCatalog, catalogError := proxy.NewPublicCapabilityCatalog(withModelCatalog(t, proxy.Configuration{}))
 	if catalogError != nil {
 		t.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
 	}

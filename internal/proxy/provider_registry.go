@@ -30,150 +30,49 @@ type textModelSummary struct {
 }
 
 func newProviderRegistry(configuration Configuration) *providerRegistry {
-	openAIProviderID := providerID(ProviderNameOpenAI)
-	deepSeekProviderID := providerID(ProviderNameDeepSeek)
-	dashScopeProviderID := providerID(ProviderNameDashScope)
-	moonshotProviderID := providerID(ProviderNameMoonshot)
-	miniMaxProviderID := providerID(ProviderNameMiniMax)
-	siliconFlowProviderID := providerID(ProviderNameSiliconFlow)
-	zhipuProviderID := providerID(ProviderNameZhipu)
-	geminiProviderID := providerID(ProviderNameGemini)
-	anthropicProviderID := providerID(ProviderNameAnthropic)
-	metaProviderID := providerID(ProviderNameMeta)
-	grokProviderID := providerID(ProviderNameGrok)
-	openAIModels := configuration.ProviderModels[ProviderNameOpenAI]
-	deepSeekModels := configuration.ProviderModels[ProviderNameDeepSeek]
-	dashScopeModels := configuration.ProviderModels[ProviderNameDashScope]
-	moonshotModels := configuration.ProviderModels[ProviderNameMoonshot]
-	miniMaxModels := configuration.ProviderModels[ProviderNameMiniMax]
-	siliconFlowModels := configuration.ProviderModels[ProviderNameSiliconFlow]
-	zhipuModels := configuration.ProviderModels[ProviderNameZhipu]
-	geminiModels := configuration.ProviderModels[ProviderNameGemini]
-	anthropicModels := configuration.ProviderModels[ProviderNameAnthropic]
-	metaModels := configuration.ProviderModels[ProviderNameMeta]
-	grokModels := configuration.ProviderModels[ProviderNameGrok]
-
-	definitions := map[providerID]providerDefinition{
-		openAIProviderID: {
-			identifier:                openAIProviderID,
-			textAPIKey:                configuration.OpenAIKey,
-			transcriptionAPIKey:       configuration.OpenAIKey,
-			transcriptionsURL:         configuration.OpenAITranscriptionsURL,
-			defaultTextModel:          modelID(openAIModels.Text.DefaultModel),
-			defaultTranscriptionModel: modelID(openAIModels.Dictation.DefaultModel),
-			transcriptionModelField:   keyModel,
-			textModels:                textModelSet(openAIModels.Text),
-			transcriptionModels:       dictationModelSet(openAIModels.Dictation),
-			supportsDictation:         true,
-		},
-		deepSeekProviderID: {
-			identifier:              deepSeekProviderID,
-			textAPIKey:              configuration.DeepSeekKey,
-			textBaseURL:             configuration.DeepSeekBaseURL,
-			defaultTextModel:        modelID(deepSeekModels.Text.DefaultModel),
-			textModels:              textModelSet(deepSeekModels.Text),
-			transcriptionModels:     map[string]modelID{},
-			chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
-		},
-		dashScopeProviderID: {
-			identifier:              dashScopeProviderID,
-			aliases:                 []string{providerAliasQwen},
-			textAPIKey:              configuration.DashScopeKey,
-			textBaseURL:             configuration.DashScopeBaseURL,
-			defaultTextModel:        modelID(dashScopeModels.Text.DefaultModel),
-			textModels:              textModelSet(dashScopeModels.Text),
-			transcriptionModels:     map[string]modelID{},
-			chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
-		},
-		moonshotProviderID: {
-			identifier:              moonshotProviderID,
-			aliases:                 []string{providerAliasKimi},
-			textAPIKey:              configuration.MoonshotKey,
-			textBaseURL:             configuration.MoonshotBaseURL,
-			defaultTextModel:        modelID(moonshotModels.Text.DefaultModel),
-			textModels:              textModelSet(moonshotModels.Text),
-			transcriptionModels:     map[string]modelID{},
-			chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
-		},
-		miniMaxProviderID: {
-			identifier:              miniMaxProviderID,
-			textAPIKey:              configuration.MiniMaxKey,
-			textBaseURL:             configuration.MiniMaxBaseURL,
-			defaultTextModel:        modelID(miniMaxModels.Text.DefaultModel),
-			textModels:              textModelSet(miniMaxModels.Text),
-			transcriptionModels:     map[string]modelID{},
-			chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
-		},
-		siliconFlowProviderID: {
-			identifier:                siliconFlowProviderID,
-			textAPIKey:                configuration.SiliconFlowKey,
-			textBaseURL:               configuration.SiliconFlowBaseURL,
-			transcriptionAPIKey:       configuration.SiliconFlowKey,
-			transcriptionsURL:         configuration.SiliconFlowTranscriptionsURL,
-			defaultTextModel:          modelID(siliconFlowModels.Text.DefaultModel),
-			defaultTranscriptionModel: modelID(siliconFlowModels.Dictation.DefaultModel),
-			transcriptionModelField:   keyModel,
-			textModels:                textModelSet(siliconFlowModels.Text),
-			transcriptionModels:       dictationModelSet(siliconFlowModels.Dictation),
-			supportsDictation:         true,
-			chatTokenLimitParameter:   chatCompletionTokenLimitMaxTokens,
-		},
-		zhipuProviderID: {
-			identifier:                zhipuProviderID,
-			aliases:                   []string{providerAliasGLM},
-			textAPIKey:                configuration.ZhipuKey,
-			textBaseURL:               configuration.ZhipuBaseURL,
-			transcriptionAPIKey:       configuration.ZhipuKey,
-			transcriptionsURL:         configuration.ZhipuTranscriptionsURL,
-			defaultTextModel:          modelID(zhipuModels.Text.DefaultModel),
-			defaultTranscriptionModel: modelID(zhipuModels.Dictation.DefaultModel),
-			transcriptionModelField:   keyModel,
-			textModels:                textModelSet(zhipuModels.Text),
-			transcriptionModels:       dictationModelSet(zhipuModels.Dictation),
-			supportsDictation:         true,
-			chatTokenLimitParameter:   chatCompletionTokenLimitMaxTokens,
-		},
-		geminiProviderID: {
-			identifier:          geminiProviderID,
-			textAPIKey:          configuration.GeminiKey,
-			textBaseURL:         configuration.GeminiBaseURL,
-			defaultTextModel:    modelID(geminiModels.Text.DefaultModel),
-			textModels:          textModelSet(geminiModels.Text),
-			transcriptionModels: map[string]modelID{},
-		},
-		anthropicProviderID: {
-			identifier:          anthropicProviderID,
-			aliases:             []string{providerAliasClaude},
-			textAPIKey:          configuration.AnthropicKey,
-			textBaseURL:         configuration.AnthropicBaseURL,
-			defaultTextModel:    modelID(anthropicModels.Text.DefaultModel),
-			textModels:          textModelSet(anthropicModels.Text),
-			transcriptionModels: map[string]modelID{},
-		},
-		metaProviderID: {
-			identifier:              metaProviderID,
-			textAPIKey:              configuration.MetaKey,
-			textBaseURL:             configuration.MetaBaseURL,
-			defaultTextModel:        modelID(metaModels.Text.DefaultModel),
-			textModels:              textModelSet(metaModels.Text),
-			transcriptionModels:     map[string]modelID{},
-			chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
-		},
-		grokProviderID: {
-			identifier:                grokProviderID,
-			aliases:                   []string{providerAliasXAI},
-			textAPIKey:                configuration.GrokKey,
-			textBaseURL:               configuration.GrokBaseURL,
-			transcriptionAPIKey:       configuration.GrokKey,
-			transcriptionsURL:         configuration.GrokTranscriptionsURL,
-			defaultTextModel:          modelID(grokModels.Text.DefaultModel),
-			defaultTranscriptionModel: modelID(grokModels.Dictation.DefaultModel),
-			transcriptionModelField:   constants.EmptyString,
-			textModels:                textModelSet(grokModels.Text),
-			transcriptionModels:       dictationModelSet(grokModels.Dictation),
-			supportsDictation:         true,
-			chatTokenLimitParameter:   chatCompletionTokenLimitMaxTokens,
-		},
+	definitions := configuredProviderDefinitions(configuration)
+	for _, provider := range configuration.ModelCatalog.Providers {
+		identifier := providerID(provider.ID)
+		definition := definitions[identifier]
+		definition.label = provider.Label
+		definitions[identifier] = definition
+	}
+	for _, offering := range configuration.ModelCatalog.Offerings {
+		identifier := providerID(offering.Provider)
+		definition := definitions[identifier]
+		if offeringSupportsOperation(offering, ModelOperationText) {
+			routeCapabilities := textRouteCapabilities{
+				wireContract:       textWireContract(offering.WireContract),
+				executionLifecycle: textExecutionLifecycle(offering.ExecutionLifecycle),
+			}
+			definition.textModels[strings.ToLower(offering.Model)] = textModelDefinition{
+				identifier:          modelID(offering.Model),
+				providerIdentifier:  modelID(offering.ProviderModel),
+				wireContract:        routeCapabilities.wireContract,
+				executionLifecycle:  routeCapabilities.executionLifecycle,
+				routeAdapter:        textRouteAdapters[routeCapabilities],
+				requestProfile:      modelRequestProfile(offering.RequestProfile),
+				supportsWebSearch:   offering.WebSearch,
+				outputTokenLimit:    offering.OutputTokenLimit,
+				hasOutputTokenLimit: offering.OutputTokenLimit > 0,
+				reasoningEffort:     configuredReasoningEffortCapability(offering.ReasoningEffort),
+				mediaInputs:         configuredMediaInputSet(offering.MediaInputs),
+			}
+			if offeringDefaultsOperation(offering, ModelOperationText) {
+				definition.defaultTextModel = modelID(offering.Model)
+			}
+		}
+		if offeringSupportsOperation(offering, ModelOperationDictation) {
+			definition.transcriptionModels[strings.ToLower(offering.Model)] = dictationModelDefinition{
+				identifier:         modelID(offering.Model),
+				providerIdentifier: modelID(offering.ProviderModel),
+			}
+			definition.supportsDictation = true
+			if offeringDefaultsOperation(offering, ModelOperationDictation) {
+				definition.defaultTranscriptionModel = modelID(offering.Model)
+			}
+		}
+		definitions[identifier] = definition
 	}
 
 	registry := &providerRegistry{
@@ -190,6 +89,59 @@ func newProviderRegistry(configuration Configuration) *providerRegistry {
 		}
 	}
 	return registry
+}
+
+func configuredProviderDefinitions(configuration Configuration) map[providerID]providerDefinition {
+	return map[providerID]providerDefinition{
+		providerID(ProviderNameOpenAI): {
+			identifier: providerID(ProviderNameOpenAI), textAPIKey: configuration.OpenAIKey,
+			transcriptionAPIKey: configuration.OpenAIKey, transcriptionsURL: configuration.OpenAITranscriptionsURL,
+			transcriptionModelField: keyModel, textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{},
+		},
+		providerID(ProviderNameDeepSeek): {
+			identifier: providerID(ProviderNameDeepSeek), textAPIKey: configuration.DeepSeekKey, textBaseURL: configuration.DeepSeekBaseURL,
+			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
+		},
+		providerID(ProviderNameDashScope): {
+			identifier: providerID(ProviderNameDashScope), aliases: []string{providerAliasQwen}, textAPIKey: configuration.DashScopeKey, textBaseURL: configuration.DashScopeBaseURL,
+			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
+		},
+		providerID(ProviderNameMoonshot): {
+			identifier: providerID(ProviderNameMoonshot), aliases: []string{providerAliasKimi}, textAPIKey: configuration.MoonshotKey, textBaseURL: configuration.MoonshotBaseURL,
+			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
+		},
+		providerID(ProviderNameMiniMax): {
+			identifier: providerID(ProviderNameMiniMax), textAPIKey: configuration.MiniMaxKey, textBaseURL: configuration.MiniMaxBaseURL,
+			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
+		},
+		providerID(ProviderNameSiliconFlow): {
+			identifier: providerID(ProviderNameSiliconFlow), textAPIKey: configuration.SiliconFlowKey, textBaseURL: configuration.SiliconFlowBaseURL,
+			transcriptionAPIKey: configuration.SiliconFlowKey, transcriptionsURL: configuration.SiliconFlowTranscriptionsURL, transcriptionModelField: keyModel,
+			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
+		},
+		providerID(ProviderNameZhipu): {
+			identifier: providerID(ProviderNameZhipu), aliases: []string{providerAliasGLM}, textAPIKey: configuration.ZhipuKey, textBaseURL: configuration.ZhipuBaseURL,
+			transcriptionAPIKey: configuration.ZhipuKey, transcriptionsURL: configuration.ZhipuTranscriptionsURL, transcriptionModelField: keyModel,
+			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
+		},
+		providerID(ProviderNameGemini): {
+			identifier: providerID(ProviderNameGemini), textAPIKey: configuration.GeminiKey, textBaseURL: configuration.GeminiBaseURL,
+			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{},
+		},
+		providerID(ProviderNameAnthropic): {
+			identifier: providerID(ProviderNameAnthropic), aliases: []string{providerAliasClaude}, textAPIKey: configuration.AnthropicKey, textBaseURL: configuration.AnthropicBaseURL,
+			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{},
+		},
+		providerID(ProviderNameMeta): {
+			identifier: providerID(ProviderNameMeta), textAPIKey: configuration.MetaKey, textBaseURL: configuration.MetaBaseURL,
+			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxCompletionTokens,
+		},
+		providerID(ProviderNameGrok): {
+			identifier: providerID(ProviderNameGrok), aliases: []string{providerAliasXAI}, textAPIKey: configuration.GrokKey, textBaseURL: configuration.GrokBaseURL,
+			transcriptionAPIKey: configuration.GrokKey, transcriptionsURL: configuration.GrokTranscriptionsURL, transcriptionModelField: constants.EmptyString,
+			textModels: map[string]textModelDefinition{}, transcriptionModels: map[string]dictationModelDefinition{}, chatTokenLimitParameter: chatCompletionTokenLimitMaxTokens,
+		},
+	}
 }
 
 func configuredProviderAPIKeys(configuration Configuration) map[providerID]string {
@@ -263,7 +215,7 @@ func (registry *providerRegistry) providerSummaries() []providerSummary {
 		sort.Strings(aliases)
 		summaries = append(summaries, providerSummary{
 			identifier:            definition.identifier.string(),
-			label:                 providerLabel(definition.identifier),
+			label:                 definition.label,
 			aliases:               aliases,
 			textDefaultModel:      definition.defaultTextModel.string(),
 			textModels:            sortedTextModelSummaries(definition.textModels),
@@ -370,10 +322,10 @@ func (registry *providerRegistry) resolveDictationModel(rawProvider string, rawM
 	return definition, resolvedModel, nil
 }
 
-func resolveModelFromSet(modelIdentifiers map[string]modelID, rawModel string) (modelID, error) {
+func resolveModelFromSet(modelIdentifiers map[string]dictationModelDefinition, rawModel string) (modelID, error) {
 	resolvedModel := newModelID(rawModel)
-	if modelIdentifier, known := modelIdentifiers[strings.ToLower(resolvedModel.string())]; known {
-		return modelIdentifier, nil
+	if modelDefinition, known := modelIdentifiers[strings.ToLower(resolvedModel.string())]; known {
+		return modelDefinition.identifier, nil
 	}
 	return modelID(""), fmt.Errorf("%w: %s", ErrUnknownModel, resolvedModel.string())
 }
@@ -408,11 +360,11 @@ func sortedTextModelSummaries(modelIdentifiers map[string]textModelDefinition) [
 	return models
 }
 
-func sortedDictationModels(modelIdentifiers map[string]modelID) []string {
+func sortedDictationModels(modelIdentifiers map[string]dictationModelDefinition) []string {
 	models := make([]string, 0, len(modelIdentifiers))
 	seenModels := map[string]struct{}{}
-	for _, modelIdentifier := range modelIdentifiers {
-		modelIdentifierString := modelIdentifier.string()
+	for _, modelDefinition := range modelIdentifiers {
+		modelIdentifierString := modelDefinition.identifier.string()
 		if _, seen := seenModels[modelIdentifierString]; seen {
 			continue
 		}
@@ -421,33 +373,4 @@ func sortedDictationModels(modelIdentifiers map[string]modelID) []string {
 	}
 	sort.Strings(models)
 	return models
-}
-
-func providerLabel(identifier providerID) string {
-	switch identifier.string() {
-	case ProviderNameOpenAI:
-		return "OpenAI"
-	case ProviderNameDeepSeek:
-		return "DeepSeek"
-	case ProviderNameDashScope:
-		return "DashScope"
-	case ProviderNameMoonshot:
-		return "Moonshot"
-	case ProviderNameMiniMax:
-		return "MiniMax"
-	case ProviderNameSiliconFlow:
-		return "SiliconFlow"
-	case ProviderNameZhipu:
-		return "Zhipu"
-	case ProviderNameGemini:
-		return "Gemini"
-	case ProviderNameAnthropic:
-		return "Anthropic"
-	case ProviderNameMeta:
-		return "Meta"
-	case ProviderNameGrok:
-		return "Grok"
-	default:
-		return identifier.string()
-	}
 }

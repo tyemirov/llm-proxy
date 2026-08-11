@@ -13,34 +13,13 @@ func TestManagedRoutingDefaultsRejectNonCanonicalPairs(t *testing.T) {
 		siliconDictationModel = "silicon-stt"
 	)
 	providers := newProviderRegistry(Configuration{
-		ProviderModels: ProviderModelCatalogs{
-			ProviderNameOpenAI: {
-				Text: ModelEndpointCatalog{
-					DefaultModel: openAITextModel,
-					Models:       []ModelConfiguration{{ID: openAITextModel}},
-				},
-				Dictation: ModelEndpointCatalog{
-					DefaultModel: openAIDictationModel,
-					Models:       []ModelConfiguration{{ID: openAIDictationModel}},
-				},
-			},
-			ProviderNameDeepSeek: {
-				Text: ModelEndpointCatalog{
-					DefaultModel: deepSeekTextModel,
-					Models:       []ModelConfiguration{{ID: deepSeekTextModel}},
-				},
-			},
-			ProviderNameSiliconFlow: {
-				Text: ModelEndpointCatalog{
-					DefaultModel: "silicon-text",
-					Models:       []ModelConfiguration{{ID: "silicon-text"}},
-				},
-				Dictation: ModelEndpointCatalog{
-					DefaultModel: siliconDictationModel,
-					Models:       []ModelConfiguration{{ID: siliconDictationModel}},
-				},
-			},
-		},
+		ModelCatalog: internalTestModelCatalog(
+			internalTestOffering(ProviderNameOpenAI, openAITextModel, []string{ModelOperationText}, []string{ModelOperationText}),
+			internalTestOffering(ProviderNameOpenAI, openAIDictationModel, []string{ModelOperationDictation}, []string{ModelOperationDictation}),
+			internalTestOffering(ProviderNameDeepSeek, deepSeekTextModel, []string{ModelOperationText}, []string{ModelOperationText}),
+			internalTestOffering(ProviderNameSiliconFlow, "silicon-text", []string{ModelOperationText}, []string{ModelOperationText}),
+			internalTestOffering(ProviderNameSiliconFlow, siliconDictationModel, []string{ModelOperationDictation}, []string{ModelOperationDictation}),
+		),
 	})
 	canonical := TenantDefaults{
 		Provider:          ProviderNameOpenAI,

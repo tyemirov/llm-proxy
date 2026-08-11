@@ -2,7 +2,7 @@
 
 import { expect, test } from "@playwright/test";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -25,12 +25,9 @@ test("public site rendering rejects a missing capability REST resource", async (
 });
 
 test("public site rendering rejects an invalid capability REST representation", async () => {
-  await withCapabilityServer(200, {
-    providers: [],
-    max_prompt_bytes: 4194304,
-    max_input_audio_bytes: 26214400,
-    max_request_timeout_seconds: 3600,
-  }, async (capabilitiesURL) => {
+  const capabilities = normalizedCapabilityFixture();
+  capabilities.providers = [];
+  await withCapabilityServer(200, capabilities, async (capabilitiesURL) => {
     const fixture = await siteFixture();
     try {
       await expect(renderFixture(fixture, capabilitiesURL)).rejects.toThrow(/catalog\.providers must not be empty/u);
@@ -39,6 +36,62 @@ test("public site rendering rejects an invalid capability REST representation", 
     }
   });
 });
+
+test("public site rendering writes the normalized exact model catalog", async () => {
+  await withCapabilityServer(200, normalizedCapabilityFixture(), async (capabilitiesURL) => {
+    const fixture = await siteFixture();
+    try {
+      await renderFixture(fixture, capabilitiesURL);
+      const renderedLanding = await readFile(path.join(fixture.output, "index.html"), "utf8");
+      expect(renderedLanding).toContain("1 publisher · 1 exact model · 1 offering");
+      expect(renderedLanding).toContain('data-route-publisher="example-publisher"');
+      expect(renderedLanding).toContain('data-route-model="example-model"');
+      expect(renderedLanding).toContain('data-route-provider="example-provider"');
+      expect(renderedLanding).toContain('<strong>1</strong><span>Exact models</span>');
+      expect(renderedLanding).not.toContain("provider_model");
+      expect(renderedLanding).not.toContain("default_operations");
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+});
+
+function normalizedCapabilityFixture() {
+  return {
+    providers: [{ identifier: "example-provider", label: "Example Provider" }],
+    publishers: [{ identifier: "example-publisher", label: "Example Publisher", model_count: 1 }],
+    families: [{ identifier: "example-family", publisher: "example-publisher", label: "Example Family" }],
+    models: [{
+      identifier: "example-model",
+      publisher: "example-publisher",
+      family: "example-family",
+      version: "1",
+      operations: ["text"],
+      media_inputs: [],
+      capabilities: ["text"],
+      provider_offerings: ["example-provider:example-model"],
+    }],
+    offerings: [{
+      identifier: "example-provider:example-model",
+      provider: "example-provider",
+      model: "example-model",
+      capabilities: ["text"],
+      wire_contract: "openai_chat_completions",
+      output_token_limit: 0,
+      reasoning_efforts: [],
+    }],
+    counts: {
+      providers: 1,
+      model_publishers: 1,
+      model_families: 1,
+      exact_models: 1,
+      provider_offerings: 1,
+    },
+    max_prompt_bytes: 4194304,
+    max_input_audio_bytes: 26214400,
+    max_request_timeout_seconds: 3600,
+  };
+}
 
 /**
  * @param {{root: string, source: string, output: string}} fixture

@@ -19,14 +19,6 @@ import (
 func TestManagedTenantSQLiteMigrationPreflightRejectsMalformedOwnershipData(t *testing.T) {
 	cipher := internalManagedProviderKeyCipher()
 	providers := internalManagementProviderRegistry()
-	dashScopeIdentifier := newProviderID(ProviderNameDashScope)
-	dashScopeDefinition := providers.definitions[dashScopeIdentifier]
-	dashScopeDefinition.defaultTextModel = newModelID(ModelNameDashScopeQwenPlus)
-	dashScopeDefinition.textModels = textModelSet(ModelEndpointCatalog{
-		DefaultModel: ModelNameDashScopeQwenPlus,
-		Models:       []ModelConfiguration{{ID: ModelNameDashScopeQwenPlus}},
-	})
-	providers.definitions[dashScopeIdentifier] = dashScopeDefinition
 	now := time.Date(2026, 7, 25, 17, 0, 0, 0, time.UTC)
 
 	type fixture struct {

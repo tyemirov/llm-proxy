@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>LLM model catalog configuration in config.yml</title>
-    <meta name="description" content="Keep provider model IDs, defaults, web-search flags, and token limits in runtime config.">
+    <meta name="description" content="Keep exact model identity and provider offerings in normalized runtime config.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/resources/model-catalog-configuration/">
     <meta property="og:title" content="LLM model catalog configuration in config.yml">
-    <meta property="og:description" content="Keep provider model IDs, defaults, web-search flags, and token limits in runtime config.">
+    <meta property="og:description" content="Keep exact model identity and provider offerings in normalized runtime config.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://llm-proxy.mprlab.com/resources/model-catalog-configuration/">
     <meta name="twitter:card" content="summary">
@@ -27,9 +27,9 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
     <script defer src="/assets/llm-proxy/js/googleAnalytics.js"></script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"LLM model catalog configuration in config.yml","description":"Keep provider model IDs, defaults, web-search flags, and token limits in runtime config.","url":"https://llm-proxy.mprlab.com/resources/model-catalog-configuration/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/model-catalog-configuration/","about":["LLM Proxy","Configuration","LLM model catalog configuration"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"LLM model catalog configuration in config.yml","description":"Keep exact model identity and provider offerings in normalized runtime config.","url":"https://llm-proxy.mprlab.com/resources/model-catalog-configuration/","datePublished":"2026-07-06","dateModified":"2026-07-11","mainEntityOfPage":"https://llm-proxy.mprlab.com/resources/model-catalog-configuration/","about":["LLM Proxy","Configuration","LLM model catalog configuration"],"author":{"@type":"Person","name":"Tyemirov","url":"https://github.com/tyemirov"}}</script>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://llm-proxy.mprlab.com/"},{"@type":"ListItem","position":2,"name":"Resources","item":"https://llm-proxy.mprlab.com/resources/"},{"@type":"ListItem","position":3,"name":"LLM model catalog configuration in config.yml","item":"https://llm-proxy.mprlab.com/resources/model-catalog-configuration/"}]}</script>
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of LLM model catalog configuration?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy treats provider model catalogs as runtime configuration while provider transports stay code-owned."}},{"@type":"Question","name":"Who should read this configuration resource?","acceptedAnswer":{"@type":"Answer","text":"Operators maintaining provider model availability without changing application code."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Provider default model selection for omitted models, which covers provider default model selection."}}]}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the main job of LLM model catalog configuration?","acceptedAnswer":{"@type":"Answer","text":"LLM Proxy keeps publishers, families, exact models, providers, and provider offerings in normalized runtime configuration."}},{"@type":"Question","name":"Who should read this configuration resource?","acceptedAnswer":{"@type":"Answer","text":"Operators maintaining provider model availability without changing application code."}},{"@type":"Question","name":"Does this page claim provider performance or pricing advantages?","acceptedAnswer":{"@type":"Answer","text":"No. The supported claim is about LLM Proxy's documented routing, configuration, management, security, usage, and deployment contracts. Provider cost, speed, rankings, and benchmark claims are not made here."}},{"@type":"Question","name":"Where should setup details come from?","acceptedAnswer":{"@type":"Answer","text":"Use the main README and implementation notes for current command, config, and endpoint details. This page summarizes the workflow without replacing LLM Proxy documentation."}},{"@type":"Question","name":"What should I read next?","acceptedAnswer":{"@type":"Answer","text":"A closely related resource is Provider default model selection for omitted models, which covers provider default model selection."}}]}</script>
     <script defer src="https://loopaware.mprlab.com/pixel.js?site_id=839f018b-97a9-4955-a489-4ad5cb626f4f"></script>
   </head>
   <body class="resource-page">
@@ -65,7 +65,7 @@
           <header class="resource-hero">
             <p class="eyebrow">Configuration</p>
             <h1>LLM model catalog configuration in config.yml</h1>
-            <p class="resource-deck">Keep provider model IDs, defaults, web-search flags, and token limits in runtime config.</p>
+            <p class="resource-deck">Keep exact model identity and provider offerings in normalized runtime config.</p>
             <p class="resource-audience">Operators maintaining provider model availability without changing application code.</p>
             <p class="resource-byline">Reviewed 2026-07-11 by <a href="https://github.com/tyemirov" rel="author">Tyemirov on GitHub</a>.</p>
             <div class="resource-actions">
@@ -81,15 +81,15 @@
 
           <section>
             <h2>How LLM Proxy helps</h2>
-            <p>LLM Proxy treats provider model catalogs as runtime configuration while provider transports stay code-owned.</p>
+            <p>LLM Proxy keeps publishers, families, exact models, providers, and provider offerings in normalized runtime configuration.</p>
           </section>
 
           <section>
             <h2>How it works</h2>
             <ol class="resource-steps">
-              <li>Declare each provider text catalog and default model in config.yml.</li>
-<li>Declare dictation catalogs for dictation-capable providers.</li>
-<li>Add OpenAI request profiles and web_search flags only where supported.</li>
+              <li>Declare each publisher, family, exact model, provider, and provider offering in config.yml.</li>
+<li>Declare operation defaults on provider offerings.</li>
+<li>Add request profiles, web_search flags, and limits only to supported offerings.</li>
 <li>Restart the service after changing runtime config.</li>
             </ol>
           </section>
@@ -108,21 +108,21 @@
                 <tbody>
 
                         <tr>
-                          <td>Config-owned models</td>
-                          <td>Model IDs and defaults live in config instead of client code.</td>
-                          <td>A new provider model can be added without releasing every app.</td>
+                          <td>Normalized identity</td>
+                          <td>Exact models remain independent from provider-native identifiers.</td>
+                          <td>One exact model can have multiple provider offerings.</td>
                         </tr>
 
 
                         <tr>
                           <td>Startup validation</td>
-                          <td>Blank, duplicate, and missing default model entries fail startup.</td>
+                          <td>Duplicate routes, dangling references, and missing defaults fail startup.</td>
                           <td>Bad catalogs are caught before serving traffic.</td>
                         </tr>
 
 
                         <tr>
-                          <td>Provider metadata</td>
+                          <td>Offering metadata</td>
                           <td>Output token limits and OpenAI request profiles are explicit.</td>
                           <td>Known ceilings can be rejected before upstream calls.</td>
                         </tr>
@@ -138,7 +138,7 @@
 
                     <section class="resource-card">
                       <h3>Gemini catalog update</h3>
-                      <p>An operator adds a Gemini model ID and its output token limit to config.yml.</p>
+                      <p>An operator adds a Gemini exact model and provider offering to config.yml.</p>
                     </section>
 
 
@@ -171,7 +171,7 @@
 
                     <details>
                       <summary>What is the main job of LLM model catalog configuration?</summary>
-                      <p>LLM Proxy treats provider model catalogs as runtime configuration while provider transports stay code-owned.</p>
+                      <p>LLM Proxy keeps publishers, families, exact models, providers, and provider offerings in normalized runtime configuration.</p>
                     </details>
 
 

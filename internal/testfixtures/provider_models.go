@@ -9,38 +9,65 @@ import (
 	"github.com/tyemirov/llm-proxy/internal/proxy"
 )
 
-type providerModelsFileConfiguration struct {
-	Providers map[string]providerModelsProviderConfiguration `mapstructure:"providers"`
+type modelCatalogFileConfiguration struct {
+	Catalog modelCatalogConfiguration `mapstructure:"catalog"`
 }
 
-type providerModelsProviderConfiguration struct {
-	Text      providerModelsEndpointConfiguration `mapstructure:"text"`
-	Dictation providerModelsEndpointConfiguration `mapstructure:"dictation"`
+type modelCatalogConfiguration struct {
+	Providers  []catalogProviderConfiguration  `mapstructure:"providers"`
+	Publishers []modelPublisherConfiguration   `mapstructure:"publishers"`
+	Families   []modelFamilyConfiguration      `mapstructure:"families"`
+	Models     []exactModelConfiguration       `mapstructure:"models"`
+	Offerings  []providerOfferingConfiguration `mapstructure:"offerings"`
 }
 
-type providerModelsEndpointConfiguration struct {
-	DefaultModel string                             `mapstructure:"default_model"`
-	Models       []providerModelsModelConfiguration `mapstructure:"models"`
+type catalogProviderConfiguration struct {
+	ID    string `mapstructure:"id"`
+	Label string `mapstructure:"label"`
 }
 
-type providerModelsModelConfiguration struct {
-	ID                 string                               `mapstructure:"id"`
-	WireContract       string                               `mapstructure:"wire_contract"`
-	ExecutionLifecycle string                               `mapstructure:"execution_lifecycle"`
-	RequestProfile     string                               `mapstructure:"request_profile"`
-	WebSearch          bool                                 `mapstructure:"web_search"`
-	OutputTokenLimit   int                                  `mapstructure:"output_token_limit"`
-	ReasoningEffort    *providerModelsReasoningEffortConfig `mapstructure:"reasoning_effort"`
-	MediaInputs        []string                             `mapstructure:"media_inputs"`
+type modelPublisherConfiguration struct {
+	ID    string `mapstructure:"id"`
+	Label string `mapstructure:"label"`
 }
 
-type providerModelsReasoningEffortConfig struct {
+type modelFamilyConfiguration struct {
+	ID        string `mapstructure:"id"`
+	Publisher string `mapstructure:"publisher"`
+	Label     string `mapstructure:"label"`
+}
+
+type exactModelConfiguration struct {
+	ID          string   `mapstructure:"id"`
+	Publisher   string   `mapstructure:"publisher"`
+	Family      string   `mapstructure:"family"`
+	Version     string   `mapstructure:"version"`
+	Operations  []string `mapstructure:"operations"`
+	MediaInputs []string `mapstructure:"media_inputs"`
+}
+
+type providerOfferingConfiguration struct {
+	Provider           string                           `mapstructure:"provider"`
+	Model              string                           `mapstructure:"model"`
+	ProviderModel      string                           `mapstructure:"provider_model"`
+	Operations         []string                         `mapstructure:"operations"`
+	DefaultOperations  []string                         `mapstructure:"default_operations"`
+	WireContract       string                           `mapstructure:"wire_contract"`
+	ExecutionLifecycle string                           `mapstructure:"execution_lifecycle"`
+	RequestProfile     string                           `mapstructure:"request_profile"`
+	WebSearch          bool                             `mapstructure:"web_search"`
+	OutputTokenLimit   int                              `mapstructure:"output_token_limit"`
+	ReasoningEffort    *reasoningEffortCapabilityConfig `mapstructure:"reasoning_effort"`
+	MediaInputs        []string                         `mapstructure:"media_inputs"`
+}
+
+type reasoningEffortCapabilityConfig struct {
 	Adapter string   `mapstructure:"adapter"`
 	Efforts []string `mapstructure:"efforts"`
 }
 
-// ProviderModelCatalogs loads the repository config model catalogs for tests that build proxy.Configuration directly.
-func ProviderModelCatalogs(testingInstance testing.TB) proxy.ProviderModelCatalogs {
+// ModelCatalog loads the repository model catalog for tests that build proxy.Configuration directly.
+func ModelCatalog(testingInstance testing.TB) proxy.ModelCatalog {
 	testingInstance.Helper()
 	_, currentFile, _, callerOK := runtime.Caller(0)
 	if !callerOK {
@@ -51,50 +78,56 @@ func ProviderModelCatalogs(testingInstance testing.TB) proxy.ProviderModelCatalo
 	configReader := viper.New()
 	configReader.SetConfigFile(configPath)
 	if readConfigError := configReader.ReadInConfig(); readConfigError != nil {
-		testingInstance.Fatalf("read provider model config: %v", readConfigError)
+		testingInstance.Fatalf("read model catalog config: %v", readConfigError)
 	}
-	var parsedConfiguration providerModelsFileConfiguration
+	var parsedConfiguration modelCatalogFileConfiguration
 	if unmarshalError := configReader.Unmarshal(&parsedConfiguration); unmarshalError != nil {
-		testingInstance.Fatalf("parse provider model config: %v", unmarshalError)
+		testingInstance.Fatalf("parse model catalog config: %v", unmarshalError)
 	}
-	catalogs := proxy.ProviderModelCatalogs{}
-	for providerName, providerConfiguration := range parsedConfiguration.Providers {
-		catalogs[providerName] = proxy.ProviderModelCatalog{
-			Text:      providerConfiguration.Text.proxyCatalog(),
-			Dictation: providerConfiguration.Dictation.proxyCatalog(),
-		}
-	}
-	return catalogs
+	return parsedConfiguration.Catalog.proxyCatalog()
 }
 
-// WithProviderModelCatalogs returns a configuration with explicit provider model catalogs from configs/config.yml.
-func WithProviderModelCatalogs(testingInstance testing.TB, configuration proxy.Configuration) proxy.Configuration {
+// WithModelCatalog returns a configuration with the explicit model catalog from configs/config.yml.
+func WithModelCatalog(testingInstance testing.TB, configuration proxy.Configuration) proxy.Configuration {
 	testingInstance.Helper()
-	configuration.ProviderModels = ProviderModelCatalogs(testingInstance)
+	configuration.ModelCatalog = ModelCatalog(testingInstance)
 	return configuration
 }
 
-func (configuration providerModelsEndpointConfiguration) proxyCatalog() proxy.ModelEndpointCatalog {
-	models := make([]proxy.ModelConfiguration, 0, len(configuration.Models))
-	for _, modelConfiguration := range configuration.Models {
-		models = append(models, proxy.ModelConfiguration{
-			ID:                 modelConfiguration.ID,
-			WireContract:       modelConfiguration.WireContract,
-			ExecutionLifecycle: modelConfiguration.ExecutionLifecycle,
-			RequestProfile:     modelConfiguration.RequestProfile,
-			WebSearch:          modelConfiguration.WebSearch,
-			OutputTokenLimit:   modelConfiguration.OutputTokenLimit,
-			ReasoningEffort:    providerModelsReasoningEffortCapability(modelConfiguration.ReasoningEffort),
-			MediaInputs:        append([]string(nil), modelConfiguration.MediaInputs...),
+func (configuration modelCatalogConfiguration) proxyCatalog() proxy.ModelCatalog {
+	providers := make([]proxy.CatalogProvider, 0, len(configuration.Providers))
+	for _, provider := range configuration.Providers {
+		providers = append(providers, proxy.CatalogProvider{ID: provider.ID, Label: provider.Label})
+	}
+	publishers := make([]proxy.ModelPublisher, 0, len(configuration.Publishers))
+	for _, publisher := range configuration.Publishers {
+		publishers = append(publishers, proxy.ModelPublisher{ID: publisher.ID, Label: publisher.Label})
+	}
+	families := make([]proxy.ModelFamily, 0, len(configuration.Families))
+	for _, family := range configuration.Families {
+		families = append(families, proxy.ModelFamily{ID: family.ID, Publisher: family.Publisher, Label: family.Label})
+	}
+	models := make([]proxy.ExactModel, 0, len(configuration.Models))
+	for _, model := range configuration.Models {
+		models = append(models, proxy.ExactModel{
+			ID: model.ID, Publisher: model.Publisher, Family: model.Family, Version: model.Version,
+			Operations: append([]string(nil), model.Operations...), MediaInputs: append([]string(nil), model.MediaInputs...),
 		})
 	}
-	return proxy.ModelEndpointCatalog{
-		DefaultModel: configuration.DefaultModel,
-		Models:       models,
+	offerings := make([]proxy.ProviderOffering, 0, len(configuration.Offerings))
+	for _, offering := range configuration.Offerings {
+		offerings = append(offerings, proxy.ProviderOffering{
+			Provider: offering.Provider, Model: offering.Model, ProviderModel: offering.ProviderModel,
+			Operations: append([]string(nil), offering.Operations...), DefaultOperations: append([]string(nil), offering.DefaultOperations...),
+			WireContract: offering.WireContract, ExecutionLifecycle: offering.ExecutionLifecycle, RequestProfile: offering.RequestProfile,
+			WebSearch: offering.WebSearch, OutputTokenLimit: offering.OutputTokenLimit,
+			ReasoningEffort: reasoningEffortCapability(offering.ReasoningEffort), MediaInputs: append([]string(nil), offering.MediaInputs...),
+		})
 	}
+	return proxy.ModelCatalog{Providers: providers, Publishers: publishers, Families: families, Models: models, Offerings: offerings}
 }
 
-func providerModelsReasoningEffortCapability(configuration *providerModelsReasoningEffortConfig) *proxy.ReasoningEffortCapability {
+func reasoningEffortCapability(configuration *reasoningEffortCapabilityConfig) *proxy.ReasoningEffortCapability {
 	if configuration == nil {
 		return nil
 	}

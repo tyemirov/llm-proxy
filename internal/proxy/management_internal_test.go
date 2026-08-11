@@ -234,20 +234,11 @@ func TestTextRequestDefaultsForProviderInternalEdges(t *testing.T) {
 	providers := newProviderRegistry(Configuration{
 		OpenAIKey:   "sk-openai",
 		DeepSeekKey: "sk-deepseek",
-		ProviderModels: ProviderModelCatalogs{
-			ProviderNameOpenAI: {
-				Text: ModelEndpointCatalog{
-					DefaultModel: ModelNameGPT41,
-					Models:       []ModelConfiguration{{ID: ModelNameGPT41}, {ID: ModelNameGPT55}},
-				},
-			},
-			ProviderNameDeepSeek: {
-				Text: ModelEndpointCatalog{
-					DefaultModel: ModelNameDeepSeekV4Flash,
-					Models:       []ModelConfiguration{{ID: ModelNameDeepSeekV4Flash}},
-				},
-			},
-		},
+		ModelCatalog: internalTestModelCatalog(
+			internalTestOffering(ProviderNameOpenAI, ModelNameGPT41, []string{ModelOperationText}, []string{ModelOperationText}),
+			internalTestOffering(ProviderNameOpenAI, ModelNameGPT55, []string{ModelOperationText}, nil),
+			internalTestOffering(ProviderNameDeepSeek, ModelNameDeepSeekV4Flash, []string{ModelOperationText}, []string{ModelOperationText}),
+		),
 	})
 	staticTenant := tenant{
 		defaults: newTenantDefaults(TenantDefaults{
@@ -319,16 +310,13 @@ func TestProviderSummaryInternalEdges(t *testing.T) {
 	if !reflect.DeepEqual(textModels, []textModelSummary{{identifier: "other-text-model"}, {identifier: "same-text-model"}}) {
 		t.Fatalf("text models=%v", textModels)
 	}
-	dictationModels := sortedDictationModels(map[string]modelID{
-		"alias-a": newModelID("same-dictation-model"),
-		"alias-b": newModelID("same-dictation-model"),
-		"other":   newModelID("other-dictation-model"),
+	dictationModels := sortedDictationModels(map[string]dictationModelDefinition{
+		"alias-a": {identifier: newModelID("same-dictation-model")},
+		"alias-b": {identifier: newModelID("same-dictation-model")},
+		"other":   {identifier: newModelID("other-dictation-model")},
 	})
 	if !reflect.DeepEqual(dictationModels, []string{"other-dictation-model", "same-dictation-model"}) {
 		t.Fatalf("dictation models=%v", dictationModels)
-	}
-	if label := providerLabel(newProviderID("custom-provider")); label != "custom-provider" {
-		t.Fatalf("provider label=%q", label)
 	}
 }
 

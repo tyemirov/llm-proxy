@@ -15,6 +15,8 @@ Archive passes:
 - 2026-08-10: Archived I222 after validation of the CalVer release decision.
 - 2026-08-10: Archived I039 after retiring Qwen Cloud Token Plan and migrating
   managed data to schema version 4.
+- 2026-08-10: Archived I221 after normalizing model identity and provider
+  offerings.
 
 `CHANGELOG.md` remains the release-level history. This index keeps completed
 issue titles discoverable without making the active tracker noisy.
@@ -2889,6 +2891,98 @@ issue titles discoverable without making the active tracker noisy.
 
 
 ### Complete entries archived 2026-08-10
+
+- [x] [I221] (P0) Make model identity independent from provider offerings.
+  Goal:
+  Make models the primary public discovery items. Keep each selected model's
+  publisher and provider offerings explicit.
+  Requirements:
+  - Replace `ProviderModelCatalogs` and public `providers[].models` with one
+    normalized catalog for model publishers, model families, exact models,
+    providers, and provider offerings.
+  - Give each exact model one canonical identifier, model publisher, model
+    family, version, operation set, and model media capabilities.
+  - Give each provider offering one provider, exact model, provider-native
+    model identifier, wire contract, lifecycle, limits, defaults, and
+    route-specific capabilities.
+  - Use a canonical provider and model pair as the external route. Resolve that
+    pair to exactly one provider offering.
+  - Map each provider-native model identifier only at the provider offering
+    boundary.
+  - Migrate configured catalogs, public REST data, OpenAPI, management data,
+    and stored routing defaults in one forward-only change.
+  - Preserve I039's historical `qwencloud` usage as observed execution
+    evidence. Do not expose it as a current provider offering.
+  - Do not relabel historical `qwencloud` usage as `dashscope` usage.
+  - Add one bounded migration that maps each stored provider/model route to its
+    canonical provider offering. Remove the obsolete shape after migration.
+  - Reject duplicate identifiers, dangling references, route conflicts,
+    missing relationships, and invalid route capabilities at startup.
+  - Use model publishers as model groups and labels in the public route
+    explorer.
+  - Open a model picker when the user selects a model publisher. Provide
+    exact model search and model family and operation filters.
+  - Show a model count for each model publisher. Group exact models by model
+    family in the model picker.
+  - Show the selected model publisher and exact model in one compact model
+    stage.
+  - Keep only the selected exact model and its provider offerings in the
+    expanded graph.
+  - Keep the complete catalog available in semantic HTML and the searchable
+    capability table.
+  - Render one capability row for each exact model. Show its provider offerings
+    within that model row.
+  - Report separate model publisher, exact model, provider, and provider
+    offering counts.
+  - Make the graph compact for model publishers with many model families and
+    exact models.
+  - Keep provider credential settings provider-first. Derive each provider's
+    exact models from its provider offerings.
+  - Keep provider keys, base URLs, private handles, tenant defaults, and
+    provider-native model identifiers outside public data.
+  - Generate every publisher, model, family, and provider option from catalog
+    REST data.
+  Deliverables:
+  - Add normalized catalog types, a strict loader, a deterministic public
+    projection, and an exact provider-offering resolver.
+  - Update runtime configuration, public REST and OpenAPI contracts,
+    management profiles, stored routes, and configuration examples.
+  - Add the model picker and provider fan for the selected model to the
+    frontend-owned route explorer.
+  - Add the bounded migration. Remove the provider-nested catalog structures
+    and public fields.
+  - Update current documentation and black-box integration tests.
+  Validation:
+  - Prove that one exact model can have multiple provider offerings without
+    duplicate model records.
+  - Prove that the capability table shows one row for each exact model and all
+    provider offerings for that model.
+  - Prove that one model publisher with many exact models remains compact while
+    every exact model stays discoverable.
+  - Prove that a proprietary model with one provider offering uses the same
+    normalized structure.
+  - Prove that model publisher, exact model, and provider offering selections
+    update one explicit provider/model route.
+  - Prove that each valid provider/model route resolves to one offering. Reject
+    every unknown or ambiguous pair before execution.
+  - Prove that the bounded migration maps every stored route. Require exact
+    route context when an invalid route stops startup.
+  - Prove semantic no-JavaScript access, keyboard operation, reduced-motion
+    behavior, and responsive containment through the public browser entrypoint.
+  - Prove that public data excludes credentials, private provider data, tenant
+    defaults, and provider-native model identifiers.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+  Resolved 2026-08-10:
+  - The normalized catalog separates publishers, families, exact models,
+    providers, and provider offerings.
+  - Schema version 5 maps stored provider-native routes to canonical exact
+    model identifiers and preserves historical usage.
+  - Public REST, OpenAPI, management profiles, the route explorer, and the
+    capability table use the normalized catalog and exclude private provider
+    data, native model identifiers, and tenant defaults.
+  - The final `make ci` passed all 11 reported gates with 100.0% Go statement
+    coverage and 90 browser scenarios.
 
 - [x] [I039] (P0) Retire Qwen Cloud Token Plan and keep DashScope.
   Goal:

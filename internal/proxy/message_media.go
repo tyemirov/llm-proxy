@@ -91,10 +91,7 @@ func decodeHashBoundMessageMedia(rawData string, rawDigest string) ([]byte, erro
 	return decodedData, nil
 }
 
-func providerSupportsMessageMedia(providerName string, endpoint endpointKind, mediaInput messageMediaType) bool {
-	if endpoint != endpointKindText {
-		return false
-	}
+func providerSupportsMessageMedia(providerName string, mediaInput messageMediaType) bool {
 	_, supported := providerMessageMediaInputs[providerName][mediaInput]
 	return supported
 }

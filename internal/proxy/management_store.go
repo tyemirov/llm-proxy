@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -27,26 +28,30 @@ import (
 )
 
 const (
-	generatedTenantSecretBytes          = 32
-	generatedTenantSecretAttempts       = 16
-	generatedTenantSecretPrefix         = "llmp_"
-	generatedTenantIdentifierBytes      = 16
-	generatedTenantIdentifierAttempts   = 16
-	managedTenantIdentifierPrefix       = "managed-"
-	managedTenantNameMaximumCharacters  = 80
-	managedTenantIDMaximumCharacters    = 128
-	managedProviderKeyCiphertextPrefix  = "llmpk1:"
-	maskedSecretPrefixLength            = 3
-	maskedSecretSuffixLength            = 4
-	managedUsageSummaryDays             = 30
-	managedUsageReadBatchSize           = 256
-	managedTenantOwnershipSchemaVersion = 1
-	managedUsageOutcomeSchemaVersion    = 2
-	managedKeyedRoutingSchemaVersion    = 3
-	managedTenantSchemaVersion          = 4
-	managedSQLiteRuntimeQuery           = "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
-	retiredQwenCloudProviderIdentifier  = "qwencloud"
-	retiredQwenCloudModelIdentifier     = "qwen3.8-max-preview"
+	generatedTenantSecretBytes            = 32
+	generatedTenantSecretAttempts         = 16
+	generatedTenantSecretPrefix           = "llmp_"
+	generatedTenantIdentifierBytes        = 16
+	generatedTenantIdentifierAttempts     = 16
+	managedTenantIdentifierPrefix         = "managed-"
+	managedTenantNameMaximumCharacters    = 80
+	managedTenantIDMaximumCharacters      = 128
+	managedProviderKeyCiphertextPrefix    = "llmpk1:"
+	maskedSecretPrefixLength              = 3
+	maskedSecretSuffixLength              = 4
+	managedUsageSummaryDays               = 30
+	managedUsageReadBatchSize             = 256
+	managedTenantOwnershipSchemaVersion   = 1
+	managedUsageOutcomeSchemaVersion      = 2
+	managedKeyedRoutingSchemaVersion      = 3
+	managedQwenCloudRetirementVersion     = 4
+	managedTenantSchemaVersion            = 5
+	managedSQLiteRuntimeQuery             = "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
+	retiredQwenCloudProviderIdentifier    = "qwencloud"
+	retiredQwenCloudModelIdentifier       = "qwen3.8-max-preview"
+	managedMiniMaxNativeModel             = "MiniMax-M2.7"
+	managedSiliconFlowDeepSeekNativeModel = "deepseek-ai/DeepSeek-R1"
+	managedSenseVoiceNativeModel          = "FunAudioLLM/SenseVoiceSmall"
 
 	managedUserTable                = "managed_user_records"
 	managedTenantTable              = "managed_tenant_records"
@@ -489,6 +494,7 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 	if queryError := database.Order(clause.OrderBy{Columns: []clause.OrderByColumn{{Column: clause.Column{Name: managedSchemaVersionColumn}, Desc: true}}}).First(&migration).Error; queryError != nil {
 		return fmt.Errorf("%w: operation=read_version table=%s: %v", errManagedTenantSchemaMigration, managedSchemaMigrationTable, queryError)
 	}
+	requiresQwenCloudRetirement := false
 	switch migration.Version {
 	case managedTenantOwnershipSchemaVersion:
 		if migrationError := migrateManagedUsageOutcomeSchema(database); migrationError != nil {
@@ -497,7 +503,7 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 		if migrationError := migrateManagedKeyedRoutingDefaults(database, providerKeyCipher, providers); migrationError != nil {
 			return migrationError
 		}
-		return migrateManagedQwenCloudRetirement(database, providerKeyCipher, providers)
+		requiresQwenCloudRetirement = true
 	case managedUsageOutcomeSchemaVersion:
 		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
 			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) {
@@ -506,13 +512,18 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 		if migrationError := migrateManagedKeyedRoutingDefaults(database, providerKeyCipher, providers); migrationError != nil {
 			return migrationError
 		}
-		return migrateManagedQwenCloudRetirement(database, providerKeyCipher, providers)
+		requiresQwenCloudRetirement = true
 	case managedKeyedRoutingSchemaVersion:
 		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
 			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) {
 			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedUsageEventTable)
 		}
-		return migrateManagedQwenCloudRetirement(database, providerKeyCipher, providers)
+		requiresQwenCloudRetirement = true
+	case managedQwenCloudRetirementVersion:
+		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
+			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) {
+			return fmt.Errorf("%w: operation=validate_current_schema table=%s", errManagedTenantSchemaMigration, managedUsageEventTable)
+		}
 	case managedTenantSchemaVersion:
 		if !managedTableHasColumn(migrator, managedUsageEventTable, managedUsageOutcomeCodeColumn) ||
 			!migrator.HasIndex(&managedUsageEventRecord{}, managedUsageFailurePageIndex) {
@@ -522,6 +533,12 @@ func initializeManagedTenantSchema(database *gorm.DB, providerKeyCipher managedP
 	default:
 		return fmt.Errorf("%w: operation=validate_version version=%d expected=%d", errManagedTenantSchemaMigration, migration.Version, managedTenantSchemaVersion)
 	}
+	if requiresQwenCloudRetirement {
+		if migrationError := migrateManagedQwenCloudRetirement(database, providerKeyCipher, providers); migrationError != nil {
+			return migrationError
+		}
+	}
+	return migrateManagedModelIdentity(database, providerKeyCipher, providers)
 }
 
 type managedUsageOutcomeBackfill struct {
@@ -703,7 +720,7 @@ func migrateManagedQwenCloudRetirement(database *gorm.DB, providerKeyCipher mana
 		if verifyError := verifyManagedQwenCloudRetirement(transaction, providerKeyCipher, providers, dataset); verifyError != nil {
 			return verifyError
 		}
-		if createError := transaction.Create(&managedSchemaMigrationRecord{Version: managedTenantSchemaVersion, AppliedAt: time.Now().UTC()}).Error; createError != nil {
+		if createError := transaction.Create(&managedSchemaMigrationRecord{Version: managedQwenCloudRetirementVersion, AppliedAt: time.Now().UTC()}).Error; createError != nil {
 			return fmt.Errorf("%w: operation=record_version table=%s: %v", errManagedTenantSchemaMigration, managedSchemaMigrationTable, createError)
 		}
 		return nil
@@ -814,6 +831,144 @@ func verifyManagedQwenCloudRetirement(database *gorm.DB, providerKeyCipher manag
 		}
 	}
 	return nil
+}
+
+type managedModelIdentityProviderKeyBackfill struct {
+	tenantID string
+	provider string
+	model    string
+}
+
+type managedModelIdentityTenantBackfill struct {
+	tenantID  string
+	defaults  managedRoutingDefaults
+	updatedAt time.Time
+}
+
+type managedModelIdentityDataset struct {
+	providerKeys    []managedModelIdentityProviderKeyBackfill
+	tenants         []managedModelIdentityTenantBackfill
+	historicalUsage []managedUsageEventRecord
+}
+
+func migrateManagedModelIdentity(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) error {
+	dataset, preflightError := preflightManagedModelIdentity(database, providerKeyCipher, providers)
+	if preflightError != nil {
+		return preflightError
+	}
+	return database.Transaction(func(transaction *gorm.DB) error {
+		for _, backfill := range dataset.providerKeys {
+			result := transaction.Model(&managedProviderAPIKeyRecord{}).
+				Where(&managedProviderAPIKeyRecord{TenantID: backfill.tenantID, ProviderID: backfill.provider}).
+				UpdateColumn("text_model", backfill.model)
+			if result.Error != nil || result.RowsAffected != 1 {
+				return fmt.Errorf("%w: operation=backfill table=%s tenant=%s provider=%s rows=%d: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, backfill.tenantID, backfill.provider, result.RowsAffected, result.Error)
+			}
+		}
+		for _, backfill := range dataset.tenants {
+			result := transaction.Model(&managedTenantRecord{}).
+				Where(&managedTenantRecord{TenantID: backfill.tenantID}).
+				Updates(managedRoutingDefaultsDatabaseUpdates(backfill.defaults, backfill.updatedAt))
+			if result.Error != nil || result.RowsAffected != 1 {
+				return fmt.Errorf("%w: operation=backfill table=%s tenant=%s rows=%d: %v", errManagedTenantSchemaMigration, managedTenantTable, backfill.tenantID, result.RowsAffected, result.Error)
+			}
+		}
+		if validationError := validateManagedKeyedRoutingDefaults(transaction, providerKeyCipher, providers); validationError != nil {
+			return validationError
+		}
+		migratedHistoricalUsage, usageError := managedModelIdentityHistoricalUsage(transaction)
+		if usageError != nil {
+			return usageError
+		}
+		if !slices.Equal(migratedHistoricalUsage, dataset.historicalUsage) {
+			return fmt.Errorf("%w: operation=verify table=%s historical_usage_changed", errManagedTenantSchemaMigration, managedUsageEventTable)
+		}
+		if createError := transaction.Create(&managedSchemaMigrationRecord{Version: managedTenantSchemaVersion, AppliedAt: time.Now().UTC()}).Error; createError != nil {
+			return fmt.Errorf("%w: operation=record_version table=%s: %v", errManagedTenantSchemaMigration, managedSchemaMigrationTable, createError)
+		}
+		return nil
+	})
+}
+
+func preflightManagedModelIdentity(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) (managedModelIdentityDataset, error) {
+	records, queryError := managedTenantRecordsForRoutingValidation(database)
+	if queryError != nil {
+		return managedModelIdentityDataset{}, queryError
+	}
+	dataset := managedModelIdentityDataset{
+		providerKeys: make([]managedModelIdentityProviderKeyBackfill, 0),
+		tenants:      make([]managedModelIdentityTenantBackfill, 0),
+	}
+	for recordIndex := range records {
+		record := &records[recordIndex]
+		for providerKeyIndex := range record.ProviderAPIKeys {
+			providerKey := &record.ProviderAPIKeys[providerKeyIndex]
+			canonicalModel, changed := canonicalManagedTextModel(providerKey.ProviderID, providerKey.TextModel)
+			if changed {
+				providerKey.TextModel = canonicalModel
+				dataset.providerKeys = append(dataset.providerKeys, managedModelIdentityProviderKeyBackfill{
+					tenantID: record.TenantID, provider: providerKey.ProviderID, model: canonicalModel,
+				})
+			}
+		}
+		providerSettings, providerSettingsError := managedProviderSettingsFromRecords(providerKeyCipher, record.ProviderAPIKeys)
+		if providerSettingsError != nil {
+			return managedModelIdentityDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedProviderKeyTable, record.OwnerUserID, record.TenantID, providerSettingsError)
+		}
+		defaults, defaultsChanged := canonicalManagedTenantDefaults(record.defaults())
+		validatedDefaults, defaultsError := validatePersistedManagedRoutingDefaults(providers, providerSettings, defaults)
+		if defaultsError != nil {
+			return managedModelIdentityDataset{}, fmt.Errorf("%w: operation=preflight table=%s owner=%s tenant=%s: %v", errManagedTenantSchemaMigration, managedTenantTable, record.OwnerUserID, record.TenantID, defaultsError)
+		}
+		if defaultsChanged {
+			dataset.tenants = append(dataset.tenants, managedModelIdentityTenantBackfill{
+				tenantID: record.TenantID, defaults: validatedDefaults, updatedAt: record.UpdatedAt,
+			})
+		}
+	}
+	historicalUsage, usageError := managedModelIdentityHistoricalUsage(database)
+	if usageError != nil {
+		return managedModelIdentityDataset{}, usageError
+	}
+	dataset.historicalUsage = historicalUsage
+	return dataset, nil
+}
+
+func canonicalManagedTextModel(provider string, model string) (string, bool) {
+	switch {
+	case provider == ProviderNameMiniMax && model == managedMiniMaxNativeModel:
+		return ModelNameMiniMaxM27, true
+	case provider == ProviderNameSiliconFlow && model == managedSiliconFlowDeepSeekNativeModel:
+		return ModelNameSiliconFlowDeepSeek, true
+	default:
+		return model, false
+	}
+}
+
+func canonicalManagedTenantDefaults(defaults TenantDefaults) (TenantDefaults, bool) {
+	changed := false
+	if canonicalModel, modelChanged := canonicalManagedTextModel(defaults.Provider, defaults.Model); modelChanged {
+		defaults.Model = canonicalModel
+		changed = true
+	}
+	if defaults.DictationProvider == ProviderNameSiliconFlow && defaults.DictationModel == managedSenseVoiceNativeModel {
+		defaults.DictationModel = "sensevoice-small"
+		changed = true
+	}
+	return defaults, changed
+}
+
+func managedModelIdentityHistoricalUsage(database *gorm.DB) ([]managedUsageEventRecord, error) {
+	var historicalUsage []managedUsageEventRecord
+	queryError := database.
+		Where("(provider_id = ? AND model_id = ?) OR (provider_id = ? AND model_id IN ?)", ProviderNameMiniMax, managedMiniMaxNativeModel, ProviderNameSiliconFlow, []string{managedSiliconFlowDeepSeekNativeModel, managedSenseVoiceNativeModel}).
+		Order("id").
+		Find(&historicalUsage).
+		Error
+	if queryError != nil {
+		return nil, fmt.Errorf("%w: operation=read table=%s historical_model_identity: %v", errManagedTenantSchemaMigration, managedUsageEventTable, queryError)
+	}
+	return historicalUsage, nil
 }
 
 func validateManagedKeyedRoutingDefaults(database *gorm.DB, providerKeyCipher managedProviderKeyCipher, providers *providerRegistry) error {

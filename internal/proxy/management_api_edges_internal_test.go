@@ -324,18 +324,10 @@ func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 		t.Fatalf("defaults profile status=%d", response.Code)
 	}
 	noKeyProviders := newProviderRegistry(Configuration{
-		ProviderModels: ProviderModelCatalogs{
-			ProviderNameOpenAI: {
-				Text: ModelEndpointCatalog{
-					DefaultModel: ModelNameGPT41,
-					Models:       []ModelConfiguration{{ID: ModelNameGPT41}},
-				},
-				Dictation: ModelEndpointCatalog{
-					DefaultModel: DefaultDictationModel,
-					Models:       []ModelConfiguration{{ID: DefaultDictationModel}},
-				},
-			},
-		},
+		ModelCatalog: internalTestModelCatalog(
+			internalTestOffering(ProviderNameOpenAI, ModelNameGPT41, []string{ModelOperationText}, []string{ModelOperationText}),
+			internalTestOffering(ProviderNameOpenAI, DefaultDictationModel, []string{ModelOperationDictation}, []string{ModelOperationDictation}),
+		),
 	})
 	database = newFakeManagedTenantDatabase()
 	fakeUserWithTenant(database, principal, "managed-default", "Default", now)

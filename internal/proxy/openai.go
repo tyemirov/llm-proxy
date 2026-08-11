@@ -76,7 +76,7 @@ func hasFinalMessage(rawPayload []byte) bool {
 
 // openAIRequest sends messages to the OpenAI responses API and returns the resulting text.
 func (client *OpenAIClient) openAIRequest(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, messages chatMessages, webSearchEnabled bool, maxTokens *int, reasoningEffort string, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
-	payload := BuildRequestPayload(modelIdentifier.string(), modelIdentifier.requestProfile.string(), messages.openAIResponsesInput(), webSearchEnabled, maxTokens, reasoningEffort)
+	payload := BuildRequestPayload(modelIdentifier.providerString(), modelIdentifier.requestProfile.string(), messages.openAIResponsesInput(), webSearchEnabled, maxTokens, reasoningEffort)
 	payloadBytes, _ := json.Marshal(payload)
 
 	httpRequest, buildError := buildAuthorizedJSONRequest(parentContext, http.MethodPost, client.endpoints.GetResponsesURL(), openAIKey, bytes.NewReader(payloadBytes))
@@ -212,7 +212,7 @@ func (client *OpenAIClient) resolveTerminalOpenAIResponse(parentContext context.
 func (client *OpenAIClient) resolveCompleteOpenAIResponse(parentContext context.Context, openAIKey string, modelIdentifier textModelDefinition, webSearchEnabled bool, maxTokens *int, reasoningEffort string, responseSnapshot openAIResponseSnapshot, structuredLogger *zap.SugaredLogger) (textGenerationResult, error) {
 	if responseSnapshot.needsSynthesis() && !utils.IsBlank(responseSnapshot.identifier) {
 		structuredLogger.Debugw(logEventMissingFinalMessage)
-		continuedResponseID, synthErr := client.startSynthesisContinuation(parentContext, openAIKey, responseSnapshot.identifier, modelIdentifier.string(), maxTokens, reasoningEffort, structuredLogger)
+		continuedResponseID, synthErr := client.startSynthesisContinuation(parentContext, openAIKey, responseSnapshot.identifier, modelIdentifier.providerString(), maxTokens, reasoningEffort, structuredLogger)
 		if synthErr != nil {
 			structuredLogger.Errorw(
 				logEventOpenAIContinueError,

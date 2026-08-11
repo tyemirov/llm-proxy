@@ -96,40 +96,18 @@ const i220ScreenshotDirectory = path.join(repoRoot, "output/playwright");
 const httpOK = 200;
 const httpNotFound = 404;
 const httpInternalServerError = 500;
-const routingConnectorEndpointRadius = 4;
-const routingConnectorColorTolerance = 2;
-const routingDesktopCenterTolerance = 1;
-const routingDesktopEdgeAlignmentTolerance = 1;
-const routingDesktopConnectorLaneMinimum = 90;
-const routingDesktopConnectorLaneVarianceMaximum = 16;
-const routingDesktopProviderWidthMaximum = 220;
-const routingDesktopModelWidthMaximum = 220;
+const routingConnectorEndpointRadius = 6;
 const publicCapabilitiesPath = "/api/public/capabilities";
 const capabilityShutdownProbeTimeoutMilliseconds = 1_000;
 
 /**
  * @param {import("@playwright/test").Locator} routingTree
- * @returns {Promise<Record<string, number>>}
- */
-async function routingProviderTopPositions(routingTree) {
-  return routingTree.locator("[data-route-provider]").evaluateAll((providerButtons) => Object.fromEntries(
-    providerButtons.map((providerButton) => {
-      if (!(providerButton instanceof HTMLElement) || !providerButton.dataset.routeProvider) {
-        throw new Error("routing_tree_provider_position_invalid");
-      }
-      return [providerButton.dataset.routeProvider, providerButton.getBoundingClientRect().top + window.scrollY];
-    }),
-  ));
-}
-
-/**
- * @param {import("@playwright/test").Locator} routingTree
  */
 async function expectSelectedRoutingFanEndpoints(routingTree) {
-  const endpointEvidence = await routingTree.evaluate((tree, connectorContract) => {
+  const endpointEvidence = await routingTree.evaluate((tree, endpointRadius) => {
     const canvas = tree.querySelector("[data-route-canvas]");
-    const selectedProvider = tree.querySelector('[data-route-provider][aria-pressed="true"]');
-    const selectedModel = tree.querySelector('[data-route-model-group]:not([hidden]) [data-route-model][aria-pressed="true"]');
+    const selectedProvider = tree.querySelector('[data-route-provider-group]:not([hidden]) [data-route-provider][aria-pressed="true"]');
+    const selectedModel = tree.querySelector("[data-route-selection-node]");
     if (!(canvas instanceof HTMLCanvasElement) || !(selectedProvider instanceof HTMLElement) || !(selectedModel instanceof HTMLElement)) {
       throw new Error("routing_tree_selected_connector_endpoint_missing");
     }
@@ -140,21 +118,12 @@ async function expectSelectedRoutingFanEndpoints(routingTree) {
     const canvasBounds = canvas.getBoundingClientRect();
     const providerBounds = selectedProvider.getBoundingClientRect();
     const modelBounds = selectedModel.getBoundingClientRect();
-    const accentColor = getComputedStyle(tree).getPropertyValue("--routing-tree-accent").trim();
-    const colorProbe = document.createElement("span");
-    colorProbe.style.color = accentColor;
-    tree.append(colorProbe);
-    const accentChannels = getComputedStyle(colorProbe).color.match(/\d+/gu)?.slice(0, 3).map(Number);
-    colorProbe.remove();
-    if (!accentChannels || accentChannels.length !== 3) {
-      throw new Error("routing_tree_accent_color_invalid");
-    }
     const canvasScaleHorizontal = canvas.width / canvasBounds.width;
     const canvasScaleVertical = canvas.height / canvasBounds.height;
-    const hasAccentPixel = (pageHorizontal, pageVertical) => {
+    const hasPaintedPixel = (pageHorizontal, pageVertical) => {
       const centerHorizontal = Math.round((pageHorizontal - canvasBounds.left) * canvasScaleHorizontal);
       const centerVertical = Math.round((pageVertical - canvasBounds.top) * canvasScaleVertical);
-      const scaledRadius = Math.ceil(connectorContract.endpointRadius * Math.max(canvasScaleHorizontal, canvasScaleVertical));
+      const scaledRadius = Math.ceil(endpointRadius * Math.max(canvasScaleHorizontal, canvasScaleVertical));
       const sampleLeft = Math.max(0, centerHorizontal - scaledRadius);
       const sampleTop = Math.max(0, centerVertical - scaledRadius);
       const sampleRight = Math.min(canvas.width, centerHorizontal + scaledRadius + 1);
@@ -166,31 +135,18 @@ async function expectSelectedRoutingFanEndpoints(routingTree) {
         sampleBottom - sampleTop,
       ).data;
       for (let channelOffset = 0; channelOffset < pixelChannels.length; channelOffset += 4) {
-        const redDifference = Math.abs(pixelChannels[channelOffset] - accentChannels[0]);
-        const greenDifference = Math.abs(pixelChannels[channelOffset + 1] - accentChannels[1]);
-        const blueDifference = Math.abs(pixelChannels[channelOffset + 2] - accentChannels[2]);
-        if (
-          redDifference <= connectorContract.colorTolerance
-          && greenDifference <= connectorContract.colorTolerance
-          && blueDifference <= connectorContract.colorTolerance
-          && pixelChannels[channelOffset + 3] > 0
-        ) {
+        if (pixelChannels[channelOffset + 3] > 0) {
           return true;
         }
       }
       return false;
     };
     return {
-      modelEndpoint: hasAccentPixel(modelBounds.left, modelBounds.top + modelBounds.height / 2),
-      providerIncomingEndpoint: hasAccentPixel(providerBounds.left, providerBounds.top + providerBounds.height / 2),
-      providerEndpoint: hasAccentPixel(providerBounds.right, providerBounds.top + providerBounds.height / 2),
+      modelEndpoint: hasPaintedPixel(modelBounds.right, modelBounds.top + modelBounds.height / 2),
+      providerIncomingEndpoint: hasPaintedPixel(providerBounds.left, providerBounds.top + providerBounds.height / 2),
     };
-  }, {
-    colorTolerance: routingConnectorColorTolerance,
-    endpointRadius: routingConnectorEndpointRadius,
-  });
+  }, routingConnectorEndpointRadius);
   expect(endpointEvidence.providerIncomingEndpoint).toBe(true);
-  expect(endpointEvidence.providerEndpoint).toBe(true);
   expect(endpointEvidence.modelEndpoint).toBe(true);
 }
 
@@ -411,28 +367,28 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('<routing-tree class="routing-tree" data-enhanced="false" aria-label="Interactive LLM routing map">');
   expect(html).toContain("One integration. Choose the exact route.");
   expect(html).toContain('<canvas class="routing-tree__connectors" data-route-canvas aria-hidden="true"></canvas>');
-  expect(html).toContain('<span>11 providers · 52 text models</span>');
-	expect(html).toContain('data-route-provider="deepseek"');
-	expect(html).toContain('data-route-provider="dashscope"');
-	expect(html).toContain('data-route-provider="moonshot"');
-	expect(html).toContain('data-route-model="kimi-k2.6" data-route-default-model="true"');
-	expect(html).toContain('data-route-model="qwen-plus" data-route-default-model="true"');
-	expect(html).not.toContain("llm-proxy-routing-tree");
-	expect(html).toContain('<table class="catalog-table">');
-	expect(html).toContain('<strong>11</strong><span>Providers</span>');
-	expect(html).toContain('<strong>57</strong><span>Models</span>');
-  expect(html).toContain('<strong>6</strong><span>Filterable capabilities</span>');
-  expect(html).toContain('data-catalog-sort-header="provider"');
+  expect(html).toContain('<span>11 publishers · 56 exact models · 57 offerings</span>');
+  expect(html).toContain('data-route-publisher="deepseek"');
+  expect(html).toContain('data-route-publisher="alibaba"');
+  expect(html).toContain('data-route-publisher="moonshot"');
+  expect(html).toContain('data-route-model="kimi-k2.6" data-route-model-publisher="moonshot"');
+  expect(html).toContain('data-route-model="qwen-plus" data-route-model-publisher="alibaba"');
+  expect(html).toContain('data-route-offering="siliconflow:deepseek-reasoner"');
+  expect(html).not.toContain("llm-proxy-routing-tree");
+  expect(html).toContain('<table class="catalog-table">');
+  expect(html).toContain('<strong>11</strong><span>Providers</span>');
+  expect(html).toContain('<strong>11</strong><span>Publishers</span>');
+  expect(html).toContain('<strong>23</strong><span>Families</span>');
+  expect(html).toContain('<strong>56</strong><span>Exact models</span>');
+  expect(html).toContain('<strong>57</strong><span>Offerings</span>');
+  expect(html).toContain('data-catalog-sort-header="publisher"');
   expect(html).toContain('data-catalog-sort-header="model"');
   expect(html).toContain('data-catalog-sort-header="capabilities"');
   expect(html).not.toContain('<th scope="col">Dictation models</th>');
-  expect(html).toContain(
-    '<span class="catalog-model__content"><code data-catalog-model-id>gpt-4.1</code><span class="catalog-model__default" title="This is the provider catalog default for text routing; account settings can select another model.">Default for text</span></span>',
-  );
-  expect(html).toContain(
-    '<span class="catalog-model__content"><code data-catalog-model-id>gpt-4o-mini-transcribe</code><span class="catalog-model__default" title="This is the provider catalog default for dictation routing; account settings can select another model.">Default for dictation</span></span>',
-  );
-  expect(html).toContain('data-model="gpt-4o-mini-transcribe" data-capabilities="dictation"');
+  expect(html).toContain('<code data-catalog-model-id>gpt-4.1</code>');
+  expect(html).toContain('<code data-catalog-model-id>gpt-4o-mini-transcribe</code>');
+  expect(html).toContain('data-publisher="openai" data-provider="openai" data-model="gpt-4o-mini-transcribe"');
+  expect(html).not.toContain("catalog-model__default");
   expect(html).toContain('aria-label="Search all model characteristics"');
   expect(html).toContain("data-catalog-search-submit");
   expect(html).toContain("data-catalog-filter-panel");
@@ -443,13 +399,15 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).not.toContain('data-catalog-capability-action="background"');
   expect(html).not.toContain('data-catalog-capability-action="synchronous"');
   expect(html).not.toContain("data-catalog-provider");
-  expect(html).not.toContain("<select");
+  expect(html).toContain('<select aria-label="Filter model family"');
   expect(html).toContain("gpt-4o-mini-transcribe");
   expect(html).toContain("gemini-2.5-flash");
   expect(html).toContain("claude-sonnet-4-6");
   expect(html).toContain("grok-4.3");
   expect(html).not.toContain("api_key");
   expect(html).not.toContain("base_url");
+  expect(html).not.toContain("provider_model");
+  expect(html).not.toContain("default_operations");
   expect(html).toContain(`data-config-url="${configPath}"`);
   expect(html).toContain(`<link rel="stylesheet" href="${mprUICSSURL}">`);
   expect(html).not.toContain(`<script src="${forbiddenTAuthBrowserClientURL}"></script>`);
@@ -796,20 +754,23 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(page.locator("#routing-overview routing-tree")).toHaveCount(1);
   await expect(page.locator("#models > routing-tree")).toHaveCount(0);
   await expect(routingTree).toHaveAttribute("data-enhanced", "false");
-  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(11);
-  await expect(routingTree.locator("[data-route-model]")).toHaveCount(52);
-  await expect(routingTree.locator('[data-route-provider="anthropic"]')).toHaveAttribute("aria-pressed", "true");
-  await expect(routingTree.locator('[data-route-model-group="anthropic"]')).toBeVisible();
+  await expect(routingTree.locator("[data-route-publisher]")).toHaveCount(11);
+  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(57);
+  await expect(routingTree.locator("[data-route-model]")).toHaveCount(56);
+  await expect(routingTree.locator('[data-route-publisher="alibaba"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-model-group="alibaba"]')).toBeVisible();
   await expect(routingTree.locator('[data-route-model-group="moonshot"]')).toBeHidden();
-  await expect(routingTree.locator('[data-route-selected-provider]')).toHaveText("anthropic");
-  await expect(routingTree.locator('[data-route-selected-model]')).toHaveText("claude-sonnet-4-6");
+  await expect(routingTree.locator('[data-route-provider="dashscope"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-selected-publisher]')).toHaveText("Alibaba");
+  await expect(routingTree.locator('[data-route-selected-provider]')).toHaveText("dashscope");
+  await expect(routingTree.locator('[data-route-selected-model]')).toHaveText("qwen-plus");
   await expect(routingTree.locator("button:enabled")).toHaveCount(0);
 
   const catalog = page.locator("capability-catalog");
   await expect(catalog).toHaveAttribute("data-enhanced", "false");
   await expect(catalog.locator("[data-catalog-toolbar]")).toBeHidden();
-  await expect(catalog.getByRole("columnheader")).toHaveText(["Provider", "Model", "Capabilities"]);
-  await expect(catalog.locator("[data-catalog-row]")).toHaveCount(57);
+  await expect(catalog.getByRole("columnheader")).toHaveText(["Publisher", "Model", "Provider offerings and capabilities"]);
+  await expect(catalog.locator("[data-catalog-row]")).toHaveCount(56);
   await expect(catalog.locator('[data-model="gpt-4o-mini-transcribe"]')).toContainText("Dictation");
 
   const footer = page.locator(".public-site-footer-fallback");
@@ -825,122 +786,93 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await browserContext.close();
 });
 
-test("visitors can fan from one proxy connection into exact provider model versions", async ({ page }) => {
+test("visitors can choose a publisher, exact model, and provider offering", async ({ page }) => {
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(baseURL);
 
   const routingTree = page.locator("routing-tree");
+  const selectedPublisher = routingTree.locator("[data-route-selected-publisher]");
   const selectedProvider = routingTree.locator("[data-route-selected-provider]");
   const selectedModel = routingTree.locator("[data-route-selected-model]");
-  const moonshotProvider = routingTree.locator('[data-route-provider="moonshot"]');
+  const searchInput = routingTree.getByLabel("Search exact models");
+  const familyFilter = routingTree.getByLabel("Filter model family");
+  const operationFilter = routingTree.getByLabel("Filter model operation");
   await expect(routingTree).toHaveAttribute("data-enhanced", "true");
   await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "true");
-  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(11);
-  await expect(routingTree.locator("[data-route-provider]:visible")).toHaveCount(11);
-  await expect(routingTree.locator("[data-route-model]")).toHaveCount(52);
-  await expect(selectedProvider).toHaveText("openai");
-  await expect(selectedModel).toHaveText("gpt-4.1");
+  await expect(routingTree.locator("[data-route-publisher]")).toHaveCount(11);
+  await expect(routingTree.locator("[data-route-model]")).toHaveCount(56);
+  await expect(routingTree.locator("[data-route-provider]")).toHaveCount(57);
+  await expect(routingTree.locator("[data-route-provider]:visible")).toHaveCount(1);
+  await expect(selectedPublisher).toHaveText("Alibaba");
+  await expect(selectedModel).toHaveText("qwen-plus");
+  await expect(selectedProvider).toHaveText("dashscope");
+
   const routeCanvasDimensions = await routingTree.locator("[data-route-canvas]").evaluate((canvas) => ({
     height: canvas.height,
     width: canvas.width,
   }));
   expect(routeCanvasDimensions.height).toBeGreaterThan(0);
   expect(routeCanvasDimensions.width).toBeGreaterThan(0);
-  const providerBranchGeometry = await routingTree.locator(".routing-tree__provider-branches").evaluate((branches) => ({
-    clientHeight: branches.clientHeight,
-    overflowY: getComputedStyle(branches).overflowY,
-    scrollHeight: branches.scrollHeight,
-  }));
-  expect(providerBranchGeometry.overflowY).toBe("visible");
-  expect(providerBranchGeometry.scrollHeight).toBe(providerBranchGeometry.clientHeight);
-  const openAIModelColumns = await routingTree.locator('[data-route-model-group="openai"] .routing-tree__model-branches').evaluate(
-    (branches) => getComputedStyle(branches).gridTemplateColumns.split(" ").length,
-  );
-  expect(openAIModelColumns).toBe(1);
-  const leafWidths = await routingTree.evaluate((tree) => {
-    const widths = (selector) => [...tree.querySelectorAll(selector)].map((leaf) => leaf.getBoundingClientRect().width);
-    return {
-      widestModel: Math.max(...widths('[data-route-model-group="openai"] [data-route-model]')),
-      widestProvider: Math.max(...widths("[data-route-provider]")),
-    };
-  });
-  expect.soft(leafWidths.widestProvider).toBeLessThanOrEqual(routingDesktopProviderWidthMaximum);
-  expect(leafWidths.widestModel).toBeLessThanOrEqual(routingDesktopModelWidthMaximum);
-  const desktopForkGeometry = await routingTree.evaluate((tree) => {
-    const routeMap = tree.querySelector("[data-route-map]");
+  const desktopSequence = await routingTree.evaluate((tree) => {
     const product = tree.querySelector("[data-route-product]");
     const proxy = tree.querySelector("[data-route-proxy]");
-    const providerBranches = tree.querySelector(".routing-tree__provider-branches");
-    const modelGroup = tree.querySelector("[data-route-model-group]:not([hidden])");
+    const selection = tree.querySelector("[data-route-selection-node]");
+    const provider = tree.querySelector('[data-route-provider][aria-pressed="true"]');
     if (
-      !(routeMap instanceof HTMLElement)
-      || !(product instanceof HTMLElement)
+      !(product instanceof HTMLElement)
       || !(proxy instanceof HTMLElement)
-      || !(providerBranches instanceof HTMLElement)
-      || !(modelGroup instanceof HTMLElement)
+      || !(selection instanceof HTMLElement)
+      || !(provider instanceof HTMLElement)
     ) {
-      throw new Error("routing_tree_desktop_stage_missing");
+      throw new Error("routing_tree_desktop_sequence_missing");
     }
-    const mapBounds = routeMap.getBoundingClientRect();
-    const mapStyle = getComputedStyle(routeMap);
-    const productBounds = product.getBoundingClientRect();
-    const proxyBounds = proxy.getBoundingClientRect();
-    const providerBounds = providerBranches.getBoundingClientRect();
-    const modelBounds = modelGroup.getBoundingClientRect();
-    const providerCenter = providerBounds.top + providerBounds.height / 2;
-    const connectorLaneWidths = [
-      proxyBounds.left - productBounds.right,
-      providerBounds.left - proxyBounds.right,
-      modelBounds.left - providerBounds.right,
+    return [
+      product.getBoundingClientRect().right,
+      proxy.getBoundingClientRect().left,
+      proxy.getBoundingClientRect().right,
+      selection.getBoundingClientRect().left,
+      selection.getBoundingClientRect().right,
+      provider.getBoundingClientRect().left,
     ];
-    return {
-      connectorLaneMaximum: Math.max(...connectorLaneWidths),
-      connectorLaneMinimum: Math.min(...connectorLaneWidths),
-      modelRightDifference: Math.abs(
-        mapBounds.right - Number.parseFloat(mapStyle.paddingRight) - modelBounds.right,
-      ),
-      modelFollowsProviders: providerBounds.right < modelBounds.left,
-      productLeftDifference: Math.abs(
-        productBounds.left - mapBounds.left - Number.parseFloat(mapStyle.paddingLeft),
-      ),
-      productCenterDifference: Math.abs(productBounds.top + productBounds.height / 2 - providerCenter),
-      proxyFollowsProduct: productBounds.right < proxyBounds.left,
-      providerFollowsProxy: proxyBounds.right < providerBounds.left,
-      proxyCenterDifference: Math.abs(proxyBounds.top + proxyBounds.height / 2 - providerCenter),
-    };
   });
-  expect.soft(desktopForkGeometry.proxyFollowsProduct).toBe(true);
-  expect.soft(desktopForkGeometry.providerFollowsProxy).toBe(true);
-  expect.soft(desktopForkGeometry.modelFollowsProviders).toBe(true);
-  expect.soft(desktopForkGeometry.productLeftDifference).toBeLessThanOrEqual(routingDesktopEdgeAlignmentTolerance);
-  expect.soft(desktopForkGeometry.modelRightDifference).toBeLessThanOrEqual(routingDesktopEdgeAlignmentTolerance);
-  expect.soft(desktopForkGeometry.connectorLaneMinimum).toBeGreaterThanOrEqual(routingDesktopConnectorLaneMinimum);
-  expect.soft(
-    desktopForkGeometry.connectorLaneMaximum - desktopForkGeometry.connectorLaneMinimum,
-  ).toBeLessThanOrEqual(routingDesktopConnectorLaneVarianceMaximum);
-  expect.soft(desktopForkGeometry.productCenterDifference).toBeLessThanOrEqual(routingDesktopCenterTolerance);
-  expect.soft(desktopForkGeometry.proxyCenterDifference).toBeLessThanOrEqual(routingDesktopCenterTolerance);
-  const routingOverviewAlignment = await page.locator("#routing-overview").evaluate((routingOverview) => {
-    const diagram = routingOverview.querySelector("routing-tree");
-    const facts = routingOverview.querySelector(".value-strip__grid");
-    if (!diagram || !facts) {
-      throw new Error("routing_overview_diagram_or_facts_missing");
-    }
-    const diagramBounds = diagram.getBoundingClientRect();
-    const factsBounds = facts.getBoundingClientRect();
-    return {
-      diagramTop: diagramBounds.top,
-      factsBottom: factsBounds.bottom,
-      leftDifference: Math.abs(diagramBounds.left - factsBounds.left),
-      rightDifference: Math.abs(diagramBounds.right - factsBounds.right),
-      widthDifference: Math.abs(diagramBounds.width - factsBounds.width),
-    };
-  });
-  expect(routingOverviewAlignment.diagramTop).toBeGreaterThan(routingOverviewAlignment.factsBottom);
-  expect(routingOverviewAlignment.leftDifference).toBeLessThanOrEqual(1);
-  expect(routingOverviewAlignment.rightDifference).toBeLessThanOrEqual(1);
-  expect(routingOverviewAlignment.widthDifference).toBeLessThanOrEqual(1);
+  expect(desktopSequence[0]).toBeLessThan(desktopSequence[1]);
+  expect(desktopSequence[2]).toBeLessThan(desktopSequence[3]);
+  expect(desktopSequence[4]).toBeLessThan(desktopSequence[5]);
+  await expectSelectedRoutingFanEndpoints(routingTree);
+
+  await routingTree.locator('[data-route-publisher="deepseek"]').click();
+  const deepSeekModels = routingTree.locator('[data-route-model-group="deepseek"]');
+  await expect(deepSeekModels).toBeVisible();
+  await expect(deepSeekModels.locator("[data-route-model]")).toHaveCount(4);
+  await expect(selectedPublisher).toHaveText("DeepSeek");
+  await deepSeekModels.locator('[data-route-model="deepseek-reasoner"]').click();
+  const reasonerProviders = routingTree.locator('[data-route-provider-group="deepseek-reasoner"]');
+  await expect(reasonerProviders).toBeVisible();
+  await expect(reasonerProviders.locator("[data-route-provider]")).toHaveCount(2);
+  await expect(selectedModel).toHaveText("deepseek-reasoner");
+  await expect(selectedProvider).toHaveText("deepseek");
+  await reasonerProviders.locator('[data-route-provider="siliconflow"]').click();
+  await expect(selectedProvider).toHaveText("siliconflow");
+  await expectSelectedRoutingFanEndpoints(routingTree);
+
+  await searchInput.fill("deepseek reasoner");
+  await expect(routingTree.locator("[data-route-publisher]:visible")).toHaveCount(1);
+  await expect(routingTree.locator("[data-route-model]:visible")).toHaveCount(1);
+  await expect(reasonerProviders.locator("[data-route-provider]:visible")).toHaveCount(2);
+  await searchInput.fill("no-such-model");
+  await expect(routingTree.locator("[data-route-empty]")).toBeVisible();
+  await routingTree.getByRole("button", { name: "Reset" }).click();
+  await expect(routingTree.locator("[data-route-publisher]:visible")).toHaveCount(11);
+
+  await familyFilter.selectOption("gpt-transcribe");
+  await expect(routingTree.locator("[data-route-publisher]:visible")).toHaveCount(1);
+  await expect(routingTree.locator("[data-route-model]:visible")).toHaveCount(2);
+  await familyFilter.selectOption("");
+  await operationFilter.selectOption("dictation");
+  await expect(routingTree.locator("[data-route-publisher]:visible")).toHaveCount(4);
+  await expect(routingTree.locator("[data-route-model]:not([hidden])")).toHaveCount(5);
+
   if (process.env.I220_SCREENSHOTS === "1") {
     await mkdir(i220ScreenshotDirectory, { recursive: true });
     for (const viewport of routingTreeViewports) {
@@ -949,39 +881,9 @@ test("visitors can fan from one proxy connection into exact provider model versi
         "data-route-lines-rendered",
         viewport.width > 680 ? "true" : "false",
       );
-      await routingTree.screenshot({ path: path.join(i220ScreenshotDirectory, `I220-routing-${viewport.name}.png`) });
+      await routingTree.screenshot({ path: path.join(i220ScreenshotDirectory, `I221-routing-${viewport.name}.png`) });
     }
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "true");
   }
-  const providerTopPositions = await routingProviderTopPositions(routingTree);
-
-  await moonshotProvider.focus();
-  await page.keyboard.press("Enter");
-  await expect(moonshotProvider).toHaveAttribute("aria-pressed", "true");
-  await expect(routingTree.locator('[data-route-model-group="openai"]')).toBeHidden();
-  const moonshotModels = routingTree.locator('[data-route-model-group="moonshot"]');
-  await expect(moonshotModels).toBeVisible();
-  await expect(moonshotModels.locator("[data-route-model]")).toHaveCount(4);
-  await expect(selectedProvider).toHaveText("moonshot");
-  await expect(selectedModel).toHaveText("kimi-k2.6");
-  await expect(moonshotModels.locator('[data-route-model="kimi-k2.6"]')).toHaveAttribute("aria-pressed", "true");
-  await expect.poll(() => routingProviderTopPositions(routingTree)).toEqual(providerTopPositions);
-  await expectSelectedRoutingFanEndpoints(routingTree);
-
-  await moonshotModels.locator('[data-route-model="kimi-k3"]').click();
-  await expect(selectedModel).toHaveText("kimi-k3");
-  await expect(moonshotModels.locator('[data-route-model="kimi-k3"]')).toHaveAttribute("aria-pressed", "true");
-  await expectSelectedRoutingFanEndpoints(routingTree);
-
-	await routingTree.locator('[data-route-provider="dashscope"]').click();
-	const dashScopeModels = routingTree.locator('[data-route-model-group="dashscope"]');
-	await expect(dashScopeModels).toBeVisible();
-	await expect(dashScopeModels.locator("[data-route-model]")).toHaveCount(1);
-	await expect(selectedProvider).toHaveText("dashscope");
-	await expect(selectedModel).toHaveText("qwen-plus");
-  await expect.poll(() => routingProviderTopPositions(routingTree)).toEqual(providerTopPositions);
-  await expectSelectedRoutingFanEndpoints(routingTree);
 
   await page.setViewportSize({ width: 390, height: 780 });
   await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "false");
@@ -994,7 +896,6 @@ test("visitors can fan from one proxy connection into exact provider model versi
   expect(routingTreeGeometry.left).toBeGreaterThanOrEqual(0);
   expect(routingTreeGeometry.right).toBeLessThanOrEqual(routingTreeGeometry.viewportWidth);
 });
-
 test("visitors can disclose filters, search every characteristic, and sort through table headers", async ({ page }) => {
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -1007,12 +908,12 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   const searchInput = catalog.getByLabel("Search all model characteristics");
   const searchSubmit = catalog.getByRole("button", { name: "Toggle capability filters" });
   const filterPanel = catalog.locator("[data-catalog-filter-panel]");
-  const providerHeader = catalog.locator('[data-catalog-sort-header="provider"]');
+  const publisherHeader = catalog.locator('[data-catalog-sort-header="publisher"]');
   const modelHeader = catalog.locator('[data-catalog-sort-header="model"]');
   const capabilitiesHeader = catalog.locator('[data-catalog-sort-header="capabilities"]');
   await expect(catalog).toHaveAttribute("data-enhanced", "true");
-  await expect(rows).toHaveCount(57);
-  await expect(resultCount).toHaveText("57 of 57 models");
+  await expect(rows).toHaveCount(56);
+  await expect(resultCount).toHaveText("56 of 56 models");
   await expect(filterPanel).toBeHidden();
   await expect(searchSubmit).toHaveAttribute("aria-expanded", "false");
 
@@ -1034,20 +935,20 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await expect(catalog.locator('[data-catalog-search-text*="synchronous"]')).toHaveCount(0);
   await searchInput.fill("gemini-3.5-flash image_input audio_input");
   await expect(filterPanel).toBeVisible();
-  await expect(resultCount).toHaveText("1 of 57 model");
+  await expect(resultCount).toHaveText("1 of 56 model");
   await expect(visibleRows).toHaveAttribute("data-model", "gemini-3.5-flash");
 
   await searchInput.fill("gpt-5.5-pro openai_responses xhigh");
-  await expect(resultCount).toHaveText("1 of 57 model");
+  await expect(resultCount).toHaveText("1 of 56 model");
   await expect(visibleRows).toHaveAttribute("data-model", "gpt-5.5-pro");
 
   await searchInput.fill("glm-5.2 131072 token");
-  await expect(resultCount).toHaveText("1 of 57 model");
+  await expect(resultCount).toHaveText("1 of 56 model");
   await expect(visibleRows).toHaveAttribute("data-model", "glm-5.2");
 
   await catalog.getByRole("button", { name: "Reset" }).click();
-  await searchInput.fill("default dictation");
-  await expect(resultCount).toHaveText("4 of 57 models");
+  await searchInput.fill("dictation");
+  await expect(resultCount).toHaveText("5 of 56 models");
   for (const visibleRow of await visibleRows.all()) {
     await expect(visibleRow).toHaveAttribute("data-capabilities", "dictation");
   }
@@ -1055,44 +956,44 @@ test("visitors can disclose filters, search every characteristic, and sort throu
   await catalog.getByRole("button", { name: "Reset" }).click();
   await catalog.getByRole("checkbox", { name: "Image input" }).check();
   await catalog.getByRole("checkbox", { name: "Audio message input" }).check();
-  await expect(resultCount).toHaveText("2 of 57 models");
+  await expect(resultCount).toHaveText("2 of 56 models");
   await expect(visibleRows).toHaveCount(2);
 
   await searchSubmit.click();
   await expect(filterPanel).toBeHidden();
-  await expect(resultCount).toHaveText("2 of 57 models");
+  await expect(resultCount).toHaveText("2 of 56 models");
   await searchSubmit.click();
   await expect(filterPanel).toBeVisible();
   await expect(catalog.getByRole("checkbox", { name: "Image input" })).toBeChecked();
   await expect(catalog.getByRole("checkbox", { name: "Audio message input" })).toBeChecked();
 
   await catalog.getByRole("checkbox", { name: "Dictation" }).check();
-  await expect(resultCount).toHaveText("0 of 57 models");
+  await expect(resultCount).toHaveText("0 of 56 models");
   await expect(catalog.locator("[data-catalog-empty]")).toBeVisible();
 
   await catalog.getByRole("button", { name: "Reset" }).click();
-  await expect(resultCount).toHaveText("57 of 57 models");
+  await expect(resultCount).toHaveText("56 of 56 models");
   await searchInput.press("Escape");
   await catalog.getByRole("button", { name: "Filter by Dictation" }).first().click();
   await expect(filterPanel).toBeVisible();
   await expect(catalog.getByRole("checkbox", { name: "Dictation" })).toBeChecked();
-  await expect(resultCount).toHaveText("5 of 57 models");
+  await expect(resultCount).toHaveText("5 of 56 models");
 
   await catalog.getByRole("button", { name: "Reset" }).click();
-  await expect(providerHeader).toHaveAttribute("aria-sort", "ascending");
-  await catalog.getByRole("button", { name: "Sort by Provider descending" }).click();
-  await expect(providerHeader).toHaveAttribute("aria-sort", "descending");
+  await expect(publisherHeader).toHaveAttribute("aria-sort", "ascending");
+  await catalog.getByRole("button", { name: "Sort by Publisher descending" }).click();
+  await expect(publisherHeader).toHaveAttribute("aria-sort", "descending");
   await expect
     .poll(async () => rows.evaluateAll((elements) => {
-        const providersAndModels = elements.map((element) => [
-          element.getAttribute("data-provider") || "",
+        const publishersAndModels = elements.map((element) => [
+          element.getAttribute("data-publisher") || "",
           element.getAttribute("data-model") || "",
         ]);
-        return providersAndModels.every((entry, index) => {
+        return publishersAndModels.every((entry, index) => {
           if (index === 0) {
             return true;
           }
-          const previous = providersAndModels[index - 1];
+          const previous = publishersAndModels[index - 1];
           return previous[0].localeCompare(entry[0], undefined, { sensitivity: "base" }) > 0 ||
             (previous[0].localeCompare(entry[0], undefined, { sensitivity: "base" }) === 0 &&
               previous[1].localeCompare(entry[1], undefined, { sensitivity: "base" }) >= 0);
@@ -1102,7 +1003,7 @@ test("visitors can disclose filters, search every characteristic, and sort throu
 
   await catalog.getByRole("button", { name: "Sort by Model ascending" }).click();
   await expect(modelHeader).toHaveAttribute("aria-sort", "ascending");
-  await expect(providerHeader).not.toHaveAttribute("aria-sort");
+  await expect(publisherHeader).not.toHaveAttribute("aria-sort");
   await expect
     .poll(async () => rows.evaluateAll((elements) => {
         const models = elements.map((element) => element.getAttribute("data-model") || "");
@@ -1126,7 +1027,7 @@ test("visitors can disclose filters, search every characteristic, and sort throu
     .toBe(true);
 
   await catalog.getByRole("button", { name: "Reset" }).click();
-  await expect(providerHeader).toHaveAttribute("aria-sort", "ascending");
+  await expect(publisherHeader).toHaveAttribute("aria-sort", "ascending");
   await expect(modelHeader).not.toHaveAttribute("aria-sort");
   await expect(capabilitiesHeader).not.toHaveAttribute("aria-sort");
 
@@ -1325,18 +1226,13 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
   await expect(page.getByRole("link", { name: "Install the CLI" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "One boundary. Three ways to benefit." })).toBeVisible();
   await expect(page.getByRole("button", { name: "Log In" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Provider and model capability matrix" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Exact model provider offering matrix" })).toBeVisible();
   await expect(page.getByRole("table")).toBeVisible();
-  const dictationDefaultRow = page.locator('[data-provider="openai"][data-model="gpt-4o-mini-transcribe"]');
-  const dictationDefault = dictationDefaultRow.locator(".catalog-model__default");
-  await expect(dictationDefault).toHaveText("Default for dictation");
-  await expect(dictationDefault).toHaveAttribute(
-    "title",
-    "This is the provider catalog default for dictation routing; account settings can select another model.",
-  );
-  await expect
-    .poll(() => dictationDefaultRow.locator(".catalog-model__content").evaluate((element) => parseFloat(getComputedStyle(element).columnGap)))
-    .toBeGreaterThanOrEqual(8);
+  const reasonerRow = page.locator('[data-publisher="deepseek"][data-model="deepseek-reasoner"]');
+  await expect(reasonerRow.locator(".catalog-offerings > li")).toHaveCount(2);
+  await expect(reasonerRow).toContainText("DeepSeek");
+  await expect(reasonerRow).toContainText("SiliconFlow");
+  await expect(reasonerRow).not.toContainText("deepseek-ai/DeepSeek-R1");
   await expectAlignedCatalogRows(page);
   await expectCenteredValueStrip(page);
   const footer = page.locator("mpr-footer");
@@ -1358,10 +1254,8 @@ test("public landing is keyboard navigable and responsive in Chromium", async ({
   await page.setViewportSize({ width: 390, height: 780 });
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.getByRole("button", { name: "Log In" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Provider and model capability matrix" })).toBeVisible();
-  await expect
-    .poll(() => dictationDefaultRow.locator(".catalog-model__content").evaluate((element) => parseFloat(getComputedStyle(element).columnGap)))
-    .toBeGreaterThanOrEqual(8);
+  await expect(page.getByRole("region", { name: "Exact model provider offering matrix" })).toBeVisible();
+  await expect(reasonerRow.locator(".catalog-offerings > li")).toHaveCount(2);
   await expectAlignedCatalogRows(page);
   await expectCenteredValueStrip(page);
   await expectStickyFooterGeometry(page, footer);

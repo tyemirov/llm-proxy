@@ -7,24 +7,58 @@ import (
 	"github.com/tyemirov/llm-proxy/internal/constants"
 )
 
-// ProviderModelCatalogs maps canonical provider identifiers to configured model catalogs.
-type ProviderModelCatalogs map[string]ProviderModelCatalog
+const (
+	// ModelOperationText identifies text generation through the proxy messages contract.
+	ModelOperationText = "text"
+	// ModelOperationDictation identifies audio transcription through the proxy dictation contract.
+	ModelOperationDictation = "dictation"
+)
 
-// ProviderModelCatalog declares text and dictation model support for one provider.
-type ProviderModelCatalog struct {
-	Text      ModelEndpointCatalog
-	Dictation ModelEndpointCatalog
+// ModelCatalog is the canonical normalized model and provider-offering registry.
+type ModelCatalog struct {
+	Providers  []CatalogProvider
+	Publishers []ModelPublisher
+	Families   []ModelFamily
+	Models     []ExactModel
+	Offerings  []ProviderOffering
 }
 
-// ModelEndpointCatalog declares allowed models and the endpoint default model.
-type ModelEndpointCatalog struct {
-	DefaultModel string
-	Models       []ModelConfiguration
+// CatalogProvider declares one provider that can own provider offerings.
+type CatalogProvider struct {
+	ID    string
+	Label string
 }
 
-// ModelConfiguration declares runtime metadata for one configured model.
-type ModelConfiguration struct {
-	ID                 string
+// ModelPublisher declares the organization or community that publishes models.
+type ModelPublisher struct {
+	ID    string
+	Label string
+}
+
+// ModelFamily groups exact models from one publisher.
+type ModelFamily struct {
+	ID        string
+	Publisher string
+	Label     string
+}
+
+// ExactModel declares provider-independent identity and model capabilities.
+type ExactModel struct {
+	ID          string
+	Publisher   string
+	Family      string
+	Version     string
+	Operations  []string
+	MediaInputs []string
+}
+
+// ProviderOffering declares one provider route for one exact model.
+type ProviderOffering struct {
+	Provider           string
+	Model              string
+	ProviderModel      string
+	Operations         []string
+	DefaultOperations  []string
 	WireContract       string
 	ExecutionLifecycle string
 	RequestProfile     string
@@ -34,187 +68,362 @@ type ModelConfiguration struct {
 	MediaInputs        []string
 }
 
-var providerTextRouteCapabilities = map[string]map[textRouteCapabilities]struct{}{
-	ProviderNameOpenAI: {
-		openAIResponsesPollableRouteCapabilities: {},
-	},
-	ProviderNameDeepSeek: {
-		openAIChatCompletionsSynchronousRouteCapabilities: {},
-	},
-	ProviderNameDashScope: {
-		openAIChatCompletionsSynchronousRouteCapabilities: {},
-	},
-	ProviderNameMoonshot: {
-		openAIChatCompletionsSynchronousRouteCapabilities: {},
-	},
-	ProviderNameMiniMax: {
-		openAIChatCompletionsSynchronousRouteCapabilities: {},
-	},
-	ProviderNameSiliconFlow: {
-		openAIChatCompletionsSynchronousRouteCapabilities: {},
-	},
-	ProviderNameZhipu: {
-		openAIChatCompletionsSynchronousRouteCapabilities: {},
-	},
-	ProviderNameGemini: {
-		geminiInteractionsPollableRouteCapabilities:    {},
-		geminiInteractionsSynchronousRouteCapabilities: {},
-	},
-	ProviderNameAnthropic: {
-		anthropicMessagesSynchronousRouteCapabilities: {},
-	},
-	ProviderNameMeta: {
-		openAIChatCompletionsSynchronousRouteCapabilities: {},
-	},
-	ProviderNameGrok: {
-		openAIChatCompletionsSynchronousRouteCapabilities: {},
-	},
-}
-
 // ReasoningEffortCapability declares the configured upstream mapping for one
-// exact text provider/model route.
+// exact provider offering.
 type ReasoningEffortCapability struct {
 	Adapter string
 	Efforts []string
 }
 
-func validateProviderModelCatalogs(catalogs ProviderModelCatalogs) error {
-	for _, providerName := range []string{
-		ProviderNameOpenAI,
-		ProviderNameDeepSeek,
-		ProviderNameDashScope,
-		ProviderNameMoonshot,
-		ProviderNameMiniMax,
-		ProviderNameSiliconFlow,
-		ProviderNameZhipu,
-		ProviderNameGemini,
-		ProviderNameAnthropic,
-		ProviderNameMeta,
-		ProviderNameGrok,
-	} {
-		catalog, found := catalogs[providerName]
-		if !found {
-			return fmt.Errorf("%w: provider=%s field=providers.%s.text", ErrInvalidModelCatalog, providerName, providerName)
-		}
-		if catalogError := validateModelEndpointCatalog(providerName, endpointKindText, catalog.Text); catalogError != nil {
-			return catalogError
-		}
-	}
-	for _, providerName := range []string{ProviderNameOpenAI, ProviderNameSiliconFlow, ProviderNameZhipu, ProviderNameGrok} {
-		if catalogError := validateModelEndpointCatalog(providerName, endpointKindDictation, catalogs[providerName].Dictation); catalogError != nil {
-			return catalogError
-		}
-	}
-	return nil
+type validatedModelCatalog struct {
+	providers  map[string]CatalogProvider
+	publishers map[string]ModelPublisher
+	families   map[string]ModelFamily
+	models     map[string]ExactModel
+	offerings  map[string]ProviderOffering
 }
 
-func validateModelEndpointCatalog(providerName string, endpoint endpointKind, catalog ModelEndpointCatalog) error {
-	endpointName := string(endpoint)
-	fieldPrefix := fmt.Sprintf("providers.%s.%s", providerName, endpointName)
-	defaultModel := strings.TrimSpace(catalog.DefaultModel)
-	if defaultModel == constants.EmptyString {
-		return fmt.Errorf("%w: provider=%s endpoint=%s field=%s.default_model", ErrInvalidModelCatalog, providerName, endpointName, fieldPrefix)
+var providerTextRouteCapabilities = map[string]map[textRouteCapabilities]struct{}{
+	ProviderNameOpenAI:      {openAIResponsesPollableRouteCapabilities: {}},
+	ProviderNameDeepSeek:    {openAIChatCompletionsSynchronousRouteCapabilities: {}},
+	ProviderNameDashScope:   {openAIChatCompletionsSynchronousRouteCapabilities: {}},
+	ProviderNameMoonshot:    {openAIChatCompletionsSynchronousRouteCapabilities: {}},
+	ProviderNameMiniMax:     {openAIChatCompletionsSynchronousRouteCapabilities: {}},
+	ProviderNameSiliconFlow: {openAIChatCompletionsSynchronousRouteCapabilities: {}},
+	ProviderNameZhipu:       {openAIChatCompletionsSynchronousRouteCapabilities: {}},
+	ProviderNameGemini: {
+		geminiInteractionsPollableRouteCapabilities:    {},
+		geminiInteractionsSynchronousRouteCapabilities: {},
+	},
+	ProviderNameAnthropic: {anthropicMessagesSynchronousRouteCapabilities: {}},
+	ProviderNameMeta:      {openAIChatCompletionsSynchronousRouteCapabilities: {}},
+	ProviderNameGrok:      {openAIChatCompletionsSynchronousRouteCapabilities: {}},
+}
+
+func validateModelCatalog(catalog ModelCatalog) (validatedModelCatalog, error) {
+	validated := validatedModelCatalog{
+		providers:  map[string]CatalogProvider{},
+		publishers: map[string]ModelPublisher{},
+		families:   map[string]ModelFamily{},
+		models:     map[string]ExactModel{},
+		offerings:  map[string]ProviderOffering{},
 	}
-	if len(catalog.Models) == 0 {
-		return fmt.Errorf("%w: provider=%s endpoint=%s field=%s.models", ErrInvalidModelCatalog, providerName, endpointName, fieldPrefix)
+	if catalogError := validateCatalogProviders(catalog.Providers, validated.providers); catalogError != nil {
+		return validatedModelCatalog{}, catalogError
 	}
-	seenModelIdentifiers := map[string]struct{}{}
-	defaultModelFound := false
-	for modelIndex, modelConfiguration := range catalog.Models {
-		modelIdentifier := strings.TrimSpace(modelConfiguration.ID)
-		if modelIdentifier == constants.EmptyString {
-			return fmt.Errorf("%w: provider=%s endpoint=%s field=%s.models[%d].id", ErrInvalidModelCatalog, providerName, endpointName, fieldPrefix, modelIndex)
+	if catalogError := validateModelPublishers(catalog.Publishers, validated.publishers); catalogError != nil {
+		return validatedModelCatalog{}, catalogError
+	}
+	if catalogError := validateModelFamilies(catalog.Families, validated.publishers, validated.families); catalogError != nil {
+		return validatedModelCatalog{}, catalogError
+	}
+	if catalogError := validateExactModels(catalog.Models, validated.publishers, validated.families, validated.models); catalogError != nil {
+		return validatedModelCatalog{}, catalogError
+	}
+	if catalogError := validateProviderOfferings(catalog.Offerings, validated); catalogError != nil {
+		return validatedModelCatalog{}, catalogError
+	}
+	return validated, nil
+}
+
+func validateCatalogProviders(providers []CatalogProvider, validated map[string]CatalogProvider) error {
+	if len(providers) == 0 {
+		return fmt.Errorf("%w: field=catalog.providers", ErrInvalidModelCatalog)
+	}
+	for index, provider := range providers {
+		identifier, identifierError := canonicalCatalogIdentifier(provider.ID, fmt.Sprintf("catalog.providers[%d].id", index))
+		if identifierError != nil {
+			return identifierError
 		}
-		normalizedModelIdentifier := strings.ToLower(modelIdentifier)
-		if _, duplicate := seenModelIdentifiers[normalizedModelIdentifier]; duplicate {
-			return fmt.Errorf("%w: provider=%s endpoint=%s duplicate_model=%s", ErrInvalidModelCatalog, providerName, endpointName, modelIdentifier)
+		if _, duplicate := validated[identifier]; duplicate {
+			return fmt.Errorf("%w: field=catalog.providers[%d].id duplicate_identifier=%s", ErrInvalidModelCatalog, index, identifier)
 		}
-		seenModelIdentifiers[normalizedModelIdentifier] = struct{}{}
-		if strings.EqualFold(modelIdentifier, defaultModel) {
-			defaultModelFound = true
+		if strings.TrimSpace(provider.Label) == constants.EmptyString || provider.Label != strings.TrimSpace(provider.Label) {
+			return fmt.Errorf("%w: field=catalog.providers[%d].label", ErrInvalidModelCatalog, index)
 		}
-		if modelConfiguration.OutputTokenLimit < 0 {
-			return fmt.Errorf("%w: provider=%s endpoint=%s field=%s.models[%d].output_token_limit", ErrInvalidModelCatalog, providerName, endpointName, fieldPrefix, modelIndex)
+		if _, supported := providerTextRouteCapabilities[identifier]; !supported {
+			return fmt.Errorf("%w: field=catalog.providers[%d].id provider=%s reason=unknown", ErrInvalidModelCatalog, index, identifier)
 		}
-		if modelConfiguration.WebSearch && (providerName != ProviderNameOpenAI || endpoint != endpointKindText) {
-			return fmt.Errorf("%w: provider=%s endpoint=%s field=%s.models[%d].web_search", ErrInvalidModelCatalog, providerName, endpointName, fieldPrefix, modelIndex)
-		}
-		if providerName == ProviderNameAnthropic && endpoint == endpointKindText && modelConfiguration.OutputTokenLimit <= 0 {
-			return fmt.Errorf("%w: provider=%s endpoint=%s field=%s.models[%d].output_token_limit", ErrInvalidModelCatalog, providerName, endpointName, fieldPrefix, modelIndex)
-		}
-		modelFieldPrefix := fmt.Sprintf("%s.models[%d]", fieldPrefix, modelIndex)
-		if _, capabilityError := validatedTextRouteCapabilities(providerName, endpoint, modelConfiguration, modelFieldPrefix); capabilityError != nil {
-			return capabilityError
-		}
-		if profileError := validateModelRequestProfile(providerName, endpoint, modelConfiguration); profileError != nil {
-			return fmt.Errorf("%w: field=%s.models[%d].request_profile", profileError, fieldPrefix, modelIndex)
-		}
-		modelReasoningEffort, modelCapabilityError := validatedReasoningEffortCapability(modelConfiguration.ReasoningEffort, modelFieldPrefix+".reasoning_effort")
-		if modelCapabilityError != nil {
-			return fmt.Errorf("%w: provider=%s endpoint=%s", modelCapabilityError, providerName, endpointName)
-		}
-		if modelReasoningEffort != nil {
-			if capabilityError := validateReasoningEffortAdapterMapping(providerName, endpoint, modelConfiguration, *modelReasoningEffort); capabilityError != nil {
-				return fmt.Errorf("%w: field=%s.reasoning_effort", capabilityError, modelFieldPrefix)
+		validated[identifier] = provider
+	}
+	if len(validated) != len(providerTextRouteCapabilities) {
+		for identifier := range providerTextRouteCapabilities {
+			if _, found := validated[identifier]; !found {
+				return fmt.Errorf("%w: field=catalog.providers provider=%s reason=missing", ErrInvalidModelCatalog, identifier)
 			}
 		}
-		if _, mediaInputError := validatedMediaInputSet(providerName, endpoint, modelConfiguration.MediaInputs, modelFieldPrefix+".media_inputs"); mediaInputError != nil {
-			return mediaInputError
-		}
-	}
-	if !defaultModelFound {
-		return fmt.Errorf("%w: provider=%s endpoint=%s default_model=%s", ErrInvalidModelCatalog, providerName, endpointName, defaultModel)
 	}
 	return nil
 }
 
-func validatedTextRouteCapabilities(providerName string, endpoint endpointKind, modelConfiguration ModelConfiguration, fieldPrefix string) (textRouteCapabilities, error) {
-	rawWireContract := modelConfiguration.WireContract
-	rawExecutionLifecycle := modelConfiguration.ExecutionLifecycle
-	if endpoint != endpointKindText {
-		if rawWireContract != constants.EmptyString {
-			return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s endpoint=%s field=%s.wire_contract", ErrInvalidModelCatalog, providerName, endpoint, fieldPrefix)
-		}
-		if rawExecutionLifecycle != constants.EmptyString {
-			return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s endpoint=%s field=%s.execution_lifecycle", ErrInvalidModelCatalog, providerName, endpoint, fieldPrefix)
-		}
-		return textRouteCapabilities{}, nil
+func validateModelPublishers(publishers []ModelPublisher, validated map[string]ModelPublisher) error {
+	if len(publishers) == 0 {
+		return fmt.Errorf("%w: field=catalog.publishers", ErrInvalidModelCatalog)
 	}
-	if rawWireContract == constants.EmptyString || rawWireContract != strings.TrimSpace(rawWireContract) {
-		return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s endpoint=%s field=%s.wire_contract", ErrInvalidModelCatalog, providerName, endpoint, fieldPrefix)
+	for index, publisher := range publishers {
+		identifier, identifierError := canonicalCatalogIdentifier(publisher.ID, fmt.Sprintf("catalog.publishers[%d].id", index))
+		if identifierError != nil {
+			return identifierError
+		}
+		if _, duplicate := validated[identifier]; duplicate {
+			return fmt.Errorf("%w: field=catalog.publishers[%d].id duplicate_identifier=%s", ErrInvalidModelCatalog, index, identifier)
+		}
+		if strings.TrimSpace(publisher.Label) == constants.EmptyString || publisher.Label != strings.TrimSpace(publisher.Label) {
+			return fmt.Errorf("%w: field=catalog.publishers[%d].label", ErrInvalidModelCatalog, index)
+		}
+		validated[identifier] = publisher
 	}
-	if rawExecutionLifecycle == constants.EmptyString || rawExecutionLifecycle != strings.TrimSpace(rawExecutionLifecycle) {
-		return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s endpoint=%s field=%s.execution_lifecycle", ErrInvalidModelCatalog, providerName, endpoint, fieldPrefix)
+	return nil
+}
+
+func validateModelFamilies(families []ModelFamily, publishers map[string]ModelPublisher, validated map[string]ModelFamily) error {
+	if len(families) == 0 {
+		return fmt.Errorf("%w: field=catalog.families", ErrInvalidModelCatalog)
+	}
+	for index, family := range families {
+		identifier, identifierError := canonicalCatalogIdentifier(family.ID, fmt.Sprintf("catalog.families[%d].id", index))
+		if identifierError != nil {
+			return identifierError
+		}
+		if _, duplicate := validated[identifier]; duplicate {
+			return fmt.Errorf("%w: field=catalog.families[%d].id duplicate_identifier=%s", ErrInvalidModelCatalog, index, identifier)
+		}
+		if _, found := publishers[family.Publisher]; !found {
+			return fmt.Errorf("%w: field=catalog.families[%d].publisher publisher=%s reason=dangling_reference", ErrInvalidModelCatalog, index, family.Publisher)
+		}
+		if strings.TrimSpace(family.Label) == constants.EmptyString || family.Label != strings.TrimSpace(family.Label) {
+			return fmt.Errorf("%w: field=catalog.families[%d].label", ErrInvalidModelCatalog, index)
+		}
+		validated[identifier] = family
+	}
+	return nil
+}
+
+func validateExactModels(models []ExactModel, publishers map[string]ModelPublisher, families map[string]ModelFamily, validated map[string]ExactModel) error {
+	if len(models) == 0 {
+		return fmt.Errorf("%w: field=catalog.models", ErrInvalidModelCatalog)
+	}
+	for index, model := range models {
+		identifier, identifierError := canonicalCatalogIdentifier(model.ID, fmt.Sprintf("catalog.models[%d].id", index))
+		if identifierError != nil {
+			return identifierError
+		}
+		if _, duplicate := validated[identifier]; duplicate {
+			return fmt.Errorf("%w: field=catalog.models[%d].id duplicate_identifier=%s", ErrInvalidModelCatalog, index, identifier)
+		}
+		if _, found := publishers[model.Publisher]; !found {
+			return fmt.Errorf("%w: field=catalog.models[%d].publisher publisher=%s reason=dangling_reference", ErrInvalidModelCatalog, index, model.Publisher)
+		}
+		family, found := families[model.Family]
+		if !found || family.Publisher != model.Publisher {
+			return fmt.Errorf("%w: field=catalog.models[%d].family family=%s publisher=%s reason=dangling_reference", ErrInvalidModelCatalog, index, model.Family, model.Publisher)
+		}
+		if strings.TrimSpace(model.Version) == constants.EmptyString || model.Version != strings.TrimSpace(model.Version) {
+			return fmt.Errorf("%w: field=catalog.models[%d].version", ErrInvalidModelCatalog, index)
+		}
+		if _, operationError := validatedOperationSet(model.Operations, fmt.Sprintf("catalog.models[%d].operations", index)); operationError != nil {
+			return operationError
+		}
+		if _, mediaError := validatedExactModelMediaInputs(model.MediaInputs, fmt.Sprintf("catalog.models[%d].media_inputs", index)); mediaError != nil {
+			return mediaError
+		}
+		validated[identifier] = model
+	}
+	return nil
+}
+
+func validateProviderOfferings(offerings []ProviderOffering, catalog validatedModelCatalog) error {
+	if len(offerings) == 0 {
+		return fmt.Errorf("%w: field=catalog.offerings", ErrInvalidModelCatalog)
+	}
+	providerOperationDefaults := map[string]int{}
+	providerOperations := map[string]map[string]struct{}{}
+	modelOperations := map[string]map[string]struct{}{}
+	providerNativeModels := map[string]struct{}{}
+	for index, offering := range offerings {
+		fieldPrefix := fmt.Sprintf("catalog.offerings[%d]", index)
+		if _, found := catalog.providers[offering.Provider]; !found {
+			return fmt.Errorf("%w: field=%s.provider provider=%s reason=dangling_reference", ErrInvalidModelCatalog, fieldPrefix, offering.Provider)
+		}
+		exactModel, found := catalog.models[offering.Model]
+		if !found {
+			return fmt.Errorf("%w: field=%s.model model=%s reason=dangling_reference", ErrInvalidModelCatalog, fieldPrefix, offering.Model)
+		}
+		providerModel := strings.TrimSpace(offering.ProviderModel)
+		if providerModel == constants.EmptyString || providerModel != offering.ProviderModel {
+			return fmt.Errorf("%w: field=%s.provider_model", ErrInvalidModelCatalog, fieldPrefix)
+		}
+		offeringIdentifier := providerOfferingIdentifier(offering.Provider, offering.Model)
+		if _, duplicate := catalog.offerings[offeringIdentifier]; duplicate {
+			return fmt.Errorf("%w: field=%s route_conflict=%s", ErrInvalidModelCatalog, fieldPrefix, offeringIdentifier)
+		}
+		nativeIdentifier := strings.ToLower(offering.Provider + "\x00" + providerModel)
+		if _, duplicate := providerNativeModels[nativeIdentifier]; duplicate {
+			return fmt.Errorf("%w: field=%s provider_native_model_conflict=%s", ErrInvalidModelCatalog, fieldPrefix, providerModel)
+		}
+		providerNativeModels[nativeIdentifier] = struct{}{}
+		offeredOperations, operationError := validatedOperationSet(offering.Operations, fieldPrefix+".operations")
+		if operationError != nil {
+			return operationError
+		}
+		modelOperationSet, _ := validatedOperationSet(exactModel.Operations, "catalog.models.operations")
+		for operation := range offeredOperations {
+			if _, supported := modelOperationSet[operation]; !supported {
+				return fmt.Errorf("%w: field=%s.operations operation=%s reason=unsupported_by_model", ErrInvalidModelCatalog, fieldPrefix, operation)
+			}
+			if providerOperations[offering.Provider] == nil {
+				providerOperations[offering.Provider] = map[string]struct{}{}
+			}
+			providerOperations[offering.Provider][operation] = struct{}{}
+			if modelOperations[offering.Model] == nil {
+				modelOperations[offering.Model] = map[string]struct{}{}
+			}
+			modelOperations[offering.Model][operation] = struct{}{}
+		}
+		defaultOperations, defaultError := validatedOperationSet(offering.DefaultOperations, fieldPrefix+".default_operations")
+		if defaultError != nil && len(offering.DefaultOperations) != 0 {
+			return defaultError
+		}
+		for operation := range defaultOperations {
+			if _, offered := offeredOperations[operation]; !offered {
+				return fmt.Errorf("%w: field=%s.default_operations operation=%s reason=unsupported_by_offering", ErrInvalidModelCatalog, fieldPrefix, operation)
+			}
+			providerOperationDefaults[offering.Provider+"\x00"+operation]++
+		}
+		if offering.OutputTokenLimit < 0 {
+			return fmt.Errorf("%w: field=%s.output_token_limit", ErrInvalidModelCatalog, fieldPrefix)
+		}
+		if _, supportsText := offeredOperations[ModelOperationText]; supportsText {
+			if routeError := validateTextOffering(offering, fieldPrefix); routeError != nil {
+				return routeError
+			}
+		} else if offering.WireContract != constants.EmptyString || offering.ExecutionLifecycle != constants.EmptyString || offering.RequestProfile != constants.EmptyString || offering.WebSearch || offering.OutputTokenLimit != 0 || offering.ReasoningEffort != nil || len(offering.MediaInputs) != 0 {
+			return fmt.Errorf("%w: field=%s reason=text_capabilities_without_text_operation", ErrInvalidModelCatalog, fieldPrefix)
+		}
+		modelMediaInputs, _ := validatedExactModelMediaInputs(exactModel.MediaInputs, "catalog.models.media_inputs")
+		offeringMediaInputs, mediaError := validatedMediaInputSet(offering.Provider, offering.MediaInputs, fieldPrefix+".media_inputs")
+		if mediaError != nil {
+			return mediaError
+		}
+		for mediaInput := range offeringMediaInputs {
+			if _, supported := modelMediaInputs[mediaInput]; !supported {
+				return fmt.Errorf("%w: field=%s.media_inputs media_input=%s reason=unsupported_by_model", ErrInvalidModelCatalog, fieldPrefix, mediaInput)
+			}
+		}
+		catalog.offerings[offeringIdentifier] = offering
+	}
+	for provider, operations := range providerOperations {
+		for operation := range operations {
+			if providerOperationDefaults[provider+"\x00"+operation] != 1 {
+				return fmt.Errorf("%w: provider=%s operation=%s default_count=%d", ErrInvalidModelCatalog, provider, operation, providerOperationDefaults[provider+"\x00"+operation])
+			}
+		}
+	}
+	for modelIdentifier, exactModel := range catalog.models {
+		exactOperations, _ := validatedOperationSet(exactModel.Operations, "catalog.models.operations")
+		for operation := range exactOperations {
+			if _, found := modelOperations[modelIdentifier][operation]; !found {
+				return fmt.Errorf("%w: model=%s operation=%s reason=missing_provider_offering", ErrInvalidModelCatalog, modelIdentifier, operation)
+			}
+		}
+	}
+	return nil
+}
+
+func validateTextOffering(offering ProviderOffering, fieldPrefix string) error {
+	capabilities, capabilityError := validatedTextRouteCapabilities(offering.Provider, offering, fieldPrefix)
+	if capabilityError != nil {
+		return capabilityError
+	}
+	if _, allowed := providerTextRouteCapabilities[offering.Provider][capabilities]; !allowed {
+		return fmt.Errorf("%w: provider=%s model=%s wire_contract=%s execution_lifecycle=%s", ErrInvalidModelCatalog, offering.Provider, offering.Model, offering.WireContract, offering.ExecutionLifecycle)
+	}
+	if offering.WebSearch && offering.Provider != ProviderNameOpenAI {
+		return fmt.Errorf("%w: field=%s.web_search provider=%s", ErrInvalidModelCatalog, fieldPrefix, offering.Provider)
+	}
+	if offering.Provider == ProviderNameAnthropic && offering.OutputTokenLimit <= 0 {
+		return fmt.Errorf("%w: field=%s.output_token_limit provider=%s", ErrInvalidModelCatalog, fieldPrefix, offering.Provider)
+	}
+	if profileError := validateOfferingRequestProfile(offering); profileError != nil {
+		return fmt.Errorf("%w: field=%s.request_profile", profileError, fieldPrefix)
+	}
+	reasoningEffort, reasoningError := validatedReasoningEffortCapability(offering.ReasoningEffort, fieldPrefix+".reasoning_effort")
+	if reasoningError != nil {
+		return reasoningError
+	}
+	if reasoningEffort != nil && (reasoningEffort.adapter != reasoningEffortAdapterOpenAIResponses || offering.Provider != ProviderNameOpenAI || modelRequestProfile(offering.RequestProfile) != requestProfileOpenAIResponsesReasoningTools) {
+		return fmt.Errorf("%w: field=%s.reasoning_effort adapter=%s", ErrInvalidModelCatalog, fieldPrefix, reasoningEffort.adapter)
+	}
+	return nil
+}
+
+func validatedTextRouteCapabilities(providerName string, offering ProviderOffering, fieldPrefix string) (textRouteCapabilities, error) {
+	if offering.WireContract == constants.EmptyString || offering.WireContract != strings.TrimSpace(offering.WireContract) {
+		return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s field=%s.wire_contract", ErrInvalidModelCatalog, providerName, fieldPrefix)
+	}
+	if offering.ExecutionLifecycle == constants.EmptyString || offering.ExecutionLifecycle != strings.TrimSpace(offering.ExecutionLifecycle) {
+		return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s field=%s.execution_lifecycle", ErrInvalidModelCatalog, providerName, fieldPrefix)
 	}
 	capabilities := textRouteCapabilities{
-		wireContract:       textWireContract(rawWireContract),
-		executionLifecycle: textExecutionLifecycle(rawExecutionLifecycle),
+		wireContract:       textWireContract(offering.WireContract),
+		executionLifecycle: textExecutionLifecycle(offering.ExecutionLifecycle),
 	}
 	if !knownTextWireContract(capabilities.wireContract) {
-		return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s endpoint=%s field=%s.wire_contract wire_contract=%s", ErrInvalidModelCatalog, providerName, endpoint, fieldPrefix, rawWireContract)
+		return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s field=%s.wire_contract wire_contract=%s", ErrInvalidModelCatalog, providerName, fieldPrefix, offering.WireContract)
 	}
 	if !knownTextExecutionLifecycle(capabilities.executionLifecycle) {
-		return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s endpoint=%s field=%s.execution_lifecycle execution_lifecycle=%s", ErrInvalidModelCatalog, providerName, endpoint, fieldPrefix, rawExecutionLifecycle)
-	}
-	if _, allowed := providerTextRouteCapabilities[providerName][capabilities]; !allowed {
-		return textRouteCapabilities{}, fmt.Errorf(
-			"%w: provider=%s endpoint=%s wire_contract=%s execution_lifecycle=%s",
-			ErrInvalidModelCatalog,
-			providerName,
-			endpoint,
-			rawWireContract,
-			rawExecutionLifecycle,
-		)
+		return textRouteCapabilities{}, fmt.Errorf("%w: provider=%s field=%s.execution_lifecycle execution_lifecycle=%s", ErrInvalidModelCatalog, providerName, fieldPrefix, offering.ExecutionLifecycle)
 	}
 	return capabilities, nil
 }
 
+func canonicalCatalogIdentifier(rawIdentifier string, field string) (string, error) {
+	identifier := strings.TrimSpace(rawIdentifier)
+	if identifier == constants.EmptyString || identifier != rawIdentifier || identifier != strings.ToLower(identifier) {
+		return constants.EmptyString, fmt.Errorf("%w: field=%s identifier=%s reason=not_canonical", ErrInvalidModelCatalog, field, rawIdentifier)
+	}
+	return identifier, nil
+}
+
+func providerOfferingIdentifier(providerIdentifier string, modelIdentifier string) string {
+	return providerIdentifier + ":" + modelIdentifier
+}
+
+func validatedOperationSet(rawOperations []string, field string) (map[string]struct{}, error) {
+	if len(rawOperations) == 0 {
+		return nil, fmt.Errorf("%w: field=%s", ErrInvalidModelCatalog, field)
+	}
+	operations := make(map[string]struct{}, len(rawOperations))
+	for index, operation := range rawOperations {
+		if operation != ModelOperationText && operation != ModelOperationDictation {
+			return nil, fmt.Errorf("%w: field=%s[%d] operation=%s", ErrInvalidModelCatalog, field, index, operation)
+		}
+		if _, duplicate := operations[operation]; duplicate {
+			return nil, fmt.Errorf("%w: field=%s[%d] duplicate=%s", ErrInvalidModelCatalog, field, index, operation)
+		}
+		operations[operation] = struct{}{}
+	}
+	return operations, nil
+}
+
+func validatedExactModelMediaInputs(rawMediaInputs []string, field string) (map[messageMediaType]struct{}, error) {
+	mediaInputs := make(map[messageMediaType]struct{}, len(rawMediaInputs))
+	for index, rawMediaInput := range rawMediaInputs {
+		mediaInput := messageMediaType(rawMediaInput)
+		if mediaInput != messageMediaTypeImage && mediaInput != messageMediaTypeAudio {
+			return nil, fmt.Errorf("%w: field=%s[%d] media_input=%s", ErrInvalidModelCatalog, field, index, rawMediaInput)
+		}
+		if _, duplicate := mediaInputs[mediaInput]; duplicate {
+			return nil, fmt.Errorf("%w: field=%s[%d] duplicate=%s", ErrInvalidModelCatalog, field, index, rawMediaInput)
+		}
+		mediaInputs[mediaInput] = struct{}{}
+	}
+	return mediaInputs, nil
+}
+
 func knownTextWireContract(wireContract textWireContract) bool {
 	switch wireContract {
-	case textWireContractOpenAIResponses,
-		textWireContractOpenAIChatCompletions,
-		textWireContractGeminiInteractions,
-		textWireContractAnthropicMessages:
+	case textWireContractOpenAIResponses, textWireContractOpenAIChatCompletions, textWireContractGeminiInteractions, textWireContractAnthropicMessages:
 		return true
 	default:
 		return false
@@ -223,8 +432,7 @@ func knownTextWireContract(wireContract textWireContract) bool {
 
 func knownTextExecutionLifecycle(executionLifecycle textExecutionLifecycle) bool {
 	switch executionLifecycle {
-	case textExecutionLifecycleSynchronousCompletion,
-		textExecutionLifecyclePollableResource:
+	case textExecutionLifecycleSynchronousCompletion, textExecutionLifecyclePollableResource:
 		return true
 	default:
 		return false
@@ -260,87 +468,35 @@ func validatedReasoningEffortCapability(rawCapability *ReasoningEffortCapability
 	return &reasoningEffortCapability{adapter: adapter, efforts: efforts}, nil
 }
 
-func validateReasoningEffortAdapterMapping(providerName string, endpoint endpointKind, modelConfiguration ModelConfiguration, capability reasoningEffortCapability) error {
-	if endpoint != endpointKindText {
-		return fmt.Errorf("%w: provider=%s endpoint=%s adapter=%s", ErrInvalidModelCatalog, providerName, endpoint, capability.adapter)
-	}
-	if capability.adapter != reasoningEffortAdapterOpenAIResponses || providerName != ProviderNameOpenAI || modelRequestProfile(strings.TrimSpace(modelConfiguration.RequestProfile)) != requestProfileOpenAIResponsesReasoningTools {
-		return fmt.Errorf("%w: provider=%s endpoint=%s adapter=%s profile=%s", ErrInvalidModelCatalog, providerName, endpoint, capability.adapter, strings.TrimSpace(modelConfiguration.RequestProfile))
-	}
-	return nil
-}
-
-func validateModelRequestProfile(providerName string, endpoint endpointKind, modelConfiguration ModelConfiguration) error {
-	requestProfile := strings.TrimSpace(modelConfiguration.RequestProfile)
-	if providerName != ProviderNameOpenAI || endpoint != endpointKindText {
+func validateOfferingRequestProfile(offering ProviderOffering) error {
+	requestProfile := strings.TrimSpace(offering.RequestProfile)
+	if offering.Provider != ProviderNameOpenAI {
 		if requestProfile != constants.EmptyString {
-			return fmt.Errorf("%w: provider=%s endpoint=%s profile=%s", ErrInvalidModelCatalog, providerName, endpoint, requestProfile)
+			return fmt.Errorf("%w: provider=%s profile=%s", ErrInvalidModelCatalog, offering.Provider, requestProfile)
 		}
 		return nil
 	}
-	if requestProfile == constants.EmptyString {
-		return fmt.Errorf("%w: provider=%s endpoint=%s", ErrInvalidModelCatalog, providerName, endpoint)
-	}
-	if !knownModelRequestProfile(modelRequestProfile(requestProfile)) {
-		return fmt.Errorf("%w: provider=%s endpoint=%s profile=%s", ErrInvalidModelCatalog, providerName, endpoint, requestProfile)
+	if requestProfile == constants.EmptyString || !knownModelRequestProfile(modelRequestProfile(requestProfile)) {
+		return fmt.Errorf("%w: provider=%s profile=%s", ErrInvalidModelCatalog, offering.Provider, requestProfile)
 	}
 	return nil
 }
 
 func knownModelRequestProfile(requestProfile modelRequestProfile) bool {
 	switch requestProfile {
-	case requestProfileOpenAIResponsesTemperature,
-		requestProfileOpenAIResponsesTemperatureTools,
-		requestProfileOpenAIResponsesReasoningTools:
+	case requestProfileOpenAIResponsesTemperature, requestProfileOpenAIResponsesTemperatureTools, requestProfileOpenAIResponsesReasoningTools:
 		return true
 	default:
 		return false
 	}
 }
 
-func textModelSet(catalog ModelEndpointCatalog) map[string]textModelDefinition {
-	models := map[string]textModelDefinition{}
-	for _, modelConfiguration := range catalog.Models {
-		trimmedModelIdentifier := strings.TrimSpace(modelConfiguration.ID)
-		if trimmedModelIdentifier != constants.EmptyString {
-			routeCapabilities := textRouteCapabilities{
-				wireContract:       textWireContract(strings.TrimSpace(modelConfiguration.WireContract)),
-				executionLifecycle: textExecutionLifecycle(strings.TrimSpace(modelConfiguration.ExecutionLifecycle)),
-			}
-			models[strings.ToLower(trimmedModelIdentifier)] = textModelDefinition{
-				identifier:          modelID(trimmedModelIdentifier),
-				wireContract:        routeCapabilities.wireContract,
-				executionLifecycle:  routeCapabilities.executionLifecycle,
-				routeAdapter:        textRouteAdapters[routeCapabilities],
-				requestProfile:      modelRequestProfile(strings.TrimSpace(modelConfiguration.RequestProfile)),
-				supportsWebSearch:   modelConfiguration.WebSearch,
-				outputTokenLimit:    modelConfiguration.OutputTokenLimit,
-				hasOutputTokenLimit: modelConfiguration.OutputTokenLimit > 0,
-				reasoningEffort:     configuredReasoningEffortCapability(modelConfiguration.ReasoningEffort),
-				mediaInputs:         configuredMediaInputSet(modelConfiguration.MediaInputs),
-			}
-		}
-	}
-	return models
-}
-
-func validatedMediaInputSet(providerName string, endpoint endpointKind, rawMediaInputs []string, fieldPrefix string) (map[messageMediaType]struct{}, error) {
+func validatedMediaInputSet(providerName string, rawMediaInputs []string, fieldPrefix string) (map[messageMediaType]struct{}, error) {
 	mediaInputs := make(map[messageMediaType]struct{}, len(rawMediaInputs))
 	for mediaInputIndex, rawMediaInput := range rawMediaInputs {
 		mediaInput := messageMediaType(rawMediaInput)
-		if rawMediaInput == constants.EmptyString || rawMediaInput != strings.TrimSpace(rawMediaInput) {
-			return nil, fmt.Errorf("%w: field=%s[%d]", ErrInvalidModelCatalog, fieldPrefix, mediaInputIndex)
-		}
-		if !providerSupportsMessageMedia(providerName, endpoint, mediaInput) {
-			return nil, fmt.Errorf(
-				"%w: field=%s[%d] provider=%s endpoint=%s media_input=%s",
-				ErrInvalidModelCatalog,
-				fieldPrefix,
-				mediaInputIndex,
-				providerName,
-				endpoint,
-				rawMediaInput,
-			)
+		if rawMediaInput == constants.EmptyString || rawMediaInput != strings.TrimSpace(rawMediaInput) || !providerSupportsMessageMedia(providerName, mediaInput) {
+			return nil, fmt.Errorf("%w: field=%s[%d] provider=%s media_input=%s", ErrInvalidModelCatalog, fieldPrefix, mediaInputIndex, providerName, rawMediaInput)
 		}
 		if _, duplicate := mediaInputs[mediaInput]; duplicate {
 			return nil, fmt.Errorf("%w: field=%s[%d] duplicate=%s", ErrInvalidModelCatalog, fieldPrefix, mediaInputIndex, rawMediaInput)
@@ -362,21 +518,25 @@ func configuredReasoningEffortCapability(configuration *ReasoningEffortCapabilit
 	if configuration == nil {
 		return nil
 	}
-	return &reasoningEffortCapability{
-		adapter: reasoningEffortAdapter(strings.TrimSpace(configuration.Adapter)),
-		efforts: append([]string(nil), configuration.Efforts...),
-	}
+	return &reasoningEffortCapability{adapter: reasoningEffortAdapter(strings.TrimSpace(configuration.Adapter)), efforts: append([]string(nil), configuration.Efforts...)}
 }
 
-func dictationModelSet(catalog ModelEndpointCatalog) map[string]modelID {
-	models := map[string]modelID{}
-	for _, modelConfiguration := range catalog.Models {
-		trimmedModelIdentifier := strings.TrimSpace(modelConfiguration.ID)
-		if trimmedModelIdentifier != constants.EmptyString {
-			models[strings.ToLower(trimmedModelIdentifier)] = modelID(trimmedModelIdentifier)
+func offeringSupportsOperation(offering ProviderOffering, operation string) bool {
+	for _, configuredOperation := range offering.Operations {
+		if configuredOperation == operation {
+			return true
 		}
 	}
-	return models
+	return false
+}
+
+func offeringDefaultsOperation(offering ProviderOffering, operation string) bool {
+	for _, defaultOperation := range offering.DefaultOperations {
+		if defaultOperation == operation {
+			return true
+		}
+	}
+	return false
 }
 
 func (requestProfile modelRequestProfile) string() string {
