@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="e4f8d83fa082967e1018f428e6e4a404908b47f4581085b788aca47dd67b8052">
+    <meta name="openapi-source-sha256" content="9f75f00a49eefffc9d8c53ce99fc48a8c52cf95ab3975b07fbaaf693841338ef">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="e4f8d83fa082967e1018f428e6e4a404908b47f4581085b788aca47dd67b8052">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="9f75f00a49eefffc9d8c53ce99fc48a8c52cf95ab3975b07fbaaf693841338ef">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -49,7 +49,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>e4f8d83fa082967e1018f428e6e4a404908b47f4581085b788aca47dd67b8052</code></span>
+          <span>Source SHA-256 <code>9f75f00a49eefffc9d8c53ce99fc48a8c52cf95ab3975b07fbaaf693841338ef</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -1453,6 +1453,7 @@ components:
         - identifier
         - publisher
         - label
+        - weight_access
       properties:
         identifier:
           type: string
@@ -1463,6 +1464,11 @@ components:
         label:
           type: string
           minLength: 1
+        weight_access:
+          type: string
+          enum:
+            - proprietary
+            - open_weights
     PublicExactModelCapability:
       type: object
       additionalProperties: false

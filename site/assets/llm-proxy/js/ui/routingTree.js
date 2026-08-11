@@ -12,16 +12,25 @@ const ACTIVE_LINE_OPACITY = 1;
 
 const SELECTORS = Object.freeze({
   CANVAS: "[data-route-canvas]",
+  CAPABILITY: "[data-route-capability]",
+  COUNTS: "[data-route-counts]",
+  EMPTY: "[data-route-empty]",
   FAMILY: "[data-route-family]",
+  FAMILY_MODEL_COUNT: "[data-route-family-model-count]",
   MAP: "[data-route-map]",
   MODEL: "[data-route-model]",
+  MODEL_COUNT: "[data-route-model-count]",
   MODEL_GROUP: "[data-route-model-group]",
   PRODUCT: "[data-route-product]",
   PROVIDER: "[data-route-provider]",
+  PROVIDER_COUNT: "[data-route-provider-count]",
   PROVIDER_GROUP: "[data-route-provider-group]",
   PROXY: "[data-route-proxy]",
+  SELECTION: "[data-route-selection]",
   SELECTED_MODEL: "[data-route-selected-model]",
   SELECTED_PROVIDER: "[data-route-selected-provider]",
+  STAGE: "[data-route-stage]",
+  WEIGHT_ACCESS: "[data-route-weight-access]",
 });
 
 class RoutingTreeElement extends HTMLElement {
@@ -30,7 +39,13 @@ class RoutingTreeElement extends HTMLElement {
     /** @type {HTMLButtonElement[]} */
     this.familyButtons = [];
     /** @type {HTMLButtonElement[]} */
+    this.weightAccessButtons = [];
+    /** @type {HTMLButtonElement[]} */
+    this.capabilityButtons = [];
+    /** @type {HTMLButtonElement[]} */
     this.modelButtons = [];
+    /** @type {HTMLButtonElement[]} */
+    this.providerButtons = [];
     /** @type {Map<string, HTMLElement>} */
     this.modelGroups = new Map();
     /** @type {Map<string, HTMLElement>} */
@@ -43,6 +58,14 @@ class RoutingTreeElement extends HTMLElement {
     this.selectedModelOutput = null;
     /** @type {HTMLElement | null} */
     this.selectedProviderOutput = null;
+    /** @type {HTMLOutputElement | null} */
+    this.countsOutput = null;
+    /** @type {HTMLElement | null} */
+    this.emptyMessage = null;
+    /** @type {HTMLElement | null} */
+    this.selectionFooter = null;
+    /** @type {HTMLElement[]} */
+    this.downstreamStages = [];
     /** @type {HTMLElement | null} */
     this.routeMap = null;
     /** @type {HTMLCanvasElement | null} */
@@ -60,12 +83,19 @@ class RoutingTreeElement extends HTMLElement {
     if (this.dataset.enhanced === SELECTED_ATTRIBUTE_VALUE) {
       return;
     }
+    this.weightAccessButtons = requiredButtons(this, SELECTORS.WEIGHT_ACCESS);
+    this.capabilityButtons = requiredButtons(this, SELECTORS.CAPABILITY);
     this.familyButtons = requiredButtons(this, SELECTORS.FAMILY);
     this.modelButtons = requiredButtons(this, SELECTORS.MODEL);
+    this.providerButtons = requiredButtons(this, SELECTORS.PROVIDER);
     this.modelGroups = routingGroups(this, SELECTORS.MODEL_GROUP, "routeModelGroup");
     this.providerGroups = routingGroups(this, SELECTORS.PROVIDER_GROUP, "routeProviderGroup");
     this.selectedModelOutput = requiredElement(this, SELECTORS.SELECTED_MODEL, HTMLElement);
     this.selectedProviderOutput = requiredElement(this, SELECTORS.SELECTED_PROVIDER, HTMLElement);
+    this.countsOutput = requiredElement(this, SELECTORS.COUNTS, HTMLOutputElement);
+    this.emptyMessage = requiredElement(this, SELECTORS.EMPTY, HTMLElement);
+    this.selectionFooter = requiredElement(this, SELECTORS.SELECTION, HTMLElement);
+    this.downstreamStages = requiredElements(this, SELECTORS.STAGE, HTMLElement);
     this.routeMap = requiredElement(this, SELECTORS.MAP, HTMLElement);
     this.routeCanvas = requiredElement(this, SELECTORS.CANVAS, HTMLCanvasElement);
     this.productNode = requiredElement(this, SELECTORS.PRODUCT, HTMLElement);
@@ -76,8 +106,19 @@ class RoutingTreeElement extends HTMLElement {
     }
     const selectedFamilies = this.familyButtons.filter((button) => isSelected(button));
     const selectedModels = this.modelButtons.filter((button) => isSelected(button));
-    if (selectedFamilies.length !== 1 || selectedModels.length !== 1) {
-      throw new Error(`routing_tree_selection_invalid: families=${selectedFamilies.length} models=${selectedModels.length}`);
+    const selectedWeightAccess = this.weightAccessButtons.filter((button) => isSelected(button));
+    const selectedCapabilities = this.capabilityButtons.filter((button) => isSelected(button));
+    if (selectedFamilies.length !== 1 || selectedModels.length !== 1 || selectedWeightAccess.length === 0 || selectedCapabilities.length !== 1) {
+      throw new Error(`routing_tree_selection_invalid: weight_access=${selectedWeightAccess.length} capabilities=${selectedCapabilities.length} families=${selectedFamilies.length} models=${selectedModels.length}`);
+    }
+
+    for (const weightAccessButton of this.weightAccessButtons) {
+      weightAccessButton.disabled = false;
+      weightAccessButton.addEventListener("click", () => this.toggleWeightAccess(weightAccessButton));
+    }
+    for (const capabilityButton of this.capabilityButtons) {
+      capabilityButton.disabled = false;
+      capabilityButton.addEventListener("click", () => this.selectCapability(capabilityButton));
     }
 
     for (const familyButton of this.familyButtons) {
@@ -88,14 +129,124 @@ class RoutingTreeElement extends HTMLElement {
       modelButton.disabled = false;
       modelButton.addEventListener("click", () => this.selectModel(modelButton));
     }
-    for (const providerButton of requiredButtons(this, SELECTORS.PROVIDER)) {
+    for (const providerButton of this.providerButtons) {
       providerButton.disabled = false;
       providerButton.addEventListener("click", () => this.selectProvider(providerButton));
     }
     this.resizeObserver = new ResizeObserver(() => this.scheduleRouteDraw());
     this.resizeObserver.observe(this.routeMap);
     this.dataset.enhanced = SELECTED_ATTRIBUTE_VALUE;
-    this.selectFamily(selectedFamilies[0]);
+    this.applyFilters();
+  }
+
+  /** @param {HTMLButtonElement} weightAccessButton */
+  toggleWeightAccess(weightAccessButton) {
+    const selectedWeightAccessButtons = this.weightAccessButtons.filter((button) => isSelected(button));
+    if (isSelected(weightAccessButton) && selectedWeightAccessButtons.length === 1) {
+      return;
+    }
+    weightAccessButton.setAttribute("aria-pressed", String(!isSelected(weightAccessButton)));
+    this.applyFilters();
+  }
+
+  /** @param {HTMLButtonElement} capabilityButton */
+  selectCapability(capabilityButton) {
+    for (const candidateButton of this.capabilityButtons) {
+      candidateButton.setAttribute("aria-pressed", String(candidateButton === capabilityButton));
+    }
+    this.applyFilters();
+  }
+
+  applyFilters() {
+    const selectedWeightAccessButtons = this.weightAccessButtons.filter((button) => isSelected(button));
+    if (selectedWeightAccessButtons.length === 0) {
+      throw new Error(`routing_tree_weight_access_selection_invalid: selected=${selectedWeightAccessButtons.length}`);
+    }
+    const selectedCapabilityButtons = this.capabilityButtons.filter((button) => isSelected(button));
+    if (selectedCapabilityButtons.length !== 1) {
+      throw new Error(`routing_tree_capability_selection_invalid: selected=${selectedCapabilityButtons.length}`);
+    }
+    const selectedWeightAccessValues = new Set(selectedWeightAccessButtons.map(
+      (button) => requiredDatasetValue(button, "routeWeightAccess"),
+    ));
+    const selectedCapability = requiredDatasetValue(selectedCapabilityButtons[0], "routeCapability");
+
+    for (const providerButton of this.providerButtons) {
+      const capabilities = new Set(requiredDatasetValue(providerButton, "routeProviderCapabilities").split(" "));
+      providerButton.hidden = !capabilities.has(selectedCapability);
+    }
+
+    let exactModelCount = 0;
+    let offeringCount = 0;
+    for (const modelButton of this.modelButtons) {
+      const modelIdentifier = requiredDatasetValue(modelButton, "routeModel");
+      const providerGroup = this.providerGroups.get(modelIdentifier);
+      if (!providerGroup) {
+        throw new Error(`routing_tree_provider_group_missing: model=${modelIdentifier}`);
+      }
+      const matchingProviders = requiredButtons(providerGroup, SELECTORS.PROVIDER).filter((button) => !button.hidden);
+      modelButton.hidden = matchingProviders.length === 0;
+      const providerCount = requiredElement(providerGroup, SELECTORS.PROVIDER_COUNT, HTMLElement);
+      providerCount.textContent = countLabel(matchingProviders.length, "route");
+    }
+
+    /** @type {HTMLButtonElement[]} */
+    const visibleFamilies = [];
+    for (const familyButton of this.familyButtons) {
+      const familyIdentifier = requiredDatasetValue(familyButton, "routeFamily");
+      const familyWeightAccess = requiredDatasetValue(familyButton, "routeFamilyWeightAccess");
+      const modelGroup = this.modelGroups.get(familyIdentifier);
+      if (!modelGroup) {
+        throw new Error(`routing_tree_model_group_missing: family=${familyIdentifier}`);
+      }
+      const matchingModels = requiredButtons(modelGroup, SELECTORS.MODEL).filter((button) => !button.hidden);
+      const matchesWeightAccess = selectedWeightAccessValues.has(familyWeightAccess);
+      familyButton.hidden = !matchesWeightAccess || matchingModels.length === 0;
+      const familyModelCount = requiredElement(familyButton, SELECTORS.FAMILY_MODEL_COUNT, HTMLElement);
+      const groupModelCount = requiredElement(modelGroup, SELECTORS.MODEL_COUNT, HTMLElement);
+      familyModelCount.textContent = countLabel(matchingModels.length, "model");
+      groupModelCount.textContent = countLabel(matchingModels.length, "exact model");
+      if (!familyButton.hidden) {
+        visibleFamilies.push(familyButton);
+        exactModelCount += matchingModels.length;
+        for (const matchingModel of matchingModels) {
+          const providerGroup = this.providerGroups.get(requiredDatasetValue(matchingModel, "routeModel"));
+          if (!providerGroup) {
+            throw new Error("routing_tree_visible_model_provider_group_missing");
+          }
+          offeringCount += requiredButtons(providerGroup, SELECTORS.PROVIDER).filter((button) => !button.hidden).length;
+        }
+      }
+    }
+
+    if (!this.countsOutput || !this.emptyMessage || !this.selectionFooter) {
+      throw new Error("routing_tree_filter_surface_missing");
+    }
+    this.countsOutput.textContent = `${countLabel(visibleFamilies.length, "family", "families")} · ${countLabel(exactModelCount, "exact model")} · ${countLabel(offeringCount, "offering")}`;
+    const isEmpty = visibleFamilies.length === 0;
+    this.emptyMessage.hidden = !isEmpty;
+    this.selectionFooter.hidden = isEmpty;
+    for (const stage of this.downstreamStages) {
+      stage.hidden = isEmpty;
+    }
+    if (isEmpty) {
+      for (const branchButton of [...this.familyButtons, ...this.modelButtons, ...this.providerButtons]) {
+        branchButton.setAttribute("aria-pressed", "false");
+      }
+      for (const modelGroup of this.modelGroups.values()) {
+        modelGroup.hidden = true;
+      }
+      for (const providerGroup of this.providerGroups.values()) {
+        providerGroup.hidden = true;
+      }
+      this.activeModelGroup = null;
+      this.activeProviderGroup = null;
+      this.scheduleRouteDraw();
+      return;
+    }
+
+    const selectedFamily = visibleFamilies.find((button) => isSelected(button)) ?? visibleFamilies[0];
+    this.selectFamily(selectedFamily);
   }
 
   disconnectedCallback() {
@@ -120,7 +271,10 @@ class RoutingTreeElement extends HTMLElement {
       candidateModelGroup.hidden = candidateModelGroup !== modelGroup;
     }
     this.activeModelGroup = modelGroup;
-    const familyModels = requiredButtons(modelGroup, SELECTORS.MODEL);
+    const familyModels = requiredButtons(modelGroup, SELECTORS.MODEL).filter((button) => !button.hidden);
+    if (familyModels.length === 0) {
+      throw new Error(`routing_tree_family_models_missing: family=${familyIdentifier}`);
+    }
     const selectedModel = familyModels.find((button) => isSelected(button)) ?? familyModels[0];
     this.selectModel(selectedModel);
   }
@@ -146,7 +300,10 @@ class RoutingTreeElement extends HTMLElement {
       throw new Error("routing_tree_selected_model_output_missing");
     }
     this.selectedModelOutput.textContent = modelIdentifier;
-    const providerButtons = requiredButtons(providerGroup, SELECTORS.PROVIDER);
+    const providerButtons = requiredButtons(providerGroup, SELECTORS.PROVIDER).filter((button) => !button.hidden);
+    if (providerButtons.length === 0) {
+      throw new Error(`routing_tree_provider_buttons_missing: model=${modelIdentifier}`);
+    }
     this.selectProvider(providerButtons.find((button) => isSelected(button)) ?? providerButtons[0]);
   }
 
@@ -156,7 +313,7 @@ class RoutingTreeElement extends HTMLElement {
       throw new Error("routing_tree_provider_outside_active_model");
     }
     const providerIdentifier = requiredDatasetValue(providerButton, "routeProvider");
-    for (const candidateProvider of requiredButtons(this, SELECTORS.PROVIDER)) {
+    for (const candidateProvider of this.providerButtons) {
       candidateProvider.setAttribute("aria-pressed", String(candidateProvider === providerButton));
     }
     if (!this.selectedProviderOutput) {
@@ -177,7 +334,7 @@ class RoutingTreeElement extends HTMLElement {
   }
 
   drawRoutes() {
-    if (!this.routeMap || !this.routeCanvas || !this.productNode || !this.proxyNode || !this.activeModelGroup || !this.activeProviderGroup) {
+    if (!this.routeMap || !this.routeCanvas || !this.productNode || !this.proxyNode) {
       throw new Error("routing_tree_drawing_surface_missing");
     }
     const mapBounds = this.routeMap.getBoundingClientRect();
@@ -205,7 +362,12 @@ class RoutingTreeElement extends HTMLElement {
     const proxyPoint = relativeElementPoint(this.proxyNode, mapBounds);
     drawHorizontalCurve(drawingContext, productPoint, proxyPoint, accentColor, ACTIVE_LINE_WIDTH, ACTIVE_LINE_OPACITY);
 
-    const familyConnections = this.familyButtons.map((familyButton) => ({
+    if (!this.activeModelGroup || !this.activeProviderGroup) {
+      this.dataset.routeLinesRendered = SELECTED_ATTRIBUTE_VALUE;
+      return;
+    }
+
+    const familyConnections = this.familyButtons.filter((familyButton) => !familyButton.hidden).map((familyButton) => ({
       active: isSelected(familyButton),
       point: relativeElementPoint(familyButton, mapBounds),
     }));
@@ -224,7 +386,7 @@ class RoutingTreeElement extends HTMLElement {
       throw new Error("routing_tree_selected_family_missing");
     }
     const selectedFamilyPoint = relativeElementPoint(selectedFamily, mapBounds);
-    const modelConnections = requiredButtons(this.activeModelGroup, SELECTORS.MODEL).map((modelButton) => ({
+    const modelConnections = requiredButtons(this.activeModelGroup, SELECTORS.MODEL).filter((modelButton) => !modelButton.hidden).map((modelButton) => ({
       active: isSelected(modelButton),
       point: relativeElementPoint(modelButton, mapBounds),
     }));
@@ -243,7 +405,7 @@ class RoutingTreeElement extends HTMLElement {
       throw new Error("routing_tree_selected_model_missing");
     }
     const selectedModelPoint = relativeElementPoint(selectedModel, mapBounds);
-    const providerConnections = requiredButtons(this.activeProviderGroup, SELECTORS.PROVIDER).map((providerButton) => ({
+    const providerConnections = requiredButtons(this.activeProviderGroup, SELECTORS.PROVIDER).filter((providerButton) => !providerButton.hidden).map((providerButton) => ({
       active: isSelected(providerButton),
       point: relativeElementPoint(providerButton, mapBounds),
     }));
@@ -357,6 +519,35 @@ function requiredButtons(root, selector) {
     throw new Error(`routing_tree_buttons_missing: selector=${selector}`);
   }
   return buttons;
+}
+
+/**
+ * @template {Element} ElementType
+ * @param {ParentNode} root
+ * @param {string} selector
+ * @param {{new(): ElementType}} expectedType
+ * @returns {ElementType[]}
+ */
+function requiredElements(root, selector, expectedType) {
+  const elements = [...root.querySelectorAll(selector)].map((element) => {
+    if (!(element instanceof expectedType)) {
+      throw new Error(`routing_tree_element_invalid: selector=${selector}`);
+    }
+    return element;
+  });
+  if (elements.length === 0) {
+    throw new Error(`routing_tree_elements_missing: selector=${selector}`);
+  }
+  return elements;
+}
+
+/**
+ * @param {number} count
+ * @param {string} singular
+ * @param {string} [plural]
+ */
+function countLabel(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 /**

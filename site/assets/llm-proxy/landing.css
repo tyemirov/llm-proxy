@@ -231,12 +231,12 @@ routing-tree {
 }
 
 .routing-tree__header {
-  display: flex;
+  display: grid;
   min-height: 58px;
-  padding: 1.15rem 1.25rem 0.65rem;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 0.85rem;
 }
 
 .routing-tree__header h2,
@@ -248,10 +248,83 @@ routing-tree {
 }
 
 .routing-tree__header h2 {
+  overflow: hidden;
   font-size: 1.02rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.routing-tree__header > span {
+.routing-tree__filters,
+.routing-tree__filter-group {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.routing-tree__filters {
+  overflow-x: auto;
+  gap: 0.42rem;
+  scrollbar-width: none;
+}
+
+.routing-tree__filters::-webkit-scrollbar {
+  display: none;
+}
+
+.routing-tree__filter-group {
+  flex: 0 0 auto;
+  gap: 0.22rem;
+}
+
+.routing-tree__filter-divider {
+  width: 1px;
+  height: 18px;
+  flex: 0 0 auto;
+  background: var(--border-strong);
+}
+
+.routing-tree__filter {
+  min-height: 24px;
+  padding: 0.26rem 0.46rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  appearance: none;
+  background: #171a1f;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.48rem;
+  font-weight: 600;
+  letter-spacing: 0.045em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: border-color 130ms ease, background 130ms ease, color 130ms ease;
+}
+
+.routing-tree__filter:hover,
+.routing-tree__filter:focus-visible {
+  border-color: var(--routing-tree-accent);
+  color: var(--text-support);
+}
+
+.routing-tree__filter:focus-visible {
+  outline: 2px solid rgba(74, 211, 181, 0.2);
+  outline-offset: 1px;
+}
+
+.routing-tree__filter[aria-pressed="true"] {
+  border-color: var(--routing-tree-accent);
+  background: var(--routing-tree-accent-soft);
+  color: var(--text);
+}
+
+.routing-tree__filter:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.routing-tree__counts {
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: 0.53rem;
@@ -326,8 +399,11 @@ routing-tree {
 }
 
 .routing-tree__branch[hidden],
+.routing-tree__stage[hidden],
 .routing-tree__model-group[hidden],
-.routing-tree__provider-group[hidden] {
+.routing-tree__provider-group[hidden],
+.routing-tree__empty[hidden],
+.routing-tree__selection[hidden] {
   display: none;
 }
 
@@ -529,6 +605,18 @@ routing-tree {
 .routing-tree__selection output i {
   color: var(--text-muted);
   font-style: normal;
+}
+
+.routing-tree__empty {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  grid-column: 3 / -1;
+  grid-row: 1;
+  align-self: center;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  text-align: center;
 }
 .section.route-overview {
   --content: 1180px;
@@ -1388,6 +1476,20 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
     width: min(100%, 720px);
   }
 
+  .routing-tree__counts {
+    display: none;
+  }
+
+  .routing-tree__header {
+    padding-inline: 1rem;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 0.65rem;
+  }
+
+  .routing-tree__header h2 {
+    font-size: 0.86rem;
+  }
+
   .routing-tree__map {
     min-height: 620px;
     grid-template-columns:
@@ -1460,14 +1562,20 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
   }
 
   .routing-tree__header {
-    align-items: flex-start;
-    flex-direction: column;
-    flex-wrap: wrap;
-    gap: 0.35rem;
+    min-height: 50px;
+    padding: 0.6rem 0.7rem;
+    grid-template-columns: minmax(6rem, 7.5rem) minmax(0, 1fr);
+    gap: 0.5rem;
   }
 
-  .routing-tree__header > span {
-    white-space: normal;
+  .routing-tree__header h2 {
+    font-size: 0.78rem;
+  }
+
+  .routing-tree__filter {
+    min-height: 22px;
+    padding-inline: 0.4rem;
+    font-size: 0.45rem;
   }
 
   .routing-tree__map {
@@ -1504,6 +1612,13 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
 
   .routing-tree__selection {
     flex-wrap: wrap;
+  }
+
+  .routing-tree__empty {
+    grid-column: 1;
+    grid-row: 3;
+    min-height: 82px;
+    align-content: center;
   }
 
   .value-strip__grid,
