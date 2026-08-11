@@ -1026,6 +1026,91 @@ retain satisfied historical dependencies.
 
 ## Features
 
+- [ ] [F033] (P0) {F022} Support large media in canonical message requests.
+  Goal:
+  Let `/v2` callers reference tenant assets when inline media would exceed
+  `max_prompt_bytes`. Keep the JSON request limit. Preserve exact media bytes,
+  order, MIME type, and SHA-256.
+
+  Observed failure:
+  - Creative Director sends `master-character-sheet.png` through
+    `NewImageAttachment` for Gemini semantic image QA.
+  - The PNG is 3,326,724 bytes. Canonical base64 requires 4,435,632 bytes
+    before JSON and prompt content.
+  - The deployed capability resource reports `max_prompt_bytes: 4194304`.
+  - LLM Proxy returns HTTP 413 `prompt payload too large` before Gemini
+    receives the image.
+  - Creative Director receives no QA result. It cannot produce the next
+    MediaOps operation.
+  - The current Go client accepts the PNG. It cannot compare the serialized
+    request with the deployed request limit.
+
+  Contract gap:
+  - The current `/v2` contract supports only inline base64 media.
+  - F022 defines streaming asset upload. It does not connect uploaded assets
+    to blocking message attachments.
+  - A configured model can support an image that the public request transport
+    cannot carry.
+
+  Requirements:
+  - Use the F022 tenant asset store as the large-media input boundary.
+  - Add an asset-reference variant to the canonical user-message attachment
+    union.
+  - Require `type`, `asset_id`, `mime_type`, and `sha256` in each asset
+    reference.
+  - Reject an attachment that contains both `data` and `asset_id`.
+  - Keep inline base64 attachments for requests that satisfy
+    `max_prompt_bytes`.
+  - Apply `max_prompt_bytes` only to the JSON body. Apply separate limits to
+    resolved asset bytes.
+  - Publish the attachment count, per-asset byte limit, and aggregate media
+    byte limit in public capabilities.
+  - Validate tenant ownership, asset state, expiry, MIME type, size, and
+    SHA-256 before provider dispatch.
+  - Preserve message order and attachment order after asset resolution.
+  - Translate each resolved asset into the selected provider's exact media
+    input shape.
+  - Preserve caller bytes without resize, compression, or format conversion.
+  - Keep caller filesystem paths outside the HTTP contract.
+  - Return stable errors for missing, foreign, expired, oversized, mismatched,
+    and unsupported assets.
+  - Exclude asset bytes and authenticated asset URLs from logs, responses, and
+    usage records.
+  - Add official-client constructors for asset-backed image and audio
+    attachments.
+  - Expose the serialized JSON byte count before an official client submits a
+    request.
+
+  Deliverables:
+  - Add the OpenAPI asset-reference schemas and canonical message request
+    union.
+  - Add tenant asset resolution and provider adapter integration.
+  - Add public capability limits and official-client support.
+  - Update the root README, API reference, provider routing guide, and release
+    notes.
+
+  Validation:
+  - Use a 3,326,724-byte image fixture with a 4,194,304-byte JSON limit.
+  - Upload the fixture through F022. Send one `/v2` asset reference.
+  - Prove the JSON stays below the limit. Prove the fake Gemini adapter
+    receives the exact original bytes, MIME type, SHA-256, and order.
+  - Send the same bytes as inline base64. Require HTTP 413 before provider
+    dispatch.
+  - Send a JSON-only request above the limit. Require the same bounded HTTP
+    413 result.
+  - Cover missing, foreign, expired, deleted, oversized, wrong-MIME, and
+    wrong-digest assets.
+  - Cover one image, ordered images, audio, mixed media, count limits, and
+    aggregate byte limits.
+  - Prove asset cleanup cannot change an admitted request or expose another
+    tenant's asset.
+  - Prove logs, errors, responses, and usage records contain no asset bytes or
+    authenticated asset URLs.
+  - Exercise the public router and every released official client against a
+    fake provider.
+  - Run the required baseline and final
+    `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
 - [ ] [F032] (P1) Add Baidu Qianfan as a user-configurable text provider.
   Goal:
   Let a managed user paste, verify, and save a Baidu Qianfan API key through
