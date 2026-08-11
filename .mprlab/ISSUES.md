@@ -58,6 +58,45 @@ retain satisfied historical dependencies.
     orchestration readiness checks.
   - `make ci` passed all 11 gates with 91 browser tests and 100.0% Go statement
     coverage.
+- [x] [B131] (P1) Restore the five-stage model route.
+  Goal:
+  Restore one continuous route graph from the product to the selected provider
+  offering. The graph uses model family and exact model stages.
+  Evidence:
+  - The current route explorer separates publisher and model selection from
+    the lower route graph.
+  - The lower graph combines publisher and exact model in one node.
+  - The model family appears only as a filter and model label.
+  Requirements:
+  - Render exactly five desktop stages: Product, LLM Proxy, Model Family,
+    Model, and Provider.
+  - Keep this stage order at each supported desktop width.
+  - Generate each model family, exact model, and provider offering from the
+    normalized public catalog.
+  - Select a model family before an exact model.
+  - Show only the selected family's exact models in the model stage.
+  - Show only the selected exact model's provider offerings in the provider
+    stage.
+  - Remove the publisher picker and route filters from the route explorer.
+  - Keep publisher data in the normalized catalog and capability table.
+  - Preserve complete semantic HTML without JavaScript.
+  - Preserve responsive containment and the selected provider/model route
+    output.
+  Validation:
+  - Prove the five-stage order and connector endpoints in a real browser.
+  - Prove family, model, and provider selection updates the explicit route.
+  - Prove all families, exact models, and provider offerings exist without
+    JavaScript.
+  - Run `make ci` after the last application change.
+  Resolution:
+  - Restored one continuous Product, LLM Proxy, Model Family, Model, and
+    Provider route graph.
+  - Removed publisher selection and route filters from the route explorer.
+    The capability matrix continues to show publisher data and its filters.
+  - Added browser proofs for the five-stage order, connector endpoints,
+    selection updates, complete semantic HTML, and responsive layouts.
+  - `make ci` passed all 11 gates with 92 browser tests and 100.0% Go statement
+    coverage.
 - [!] [B126] (P1) Activate the current v0.4.0 release on every public surface.
   Goal:
   Make the production API, container, and Pages site serve the immutable
