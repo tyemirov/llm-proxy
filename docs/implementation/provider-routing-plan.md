@@ -96,10 +96,10 @@ in Meta's [Muse Spark guide](https://developer.meta.com/ai/resources/blog/build-
 [Chat Completions reference](https://dev.meta.ai/docs/features/chat-completion),
 and [pricing and rate-limit documentation](https://dev.meta.ai/docs/getting-started/pricing-rate-limits).
 
-DashScope is the only Alibaba provider. Production requires
-`${DASHSCOPE_BASE_URL}` to identify the Singapore Model Studio workspace paired
-with the regional `${DASHSCOPE_API_KEY}` credential. The `qwen` alias resolves
-to DashScope.
+DashScope is the only Alibaba provider. Each managed tenant saves its Singapore
+Model Studio workspace URL with the matching regional API key. Verification and
+routed requests use that saved tenant URL. Static mode requires the same pair in
+`providers.dashscope`. The `qwen` alias resolves to DashScope.
 
 MiniMax is a distinct text-only provider with canonical selector `minimax`,
 exact model `minimax-m2.7`, endpoint `https://api.minimax.io/v1`, and
