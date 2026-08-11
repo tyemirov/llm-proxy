@@ -245,6 +245,120 @@ retain satisfied historical dependencies.
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
 ## Improvements
 
+- [ ] [I223] (P0) {I216,I221} Load all supported providers and models from one catalog file.
+  Goal:
+  Make `configs/providers.yml` the only source that defines supported providers,
+  exact models, provider offerings, operations, controls, limits, and prices.
+  The application loads this file at startup and builds one validated provider
+  catalog. Provider onboarding changes only this file when current protocol
+  adapters can represent the complete provider contract.
+  Evidence:
+  - The current catalog has 11 providers, 57 exact models, 58 provider
+    offerings, and 58 price records.
+  - Provider data also exists in Go types, registry branches, persistence,
+    management APIs, UI forms, environment variables, and live-test lists.
+  - Current provider offerings use six request protocols and two execution
+    lifecycles.
+  Requirements:
+  - Inventory every datum that defines a provider, exact model, or provider
+    offering.
+  - Map each datum to one schema field or one reusable protocol adapter.
+  - Record the complete mapping in the provider catalog documentation.
+  - Add one strict, versioned schema for `configs/providers.yml`.
+  - Use root records for `schema_version`, `operations`, `publishers`,
+    `families`, `models`, and `providers`.
+  - Keep each exact model independent from its provider offerings.
+  - Put each provider offering inside its provider definition.
+  - Reference each exact model from a provider offering by its canonical
+    identifier.
+  - Define each provider identifier, display label, aliases, credential fields,
+    setting fields, and transports.
+  - Define each provider field's identifier, label, type, requirement, default,
+    secrecy, validation rules, and environment binding.
+  - Define each transport endpoint rule, authentication rule, request protocol,
+    response protocol, usage mapping, and lifecycle.
+  - Define protocol parameters for token fields, output fields, finish rules,
+    continuation rules, error rules, and usage fields.
+  - Define each provider offering's upstream model, operations, default state,
+    capabilities, controls, limits, request profile, and price.
+  - Put each price record inside its provider offering.
+  - Define optional environment bindings for each credential field and setting
+    field.
+  - Keep credential values and tenant setting values outside the provider
+    catalog.
+  - Support these existing protocol adapter identifiers:
+    - `openai_responses`
+    - `openai_chat_completions`
+    - `anthropic_messages`
+    - `gemini_interactions`
+    - `multipart_transcription`
+    - `xai_videos_generations`
+  - Support `synchronous_completion` and `pollable_resource` as catalog
+    lifecycle values.
+  - Reject unknown fields and unsupported schema versions during startup.
+  - Reject duplicate identifiers, alias collisions, missing references,
+    unsupported protocols, and invalid numeric bounds.
+  - Require exactly one default provider offering for each supported provider
+    operation.
+  - Require one valid price for each declared provider offering operation.
+  - Validate each control, limit, media declaration, and request profile against
+    its selected protocol adapter.
+  - Load the provider catalog once before runtime configuration validation.
+  - Compile one immutable registry from the validated provider catalog.
+  - Use this registry for routing, key verification, management APIs, public
+    capabilities, UI generation, persistence validation, and live tests.
+  - Select protocol adapters only by catalog identifiers.
+  - Keep provider identifiers out of generic protocol dispatch.
+  - When no current protocol adapter can implement a required protocol, add one
+    new protocol adapter.
+  - Resolve declared environment bindings through one generic configuration
+    loader.
+  - After the provider catalog replaces them, remove provider blocks from
+    `configs/config.yml`.
+  - Store provider connection values by provider identifier and catalog field
+    identifier.
+  - Encrypt each secret provider connection value with the current encryption
+    boundary.
+  - Add one bounded migration from provider-specific columns to provider
+    connection records.
+  - Read only provider connection records after the migration.
+  - Return generic provider field definitions and connection state from the
+    management API.
+  - Render management provider forms from the returned field definitions.
+  - Publish only safe exact model and provider offering data through public
+    capability resources.
+  - Keep credentials, private settings, authentication bindings, and upstream
+    model identifiers out of public data.
+  - Derive live-provider discovery and environment checks from the provider
+    catalog.
+  Deliverables:
+  - Add `configs/providers.yml` with all 11 providers, 57 exact models, 58
+    provider offerings, and 58 price records.
+  - Add the schema types, parser, semantic validator, immutable registry, and
+    safe data projections.
+  - Replace provider-specific runtime, management, persistence, UI, routing,
+    configuration, and test-discovery paths with generic consumers.
+  - Add the bounded provider connection migration.
+  - Document the schema and the one-definition provider onboarding procedure.
+  - Remove obsolete provider-specific fields, registry maps, UI branches,
+    database columns, and live-test lists.
+  Validation:
+  - When no satisfactory baseline result applies, run `make ci` before
+    application changes.
+  - Prove exact catalog counts for 11 providers, 57 exact models, 58 provider
+    offerings, and 58 price records.
+  - Prove startup rejection for each invalid schema and reference condition.
+  - Add a test provider definition that uses an existing protocol adapter.
+  - Prove the test provider appears in routing, management, UI schema,
+    persistence, public capabilities, and live-test discovery.
+  - Prove key verification and request routing against fake upstream servers.
+  - Prove provider connection migration and encrypted round-trip behavior.
+  - Prove public data contains no private provider catalog data.
+  - Prove controls and limits at each exact boundary.
+  - Prove the test provider requires no provider-specific production source
+    change.
+  - After the last application change, run `make ci`.
+
 - [ ] [I041] (P1) Migrate xAI text routes to Responses without OpenAI background assumptions.
   Goal:
   Move Grok models off xAI's deprecated Chat Completions surface while
@@ -1098,6 +1212,46 @@ retain satisfied historical dependencies.
 
 ## Features
 
+- [ ] [F035] (P0) {F033} Add verified provider image routes.
+  Goal:
+  LLM Proxy routes canonical image and audio attachments only through Gemini.
+  As a result, the Image input filter shows only the Gemini family. Provider
+  documents describe image input for OpenAI, Anthropic, and xAI models in the
+  current catalog. The Audio input filter represents conversational audio
+  input. The Dictation filter represents speech transcription.
+  Requirements:
+  - Reverify image and audio support for each exact model from official
+    provider documents.
+  - Add OpenAI Responses image transport for each verified exact model:
+    https://developers.openai.com/api/docs/guides/images-vision
+  - Add Anthropic Messages image transport for each verified exact model:
+    https://platform.claude.com/docs/en/build-with-claude/vision
+  - Add xAI Responses image transport for each verified exact model:
+    https://docs.x.ai/developers/model-capabilities/images/understanding
+  - Audit every Gemini exact model with the official image and audio guides:
+    https://ai.google.dev/gemini-api/docs/image-understanding
+    https://ai.google.dev/gemini-api/docs/audio
+  - Declare `media_inputs` only for a provider offering with a working
+    code-owned transport.
+  - Reject each media declaration that has no code-owned provider transport.
+  - Preserve attachment order, media bytes, MIME type, and SHA-256 through
+    provider serialization.
+  - Use a provider file API when inline transport cannot carry accepted media.
+  - Apply each provider offering's declared media limits before dispatch.
+  - Publish each media limit with its source and verification date.
+  - Derive public capabilities and route filters from the validated catalog.
+  - Declare audio input only for verified conversational routes.
+  - Keep dictation models under the Dictation filter.
+  Validation:
+  - Prove each new provider transport through canonical `POST /v2` requests.
+  - Prove the exact provider payload, attachment order, media bytes, and MIME
+    type.
+  - Prove each bounded media limit at its edge.
+  - Prove that unsupported media routes fail before provider dispatch.
+  - Prove the exact media routes in `/api/public/capabilities`.
+  - Prove the Image input and Audio input route filters in a browser.
+  - Prove complete semantic route content without JavaScript.
+  - Run `make ci` after the last application change.
 - [x] [F034] (P1) Filter the route explorer by weight access and capability.
   Goal:
   Reduce the model family fan with compact route filters in the diagram title.
@@ -1273,7 +1427,7 @@ retain satisfied historical dependencies.
     including polling and cancellation failures.
   - Passed the final 11-gate CI run with 100.0% Go statement coverage.
 
-- [ ] [F032] (P1) Add Baidu Qianfan as a user-configurable text provider.
+- [ ] [F032] (P1) {I223} Add Baidu Qianfan as a user-configurable text provider.
   Goal:
   Let a managed user paste, verify, and save a Baidu Qianfan API key through
   the existing tenant-scoped provider editor. Route blocking LLM Proxy text
@@ -1295,10 +1449,9 @@ retain satisfied historical dependencies.
     131072, and 32768 tokens respectively:
     https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en
   Requirements:
-  - Implement after I221 so `baidu` becomes a distinct provider offering for
-    canonical ERNIE and DeepSeek model identities instead of adding duplicate
-    provider-nested model records. Use canonical provider id `baidu`, display
-    label `Baidu Qianfan`, and no aliases.
+  - Add one `baidu` provider definition through the provider catalog from I223.
+    Use `baidu` as its canonical provider id. Use `Baidu Qianfan` as its display
+    label. Declare no aliases.
   - Register exact Qianfan text offerings `ernie-5.0`, `deepseek-v4-pro`,
     `deepseek-v4-flash`, and `deepseek-v3.2`. Use `ernie-5.0` as the Baidu
     provider default and record each documented output-token limit on its
@@ -1307,41 +1460,38 @@ retain satisfied historical dependencies.
     `openai_chat_completions` wire contract, `synchronous_completion`, and the
     upstream `max_tokens` field. Omit the optional `appid`. Make one pasted API
     key sufficient for the complete supported flow.
-  - Treat the API key as an opaque nonblank credential. Add
-    `providers.baidu.api_key` and `providers.baidu.base_url` to the service
-    configuration contract. Keep provider keys absent from the checked-in
-    managed configuration. Use `BAIDU_API_KEY` only for explicit static or
-    paid-live inputs.
-  - Reuse the shared Chat Completions request codec and add an explicit Qianfan
-    response policy. `finish_reason=stop` completes, `length` enters the common
+  - Declare one opaque nonblank `api_key` credential field and one `base_url`
+    setting field in the provider definition. Bind `BAIDU_API_KEY` through
+    catalog metadata for explicit static or paid-live inputs.
+  - Use the shared Chat Completions protocol adapter. Declare the Qianfan
+    response policy in catalog data. `finish_reason=stop` completes, `length`
+    enters the common
     missing-suffix coordinator, and other reasons fail safely. When `flag` is
     present, accept only documented continue values `0` and `1`. Reject `2`,
     `3`, `4`, and unknown values without exposing partial text. Apply the same
     structural and safety checks to provider-key verification.
-  - Expose Baidu through the existing authenticated
-    `provider-keys/baidu` operation and generated provider editor. A paste must
-    automatically verify the exact selected Qianfan model before the encrypted
-    key, provider settings, and eligible routing default are atomically saved.
+  - Expose Baidu through the generic authenticated provider-key operation.
+    Render Baidu in the provider editor from its provider definition. A paste
+    must automatically verify the exact selected Qianfan model before the
+    encrypted key, provider settings, and eligible routing default are
+    atomically saved.
     Keep the raw key, authorization header, and Qianfan body out of responses
     and logs.
   - Project the new provider offerings through the canonical management
     profile, routing selectors, public capability REST resource, frontend-owned
-    routing graph and model catalog, usage dimensions, and examples. Add Baidu
-    selection to the official Go, Python, and CLI clients. Generate each view
-    from the canonical provider and model inventory.
+    routing graph and model catalog, usage dimensions, and examples. Make Baidu
+    available to official clients through the existing provider selector.
+    Generate each view from the canonical provider and model inventory.
   - Keep the initial integration text-only and non-streaming. Qianfan visual
     input, deep-thinking controls, configurable reasoning effort, tools,
     structured output, search results, and streaming require separate explicit
     capability issues. Apply the same rule to AppBuilder, ModelBuilder, custom
     deployments, and dictation.
   Deliverables:
-  - Add the Baidu provider/configuration boundary, normalized provider
-    offerings, Qianfan response policy, management-key verification path, and
-    paid-live harness registration with `LLM_PROXY_LIVE_BAIDU_MODEL` for an
-    optional exact model override.
-  - Update the canonical OpenAPI artifact, checked-in configuration, README,
-    provider-routing guide, generated public artifacts, environment examples,
-    and affected black-box fixtures together.
+  - Add one Baidu provider definition with its provider offerings, Qianfan
+    response policy, credential fields, settings, and live-test metadata.
+  - Regenerate the OpenAPI artifact, public artifacts, documentation,
+    environment examples, and black-box fixtures from the provider catalog.
   Validation:
   - Fake-Qianfan public-boundary scenarios prove the exact URL and a redacted
     bearer header. Cover ordered messages, selected model, `max_tokens`, usage,
