@@ -1492,6 +1492,13 @@ providers:
 			expectedError: "field=catalog.families[0].label",
 		},
 		{
+			name: "unknown catalog family weight access",
+			providersYAML: mutateCatalogRecordYAML(completeLiteralProvidersYAML(), "families", "gpt-4", func(block string) string {
+				return strings.Replace(block, "    weight_access: proprietary", "    weight_access: unknown", 1)
+			}),
+			expectedError: "field=catalog.families[0].weight_access value=unknown",
+		},
+		{
 			name:          "empty exact models",
 			providersYAML: mutateCatalogSectionYAML(completeLiteralProvidersYAML(), "models", func(string) string { return "  models: []" }),
 			expectedError: "field=catalog.models",

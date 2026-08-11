@@ -162,7 +162,9 @@ func TestCatalogCapabilityValidationRejectsIncompleteContracts(t *testing.T) {
 	t.Run("catalog publisher without exact model", func(t *testing.T) {
 		catalog := internalTestModelCatalog(internalTestOffering(ProviderNameOpenAI, ModelNameGPT41, []string{ModelOperationText}, []string{ModelOperationText}))
 		catalog.Publishers = append(catalog.Publishers, ModelPublisher{ID: "unused", Label: "Unused"})
-		catalog.Families = append(catalog.Families, ModelFamily{ID: "unused", Publisher: "unused", Label: "Unused"})
+		catalog.Families = append(catalog.Families, ModelFamily{
+			ID: "unused", Publisher: "unused", Label: "Unused", WeightAccess: ModelWeightAccessProprietary,
+		})
 		_, validationError := NewCatalogService(catalog)
 		assertError(t, validationError, "publisher=unused reason=missing_exact_model")
 	})

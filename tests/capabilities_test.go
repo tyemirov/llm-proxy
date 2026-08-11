@@ -127,8 +127,18 @@ func TestPublicCapabilityCatalogProjectsValidatedRuntimeRegistry(testingInstance
 	if catalogError != nil {
 		testingInstance.Fatalf("NewPublicCapabilityCatalog error: %v", catalogError)
 	}
-	if catalog.Revision == "" || len(catalog.Operations) != 3 || len(catalog.Prices) != len(catalog.Offerings) || catalog.Counts.Providers != 11 || catalog.Counts.ModelPublishers != 11 || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
+	if catalog.Revision == "" || len(catalog.Operations) != 3 || len(catalog.Prices) != len(catalog.Offerings) || catalog.Counts.Providers != 11 || catalog.Counts.ModelPublishers != 11 || catalog.Counts.ModelFamilies != len(catalog.Families) || catalog.Counts.ExactModels != len(catalog.Models) || catalog.Counts.ProviderOfferings != len(catalog.Offerings) || catalog.MaxPromptBytes != proxy.DefaultMaxPromptBytes || catalog.MaxInputAudioBytes != proxy.DefaultMaxInputAudioBytes {
 		testingInstance.Fatalf("catalog summary=%+v", catalog)
+	}
+	weightAccessFound := map[string]bool{}
+	for _, family := range catalog.Families {
+		if family.WeightAccess != proxy.ModelWeightAccessProprietary && family.WeightAccess != proxy.ModelWeightAccessOpenWeights {
+			testingInstance.Fatalf("family=%s weight_access=%q", family.Identifier, family.WeightAccess)
+		}
+		weightAccessFound[family.WeightAccess] = true
+	}
+	if !weightAccessFound[proxy.ModelWeightAccessProprietary] || !weightAccessFound[proxy.ModelWeightAccessOpenWeights] {
+		testingInstance.Fatalf("public weight access classifications=%v", weightAccessFound)
 	}
 	geminiCapabilityFound := false
 	openAIDictationCapabilityFound := false

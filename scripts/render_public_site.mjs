@@ -12,16 +12,23 @@ const legacyRuntimeConfigFile = "llm-proxy-config.json";
 const binaryBytesPerMiB = 1024 * 1024;
 
 const capabilityDefinitions = Object.freeze([
-  { identifier: "text", label: "Text generation", className: "capability-badge--primary" },
-  { identifier: "dictation", label: "Dictation", className: "capability-badge--info" },
-  { identifier: "video_generation", label: "Video generation", className: "capability-badge--info" },
-  { identifier: "image_input", label: "Image input", className: "capability-badge--info" },
-  { identifier: "audio_input", label: "Audio message input", className: "capability-badge--info" },
-  { identifier: "web_search", label: "Web search", className: "capability-badge--success" },
-  { identifier: "reasoning", label: "Reasoning", className: "capability-badge--success" },
+  { identifier: "text", label: "Text generation", routeLabel: "Text", className: "capability-badge--primary" },
+  { identifier: "dictation", label: "Dictation", routeLabel: "Dictation", className: "capability-badge--info" },
+  { identifier: "video_generation", label: "Video generation", routeLabel: "Video", className: "capability-badge--info" },
+  { identifier: "image_input", label: "Image input", routeLabel: "Image", className: "capability-badge--info" },
+  { identifier: "audio_input", label: "Audio message input", routeLabel: "Audio", className: "capability-badge--info" },
+  { identifier: "web_search", label: "Web search", routeLabel: "Web search", className: "capability-badge--success" },
+  { identifier: "reasoning", label: "Reasoning", routeLabel: "Reasoning", className: "capability-badge--success" },
 ]);
 const capabilityDefinitionsByIdentifier = new Map(
   capabilityDefinitions.map((definition) => [definition.identifier, definition]),
+);
+const weightAccessDefinitions = Object.freeze([
+  { identifier: "proprietary", label: "Proprietary" },
+  { identifier: "open_weights", label: "Open weights" },
+]);
+const weightAccessDefinitionsByIdentifier = new Map(
+  weightAccessDefinitions.map((definition) => [definition.identifier, definition]),
 );
 
 const options = parseArguments(process.argv.slice(2));
@@ -39,7 +46,7 @@ await renderPublicSite(options);
 /** @typedef {{id: string, input_artifacts: string[], output_artifacts: string[]}} PublicModelOperation */
 /** @typedef {{identifier: string, label: string, credential_kinds: string[]}} PublicProviderCapability */
 /** @typedef {{identifier: string, label: string, model_count: number}} PublicModelPublisher */
-/** @typedef {{identifier: string, publisher: string, label: string}} PublicModelFamily */
+/** @typedef {{identifier: string, publisher: string, label: string, weight_access: string}} PublicModelFamily */
 /**
  * @typedef {{
  *   identifier: string,
@@ -101,7 +108,7 @@ await renderPublicSite(options);
  */
 
 /**
- * @typedef {{identifier: string, label: string, className: string}} CapabilityDefinition
+ * @typedef {{identifier: string, label: string, routeLabel: string, className: string}} CapabilityDefinition
  */
 
 /**
@@ -249,11 +256,16 @@ function parseCapabilityCatalog(rawCatalog) {
   const families = requiredNonemptyArray(catalog.families, "catalog.families").map((rawFamily, familyIndex) => {
     const field = `catalog.families[${familyIndex}]`;
     const family = requiredRecord(rawFamily, field);
-    requireExactKeys(family, ["identifier", "publisher", "label"], field);
+    requireExactKeys(family, ["identifier", "publisher", "label", "weight_access"], field);
+    const weightAccess = requiredString(family.weight_access, `${field}.weight_access`);
+    if (!weightAccessDefinitionsByIdentifier.has(weightAccess)) {
+      throw new Error(`public_capabilities_invalid: ${field}.weight_access value=${weightAccess}`);
+    }
     return {
       identifier: requiredString(family.identifier, `${field}.identifier`),
       publisher: requiredString(family.publisher, `${field}.publisher`),
       label: requiredString(family.label, `${field}.label`),
+      weight_access: weightAccess,
     };
   });
 
@@ -634,20 +646,37 @@ async function renderLandingContent(outputDirectory, capabilityCatalog) {
  */
 function renderRoutingTree(catalog) {
   const providersByIdentifier = new Map(catalog.providers.map((provider) => [provider.identifier, provider]));
-  const publishersByIdentifier = new Map(catalog.publishers.map((publisher) => [publisher.identifier, publisher]));
-  const familiesByIdentifier = new Map(catalog.families.map((family) => [family.identifier, family]));
   const offeringsByIdentifier = new Map(catalog.offerings.map((offering) => [offering.identifier, offering]));
   /** @type {Map<string, PublicExactModelCapability[]>} */
-  const modelsByPublisher = new Map(catalog.publishers.map((publisher) => [publisher.identifier, []]));
+  const modelsByFamily = new Map(catalog.families.map((family) => [family.identifier, []]));
   for (const model of catalog.models) {
-    modelsByPublisher.get(model.publisher)?.push(model);
+    modelsByFamily.get(model.family)?.push(model);
   }
-  const selectedPublisher = catalog.publishers[0];
-  const selectedModel = modelsByPublisher.get(selectedPublisher.identifier)?.[0];
+  const defaultWeightAccess = "proprietary";
+  const defaultCapability = "text";
+  /** @type {Map<string, PublicProviderOffering[]>} */
+  const defaultOfferingsByModel = new Map(catalog.models.map((model) => [
+    model.identifier,
+    model.provider_offerings.map((offeringIdentifier) => requireReference(
+      offeringsByIdentifier,
+      offeringIdentifier,
+      `model=${model.identifier} offering`,
+    )).filter((offering) => offering.capabilities.includes(defaultCapability)),
+  ]));
+  const selectedFamily = catalog.families.find((family) => (
+    family.weight_access === defaultWeightAccess
+    && (modelsByFamily.get(family.identifier) ?? []).some((model) => (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0)
+  ));
+  if (!selectedFamily) {
+    throw new Error(`public_capabilities_invalid: weight_access=${defaultWeightAccess} capability=${defaultCapability} has no model family`);
+  }
+  const selectedModel = modelsByFamily.get(selectedFamily.identifier)?.find(
+    (model) => (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0,
+  );
   if (!selectedModel) {
-    throw new Error(`public_capabilities_invalid: publisher=${selectedPublisher.identifier} has no exact models`);
+    throw new Error(`public_capabilities_invalid: family=${selectedFamily.identifier} has no exact models`);
   }
-  const selectedOffering = offeringsByIdentifier.get(selectedModel.provider_offerings[0]);
+  const selectedOffering = defaultOfferingsByModel.get(selectedModel.identifier)?.[0];
   if (!selectedOffering) {
     throw new Error(`public_capabilities_invalid: model=${selectedModel.identifier} has no provider offering`);
   }
@@ -655,19 +684,31 @@ function renderRoutingTree(catalog) {
   if (!selectedProvider) {
     throw new Error(`public_capabilities_invalid: offering=${selectedOffering.identifier} provider`);
   }
-  const publisherButtons = catalog.publishers.map((publisher, publisherIndex) => `        <button type="button" class="routing-tree__branch routing-tree__publisher" data-route-publisher="${escapeAttribute(publisher.identifier)}" aria-controls="routing-tree-models-${escapeAttribute(publisher.identifier)}" aria-pressed="${publisherIndex === 0 ? "true" : "false"}" disabled>
-          <strong>${escapeHTML(publisher.label)}</strong><small>${countLabel(publisher.model_count, "model")}</small>
-        </button>`).join("");
-  const modelGroups = catalog.publishers.map((publisher, publisherIndex) => {
-    const publisherModels = modelsByPublisher.get(publisher.identifier) ?? [];
-    const modelButtons = publisherModels.map((model, modelIndex) => {
-      const family = familiesByIdentifier.get(model.family);
-      const searchText = [publisher.identifier, publisher.label, model.identifier, model.version, model.family, family?.label ?? "", ...model.operations].join(" ");
-      return `<button type="button" class="routing-tree__branch routing-tree__model" data-route-model="${escapeAttribute(model.identifier)}" data-route-model-publisher="${escapeAttribute(model.publisher)}" data-route-family="${escapeAttribute(model.family)}" data-route-operations="${escapeAttribute(model.operations.join(" "))}" data-route-search-text="${escapeAttribute(searchText)}" aria-pressed="${publisherIndex === 0 && modelIndex === 0 ? "true" : "false"}" disabled><code>${escapeHTML(model.identifier)}</code><small>${escapeHTML(family?.label ?? model.family)} · ${escapeHTML(model.operations.join(" + "))}</small></button>`;
+  const availableCapabilities = new Set(catalog.offerings.flatMap((offering) => offering.capabilities));
+  const accessButtons = weightAccessDefinitions.map((definition) => (
+    `<button type="button" class="routing-tree__filter" data-route-weight-access="${escapeAttribute(definition.identifier)}" aria-pressed="${definition.identifier === defaultWeightAccess ? "true" : "false"}" disabled>${escapeHTML(definition.label)}</button>`
+  )).join("");
+  const capabilityButtons = capabilityDefinitions.filter((definition) => availableCapabilities.has(definition.identifier)).map((definition) => (
+    `<button type="button" class="routing-tree__filter" data-route-capability="${escapeAttribute(definition.identifier)}" aria-label="${escapeAttribute(definition.label)}" title="${escapeAttribute(definition.label)}" aria-pressed="${definition.identifier === defaultCapability ? "true" : "false"}" disabled>${escapeHTML(definition.routeLabel)}</button>`
+  )).join("");
+  const familyButtons = catalog.families.map((family) => {
+    const familyModels = modelsByFamily.get(family.identifier) ?? [];
+    const matchingModels = familyModels.filter((model) => (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0);
+    const visible = family.weight_access === defaultWeightAccess && matchingModels.length > 0;
+    return `        <button type="button" class="routing-tree__branch routing-tree__family" data-route-family="${escapeAttribute(family.identifier)}" data-route-family-weight-access="${escapeAttribute(family.weight_access)}" aria-controls="routing-tree-models-${escapeAttribute(family.identifier)}" aria-pressed="${family.identifier === selectedFamily.identifier ? "true" : "false"}"${visible ? "" : " hidden"} disabled>
+          <strong>${escapeHTML(family.label)}</strong><small data-route-family-model-count>${countLabel(matchingModels.length, "model")}</small>
+        </button>`;
+  }).join("");
+  const modelGroups = catalog.families.map((family) => {
+    const familyModels = modelsByFamily.get(family.identifier) ?? [];
+    const matchingModels = familyModels.filter((model) => (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0);
+    const modelButtons = familyModels.map((model) => {
+      const visible = family.weight_access === defaultWeightAccess && (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0;
+      return `<button type="button" class="routing-tree__branch routing-tree__model" data-route-model="${escapeAttribute(model.identifier)}" data-route-model-family="${escapeAttribute(model.family)}" aria-pressed="${model.identifier === selectedModel.identifier ? "true" : "false"}"${visible ? "" : " hidden"} disabled><code>${escapeHTML(model.identifier)}</code><small>${escapeHTML(model.operations.join(" + "))}</small></button>`;
     }).join("");
-    return `      <section id="routing-tree-models-${escapeAttribute(publisher.identifier)}" class="routing-tree__model-group" data-route-model-group="${escapeAttribute(publisher.identifier)}" aria-label="${escapeAttribute(publisher.label)} exact models"${publisherIndex === 0 ? "" : " hidden"}>
-        <p><strong>${escapeHTML(publisher.label)}</strong><span>${countLabel(publisherModels.length, "exact model")}</span></p>
-        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose an exact ${escapeAttribute(publisher.label)} model">
+    return `      <section id="routing-tree-models-${escapeAttribute(family.identifier)}" class="routing-tree__model-group" data-route-model-group="${escapeAttribute(family.identifier)}" aria-label="${escapeAttribute(family.label)} exact models"${family.identifier === selectedFamily.identifier ? "" : " hidden"}>
+        <p><strong>${escapeHTML(family.label)}</strong><span data-route-model-count>${countLabel(matchingModels.length, "exact model")}</span></p>
+        <div class="routing-tree__branches routing-tree__model-branches" role="group" aria-label="Choose an exact ${escapeAttribute(family.label)} model">
           ${modelButtons}
         </div>
       </section>`;
@@ -678,66 +719,65 @@ function renderRoutingTree(catalog) {
       offeringIdentifier,
       `model=${model.identifier} offering`,
     ));
-    const providerButtons = modelOfferings.map((offering, offeringIndex) => {
+    const matchingOfferings = defaultOfferingsByModel.get(model.identifier) ?? [];
+    const providerButtons = modelOfferings.map((offering) => {
       const provider = providersByIdentifier.get(offering.provider);
-      return `<button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="${escapeAttribute(offering.provider)}" data-route-offering="${escapeAttribute(offering.identifier)}" aria-pressed="${model.identifier === selectedModel.identifier && offeringIndex === 0 ? "true" : "false"}" disabled><strong>${escapeHTML(provider?.label ?? offering.provider)}</strong><small>${escapeHTML(offering.capabilities.join(" · "))}</small></button>`;
+      const visible = offering.capabilities.includes(defaultCapability);
+      return `<button type="button" class="routing-tree__branch routing-tree__provider" data-route-provider="${escapeAttribute(offering.provider)}" data-route-offering="${escapeAttribute(offering.identifier)}" data-route-provider-capabilities="${escapeAttribute(offering.capabilities.join(" "))}" aria-pressed="${offering.identifier === selectedOffering.identifier ? "true" : "false"}"${visible ? "" : " hidden"} disabled><strong>${escapeHTML(provider?.label ?? offering.provider)}</strong><small>${escapeHTML(offering.capabilities.join(" · "))}</small></button>`;
     }).join("");
     return `      <section class="routing-tree__provider-group" data-route-provider-group="${escapeAttribute(model.identifier)}" aria-label="Providers offering ${escapeAttribute(model.identifier)}"${model.identifier === selectedModel.identifier ? "" : " hidden"}>
-        <p><strong>Provider offerings</strong><span>${modelOfferings.length} route${modelOfferings.length === 1 ? "" : "s"}</span></p>
+        <p><strong>Provider offerings</strong><span data-route-provider-count>${matchingOfferings.length} route${matchingOfferings.length === 1 ? "" : "s"}</span></p>
         <div class="routing-tree__branches routing-tree__provider-branches" role="group" aria-label="Choose a provider for ${escapeAttribute(model.identifier)}">
           ${providerButtons}
         </div>
       </section>`;
   }).join("");
-  const familyOptions = catalog.families.map((family) => `<option value="${escapeAttribute(family.identifier)}">${escapeHTML(family.label)}</option>`).join("");
+  const defaultFamilies = catalog.families.filter((family) => family.weight_access === defaultWeightAccess && (
+    modelsByFamily.get(family.identifier) ?? []
+  ).some((model) => (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0));
+  const defaultModels = catalog.models.filter((model) => (
+    catalog.families.find((family) => family.identifier === model.family)?.weight_access === defaultWeightAccess
+    && (defaultOfferingsByModel.get(model.identifier)?.length ?? 0) > 0
+  ));
+  const defaultOfferings = defaultModels.flatMap((model) => defaultOfferingsByModel.get(model.identifier) ?? []);
   return `<routing-tree class="routing-tree" data-enhanced="false" aria-label="Interactive LLM routing map">
   <header class="routing-tree__header">
     <h2>One integration. Choose the exact route.</h2>
-    <span>${countLabel(catalog.counts.model_publishers, "publisher")} · ${countLabel(catalog.counts.exact_models, "exact model")} · ${countLabel(catalog.counts.provider_offerings, "offering")}</span>
+    <div class="routing-tree__filters" aria-label="Route filters">
+      <div class="routing-tree__filter-group" role="group" aria-label="Choose one or both weight access types">${accessButtons}</div>
+      <span class="routing-tree__filter-divider" aria-hidden="true"></span>
+      <div class="routing-tree__filter-group" role="group" aria-label="Choose one capability">${capabilityButtons}</div>
+    </div>
+    <output class="routing-tree__counts" aria-live="polite" data-route-counts>${countLabel(defaultFamilies.length, "family", "families")} · ${countLabel(defaultModels.length, "exact model")} · ${countLabel(defaultOfferings.length, "offering")}</output>
   </header>
-  <form class="routing-tree__filters" data-route-picker role="search" aria-label="Find an exact model">
-    <input type="search" aria-label="Search exact models" placeholder="Search publisher, family, or model" autocomplete="off" data-route-search disabled>
-    <select aria-label="Filter model family" data-route-family-filter disabled><option value="">All families</option>${familyOptions}</select>
-    <select aria-label="Filter model operation" data-route-operation-filter disabled><option value="">All operations</option><option value="text">Text</option><option value="dictation">Dictation</option><option value="video_generation">Video generation</option></select>
-    <button type="reset" data-route-reset disabled>Reset</button>
-  </form>
-  <div class="routing-tree__catalog">
-    <section class="routing-tree__stage routing-tree__stage--publishers" aria-labelledby="routing-tree-publisher-title">
-      <h3 id="routing-tree-publisher-title">Choose a publisher</h3>
-      <div class="routing-tree__branches routing-tree__publisher-branches" role="group" aria-label="Model publishers">
-${publisherButtons}
-      </div>
-    </section>
-    <section class="routing-tree__stage routing-tree__stage--models" aria-labelledby="routing-tree-model-title">
-      <h3 id="routing-tree-model-title">Choose an exact model</h3>
-${modelGroups}
-      <p class="routing-tree__empty" data-route-empty hidden>No exact models match these filters.</p>
-    </section>
-  </div>
   <div class="routing-tree__map" data-route-map>
     <canvas class="routing-tree__connectors" data-route-canvas aria-hidden="true"></canvas>
-    <div class="routing-tree__ingress" aria-label="One connection into LLM Proxy">
-      <article class="routing-tree__node routing-tree__node--product" data-route-product>
-        <strong>Your product</strong>
-        <span>HTTP · Go · Python · CLI</span>
-      </article>
-      <article class="routing-tree__node routing-tree__node--proxy" data-route-proxy>
-        <strong>LLM Proxy</strong>
-        <span>Authenticate · validate · route</span>
-      </article>
-    </div>
-    <article class="routing-tree__node routing-tree__node--selection" data-route-selection-node>
-      <span data-route-selected-publisher>${escapeHTML(selectedPublisher.label)}</span>
-      <strong><code data-route-selected-model>${escapeHTML(selectedModel.identifier)}</code></strong>
-      <small>${escapeHTML(selectedModel.operations.join(" + "))}</small>
+    <article class="routing-tree__node routing-tree__node--product" data-route-product>
+      <strong>Your product</strong>
+      <span>HTTP · Go · Python · CLI</span>
     </article>
-    <section class="routing-tree__stage routing-tree__stage--providers" aria-labelledby="routing-tree-provider-title">
+    <article class="routing-tree__node routing-tree__node--proxy" data-route-proxy>
+      <strong>LLM Proxy</strong>
+      <span>Authenticate · validate · route</span>
+    </article>
+    <section class="routing-tree__stage routing-tree__stage--families" data-route-stage aria-labelledby="routing-tree-family-title">
+      <h3 id="routing-tree-family-title">Choose a model family</h3>
+      <div class="routing-tree__branches routing-tree__family-branches" role="group" aria-label="Model families">
+${familyButtons}
+      </div>
+    </section>
+    <section class="routing-tree__stage routing-tree__stage--models" data-route-stage aria-labelledby="routing-tree-model-title">
+      <h3 id="routing-tree-model-title">Choose an exact model</h3>
+${modelGroups}
+    </section>
+    <section class="routing-tree__stage routing-tree__stage--providers" data-route-stage aria-labelledby="routing-tree-provider-title">
       <h3 id="routing-tree-provider-title">Choose a provider offering</h3>
 ${providerGroups}
     </section>
-    <footer class="routing-tree__selection">
+    <p class="routing-tree__empty" data-route-empty hidden>No routes match these filters.</p>
+    <footer class="routing-tree__selection" data-route-selection>
       <span>Selected route:</span>
-      <output aria-live="polite"><code data-route-selected-provider>${escapeHTML(selectedProvider.identifier)}</code><i aria-hidden="true">/</i><code data-route-selected-route-model>${escapeHTML(selectedModel.identifier)}</code></output>
+      <output aria-live="polite"><code data-route-selected-provider>${escapeHTML(selectedProvider.identifier)}</code><i aria-hidden="true">/</i><code data-route-selected-model>${escapeHTML(selectedModel.identifier)}</code></output>
     </footer>
   </div>
 </routing-tree>`;
@@ -1131,9 +1171,10 @@ function requireCount(declared, actual, field) {
 /**
  * @param {number} count
  * @param {string} singular
+ * @param {string} [plural]
  */
-function countLabel(count, singular) {
-  return `${count} ${singular}${count === 1 ? "" : "s"}`;
+function countLabel(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 /**

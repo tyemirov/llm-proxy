@@ -92,7 +92,7 @@ const mprUIBundleURL = "https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@
 const forbiddenTAuthBrowserClientURL = "https://tauth.mprlab.com/tauth.js";
 const catalogColumnCount = 3;
 const b020ScreenshotDirectory = path.join(repoRoot, "output/playwright");
-const i220ScreenshotDirectory = path.join(repoRoot, "output/playwright");
+const f034ScreenshotDirectory = path.join(repoRoot, "output/playwright");
 const httpOK = 200;
 const httpNotFound = 404;
 const httpInternalServerError = 500;
@@ -106,9 +106,19 @@ const capabilityShutdownProbeTimeoutMilliseconds = 1_000;
 async function expectSelectedRoutingFanEndpoints(routingTree) {
   const endpointEvidence = await routingTree.evaluate((tree, endpointRadius) => {
     const canvas = tree.querySelector("[data-route-canvas]");
+    const product = tree.querySelector("[data-route-product]");
+    const proxy = tree.querySelector("[data-route-proxy]");
+    const selectedFamily = tree.querySelector('[data-route-family][aria-pressed="true"]');
+    const selectedModel = tree.querySelector('[data-route-model-group]:not([hidden]) [data-route-model][aria-pressed="true"]');
     const selectedProvider = tree.querySelector('[data-route-provider-group]:not([hidden]) [data-route-provider][aria-pressed="true"]');
-    const selectedModel = tree.querySelector("[data-route-selection-node]");
-    if (!(canvas instanceof HTMLCanvasElement) || !(selectedProvider instanceof HTMLElement) || !(selectedModel instanceof HTMLElement)) {
+    if (
+      !(canvas instanceof HTMLCanvasElement)
+      || !(product instanceof HTMLElement)
+      || !(proxy instanceof HTMLElement)
+      || !(selectedFamily instanceof HTMLElement)
+      || !(selectedModel instanceof HTMLElement)
+      || !(selectedProvider instanceof HTMLElement)
+    ) {
       throw new Error("routing_tree_selected_connector_endpoint_missing");
     }
     const drawingContext = canvas.getContext("2d", { willReadFrequently: true });
@@ -116,6 +126,9 @@ async function expectSelectedRoutingFanEndpoints(routingTree) {
       throw new Error("routing_tree_canvas_context_missing");
     }
     const canvasBounds = canvas.getBoundingClientRect();
+    const productBounds = product.getBoundingClientRect();
+    const proxyBounds = proxy.getBoundingClientRect();
+    const familyBounds = selectedFamily.getBoundingClientRect();
     const providerBounds = selectedProvider.getBoundingClientRect();
     const modelBounds = selectedModel.getBoundingClientRect();
     const canvasScaleHorizontal = canvas.width / canvasBounds.width;
@@ -142,12 +155,72 @@ async function expectSelectedRoutingFanEndpoints(routingTree) {
       return false;
     };
     return {
-      modelEndpoint: hasPaintedPixel(modelBounds.right, modelBounds.top + modelBounds.height / 2),
+      productOutgoingEndpoint: hasPaintedPixel(productBounds.right, productBounds.top + productBounds.height / 2),
+      proxyIncomingEndpoint: hasPaintedPixel(proxyBounds.left, proxyBounds.top + proxyBounds.height / 2),
+      proxyOutgoingEndpoint: hasPaintedPixel(proxyBounds.right, proxyBounds.top + proxyBounds.height / 2),
+      familyIncomingEndpoint: hasPaintedPixel(familyBounds.left, familyBounds.top + familyBounds.height / 2),
+      familyOutgoingEndpoint: hasPaintedPixel(familyBounds.right, familyBounds.top + familyBounds.height / 2),
+      modelIncomingEndpoint: hasPaintedPixel(modelBounds.left, modelBounds.top + modelBounds.height / 2),
+      modelOutgoingEndpoint: hasPaintedPixel(modelBounds.right, modelBounds.top + modelBounds.height / 2),
       providerIncomingEndpoint: hasPaintedPixel(providerBounds.left, providerBounds.top + providerBounds.height / 2),
     };
   }, routingConnectorEndpointRadius);
-  expect(endpointEvidence.providerIncomingEndpoint).toBe(true);
-  expect(endpointEvidence.modelEndpoint).toBe(true);
+  expect(Object.values(endpointEvidence).every(Boolean)).toBe(true);
+}
+
+/**
+ * @param {import("@playwright/test").Locator} routingTree
+ */
+async function expectFiveStageRouteOrder(routingTree) {
+  const stageOrder = await routingTree.evaluate((tree) => {
+    const stages = [
+      tree.querySelector("[data-route-product]"),
+      tree.querySelector("[data-route-proxy]"),
+      tree.querySelector('[data-route-family][aria-pressed="true"]'),
+      tree.querySelector('[data-route-model-group]:not([hidden]) [data-route-model][aria-pressed="true"]'),
+      tree.querySelector('[data-route-provider-group]:not([hidden]) [data-route-provider][aria-pressed="true"]'),
+    ];
+    if (!stages.every((stage) => stage instanceof HTMLElement)) {
+      throw new Error("routing_tree_five_stage_route_missing");
+    }
+    return stages.map((stage) => stage.getBoundingClientRect());
+  });
+  for (let stageIndex = 1; stageIndex < stageOrder.length; stageIndex += 1) {
+    expect(stageOrder[stageIndex - 1].right).toBeLessThan(stageOrder[stageIndex].left);
+  }
+}
+
+/**
+ * @param {import("@playwright/test").Locator} routingTree
+ */
+async function expectRoutingHeaderSingleRow(routingTree) {
+  const geometry = await routingTree.evaluate((tree) => {
+    const header = tree.querySelector(".routing-tree__header");
+    const title = header?.querySelector("h2");
+    const filters = header?.querySelector(".routing-tree__filters");
+    const counts = header?.querySelector("[data-route-counts]");
+    if (!(header instanceof HTMLElement) || !(title instanceof HTMLElement) || !(filters instanceof HTMLElement) || !(counts instanceof HTMLElement)) {
+      throw new Error("routing_tree_header_surface_missing");
+    }
+    const visibleItems = [title, filters, counts].filter((item) => getComputedStyle(item).display !== "none");
+    const itemCenters = visibleItems.map((item) => {
+      const bounds = item.getBoundingClientRect();
+      return bounds.top + bounds.height / 2;
+    });
+    const filterButtons = [...filters.querySelectorAll("button")];
+    return {
+      filterButtonTopRange: Math.max(...filterButtons.map((button) => button.getBoundingClientRect().top))
+        - Math.min(...filterButtons.map((button) => button.getBoundingClientRect().top)),
+      filterClientHeight: filters.clientHeight,
+      filterScrollHeight: filters.scrollHeight,
+      headerHeight: header.getBoundingClientRect().height,
+      itemCenterRange: Math.max(...itemCenters) - Math.min(...itemCenters),
+    };
+  });
+  expect(geometry.headerHeight).toBeLessThanOrEqual(60);
+  expect(geometry.itemCenterRange).toBeLessThanOrEqual(1);
+  expect(geometry.filterButtonTopRange).toBeLessThanOrEqual(1);
+  expect(geometry.filterScrollHeight).toBeLessThanOrEqual(geometry.filterClientHeight + 1);
 }
 
 /**
@@ -367,13 +440,14 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).toContain('<routing-tree class="routing-tree" data-enhanced="false" aria-label="Interactive LLM routing map">');
   expect(html).toContain("One integration. Choose the exact route.");
   expect(html).toContain('<canvas class="routing-tree__connectors" data-route-canvas aria-hidden="true"></canvas>');
-  expect(html).toContain('<span>11 publishers · 57 exact models · 58 offerings</span>');
-  expect(html).toContain('data-route-publisher="deepseek"');
-  expect(html).toContain('data-route-publisher="alibaba"');
-  expect(html).toContain('data-route-publisher="moonshot"');
-  expect(html).toContain('data-route-model="kimi-k2.6" data-route-model-publisher="moonshot"');
-  expect(html).toContain('data-route-model="qwen-plus" data-route-model-publisher="alibaba"');
+  expect(html).toContain('<output class="routing-tree__counts" aria-live="polite" data-route-counts>12 families · 40 exact models · 40 offerings</output>');
+  expect(html).toContain('data-route-family="deepseek-r1"');
+  expect(html).toContain('data-route-family="muse-spark"');
+  expect(html).toContain('data-route-family="qwen"');
+  expect(html).toContain('data-route-model="kimi-k2.6" data-route-model-family="kimi-k2"');
+  expect(html).toContain('data-route-model="qwen-plus" data-route-model-family="qwen"');
   expect(html).toContain('data-route-offering="siliconflow:deepseek-reasoner"');
+  expect(html).not.toContain("data-route-publisher");
   expect(html).not.toContain("llm-proxy-routing-tree");
   expect(html).toContain('<table class="catalog-table">');
   expect(html).toContain('<strong>11</strong><span>Providers</span>');
@@ -399,13 +473,12 @@ test("public landing explains the product and exposes the generated capability c
   expect(html).not.toContain('data-catalog-capability-action="background"');
   expect(html).not.toContain('data-catalog-capability-action="synchronous"');
   expect(html).not.toContain("data-catalog-provider");
-  expect(html).toContain('<select aria-label="Filter model family"');
+  expect(html).not.toContain("data-route-picker");
   expect(html).toContain("gpt-4o-mini-transcribe");
   expect(html).toContain("gemini-2.5-flash");
   expect(html).toContain("claude-sonnet-4-6");
   expect(html).toContain("grok-4.3");
   expect(html).toContain("grok-imagine-video-1.5");
-  expect(html).toContain('<option value="video_generation">Video generation</option>');
   expect(html).not.toContain("api_key");
   expect(html).not.toContain("base_url");
   expect(html).not.toContain("provider_model");
@@ -756,16 +829,24 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await expect(page.locator("#routing-overview routing-tree")).toHaveCount(1);
   await expect(page.locator("#models > routing-tree")).toHaveCount(0);
   await expect(routingTree).toHaveAttribute("data-enhanced", "false");
-  await expect(routingTree.locator("[data-route-publisher]")).toHaveCount(11);
+  await expect(routingTree.locator("[data-route-family]")).toHaveCount(24);
   await expect(routingTree.locator("[data-route-provider]")).toHaveCount(58);
   await expect(routingTree.locator("[data-route-model]")).toHaveCount(57);
-  await expect(routingTree.locator('[data-route-publisher="alibaba"]')).toHaveAttribute("aria-pressed", "true");
-  await expect(routingTree.locator('[data-route-model-group="alibaba"]')).toBeVisible();
-  await expect(routingTree.locator('[data-route-model-group="moonshot"]')).toBeHidden();
-  await expect(routingTree.locator('[data-route-provider="dashscope"]')).toHaveAttribute("aria-pressed", "true");
-  await expect(routingTree.locator('[data-route-selected-publisher]')).toHaveText("Alibaba");
-  await expect(routingTree.locator('[data-route-selected-provider]')).toHaveText("dashscope");
-  await expect(routingTree.locator('[data-route-selected-model]')).toHaveText("qwen-plus");
+  await expect(routingTree.locator("[data-route-weight-access]")).toHaveCount(2);
+  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(7);
+  await expect(routingTree.locator('[data-route-weight-access="proprietary"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-weight-access="open_weights"]')).toHaveAttribute("aria-pressed", "false");
+  await expect(routingTree.locator('[data-route-capability="text"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(1);
+  await expect(routingTree.locator('[data-route-capability][aria-pressed="true"]')).toHaveCount(1);
+  await expect(routingTree.locator('[data-route-family]:visible')).toHaveCount(12);
+  await expect(routingTree.locator("[data-route-counts]")).toHaveText("12 families · 40 exact models · 40 offerings");
+  await expect(routingTree.locator('[data-route-family="claude-fable"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-model-group="claude-fable"]')).toBeVisible();
+  await expect(routingTree.locator('[data-route-model-group="grok"]')).toBeHidden();
+  await expect(routingTree.locator('[data-route-provider-group="claude-fable-5"] [data-route-provider="anthropic"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-selected-provider]')).toHaveText("anthropic");
+  await expect(routingTree.locator('[data-route-selected-model]')).toHaveText("claude-fable-5");
   await expect(routingTree.locator("button:enabled")).toHaveCount(0);
 
   const catalog = page.locator("capability-catalog");
@@ -788,27 +869,38 @@ test("the routing tree and capability catalog remain complete without JavaScript
   await browserContext.close();
 });
 
-test("visitors can choose a publisher, exact model, and provider offering", async ({ page }) => {
+test("visitors can filter and choose a model family, exact model, and provider offering", async ({ page }) => {
   await installAssetRoutes(page, { initialAuthStatus: "unauthenticated" });
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(baseURL);
 
   const routingTree = page.locator("routing-tree");
-  const selectedPublisher = routingTree.locator("[data-route-selected-publisher]");
   const selectedProvider = routingTree.locator("[data-route-selected-provider]");
   const selectedModel = routingTree.locator("[data-route-selected-model]");
-  const searchInput = routingTree.getByLabel("Search exact models");
-  const familyFilter = routingTree.getByLabel("Filter model family");
-  const operationFilter = routingTree.getByLabel("Filter model operation");
+  const counts = routingTree.locator("[data-route-counts]");
+  const proprietaryFilter = routingTree.locator('[data-route-weight-access="proprietary"]');
+  const openWeightsFilter = routingTree.locator('[data-route-weight-access="open_weights"]');
+  const textFilter = routingTree.locator('[data-route-capability="text"]');
+  const webSearchFilter = routingTree.locator('[data-route-capability="web_search"]');
   await expect(routingTree).toHaveAttribute("data-enhanced", "true");
   await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "true");
-  await expect(routingTree.locator("[data-route-publisher]")).toHaveCount(11);
+  await expect(routingTree.locator("[data-route-family]")).toHaveCount(24);
   await expect(routingTree.locator("[data-route-model]")).toHaveCount(57);
   await expect(routingTree.locator("[data-route-provider]")).toHaveCount(58);
+  await expect(routingTree.locator("[data-route-weight-access]")).toHaveCount(2);
+  await expect(routingTree.locator("[data-route-capability]")).toHaveCount(7);
+  await expect(proprietaryFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(openWeightsFilter).toHaveAttribute("aria-pressed", "false");
+  await expect(textFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(1);
+  await expect(routingTree.locator('[data-route-capability][aria-pressed="true"]')).toHaveCount(1);
+  await expect(counts).toHaveText("12 families · 40 exact models · 40 offerings");
+  await expect(routingTree.locator("[data-route-family]:visible")).toHaveCount(12);
+  await expect(routingTree.locator("[data-route-model]:visible")).toHaveCount(1);
   await expect(routingTree.locator("[data-route-provider]:visible")).toHaveCount(1);
-  await expect(selectedPublisher).toHaveText("Alibaba");
-  await expect(selectedModel).toHaveText("qwen-plus");
-  await expect(selectedProvider).toHaveText("dashscope");
+  await expect(selectedModel).toHaveText("claude-fable-5");
+  await expect(selectedProvider).toHaveText("anthropic");
+  await expectRoutingHeaderSingleRow(routingTree);
 
   const routeCanvasDimensions = await routingTree.locator("[data-route-canvas]").evaluate((canvas) => ({
     height: canvas.height,
@@ -816,82 +908,156 @@ test("visitors can choose a publisher, exact model, and provider offering", asyn
   }));
   expect(routeCanvasDimensions.height).toBeGreaterThan(0);
   expect(routeCanvasDimensions.width).toBeGreaterThan(0);
-  const desktopSequence = await routingTree.evaluate((tree) => {
-    const product = tree.querySelector("[data-route-product]");
-    const proxy = tree.querySelector("[data-route-proxy]");
-    const selection = tree.querySelector("[data-route-selection-node]");
-    const provider = tree.querySelector('[data-route-provider][aria-pressed="true"]');
-    if (
-      !(product instanceof HTMLElement)
-      || !(proxy instanceof HTMLElement)
-      || !(selection instanceof HTMLElement)
-      || !(provider instanceof HTMLElement)
-    ) {
-      throw new Error("routing_tree_desktop_sequence_missing");
-    }
-    return [
-      product.getBoundingClientRect().right,
-      proxy.getBoundingClientRect().left,
-      proxy.getBoundingClientRect().right,
-      selection.getBoundingClientRect().left,
-      selection.getBoundingClientRect().right,
-      provider.getBoundingClientRect().left,
-    ];
-  });
-  expect(desktopSequence[0]).toBeLessThan(desktopSequence[1]);
-  expect(desktopSequence[2]).toBeLessThan(desktopSequence[3]);
-  expect(desktopSequence[4]).toBeLessThan(desktopSequence[5]);
+  await expectFiveStageRouteOrder(routingTree);
   await expectSelectedRoutingFanEndpoints(routingTree);
 
-  await routingTree.locator('[data-route-publisher="deepseek"]').click();
-  const deepSeekModels = routingTree.locator('[data-route-model-group="deepseek"]');
+  await openWeightsFilter.click();
+  await expect(openWeightsFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(proprietaryFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(2);
+  await expect(counts).toHaveText("19 families · 51 exact models · 52 offerings");
+  await expect(routingTree.locator("[data-route-family]:visible")).toHaveCount(19);
+  await expect(selectedModel).toHaveText("claude-fable-5");
+  await expect(selectedProvider).toHaveText("anthropic");
+
+  await proprietaryFilter.click();
+  await expect(openWeightsFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(proprietaryFilter).toHaveAttribute("aria-pressed", "false");
+  await expect(routingTree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(1);
+  await expect(counts).toHaveText("7 families · 11 exact models · 12 offerings");
+  await expect(routingTree.locator("[data-route-family]:visible")).toHaveCount(7);
+  await expect(routingTree.locator('[data-route-family="deepseek-r1"]')).toHaveAttribute("aria-pressed", "true");
+  const deepSeekModels = routingTree.locator('[data-route-model-group="deepseek-r1"]');
   await expect(deepSeekModels).toBeVisible();
-  await expect(deepSeekModels.locator("[data-route-model]")).toHaveCount(4);
-  await expect(selectedPublisher).toHaveText("DeepSeek");
-  await deepSeekModels.locator('[data-route-model="deepseek-reasoner"]').click();
+  await expect(deepSeekModels.locator("[data-route-model]")).toHaveCount(1);
+  await expect(deepSeekModels.locator('[data-route-model="deepseek-reasoner"]')).toHaveAttribute("aria-pressed", "true");
   const reasonerProviders = routingTree.locator('[data-route-provider-group="deepseek-reasoner"]');
   await expect(reasonerProviders).toBeVisible();
-  await expect(reasonerProviders.locator("[data-route-provider]")).toHaveCount(2);
+  await expect(reasonerProviders.locator("[data-route-provider]:visible")).toHaveCount(2);
   await expect(selectedModel).toHaveText("deepseek-reasoner");
   await expect(selectedProvider).toHaveText("deepseek");
   await reasonerProviders.locator('[data-route-provider="siliconflow"]').click();
   await expect(selectedProvider).toHaveText("siliconflow");
+  await openWeightsFilter.click();
+  await expect(openWeightsFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(1);
+  await expect(counts).toHaveText("7 families · 11 exact models · 12 offerings");
+  await expectFiveStageRouteOrder(routingTree);
   await expectSelectedRoutingFanEndpoints(routingTree);
 
-  await searchInput.fill("deepseek reasoner");
-  await expect(routingTree.locator("[data-route-publisher]:visible")).toHaveCount(1);
-  await expect(routingTree.locator("[data-route-model]:visible")).toHaveCount(1);
-  await expect(reasonerProviders.locator("[data-route-provider]:visible")).toHaveCount(2);
-  await searchInput.fill("no-such-model");
+  await webSearchFilter.click();
+  await expect(webSearchFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(textFilter).toHaveAttribute("aria-pressed", "false");
+  await expect(routingTree.locator('[data-route-capability][aria-pressed="true"]')).toHaveCount(1);
+  await expect(counts).toHaveText("0 families · 0 exact models · 0 offerings");
   await expect(routingTree.locator("[data-route-empty]")).toBeVisible();
-  await routingTree.getByRole("button", { name: "Reset" }).click();
-  await expect(routingTree.locator("[data-route-publisher]:visible")).toHaveCount(11);
+  await expect(routingTree.locator("[data-route-stage]:visible")).toHaveCount(0);
+  await expect(routingTree.locator("[data-route-selection]")).toBeHidden();
+  await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "true");
+  await webSearchFilter.click();
+  await expect(webSearchFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(counts).toHaveText("0 families · 0 exact models · 0 offerings");
+  await textFilter.click();
+  await expect(textFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(webSearchFilter).toHaveAttribute("aria-pressed", "false");
+  await expect(routingTree.locator('[data-route-capability][aria-pressed="true"]')).toHaveCount(1);
+  await expect(counts).toHaveText("7 families · 11 exact models · 12 offerings");
+  await expect(routingTree.locator("[data-route-empty]")).toBeHidden();
+  await expect(selectedModel).toHaveText("deepseek-reasoner");
+  await expect(selectedProvider).toHaveText("deepseek");
 
-  await familyFilter.selectOption("gpt-transcribe");
-  await expect(routingTree.locator("[data-route-publisher]:visible")).toHaveCount(1);
-  await expect(routingTree.locator("[data-route-model]:visible")).toHaveCount(2);
-  await familyFilter.selectOption("");
-  await operationFilter.selectOption("dictation");
-  await expect(routingTree.locator("[data-route-publisher]:visible")).toHaveCount(4);
-  await expect(routingTree.locator("[data-route-model]:not([hidden])")).toHaveCount(5);
-  await operationFilter.selectOption("video_generation");
-  await expect(routingTree.locator("[data-route-publisher]:visible")).toHaveCount(1);
-  await expect(routingTree.locator("[data-route-model]:not([hidden])")).toHaveCount(1);
+  await proprietaryFilter.click();
+  await expect(openWeightsFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(proprietaryFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(2);
+  await expect(counts).toHaveText("19 families · 51 exact models · 52 offerings");
+  await openWeightsFilter.click();
+  await expect(openWeightsFilter).toHaveAttribute("aria-pressed", "false");
+  await expect(proprietaryFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(1);
+  await expect(counts).toHaveText("12 families · 40 exact models · 40 offerings");
+  await webSearchFilter.click();
+  await expect(webSearchFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(textFilter).toHaveAttribute("aria-pressed", "false");
+  await expect(counts).toHaveText("2 families · 9 exact models · 9 offerings");
+  await expect(selectedModel).toHaveText("gpt-4.1");
+  await webSearchFilter.click();
+  await expect(webSearchFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-capability][aria-pressed="true"]')).toHaveCount(1);
+  await expect(selectedModel).toHaveText("gpt-4.1");
 
-  if (process.env.I220_SCREENSHOTS === "1") {
-    await mkdir(i220ScreenshotDirectory, { recursive: true });
+  const canonicalCapabilities = [
+    "text",
+    "dictation",
+    "video_generation",
+    "image_input",
+    "audio_input",
+    "web_search",
+    "reasoning",
+  ];
+  for (const capability of canonicalCapabilities) {
+    const capabilityFilter = routingTree.locator(`[data-route-capability="${capability}"]`);
+    await capabilityFilter.click();
+    await expect(capabilityFilter).toHaveAttribute("aria-pressed", "true");
+    await expect(routingTree.locator('[data-route-capability][aria-pressed="true"]')).toHaveCount(1);
+    await expect(counts).not.toHaveText(/^0 families/u);
+    expect(await routingTree.locator("[data-route-family]:visible").count()).toBeGreaterThan(0);
+  }
+
+  await textFilter.click();
+  await routingTree.locator('[data-route-family="gpt-5"]').click();
+  const gptModels = routingTree.locator('[data-route-model-group="gpt-5"]');
+  await expect(gptModels).toBeVisible();
+  await expect(gptModels.locator("[data-route-model]")).toHaveCount(8);
+  await gptModels.locator('[data-route-model="gpt-5.6-terra"]').click();
+  await expect(selectedModel).toHaveText("gpt-5.6-terra");
+  await expect(selectedProvider).toHaveText("openai");
+  await expectFiveStageRouteOrder(routingTree);
+  await expectSelectedRoutingFanEndpoints(routingTree);
+  await routingTree.locator('[data-route-capability="reasoning"]').click();
+  await expect(routingTree.locator('[data-route-capability][aria-pressed="true"]')).toHaveCount(1);
+  await expect(selectedModel).toHaveText("gpt-5.6-terra");
+  await expect(selectedProvider).toHaveText("openai");
+  await textFilter.click();
+  await expect(routingTree.locator('[data-route-capability][aria-pressed="true"]')).toHaveCount(1);
+  await expect(selectedModel).toHaveText("gpt-5.6-terra");
+  await expect(selectedProvider).toHaveText("openai");
+  await textFilter.click();
+  await expect(textFilter).toHaveAttribute("aria-pressed", "true");
+  await expect(routingTree.locator('[data-route-capability][aria-pressed="true"]')).toHaveCount(1);
+  await expect(selectedModel).toHaveText("gpt-5.6-terra");
+  await expect(selectedProvider).toHaveText("openai");
+
+  await page.setViewportSize({ width: 900, height: 900 });
+  await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "true");
+  await expectRoutingHeaderSingleRow(routingTree);
+  await expectFiveStageRouteOrder(routingTree);
+  await expectSelectedRoutingFanEndpoints(routingTree);
+
+  if (process.env.F034_SCREENSHOTS === "1") {
+    await mkdir(f034ScreenshotDirectory, { recursive: true });
+    await openWeightsFilter.click();
+    await expect(routingTree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(2);
     for (const viewport of routingTreeViewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await expect(routingTree).toHaveAttribute(
         "data-route-lines-rendered",
         viewport.width > 680 ? "true" : "false",
       );
-      await routingTree.screenshot({ path: path.join(i220ScreenshotDirectory, `I221-routing-${viewport.name}.png`) });
+      await expectRoutingHeaderSingleRow(routingTree);
+      await routingTree.screenshot({ path: path.join(f034ScreenshotDirectory, `F034-routing-${viewport.name}.png`) });
+      const routingHeader = routingTree.locator(".routing-tree__header");
+      await routingHeader.scrollIntoViewIfNeeded();
+      await page.evaluate(() => window.scrollBy(0, -80));
+      await routingHeader.screenshot({ path: path.join(f034ScreenshotDirectory, `F034-header-${viewport.name}.png`) });
     }
+    await openWeightsFilter.click();
+    await expect(routingTree.locator('[data-route-weight-access][aria-pressed="true"]')).toHaveCount(1);
   }
 
   await page.setViewportSize({ width: 390, height: 780 });
   await expect(routingTree).toHaveAttribute("data-route-lines-rendered", "false");
+  await expectRoutingHeaderSingleRow(routingTree);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   const routingTreeGeometry = await routingTree.evaluate((element) => ({
     left: element.getBoundingClientRect().left,

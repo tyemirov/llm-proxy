@@ -1391,6 +1391,7 @@ components:
         - identifier
         - publisher
         - label
+        - weight_access
       properties:
         identifier:
           type: string
@@ -1401,6 +1402,11 @@ components:
         label:
           type: string
           minLength: 1
+        weight_access:
+          type: string
+          enum:
+            - proprietary
+            - open_weights
     PublicExactModelCapability:
       type: object
       additionalProperties: false

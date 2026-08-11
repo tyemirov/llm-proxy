@@ -66,10 +66,12 @@ func internalTestModelCatalog(offerings ...ProviderOffering) ModelCatalog {
 		},
 		Providers:  providers,
 		Publishers: []ModelPublisher{{ID: "test", Label: "Test"}},
-		Families:   []ModelFamily{{ID: "test", Publisher: "test", Label: "Test"}},
-		Models:     models,
-		Offerings:  offerings,
-		Prices:     prices,
+		Families: []ModelFamily{{
+			ID: "test", Publisher: "test", Label: "Test", WeightAccess: ModelWeightAccessProprietary,
+		}},
+		Models:    models,
+		Offerings: offerings,
+		Prices:    prices,
 	}
 }
 

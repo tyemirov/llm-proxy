@@ -231,12 +231,12 @@ routing-tree {
 }
 
 .routing-tree__header {
-  display: flex;
+  display: grid;
   min-height: 58px;
-  padding: 1.15rem 1.25rem 0.65rem;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 0.85rem;
 }
 
 .routing-tree__header h2,
@@ -248,59 +248,98 @@ routing-tree {
 }
 
 .routing-tree__header h2 {
+  overflow: hidden;
   font-size: 1.02rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.routing-tree__header > span {
+.routing-tree__filters,
+.routing-tree__filter-group {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.routing-tree__filters {
+  overflow-x: auto;
+  gap: 0.42rem;
+  scrollbar-width: none;
+}
+
+.routing-tree__filters::-webkit-scrollbar {
+  display: none;
+}
+
+.routing-tree__filter-group {
+  flex: 0 0 auto;
+  gap: 0.22rem;
+}
+
+.routing-tree__filter-divider {
+  width: 1px;
+  height: 18px;
+  flex: 0 0 auto;
+  background: var(--border-strong);
+}
+
+.routing-tree__filter {
+  min-height: 24px;
+  padding: 0.26rem 0.46rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  appearance: none;
+  background: #171a1f;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.48rem;
+  font-weight: 600;
+  letter-spacing: 0.045em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: border-color 130ms ease, background 130ms ease, color 130ms ease;
+}
+
+.routing-tree__filter:hover,
+.routing-tree__filter:focus-visible {
+  border-color: var(--routing-tree-accent);
+  color: var(--text-support);
+}
+
+.routing-tree__filter:focus-visible {
+  outline: 2px solid rgba(74, 211, 181, 0.2);
+  outline-offset: 1px;
+}
+
+.routing-tree__filter[aria-pressed="true"] {
+  border-color: var(--routing-tree-accent);
+  background: var(--routing-tree-accent-soft);
+  color: var(--text);
+}
+
+.routing-tree__filter:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.routing-tree__counts {
   color: var(--text-muted);
   font-family: var(--mono);
   font-size: 0.53rem;
   white-space: nowrap;
 }
 
-.routing-tree__filters {
-  display: grid;
-  padding: 0 1.25rem 0.85rem;
-  grid-template-columns: minmax(220px, 1fr) minmax(150px, 0.35fr) minmax(145px, 0.3fr) auto;
-  gap: 0.45rem;
-}
-
-.routing-tree__filters input,
-.routing-tree__filters select,
-.routing-tree__filters button {
-  min-width: 0;
-  min-height: 34px;
-  padding: 0.42rem 0.58rem;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  background: #181b20;
-  color: var(--text-support);
-  font: inherit;
-  font-size: 0.62rem;
-}
-
-.routing-tree__filters button {
-  cursor: pointer;
-}
-
-.routing-tree__filters :focus-visible,
 .routing-tree__branch:focus-visible {
   border-color: var(--routing-tree-accent);
   outline: 2px solid rgba(74, 211, 181, 0.2);
   outline-offset: 1px;
 }
 
-.routing-tree__catalog {
-  display: grid;
-  min-height: 300px;
-  padding: 0.9rem 1.25rem;
-  border-block: 1px solid var(--border);
-  grid-template-columns: minmax(170px, 220px) minmax(0, 1fr);
-  gap: 1rem;
-  background: #14171c;
-}
-
 .routing-tree__stage {
+  position: relative;
+  z-index: 1;
   min-width: 0;
 }
 
@@ -315,10 +354,8 @@ routing-tree {
   gap: 0.35rem;
 }
 
-.routing-tree__publisher-branches {
-  max-height: 254px;
-  padding-right: 0.25rem;
-  overflow-y: auto;
+.routing-tree__family-branches {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .routing-tree__branch {
@@ -362,13 +399,15 @@ routing-tree {
 }
 
 .routing-tree__branch[hidden],
+.routing-tree__stage[hidden],
 .routing-tree__model-group[hidden],
 .routing-tree__provider-group[hidden],
-.routing-tree__empty[hidden] {
+.routing-tree__empty[hidden],
+.routing-tree__selection[hidden] {
   display: none;
 }
 
-.routing-tree__publisher strong,
+.routing-tree__family strong,
 .routing-tree__provider strong {
   min-width: 0;
   font-size: 0.65rem;
@@ -408,10 +447,7 @@ routing-tree {
 }
 
 .routing-tree__model-branches {
-  max-height: 230px;
-  padding-right: 0.25rem;
-  overflow-y: auto;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 0.42rem;
 }
 
@@ -428,24 +464,24 @@ routing-tree {
   overflow-wrap: anywhere;
 }
 
-.routing-tree__empty {
-  margin: 1rem 0;
-  color: var(--text-muted);
-  font-size: 0.62rem;
-}
-
 .routing-tree__map {
   position: relative;
   display: grid;
-  min-height: 230px;
-  padding: 1rem 1.25rem 0.8rem;
-  grid-template-columns: minmax(360px, 1fr) minmax(180px, 220px) minmax(200px, 1fr);
+  min-height: 570px;
+  padding: 1.2rem 1.25rem 0.8rem;
+  border-top: 1px solid var(--border);
+  grid-template-columns:
+    minmax(110px, 0.7fr)
+    minmax(145px, 0.85fr)
+    minmax(245px, 1.4fr)
+    minmax(175px, 1fr)
+    minmax(155px, 0.9fr);
   grid-template-areas:
-    "ingress selected providers"
-    "route route route";
+    "product proxy families models providers"
+    "route route route route route";
   grid-template-rows: 1fr auto;
   align-items: center;
-  gap: 0.8rem 4rem;
+  gap: 0.8rem 1.55rem;
 }
 
 .routing-tree__connectors {
@@ -457,17 +493,9 @@ routing-tree {
   pointer-events: none;
 }
 
-.routing-tree__ingress {
+.routing-tree__node {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-area: ingress;
-  grid-template-columns: repeat(2, minmax(160px, 1fr));
-  align-items: center;
-  gap: 4rem;
-}
-
-.routing-tree__node {
   display: flex;
   width: 100%;
   min-height: 86px;
@@ -496,8 +524,13 @@ routing-tree {
 }
 
 .routing-tree__node--proxy {
+  grid-area: proxy;
   border-color: var(--routing-tree-accent);
   background: #142622;
+}
+
+.routing-tree__node--product {
+  grid-area: product;
 }
 
 .routing-tree__node--proxy::before {
@@ -510,32 +543,32 @@ routing-tree {
   content: "";
 }
 
-.routing-tree__node--selection {
-  position: relative;
-  z-index: 1;
-  grid-area: selected;
-  border-color: rgba(74, 211, 181, 0.55);
-  background: #171f1e;
+.routing-tree__stage--families {
+  grid-area: families;
 }
 
-.routing-tree__node--selection code {
-  color: inherit;
-  font-size: 0.66rem;
-  overflow-wrap: anywhere;
+.routing-tree__stage--models {
+  grid-area: models;
 }
 
 .routing-tree__stage--providers {
-  position: relative;
-  z-index: 1;
   grid-area: providers;
 }
 
 .routing-tree__provider-branches {
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .routing-tree__provider {
   min-height: 42px;
+}
+
+.routing-tree__provider small {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .routing-tree__selection {
@@ -572,6 +605,18 @@ routing-tree {
 .routing-tree__selection output i {
   color: var(--text-muted);
   font-style: normal;
+}
+
+.routing-tree__empty {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  grid-column: 3 / -1;
+  grid-row: 1;
+  align-self: center;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  text-align: center;
 }
 .section.route-overview {
   --content: 1180px;
@@ -1431,24 +1476,43 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
     width: min(100%, 720px);
   }
 
-  .routing-tree__filters {
-    grid-template-columns: 1fr 1fr;
+  .routing-tree__counts {
+    display: none;
+  }
+
+  .routing-tree__header {
+    padding-inline: 1rem;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 0.65rem;
+  }
+
+  .routing-tree__header h2 {
+    font-size: 0.86rem;
   }
 
   .routing-tree__map {
-    grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+    min-height: 620px;
+    grid-template-columns:
+      minmax(80px, 0.65fr)
+      minmax(95px, 0.75fr)
+      minmax(170px, 1.35fr)
+      minmax(130px, 1fr)
+      minmax(115px, 0.9fr);
     grid-template-areas:
-      "ingress ingress"
-      "selected providers"
-      "route route";
-    grid-template-rows: auto auto auto;
-    align-items: stretch;
-    gap: 1rem 2rem;
+      "product proxy families models providers"
+      "route route route route route";
+    grid-template-rows: 1fr auto;
+    align-items: center;
+    gap: 0.8rem 0.55rem;
   }
 
-  .routing-tree__ingress {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 2rem;
+  .routing-tree__node {
+    min-height: 76px;
+    padding-inline: 0.4rem;
+  }
+
+  .routing-tree__provider small {
+    display: none;
   }
 
   .catalog-summary {
@@ -1498,35 +1562,20 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
   }
 
   .routing-tree__header {
-    align-items: flex-start;
-    flex-direction: column;
-    flex-wrap: wrap;
-    gap: 0.35rem;
+    min-height: 50px;
+    padding: 0.6rem 0.7rem;
+    grid-template-columns: minmax(6rem, 7.5rem) minmax(0, 1fr);
+    gap: 0.5rem;
   }
 
-  .routing-tree__header > span {
-    white-space: normal;
+  .routing-tree__header h2 {
+    font-size: 0.78rem;
   }
 
-  .routing-tree__filters {
-    padding-inline: 0.85rem;
-    grid-template-columns: 1fr;
-  }
-
-  .routing-tree__catalog {
-    min-height: 0;
-    padding-inline: 0.85rem;
-    grid-template-columns: 1fr;
-  }
-
-  .routing-tree__publisher-branches {
-    max-height: none;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .routing-tree__model-branches {
-    max-height: 260px;
-    grid-template-columns: 1fr;
+  .routing-tree__filter {
+    min-height: 22px;
+    padding-inline: 0.4rem;
+    font-size: 0.45rem;
   }
 
   .routing-tree__map {
@@ -1534,8 +1583,10 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
     padding-inline: 0.85rem;
     grid-template-columns: 1fr;
     grid-template-areas:
-      "ingress"
-      "selected"
+      "product"
+      "proxy"
+      "families"
+      "models"
       "providers"
       "route";
     grid-template-rows: auto;
@@ -1544,12 +1595,6 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
 
   .routing-tree__connectors {
     display: none;
-  }
-
-  .routing-tree__ingress {
-    min-height: 0;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.65rem;
   }
 
   .routing-tree__node {
@@ -1561,8 +1606,19 @@ capability-catalog[data-enhanced="false"] .catalog-toolbar {
     grid-template-columns: 1fr;
   }
 
+  .routing-tree__provider small {
+    display: inline;
+  }
+
   .routing-tree__selection {
     flex-wrap: wrap;
+  }
+
+  .routing-tree__empty {
+    grid-column: 1;
+    grid-row: 3;
+    min-height: 82px;
+    align-content: center;
   }
 
   .value-strip__grid,
