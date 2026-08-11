@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
@@ -274,6 +275,20 @@ func validateExactModels(models []ExactModel, publishers map[string]ModelPublish
 		}
 		validated[identifier] = model
 	}
+	referencedPublishers := make(map[string]struct{}, len(validated))
+	for _, model := range validated {
+		referencedPublishers[model.Publisher] = struct{}{}
+	}
+	publisherIdentifiers := make([]string, 0, len(publishers))
+	for publisherIdentifier := range publishers {
+		publisherIdentifiers = append(publisherIdentifiers, publisherIdentifier)
+	}
+	sort.Strings(publisherIdentifiers)
+	for _, publisherIdentifier := range publisherIdentifiers {
+		if _, referenced := referencedPublishers[publisherIdentifier]; !referenced {
+			return fmt.Errorf("%w: field=catalog.publishers publisher=%s reason=missing_exact_model", ErrInvalidModelCatalog, publisherIdentifier)
+		}
+	}
 	return nil
 }
 
@@ -344,16 +359,17 @@ func validateProviderOfferings(offerings []ProviderOffering, catalog validatedMo
 		if limitError := validateCatalogLimits(offering.Limits, fieldPrefix+".limits"); limitError != nil {
 			return limitError
 		}
-		if _, supportsText := offeredOperations[ModelOperationText]; supportsText {
-			if routeError := validateTextOffering(offering, fieldPrefix); routeError != nil {
-				return routeError
+		for _, operation := range offering.Operations {
+			var routeError error
+			switch operation {
+			case ModelOperationText:
+				routeError = validateTextOffering(offering, fieldPrefix)
+			case ModelOperationVideoGeneration:
+				routeError = validateVideoOffering(offering, fieldPrefix)
+			case ModelOperationDictation:
+				routeError = validateDictationOffering(offering, fieldPrefix)
 			}
-		} else if _, supportsVideo := offeredOperations[ModelOperationVideoGeneration]; supportsVideo {
-			if routeError := validateVideoOffering(offering, fieldPrefix); routeError != nil {
-				return routeError
-			}
-		} else if _, supportsDictation := offeredOperations[ModelOperationDictation]; supportsDictation {
-			if routeError := validateDictationOffering(offering, fieldPrefix); routeError != nil {
+			if routeError != nil {
 				return routeError
 			}
 		}

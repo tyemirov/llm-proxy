@@ -101,7 +101,7 @@ type CatalogService struct {
 
 // NewCatalogService validates one complete catalog snapshot.
 func NewCatalogService(catalog ModelCatalog) (CatalogService, error) {
-	validated, validationError := validateModelCatalog(catalog)
+	validated, validationError := validateModelCatalog(cloneModelCatalog(catalog))
 	if validationError != nil {
 		return CatalogService{}, validationError
 	}
@@ -120,7 +120,7 @@ func (service CatalogService) ResolveOffering(provider string, model string) (Pr
 	if !found {
 		return ProviderOffering{}, fmt.Errorf("%w: route=%s reason=unknown", ErrInvalidModelCatalog, offeringIdentifier)
 	}
-	return offering, nil
+	return cloneProviderOffering(offering), nil
 }
 
 // SelectPrice returns the exact component and condition match. Missing or
@@ -155,6 +155,82 @@ func (service CatalogService) SelectPrice(provider string, model string, operati
 	}
 	selection.UnavailableReason = "exact_price_unavailable"
 	return selection
+}
+
+func cloneModelCatalog(catalog ModelCatalog) ModelCatalog {
+	cloned := catalog
+	cloned.Operations = make([]ModelOperationKind, len(catalog.Operations))
+	for operationIndex, operation := range catalog.Operations {
+		cloned.Operations[operationIndex] = operation
+		cloned.Operations[operationIndex].InputArtifacts = append([]string(nil), operation.InputArtifacts...)
+		cloned.Operations[operationIndex].OutputArtifacts = append([]string(nil), operation.OutputArtifacts...)
+	}
+	cloned.Providers = make([]CatalogProvider, len(catalog.Providers))
+	for providerIndex, provider := range catalog.Providers {
+		cloned.Providers[providerIndex] = provider
+		cloned.Providers[providerIndex].CredentialKinds = append([]string(nil), provider.CredentialKinds...)
+	}
+	cloned.Publishers = append([]ModelPublisher(nil), catalog.Publishers...)
+	cloned.Families = append([]ModelFamily(nil), catalog.Families...)
+	cloned.Models = make([]ExactModel, len(catalog.Models))
+	for modelIndex, model := range catalog.Models {
+		cloned.Models[modelIndex] = model
+		cloned.Models[modelIndex].Operations = append([]string(nil), model.Operations...)
+		cloned.Models[modelIndex].MediaInputs = append([]string(nil), model.MediaInputs...)
+	}
+	cloned.Offerings = make([]ProviderOffering, len(catalog.Offerings))
+	for offeringIndex, offering := range catalog.Offerings {
+		cloned.Offerings[offeringIndex] = cloneProviderOffering(offering)
+	}
+	cloned.Prices = make([]CatalogPriceDescriptor, len(catalog.Prices))
+	for priceIndex, price := range catalog.Prices {
+		cloned.Prices[priceIndex] = cloneCatalogPriceDescriptor(price)
+	}
+	return cloned
+}
+
+func cloneProviderOffering(offering ProviderOffering) ProviderOffering {
+	cloned := offering
+	cloned.Operations = append([]string(nil), offering.Operations...)
+	cloned.DefaultOperations = append([]string(nil), offering.DefaultOperations...)
+	cloned.MediaInputs = append([]string(nil), offering.MediaInputs...)
+	if offering.ReasoningEffort != nil {
+		cloned.ReasoningEffort = &ReasoningEffortCapability{
+			Adapter: offering.ReasoningEffort.Adapter,
+			Efforts: append([]string(nil), offering.ReasoningEffort.Efforts...),
+		}
+	}
+	cloned.Controls = make([]CatalogControl, len(offering.Controls))
+	for controlIndex, control := range offering.Controls {
+		cloned.Controls[controlIndex] = control
+		cloned.Controls[controlIndex].Values = append([]string(nil), control.Values...)
+		cloned.Controls[controlIndex].Minimum = cloneInteger(control.Minimum)
+		cloned.Controls[controlIndex].Maximum = cloneInteger(control.Maximum)
+	}
+	cloned.Limits = make([]CatalogLimit, len(offering.Limits))
+	for limitIndex, limit := range offering.Limits {
+		cloned.Limits[limitIndex] = limit
+		cloned.Limits[limitIndex].Value = cloneInteger(limit.Value)
+	}
+	return cloned
+}
+
+func cloneCatalogPriceDescriptor(descriptor CatalogPriceDescriptor) CatalogPriceDescriptor {
+	cloned := descriptor
+	cloned.Rates = append([]CatalogPriceRate(nil), descriptor.Rates...)
+	if descriptor.MinimumCharge != nil {
+		minimumCharge := *descriptor.MinimumCharge
+		cloned.MinimumCharge = &minimumCharge
+	}
+	return cloned
+}
+
+func cloneInteger(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }
 
 func validateCatalogRevision(revision string) error {
@@ -247,7 +323,7 @@ func validateCatalogControls(controls []CatalogControl, field string) error {
 				values[value] = struct{}{}
 			}
 		case CatalogControlInteger:
-			if len(control.Values) != 0 || control.Minimum == nil || control.Maximum == nil || *control.Minimum > *control.Maximum {
+			if len(control.Values) != 0 || control.Minimum == nil || control.Maximum == nil || *control.Minimum < 0 || *control.Maximum < 0 || *control.Minimum > *control.Maximum {
 				return fmt.Errorf("%w: field=%s[%d] kind=%s", ErrInvalidModelCatalog, field, controlIndex, control.Kind)
 			}
 		case CatalogControlBoolean:

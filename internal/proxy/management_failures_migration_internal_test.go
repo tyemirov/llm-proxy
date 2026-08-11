@@ -682,6 +682,63 @@ func TestManagedXAIProviderMigrationCanonicalizesCurrentRoutesAndPreservesUsage(
 	}
 }
 
+func TestManagedTenantRouteMigrationsComposeConfirmedPredecessorIdentities(t *testing.T) {
+	for _, testCase := range []struct {
+		name    string
+		version int
+	}{
+		{name: "schema two", version: managedUsageOutcomeSchemaVersion},
+		{name: "schema three", version: managedKeyedRoutingSchemaVersion},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			fixture := newManagedXAIProviderMigrationFixture(t)
+			fixture.addProvider(t, ProviderNameMiniMax, managedMiniMaxNativeModel, "")
+			fixture.addProvider(t, ProviderNameSiliconFlow, managedSiliconFlowDeepSeekNativeModel, "")
+			historicalUsage := []managedUsageEventRecord{
+				{ID: 102, TenantID: fixture.tenant.TenantID, Endpoint: usageEndpointText, ProviderID: ProviderNameMiniMax, ModelID: managedMiniMaxNativeModel, StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: fixture.tenant.CreatedAt.Add(time.Minute)},
+				{ID: 103, TenantID: fixture.tenant.TenantID, Endpoint: usageEndpointDictation, ProviderID: ProviderNameSiliconFlow, ModelID: managedSenseVoiceNativeModel, StatusCode: http.StatusOK, Success: true, OutcomeCode: managedUsageOutcomeSuccess, CreatedAt: fixture.tenant.CreatedAt.Add(2 * time.Minute)},
+			}
+			if createError := fixture.database.Create(&historicalUsage).Error; createError != nil {
+				t.Fatalf("seed predecessor historical usage: %v", createError)
+			}
+			if createError := fixture.database.Create(&managedSchemaMigrationRecord{Version: testCase.version, AppliedAt: fixture.tenant.CreatedAt}).Error; createError != nil {
+				t.Fatalf("seed predecessor schema version: %v", createError)
+			}
+
+			if migrationError := initializeManagedTenantSchema(fixture.database, fixture.providerKeyCipher, fixture.providers); migrationError != nil {
+				t.Fatalf("migrate predecessor routes: %v", migrationError)
+			}
+			var tenantRecord managedTenantRecord
+			if queryError := fixture.database.Preload("ProviderAPIKeys").Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).First(&tenantRecord).Error; queryError != nil {
+				t.Fatalf("load migrated predecessor tenant: %v", queryError)
+			}
+			expectedDefaults := TenantDefaults{
+				Provider: ProviderNameXAI, Model: ModelNameGrok43,
+				DictationProvider: ProviderNameXAI, DictationModel: "xai-stt",
+				SystemPrompt: "preserve tenant prompt",
+			}
+			if tenantRecord.defaults() != expectedDefaults || len(tenantRecord.ProviderAPIKeys) != 3 {
+				t.Fatalf("migrated predecessor tenant=%+v keys=%+v", tenantRecord, tenantRecord.ProviderAPIKeys)
+			}
+			modelsByProvider := map[string]string{}
+			for _, providerKey := range tenantRecord.ProviderAPIKeys {
+				modelsByProvider[providerKey.ProviderID] = providerKey.TextModel
+			}
+			if modelsByProvider[ProviderNameXAI] != ModelNameGrok43 || modelsByProvider[ProviderNameMiniMax] != ModelNameMiniMaxM27 || modelsByProvider[ProviderNameSiliconFlow] != ModelNameSiliconFlowDeepSeek {
+				t.Fatalf("migrated predecessor provider models=%v", modelsByProvider)
+			}
+			var retainedUsage []managedUsageEventRecord
+			if queryError := fixture.database.Where("id IN ?", []uint{102, 103}).Order("id").Find(&retainedUsage).Error; queryError != nil || !slices.Equal(retainedUsage, historicalUsage) {
+				t.Fatalf("retained predecessor usage=%+v error=%v", retainedUsage, queryError)
+			}
+			var latest managedSchemaMigrationRecord
+			if queryError := fixture.database.Order("version DESC").First(&latest).Error; queryError != nil || latest.Version != managedTenantSchemaVersion {
+				t.Fatalf("latest predecessor version=%+v error=%v", latest, queryError)
+			}
+		})
+	}
+}
+
 func TestManagedXAIProviderMigrationRejectsStageFailures(t *testing.T) {
 	assertMigrationError := func(t *testing.T, migrationError error, want string) {
 		t.Helper()
@@ -985,6 +1042,27 @@ func TestManagedQwenCloudRetirementMigrationRejectsStageFailures(t *testing.T) {
 			name: "invalid remaining provider", want: "operation=preflight",
 			configure: func(t *testing.T, fixture managedQwenCloudRetirementFixture) {
 				fixture.addProvider(t, "missing", "missing-model", "")
+			},
+		},
+		{
+			name: "nonretired defaults without key", want: "operation=preflight",
+			configure: func(t *testing.T, fixture managedQwenCloudRetirementFixture) {
+				if updateError := fixture.database.Model(&managedTenantRecord{}).
+					Where(&managedTenantRecord{TenantID: fixture.tenant.TenantID}).
+					Updates(map[string]any{
+						"default_provider":         ProviderNameXAI,
+						"default_model":            ModelNameGrok43,
+						"default_reasoning_effort": "",
+					}).Error; updateError != nil {
+					t.Fatalf("seed nonretired defaults without key: %v", updateError)
+				}
+			},
+		},
+		{
+			name: "predecessor provider conflict", want: "provider_conflict=" + ProviderNameXAI,
+			configure: func(t *testing.T, fixture managedQwenCloudRetirementFixture) {
+				fixture.addProvider(t, retiredGrokProviderIdentifier, ModelNameGrok43, "")
+				fixture.addProvider(t, ProviderNameXAI, ModelNameGrok43, "")
 			},
 		},
 		{

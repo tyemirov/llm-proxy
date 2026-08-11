@@ -8,6 +8,12 @@ import (
 func TestCatalogServiceResolvesExactRoutesAndPrices(t *testing.T) {
 	minimum := 1
 	maximum := 15
+	reasoningOffering := internalTestOffering(ProviderNameOpenAI, ModelNameGPT55, []string{ModelOperationText}, []string{ModelOperationText})
+	reasoningOffering.RequestProfile = string(requestProfileOpenAIResponsesReasoningTools)
+	reasoningOffering.ReasoningEffort = &ReasoningEffortCapability{
+		Adapter: string(reasoningEffortAdapterOpenAIResponses),
+		Efforts: []string{"minimal", "low", "medium", "high"},
+	}
 	catalog := internalTestModelCatalog(
 		internalTestOffering(ProviderNameXAI, ModelNameGrok43, []string{ModelOperationText}, []string{ModelOperationText}),
 		ProviderOffering{
@@ -17,12 +23,15 @@ func TestCatalogServiceResolvesExactRoutesAndPrices(t *testing.T) {
 			Controls: []CatalogControl{{ID: "duration", Kind: CatalogControlInteger, Minimum: &minimum, Maximum: &maximum}},
 			Limits:   []CatalogLimit{{ID: "concurrent_requests", Unit: "requests", AccountDependent: true}},
 		},
+		reasoningOffering,
 	)
 	conditions := CatalogPriceConditions{Resolution: "720p", Duration: "output"}
+	videoPriceIndex := -1
 	for priceIndex := range catalog.Prices {
 		if catalog.Prices[priceIndex].Operation != ModelOperationVideoGeneration {
 			continue
 		}
+		videoPriceIndex = priceIndex
 		catalog.Prices[priceIndex] = CatalogPriceDescriptor{
 			Provider: ProviderNameXAI, Model: "grok-imagine-video-1.5", Operation: ModelOperationVideoGeneration,
 			Available:     true,
@@ -36,11 +45,34 @@ func TestCatalogServiceResolvesExactRoutesAndPrices(t *testing.T) {
 	if serviceError != nil {
 		t.Fatalf("NewCatalogService error: %v", serviceError)
 	}
+	catalog.Offerings[1].Operations[0] = ModelOperationDictation
+	*catalog.Offerings[1].Controls[0].Minimum = 9
+	catalog.Offerings[1].Limits[0].Unit = "changed"
+	catalog.Offerings[2].ReasoningEffort.Efforts[0] = "changed"
+	catalog.Prices[videoPriceIndex].Rates[0].Rate = 9
+	catalog.Prices[videoPriceIndex].MinimumCharge.Amount = 9
 	if service.Revision() != catalog.Revision {
 		t.Fatalf("revision=%q", service.Revision())
 	}
-	if offering, offeringError := service.ResolveOffering(" xai ", " grok-imagine-video-1.5 "); offeringError != nil || offering.Model != "grok-imagine-video-1.5" {
+	offering, offeringError := service.ResolveOffering(" xai ", " grok-imagine-video-1.5 ")
+	if offeringError != nil || offering.Model != "grok-imagine-video-1.5" || offering.Operations[0] != ModelOperationVideoGeneration || *offering.Controls[0].Minimum != 1 || offering.Limits[0].Unit != "requests" {
 		t.Fatalf("ResolveOffering offering=%+v error=%v", offering, offeringError)
+	}
+	offering.Operations[0] = ModelOperationDictation
+	*offering.Controls[0].Minimum = 12
+	offering.Limits[0].Unit = "changed again"
+	resolvedAgain, resolvedAgainError := service.ResolveOffering(ProviderNameXAI, "grok-imagine-video-1.5")
+	if resolvedAgainError != nil || resolvedAgain.Operations[0] != ModelOperationVideoGeneration || *resolvedAgain.Controls[0].Minimum != 1 || resolvedAgain.Limits[0].Unit != "requests" {
+		t.Fatalf("ResolveOffering second result=%+v error=%v", resolvedAgain, resolvedAgainError)
+	}
+	reasoningResolved, reasoningResolvedError := service.ResolveOffering(ProviderNameOpenAI, ModelNameGPT55)
+	if reasoningResolvedError != nil || reasoningResolved.ReasoningEffort == nil || reasoningResolved.ReasoningEffort.Efforts[0] != "minimal" {
+		t.Fatalf("ResolveOffering reasoning result=%+v error=%v", reasoningResolved, reasoningResolvedError)
+	}
+	reasoningResolved.ReasoningEffort.Efforts[0] = "changed again"
+	reasoningResolvedAgain, reasoningResolvedAgainError := service.ResolveOffering(ProviderNameOpenAI, ModelNameGPT55)
+	if reasoningResolvedAgainError != nil || reasoningResolvedAgain.ReasoningEffort == nil || reasoningResolvedAgain.ReasoningEffort.Efforts[0] != "minimal" {
+		t.Fatalf("ResolveOffering reasoning second result=%+v error=%v", reasoningResolvedAgain, reasoningResolvedAgainError)
 	}
 	if _, offeringError := service.ResolveOffering(ProviderNameXAI, "missing"); offeringError == nil {
 		t.Fatal("ResolveOffering accepted an unknown route")
@@ -48,6 +80,12 @@ func TestCatalogServiceResolvesExactRoutesAndPrices(t *testing.T) {
 	selection := service.SelectPrice(ProviderNameXAI, "grok-imagine-video-1.5", ModelOperationVideoGeneration, " output_video ", conditions)
 	if !selection.Available || selection.Rate == nil || selection.Rate.Rate != 0.14 || selection.MinimumCharge == nil {
 		t.Fatalf("exact selection=%+v", selection)
+	}
+	selection.Rate.Rate = 12
+	selection.MinimumCharge.Amount = 12
+	selectionAgain := service.SelectPrice(ProviderNameXAI, "grok-imagine-video-1.5", ModelOperationVideoGeneration, "output_video", conditions)
+	if selectionAgain.Rate == nil || selectionAgain.Rate.Rate != 0.14 || selectionAgain.MinimumCharge == nil || selectionAgain.MinimumCharge.Amount != 0.14 {
+		t.Fatalf("exact selection after result mutation=%+v", selectionAgain)
 	}
 	if unavailable := service.SelectPrice(ProviderNameXAI, ModelNameGrok43, ModelOperationText, "input", CatalogPriceConditions{}); unavailable.Available || unavailable.UnavailableReason != "Test price is unavailable." {
 		t.Fatalf("unavailable selection=%+v", unavailable)
@@ -109,6 +147,25 @@ func TestCatalogCapabilityValidationRejectsIncompleteContracts(t *testing.T) {
 		_, validationError := NewCatalogService(catalog)
 		assertError(t, validationError, "unsupported_video_route")
 	})
+	for _, secondaryOperation := range []string{ModelOperationVideoGeneration, ModelOperationDictation} {
+		t.Run("catalog validates secondary "+secondaryOperation, func(t *testing.T) {
+			catalog := internalTestModelCatalog(internalTestOffering(
+				ProviderNameXAI,
+				ModelNameGrok43,
+				[]string{ModelOperationText, secondaryOperation},
+				[]string{ModelOperationText, secondaryOperation},
+			))
+			_, validationError := NewCatalogService(catalog)
+			assertError(t, validationError, "unsupported_"+strings.TrimSuffix(secondaryOperation, "_generation")+"_route")
+		})
+	}
+	t.Run("catalog publisher without exact model", func(t *testing.T) {
+		catalog := internalTestModelCatalog(internalTestOffering(ProviderNameOpenAI, ModelNameGPT41, []string{ModelOperationText}, []string{ModelOperationText}))
+		catalog.Publishers = append(catalog.Publishers, ModelPublisher{ID: "unused", Label: "Unused"})
+		catalog.Families = append(catalog.Families, ModelFamily{ID: "unused", Publisher: "unused", Label: "Unused"})
+		_, validationError := NewCatalogService(catalog)
+		assertError(t, validationError, "publisher=unused reason=missing_exact_model")
+	})
 	t.Run("catalog prices", func(t *testing.T) {
 		catalog := internalTestModelCatalog(internalTestOffering(ProviderNameOpenAI, ModelNameGPT41, []string{ModelOperationText}, []string{ModelOperationText}))
 		catalog.Prices = nil
@@ -151,6 +208,8 @@ func TestCatalogCapabilityValidationRejectsIncompleteContracts(t *testing.T) {
 		{name: "enum value", controls: []CatalogControl{{ID: "mode", Kind: CatalogControlEnum, Values: []string{" "}}}, expected: "values[0]"},
 		{name: "enum duplicate", controls: []CatalogControl{{ID: "mode", Kind: CatalogControlEnum, Values: []string{"fast", "fast"}}}, expected: "duplicate=fast"},
 		{name: "integer", controls: []CatalogControl{{ID: "duration", Kind: CatalogControlInteger, Minimum: integer(2), Maximum: integer(1)}}, expected: "kind=integer"},
+		{name: "negative minimum", controls: []CatalogControl{{ID: "duration", Kind: CatalogControlInteger, Minimum: integer(-1), Maximum: integer(1)}}, expected: "kind=integer"},
+		{name: "negative maximum", controls: []CatalogControl{{ID: "duration", Kind: CatalogControlInteger, Minimum: integer(0), Maximum: integer(-1)}}, expected: "kind=integer"},
 		{name: "boolean", controls: []CatalogControl{{ID: "audio", Kind: CatalogControlBoolean, Values: []string{"yes"}}}, expected: "kind=boolean"},
 		{name: "kind", controls: []CatalogControl{{ID: "mode", Kind: "future"}}, expected: "kind=future"},
 	}
