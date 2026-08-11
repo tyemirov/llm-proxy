@@ -71,9 +71,14 @@ func (httpDoer managementProviderKeyVerificationHTTPDoer) Do(request *http.Reque
 }
 
 func managementProviderKeyRequestBody(t *testing.T, apiKey string, textModel string, systemPrompt string) string {
+	return managementProviderKeyRequestBodyWithBaseURL(t, apiKey, "", textModel, systemPrompt)
+}
+
+func managementProviderKeyRequestBodyWithBaseURL(t *testing.T, apiKey string, baseURL string, textModel string, systemPrompt string) string {
 	t.Helper()
 	requestBody, marshalError := json.Marshal(map[string]string{
 		"api_key":       apiKey,
+		"base_url":      baseURL,
 		"text_model":    textModel,
 		"system_prompt": systemPrompt,
 	})
@@ -170,8 +175,8 @@ func TestManagementStaticPagesAndUnauthenticatedAPI(t *testing.T) {
 		`href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css"`,
 		`src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui-config.js"`,
 		`data-mpr-ui-bundle-src="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.js"`,
-		`src="/assets/llm-proxy/js/startupGuard.js?v=20260809i217"`,
-		`src="/assets/llm-proxy/js/app.js?v=20260809i217"`,
+		`src="/assets/llm-proxy/js/startupGuard.js?v=20260811b130"`,
+		`src="/assets/llm-proxy/js/app.js?v=20260811b130"`,
 		`data-config-url="/config-ui.yaml"`,
 		`<mpr-user`,
 		`<mpr-footer`,

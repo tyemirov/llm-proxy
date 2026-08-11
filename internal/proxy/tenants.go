@@ -87,6 +87,7 @@ func normalizedTenantDefaults(rawDefaults TenantDefaults) tenantDefaults {
 
 type managedProviderSettings struct {
 	apiKey       string
+	baseURL      string
 	textModel    string
 	systemPrompt string
 }

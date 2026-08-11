@@ -90,8 +90,13 @@ func TestManagedTenantSQLiteOwnershipMigrationPreservesAndRebindsData(t *testing
 	if secondEncryptionError != nil {
 		t.Fatalf("encrypt second key: %v", secondEncryptionError)
 	}
+	dashScopeCiphertext, dashScopeEncryptionError := providerKeyCipher.encrypt(bytes.NewReader(bytes.Repeat([]byte{2}, providerKeyCipher.aeadCipher.NonceSize())), firstTenant.UserID, ProviderNameDashScope, "sk-dashscope")
+	if dashScopeEncryptionError != nil {
+		t.Fatalf("encrypt DashScope key: %v", dashScopeEncryptionError)
+	}
 	legacyProviderKeys := []legacyManagedProviderAPIKeyRecord{
 		{UserID: firstTenant.UserID, ProviderID: ProviderNameOpenAI, EncryptedAPIKey: firstCiphertext, TextModel: ModelNameGPT41, SystemPrompt: "first system", CreatedAt: fixedTime, UpdatedAt: fixedTime.Add(time.Minute)},
+		{UserID: firstTenant.UserID, ProviderID: ProviderNameDashScope, EncryptedAPIKey: dashScopeCiphertext, TextModel: ModelNameDashScopeQwenPlus, SystemPrompt: "incomplete workspace settings", CreatedAt: fixedTime, UpdatedAt: fixedTime.Add(time.Minute)},
 		{UserID: secondTenant.UserID, ProviderID: retiredGrokProviderIdentifier, EncryptedAPIKey: secondCiphertext, TextModel: ModelNameGrok43, SystemPrompt: "second system", CreatedAt: fixedTime.Add(time.Hour), UpdatedAt: fixedTime.Add(2 * time.Hour)},
 	}
 	if createError := legacyDatabase.Table(managedProviderKeyTable).Create(&legacyProviderKeys).Error; createError != nil {
@@ -260,6 +265,15 @@ func TestManagedTenantKeyedRoutingDefaultsMigrationReconcilesExistingTenants(t *
 	if openError != nil {
 		t.Fatalf("open SQLite fixture: %v", openError)
 	}
+	sqlDatabase, sqlDatabaseError := database.DB()
+	if sqlDatabaseError != nil {
+		t.Fatalf("resolve SQLite fixture: %v", sqlDatabaseError)
+	}
+	t.Cleanup(func() {
+		if closeError := sqlDatabase.Close(); closeError != nil {
+			t.Errorf("close SQLite fixture: %v", closeError)
+		}
+	})
 	if migrationError := migrateCurrentManagedSchema(database); migrationError != nil {
 		t.Fatalf("create schema two fixture: %v", migrationError)
 	}
@@ -548,10 +562,10 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 	migratedMixed := migratedTenants[0]
 	migratedQwenOnly := migratedTenants[1]
 	expectedMixedDefaults := TenantDefaults{
-		Provider: ProviderNameDashScope, Model: ModelNameDashScopeQwenPlus,
+		Provider: ProviderNameDeepSeek, Model: ModelNameDeepSeekV4Flash,
 		SystemPrompt: "retain mixed tenant prompt",
 	}
-	if migratedMixed.defaults() != expectedMixedDefaults || !migratedMixed.UpdatedAt.Equal(mixedTenant.UpdatedAt) || len(migratedMixed.ProviderAPIKeys) != 2 {
+	if migratedMixed.defaults() != expectedMixedDefaults || !migratedMixed.UpdatedAt.Equal(mixedTenant.UpdatedAt) || len(migratedMixed.ProviderAPIKeys) != 1 {
 		t.Fatalf("migrated mixed tenant=%+v keys=%+v", migratedMixed, migratedMixed.ProviderAPIKeys)
 	}
 	expectedQwenOnlyDefaults := TenantDefaults{SystemPrompt: "retain tenant prompt"}
@@ -602,6 +616,20 @@ func TestManagedTenantQwenCloudRetirementMigrationReconcilesCurrentTenants(t *te
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusServiceUnavailable || upstreamRequestCount != 0 || !strings.Contains(response.Body.String(), ErrProviderNotConfigured.Error()) {
 		t.Fatalf("migrated qwen-only route status=%d body=%q upstream_requests=%d", response.Code, response.Body.String(), upstreamRequestCount)
+	}
+	usageWriteDeadline := time.Now().Add(time.Second)
+	for {
+		var usageEventCount int64
+		if countError := database.Model(&managedUsageEventRecord{}).Count(&usageEventCount).Error; countError != nil {
+			t.Fatalf("count migrated route usage: %v", countError)
+		}
+		if usageEventCount == 2 {
+			break
+		}
+		if usageEventCount > 2 || time.Now().After(usageWriteDeadline) {
+			t.Fatalf("migrated route usage count=%d want=2", usageEventCount)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

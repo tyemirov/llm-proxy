@@ -38,7 +38,6 @@ const (
 
 const (
 	defaultDeepSeekBaseURL        = "https://api.deepseek.com"
-	defaultDashScopeBaseURL       = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
 	defaultMoonshotBaseURL        = "https://api.moonshot.ai/v1"
 	defaultMiniMaxBaseURL         = "https://api.minimax.io/v1"
 	defaultSiliconFlowBaseURL     = "https://api.siliconflow.com/v1"

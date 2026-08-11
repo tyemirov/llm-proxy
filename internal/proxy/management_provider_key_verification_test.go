@@ -24,6 +24,7 @@ const (
 	verificationTransportChat      = "chat"
 	verificationTransportGemini    = "gemini"
 	verificationTransportAnthropic = "anthropic"
+	testDashScopeWorkspaceURL      = "https://test-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
 )
 
 type providerKeyVerificationTransportCase struct {
@@ -42,6 +43,7 @@ type providerKeyVerificationProfile struct {
 		ID           string `json:"id"`
 		HasKey       bool   `json:"has_key"`
 		MaskedKey    string `json:"masked_key"`
+		BaseURL      string `json:"base_url"`
 		TextModel    string `json:"text_model"`
 		SystemPrompt string `json:"system_prompt"`
 	} `json:"providers"`
@@ -82,6 +84,20 @@ func TestManagementProviderKeyVerificationUsesEveryCanonicalTransportBeforePersi
 				writeProviderKeyVerificationSuccess(responseWriter, transportCase.transport)
 			}))
 			subTest.Cleanup(upstreamServer.Close)
+			observedWorkspaceRequestURL := ""
+			previousHTTPClient := proxy.HTTPClient
+			if transportCase.provider == proxy.ProviderNameDashScope {
+				targetURL, _ := url.Parse(upstreamServer.URL)
+				proxy.HTTPClient = coverageHTTPDoer(func(request *http.Request) (*http.Response, error) {
+					observedWorkspaceRequestURL = request.URL.String()
+					rewrittenRequest := request.Clone(request.Context())
+					rewrittenRequest.URL.Scheme = targetURL.Scheme
+					rewrittenRequest.URL.Host = targetURL.Host
+					rewrittenRequest.Host = ""
+					return previousHTTPClient.Do(rewrittenRequest)
+				})
+				defer func() { proxy.HTTPClient = previousHTTPClient }()
+			}
 
 			router := newOperationalProviderKeyVerificationRouter(
 				subTest,
@@ -114,16 +130,100 @@ func TestManagementProviderKeyVerificationUsesEveryCanonicalTransportBeforePersi
 			if !savedProvider.HasKey || savedProvider.MaskedKey == "" || savedProvider.TextModel != transportCase.model || savedProvider.SystemPrompt != "must-not-enter-verification" {
 				subTest.Fatalf("saved provider=%+v", savedProvider)
 			}
+			expectedBaseURL := ""
+			if transportCase.provider == proxy.ProviderNameDashScope {
+				expectedBaseURL = testDashScopeWorkspaceURL
+			}
+			if savedProvider.BaseURL != expectedBaseURL {
+				subTest.Fatalf("saved provider base URL=%q want=%q", savedProvider.BaseURL, expectedBaseURL)
+			}
 			if profile.Tenant.Defaults.Provider != transportCase.provider || profile.Tenant.Defaults.Model != transportCase.model {
 				subTest.Fatalf("defaults=%+v", profile.Tenant.Defaults)
 			}
 			if upstreamRequests.Load() != 1 {
 				subTest.Fatalf("verification requests=%d want=1", upstreamRequests.Load())
 			}
+			if transportCase.provider == proxy.ProviderNameDashScope && observedWorkspaceRequestURL != testDashScopeWorkspaceURL+"/chat/completions" {
+				subTest.Fatalf("DashScope verification URL=%q", observedWorkspaceRequestURL)
+			}
 			if usage := requestManagementUsage(subTest, router, sessionCookie, "all"); usage.Totals.Requests != 0 {
 				subTest.Fatalf("verification usage requests=%d want=0", usage.Totals.Requests)
 			}
 		})
+	}
+}
+
+func TestManagementDashScopeWorkspaceChangeVerifiesRetainedKeyAndRoutesWithStoredURL(t *testing.T) {
+	const (
+		candidateKey = "candidate-dashscope"
+		updatedURL   = "https://updated-workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+	)
+	requestURLs := make([]string, 0, 3)
+	authorizations := make([]string, 0, 3)
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		authorizations = append(authorizations, request.Header.Get("Authorization"))
+		responseWriter.Header().Set("Content-Type", "application/json")
+		if len(authorizations) < 3 {
+			_, _ = responseWriter.Write([]byte(`{"choices":[{}]}`))
+			return
+		}
+		_, _ = responseWriter.Write([]byte(`{"choices":[{"message":{"content":"tenant workspace ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}`))
+	}))
+	defer upstreamServer.Close()
+
+	upstreamTarget, _ := url.Parse(upstreamServer.URL)
+	previousHTTPClient := proxy.HTTPClient
+	proxy.HTTPClient = coverageHTTPDoer(func(request *http.Request) (*http.Response, error) {
+		requestURLs = append(requestURLs, request.URL.String())
+		rewrittenRequest := request.Clone(request.Context())
+		rewrittenRequest.URL.Scheme = upstreamTarget.Scheme
+		rewrittenRequest.URL.Host = upstreamTarget.Host
+		rewrittenRequest.Host = ""
+		return previousHTTPClient.Do(rewrittenRequest)
+	})
+	defer func() { proxy.HTTPClient = previousHTTPClient }()
+
+	router := newOperationalProviderKeyVerificationRouter(
+		t,
+		providerKeyVerificationConfiguration(upstreamServer.URL),
+		zap.NewNop().Sugar(),
+		t.TempDir()+"/managed-tenants.db",
+		TestTimeout,
+	)
+	sessionCookie := managementSessionCookie(t, "dashscope-workspace-change")
+	tenantID := managementDefaultTenantTestID(t, router, sessionCookie)
+	firstResponse := putManagementProviderKeyWithBaseURL(t, router, sessionCookie, tenantID, proxy.ProviderNameDashScope, candidateKey, testDashScopeWorkspaceURL, proxy.ModelNameDashScopeQwenPlus, "", context.Background())
+	if firstResponse.Code != http.StatusOK {
+		t.Fatalf("first save status=%d body=%q", firstResponse.Code, firstResponse.Body.String())
+	}
+	updatedResponse := putManagementProviderKeyWithBaseURL(t, router, sessionCookie, tenantID, proxy.ProviderNameDashScope, "", updatedURL, proxy.ModelNameDashScopeQwenPlus, "", context.Background())
+	if updatedResponse.Code != http.StatusOK {
+		t.Fatalf("updated save status=%d body=%q", updatedResponse.Code, updatedResponse.Body.String())
+	}
+	updatedProfile := decodeProviderKeyVerificationProfile(t, updatedResponse.Body.Bytes())
+	if savedProvider := verificationProfileProvider(t, updatedProfile, proxy.ProviderNameDashScope); savedProvider.BaseURL != updatedURL || !savedProvider.HasKey {
+		t.Fatalf("updated provider=%+v", savedProvider)
+	}
+
+	secret := generateManagementTenantSecret(t, router, sessionCookie, tenantID)
+	proxyRequest := httptest.NewRequest(http.MethodGet, "/?key="+url.QueryEscape(secret)+"&provider=dashscope&model="+proxy.ModelNameDashScopeQwenPlus+"&prompt=hello", nil)
+	proxyResponse := httptest.NewRecorder()
+	router.ServeHTTP(proxyResponse, proxyRequest)
+	if proxyResponse.Code != http.StatusOK || strings.TrimSpace(proxyResponse.Body.String()) != "tenant workspace ok" {
+		t.Fatalf("proxy status=%d body=%q", proxyResponse.Code, proxyResponse.Body.String())
+	}
+	expectedURLs := []string{
+		testDashScopeWorkspaceURL + "/chat/completions",
+		updatedURL + "/chat/completions",
+		updatedURL + "/chat/completions",
+	}
+	if len(requestURLs) != len(expectedURLs) {
+		t.Fatalf("workspace requests=%v", requestURLs)
+	}
+	for index, expectedURL := range expectedURLs {
+		if requestURLs[index] != expectedURL || authorizations[index] != "Bearer "+candidateKey {
+			t.Fatalf("request[%d] URL=%q authorization=%q", index, requestURLs[index], authorizations[index])
+		}
 	}
 }
 
@@ -522,10 +622,19 @@ func newOperationalProviderKeyVerificationRouter(t *testing.T, configuration pro
 
 func putManagementProviderKey(t *testing.T, router http.Handler, sessionCookie *http.Cookie, tenantID string, provider string, apiKey string, model string, systemPrompt string, requestContext context.Context) *httptest.ResponseRecorder {
 	t.Helper()
+	baseURL := ""
+	if provider == proxy.ProviderNameDashScope {
+		baseURL = testDashScopeWorkspaceURL
+	}
+	return putManagementProviderKeyWithBaseURL(t, router, sessionCookie, tenantID, provider, apiKey, baseURL, model, systemPrompt, requestContext)
+}
+
+func putManagementProviderKeyWithBaseURL(t *testing.T, router http.Handler, sessionCookie *http.Cookie, tenantID string, provider string, apiKey string, baseURL string, model string, systemPrompt string, requestContext context.Context) *httptest.ResponseRecorder {
+	t.Helper()
 	request := authenticatedJSONRequest(
 		http.MethodPut,
 		managementTenantTestPath(tenantID, "/provider-keys/"+url.PathEscape(provider)),
-		managementProviderKeyRequestBody(t, apiKey, model, systemPrompt),
+		managementProviderKeyRequestBodyWithBaseURL(t, apiKey, baseURL, model, systemPrompt),
 		sessionCookie,
 	).WithContext(requestContext)
 	response := httptest.NewRecorder()
@@ -558,6 +667,7 @@ func verificationProfileProvider(t *testing.T, profile providerKeyVerificationPr
 	ID           string `json:"id"`
 	HasKey       bool   `json:"has_key"`
 	MaskedKey    string `json:"masked_key"`
+	BaseURL      string `json:"base_url"`
 	TextModel    string `json:"text_model"`
 	SystemPrompt string `json:"system_prompt"`
 } {
@@ -572,6 +682,7 @@ func verificationProfileProvider(t *testing.T, profile providerKeyVerificationPr
 		ID           string `json:"id"`
 		HasKey       bool   `json:"has_key"`
 		MaskedKey    string `json:"masked_key"`
+		BaseURL      string `json:"base_url"`
 		TextModel    string `json:"text_model"`
 		SystemPrompt string `json:"system_prompt"`
 	}{}
@@ -610,7 +721,11 @@ func assertProviderKeyVerificationRequest(t *testing.T, request *http.Request, t
 			t.Errorf("OpenAI verification path=%q headers=%v payload=%v", request.URL.Path, request.Header, payload)
 		}
 	case verificationTransportChat:
-		if request.URL.Path != "/chat/completions" ||
+		expectedPath := "/chat/completions"
+		if transportCase.provider == proxy.ProviderNameDashScope {
+			expectedPath = "/compatible-mode/v1/chat/completions"
+		}
+		if request.URL.Path != expectedPath ||
 			request.Header.Get("Authorization") != "Bearer "+candidateKey ||
 			payload["model"] != expectedProviderModel ||
 			payload[transportCase.tokenLimitField] != float64(16) {

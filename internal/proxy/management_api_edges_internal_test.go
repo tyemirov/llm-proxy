@@ -259,6 +259,15 @@ func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("save key store status=%d", response.Code)
 	}
+	service, _ = newSeededService()
+	dashScopeProviderParams := gin.Params{
+		{Key: "tenant_id", Value: "managed-default"},
+		{Key: "provider", Value: ProviderNameDashScope},
+	}
+	response = executeInternalManagementHandler(service.saveProviderKeyHandler(), http.MethodPut, "/api/management/tenants/managed-default/provider-keys/dashscope", `{"api_key":"sk","base_url":"https://invalid.example/v1","text_model":"`+ModelNameDashScopeQwenPlus+`","system_prompt":""}`, dashScopeProviderParams, principal)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("save key base URL status=%d body=%q", response.Code, response.Body.String())
+	}
 
 	service, _ = newSeededService()
 	response = executeInternalManagementHandler(service.removeProviderKeyHandler(), http.MethodDelete, "/api/management/tenants/%20/provider-keys/openai", "", gin.Params{{Key: "tenant_id", Value: " "}}, principal)
@@ -338,7 +347,7 @@ func TestManagementTenantHandlersRejectInvalidAndFailedRequests(t *testing.T) {
 	}
 	service, database = newSeededService()
 	service.store.randomReader = strings.NewReader(strings.Repeat("x", 64))
-	if _, saveError := service.store.saveProviderKey(context.Background(), principal, "managed-default", newProviderID(ProviderNameOpenAI), "sk-openai", ModelNameGPT41, ""); saveError != nil {
+	if _, saveError := service.store.saveProviderKey(context.Background(), principal, "managed-default", newProviderID(ProviderNameOpenAI), "sk-openai", "", ModelNameGPT41, ""); saveError != nil {
 		t.Fatalf("seed defaults provider key: %v", saveError)
 	}
 	database.saveTenantErrors = []error{errInternalTestDatabase}
