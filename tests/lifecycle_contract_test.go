@@ -30,7 +30,7 @@ var expectedSiblingGatewayWrapper = strings.Join([]string{
 	"\t\tMPRLAB_APP_ROOT=\"$${application_root}\"",
 }, "\n")
 
-func TestOperationalRepositoryOwnsSchemaV3Lifecycle(testingInstance *testing.T) {
+func TestOperationalRepositoryOwnsSchemaV4Lifecycle(testingInstance *testing.T) {
 	repositoryRoot := operationalRepositoryRoot(testingInstance)
 	manifestPath := filepath.Join(repositoryRoot, filepath.FromSlash(lifecycleManifestRelativePath))
 	manifestBytes, readError := os.ReadFile(manifestPath)
@@ -49,17 +49,21 @@ func TestOperationalRepositoryOwnsSchemaV3Lifecycle(testingInstance *testing.T) 
 	if !available {
 		testingInstance.Fatalf("lifecycle manifest has no mprlab_resources mapping: %#v", document)
 	}
-	if schemaVersion, schemaAvailable := resourcesDocument["schema_version"].(int); !schemaAvailable || schemaVersion != 3 {
+	if schemaVersion, schemaAvailable := resourcesDocument["schema_version"].(int); !schemaAvailable || schemaVersion != 4 {
 		testingInstance.Fatalf("unexpected lifecycle schema version: %#v", resourcesDocument["schema_version"])
 	}
 	if owner, ownerAvailable := resourcesDocument["owner"].(string); !ownerAvailable || owner != "llm-proxy" {
 		testingInstance.Fatalf("unexpected lifecycle owner: %#v", resourcesDocument["owner"])
 	}
+	release, releaseAvailable := resourcesDocument["release"].(map[string]any)
+	if !releaseAvailable || len(release) != 1 || release["scheme"] != "semver" {
+		testingInstance.Fatalf("unexpected lifecycle release policy: %#v", resourcesDocument["release"])
+	}
 	if _, dependenciesAvailable := resourcesDocument["dependencies"]; dependenciesAvailable {
 		testingInstance.Fatalf("lifecycle manifest must not declare top-level dependencies: %#v", resourcesDocument["dependencies"])
 	}
-	if len(resourcesDocument) != 3 {
-		testingInstance.Fatalf("lifecycle manifest must contain only schema_version, owner, and resources: %#v", resourcesDocument)
+	if len(resourcesDocument) != 4 {
+		testingInstance.Fatalf("lifecycle manifest must contain only schema_version, owner, release, and resources: %#v", resourcesDocument)
 	}
 
 	resources, resourcesAvailable := resourcesDocument["resources"].([]any)
@@ -81,6 +85,12 @@ func TestOperationalRepositoryOwnsSchemaV3Lifecycle(testingInstance *testing.T) 
 		resourcesByIdentity[resourceIdentity] = resource
 		if resourceKind != "compose_project" || resourceID != "runtime" {
 			continue
+		}
+		for _, imageValue := range resource["images"].([]any) {
+			image := imageValue.(map[string]any)
+			if _, visibilityAvailable := image["visibility"]; visibilityAvailable {
+				testingInstance.Fatalf("GHCR visibility must remain provider-owned: %#v", image)
+			}
 		}
 		composeProjectFound = true
 		retiredServices, retiredServicesAvailable := resource["retired_services"].([]any)

@@ -1,7 +1,9 @@
 ---
 mprlab_resources:
-  schema_version: 3
+  schema_version: 4
   owner: llm-proxy
+  release:
+    scheme: semver
   resources:
     - kind: private_values
       id: private
@@ -18,7 +20,6 @@ mprlab_resources:
       images:
         - id: llm-proxy-image
           repository: ghcr.io/tyemirov/llm-proxy
-          visibility: public
           build:
             context: .
             dockerfile: Dockerfile

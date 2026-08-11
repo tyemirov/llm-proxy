@@ -1691,7 +1691,7 @@ This repository exposes the standard local targets used by MPR app repos:
 | `make test-live-providers` | Start a disposable managed tenant, verify every available provider key through the canonical management operation, and run that provider's live text smoke only after verification succeeds; use `LIVE_ENV_FILE=/path/to/env` to load key values. |
 | `make test-live-gemini` | Compatibility wrapper for `make test-live-providers` with `LLM_PROXY_LIVE_PROVIDERS=gemini`. |
 | `make live-test` | Send paid production `POST /v2` requests through the Default tenant using only `LLM_PROXY_SECRET`: echo checks for OpenAI, Anthropic, Meta, Gemini, and Moonshot, plus large completion cases for OpenAI, Anthropic, Meta, and Gemini. |
-| `make release` | Delegate this clean checkout and its schema-v3 resource declaration to the exact sibling `../mprlab-gateway` release transaction. |
+| `make release` | Delegate this clean checkout and its schema-v4 resource declaration to the exact sibling `../mprlab-gateway` release transaction. |
 | `make publish` | Delegate publication of the exact sealed release to `../mprlab-gateway`; it does not rebuild or deploy. |
 | `make deploy` | Delegate convergence of only this app's declared runtime, route, health, Pages, and TAuth resources to `../mprlab-gateway`. |
 
@@ -1827,7 +1827,7 @@ maps. There is no application-owned production Ansible, Compose, Caddy,
 release, publish, or deploy implementation.
 
 The runtime declaration identifies the exact legacy
-`mprlab-nginx-gateway/llm-proxy` Compose service. During the first schema-v3
+`mprlab-nginx-gateway/llm-proxy` Compose service. During the first gateway-managed
 deployment, the gateway verifies that service belongs to llm-proxy before
 removing only its old container. The retained
 `mprlab-nginx-gateway_llm-proxy-data` volume is not removed.
@@ -2603,7 +2603,7 @@ lifecycle machinery.
 
 The gateway release transaction validates this app, builds the declared
 multi-platform container and frontend-rendered Pages artifact from committed source,
-and seals the canonical CalVer release. Publication creates only missing remote
+and seals the canonical SemVer release. Publication creates only missing remote
 state from that exact release and rejects conflicts. Deployment uses the
 gateway-owned Ansible inventory and transaction to reconcile only this app's
 declared resources, then verifies its backend and Pages boundaries. Publish and

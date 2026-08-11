@@ -518,10 +518,10 @@ a tenant secret or response body.
 
 Startup validates configured tenants, rejects duplicate tenant ids and duplicate secrets, requires API keys for each configured static tenant's default text and dictation providers when management mode is disabled, allows non-default provider API keys to be blank so those providers are disabled until configured, requires every configured provider base URL, requires transcription URLs for dictation-capable providers, requires text model catalogs for every provider, requires dictation model catalogs for dictation-capable providers, rejects blank or duplicate model ids, rejects defaults not listed in their model catalog, rejects `web_search` outside OpenAI text model entries, validates OpenAI request profiles, validates exact model-owned reasoning-effort lists, validates each configured static tenant's default text provider/model and effort, and validates endpoint/credential support for each configured static tenant's default dictation provider/model. When `management.enabled` is false, at least one static tenant is required. When `management.enabled` is true, static tenants and nonblank config-level provider API keys are rejected because managed tokens and provider credentials are user-owned database state.
 
-The repository owns the schema-v3 production declaration in
+The repository owns the schema-v4 production declaration in
 `.mprlab/deploy/resources.yml`. The repository also owns the standard
 `make release`, `make publish`, and `make deploy` entrypoints. These targets use
-the exact `../mprlab-gateway` sibling. The gateway owns CalVer selection, schema
+the exact `../mprlab-gateway` sibling. The gateway owns SemVer selection, schema
 validation, artifact sealing, publication, Ansible inventory, reconciliation,
 and production verification. The selected transaction reads only this
 application checkout and the references in its typed resources. It does not
