@@ -1181,6 +1181,13 @@ retain satisfied historical dependencies.
   - Added offering-owned media limits and Gemini inline or Files API routing.
   - Added OpenAPI, public capability, Go client, Python client, and browser
     contracts.
+  - Kept asset and management data on the hosted retained `/data` volume.
+  - Bounded `/v2` request ingestion from the catalog contract and applied the
+    authenticated request budget to asset uploads.
+  - Removed upload-stream lock contention and added restart-safe scheduled
+    expiry reclamation.
+  - Made Gemini Files API deletion authoritative after every finalized upload,
+    including polling and cancellation failures.
   - Passed the final 11-gate CI run with 100.0% Go statement coverage.
 
 - [ ] [F032] (P1) Add Baidu Qianfan as a user-configurable text provider.
