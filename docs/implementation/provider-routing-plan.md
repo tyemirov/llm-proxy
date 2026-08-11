@@ -26,10 +26,24 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - `messages[]` items contain `role` and nonblank string `content`. Supported
   roles are `system`, `user`, and `assistant`; at least one `user` message is
   required. `attachments[]` is allowed only on a user message and each item
-  contains exactly `type`, `mime_type`, canonical padded base64 `data`, and
-  the matching lowercase hexadecimal `sha256`. Image accepts `image/jpeg`,
-  `image/png`, and `image/webp`; audio accepts `audio/m4a`, `audio/mpeg`, and
+  uses one exact union variant. Inline media contains `type`, `mime_type`,
+  canonical padded base64 `data`, and the matching lowercase hexadecimal
+  `sha256`. Asset media contains `type`, `asset_id`, `mime_type`, and the
+  matching lowercase hexadecimal `sha256`. Image accepts `image/jpeg`,
+  `image/png`, and `image/webp`. Audio accepts `audio/m4a`, `audio/mpeg`, and
   `audio/wav`.
+- `POST /model/v1/assets` stores exact image or audio bytes for the
+  authenticated tenant. The request supplies the exact media content type and
+  `X-LLM-Proxy-Asset-SHA256`. The response supplies one opaque asset id and its
+  hash-bound metadata. `DELETE /model/v1/assets/{asset_id}` marks the asset as
+  deleted and removes its stored bytes.
+- `server.max_prompt_bytes` limits compatibility `POST /`. Canonical
+  `POST /v2` bounds the encoded JSON envelope with the configured text
+  allowance plus the largest bounded inline request in the provider catalog.
+  Larger media uses the asset endpoint and an asset reference. The proxy uses
+  the resolved provider offering's media limits and validates asset ownership,
+  state, expiry, MIME type, size, and SHA-256 before it dispatches provider
+  work.
 - `messages[].order` is optional. When any submitted message includes `order`, every submitted message must include a unique non-negative integer `order`; the proxy sorts submitted messages by ascending `order` before adding a request or tenant system prompt and before routing upstream.
 - With `messages[]` on `POST /`, body `system_prompt` is prepended as a system message only when the transcript does not already contain a `system` message. A body containing both `system_prompt` and a system message is invalid. With `POST /v2`, callers send system instructions as `system` role messages.
 - `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies. It is the initial per-attempt output budget and is reused for missing-suffix attempts.
@@ -38,9 +52,10 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - Known provider-specific output-token ceilings are validated before upstream calls; MiniMax M2.7 rejects `max_tokens` above `2048`, Gemini text models reject values above `65536`, and Claude models reject values above their configured synchronous Messages output limits with `400 Bad Request`.
 - `reasoning_effort` is optional on `GET /` as a query parameter and on JSON `POST /` and `POST /v2` as a body field. Omission retains the resolved tenant default. A supplied value must be nonblank and supported by the exact resolved text provider/model route; blank, `null`, or unsupported values return `400 Bad Request` before a provider call.
 - `X-LLM-Proxy-Request-Timeout-Seconds` is an optional positive whole-number
-  header on `GET /`, `POST /`, `POST /v2`, and `POST /dictate`. Omission uses
-  `server.request_timeout_seconds`; a supplied value must be in the inclusive
-  range `1..server.max_request_timeout_seconds`.
+  header on `GET /`, `POST /`, `POST /v2`, `POST /model/v1/assets`, and
+  `POST /dictate`. Omission uses `server.request_timeout_seconds`; a supplied
+  value must be in the inclusive range
+  `1..server.max_request_timeout_seconds`.
 - The effective request budget begins at authenticated ingress before body
   parsing and covers validation, queue admission, provider work, OpenAI
   background polling, and response construction. Provider adapters propagate
@@ -127,6 +142,9 @@ Shared config fields:
 - `server.request_timeout_seconds`
 - `server.max_request_timeout_seconds`
 - `server.max_prompt_bytes`
+- `server.max_asset_bytes`
+- `server.asset_retention_seconds`
+- `server.asset_store_path`
 - `server.max_input_audio_bytes`
 - `server.upstream_rate_limits[].origin`
 - `server.upstream_rate_limits[].max_requests`
@@ -187,6 +205,8 @@ Normalized model catalog:
 - `catalog.offerings[].operations` and `default_operations`
 - `catalog.offerings[].wire_contract` and `execution_lifecycle`
 - `catalog.offerings[].output_token_limit` and `media_inputs`
+- `catalog.offerings[].media_limits[].id`, `media_type`, `transport`, `status`,
+  `value`, `unit`, `scope`, `source`, and `last_verified`
 - `catalog.offerings[].reasoning_effort`
 - `catalog.offerings[].request_profile` and `web_search`
 - `catalog.offerings[].controls` and `limits`
@@ -265,6 +285,22 @@ for one interaction; input, output, and total counts are taken from
 provider-counted thought tokens remain represented. Active-resource cancel and
 delete operations use independent bounded contexts, so cancel exhaustion cannot
 prevent the delete request from starting.
+
+Gemini offering media limits are part of the validated catalog and public
+capability resource. The inline request limit is 20,000,000 encoded request
+bytes. The image-count limit is 3,600 files for one request. The published
+audio-count limit is `unknown`. Each image or audio Files API upload is limited
+to 2,000,000,000 bytes. The adapter builds the complete inline interaction and
+uses inline `data` when its encoded size is within the limit. A larger request
+streams each exact attachment to the Gemini Files API and uses the returned
+`uri` in the same attachment order. The adapter verifies the provider file's
+MIME type, byte count, SHA-256, URI, and active state. It deletes every uploaded
+provider file when the interaction ends. The catalog records Google's
+[file input methods](https://ai.google.dev/gemini-api/docs/file-input-methods),
+[image input](https://ai.google.dev/gemini-api/docs/image-understanding),
+[audio input](https://ai.google.dev/gemini-api/docs/audio), and
+[Files API](https://ai.google.dev/gemini-api/docs/files) guides as the verified
+sources.
 
 OpenAI background Responses are stored upstream. llm-proxy keeps their ids only
 in memory for the active request and never returns or persists them, but the
@@ -605,7 +641,9 @@ When the selected Usage snapshot contains failures, the success-rate card expose
 
 - `400`: unknown provider, unknown model, unsupported capability, unsupported endpoint, conflicting model parameters, or client-supplied provider API key fields on public proxy requests.
 - `403`: missing or invalid client `key`.
-- `413`: prompt or audio payload too large.
+- `413`: compatibility prompt, dictation audio, tenant asset, or selected
+  provider media limit exceeded. Provider media failures use the stable
+  `provider_media_limit_exceeded` JSON code.
 - `429`: upstream provider rate limiting.
 - `503`: registered non-default provider credential is unavailable, so the selected provider is disabled until its API key is configured.
 - `504`: the overall proxy request timed out before the selected upstream provider returned a final result.
@@ -633,9 +671,10 @@ that response or structured provider-failure logs.
   `providers.gemini.base_url`; `incomplete` continues through the shared
   coordinator as a new interaction, while `completed` with visible model text
   succeeds. Gemini 3.x uses stored background polling; Gemini 2.5 uses a
-  non-stored synchronous request. For exact models whose catalog declares the capability, ordered
-  image and audio attachments become typed interaction content after the
-  message text.
+  non-stored synchronous request. For exact models whose catalog declares the
+  capability, ordered image and audio attachments become typed interaction
+  content after the message text. The adapter selects inline `data` or Files
+  API `uri` content from the exact provider offering limits.
 - xAI uses the shared OpenAI-compatible Chat Completions adapter against `providers.xai.base_url`.
 - OpenAI-compatible chat providers receive validated and sorted `messages[]` as provider-supported `role` and `content` items.
 - OpenAI Responses payload shape comes from the selected configured model's stable `request_profile`; model-specific web-search support comes from the selected model catalog entry. OpenAI Responses text calls run in background mode with stored responses so long provider work can be polled by llm-proxy while the caller waits on one REST request.
@@ -660,10 +699,12 @@ Black-box router tests cover:
   shared continuation transcript, completion order, suffix assembly, and usage
   aggregation for Chat Completions, Gemini, Anthropic, and OpenAI.
 - Ordered images and audio through canonical `POST /v2` and Gemini native
-  `inlineData`, with no media echo in response metadata.
+  inline `data` or Files API `uri`, with no media echo in response metadata.
+- Inline and asset-backed media admission, exact-limit and one-unit-above
+  provider boundaries, tenant isolation, asset expiry and deletion, and
+  provider file cleanup.
 - Malformed, digest-mismatched, misplaced, unsupported-model, and
-  compatibility-route media rejection before any upstream request, plus the
-  existing bounded-body `413` response.
+  compatibility-route media rejection before any upstream request.
 - Deadline exhaustion and nonrecoverable safety, refusal, tool, malformed,
   missing, and unknown signals, proving partial text is never exposed as a
   failure response.
@@ -677,5 +718,5 @@ Black-box router tests cover:
 - SiliconFlow dictation routing.
 - Configured text model routing without code changes.
 - Invalid configured model catalog startup failures, including noncanonical,
-  duplicate, and adapter-incompatible `media_inputs`.
+  duplicate, and adapter-incompatible `media_inputs` or `media_limits`.
 - Existing OpenAI dictation and response-format tests.

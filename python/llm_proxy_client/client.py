@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Protocol, Sequence, cast
 
 ACCEPT_HEADER = "Accept"
@@ -16,6 +20,8 @@ FORMAT_QUERY_VALUE_TEXT_PLAIN = "text/plain"
 JSON_CONTENT_TYPE = "application/json; charset=utf-8"
 KEY_QUERY_KEY = "key"
 REQUEST_TIMEOUT_HEADER = "X-LLM-Proxy-Request-Timeout-Seconds"
+ASSET_SHA256_HEADER = "X-LLM-Proxy-Asset-SHA256"
+ASSET_ENDPOINT_PATH = "/model/v1/assets"
 PROVIDER_QUERY_KEY = "provider"
 MODEL_PROFILE_MODEL_KEY = "model"
 MODEL_PROFILE_SUBJECT = "model_profile"
@@ -34,6 +40,11 @@ POST_BODY_QUERY_KEYS = frozenset(
     }
 )
 MESSAGE_ROLES = frozenset({"system", "user", "assistant"})
+IMAGE_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
+AUDIO_MIME_TYPES = frozenset({"audio/m4a", "audio/mpeg", "audio/wav"})
+MEDIA_MIME_TYPES = IMAGE_MIME_TYPES | AUDIO_MIME_TYPES
+ASSET_ID_PATTERN = re.compile(r"^ast_[0-9a-f]{32}$")
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 class LLMProxyClientError(ValueError):
@@ -140,6 +151,28 @@ class ClientConfig:
         if self.model_profile_path.strip():
             provider = self._current_model_profile().provider
         return self._messages_post_url_for_provider(provider)
+
+    def asset_upload_url(self) -> str:
+        """Return the authenticated tenant asset upload URL for this config."""
+
+        parsed_url = urllib.parse.urlparse(self.base_url.strip())
+        query_items = urllib.parse.parse_qsl(parsed_url.query, keep_blank_values=True)
+        stripped_query_keys = set(POST_BODY_QUERY_KEYS)
+        stripped_query_keys.update({KEY_QUERY_KEY, FORMAT_QUERY_KEY, PROVIDER_QUERY_KEY})
+        preserved_items = [
+            (query_key, query_value) for query_key, query_value in query_items if query_key not in stripped_query_keys
+        ]
+        preserved_items.append((KEY_QUERY_KEY, self.secret.strip()))
+        return urllib.parse.urlunparse(
+            (
+                parsed_url.scheme,
+                parsed_url.netloc,
+                asset_endpoint_path(parsed_url.path or "/"),
+                parsed_url.params,
+                urllib.parse.urlencode(preserved_items),
+                "",
+            )
+        )
 
     def _current_model_profile(self) -> _ModelProfile:
         """Read and validate the current model-profile document."""
@@ -272,6 +305,114 @@ def v2_endpoint_path(base_path: str) -> str:
     return f"{trimmed_path}/v2"
 
 
+def asset_endpoint_path(base_path: str) -> str:
+    """Return the tenant asset endpoint for an optional base path prefix."""
+
+    trimmed_path = base_path.strip().rstrip("/")
+    if trimmed_path.endswith("/v2"):
+        trimmed_path = trimmed_path[: -len("/v2")]
+    if not trimmed_path:
+        return ASSET_ENDPOINT_PATH
+    return f"{trimmed_path}{ASSET_ENDPOINT_PATH}"
+
+
+@dataclass(frozen=True)
+class ClientAttachment:
+    """One exact inline or hash-bound tenant media attachment."""
+
+    attachment_type: str
+    mime_type: str
+    sha256: str
+    data: bytes | None = None
+    asset_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.attachment_type not in {"image", "audio"}:
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: unsupported attachment type")
+        supported_mime_types = IMAGE_MIME_TYPES if self.attachment_type == "image" else AUDIO_MIME_TYPES
+        if self.mime_type not in supported_mime_types:
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: unsupported attachment MIME type")
+        if (self.data is None) == (self.asset_id is None):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: attachment requires data or asset_id")
+        if not SHA256_PATTERN.fullmatch(self.sha256):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid attachment sha256")
+        if self.data is not None:
+            if not isinstance(self.data, bytes) or not self.data:
+                raise LLMProxyClientError("llm_proxy_client_invalid_request: attachment data is empty")
+            if hashlib.sha256(self.data).hexdigest() != self.sha256:
+                raise LLMProxyClientError("llm_proxy_client_invalid_request: attachment sha256 mismatch")
+        if self.asset_id is not None and not ASSET_ID_PATTERN.fullmatch(self.asset_id):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid attachment asset_id")
+
+    def body(self) -> dict[str, str]:
+        """Return this attachment as one JSON-ready union variant."""
+
+        payload = {"type": self.attachment_type, "mime_type": self.mime_type, "sha256": self.sha256}
+        if self.data is not None:
+            payload["data"] = base64.b64encode(self.data).decode("ascii")
+        else:
+            payload["asset_id"] = cast(str, self.asset_id)
+        return payload
+
+
+def image_attachment(data: bytes, mime_type: str) -> ClientAttachment:
+    """Construct one exact inline image attachment."""
+
+    return _inline_attachment("image", data, mime_type, IMAGE_MIME_TYPES)
+
+
+def audio_attachment(data: bytes, mime_type: str) -> ClientAttachment:
+    """Construct one exact inline audio attachment."""
+
+    return _inline_attachment("audio", data, mime_type, AUDIO_MIME_TYPES)
+
+
+def image_asset_attachment(asset_id: str, mime_type: str, sha256: str) -> ClientAttachment:
+    """Construct one hash-bound tenant image asset attachment."""
+
+    return _asset_attachment("image", asset_id, mime_type, sha256, IMAGE_MIME_TYPES)
+
+
+def audio_asset_attachment(asset_id: str, mime_type: str, sha256: str) -> ClientAttachment:
+    """Construct one hash-bound tenant audio asset attachment."""
+
+    return _asset_attachment("audio", asset_id, mime_type, sha256, AUDIO_MIME_TYPES)
+
+
+def _inline_attachment(
+    attachment_type: str, data: bytes, mime_type: str, supported_mime_types: frozenset[str]
+) -> ClientAttachment:
+    normalized_mime_type = mime_type.strip().lower()
+    if normalized_mime_type not in supported_mime_types:
+        raise LLMProxyClientError("llm_proxy_client_invalid_request: unsupported attachment MIME type")
+    if not isinstance(data, bytes) or not data:
+        raise LLMProxyClientError("llm_proxy_client_invalid_request: attachment data is empty")
+    return ClientAttachment(
+        attachment_type=attachment_type,
+        mime_type=normalized_mime_type,
+        sha256=hashlib.sha256(data).hexdigest(),
+        data=data,
+    )
+
+
+def _asset_attachment(
+    attachment_type: str,
+    asset_id: str,
+    mime_type: str,
+    sha256: str,
+    supported_mime_types: frozenset[str],
+) -> ClientAttachment:
+    normalized_mime_type = mime_type.strip().lower()
+    if normalized_mime_type not in supported_mime_types:
+        raise LLMProxyClientError("llm_proxy_client_invalid_request: unsupported attachment MIME type")
+    return ClientAttachment(
+        attachment_type=attachment_type,
+        mime_type=normalized_mime_type,
+        sha256=sha256,
+        asset_id=asset_id,
+    )
+
+
 @dataclass(frozen=True)
 class ClientMessage:
     """Validated chat message; order is optional but all-or-none within one request."""
@@ -279,6 +420,7 @@ class ClientMessage:
     role: str
     content: str
     order: int | None = None
+    attachments: Sequence[ClientAttachment] = ()
 
     def __post_init__(self) -> None:
         if self.role.strip().lower() not in MESSAGE_ROLES:
@@ -287,13 +429,19 @@ class ClientMessage:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: empty message content")
         if self.order is not None and self.order < 0:
             raise LLMProxyClientError("llm_proxy_client_invalid_request: message order must be non-negative")
+        if self.attachments and self.role.strip().lower() != "user":
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: attachments require user role")
+        if any(not isinstance(attachment, ClientAttachment) for attachment in self.attachments):
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: invalid attachment")
 
-    def body(self) -> dict[str, str | int]:
+    def body(self) -> dict[str, Any]:
         """Return this message as a JSON-ready body item."""
 
-        payload: dict[str, str | int] = {"role": self.role.strip().lower(), "content": self.content}
+        payload: dict[str, Any] = {"role": self.role.strip().lower(), "content": self.content}
         if self.order is not None:
             payload["order"] = self.order
+        if self.attachments:
+            payload["attachments"] = [attachment.body() for attachment in self.attachments]
         return payload
 
 
@@ -370,6 +518,19 @@ def ordered_messages(messages: Sequence[ClientMessage]) -> Sequence[ClientMessag
 
 
 @dataclass(frozen=True)
+class ClientAsset:
+    """One hash-bound tenant asset returned by llm-proxy."""
+
+    asset_id: str
+    mime_type: str
+    size_bytes: int
+    sha256: str
+    state: str
+    created_at: str
+    expires_at: str
+
+
+@dataclass(frozen=True)
 class Client:
     """HTTP client for llm-proxy v2 JSON POST text requests."""
 
@@ -392,6 +553,70 @@ class Client:
                 request.request_timeout_seconds,
             )
         return self._post_json(request.body(), self.config.messages_post_url(), request.request_timeout_seconds)
+
+    def upload_asset(self, data: bytes, mime_type: str) -> ClientAsset:
+        """Upload exact tenant media bytes and return their hash-bound asset record."""
+
+        normalized_mime_type = mime_type.strip().lower()
+        if normalized_mime_type not in MEDIA_MIME_TYPES:
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: unsupported asset MIME type")
+        if not isinstance(data, bytes) or not data:
+            raise LLMProxyClientError("llm_proxy_client_invalid_request: asset data is empty")
+        digest = hashlib.sha256(data).hexdigest()
+        prepared_request = urllib.request.Request(
+            self.config.asset_upload_url(),
+            data=data,
+            headers={CONTENT_TYPE_HEADER: normalized_mime_type, ASSET_SHA256_HEADER: digest},
+            method="POST",
+        )
+        opener = self.opener or default_response_opener
+        try:
+            response_text = opener(prepared_request)
+        except urllib.error.HTTPError as error:
+            body = error.read().decode("utf-8", errors="replace")
+            raise LLMProxyHTTPError(error.code, body, str(error.reason), "operation=asset_upload") from error
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: operation=asset_upload") from error
+        if not isinstance(response_text, str) or len(response_text.encode("utf-8")) > 64 * 1024:
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid asset response")
+        try:
+            response = json.loads(response_text)
+        except (json.JSONDecodeError, TypeError) as error:
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid asset response") from error
+        required_fields = {
+            "asset_id",
+            "mime_type",
+            "size_bytes",
+            "sha256",
+            "state",
+            "created_at",
+            "expires_at",
+        }
+        if not isinstance(response, dict) or set(response) != required_fields:
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid asset response")
+        if (
+            not isinstance(response["asset_id"], str)
+            or not ASSET_ID_PATTERN.fullmatch(response["asset_id"])
+            or response["mime_type"] != normalized_mime_type
+            or isinstance(response["size_bytes"], bool)
+            or response["size_bytes"] != len(data)
+            or response["sha256"] != digest
+            or response["state"] != "available"
+        ):
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid asset response")
+        created_at = _asset_timestamp(response["created_at"])
+        expires_at = _asset_timestamp(response["expires_at"])
+        if expires_at <= created_at:
+            raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid asset response")
+        return ClientAsset(
+            asset_id=response["asset_id"],
+            mime_type=response["mime_type"],
+            size_bytes=response["size_bytes"],
+            sha256=response["sha256"],
+            state=response["state"],
+            created_at=response["created_at"],
+            expires_at=response["expires_at"],
+        )
 
     def _post_json(
         self, request_payload: dict[str, Any], request_url: str, request_timeout_seconds: int | None
@@ -430,6 +655,20 @@ class Client:
             raise LLMProxyTransportError(
                 f"llm_proxy_client_transport_failure: {failure_context} reason={error}"
             ) from error
+
+
+def _asset_timestamp(value: Any) -> datetime:
+    """Parse one timezone-aware RFC 3339 asset timestamp."""
+
+    if not isinstance(value, str) or not value.endswith("Z"):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid asset response")
+    try:
+        timestamp = datetime.fromisoformat(value.removesuffix("Z") + "+00:00")
+    except ValueError as error:
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid asset response") from error
+    if timestamp.tzinfo is None or timestamp.utcoffset() != timezone.utc.utcoffset(timestamp):
+        raise LLMProxyTransportError("llm_proxy_client_transport_failure: invalid asset response")
+    return timestamp
 
 
 def request_failure_context(

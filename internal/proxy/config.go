@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/mail"
+	"path/filepath"
 	"strings"
 
 	"github.com/tyemirov/llm-proxy/internal/constants"
@@ -30,7 +31,13 @@ const (
 	// DefaultMaxRequestTimeoutSeconds is the one-hour operator capacity ceiling for a request.
 	DefaultMaxRequestTimeoutSeconds = 60 * 60
 	// DefaultMaxPromptBytes limits JSON LLM request bodies accepted by POST /.
-	DefaultMaxPromptBytes      = 4 * 1024 * 1024
+	DefaultMaxPromptBytes = 4 * 1024 * 1024
+	// DefaultMaxAssetBytes bounds one tenant asset upload at the largest supported provider file size.
+	DefaultMaxAssetBytes int64 = 2_000_000_000
+	// DefaultAssetRetentionSeconds keeps uploaded tenant assets for 48 hours.
+	DefaultAssetRetentionSeconds = 48 * 60 * 60
+	// DefaultAssetStorePath is the persistent filesystem location for tenant assets.
+	DefaultAssetStorePath      = "/data/assets"
 	DefaultDictationModel      = "gpt-4o-mini-transcribe"
 	DefaultMaxInputAudioBytes  = 25 * 1024 * 1024
 	DefaultManagementJWTIssuer = "tauth"
@@ -77,6 +84,9 @@ type Configuration struct {
 	RequestTimeoutSeconds        int
 	MaxRequestTimeoutSeconds     int
 	MaxPromptBytes               int64
+	MaxAssetBytes                int64
+	AssetRetentionSeconds        int
+	AssetStorePath               string
 	MaxInputAudioBytes           int64
 	UpstreamRateLimits           []UpstreamRateLimitConfiguration
 	Endpoints                    *Endpoints
@@ -152,6 +162,9 @@ func ensureValidatedConfiguration(configuration Configuration) (Configuration, e
 }
 
 func validateConfig(configuration Configuration) (tenantRegistry, error) {
+	if !filepath.IsAbs(configuration.AssetStorePath) || filepath.Clean(configuration.AssetStorePath) != configuration.AssetStorePath {
+		return tenantRegistry{}, fmt.Errorf("invalid asset_store_path")
+	}
 	if managementValidationError := validateManagementConfiguration(configuration.Management); managementValidationError != nil {
 		return tenantRegistry{}, managementValidationError
 	}
@@ -225,6 +238,16 @@ func (configuration *Configuration) ApplyTunables() {
 	}
 	if configuration.MaxPromptBytes <= 0 {
 		configuration.MaxPromptBytes = DefaultMaxPromptBytes
+	}
+	if configuration.MaxAssetBytes <= 0 {
+		configuration.MaxAssetBytes = DefaultMaxAssetBytes
+	}
+	if configuration.AssetRetentionSeconds <= 0 {
+		configuration.AssetRetentionSeconds = DefaultAssetRetentionSeconds
+	}
+	configuration.AssetStorePath = strings.TrimSpace(configuration.AssetStorePath)
+	if configuration.AssetStorePath == constants.EmptyString {
+		configuration.AssetStorePath = DefaultAssetStorePath
 	}
 	if configuration.MaxInputAudioBytes <= 0 {
 		configuration.MaxInputAudioBytes = DefaultMaxInputAudioBytes

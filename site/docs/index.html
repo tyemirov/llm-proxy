@@ -6,7 +6,7 @@
     <title>LLM Proxy HTTP API | LLM Proxy</title>
     <meta name="description" content="Human-readable API reference derived from the canonical LLM Proxy OpenAPI contract.">
     <link rel="canonical" href="https://llm-proxy.mprlab.com/docs/">
-    <meta name="openapi-source-sha256" content="10884193feb1e24d84a8334498a3f3f4be0e05bc7362ab1c64b9fb10216f7145">
+    <meta name="openapi-source-sha256" content="e4f8d83fa082967e1018f428e6e4a404908b47f4581085b788aca47dd67b8052">
     <link rel="icon" type="image/svg+xml" href="/assets/llm-proxy/img/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/MarcoPoloResearchLab/mpr-ui@latest/mpr-ui.css">
     <link rel="stylesheet" href="/assets/llm-proxy/public-shell.css">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="/assets/llm-proxy/styles.css">
     <link rel="stylesheet" href="/assets/llm-proxy/resources.css">
   </head>
-  <body class="resource-page api-reference-page" data-openapi-source-sha256="10884193feb1e24d84a8334498a3f3f4be0e05bc7362ab1c64b9fb10216f7145">
+  <body class="resource-page api-reference-page" data-openapi-source-sha256="e4f8d83fa082967e1018f428e6e4a404908b47f4581085b788aca47dd67b8052">
     <mpr-header
       class="public-site-header"
       data-config-url="/config-ui.yaml"
@@ -49,7 +49,7 @@
         <div class="api-contract-meta" aria-label="Contract provenance">
           <span>OpenAPI 3.1.0</span>
           <span>API server https://llm-proxy-api.mprlab.com</span>
-          <span>Source SHA-256 <code>10884193feb1e24d84a8334498a3f3f4be0e05bc7362ab1c64b9fb10216f7145</code></span>
+          <span>Source SHA-256 <code>e4f8d83fa082967e1018f428e6e4a404908b47f4581085b788aca47dd67b8052</code></span>
         </div>
         <div class="resource-actions" aria-label="OpenAPI schema actions">
           <a class="resource-button" href="#openapi-yaml">View YAML</a>
@@ -172,7 +172,15 @@ paths:
     post:
       operationId: postV2Messages
       summary: Generate text from canonical messages
-      description: The current messages-only operation. `messages` is required. User messages may include provider-neutral ordered image or audio attachments with canonical base64 bytes and matching SHA-256 digests. `model`, `web_search`, `max_tokens`, and `reasoning_effort` are optional. Omitting `reasoning_effort` selects the tenant or route default; an explicitly supplied value must be non-blank and supported by the resolved provider/model route. Unsupported media or route capabilities return the canonical plain-text 400 error response before an upstream call.
+      description: &gt;-
+        The current messages-only operation. `messages` is required. User
+        messages may include ordered inline or tenant-asset-backed image and
+        audio attachments. `model`, `web_search`, `max_tokens`, and
+        `reasoning_effort` are optional. Omitting `reasoning_effort` selects
+        the tenant or route default. A supplied value must be non-blank and
+        supported by the resolved route. The selected provider offering owns
+        media admission and transport limits. Unsupported media or route
+        capabilities return HTTP 400 before an upstream call.
       tags:
         - Proxy
       security:
@@ -190,9 +198,13 @@ paths:
         &#39;200&#39;:
           $ref: &#39;#/components/responses/TextSuccess&#39;
         &#39;400&#39;:
-          $ref: &#39;#/components/responses/ProxyBadRequest&#39;
+          $ref: &#39;#/components/responses/V2BadRequest&#39;
         &#39;403&#39;:
           $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/AssetFailure&#39;
+        &#39;410&#39;:
+          $ref: &#39;#/components/responses/AssetFailure&#39;
         &#39;413&#39;:
           $ref: &#39;#/components/responses/ProxyPayloadTooLarge&#39;
         &#39;429&#39;:
@@ -205,6 +217,62 @@ paths:
           $ref: &#39;#/components/responses/ProxyUnavailable&#39;
         &#39;504&#39;:
           $ref: &#39;#/components/responses/ProxyTimeout&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/AssetFailure&#39;
+  /model/v1/assets:
+    post:
+      operationId: uploadTenantAsset
+      summary: Upload exact tenant media bytes
+      description: &gt;-
+        Stores one hash-bound image or audio asset for the configured retention
+        period. The authenticated tenant owns the returned opaque asset id.
+      tags:
+        - Proxy
+      security:
+        - TenantClientKey: []
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantClientKey&#39;
+        - $ref: &#39;#/components/parameters/AssetSHA256&#39;
+        - $ref: &#39;#/components/parameters/RequestTimeout&#39;
+      requestBody:
+        $ref: &#39;#/components/requestBodies/AssetUpload&#39;
+      responses:
+        &#39;201&#39;:
+          $ref: &#39;#/components/responses/AssetCreated&#39;
+        &#39;400&#39;:
+          $ref: &#39;#/components/responses/AssetFailure&#39;
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;413&#39;:
+          $ref: &#39;#/components/responses/AssetFailure&#39;
+        &#39;499&#39;:
+          $ref: &#39;#/components/responses/CallerClosed&#39;
+        &#39;504&#39;:
+          $ref: &#39;#/components/responses/ProxyTimeout&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/AssetFailure&#39;
+  /model/v1/assets/{asset_id}:
+    delete:
+      operationId: deleteTenantAsset
+      summary: Delete one tenant asset
+      tags:
+        - Proxy
+      security:
+        - TenantClientKey: []
+      parameters:
+        - $ref: &#39;#/components/parameters/TenantClientKey&#39;
+        - $ref: &#39;#/components/parameters/AssetID&#39;
+      responses:
+        &#39;204&#39;:
+          description: The asset is deleted.
+        &#39;403&#39;:
+          $ref: &#39;#/components/responses/ProxyForbidden&#39;
+        &#39;404&#39;:
+          $ref: &#39;#/components/responses/AssetFailure&#39;
+        &#39;410&#39;:
+          $ref: &#39;#/components/responses/AssetFailure&#39;
+        &#39;500&#39;:
+          $ref: &#39;#/components/responses/AssetFailure&#39;
   /dictate:
     post:
       operationId: postDictation
@@ -775,6 +843,22 @@ components:
       schema:
         type: integer
         minimum: 1
+    AssetSHA256:
+      name: X-LLM-Proxy-Asset-SHA256
+      in: header
+      required: true
+      description: Lowercase hexadecimal SHA-256 of the exact request body.
+      schema:
+        type: string
+        pattern: ^[0-9a-f]{64}$
+    AssetID:
+      name: asset_id
+      in: path
+      required: true
+      description: Opaque tenant asset identifier.
+      schema:
+        type: string
+        pattern: ^ast_[0-9a-f]{32}$
     TenantID:
       name: tenant_id
       in: path
@@ -858,6 +942,33 @@ components:
           encoding:
             audio:
               contentType: audio/*,application/octet-stream
+    AssetUpload:
+      required: true
+      content:
+        image/jpeg:
+          schema:
+            type: string
+            format: binary
+        image/png:
+          schema:
+            type: string
+            format: binary
+        image/webp:
+          schema:
+            type: string
+            format: binary
+        audio/m4a:
+          schema:
+            type: string
+            format: binary
+        audio/mpeg:
+          schema:
+            type: string
+            format: binary
+        audio/wav:
+          schema:
+            type: string
+            format: binary
     TenantNameRequest:
       required: true
       content:
@@ -936,7 +1047,7 @@ components:
             type: string
             const: unknown client key
     ProxyPayloadTooLarge:
-      description: The configured JSON request or dictation audio payload limit was exceeded.
+      description: The compatibility JSON request limit, dictation audio limit, tenant asset limit, or selected provider media limit was exceeded.
       headers:
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
@@ -944,6 +1055,41 @@ components:
         text/plain:
           schema:
             type: string
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/ProviderErrorEnvelope&#39;
+    V2BadRequest:
+      description: The canonical message input or referenced asset is invalid.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: &#39;#/components/headers/OptionalResolvedRequestTimeout&#39;
+      content:
+        text/plain:
+          schema:
+            type: string
+        application/json:
+          schema:
+            oneOf:
+              - $ref: &#39;#/components/schemas/ProxyErrorEnvelope&#39;
+              - $ref: &#39;#/components/schemas/AssetErrorEnvelope&#39;
+    AssetCreated:
+      description: The asset is available to its authenticated tenant.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: &#39;#/components/headers/ResolvedRequestTimeout&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/TenantAsset&#39;
+    AssetFailure:
+      description: The asset operation failed with a stable safe code.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: &#39;#/components/headers/OptionalResolvedRequestTimeout&#39;
+      content:
+        application/json:
+          schema:
+            $ref: &#39;#/components/schemas/AssetErrorEnvelope&#39;
     ProxyRateLimited:
       description: The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.
       headers:
@@ -1395,6 +1541,7 @@ components:
         - reasoning_efforts
         - controls
         - limits
+        - media_limits
       properties:
         identifier:
           type: string
@@ -1444,6 +1591,10 @@ components:
           type: array
           items:
             $ref: &#39;#/components/schemas/PublicCatalogLimit&#39;
+        media_limits:
+          type: array
+          items:
+            $ref: &#39;#/components/schemas/PublicCatalogMediaLimit&#39;
     PublicCatalogControl:
       type: object
       additionalProperties: false
@@ -1504,6 +1655,64 @@ components:
           minLength: 1
         account_dependent:
           type: boolean
+    PublicCatalogMediaLimit:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - media_type
+        - transport
+        - status
+        - value
+        - unit
+        - scope
+        - source
+        - last_verified
+      properties:
+        id:
+          type: string
+          minLength: 1
+        media_type:
+          type: string
+          enum:
+            - all
+            - image
+            - audio
+        transport:
+          type: string
+          enum:
+            - any
+            - inline
+            - file
+        status:
+          type: string
+          enum:
+            - bounded
+            - unbounded
+            - unknown
+        value:
+          oneOf:
+            - type: integer
+              minimum: 1
+            - type: &#39;null&#39;
+        unit:
+          type: string
+          enum:
+            - bytes
+            - files
+        scope:
+          type: string
+          enum:
+            - attachment
+            - request
+            - request_encoded_bytes
+        source:
+          type: string
+          format: uri
+          pattern: &#39;^https://&#39;
+        last_verified:
+          type: string
+          format: date
     PublicPriceDescriptor:
       type: object
       additionalProperties: false
@@ -1668,6 +1877,8 @@ components:
       oneOf:
         - $ref: &#39;#/components/schemas/ImageMessageAttachment&#39;
         - $ref: &#39;#/components/schemas/AudioMessageAttachment&#39;
+        - $ref: &#39;#/components/schemas/ImageAssetMessageAttachment&#39;
+        - $ref: &#39;#/components/schemas/AudioAssetMessageAttachment&#39;
     ImageMessageAttachment:
       type: object
       additionalProperties: false
@@ -1720,6 +1931,117 @@ components:
           type: string
           pattern: ^[0-9a-f]{64}$
           description: Lowercase hexadecimal SHA-256 of the decoded media bytes.
+    ImageAssetMessageAttachment:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - mime_type
+        - asset_id
+        - sha256
+      properties:
+        type:
+          type: string
+          const: image
+        mime_type:
+          type: string
+          enum:
+            - image/jpeg
+            - image/png
+            - image/webp
+        asset_id:
+          type: string
+          pattern: ^ast_[0-9a-f]{32}$
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+    AudioAssetMessageAttachment:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - mime_type
+        - asset_id
+        - sha256
+      properties:
+        type:
+          type: string
+          const: audio
+        mime_type:
+          type: string
+          enum:
+            - audio/m4a
+            - audio/mpeg
+            - audio/wav
+        asset_id:
+          type: string
+          pattern: ^ast_[0-9a-f]{32}$
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+    TenantAsset:
+      type: object
+      additionalProperties: false
+      required:
+        - asset_id
+        - mime_type
+        - size_bytes
+        - sha256
+        - state
+        - created_at
+        - expires_at
+      properties:
+        asset_id:
+          type: string
+          pattern: ^ast_[0-9a-f]{32}$
+        mime_type:
+          type: string
+          enum:
+            - image/jpeg
+            - image/png
+            - image/webp
+            - audio/m4a
+            - audio/mpeg
+            - audio/wav
+        size_bytes:
+          type: integer
+          format: int64
+          minimum: 1
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        state:
+          type: string
+          const: available
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+    AssetErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+          properties:
+            code:
+              type: string
+              enum:
+                - asset_invalid
+                - asset_not_found
+                - asset_expired
+                - asset_deleted
+                - asset_mime_mismatch
+                - asset_digest_mismatch
+                - asset_too_large
+                - asset_store_error
     V2ChatMessage:
       description: A user message that may carry attachments, or a text-only system or assistant message.
       oneOf:
@@ -1962,6 +2284,7 @@ components:
               type: string
               enum:
                 - provider_error
+                - provider_media_limit_exceeded
                 - provider_rate_limited
             provider:
               type: string
@@ -2655,6 +2978,8 @@ components:
 <a href="#operation-getPublicCapabilities"><span class="api-method api-method-get">GET</span><code>/api/public/capabilities</code><span>Read the public normalized model capability catalog</span></a>
 <a href="#operation-getBrowserConfiguration"><span class="api-method api-method-get">GET</span><code>/config-ui.yaml</code><span>Read the browser runtime configuration</span></a>
 <a href="#operation-postDictation"><span class="api-method api-method-post">POST</span><code>/dictate</code><span>Transcribe an audio upload</span></a>
+<a href="#operation-uploadTenantAsset"><span class="api-method api-method-post">POST</span><code>/model/v1/assets</code><span>Upload exact tenant media bytes</span></a>
+<a href="#operation-deleteTenantAsset"><span class="api-method api-method-delete">DELETE</span><code>/model/v1/assets/{asset_id}</code><span>Delete one tenant asset</span></a>
 <a href="#operation-postV2Messages"><span class="api-method api-method-post">POST</span><code>/v2</code><span>Generate text from canonical messages</span></a>
         </div>
       </section>
@@ -2757,7 +3082,7 @@ components:
                 <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. The selected model has one validated wire contract and one execution lifecycle; no lifecycle is inferred from an endpoint or upstream id. The proxy internally observes queued and in_progress states for OpenAI Responses and background-capable Gemini Interactions while keeping every public operation blocking; synchronous Gemini Interactions must return an immediate terminal state. Separately, it continues exact output-budget stops through new provider calls: OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, Gemini Interactions incomplete, and Anthropic max_tokens. HTTP 200 is returned only after the adapter reports its complete signal: OpenAI or Gemini completed, Chat stop, or Anthropic end_turn|stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states never return text as success.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
-<tr><td><code>413</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The configured JSON request or dictation audio payload limit was exceeded.</td></tr>
+<tr><td><code>413</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The compatibility JSON request limit, dictation audio limit, tenant asset limit, or selected provider media limit was exceeded.</td></tr>
 <tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
 <tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The response contains only sanitized provider metadata and never exposes partial generated text, token-count headers, a raw provider body, or a provider error message; provider-reported usage can still be retained in managed failure accounting.</td></tr>
@@ -3502,12 +3827,90 @@ components:
                 <tr><td><code>200</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>Transcription result.</td></tr>
 <tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
-<tr><td><code>413</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The configured JSON request or dictation audio payload limit was exceeded.</td></tr>
+<tr><td><code>413</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The compatibility JSON request limit, dictation audio limit, tenant asset limit, or selected provider media limit was exceeded.</td></tr>
 <tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
 <tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The response contains only sanitized provider metadata and never exposes partial generated text, token-count headers, a raw provider body, or a provider error message; provider-reported usage can still be retained in managed failure accounting.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected provider is not configured or the bounded request queue is full.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-uploadTenantAsset">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-post">POST</span>
+          <code>/model/v1/assets</code>
+          <span class="api-operation-id">uploadTenantAsset</span>
+        </header>
+        <h2>Upload exact tenant media bytes</h2>
+        <p>Stores one hash-bound image or audio asset for the configured retention period. The authenticated tenant owns the returned opaque asset id.</p>
+        <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>key</code></td><td>query</td><td>Yes</td><td>string</td><td>Tenant client secret.</td></tr>
+<tr><td><code>X-LLM-Proxy-Asset-SHA256</code></td><td>header</td><td>Yes</td><td>string</td><td>Lowercase hexadecimal SHA-256 of the exact request body.</td></tr>
+<tr><td><code>X-LLM-Proxy-Request-Timeout-Seconds</code></td><td>header</td><td>No</td><td>integer</td><td>A positive whole-second request budget no greater than the server maximum. Omission selects the configured default.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>201</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset is available to its authenticated tenant.</td></tr>
+<tr><td><code>400</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>413</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
+<tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
+<tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+<section class="api-operation" id="operation-deleteTenantAsset">
+        <header class="api-operation-heading">
+          <span class="api-method api-method-delete">DELETE</span>
+          <code>/model/v1/assets/{asset_id}</code>
+          <span class="api-operation-id">deleteTenantAsset</span>
+        </header>
+        <h2>Delete one tenant asset</h2>
+        <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
+        <div class="api-contract-block">
+          <h3>Parameters</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>Required</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>key</code></td><td>query</td><td>Yes</td><td>string</td><td>Tenant client secret.</td></tr>
+<tr><td><code>asset_id</code></td><td>path</td><td>Yes</td><td>string</td><td>Opaque tenant asset identifier.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="api-contract-block"><h3>Request body</h3><p>None.</p></div>
+        <div class="api-contract-block">
+          <h3>Responses</h3>
+          <div class="resource-table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>204</code></td><td>none</td><td>none</td><td>The asset is deleted.</td></tr>
+<tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
               </tbody>
             </table>
           </div>
@@ -3520,7 +3923,7 @@ components:
           <span class="api-operation-id">postV2Messages</span>
         </header>
         <h2>Generate text from canonical messages</h2>
-        <p>The current messages-only operation. `messages` is required. User messages may include provider-neutral ordered image or audio attachments with canonical base64 bytes and matching SHA-256 digests. `model`, `web_search`, `max_tokens`, and `reasoning_effort` are optional. Omitting `reasoning_effort` selects the tenant or route default; an explicitly supplied value must be non-blank and supported by the resolved provider/model route. Unsupported media or route capabilities return the canonical plain-text 400 error response before an upstream call.</p>
+        <p>The current messages-only operation. `messages` is required. User messages may include ordered inline or tenant-asset-backed image and audio attachments. `model`, `web_search`, `max_tokens`, and `reasoning_effort` are optional. Omitting `reasoning_effort` selects the tenant or route default. A supplied value must be non-blank and supported by the resolved route. The selected provider offering owns media admission and transport limits. Unsupported media or route capabilities return HTTP 400 before an upstream call.</p>
         <p class="api-security"><strong>Authentication:</strong> TenantClientKey (query key)</p>
         <div class="api-contract-block">
           <h3>Parameters</h3>
@@ -3559,11 +3962,14 @@ components:
               <thead><tr><th>Status</th><th>Content types</th><th>Headers</th><th>Description</th></tr></thead>
               <tbody>
                 <tr><td><code>200</code></td><td>text/plain, application/json, application/xml, text/csv</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-Tokens, X-LLM-Proxy-Response-Tokens, X-LLM-Proxy-Total-Tokens</td><td>Complete generated text in the selected representation. The selected model has one validated wire contract and one execution lifecycle; no lifecycle is inferred from an endpoint or upstream id. The proxy internally observes queued and in_progress states for OpenAI Responses and background-capable Gemini Interactions while keeping every public operation blocking; synchronous Gemini Interactions must return an immediate terminal state. Separately, it continues exact output-budget stops through new provider calls: OpenAI Responses incomplete/max_output_tokens, OpenAI-compatible Chat Completions length, Gemini Interactions incomplete, and Anthropic max_tokens. HTTP 200 is returned only after the adapter reports its complete signal: OpenAI or Gemini completed, Chat stop, or Anthropic end_turn|stop_sequence. Intermediate, safety, refusal, tool, malformed, missing, and unknown states never return text as success.</td></tr>
-<tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The request is malformed, names an invalid route/capability, or supplies an invalid timeout. Text validation failures use the canonical plain-text error. Timeout-header validation uses the canonical JSON error.</td></tr>
+<tr><td><code>400</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The canonical message input or referenced asset is invalid.</td></tr>
 <tr><td><code>403</code></td><td>text/plain</td><td>none</td><td>The tenant client key is absent or unknown.</td></tr>
-<tr><td><code>413</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The configured JSON request or dictation audio payload limit was exceeded.</td></tr>
+<tr><td><code>404</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
+<tr><td><code>410</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
+<tr><td><code>413</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The compatibility JSON request limit, dictation audio limit, tenant asset limit, or selected provider media limit was exceeded.</td></tr>
 <tr><td><code>429</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.</td></tr>
 <tr><td><code>499</code></td><td>none</td><td>none</td><td>The caller canceled or closed the request.</td></tr>
+<tr><td><code>500</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The asset operation failed with a stable safe code.</td></tr>
 <tr><td><code>502</code></td><td>application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds, X-LLM-Proxy-Request-ID, Retry-After</td><td>The selected upstream provider failed, returned a non-429 unsuccessful HTTP status, or returned an unusable success payload. Output-budget stops are continued internally and do not create this response. The response contains only sanitized provider metadata and never exposes partial generated text, token-count headers, a raw provider body, or a provider error message; provider-reported usage can still be retained in managed failure accounting.</td></tr>
 <tr><td><code>503</code></td><td>text/plain</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The selected provider is not configured or the bounded request queue is full.</td></tr>
 <tr><td><code>504</code></td><td>text/plain, application/json</td><td>X-LLM-Proxy-Request-Timeout-Seconds</td><td>The proxy request budget or upstream operation timed out.</td></tr>

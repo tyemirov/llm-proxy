@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import threading
@@ -20,16 +21,77 @@ import yaml
 from llm_proxy_client import (
     Client,
     ClientConfig,
-    ClientMessagesRequest,
     ClientMessage,
+    ClientMessagesRequest,
     LLMProxyClientError,
     LLMProxyHTTPError,
     LLMProxyModelProfileError,
     LLMProxyTransportError,
+    audio_asset_attachment,
+    image_asset_attachment,
+    image_attachment,
 )
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 CANONICAL_OPENAPI_PATH = REPOSITORY_ROOT / "docs" / "openapi.yaml"
+
+
+def test_media_attachment_constructors_serialize_inline_and_asset_union_variants() -> None:
+    """Image and audio constructors emit exactly one attachment union variant."""
+
+    inline_data = b"inline-image"
+    inline = image_attachment(inline_data, " IMAGE/PNG ")
+    asset_digest = hashlib.sha256(b"asset-audio").hexdigest()
+    asset = audio_asset_attachment(
+        "ast_0123456789abcdef0123456789abcdef",
+        "audio/wav",
+        asset_digest,
+    )
+    message = ClientMessage(role="user", content="inspect", attachments=(inline, asset))
+    body = message.body()
+    assert body["attachments"][0] == {
+        "type": "image",
+        "mime_type": "image/png",
+        "sha256": hashlib.sha256(inline_data).hexdigest(),
+        "data": "aW5saW5lLWltYWdl",
+    }
+    assert body["attachments"][1] == {
+        "type": "audio",
+        "mime_type": "audio/wav",
+        "sha256": asset_digest,
+        "asset_id": "ast_0123456789abcdef0123456789abcdef",
+    }
+    with pytest.raises(LLMProxyClientError, match="attachments require user role"):
+        ClientMessage(role="assistant", content="invalid", attachments=(inline,))
+
+
+def test_client_upload_asset_validates_exact_response_without_exposing_bytes() -> None:
+    """The asset client sends exact bytes and validates the hash-bound record."""
+
+    data = b"asset-image"
+    digest = hashlib.sha256(data).hexdigest()
+
+    def opener(request: urllib.request.Request) -> str:
+        assert request.full_url.endswith("/model/v1/assets?key=sekret")
+        assert request.data == data
+        assert request.headers["Content-type"] == "image/png"
+        assert request.headers["X-llm-proxy-asset-sha256"] == digest
+        return json.dumps(
+            {
+                "asset_id": "ast_0123456789abcdef0123456789abcdef",
+                "mime_type": "image/png",
+                "size_bytes": len(data),
+                "sha256": digest,
+                "state": "available",
+                "created_at": "2026-08-11T10:00:00Z",
+                "expires_at": "2026-08-13T10:00:00Z",
+            }
+        )
+
+    client = Client(ClientConfig(base_url="https://proxy.example/v2", secret="sekret"), opener=opener)
+    asset = client.upload_asset(data, " IMAGE/PNG ")
+    assert asset.asset_id == "ast_0123456789abcdef0123456789abcdef"
+    assert image_asset_attachment(asset.asset_id, asset.mime_type, asset.sha256).body()["asset_id"] == asset.asset_id
 
 
 @dataclass

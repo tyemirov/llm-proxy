@@ -1288,10 +1288,12 @@ test("site publishes the exact canonical OpenAPI artifact and its derived refere
     `<a class="resource-button" href="${openAPIPath}" download="${openAPIDownloadFilename}">Download YAML</a>`,
   );
   expect(documentationHTML).toContain('id="operation-postV2Messages"');
+  expect(documentationHTML).toContain('id="operation-uploadTenantAsset"');
+  expect(documentationHTML).toContain('id="operation-deleteTenantAsset"');
   expect(documentationHTML).not.toContain('id="operation-deleteManagementTenantSecret"');
   expect(documentationHTML).toContain("<code>reasoning_effort</code>");
   expect(documentationHTML).toContain(`href="${openAPIPath}"`);
-  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(21);
+  expect(documentationHTML.match(/<section class="api-operation"/g) || []).toHaveLength(23);
 });
 
 test("OpenAPI reference views and downloads the exact canonical YAML", async ({ page }) => {

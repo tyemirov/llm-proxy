@@ -110,7 +110,15 @@ paths:
     post:
       operationId: postV2Messages
       summary: Generate text from canonical messages
-      description: The current messages-only operation. `messages` is required. User messages may include provider-neutral ordered image or audio attachments with canonical base64 bytes and matching SHA-256 digests. `model`, `web_search`, `max_tokens`, and `reasoning_effort` are optional. Omitting `reasoning_effort` selects the tenant or route default; an explicitly supplied value must be non-blank and supported by the resolved provider/model route. Unsupported media or route capabilities return the canonical plain-text 400 error response before an upstream call.
+      description: >-
+        The current messages-only operation. `messages` is required. User
+        messages may include ordered inline or tenant-asset-backed image and
+        audio attachments. `model`, `web_search`, `max_tokens`, and
+        `reasoning_effort` are optional. Omitting `reasoning_effort` selects
+        the tenant or route default. A supplied value must be non-blank and
+        supported by the resolved route. The selected provider offering owns
+        media admission and transport limits. Unsupported media or route
+        capabilities return HTTP 400 before an upstream call.
       tags:
         - Proxy
       security:
@@ -128,9 +136,13 @@ paths:
         '200':
           $ref: '#/components/responses/TextSuccess'
         '400':
-          $ref: '#/components/responses/ProxyBadRequest'
+          $ref: '#/components/responses/V2BadRequest'
         '403':
           $ref: '#/components/responses/ProxyForbidden'
+        '404':
+          $ref: '#/components/responses/AssetFailure'
+        '410':
+          $ref: '#/components/responses/AssetFailure'
         '413':
           $ref: '#/components/responses/ProxyPayloadTooLarge'
         '429':
@@ -143,6 +155,62 @@ paths:
           $ref: '#/components/responses/ProxyUnavailable'
         '504':
           $ref: '#/components/responses/ProxyTimeout'
+        '500':
+          $ref: '#/components/responses/AssetFailure'
+  /model/v1/assets:
+    post:
+      operationId: uploadTenantAsset
+      summary: Upload exact tenant media bytes
+      description: >-
+        Stores one hash-bound image or audio asset for the configured retention
+        period. The authenticated tenant owns the returned opaque asset id.
+      tags:
+        - Proxy
+      security:
+        - TenantClientKey: []
+      parameters:
+        - $ref: '#/components/parameters/TenantClientKey'
+        - $ref: '#/components/parameters/AssetSHA256'
+        - $ref: '#/components/parameters/RequestTimeout'
+      requestBody:
+        $ref: '#/components/requestBodies/AssetUpload'
+      responses:
+        '201':
+          $ref: '#/components/responses/AssetCreated'
+        '400':
+          $ref: '#/components/responses/AssetFailure'
+        '403':
+          $ref: '#/components/responses/ProxyForbidden'
+        '413':
+          $ref: '#/components/responses/AssetFailure'
+        '499':
+          $ref: '#/components/responses/CallerClosed'
+        '504':
+          $ref: '#/components/responses/ProxyTimeout'
+        '500':
+          $ref: '#/components/responses/AssetFailure'
+  /model/v1/assets/{asset_id}:
+    delete:
+      operationId: deleteTenantAsset
+      summary: Delete one tenant asset
+      tags:
+        - Proxy
+      security:
+        - TenantClientKey: []
+      parameters:
+        - $ref: '#/components/parameters/TenantClientKey'
+        - $ref: '#/components/parameters/AssetID'
+      responses:
+        '204':
+          description: The asset is deleted.
+        '403':
+          $ref: '#/components/responses/ProxyForbidden'
+        '404':
+          $ref: '#/components/responses/AssetFailure'
+        '410':
+          $ref: '#/components/responses/AssetFailure'
+        '500':
+          $ref: '#/components/responses/AssetFailure'
   /dictate:
     post:
       operationId: postDictation
@@ -713,6 +781,22 @@ components:
       schema:
         type: integer
         minimum: 1
+    AssetSHA256:
+      name: X-LLM-Proxy-Asset-SHA256
+      in: header
+      required: true
+      description: Lowercase hexadecimal SHA-256 of the exact request body.
+      schema:
+        type: string
+        pattern: ^[0-9a-f]{64}$
+    AssetID:
+      name: asset_id
+      in: path
+      required: true
+      description: Opaque tenant asset identifier.
+      schema:
+        type: string
+        pattern: ^ast_[0-9a-f]{32}$
     TenantID:
       name: tenant_id
       in: path
@@ -796,6 +880,33 @@ components:
           encoding:
             audio:
               contentType: audio/*,application/octet-stream
+    AssetUpload:
+      required: true
+      content:
+        image/jpeg:
+          schema:
+            type: string
+            format: binary
+        image/png:
+          schema:
+            type: string
+            format: binary
+        image/webp:
+          schema:
+            type: string
+            format: binary
+        audio/m4a:
+          schema:
+            type: string
+            format: binary
+        audio/mpeg:
+          schema:
+            type: string
+            format: binary
+        audio/wav:
+          schema:
+            type: string
+            format: binary
     TenantNameRequest:
       required: true
       content:
@@ -874,7 +985,7 @@ components:
             type: string
             const: unknown client key
     ProxyPayloadTooLarge:
-      description: The configured JSON request or dictation audio payload limit was exceeded.
+      description: The compatibility JSON request limit, dictation audio limit, tenant asset limit, or selected provider media limit was exceeded.
       headers:
         X-LLM-Proxy-Request-Timeout-Seconds:
           $ref: '#/components/headers/ResolvedRequestTimeout'
@@ -882,6 +993,41 @@ components:
         text/plain:
           schema:
             type: string
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProviderErrorEnvelope'
+    V2BadRequest:
+      description: The canonical message input or referenced asset is invalid.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: '#/components/headers/OptionalResolvedRequestTimeout'
+      content:
+        text/plain:
+          schema:
+            type: string
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/ProxyErrorEnvelope'
+              - $ref: '#/components/schemas/AssetErrorEnvelope'
+    AssetCreated:
+      description: The asset is available to its authenticated tenant.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: '#/components/headers/ResolvedRequestTimeout'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TenantAsset'
+    AssetFailure:
+      description: The asset operation failed with a stable safe code.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: '#/components/headers/OptionalResolvedRequestTimeout'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AssetErrorEnvelope'
     ProxyRateLimited:
       description: The selected upstream provider returned HTTP 429. The proxy preserves 429 at its public boundary and returns only sanitized provider metadata; it never exposes the raw provider body or message.
       headers:
@@ -1333,6 +1479,7 @@ components:
         - reasoning_efforts
         - controls
         - limits
+        - media_limits
       properties:
         identifier:
           type: string
@@ -1382,6 +1529,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PublicCatalogLimit'
+        media_limits:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicCatalogMediaLimit'
     PublicCatalogControl:
       type: object
       additionalProperties: false
@@ -1442,6 +1593,64 @@ components:
           minLength: 1
         account_dependent:
           type: boolean
+    PublicCatalogMediaLimit:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - media_type
+        - transport
+        - status
+        - value
+        - unit
+        - scope
+        - source
+        - last_verified
+      properties:
+        id:
+          type: string
+          minLength: 1
+        media_type:
+          type: string
+          enum:
+            - all
+            - image
+            - audio
+        transport:
+          type: string
+          enum:
+            - any
+            - inline
+            - file
+        status:
+          type: string
+          enum:
+            - bounded
+            - unbounded
+            - unknown
+        value:
+          oneOf:
+            - type: integer
+              minimum: 1
+            - type: 'null'
+        unit:
+          type: string
+          enum:
+            - bytes
+            - files
+        scope:
+          type: string
+          enum:
+            - attachment
+            - request
+            - request_encoded_bytes
+        source:
+          type: string
+          format: uri
+          pattern: '^https://'
+        last_verified:
+          type: string
+          format: date
     PublicPriceDescriptor:
       type: object
       additionalProperties: false
@@ -1606,6 +1815,8 @@ components:
       oneOf:
         - $ref: '#/components/schemas/ImageMessageAttachment'
         - $ref: '#/components/schemas/AudioMessageAttachment'
+        - $ref: '#/components/schemas/ImageAssetMessageAttachment'
+        - $ref: '#/components/schemas/AudioAssetMessageAttachment'
     ImageMessageAttachment:
       type: object
       additionalProperties: false
@@ -1658,6 +1869,117 @@ components:
           type: string
           pattern: ^[0-9a-f]{64}$
           description: Lowercase hexadecimal SHA-256 of the decoded media bytes.
+    ImageAssetMessageAttachment:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - mime_type
+        - asset_id
+        - sha256
+      properties:
+        type:
+          type: string
+          const: image
+        mime_type:
+          type: string
+          enum:
+            - image/jpeg
+            - image/png
+            - image/webp
+        asset_id:
+          type: string
+          pattern: ^ast_[0-9a-f]{32}$
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+    AudioAssetMessageAttachment:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - mime_type
+        - asset_id
+        - sha256
+      properties:
+        type:
+          type: string
+          const: audio
+        mime_type:
+          type: string
+          enum:
+            - audio/m4a
+            - audio/mpeg
+            - audio/wav
+        asset_id:
+          type: string
+          pattern: ^ast_[0-9a-f]{32}$
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+    TenantAsset:
+      type: object
+      additionalProperties: false
+      required:
+        - asset_id
+        - mime_type
+        - size_bytes
+        - sha256
+        - state
+        - created_at
+        - expires_at
+      properties:
+        asset_id:
+          type: string
+          pattern: ^ast_[0-9a-f]{32}$
+        mime_type:
+          type: string
+          enum:
+            - image/jpeg
+            - image/png
+            - image/webp
+            - audio/m4a
+            - audio/mpeg
+            - audio/wav
+        size_bytes:
+          type: integer
+          format: int64
+          minimum: 1
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        state:
+          type: string
+          const: available
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+    AssetErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+          properties:
+            code:
+              type: string
+              enum:
+                - asset_invalid
+                - asset_not_found
+                - asset_expired
+                - asset_deleted
+                - asset_mime_mismatch
+                - asset_digest_mismatch
+                - asset_too_large
+                - asset_store_error
     V2ChatMessage:
       description: A user message that may carry attachments, or a text-only system or assistant message.
       oneOf:
@@ -1900,6 +2222,7 @@ components:
               type: string
               enum:
                 - provider_error
+                - provider_media_limit_exceeded
                 - provider_rate_limited
             provider:
               type: string

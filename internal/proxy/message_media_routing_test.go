@@ -186,7 +186,7 @@ func TestV2RejectsInvalidOrUnsupportedMediaBeforeUpstreamWork(testingInstance *t
 	}
 }
 
-func TestCompatibilityMessagesRejectMediaAndV2BoundsEncodedMediaBody(testingInstance *testing.T) {
+func TestCompatibilityMessagesRejectMediaAndV2IgnoresCompatibilityBodyLimit(testingInstance *testing.T) {
 	upstreamCalls := 0
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 		upstreamCalls++
@@ -229,11 +229,11 @@ func TestCompatibilityMessagesRejectMediaAndV2BoundsEncodedMediaBody(testingInst
 	oversizedRequest.Header.Set("Content-Type", "application/json")
 	oversizedResponse := httptest.NewRecorder()
 	router.ServeHTTP(oversizedResponse, oversizedRequest)
-	if oversizedResponse.Code != http.StatusRequestEntityTooLarge {
+	if oversizedResponse.Code != http.StatusBadGateway {
 		testingInstance.Fatalf("oversized status=%d body=%s", oversizedResponse.Code, oversizedResponse.Body.String())
 	}
-	if upstreamCalls != 0 {
-		testingInstance.Fatalf("upstream calls=%d want=0", upstreamCalls)
+	if upstreamCalls != 1 {
+		testingInstance.Fatalf("upstream calls=%d want=1", upstreamCalls)
 	}
 }
 

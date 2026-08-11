@@ -60,6 +60,9 @@ type serverConfiguration struct {
 	RequestTimeoutSeconds    *int                             `mapstructure:"request_timeout_seconds"`
 	MaxRequestTimeoutSeconds *int                             `mapstructure:"max_request_timeout_seconds"`
 	MaxPromptBytes           int64                            `mapstructure:"max_prompt_bytes"`
+	MaxAssetBytes            int64                            `mapstructure:"max_asset_bytes"`
+	AssetRetentionSeconds    int                              `mapstructure:"asset_retention_seconds"`
+	AssetStorePath           string                           `mapstructure:"asset_store_path"`
 	MaxInputAudioBytes       int64                            `mapstructure:"max_input_audio_bytes"`
 	UpstreamRateLimits       []upstreamRateLimitConfiguration `mapstructure:"upstream_rate_limits"`
 }
@@ -310,6 +313,9 @@ func (configuration fileConfiguration) toProxyConfiguration() (proxy.Configurati
 		RequestTimeoutSeconds:        requestTimeoutSeconds,
 		MaxRequestTimeoutSeconds:     maxRequestTimeoutSeconds,
 		MaxPromptBytes:               configuration.Server.MaxPromptBytes,
+		MaxAssetBytes:                configuration.Server.MaxAssetBytes,
+		AssetRetentionSeconds:        configuration.Server.AssetRetentionSeconds,
+		AssetStorePath:               configuration.Server.AssetStorePath,
 		MaxInputAudioBytes:           configuration.Server.MaxInputAudioBytes,
 		UpstreamRateLimits:           proxyUpstreamRateLimitConfigurations(configuration.Server.UpstreamRateLimits),
 		ModelCatalog:                 configuration.Catalog,

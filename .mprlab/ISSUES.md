@@ -1059,7 +1059,7 @@ retain satisfied historical dependencies.
 
 ## Features
 
-- [ ] [F033] (P0) {F022} Pass canonical message media to selected providers.
+- [x] [F033] (P0) {F022} Pass canonical message media to selected providers.
   Goal:
   Let `/v2` accept provider-neutral media without a smaller LLM Proxy media
   limit. Translate each attachment into the selected provider's supported
@@ -1078,7 +1078,7 @@ retain satisfied historical dependencies.
     MediaOps operation.
 
   Provider limit evidence:
-  - The following provider limits were verified on 2026-08-10.
+  - The following provider limits were verified on 2026-08-11.
   - Gemini Interactions permits 20 MB for a request with inline image data.
     This total includes text, system instructions, and inline bytes. Gemini
     permits 3,600 image files per request. Gemini directs larger requests to
@@ -1174,6 +1174,21 @@ retain satisfied historical dependencies.
     providers.
   - Run the required baseline and final
     `timeout -k 350s -s SIGKILL 350s make ci` pair.
+
+  Resolution:
+  - Added tenant asset upload, deletion, strict resolution, and official client
+    support.
+  - Added offering-owned media limits and Gemini inline or Files API routing.
+  - Added OpenAPI, public capability, Go client, Python client, and browser
+    contracts.
+  - Kept asset and management data on the hosted retained `/data` volume.
+  - Bounded `/v2` request ingestion from the catalog contract and applied the
+    authenticated request budget to asset uploads.
+  - Removed upload-stream lock contention and added restart-safe scheduled
+    expiry reclamation.
+  - Made Gemini Files API deletion authoritative after every finalized upload,
+    including polling and cancellation failures.
+  - Passed the final 11-gate CI run with 100.0% Go statement coverage.
 
 - [ ] [F032] (P1) Add Baidu Qianfan as a user-configurable text provider.
   Goal:
@@ -1274,6 +1289,10 @@ retain satisfied historical dependencies.
   Extend LLM Proxy from blocking text and dictation into a shared model-provider
   data plane while keeping MediaOps and other callers responsible for their
   product operations.
+  Progress:
+  - F033 added the tenant asset upload, store, reference, and official-client
+    foundation.
+  - The durable model-operation and worker foundation remains open.
   Requirements:
   - Keep `/v2` as the canonical blocking messages contract and `/v3` as the
     planned sampling contract. Add a distinct `/model/v1` namespace to the

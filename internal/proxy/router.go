@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tyemirov/llm-proxy/internal/constants"
+	"github.com/tyemirov/llm-proxy/pkg/llmproxycontract"
 	"go.uber.org/zap"
 )
 
@@ -124,6 +125,7 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 		runtimeStaticTenants = tenantRegistry{}
 	}
 	tenantAuthenticator := newTenantAuthenticator(runtimeStaticTenants, managedTenants)
+	assetStore := newTenantAssetStore(configuration.AssetStorePath, configuration.MaxAssetBytes, configuration.AssetRetentionSeconds)
 
 	router.Use(gin.Recovery())
 	registerPublicCapabilityRoutes(router, capabilityCatalog)
@@ -138,7 +140,9 @@ func buildRouter(configuration Configuration, structuredLogger *zap.SugaredLogge
 	}
 	router.GET(rootPath, rootProxyHandler)
 	router.POST(rootPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatJSONHandler(upstreamProviders, providers, configuration.MaxPromptBytes, managedTenants, structuredLogger))))
-	router.POST(v2Path, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatV2JSONHandler(upstreamProviders, providers, configuration.MaxPromptBytes, managedTenants, structuredLogger))))
+	router.POST(v2Path, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, chatV2JSONHandler(upstreamProviders, providers, maximumV2RequestBytes(configuration.MaxPromptBytes, configuration.ModelCatalog), assetStore, managedTenants, structuredLogger))))
+	router.POST(llmproxycontract.AssetPath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, tenantAssetUploadHandler(assetStore))))
+	router.DELETE(llmproxycontract.AssetPath+"/:asset_id", tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, tenantAssetDeleteHandler(assetStore)))
 	router.POST(dictatePath, tenantAuthenticatedHandler(tenantAuthenticator, structuredLogger, requestTimeoutHandler(configuration.requestTimeoutPolicy, structuredLogger, dictateHandler(upstreamProviders, providers, configuration.MaxInputAudioBytes, managedTenants, structuredLogger))))
 	return router, nil
 }
@@ -211,7 +215,7 @@ func chatJSONHandler(upstreamProviders *providerRouter, providers *providerRegis
 	}
 }
 
-func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerRegistry, maxPromptBytes int64, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
+func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerRegistry, maxRequestBytes int64, assetStore *tenantAssetStore, managedTenants *managedTenantStore, structuredLogger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		requestStart := time.Now()
 		requestTenant := authenticatedTenantFromContext(ginContext)
@@ -219,7 +223,7 @@ func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerReg
 			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, constants.EmptyString, requestTenant.defaults), requestStart)
 			return
 		}
-		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxPromptBytes)
+		ginContext.Request.Body = http.MaxBytesReader(ginContext.Writer, ginContext.Request.Body, maxRequestBytes)
 		bodyBytes, readBodyOK := readJSONProxyBody(ginContext)
 		if !readBodyOK {
 			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, constants.EmptyString, requestTenant.defaults), requestStart)
@@ -240,11 +244,12 @@ func chatV2JSONHandler(upstreamProviders *providerRouter, providers *providerReg
 
 		validator := newModelValidator(providers.forTenant(requestTenant))
 		textDefaults := textRequestDefaultsForProvider(ginContext.Query(queryParameterProvider), requestTenant, providers)
-		chatRequest, ok := chatRequestFromV2Payload(ginContext, payload, textDefaults, validator)
+		chatRequest, ok := chatRequestFromV2Payload(ginContext, payload, textDefaults, validator, requestTenant, assetStore)
 		if !ok {
 			recordManagedUsageValidationFailure(managedTenants, structuredLogger, ginContext, requestTenant, usageEndpointV2, usageTextProviderIdentifier(ginContext, requestTenant.defaults), usageTextModelIdentifier(ginContext, payload.Model, requestTenant.defaults), requestStart)
 			return
 		}
+		defer chatRequest.messages.closeMedia()
 		submitChatRequest(ginContext, upstreamProviders, chatRequest, requestTenant, usageEndpointV2, managedTenants, structuredLogger)
 	}
 }
@@ -419,7 +424,7 @@ func chatRequestFromPayload(ginContext *gin.Context, payload chatRequestPayload,
 	}, true
 }
 
-func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayload, defaults textRequestDefaults, validator *modelValidator) (chatRequestParameters, bool) {
+func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayload, defaults textRequestDefaults, validator *modelValidator, requestTenant tenant, assetStore *tenantAssetStore) (chatRequestParameters, bool) {
 	if payload.Prompt != nil {
 		ginContext.String(http.StatusBadRequest, errorUnsupportedPromptParameter)
 		return chatRequestParameters{}, false
@@ -463,9 +468,13 @@ func chatRequestFromV2Payload(ginContext *gin.Context, payload chatV2RequestPayl
 		ginContext.String(http.StatusBadRequest, errorInvalidReasoningEffort)
 		return chatRequestParameters{}, false
 	}
-	messages, messageError := newV2PayloadChatMessages(*payload.Messages, defaults.systemPrompt)
+	messages, messageError := newV2PayloadChatMessages(*payload.Messages, defaults.systemPrompt, requestTenant, assetStore)
 	if messageError != nil {
-		ginContext.String(statusCodeForError(messageError), responseMessageForError(messageError))
+		if isTenantAssetError(messageError) {
+			writeTenantAssetError(ginContext, messageError)
+		} else {
+			ginContext.String(statusCodeForError(messageError), responseMessageForError(messageError))
+		}
 		return chatRequestParameters{}, false
 	}
 	if mediaCapabilityError := validateMessageMediaForResolvedTextRoute(providerDefinition, resolvedModel, messages); mediaCapabilityError != nil {
@@ -788,8 +797,14 @@ func validateTextMaxTokens(providerDefinition providerDefinition, modelIdentifie
 
 func statusCodeForError(requestError error) int {
 	switch {
-	case errors.Is(requestError, ErrUnknownProvider), errors.Is(requestError, ErrUnknownModel), errors.Is(requestError, ErrUnsupportedCapability), errors.Is(requestError, ErrUnsupportedEndpoint), errors.Is(requestError, ErrConflictingModelParameters), errors.Is(requestError, ErrInvalidChatMessages):
+	case errors.Is(requestError, ErrUnknownProvider), errors.Is(requestError, ErrUnknownModel), errors.Is(requestError, ErrUnsupportedCapability), errors.Is(requestError, ErrUnsupportedEndpoint), errors.Is(requestError, ErrConflictingModelParameters), errors.Is(requestError, ErrInvalidChatMessages), errors.Is(requestError, errAssetInvalid), errors.Is(requestError, errAssetMIMEMismatch), errors.Is(requestError, errAssetDigestMismatch):
 		return http.StatusBadRequest
+	case errors.Is(requestError, errAssetNotFound):
+		return http.StatusNotFound
+	case errors.Is(requestError, errAssetExpired), errors.Is(requestError, errAssetDeleted):
+		return http.StatusGone
+	case errors.Is(requestError, errAssetTooLarge), errors.Is(requestError, ErrProviderMediaLimit):
+		return http.StatusRequestEntityTooLarge
 	case errors.Is(requestError, ErrProviderNotConfigured), errors.Is(requestError, errQueueFull):
 		return http.StatusServiceUnavailable
 	case errors.Is(requestError, ErrProviderRateLimited):

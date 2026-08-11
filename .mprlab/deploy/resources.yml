@@ -40,7 +40,7 @@ mprlab_resources:
               resource: public-api
               output: origin
             LLM_PROXY_MANAGEMENT_DATABASE_PATH:
-              value: /app/data/llm-proxy-management.sqlite
+              value: /data/llm-proxy-management.sqlite
             LLM_PROXY_MANAGEMENT_ENABLED:
               value: "true"
             LLM_PROXY_MANAGEMENT_GOOGLE_CLIENT_ID:
@@ -88,7 +88,7 @@ mprlab_resources:
               mode: "0444"
           mounts:
             - volume: data
-              target: /app/data
+              target: /data
               read_only: false
           ports:
             - container_port: 8080
