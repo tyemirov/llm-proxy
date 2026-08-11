@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Added the shared MPR header and compact footer to public pages, resource pages, legal pages, and the application.
 - Migrated Gemini text routing to the native Interactions API with explicit synchronous and background execution lifecycles.
 - Added provider-neutral image and audio attachments to canonical `POST /v2` requests for compatible models.
+- Added tenant asset uploads, asset-backed message attachments, published provider media limits, and automatic Gemini inline or Files API media transport.
 - Added shared missing-suffix continuation for provider output-budget stops and sanitized provider failure responses.
 - Added typed, sanitized non-success HTTP failures to the official Go client.
 - Make every public frontend validation path install the pinned npm graph and project-local Chromium before use, including clean `make test` and `make ci` executions.
