@@ -38,9 +38,12 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
   hash-bound metadata. `DELETE /model/v1/assets/{asset_id}` marks the asset as
   deleted and removes its stored bytes.
 - `server.max_prompt_bytes` limits compatibility `POST /`. Canonical
-  `POST /v2` uses the resolved provider offering's media limits. The proxy
-  validates asset ownership, state, expiry, MIME type, size, and SHA-256 before
-  it dispatches provider work.
+  `POST /v2` bounds the encoded JSON envelope with the configured text
+  allowance plus the largest bounded inline request in the provider catalog.
+  Larger media uses the asset endpoint and an asset reference. The proxy uses
+  the resolved provider offering's media limits and validates asset ownership,
+  state, expiry, MIME type, size, and SHA-256 before it dispatches provider
+  work.
 - `messages[].order` is optional. When any submitted message includes `order`, every submitted message must include a unique non-negative integer `order`; the proxy sorts submitted messages by ascending `order` before adding a request or tenant system prompt and before routing upstream.
 - With `messages[]` on `POST /`, body `system_prompt` is prepended as a system message only when the transcript does not already contain a `system` message. A body containing both `system_prompt` and a system message is invalid. With `POST /v2`, callers send system instructions as `system` role messages.
 - `max_tokens` is an optional positive integer on `GET /` query strings and JSON `POST /` bodies. It is the initial per-attempt output budget and is reused for missing-suffix attempts.
@@ -49,9 +52,10 @@ Extend `llm-proxy` from an OpenAI-only proxy into an explicit multi-provider pro
 - Known provider-specific output-token ceilings are validated before upstream calls; MiniMax M2.7 rejects `max_tokens` above `2048`, Gemini text models reject values above `65536`, and Claude models reject values above their configured synchronous Messages output limits with `400 Bad Request`.
 - `reasoning_effort` is optional on `GET /` as a query parameter and on JSON `POST /` and `POST /v2` as a body field. Omission retains the resolved tenant default. A supplied value must be nonblank and supported by the exact resolved text provider/model route; blank, `null`, or unsupported values return `400 Bad Request` before a provider call.
 - `X-LLM-Proxy-Request-Timeout-Seconds` is an optional positive whole-number
-  header on `GET /`, `POST /`, `POST /v2`, and `POST /dictate`. Omission uses
-  `server.request_timeout_seconds`; a supplied value must be in the inclusive
-  range `1..server.max_request_timeout_seconds`.
+  header on `GET /`, `POST /`, `POST /v2`, `POST /model/v1/assets`, and
+  `POST /dictate`. Omission uses `server.request_timeout_seconds`; a supplied
+  value must be in the inclusive range
+  `1..server.max_request_timeout_seconds`.
 - The effective request budget begins at authenticated ingress before body
   parsing and covers validation, queue admission, provider work, OpenAI
   background polling, and response construction. Provider adapters propagate

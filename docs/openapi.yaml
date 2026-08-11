@@ -171,6 +171,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/TenantClientKey'
         - $ref: '#/components/parameters/AssetSHA256'
+        - $ref: '#/components/parameters/RequestTimeout'
       requestBody:
         $ref: '#/components/requestBodies/AssetUpload'
       responses:
@@ -182,6 +183,10 @@ paths:
           $ref: '#/components/responses/ProxyForbidden'
         '413':
           $ref: '#/components/responses/AssetFailure'
+        '499':
+          $ref: '#/components/responses/CallerClosed'
+        '504':
+          $ref: '#/components/responses/ProxyTimeout'
         '500':
           $ref: '#/components/responses/AssetFailure'
   /model/v1/assets/{asset_id}:
@@ -1007,12 +1012,18 @@ components:
               - $ref: '#/components/schemas/AssetErrorEnvelope'
     AssetCreated:
       description: The asset is available to its authenticated tenant.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: '#/components/headers/ResolvedRequestTimeout'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/TenantAsset'
     AssetFailure:
       description: The asset operation failed with a stable safe code.
+      headers:
+        X-LLM-Proxy-Request-Timeout-Seconds:
+          $ref: '#/components/headers/OptionalResolvedRequestTimeout'
       content:
         application/json:
           schema:
